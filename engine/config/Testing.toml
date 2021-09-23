@@ -1,11 +1,7 @@
 # Testing configurations for the CFE
 
-[message_queue]
-# can also be IP
-endpoint = "http://localhost:4222"
-
 [state_chain]
-p2p_private_key_file = "./tests/test_keystore/p2p_key"
+# 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "./tests/test_keystore/alice_key"
 ws_endpoint = "ws://localhost:9944"
 
@@ -15,8 +11,8 @@ node_endpoint = "ws://localhost:8545"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
-key_manager_eth_address = "0x602C71e4DAC47a042Ee7f46E0aee17F94A3bA0B6"
-stake_manager_eth_address = "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85"
+key_manager_eth_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+stake_manager_eth_address = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
 
 [health_check]
 hostname = "127.0.0.1"

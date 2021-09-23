@@ -1,16 +1,13 @@
-use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
-use state_chain_runtime::{
-	AccountId, AuraConfig, EmissionsConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig, AuctionConfig,
-	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
-	FlipBalance, ReputationConfig, DAYS
-};
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{traits::{Verify, IdentifyAccount}};
 use sc_service::{ChainType, Properties};
-
-// The URL for the telemetry server.
-// const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
+use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_runtime::traits::{IdentifyAccount, Verify};
+use state_chain_runtime::{
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS, WASM_BINARY,
+};
 
 const TOTAL_ISSUANCE: FlipBalance = {
 	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
@@ -19,14 +16,13 @@ const TOTAL_ISSUANCE: FlipBalance = {
 	TOKEN_ISSUANCE * TOKEN_FRACTIONS
 };
 
-const MIN_VALIDATORS: u32 = 3;
 const MAX_VALIDATORS: u32 = 150;
 
 const BLOCK_EMISSIONS: FlipBalance = {
 	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
 	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
 	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 * DAYS as u128
+	ANNUAL_INFLATION / 365 / DAYS as u128
 };
 
 // Number of blocks to be online to accrue a point
@@ -47,8 +43,9 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 type AccountPublic = <Signature as Verify>::Signer;
 
 /// Generate an account ID from seed.
-pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
-	AccountPublic: From<<TPublic::Pair as Pair>::Public>
+pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+where
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
 {
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
@@ -67,32 +64,31 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 	)
 }
 
+/// Start a single node development chain
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
 	Ok(ChainSpec::from_genesis(
-		// Name
-		"Development",
-		// ID
+		"Develop",
 		"dev",
 		ChainType::Development,
-		move || testnet_genesis(
-			wasm_binary,
-			// Initial PoA authorities
-			vec![
-				authority_keys_from_seed("Alice"),
-			],
-			// Sudo account
-			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			// Pre-funded accounts
-			vec![
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![authority_keys_from_seed("Alice")],
+				// Sudo account
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				get_account_id_from_seed::<sr25519::Public>("Bob"),
-				get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-			],
-			true,
-		),
+				// Pre-funded accounts
+				vec![
+					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					get_account_id_from_seed::<sr25519::Public>("Bob"),
+					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
+				],
+				1,
+			)
+		},
 		// Bootnodes
 		vec![],
 		// Telemetry
@@ -106,119 +102,111 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-pub fn local_testnet_config() -> Result<ChainSpec, String> {
+/// Start a single node development chain - using bashful as genesis node
+pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	Ok(ChainSpec::from_genesis(
-		// Name
-		"Local Testnet",
-		// ID
-		"local_testnet",
-		ChainType::Local,
-		move || testnet_genesis(
-			wasm_binary,
-			// Initial PoA authorities
-			vec![
-				authority_keys_from_seed("Alice"),
-				authority_keys_from_seed("Bob"),
-			],
-			// Sudo account
-			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			// Pre-funded accounts
-			vec![
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				get_account_id_from_seed::<sr25519::Public>("Bob"),
-				get_account_id_from_seed::<sr25519::Public>("Charlie"),
-				get_account_id_from_seed::<sr25519::Public>("Dave"),
-				get_account_id_from_seed::<sr25519::Public>("Eve"),
-				get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-				get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
-			],
-			true,
-		),
-		// Bootnodes
-		vec![],
-		// Telemetry
-		None,
-		// Protocol ID
-		None,
-		// Properties
-		None,
-		// Extensions
-		None,
-	))
-}
-
-/// Create a local testnet for Chainflip
-/// We would have 2 validators at Genesis; Chas and Dave https://en.wikipedia.org/wiki/Chas_%26_Dave
-/// Chas would also be Sudo
-/// Subsequent validators would need to be added via the session pallet
-pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
-	Ok(ChainSpec::from_genesis(
-		// Name
-		"Chainflip local Testnet",
-		// ID
-		"chainflip_local_testnet",
-		ChainType::Live,
-		move || testnet_genesis(
-			wasm_binary,
-			// Initial PoA authorities
-			vec![
-				(
+		"CF Develop",
+		"cf-dev",
+		ChainType::Development,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![(
 					// Bashful
-					hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"].into(),
-					hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"].unchecked_into(),
-					hex_literal::hex!["971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"].unchecked_into(),
-				),
-				(
+					bashful_sr25519.into(),
+					bashful_sr25519.unchecked_into(),
+					hex_literal::hex![
+						"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+					]
+					.unchecked_into(),
+				)],
+				// Sudo account - Bashful
+				bashful_sr25519.into(),
+				// Pre-funded accounts
+				vec![
+					// Bashful
+					bashful_sr25519.into(),
+				],
+				1,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		None,
+		// Extensions
+		None,
+	))
+}
+
+/// Initialise a Chainflip testnet
+pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let doc_sr25519 =
+		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
+	let dopey_sr25519 =
+		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	Ok(ChainSpec::from_genesis(
+		"Three node testnet",
+		"three-node-testnet",
+		ChainType::Live,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![
+					(
+						// Bashful
+						bashful_sr25519.into(),
+						bashful_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Doc
+						doc_sr25519.into(),
+						doc_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Dopey
+						dopey_sr25519.into(),
+						dopey_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
+						]
+						.unchecked_into(),
+					),
+				],
+				// Sudo account - Bashful
+				bashful_sr25519.into(),
+				// Pre-funded accounts
+				vec![
+					// Bashful
+					bashful_sr25519.into(),
 					// Doc
-					hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"].into(),
-					hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"].unchecked_into(),
-					hex_literal::hex!["e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"].unchecked_into(),
-				),
-				(
+					doc_sr25519.into(),
 					// Dopey
-					hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"].into(),
-					hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"].unchecked_into(),
-					hex_literal::hex!["5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"].unchecked_into(),
-				),
-				(
-					// Grumpy
-					hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"].into(),
-					hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"].unchecked_into(),
-					hex_literal::hex!["b9036620f103cce552edbdd15e54810c6c3906975f042e3ff949af075636007f"].unchecked_into(),
-				),
-				(
-					// Happy
-					hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"].into(),
-					hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"].unchecked_into(),
-					hex_literal::hex!["0bb5e73112e716dc54541e87d2287f2252fd479f166969dc37c07a504000dae9"].unchecked_into(),
-				),
-			],
-			// Sudo account - Bashful
-			hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"].into(),
-			// Pre-funded accounts
-			vec![
-				// Bashful
-				hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"].into(),
-				// Doc
-				hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"].into(),
-				// Dopey
-				hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"].into(),
-				// Grumpy
-				hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"].into(),
-				// Happy
-				hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"].into(),
-			],
-			false,
-		),
+					dopey_sr25519.into(),
+				],
+				2,
+			)
+		},
 		// Bootnodes
 		vec![],
 		// Telemetry
@@ -231,15 +219,114 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 		None,
 	))
 }
+
+/// Initialise a Chainflip testnet
+pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let doc_sr25519 =
+		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
+	let dopey_sr25519 =
+		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	let grumpy_sr25519 =
+		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
+	let happy_sr25519 =
+		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	Ok(ChainSpec::from_genesis(
+		"Internal testnet",
+		"test",
+		ChainType::Live,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![
+					(
+						// Bashful
+						bashful_sr25519.into(),
+						bashful_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Doc
+						doc_sr25519.into(),
+						doc_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Dopey
+						dopey_sr25519.into(),
+						dopey_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Grumpy
+						grumpy_sr25519.into(),
+						grumpy_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"b9036620f103cce552edbdd15e54810c6c3906975f042e3ff949af075636007f"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Happy
+						happy_sr25519.into(),
+						happy_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"0bb5e73112e716dc54541e87d2287f2252fd479f166969dc37c07a504000dae9"
+						]
+						.unchecked_into(),
+					),
+				],
+				// Sudo account - Bashful
+				bashful_sr25519.into(),
+				// Pre-funded accounts
+				vec![
+					// Bashful
+					bashful_sr25519.into(),
+					// Doc
+					doc_sr25519.into(),
+					// Dopey
+					dopey_sr25519.into(),
+					// Grumpy
+					grumpy_sr25519.into(),
+					// Happy
+					happy_sr25519.into(),
+				],
+				3,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		Some(chainflip_properties()),
+		// Extensions
+		None,
+	))
+}
+
 /// Configure initial storage state for FRAME modules.
-/// 100800 blocks for 7 days at 6 second blocks
 /// 150 validator limit
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-	dev: bool,
+	min_validators: u32,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -247,24 +334,35 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {
-			epoch_number_of_blocks: 100800
-		}),
+		pallet_cf_validator: Some(ValidatorConfig {}),
 		pallet_session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| {
-				(x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone()))
-			}).collect::<Vec<_>>(),
+			keys: initial_authorities
+				.iter()
+				.map(|x| {
+					(
+						x.0.clone(),
+						x.0.clone(),
+						session_keys(x.1.clone(), x.2.clone()),
+					)
+				})
+				.collect::<Vec<_>>(),
 		}),
 		pallet_cf_flip: Some(FlipConfig {
 			total_issuance: TOTAL_ISSUANCE,
 		}),
 		pallet_cf_staking: Some(StakingConfig {
-			genesis_stakers: endowed_accounts.iter()
+			genesis_stakers: endowed_accounts
+				.iter()
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
-				.collect::<Vec<(AccountId, FlipBalance)>>()
+				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (if dev { 1 } else { MIN_VALIDATORS }, MAX_VALIDATORS),
+			auction_size_range: (min_validators, MAX_VALIDATORS),
+			winners: initial_authorities
+				.iter()
+				.map(|(validator_id, ..)| validator_id.clone())
+				.collect::<Vec<AccountId>>(),
+			minimum_active_bid: TOTAL_ISSUANCE / 100,
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],
@@ -272,16 +370,19 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_sudo: Some(SudoConfig {
-			// Assign network admin rights.
-			key: root_key,
-		}),
 		pallet_cf_emissions: Some(EmissionsConfig {
 			emission_per_block: BLOCK_EMISSIONS,
-			.. Default::default()
+			..Default::default()
+		}),
+		pallet_cf_governance: Some(GovernanceConfig {
+			members: vec![root_key],
+			expiry_span: 80000,
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+		}),
+		pallet_cf_vaults: Some(VaultsConfig {
+			ethereum_vault_key: hex_literal::hex!["03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"].to_vec()
 		}),
 	}
 }

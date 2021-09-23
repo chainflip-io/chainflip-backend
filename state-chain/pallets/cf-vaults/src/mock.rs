@@ -12,8 +12,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use crate::nonce::NonceUnixTime;
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -22,8 +21,9 @@ type Amount = u64;
 type ValidatorId = u64;
 
 thread_local! {
-	pub static OTHER_CHAIN_RESULT: RefCell<RequestIndex> = RefCell::new(0);
+	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
+	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0]);
 }
 
 construct_runtime!(
@@ -33,7 +33,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -104,14 +104,20 @@ impl VaultRotationHandler for MockRuntime {
 	}
 }
 
+impl NonceProvider for MockRuntime {
+	fn next_nonce(_identifier: NonceIdentifier) -> Nonce {
+		0
+	}
+}
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
-	type Nonce = u64;
-	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
+	type NonceProvider = Self;
+	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {
@@ -122,10 +128,16 @@ pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 
+pub fn ethereum_public_key() -> Vec<u8> {
+	GENESIS_ETHEREUM_PUBLIC_KEY.with(|l| l.borrow().to_vec())
+}
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {}),
+		pallet_cf_vaults: Some(VaultsPalletConfig {
+			ethereum_vault_key: ethereum_public_key(),
+		}),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

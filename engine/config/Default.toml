@@ -1,11 +1,6 @@
 # Default configurations for the CFE
-
-[message_queue]
-# can also be IP
-endpoint = "http://localhost:4222"
-
 [state_chain]
-p2p_private_key_file = ""
+# 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = ""
 ws_endpoint = "ws://localhost:9944"
 

@@ -1,14 +1,15 @@
 use chainflip_engine::{
     eth::{
-        self,
-        key_manager::key_manager::{ChainflipKey, KeyManagerEvent},
+        key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
+        new_synced_web3_client,
     },
     logging::utils,
-    mq::{nats_client::NatsMQClient, IMQClient, Subject},
     settings::Settings,
 };
 
 use futures::stream::StreamExt;
+
+mod common;
 
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
@@ -16,25 +17,18 @@ pub async fn test_all_key_manager_events() {
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
-    let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
-
-    // subscribe before the witness pushes events to the queue
-    let km_event_stream = mq_c
-        .subscribe::<KeyManagerEvent>(Subject::KeyManager)
+    let web3 = new_synced_web3_client(&settings, &root_logger)
         .await
         .unwrap();
 
-    // The Key Manager Witness will run forever unless we stop it after a short time
-    // in which it should have already done it's job.
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        eth::key_manager::start_key_manager_witness(&settings, mq_c, &root_logger),
-    )
-    .await;
-    slog::info!(&root_logger, "Subscribed");
+    let key_manager = KeyManager::new(&settings).unwrap();
 
-    // Grab the events from the stream and put them into a vec
-    let km_events = km_event_stream
+    // The stream is infinite unless we stop it after a short time
+    // in which it should have already done it's job.
+    let km_events = key_manager
+        .event_stream(&web3, settings.eth.from_block, &root_logger)
+        .await
+        .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
         .collect::<Vec<_>>()
         .await
@@ -44,7 +38,8 @@ pub async fn test_all_key_manager_events() {
 
     assert!(
         !km_events.is_empty(),
-        "Event stream was empty. Have you ran the setup script to deploy/run the contracts?"
+        "{}",
+        common::EVENT_STREAM_EMPTY_MESSAGE
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
@@ -84,6 +79,9 @@ pub async fn test_all_key_manager_events() {
                     panic!("KeyChange event with unexpected key: {:?}", new_key);
                 }
             }
+            KeyManagerEvent::Refunded { amount: _ } => {
+                return true
+            },
         }
         ).unwrap();
 }

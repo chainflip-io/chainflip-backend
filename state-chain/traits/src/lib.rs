@@ -128,7 +128,7 @@ pub trait VaultRotationHandler {
 #[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
 pub enum RotationError<ValidatorId> {
 	/// An invalid request index
-	InvalidRequestIndex,
+	InvalidCeremonyId,
 	/// Empty validator set provided
 	EmptyValidatorSet,
 	/// A set of badly acting validators
@@ -146,7 +146,7 @@ pub enum RotationError<ValidatorId> {
 }
 
 /// Rotating vaults
-pub trait VaultRotation {
+pub trait VaultRotator {
 	type ValidatorId;
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
@@ -173,6 +173,16 @@ pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+}
+
+/// Trait for rotate bond after epoch.
+pub trait BondRotation {
+	type AccountId;
+	type Balance;
+
+	/// Sets the validator bond for all new_validator to the new_bond and
+	/// the bond for all old validators to zero.
+	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
 }
 
 pub trait StakeTransfer {
@@ -237,9 +247,59 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
+/// A nonce
+pub type Nonce = u64;
+
+/// A identifier for the chain a nonce is required
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum NonceIdentifier {
+	Ethereum = 1,
+	Bitcoin = 2,
+	Dot = 3,
+}
+
+/// Provide a nonce
 pub trait NonceProvider {
-	/// A Nonce type to be used for nonces.
-	type Nonce;
-	/// Generates a unique nonce.
-	fn generate_nonce() -> Self::Nonce;
+	/// Provide the next nonce for the chain identified
+	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+}
+
+pub trait Online {
+	/// The validator id used
+	type ValidatorId;
+	/// The online status of the validator
+	fn is_online(validator_id: &Self::ValidatorId) -> bool;
+}
+
+/// A representation of the current network state
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+pub struct NetworkState {
+	pub online: u32,
+	pub offline: u32,
+}
+
+impl NetworkState {
+	/// Return the percentage of validators online rounded down
+	pub fn percentage_online(&self) -> u32 {
+		self.online
+			.saturating_mul(100)
+			.checked_div(self.online + self.offline)
+			.unwrap_or(0)
+	}
+}
+
+/// To handle those emergency rotations
+pub trait EmergencyRotation {
+	/// Request an emergency rotation
+	fn request_emergency_rotation();
+}
+
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type AccountId;
+	/// Block number
+	type BlockNumber;
+	/// Function which implements the slashing logic
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
 }

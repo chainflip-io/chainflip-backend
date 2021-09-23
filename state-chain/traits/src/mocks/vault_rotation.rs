@@ -1,4 +1,4 @@
-use crate::{RotationError, VaultRotation};
+use crate::{RotationError, VaultRotator};
 use std::cell::RefCell;
 
 thread_local! {
@@ -12,7 +12,7 @@ pub fn clear_confirmation() {
 	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
 }
 
-impl VaultRotation for Mock {
+impl VaultRotator for Mock {
 	type ValidatorId = u64;
 
 	fn start_vault_rotation(

@@ -1,4 +1,5 @@
 mod test {
+	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
@@ -34,7 +35,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequest(
 					VaultsPallet::current_request(),
 					KeygenRequest {
-						chain: Ethereum(vec![]),
+						chain: Chain::Ethereum,
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
 					}
 				))
@@ -48,11 +49,11 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
-			let first_request_idx = VaultsPallet::current_request();
+			let first_ceremony_id = VaultsPallet::current_request();
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
-				first_request_idx,
-				KeygenResponse::Success(vec![])
+				first_ceremony_id,
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 
 			// A subsequent key generation request
@@ -60,20 +61,20 @@ mod test {
 				ALICE, BOB, CHARLIE
 			]));
 
-			let second_request_idx = VaultsPallet::current_request();
+			let second_ceremony_id = VaultsPallet::current_request();
 			// This time we respond with bad news
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
-				second_request_idx,
-				KeygenResponse::Failure(vec![BOB, CHARLIE])
+				second_ceremony_id,
+				KeygenResponse::Error(vec![BOB, CHARLIE])
 			));
 
 			// Check the event emitted of an aborted rotation with are two requests
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
-					first_request_idx,
-					second_request_idx
+					first_ceremony_id,
+					second_ceremony_id
 				]))
 			);
 
@@ -94,7 +95,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -132,7 +133,64 @@ mod test {
 	}
 
 	#[test]
-	fn vault_rotation_response() {
+	fn should_vault_rotation_response_receiving_success() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
+			let new_public_key = vec![1, 2, 3];
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
+				VaultsPallet::current_request(),
+				KeygenResponse::Success(new_public_key.clone())
+			));
+			assert_ok!(VaultsPallet::request_vault_rotation(
+				VaultsPallet::current_request(),
+				Ok(VaultRotationRequest {
+					chain: ChainParams::Other(vec![])
+				})
+			));
+
+			// Check the event emitted
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
+					VaultsPallet::current_request(),
+					VaultRotationRequest {
+						chain: Other(vec![])
+					}
+				))
+			);
+
+			let tx_hash = "tx_hash".as_bytes().to_vec();
+			assert_ok!(VaultsPallet::vault_rotation_response(
+				Origin::root(),
+				VaultsPallet::current_request(),
+				VaultRotationResponse::Success {
+					tx_hash: tx_hash.clone(),
+				}
+			));
+
+			// Confirm we have rotated the keys
+			assert_eq!(VaultsPallet::eth_vault().tx_hash, tx_hash);
+			assert_eq!(
+				VaultsPallet::eth_vault().previous_key,
+				ethereum_public_key()
+			);
+			assert_eq!(VaultsPallet::eth_vault().current_key, new_public_key);
+
+			// Check the event emitted
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
+					VaultsPallet::current_request()
+				))
+			);
+		});
+	}
+
+	#[test]
+	fn should_abort_vault_rotation_response_receiving_error() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
@@ -140,7 +198,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -163,19 +221,15 @@ mod test {
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				VaultRotationResponse {
-					old_key: "old_key".as_bytes().to_vec(),
-					new_key: "new_key".as_bytes().to_vec(),
-					tx: "tx".as_bytes().to_vec(),
-				}
+				VaultRotationResponse::Error
 			));
 
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
 					VaultsPallet::current_request()
-				))
+				]))
 			);
 		});
 	}
@@ -184,19 +238,26 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(EthereumChain::<MockRuntime>::start_vault_rotation(
+			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
 				vec![],
 				vec![ALICE, BOB, CHARLIE]
 			));
-			let signing_request = EthSigningTxRequest {
-				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
-					.unwrap(),
+			let signing_request = ThresholdSignatureRequest {
+				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
+					vec![],
+					SchnorrSigTruncPubkey::default(),
+				)
+				.unwrap(),
+				public_key: vec![],
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::EthSignTxRequest(0, signing_request))
+				mock::Event::pallet_cf_vaults(crate::Event::ThresholdSignatureRequest(
+					0,
+					signing_request
+				))
 			);
 		});
 	}
@@ -208,11 +269,24 @@ mod test {
 				ALICE, BOB, CHARLIE
 			]));
 
-			assert_ok!(VaultsPallet::eth_signing_tx_response(
+			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				1,
-				EthSigningTxResponse::Success(vec![])
+				ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
+					eth_pub_key: [0; 20],
+					s: [0; 32],
+				})
 			));
+		});
+	}
+
+	#[test]
+	fn should_increment_nonce_for_ethereum_and_other_chain_independently() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Ethereum), 1u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Ethereum), 2u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Bitcoin), 1u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Dot), 1u64);
 		});
 	}
 }

@@ -1,254 +1,286 @@
-use crate::logging::COMPONENT_KEY;
-use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
+use std::collections::VecDeque;
+
+use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
+use anyhow::Result;
 use async_trait::async_trait;
-use cf_p2p_rpc::P2PEvent;
-use futures::{Future, Stream, StreamExt};
-use jsonrpc_core_client::transports::ws::connect;
-use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
-use slog::o;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio_compat_02::FutureExt;
+use cf_p2p_rpc::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
+use failure::Error;
+use futures::{
+    compat::{Future01CompatExt, Stream01CompatExt},
+    stream::BoxStream,
+    TryStreamExt,
+};
+use jsonrpc_core::futures::{Async, AsyncSink, Future, Sink, Stream};
+use jsonrpc_core_client::{
+    transports::{duplex, ws},
+    RpcChannel, RpcError,
+};
+use thiserror::Error;
+use websocket::{ClientBuilder, OwnedMessage};
 
-pub trait Base58 {
-    fn to_base58(&self) -> String;
+#[derive(Error, Debug)]
+pub enum RpcClientError {
+    #[error("Could not connect to {0:?}: {1:?}")]
+    ConnectionError(url::Url, RpcError),
+    #[error("Rpc error calling method {0:?}: {1:?}")]
+    CallError(String, RpcError),
+    #[error("Rpc subscription notified an error: {0:?}")]
+    SubscriptionError(RpcError),
 }
 
-impl Base58 for () {
-    fn to_base58(&self) -> String {
-        "".to_string()
-    }
+/////////////////////////////////////
+/// This code was copied from jsonrpc_client_transports 15.1.0 src/transports/ws.rs
+/// The only change was to apply compat() to the rpc_client future before passing it to the tokio::spawn() call
+
+/// Connect to a JSON-RPC websocket server.
+///
+/// Uses an unbuffered channel to queue outgoing rpc messages.
+pub fn inner_connect<T>(url: &url::Url) -> impl Future<Item = T, Error = RpcError>
+where
+    T: From<RpcChannel>,
+{
+    let client_builder = ClientBuilder::from_url(url);
+    do_connect(client_builder)
 }
 
-pub struct RpcP2PClient {
-    url: url::Url,
-    logger: slog::Logger,
+fn do_connect<T>(client_builder: ClientBuilder) -> impl Future<Item = T, Error = RpcError>
+where
+    T: From<RpcChannel>,
+{
+    client_builder
+        .async_connect(None)
+        .map(|(client, _)| {
+            let (sink, stream) = client.split();
+            let (sink, stream) = WebsocketClient::new(sink, stream).split();
+            let (rpc_client, sender) = duplex(sink, stream);
+            let rpc_client = rpc_client.map_err(|error| eprintln!("{:?}", error));
+            tokio::spawn(rpc_client.compat());
+            sender.into()
+        })
+        .map_err(|error| RpcError::Other(error.into()))
 }
 
-impl RpcP2PClient {
-    pub fn new(url: url::Url, logger: &slog::Logger) -> Self {
-        RpcP2PClient {
-            url,
-            logger: logger.new(o!(COMPONENT_KEY => "RpcP2PClient")),
+struct WebsocketClient<TSink, TStream> {
+    sink: TSink,
+    stream: TStream,
+    queue: VecDeque<OwnedMessage>,
+}
+
+impl<TSink, TStream, TError> WebsocketClient<TSink, TStream>
+where
+    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
+    TStream: Stream<Item = OwnedMessage, Error = TError>,
+    TError: Into<Error>,
+{
+    pub fn new(sink: TSink, stream: TStream) -> Self {
+        Self {
+            sink,
+            stream,
+            queue: VecDeque::new(),
         }
     }
 }
 
-impl From<P2PEvent> for P2PMessage {
-    fn from(p2p_event: P2PEvent) -> Self {
-        match p2p_event {
-            P2PEvent::Received(peer_id, msg) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
-                data: msg,
-            },
-            P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
-                data: vec![],
-            },
-        }
+impl<TSink, TStream, TError> Sink for WebsocketClient<TSink, TStream>
+where
+    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
+    TStream: Stream<Item = OwnedMessage, Error = TError>,
+    TError: Into<Error>,
+{
+    type SinkItem = String;
+    type SinkError = RpcError;
+
+    fn start_send(
+        &mut self,
+        request: Self::SinkItem,
+    ) -> Result<AsyncSink<Self::SinkItem>, Self::SinkError> {
+        self.queue.push_back(OwnedMessage::Text(request));
+        Ok(AsyncSink::Ready)
     }
-}
 
-pub struct RpcP2PClientStream {
-    inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
-}
-
-impl RpcP2PClientStream {
-    pub fn new(stream: TypedSubscriptionStream<P2PEvent>) -> Self {
-        RpcP2PClientStream {
-            inner: Box::pin(stream),
-        }
-    }
-}
-
-impl Stream for RpcP2PClientStream {
-    type Item = P2PMessage;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = &mut *self;
+    fn poll_complete(&mut self) -> Result<Async<()>, Self::SinkError> {
         loop {
-            match this.inner.poll_next_unpin(cx) {
-                Poll::Ready(Some(result)) => {
-                    if let Ok(result) = result {
-                        return Poll::Ready(Some(result.into()));
+            match self.queue.pop_front() {
+                Some(request) => match self.sink.start_send(request) {
+                    Ok(AsyncSink::Ready) => continue,
+                    Ok(AsyncSink::NotReady(request)) => {
+                        self.queue.push_front(request);
+                        break;
                     }
-                }
-                Poll::Ready(None) => return Poll::Ready(None),
-                Poll::Pending => break,
+                    Err(error) => return Err(RpcError::Other(error.into())),
+                },
+                None => break,
             }
         }
-
-        Poll::Pending
+        self.sink
+            .poll_complete()
+            .map_err(|error| RpcError::Other(error.into()))
     }
+}
+
+impl<TSink, TStream, TError> Stream for WebsocketClient<TSink, TStream>
+where
+    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
+    TStream: Stream<Item = OwnedMessage, Error = TError>,
+    TError: Into<Error>,
+{
+    type Item = String;
+    type Error = RpcError;
+
+    fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
+        loop {
+            match self.stream.poll() {
+                Ok(Async::Ready(Some(message))) => match message {
+                    OwnedMessage::Text(data) => return Ok(Async::Ready(Some(data))),
+                    OwnedMessage::Binary(data) => (),
+                    OwnedMessage::Ping(p) => self.queue.push_front(OwnedMessage::Pong(p)),
+                    OwnedMessage::Pong(_) => {}
+                    OwnedMessage::Close(c) => self.queue.push_front(OwnedMessage::Close(c)),
+                },
+                Ok(Async::Ready(None)) => {
+                    // TODO try to reconnect (#411).
+                    return Ok(Async::Ready(None));
+                }
+                Ok(Async::NotReady) => return Ok(Async::NotReady),
+                Err(error) => return Err(RpcError::Other(error.into())),
+            }
+        }
+    }
+}
+
+///////////////////////////
+
+pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
+    let client = inner_connect::<P2PRpcClient>(url)
+        .compat()
+        .await
+        .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
+
+    client
+        .self_identify(AccountIdBs58(validator_id.0))
+        .compat()
+        .await
+        .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
+
+    Ok(client)
 }
 
 #[async_trait]
-impl<NodeId> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient
-where
-    NodeId: Base58 + Send + Sync,
-{
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
+impl P2PNetworkClient for P2PRpcClient {
+    type NetworkEvent = Result<P2PEvent>;
+
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
+        P2PRpcClient::broadcast(self, MessageBs58(data.into()))
+            .compat()
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+            .map_err(|e| RpcClientError::CallError(String::from("broadcast"), e).into())
+    }
 
-        client
-            .broadcast(data.into())
+    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
+        P2PRpcClient::send(self, AccountIdBs58(to.0), MessageBs58(data.into()))
+            .compat()
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)
+            .map_err(|e| RpcClientError::CallError(String::from("send"), e).into())
     }
 
-    async fn send(&self, to: &NodeId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
+    async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>> {
+        let stream = self
+            .subscribe_notifications()
+            .compat()
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+            .map_err(|e| RpcClientError::CallError(String::from("subscribe_notifications"), e))?
+            .compat()
+            .map_err(|e| RpcClientError::SubscriptionError(e).into());
 
-        client
-            .send(to.to_base58(), data.into())
-            .await
-            .map_err(|_| P2PNetworkClientError::Rpc)
-    }
-
-    async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url)).await.map_err(|e| {
-            slog::error!(
-                self.logger,
-                "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
-                &self.url,
-                e
-            );
-            P2PNetworkClientError::Rpc
-        })?;
-
-        let sub = client.subscribe_notifications().map_err(|e| {
-            slog::error!(
-                self.logger,
-                "Could not subscribe to notifications on RpcP2PClient: {:?}",
-                e
-            );
-            P2PNetworkClientError::Rpc
-        })?;
-
-        Ok(RpcP2PClientStream::new(sub))
-    }
-}
-
-#[derive(Clone)]
-struct P2PClient {
-    inner: TypedClient,
-}
-
-impl From<RpcChannel> for P2PClient {
-    fn from(channel: RpcChannel) -> Self {
-        P2PClient::new(channel.into())
-    }
-}
-
-const U64_RPC_TYPE: &str = "u64";
-
-impl P2PClient {
-    /// Creates a new `P2PClient`.
-    pub fn new(sender: RpcChannel) -> Self {
-        P2PClient {
-            inner: sender.into(),
-        }
-    }
-    /// Send a message to peer id returning a HTTP status code
-    pub fn send(&self, peer_id: String, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
-        let args = (peer_id, message);
-        self.inner.call_method("p2p_send", U64_RPC_TYPE, args)
-    }
-
-    /// Broadcast a message to the p2p network returning a HTTP status code
-    /// impl Future<Output = RpcResult<R>>
-    pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
-        let args = (message,);
-        self.inner.call_method("p2p_broadcast", U64_RPC_TYPE, args)
-    }
-
-    // Subscribe to receive notifications
-    pub fn subscribe_notifications(&self) -> RpcResult<TypedSubscriptionStream<P2PEvent>> {
-        let args_tuple = ();
-        self.inner.subscribe(
-            "cf_p2p_subscribeNotifications",
-            args_tuple,
-            "cf_p2p_notifications",
-            "cf_p2p_unsubscribeNotifications",
-            "RpcEvent",
-        )
+        Ok(Box::pin(stream))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::logging;
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
 
     use super::*;
-    use jsonrpc_core::{IoHandler, Params};
-    use jsonrpc_ws_server::{Server, ServerBuilder};
-    use serde_json::json;
+    use cf_p2p_rpc::RpcApi;
+    use jsonrpc_core::MetaIoHandler;
+    use jsonrpc_core_client::transports::local;
+    use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 
-    struct TestServer {
-        url: url::Url,
-        #[allow(dead_code)]
-        server: Option<Server>,
+    #[derive(Default)]
+    struct TestApi {
+        subs: Arc<Mutex<HashMap<SubscriptionId, jsonrpc_pubsub::typed::Sink<P2PEvent>>>>,
     }
 
-    impl TestServer {
-        fn serve() -> Self {
-            let server = ServerBuilder::new(io())
-                .start(&"0.0.0.0:3030".parse().unwrap())
-                .expect("This should start");
+    impl RpcApi for TestApi {
+        type Metadata = local::LocalMeta;
 
-            TestServer {
-                url: url::Url::parse("ws://127.0.0.1:3030").unwrap(),
-                server: Some(server),
-            }
+        fn self_identify(&self, _validator_id: AccountIdBs58) -> jsonrpc_core::Result<u64> {
+            Ok(200)
+        }
+
+        fn send(
+            &self,
+            _validator_id: AccountIdBs58,
+            _message: MessageBs58,
+        ) -> jsonrpc_core::Result<u64> {
+            Ok(200)
+        }
+
+        fn broadcast(&self, _message: MessageBs58) -> jsonrpc_core::Result<u64> {
+            Ok(200)
+        }
+
+        fn subscribe_notifications(
+            &self,
+            _metadata: Self::Metadata,
+            subscriber: Subscriber<P2PEvent>,
+        ) {
+            let mut subs = self.subs.lock().unwrap();
+            let next = SubscriptionId::Number(subs.len() as u64 + 1);
+            let sink = subscriber.assign_id(next.clone()).unwrap();
+            subs.insert(next, sink);
+        }
+
+        fn unsubscribe_notifications(
+            &self,
+            _metadata: Option<Self::Metadata>,
+            id: SubscriptionId,
+        ) -> jsonrpc_core::Result<bool> {
+            self.subs.lock().unwrap().remove(&id).unwrap();
+            Ok(true)
         }
     }
 
-    fn io() -> IoHandler {
-        let mut io = IoHandler::default();
-        io.add_sync_method("p2p_send", |params: Params| {
-            match params.parse::<(String, Vec<u8>)>() {
-                _ => Ok(json!(200)),
-            }
-        });
-        io.add_sync_method("p2p_broadcast", |params: Params| {
-            match params.parse::<(Vec<u8>,)>() {
-                _ => Ok(json!(200)),
-            }
-        });
-
+    fn io() -> MetaIoHandler<local::LocalMeta> {
+        let mut io = MetaIoHandler::default();
+        io.extend_with(TestApi::default().to_delegate());
         io
     }
 
     #[test]
     fn client_api() {
-        let server = TestServer::serve();
-        let logger = logging::test_utils::create_test_logger();
-        let mut glue_client = RpcP2PClient::new(server.url, &logger);
-        let run = async {
-            let result = glue_client
-                .send(&ValidatorId::new("100"), "disco".as_bytes())
-                .await;
-            assert!(
-                result.is_ok(),
-                "Should receive OK for sending message to peer"
-            );
-            let result = P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::broadcast(
-                &glue_client,
-                "disco".as_bytes(),
-            )
-            .await;
-            assert!(result.is_ok(), "Should receive OK for broadcasting message");
-            let result =
-                P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::take_stream(&mut glue_client)
-                    .await;
-            assert!(result.is_ok(), "Should subscribe OK");
-        };
-        tokio::runtime::Runtime::new().unwrap().block_on(run);
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let io = io();
+            let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(&io);
+
+            tokio::select! {
+                _ = async move {
+                    let result =
+                        P2PNetworkClient::send(&client, &AccountId([100; 32]), "disco".as_bytes()).await;
+                    assert!(
+                        result.is_ok(),
+                        "Should receive OK for sending message to peer"
+                    );
+                    let result = P2PNetworkClient::broadcast(&client, "disco".as_bytes()).await;
+                    assert!(result.is_ok(), "Should receive OK for broadcasting message");
+                    let result = P2PNetworkClient::take_stream(&client).await;
+                    assert!(result.is_ok(), "Should subscribe OK");
+                } => {}
+                _ = server.compat() => {}
+            };
+        });
     }
 }

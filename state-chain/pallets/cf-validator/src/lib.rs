@@ -52,7 +52,7 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Auction, AuctionPhase, EpochInfo};
+use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -174,10 +174,9 @@ pub mod pallet {
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure_root(origin)?;
-			Force::<T>::set(true);
-			Self::deposit_event(Event::ForceRotationRequested());
+			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			Self::force_validator_rotation();
 			Ok(().into())
 		}
 
@@ -202,8 +201,8 @@ pub mod pallet {
 
 	/// The starting block number for the current epoch
 	#[pallet::storage]
-	#[pallet::getter(fn last_block_number)]
-	pub(super) type LastBlockNumber<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	#[pallet::getter(fn current_epoch_started_at)]
+	pub(super) type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The number of blocks an epoch runs for
 	#[pallet::storage]
@@ -221,24 +220,18 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub epoch_number_of_blocks: T::BlockNumber,
-	}
+	pub struct GenesisConfig {}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				epoch_number_of_blocks: Zero::zero(),
-			}
+			Self {}
 		}
 	}
 
-	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			// The auction pallet should have ran through an auction
 			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
 				T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
 			}
@@ -327,15 +320,15 @@ impl<T: Config> Pallet<T> {
 			return true;
 		}
 
-		let epoch_blocks = BlocksPerEpoch::<T>::get();
-		if epoch_blocks == Zero::zero() {
+		let blocks_per_epoch = BlocksPerEpoch::<T>::get();
+		if blocks_per_epoch == Zero::zero() {
 			return false;
 		}
-		let last_block_number = LastBlockNumber::<T>::get();
-		let diff = now.saturating_sub(last_block_number);
-		let end = diff >= epoch_blocks;
+		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
+		let diff = now.saturating_sub(current_epoch_started_at);
+		let end = diff >= blocks_per_epoch;
 		if end {
-			LastBlockNumber::<T>::set(now);
+			CurrentEpochStartedAt::<T>::set(now);
 		}
 
 		return end;
@@ -348,6 +341,11 @@ impl<T: Config> Pallet<T> {
 		for validator in <pallet_session::Module<T>>::validators() {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
+	}
+
+	fn force_validator_rotation() {
+		Force::<T>::set(true);
+		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
 	}
 }
 
@@ -406,5 +404,13 @@ pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	fn convert(account: T::AccountId) -> Option<T::AccountId> {
 		Some(account)
+	}
+}
+
+pub struct EmergencyRotationOf<T>(PhantomData<T>);
+
+impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
+	fn request_emergency_rotation() {
+		Pallet::<T>::force_validator_rotation();
 	}
 }

@@ -3,7 +3,7 @@ use std::mem;
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
 };
-use cf_traits::{Issuance, StakeTransfer};
+use cf_traits::{BondRotation, Issuance, StakeTransfer};
 use frame_support::traits::{HandleLifetime, Imbalance};
 use frame_support::{assert_noop, assert_ok};
 
@@ -192,6 +192,21 @@ fn stake_transfers() {
 		Flip::set_validator_bond(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 100);
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
+
+		check_balance_integrity();
+	});
+}
+
+#[test]
+fn update_bonds() {
+	new_test_ext().execute_with(|| {
+		<Flip as BondRotation>::update_validator_bonds(&vec![ALICE, BOB], 20);
+		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
+
+		<Flip as BondRotation>::update_validator_bonds(&vec![BOB], 10);
+		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 10);
 
 		check_balance_integrity();
 	});
@@ -467,6 +482,41 @@ mod test_tx_payments {
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
 			// The fee was bured.
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
+		});
+	}
+}
+
+mod test_slashing {
+	use cf_traits::Slashing;
+
+	use crate::{FlipSlasher, SlashingRate};
+
+	use super::*;
+	#[test]
+	fn test_slash_validator() {
+		new_test_ext().execute_with(|| {
+			// Amount of blocks the validator was offline
+			const BLOCKS_OFFLINE: u64 = 20;
+			// Amount of extra token we need to mint
+			const MINT: u128 = 80_000_000;
+			// Minimum active bid
+			const BOND: u128 = 8_000_000;
+			// Slashing rate is 5 % / slash relates on the BOND
+			const SLASHING_RATE: u128 = 5;
+			const BLOCKS_PER_DAY: u128 = <Test as Config>::BlocksPerDay::get() as u128;
+			const EXPECTED_SLASH: u128 =
+				BOND / 100 * SLASHING_RATE / BLOCKS_PER_DAY * BLOCKS_OFFLINE as u128;
+			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
+			Flip::settle(&ALICE, Flip::mint(MINT).into());
+			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
+			Flip::set_validator_bond(&ALICE, BOND);
+			// Set the slashing rate to 5%
+			SlashingRate::<Test>::set(SLASHING_RATE);
+			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE), 0);
+			let balance_after = Flip::total_balance_of(&ALICE);
+			// Check if the diff between the balances is the expected slash
+			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
+			check_balance_integrity();
 		});
 	}
 }

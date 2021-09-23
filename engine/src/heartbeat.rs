@@ -1,3 +1,6 @@
+use crate::common::Mutex;
+use std::sync::Arc;
+
 use slog::o;
 use substrate_subxt::{Client, PairSigner};
 
@@ -10,16 +13,11 @@ use crate::state_chain::pallets::reputation::HeartbeatCallExt;
 /// Submits a heartbeat to the SC on start up and then every HeartbeatBlockInterval / 2 blocks
 pub async fn start(
     subxt_client: Client<StateChainRuntime>,
-    signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     logger: &slog::Logger,
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "Heartbeat"));
     slog::info!(logger, "Starting");
-
-    subxt_client
-        .heartbeat(&signer)
-        .await
-        .expect("Should send heartbeat on startup successfully");
 
     let heartbeat_block_interval = subxt_client
         .metadata()
@@ -29,6 +27,25 @@ pub async fn start(
         .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
         .value::<u32>()
         .expect("Could not decode HeartbeatBlockInterval to u32");
+
+    async fn submit_heartbeat(
+        subxt_client: &Client<StateChainRuntime>,
+        signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
+        logger: &slog::Logger,
+    ) {
+        let mut signer = signer.lock().await;
+        match subxt_client.heartbeat(&*signer).await {
+            Ok(_) => {
+                slog::info!(logger, "Sent heartbeat successfully");
+                signer.increment_nonce();
+            }
+            Err(e) => {
+                slog::error!(logger, "Failed to submit heartbeat: {:?}", e);
+            }
+        }
+    }
+
+    submit_heartbeat(&subxt_client, signer.clone(), &logger).await;
 
     slog::info!(
         logger,
@@ -44,10 +61,12 @@ pub async fn start(
     while let Some(block_header) = blocks.next().await {
         // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
-            slog::info!(logger, "Sending heartbeat");
-            if let Err(e) = subxt_client.heartbeat(&signer).await {
-                slog::error!(logger, "Error submitting heartbeat: {:?}", e)
-            }
+            slog::info!(
+                logger,
+                "Sending heartbeat at block: {}",
+                block_header.number
+            );
+            submit_heartbeat(&subxt_client, signer.clone(), &logger).await
         }
     }
 }
@@ -68,7 +87,7 @@ mod tests {
         let logger = logging::test_utils::create_test_logger();
 
         let alice = AccountKeyring::Alice.pair();
-        let pair_signer = PairSigner::new(alice);
+        let pair_signer = Arc::new(Mutex::new(PairSigner::new(alice)));
 
         start(
             ClientBuilder::<StateChainRuntime>::new()

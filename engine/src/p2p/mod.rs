@@ -1,92 +1,92 @@
-// Note: we temporary allow mock in non-test code
+pub mod conductor;
 #[cfg(test)]
 pub mod mock;
+pub mod rpc;
 
-pub mod conductor;
-mod rpc;
+pub use cf_p2p_rpc::{P2PEvent, P2PRpcClient};
 
-use std::convert::TryInto;
-
-pub use rpc::RpcP2PClient;
-
-use serde::{Deserialize, Serialize};
-
+use anyhow::Result;
 use async_trait::async_trait;
-use futures::Stream;
-use rpc::Base58;
-
-#[derive(Debug)]
-pub enum P2PNetworkClientError {
-    Format,
-    Rpc,
-}
+use futures::stream::BoxStream;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 type StatusCode = u64;
 
+/// Trait for handling messages to/from the P2P layer
+/// i.e. messages that come from / go to *other* nodes in the network
 #[async_trait]
-pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
+pub trait P2PNetworkClient {
+    type NetworkEvent;
+
     /// Broadcast to all validators on the network
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode>;
 
     /// Send to a specific `validator` only
-    async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
+    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode>;
 
-    async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError>;
+    /// Get a stream of notifications from the network.
+    async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>>;
+}
+
+/// Handles P2P network events.
+#[async_trait]
+pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
+    async fn handle_event(&self, event: C::NetworkEvent);
+}
+
+struct P2PRpcEventHandler {
+    p2p_message_sender: UnboundedSender<P2PMessage>,
+    logger: slog::Logger,
+}
+
+#[async_trait]
+impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
+    async fn handle_event(&self, network_event: Result<P2PEvent>) {
+        match network_event {
+            Ok(event) => match event {
+                P2PEvent::MessageReceived(sender, message) => {
+                    self.p2p_message_sender
+                        .send(P2PMessage {
+                            sender_id: AccountId(sender.0),
+                            data: message.0,
+                        })
+                        .map_err(|_| "Receiver dropped")
+                        .unwrap();
+                }
+                P2PEvent::ValidatorConnected(id) => {
+                    slog::debug!(self.logger, "Validator '{}' has joined the network.", id);
+                }
+                P2PEvent::ValidatorDisconnected(id) => {
+                    slog::debug!(self.logger, "Validator '{}' has left the network.", id);
+                }
+                P2PEvent::Error(e) => {
+                    slog::error!(self.logger, "P2P protocol error: {:?}", e);
+                }
+            },
+            Err(e) => panic!("Subscription stream error: {}", e),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct ValidatorId(pub [u8; 32]);
+pub struct AccountId(pub [u8; 32]);
 
-impl ValidatorId {
-    // A convenience method to quickly generate different validator ids
-    // from a string of any size that is no larger that 32 bytes
-    #[cfg(test)]
-    pub fn new<T: ToString>(id: T) -> Self {
-        let id_str = id.to_string();
-        let id_bytes = id_str.as_bytes();
-
-        let mut id: [u8; 32] = [0; 32];
-
-        for (idx, byte) in id_bytes.iter().enumerate() {
-            id[idx] = *byte;
-        }
-
-        ValidatorId(id)
-    }
-
-    pub fn from_base58(id: &str) -> anyhow::Result<Self> {
-        let id = bs58::decode(&id)
-            .into_vec()
-            .map_err(|_| anyhow::format_err!("Invalid base58"))?;
-        let id = id
-            .try_into()
-            .map_err(|_| anyhow::format_err!("Invalid id size"))?;
-
-        Ok(ValidatorId(id))
-    }
-}
-
-impl std::fmt::Display for ValidatorId {
+impl std::fmt::Display for AccountId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ValidatorId({})", self.to_base58())
-    }
-}
-
-impl Base58 for ValidatorId {
-    fn to_base58(&self) -> String {
-        bs58::encode(&self.0).into_string()
+        write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
     }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
-    pub sender_id: ValidatorId,
+    pub sender_id: AccountId,
     pub data: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct P2PMessageCommand {
-    pub destination: ValidatorId,
+    pub destination: AccountId,
     pub data: Vec<u8>,
 }
 
@@ -94,21 +94,20 @@ pub struct P2PMessageCommand {
 /// validator `destination`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CommandSendMessage {
-    destination: ValidatorId,
+    destination: AccountId,
     data: Vec<u8>,
 }
 
 #[cfg(test)]
 mod tests {
-
+    use futures::StreamExt;
     use itertools::Itertools;
-    use tokio::sync::mpsc::UnboundedReceiver;
 
     use super::mock::*;
     use super::*;
 
-    async fn receive_with_timeout<T>(mut receiver: UnboundedReceiver<T>) -> Option<T> {
-        let fut = receiver.recv();
+    async fn receive_with_timeout<T>(mut stream: BoxStream<'_, T>) -> Option<T> {
+        let fut = stream.next();
         tokio::time::timeout(std::time::Duration::from_millis(5), fut)
             .await
             .unwrap_or(None)
@@ -119,9 +118,9 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![1, 2, 3];
-        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
+        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
 
-        let mut clients = validator_ids
+        let clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))
             .collect_vec();
@@ -134,7 +133,7 @@ mod tests {
         let stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_1.into_inner()).await,
+            receive_with_timeout(stream_1).await,
             Some(P2PMessage {
                 sender_id: validator_ids[0].clone(),
                 data: data.clone()
@@ -143,7 +142,7 @@ mod tests {
 
         let stream_2 = clients[2].take_stream().await.unwrap();
 
-        assert_eq!(receive_with_timeout(stream_2.into_inner()).await, None);
+        assert_eq!(receive_with_timeout(stream_2).await, None);
     }
 
     #[tokio::test]
@@ -151,8 +150,8 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
-        let mut clients = validator_ids
+        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
+        let clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))
             .collect_vec();
@@ -163,7 +162,7 @@ mod tests {
         let stream_0 = clients[0].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_0.into_inner()).await,
+            receive_with_timeout(stream_0).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()
@@ -173,7 +172,7 @@ mod tests {
         let stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_2.into_inner()).await,
+            receive_with_timeout(stream_2).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()

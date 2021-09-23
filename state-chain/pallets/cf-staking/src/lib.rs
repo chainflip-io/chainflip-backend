@@ -59,7 +59,7 @@ use sp_std::prelude::*;
 use sp_std::vec;
 
 use codec::{Encode, FullCodec};
-use ethabi::{Bytes, Function, Param, ParamType};
+use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
@@ -153,6 +153,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	/// Store the list of staked accounts and whether or not they are retired
 	#[pallet::storage]
 	pub(super) type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
@@ -671,6 +672,7 @@ impl<T: Config> Pallet<T> {
 			],
 			vec![],
 			false,
+			StateMutability::NonPayable,
 		);
 
 		register_claim.encode_input(&vec![
@@ -678,13 +680,13 @@ impl<T: Config> Pallet<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(claim_details.nonce.into()),
+				Token::Uint(ethabi::ethereum_types::U256(claim_details.nonce.into().0)),
 				Token::Address(Address::from(claim_details.address)),
 			]),
 			// nodeId: bytes32
 			Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
 			// amount: uint
-			Token::Uint(claim_details.amount.into()),
+			Token::Uint(ethabi::ethereum_types::U256(claim_details.amount.into().0)),
 			// staker: address
 			Token::Address(Address::from(claim_details.address)),
 			// expiryTime: uint48
@@ -745,13 +747,11 @@ impl<T: Config> Pallet<T> {
 			return weight;
 		}
 
-		let expiries = ClaimExpiries::<T>::get();
-		let time_now = T::TimeSource::now();
-
 		weight = weight.saturating_add(T::DbWeight::get().reads(2));
 
+		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < time_now);
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
 
 		if expiry_cutoff == 0 {
 			return weight;
@@ -786,8 +786,6 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
-/// all non-retired accounts.
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;

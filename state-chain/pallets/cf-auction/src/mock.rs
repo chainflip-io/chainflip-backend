@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
+use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -16,6 +16,12 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
 type ValidatorId = u64;
+
+impl WeightInfo for () {
+	fn set_auction_size_range() -> u64 {
+		0 as Weight
+	}
+}
 
 pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
 pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
@@ -39,7 +45,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -84,7 +90,18 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockAuctionHandler;
+	type WeightInfo = ();
+	type Handler = MockVaultRotation;
+	type Online = MockOnline;
+}
+
+pub struct MockOnline;
+impl Online for MockOnline {
+	type ValidatorId = ValidatorId;
+
+	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -109,6 +126,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			winners: vec![JOE_BID.0],
+			minimum_active_bid: JOE_BID.1,
 		}),
 	};
 
