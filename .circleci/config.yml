@@ -119,18 +119,12 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - compile-validator-package:
+      - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
             - discord-webhooks
-          <<: *only_main_branches
-      - test-validator-package:
-          requires:
-            - compile-validator-package
-          context:
-            - ghcr-credentials
           <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
@@ -138,7 +132,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - test-validator-package
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -148,7 +142,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
           extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - test-validator-package
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -218,8 +212,6 @@ jobs:
           version: 20.10.7
           docker_layer_caching: true
       - checkout
-      - attach_workspace:
-          at: ./
       - docker/check:
           docker-username: DOCKER_USERNAME
           registry: ghcr.io
@@ -298,6 +290,35 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
+
+  cargo-build-and-test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: |
+          cargo build --locked --release
+          sccache -s
+      - run: |
+          cargo test --lib --locked --release
+          sccache -s
+      - discord/status:
+          fail_only: true
+          failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
+          only_for_branches: "develop,main"
+          webhook: $DW_ALERTS_STAGING
+
+  cargo-check-and-test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: |
+          cargo check --locked --release
+          sccache -s
+      - run: |
+          cargo build --locked --release
+          sccache -s
 
   compile-validator-package-machine:
     <<: *cargo-base-job
