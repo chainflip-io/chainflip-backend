@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error, RetryQueue,
-	Event as BroadcastEvent, Instance0
+	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error,
+	Event as BroadcastEvent, Instance0, RetryQueue,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
@@ -42,10 +42,10 @@ impl MockCfe {
 				}
 				BroadcastEvent::RetryScheduled(_, _) => {
 					// Informational only. No action required by the CFE.
-				},
+				}
 				BroadcastEvent::BroadcastFailed(id, _, _) => {
 					FAILED_BROADCASTS.with(|cell| cell.borrow_mut().push(id));
-				},
+				}
 				BroadcastEvent::__Ignore(_, _) => unimplemented!(),
 			},
 			_ => panic!("Unexpected event"),
@@ -87,7 +87,7 @@ impl MockCfe {
 			Scenario::BroadcastFailure(failure) => {
 				DogeBroadcast::broadcast_failure(Origin::root(), id, failure, [0xcf; 4])
 			}
-			_ => unimplemented!()
+			_ => unimplemented!(),
 		});
 	}
 }
@@ -133,7 +133,11 @@ fn test_broadcast_rejected() {
 			Origin::root(),
 			MockUnsignedTx
 		));
-		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).unwrap().attempt == 0);
+		assert!(
+			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID)
+				.unwrap()
+				.attempt_count == 0
+		);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
@@ -141,15 +145,27 @@ fn test_broadcast_rejected() {
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
 
 		// CFE responds that the transaction was rejected.
-		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionRejected));
+		MockCfe::respond(Scenario::BroadcastFailure(
+			BroadcastFailure::TransactionRejected,
+		));
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
-		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 1);
+		assert_eq!(
+			RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
+			1
+		);
 
 		// The `on_initialize` hook is called and triggers a new broadcast attempt.
 		DogeBroadcast::on_initialize(0);
-		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 0);
-		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID + 1).unwrap().attempt == 1);
+		assert_eq!(
+			RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
+			0
+		);
+		assert!(
+			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID + 1)
+				.unwrap()
+				.attempt_count == 1
+		);
 
 		// The nominee was not reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
@@ -169,7 +185,7 @@ fn test_broadcast_failed() {
 		assert!(
 			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID)
 				.unwrap()
-				.attempt == 0
+				.attempt_count == 0
 		);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
@@ -178,7 +194,9 @@ fn test_broadcast_failed() {
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
 
 		// CFE responds that the transaction failed.
-		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionFailed));
+		MockCfe::respond(Scenario::BroadcastFailure(
+			BroadcastFailure::TransactionFailed,
+		));
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
 
@@ -188,7 +206,9 @@ fn test_broadcast_failed() {
 			0
 		);
 		// The broadcast has failed.
-		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionFailed));
+		MockCfe::respond(Scenario::BroadcastFailure(
+			BroadcastFailure::TransactionFailed,
+		));
 		assert_eq!(
 			FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
 			BROADCAST_ID
@@ -209,7 +229,7 @@ fn test_bad_signature() {
 		assert!(
 			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID)
 				.unwrap()
-				.attempt == 0
+				.attempt_count == 0
 		);
 
 		// CFE responds with an invalid transaction.
@@ -218,7 +238,10 @@ fn test_bad_signature() {
 		// Broadcast is removed and scheduled for retry.
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
-		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 1);
+		assert_eq!(
+			RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
+			1
+		);
 
 		// The nominee was reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);

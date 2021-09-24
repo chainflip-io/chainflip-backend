@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, SignerNomination, Instance0};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -93,7 +93,7 @@ pub struct MockUnsignedTx;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum MockSignedTx {
-	Valid, 
+	Valid,
 	Invalid,
 }
 
