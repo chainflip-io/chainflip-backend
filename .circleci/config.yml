@@ -58,7 +58,7 @@ executors:
         auth: *dockerconfig
   rust-base:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:slim
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
   machine-image:
     machine:
