@@ -35,6 +35,7 @@ thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
+	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
@@ -129,6 +130,21 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+}
+
+pub struct MockEmergencyRotation;
+
+impl EmergencyRotation for MockEmergencyRotation {
+	fn request_emergency_rotation() {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow())
+	}
+
+	fn emergency_rotation_completed() {}
 }
 
 impl Config for Test {
@@ -145,6 +161,8 @@ impl Config for Test {
 	type Online = MockOnline;
 	type BackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
+	type EmergencyRotation = MockEmergencyRotation;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 pub struct MockChainflipAccount;

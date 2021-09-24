@@ -62,7 +62,8 @@ extern crate assert_matches;
 
 use cf_traits::{
 	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, ChainflipAccount,
-	ChainflipAccountState, Online, RemainingBid, StakerHandler, VaultRotationHandler, VaultRotator,
+	ChainflipAccountState, EmergencyRotation, Online, RemainingBid, StakerHandler,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
@@ -80,8 +81,8 @@ pub trait WeightInfo {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::RemainingBid;
 	use cf_traits::{ChainflipAccount, VaultRotator};
+	use cf_traits::{EmergencyRotation, RemainingBid};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_runtime::traits::Convert;
 	use sp_std::ops::Add;
@@ -124,9 +125,14 @@ pub mod pallet {
 		type AccountIdOf: Convert<Self::ValidatorId, Self::AccountId>;
 		/// An online validator
 		type Online: Online<ValidatorId = Self::ValidatorId>;
+		/// Emergency Rotations
+		type EmergencyRotation: EmergencyRotation;
 		/// Ratio of backup validators
 		#[pallet::constant]
 		type BackupValidatorRatio: Get<u32>;
+		/// Percentage of backup validators in validating set in a emergency rotation
+		#[pallet::constant]
+		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -175,6 +181,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn highest_passive_validator_bid)]
 	pub(super) type HighestPassiveNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
+	/// The last minimum active bid
+	#[pallet::storage]
+	#[pallet::getter(fn last_minimum_active_bid)]
+	pub(super) type LastMinimumActiveBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -337,16 +348,50 @@ impl<T: Config> Auction for Pallet<T> {
 					let validator_set_size = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
 					let validator_group_size = min(validator_set_size, number_of_bidders);
-					let validating_set: Vec<_> =
+					let mut validating_set: Vec<_> =
 						bids.iter().take(validator_group_size as usize).collect();
+
+					if T::EmergencyRotation::emergency_rotation_in_progress() {
+						// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
+						// of existing BVs in the validating set.  We ensure this by using the last
+						// MAB to understand who were BVs and ensure we only maintain the required
+						// amount under this level to avoid a superminority of low collateralised nodes.
+						let last_minimum_active_bid = LastMinimumActiveBid::<T>::get();
+						match validating_set
+							.iter()
+							.position(|(_, amount)| amount < &last_minimum_active_bid)
+						{
+							Some(position) => {
+								let number_of_backup_validators =
+									validator_group_size as usize - position;
+
+								let desired_number_of_backup_validators = validator_group_size
+									.saturating_mul(
+										T::PercentageOfBackupValidatorsInEmergency::get(),
+									)
+									.checked_div(100)
+									.unwrap_or_default()
+									as usize;
+
+								let trim_at_end_by = number_of_backup_validators
+									- desired_number_of_backup_validators;
+
+								validating_set.truncate(trim_at_end_by);
+							}
+							None => {}
+						}
+					}
+
 					let minimum_active_bid = validating_set
 						.last()
 						.map(|(_, bid)| *bid)
 						.unwrap_or_default();
+
 					let validating_set: Vec<_> = validating_set
 						.iter()
 						.map(|(validator_id, _)| (*validator_id).clone())
 						.collect();
+
 					let backup_group_size = min(
 						number_of_bidders - validator_group_size,
 						validator_set_size / T::BackupValidatorRatio::get(),
