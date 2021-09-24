@@ -17,7 +17,6 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-        - fix/cfe-debug
 
 only_epic_branches: &only_epic_branches
   filters:
