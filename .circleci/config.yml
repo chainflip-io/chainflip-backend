@@ -302,7 +302,9 @@ jobs:
     executor: machine-image
     steps:
       - checkout
-      - run: ./configure.sh
+      - run: |
+          chmod +x configure.sh
+          ./configure.sh
 
   clone-contracts-repo:
     resource_class: small
