@@ -19,11 +19,12 @@ use crate::{
         SigningInfo, SigningOutcome,
     },
     state_chain::{
-        pallets::vaults::{
-            KeygenResponseCallExt, ThresholdSignatureResponseCallExt, VaultRotationResponseCallExt,
-            VaultsEvent::{
-                KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
-            },
+        pallets::vaults::VaultsEvent::{
+            KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
+        },
+        pallets::witness_api::{
+            WitnessKeygenResponseCallExt, WitnessThresholdSignatureResponseCallExt,
+            WitnessVaultRotationResponseCallExt,
         },
         sc_event::SCEvent::VaultsEvent,
     },
@@ -119,19 +120,24 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
-                            let signer = signer.lock().await;
-                            subxt_client
-                                .keygen_response(
+                            let mut signer = signer.lock().await;
+                            match subxt_client
+                                .witness_keygen_response(
                                     &*signer,
                                     keygen_request_event.ceremony_id,
                                     response,
                                 )
                                 .await
-                                .unwrap(); // TODO: Handle error
+                            {
+                                Ok(_) => signer.increment_nonce(),
+                                Err(e) => {
+                                    slog::error!(
+                                        logger,
+                                        "Could not submit witness_keygen_response for ceremony_id {}: {}", keygen_request_event.ceremony_id, e
+                                    )
+                                }
+                            }
                         }
-                        // TODO: Provide the pubkey of the key we want to sign with to the signing module
-                        // from this event
-                        // https://github.com/chainflip-io/chainflip-backend/issues/492
                         ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                             let signers: Vec<_> = threshold_sig_requst
                                 .threshold_signature_request
@@ -202,20 +208,33 @@ pub async fn start(
                                 },
                                 _ => panic!("Channel closed"),
                             };
-                            let signer = signer.lock().await;
-                            subxt_client
-                                .threshold_signature_response(
+                            let mut signer = signer.lock().await;
+                            match subxt_client
+                                .witness_threshold_signature_response(
                                     &*signer,
                                     threshold_sig_requst.ceremony_id,
                                     response,
                                 )
                                 .await
-                                .unwrap(); // TODO handle error
+                            {
+                                Ok(_) => signer.increment_nonce(),
+                                Err(e) => {
+                                    slog::error!(
+                                        logger,
+                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", threshold_sig_requst.ceremony_id, e
+                                    )
+                                }
+                            }
                         }
                         VaultRotationRequestEvent(vault_rotation_request_event) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
                                 ChainParams::Ethereum(tx) => {
-                                    slog::debug!(logger, "Broadcasting to ETH: {:?}", tx);
+                                    slog::debug!(
+                                        logger,
+                                        "Sending ETH vault rotation tx for ceremony {}: {:?}",
+                                        vault_rotation_request_event.ceremony_id,
+                                        tx
+                                    );
                                     // TODO: Contract address should come from the state chain
                                     // https://github.com/chainflip-io/chainflip-backend/issues/459
                                     let response = match eth_broadcaster
@@ -241,15 +260,23 @@ pub async fn start(
                                             VaultRotationResponse::Error
                                         }
                                     };
-                                    let signer = signer.lock().await;
-                                    subxt_client
-                                        .vault_rotation_response(
+                                    let mut signer = signer.lock().await;
+                                    match subxt_client
+                                        .witness_vault_rotation_response(
                                             &*signer,
                                             vault_rotation_request_event.ceremony_id,
                                             response,
                                         )
                                         .await
-                                        .unwrap(); // TODO: Handle error
+                                    {
+                                        Ok(_) => signer.increment_nonce(),
+                                        Err(e) => {
+                                            slog::error!(
+                                                logger,
+                                                "Could not submit witness_vault_rotation_response for ceremony_id {}: {}", vault_rotation_request_event.ceremony_id, e
+                                            )
+                                        }
+                                    }
                                 }
                                 // Leave this to be explicit about future chains being added
                                 ChainParams::Other(_) => panic!("Chain::Other does not exist"),
@@ -258,6 +285,7 @@ pub async fn start(
                     },
                     _ => {
                         // ignore events we don't care about
+                        slog::trace!(logger, "Ignoring event: {:?}", raw_event);
                     }
                 }
             }

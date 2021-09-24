@@ -377,7 +377,6 @@ impl<T: Config>
 						}
 					})
 				} else {
-					// Abort this key generation request
 					Pallet::<T>::abort_rotation();
 					Err(RotationError::KeyResponseFailed)
 				}

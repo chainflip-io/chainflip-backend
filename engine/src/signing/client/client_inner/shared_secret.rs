@@ -205,7 +205,7 @@ impl SharedSecretState {
             .phase2_verify_vss_construct_keypair(params, y_vec, ss_vec, vss_vec, index);
 
         res.map(|shared_keys| {
-            slog::info!(self.logger, "[{}] phase 3 is OK", self.signer_idx);
+            slog::info!(self.logger, "[{}] phase 3 successful ✅", self.signer_idx);
 
             KeygenResult {
                 keys: self.key.clone(),
