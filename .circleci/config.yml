@@ -101,18 +101,13 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - check-validator-package:
+      - cargo-check-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - test-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
+
   chainflip-backend-release:
     jobs:
       - fmt-validator-package:
