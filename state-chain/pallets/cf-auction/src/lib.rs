@@ -112,9 +112,7 @@ pub mod pallet {
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 		/// An index for the current auction
 		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
-		/// Minimum amount of validators
-		#[pallet::constant]
-		type MinValidators: Get<u32>;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 		/// The lifecycle of a vault rotation
@@ -127,6 +125,9 @@ pub mod pallet {
 		type Online: Online<ValidatorId = Self::ValidatorId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
+		/// Minimum amount of validators
+		#[pallet::constant]
+		type MinValidators: Get<u32>;
 		/// Ratio of backup validators
 		#[pallet::constant]
 		type BackupValidatorRatio: Get<u32>;
