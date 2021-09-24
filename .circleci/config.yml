@@ -115,18 +115,7 @@ workflows:
           <<: *ignore_main_branches
   chainflip-backend-release:
     jobs:
-      - build-docker-image:
-          name: build-rust-base
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
-          dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
       - fmt-validator-package:
-          requires:
-            - build-rust-base
           context:
             - ghcr-credentials
           <<: *only_main_branches
