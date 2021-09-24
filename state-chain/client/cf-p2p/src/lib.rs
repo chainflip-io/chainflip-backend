@@ -250,33 +250,23 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 	impl P2PValidatorNetworkNodeState {
 		// THIS SHOULDN'T GO INTO DEVELOP!!!!
 		fn log_peer_to_validator_mapping(&self, location: &str) {
-			log::info!("Peer to Validator Id Mapping at {} : {}", location, {
+			log::info!("Peer to Validator Id Mapping at {} is {}", location, {
 				use itertools::Itertools;
 				self.peer_to_validator
 					.iter()
 					.map(|(peer, validator)| {
 						let validator = match validator {
-							Some(validator) => format!("{}", AccountIdBs58::from(*validator)),
+							Some(validator) => {
+								let mut validator = format!("{}", AccountIdBs58::from(*validator));
+								validator.truncate(6);
+								validator
+							},
 							None => "None".to_string(),
 						};
 
-						format!("peer {} -> validator {}", peer, validator)
+						format!("Peer: {} -> Validator: {}", peer, validator)
 					})
-					.intersperse(":\n".to_string())
-					.collect::<String>()
-			});
-			log::info!("Validator to Peer Id Mapping at {} : {}", location, {
-				use itertools::Itertools;
-				self.validator_to_peer
-					.iter()
-					.map(|(validator, peer)| {
-						format!(
-							"validator {} -> peer {}",
-							AccountIdBs58::from(*validator),
-							peer
-						)
-					})
-					.intersperse(":".to_string())
+					.intersperse(" | ".to_string())
 					.collect::<String>()
 			});
 		}
@@ -486,7 +476,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							state
 								.lock()
 								.unwrap()
-								.log_peer_to_validator_mapping("SyncConnected");
+								.log_peer_to_validator_mapping(&format!("SyncConnected from {:?}", remote));
 							p2p_network_service.reserve_peer(remote);
 						}
 						Event::SyncDisconnected { remote } => {
@@ -501,12 +491,12 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							protocol,
 							role: _,
 						} => {
-							state
-								.lock()
-								.unwrap()
-								.log_peer_to_validator_mapping("NotificationStreamOpened");
-
+							
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								state
+									.lock()
+									.unwrap()
+									.log_peer_to_validator_mapping(&format!("NotificationStreamOpened from {:?}", remote));
 								let mut state = state.lock().unwrap();
 								state.peer_to_validator.insert(remote, None);
 								if let Some(validator_id) = state.local_validator_id {
@@ -519,12 +509,12 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationStreamClosed { remote, protocol } => {
-							state
-								.lock()
-								.unwrap()
-								.log_peer_to_validator_mapping("NotificationStreamClosed");
-
+							
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								state
+									.lock()
+									.unwrap()
+									.log_peer_to_validator_mapping("NotificationStreamClosed");
 								let mut state = state.lock().unwrap();
 								if let Some(Some(validator_id)) =
 									state.peer_to_validator.remove(&remote)
@@ -538,26 +528,31 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationsReceived { remote, messages } => {
-							state
-								.lock()
-								.unwrap()
-								.log_peer_to_validator_mapping("NotificationsReceived");
-
+							
 							let mut messages = messages
-								.into_iter()
-								.filter_map(|(protocol, data)| {
-									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-										Some(data)
-									} else {
-										None
-									}
-								})
-								.peekable();
+							.into_iter()
+							.filter_map(|(protocol, data)| {
+								if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+									Some(data)
+								} else {
+									None
+								}
+							})
+							.peekable();
 							if messages.peek().is_some() {
+								state
+									.lock()
+									.unwrap()
+									.log_peer_to_validator_mapping("NotificationsReceived");
 								let mut state = state.lock().unwrap();
 								for message in messages {
 									match bincode::deserialize(&message) {
 										Ok(P2PMessage::SelfIdentify(validator_id)) => {
+											log::info!(
+												"Received identify for peer {:?} of {}",
+												remote,
+												AccountIdBs58::from(validator_id)
+											);
 											match state.peer_to_validator.entry(remote) {
 												Entry::Vacant(_entry) => {
 													log::warn!(
