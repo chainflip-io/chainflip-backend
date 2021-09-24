@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        # - update/epic-ci
+        - test/ci-with-machine
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -59,6 +59,10 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  machine-image:
+    machine:
+      image: ubuntu-2004:202107-02
+
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
@@ -66,6 +70,12 @@ orbs:
   doctl: digitalocean/cli@0.1.1
   helm: circleci/helm@1.2.0
 workflows:
+  test:
+    jobs:
+      - compile-validator-package-machine:
+          context:
+            - ghcr-credentials
+            - discord-webhooks
   chainflip-backend-checks:
     jobs:
       - build-docker-image:
@@ -285,6 +295,13 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
+
+  compile-validator-package-machine:
+    <<: *cargo-base-job
+    executor: machine-image
+    steps:
+      - checkout
+      - run: ./configure.sh
 
   clone-contracts-repo:
     resource_class: small
