@@ -137,6 +137,7 @@ impl pallet_cf_auction::Config for Test {
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
 	type BackupValidatorRatio = BackupValidatorRatio;
 }
 

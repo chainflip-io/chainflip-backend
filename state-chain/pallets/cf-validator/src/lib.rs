@@ -199,6 +199,11 @@ pub mod pallet {
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	/// An emergency rotation has been requested
+	#[pallet::storage]
+	#[pallet::getter(fn emergency_rotation_requested)]
+	pub(super) type EmergencyRotationRequested<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
@@ -305,8 +310,12 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auction::process().is_ok()
 			}
-			// Failing that do nothing
-			_ => false,
+			_ => {
+				// If we were in one, mark as completed
+				EmergencyRotationOf::<T>::emergency_rotation_completed();
+				// Do nothing more
+				false
+			}
 		};
 	}
 }
@@ -411,6 +420,18 @@ pub struct EmergencyRotationOf<T>(PhantomData<T>);
 
 impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
 	fn request_emergency_rotation() {
-		Pallet::<T>::force_validator_rotation();
+		if !Self::emergency_rotation_in_progress() {
+			Pallet::<T>::force_validator_rotation();
+		}
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EmergencyRotationRequested::<T>::get()
+	}
+
+	fn emergency_rotation_completed() {
+		if Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(false);
+		}
 	}
 }
