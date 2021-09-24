@@ -377,7 +377,8 @@ impl<T: Config> Auction for Pallet<T> {
 								let trim_at_end_by = number_of_backup_validators
 									- desired_number_of_backup_validators;
 
-								validating_set.truncate(trim_at_end_by);
+								validating_set
+									.truncate(validator_group_size as usize - trim_at_end_by);
 							}
 							None => {}
 						}

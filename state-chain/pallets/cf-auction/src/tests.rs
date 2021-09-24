@@ -20,10 +20,10 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Now move to the next phase, this should be the BidsTaken phase
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
-				if bids == expected_bidding());
+				if bids == MockBidderProvider::get_bidders());
 			// Read storage to confirm has been changed to BidsTaken
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bids)
-				if bids == expected_bidding());
+				if bids == MockBidderProvider::get_bidders());
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
@@ -53,22 +53,27 @@ mod test {
 		});
 	}
 
+	fn expected_group_sizes(number_of_bidders: u32) -> (u32, u32, u32) {
+		let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
+		let expected_number_of_backup_validators =
+			if number_of_bidders.saturating_sub(expected_number_of_validators) == 0 {
+				0
+			} else {
+				expected_number_of_validators / BACKUP_VALIDATOR_RATIO
+			};
+
+		let expected_number_of_passive_nodes = number_of_bidders
+			.saturating_sub(expected_number_of_backup_validators)
+			.saturating_sub(expected_number_of_validators);
+		(
+			expected_number_of_validators,
+			expected_number_of_backup_validators,
+			expected_number_of_passive_nodes,
+		)
+	}
+
 	#[test]
 	fn should_create_correct_size_of_groups() {
-		let expected_group_sizes = |number_of_bidders: u32| {
-			let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
-			let expected_number_of_backup_validators =
-				expected_number_of_validators / BACKUP_VALIDATOR_RATIO;
-			let expected_number_of_passive_nodes = number_of_bidders
-				.saturating_sub(expected_number_of_backup_validators)
-				.saturating_sub(expected_number_of_validators);
-			(
-				expected_number_of_validators,
-				expected_number_of_backup_validators,
-				expected_number_of_passive_nodes,
-			)
-		};
-
 		new_test_ext().execute_with(|| {
 			generate_bids(NUMBER_OF_BIDDERS);
 			run_auction();
@@ -79,9 +84,14 @@ mod test {
 			};
 
 			let validate_bidder_groups = || {
-				let number_of_bidders = expected_bidding().len() as u32;
+				let number_of_bidders = MockBidderProvider::get_bidders().len() as u32;
 				let (validators_size, backup_validators_size, passive_nodes_size) =
 					expected_group_sizes(number_of_bidders);
+
+				println!(
+					"{:?}, {:?}, {:?}",
+					validators_size, backup_validators_size, passive_nodes_size
+				);
 
 				match AuctionPallet::current_phase() {
 					AuctionPhase::WaitingForBids(validators, _) => {
@@ -92,6 +102,7 @@ mod test {
 							AuctionPallet::remaining_bidders().len() as u32
 								- AuctionPallet::backup_group_size()
 						);
+
 						validate_states(validators, ChainflipAccountState::Validator);
 
 						let backup_validators = AuctionPallet::remaining_bidders()
@@ -99,6 +110,7 @@ mod test {
 							.take(AuctionPallet::backup_group_size() as usize)
 							.map(|(validator_id, _)| *validator_id)
 							.collect();
+
 						validate_states(backup_validators, ChainflipAccountState::Backup);
 
 						let passive_nodes = AuctionPallet::remaining_bidders()
@@ -118,7 +130,8 @@ mod test {
 			validate_bidder_groups();
 
 			// Run a few auctions and validate groups
-			let auction_bidders = [MAX_VALIDATOR_SIZE - 1, MAX_VALIDATOR_SIZE, 100, 200, 1000];
+			// let auction_bidders = [MAX_VALIDATOR_SIZE - 1, MAX_VALIDATOR_SIZE, 100, 200, 1000];
+			let auction_bidders = [MAX_VALIDATOR_SIZE];
 			for bidders in auction_bidders.iter() {
 				generate_bids(*bidders);
 				run_auction();
@@ -244,6 +257,55 @@ mod test {
 			assert!(AuctionPallet::last_minimum_active_bid() > 0);
 		});
 	}
+
+	#[test]
+	fn should_adjust_groups_in_emergency() {
+		new_test_ext().execute_with(|| {
+			let number_of_bidders = 150u32;
+			let max_validators = 100u32;
+			// Create some bidders
+			generate_bids(number_of_bidders);
+			// Create a bigger group of validators, 100.
+			AuctionPallet::set_active_range((MIN_VALIDATOR_SIZE, max_validators)).unwrap();
+			// Run auction generate the groups
+			run_auction();
+			// Run an emergency rotation
+			MockEmergencyRotation::request_emergency_rotation();
+			// Take down half the validators, holy moses!
+			// This will produce mean half or 50% of our new validating set would be BVs, however, as this
+			// is an emergency rotation this would be cut back to only 30% of the validating set
+			// being ex BVs.
+			let mut bids = MockBidderProvider::get_bidders();
+			// Sort and take the top half out `max_validators / 2`
+			bids.sort_unstable_by_key(|k| k.1);
+			bids.reverse();
+			// Set our new set of bidders
+			let bidders_in_emergency_network = bids
+				.iter()
+				.skip((max_validators / 2) as usize)
+				.map(|bid| bid.clone())
+				.collect();
+
+			set_bidders(bidders_in_emergency_network);
+			// Let's now run an auction
+			run_auction();
+
+			// As this was an emergency rotation we should have only have 30% of BVs in the
+			// validating set.  This would mean a total validating set of (30% of max_validators)
+			// as BVs + 50 our old validating set which is left.
+			match AuctionPallet::current_phase() {
+				AuctionPhase::WaitingForBids(validating_set, _) => {
+					assert_eq!(
+						validating_set.len() as u32,
+						(PercentageOfBackupValidatorsInEmergency::get() * max_validators) / 100
+							+ (max_validators / 2)
+					);
+				}
+				_ => unreachable!("shall not pass"),
+			}
+		});
+	}
+
 	#[test]
 	fn changing_range() {
 		new_test_ext().execute_with(|| {

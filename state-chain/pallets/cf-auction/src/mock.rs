@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotation};
-use cf_traits::{Bid, ChainflipAccountData};
+use cf_traits::ChainflipAccountData;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -38,13 +38,13 @@ thread_local! {
 	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
-// Create a set of descending bids, including an invalid bid of amount 0
+// Create a set of descending bids
 pub fn generate_bids(number_of_bids: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
-		for bid_number in (0..number_of_bids as u64).rev() {
-			(*cell).push((bid_number + 1, bid_number * 100));
+		for bid_number in (1..=number_of_bids as u64).rev() {
+			(*cell).push((bid_number, bid_number * 100));
 		}
 	});
 }
@@ -71,16 +71,13 @@ pub fn last_event() -> mock::Event {
 		.event
 }
 
-// The last is invalid as it has a bid of 0
-pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
-	let mut bidders = TestBidderProvider::get_bidders();
-	bidders.pop();
-	bidders
-}
+// pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
+// 	MockBidderProvider::get_bidders()
+// }
 
 // The set we would expect
 pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
-	let mut bidders = TestBidderProvider::get_bidders();
+	let mut bidders = MockBidderProvider::get_bidders();
 	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
 	(
 		bidders
@@ -155,7 +152,7 @@ impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type BidderProvider = TestBidderProvider;
+	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
@@ -201,9 +198,9 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct TestBidderProvider;
+pub struct MockBidderProvider;
 
-impl BidderProvider for TestBidderProvider {
+impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
@@ -219,7 +216,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: TestBidderProvider::get_bidders()
+			winners: MockBidderProvider::get_bidders()
 				.iter()
 				.map(|(validator_id, _)| validator_id.clone())
 				.collect(),
