@@ -226,7 +226,7 @@ fn execute_extrinsic() {
 }
 
 #[test]
-fn execute_not_existing_extrinsic() {
+fn execute_not_existing_proposal() {
 	new_test_ext().execute_with(|| {
 		// Execute a proposal and expect a 404-Error
 		assert_noop!(
