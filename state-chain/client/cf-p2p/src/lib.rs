@@ -260,7 +260,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 								let mut validator = format!("{}", AccountIdBs58::from(*validator));
 								validator.truncate(6);
 								validator
-							},
+							}
 							None => "None".to_string(),
 						};
 
@@ -476,7 +476,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							state
 								.lock()
 								.unwrap()
-								.log_peer_to_validator_mapping(&format!("SyncConnected from {:?}", remote));
+								.log_peer_to_validator_mapping(&format!(
+									"SyncConnected from {:?}",
+									remote
+								));
 							p2p_network_service.reserve_peer(remote);
 						}
 						Event::SyncDisconnected { remote } => {
@@ -491,12 +494,14 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							protocol,
 							role: _,
 						} => {
-							
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								state
 									.lock()
 									.unwrap()
-									.log_peer_to_validator_mapping(&format!("NotificationStreamOpened from {:?}", remote));
+									.log_peer_to_validator_mapping(&format!(
+										"NotificationStreamOpened from {:?}",
+										remote
+									));
 								let mut state = state.lock().unwrap();
 								state.peer_to_validator.insert(remote, None);
 								if let Some(validator_id) = state.local_validator_id {
@@ -509,7 +514,6 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationStreamClosed { remote, protocol } => {
-							
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								state
 									.lock()
@@ -528,17 +532,16 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationsReceived { remote, messages } => {
-							
 							let mut messages = messages
-							.into_iter()
-							.filter_map(|(protocol, data)| {
-								if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-									Some(data)
-								} else {
-									None
-								}
-							})
-							.peekable();
+								.into_iter()
+								.filter_map(|(protocol, data)| {
+									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+										Some(data)
+									} else {
+										None
+									}
+								})
+								.peekable();
 							if messages.peek().is_some() {
 								state
 									.lock()
