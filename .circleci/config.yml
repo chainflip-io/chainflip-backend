@@ -253,9 +253,6 @@ jobs:
       - run: |
           cargo build --locked --release
           sccache -s
-      - run: |
-          cargo test --lib --locked --release
-          sccache -s
       - persist_to_workspace:
           root: ./
           paths:
