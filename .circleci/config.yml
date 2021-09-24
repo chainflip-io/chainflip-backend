@@ -212,6 +212,8 @@ jobs:
           version: 20.10.7
           docker_layer_caching: true
       - checkout
+      - attache_workspace:
+          at: ./
       - docker/check:
           docker-username: DOCKER_USERNAME
           registry: ghcr.io
@@ -249,48 +251,6 @@ jobs:
           -p cf-traits
           -- --check
 
-  check-validator-package:
-    <<: *cargo-base-job
-    steps:
-      - checkout
-      - persist_to_workspace:
-          root: ./
-          paths:
-            - target/*
-      - run: sccache -s
-      - run: |
-          cargo check --locked --release
-          sccache -s
-
-  test-validator-package:
-    <<: *cargo-base-job
-    steps:
-      - checkout
-      - attach_workspace:
-          at: ./
-      - run: sccache -s
-      - run: |
-          cargo test --locked --lib --release
-          sccache -s
-
-  compile-validator-package:
-    <<: *cargo-base-job
-    steps:
-      - checkout
-      - run: sccache -s
-      - run: |
-          cargo build --locked --release
-          sccache -s
-      - persist_to_workspace:
-          root: ./
-          paths:
-            - target/*
-      - discord/status:
-          fail_only: true
-          failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
-          only_for_branches: "develop,main"
-          webhook: $DW_ALERTS_STAGING
-
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
     steps:
@@ -302,6 +262,11 @@ jobs:
       - run: |
           cargo test --lib --locked --release
           sccache -s
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/release/state-chain-node
+            - target/release/chainflip-engine
       - discord/status:
           fail_only: true
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
