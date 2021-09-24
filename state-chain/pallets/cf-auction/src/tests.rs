@@ -241,7 +241,6 @@ mod test {
 		new_test_ext().execute_with(|| {
 			generate_bids(NUMBER_OF_BIDDERS);
 			run_auction();
-			MockEmergencyRotation::request_emergency_rotation();
 			assert!(AuctionPallet::last_minimum_active_bid() > 0);
 		});
 	}
