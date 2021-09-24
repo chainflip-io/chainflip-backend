@@ -1,3 +1,5 @@
+use core::convert::TryInto;
+
 use crate::ChainParams::Ethereum;
 use crate::{
 	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
@@ -119,6 +121,10 @@ impl<T: Config> EthereumChain<T> {
 		new_public_key: T::PublicKey,
 		signature: SchnorrSigTruncPubkey,
 	) -> ethabi::Result<Bytes> {
+		// strip y-parity from key (first byte)
+		let pubkey: Vec<u8> = new_public_key.into();
+		let y_parity = pubkey[0];
+		let x_pubkey: [u8; 32] = pubkey[1..].try_into().expect("Should be 32 bytes");
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![
@@ -131,7 +137,10 @@ impl<T: Config> EthereumChain<T> {
 						ParamType::Address,
 					]),
 				),
-				Param::new("newKey", ParamType::FixedBytes(32)),
+				Param::new(
+					"newKey",
+					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
+				),
 			],
 			vec![],
 			false,
@@ -143,8 +152,10 @@ impl<T: Config> EthereumChain<T> {
 				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
-			// newKey: bytes32
-			Token::FixedBytes(new_public_key.into()),
+			Token::Tuple(vec![
+				Token::Uint(x_pubkey.into()),
+				Token::Uint(y_parity.into()),
+			]),
 		])
 	}
 }
