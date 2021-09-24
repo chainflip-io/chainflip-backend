@@ -70,9 +70,15 @@ orbs:
   doctl: digitalocean/cli@0.1.1
   helm: circleci/helm@1.2.0
 workflows:
-  test:
+  #  machine-workflow-test:
+  #    jobs:
+  #      - compile-validator-package-machine:
+  #          context:
+  #            - ghcr-credentials
+  #            - discord-webhooks
+  single-job-test:
     jobs:
-      - compile-validator-package-machine:
+      - all-cargo:
           context:
             - ghcr-credentials
             - discord-webhooks
@@ -305,6 +311,13 @@ jobs:
       - run: |
           chmod +x configure.sh
           ./configure.sh
+
+  all-cargo:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: cargo build --locked --release
+      - run: cargo test --locked --lib --release && sccache -s
 
   clone-contracts-repo:
     resource_class: small
