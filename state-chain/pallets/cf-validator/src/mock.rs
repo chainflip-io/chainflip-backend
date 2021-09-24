@@ -122,6 +122,7 @@ impl pallet_session::Config for Test {
 parameter_types! {
 	pub const MinValidators: u32 = 2;
 	pub const BackupValidatorRatio: u32 = 3;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
 
 impl pallet_cf_auction::Config for Test {
@@ -139,6 +140,7 @@ impl pallet_cf_auction::Config for Test {
 	type Online = MockOnline;
 	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
 	type BackupValidatorRatio = BackupValidatorRatio;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 pub struct MockOnline;

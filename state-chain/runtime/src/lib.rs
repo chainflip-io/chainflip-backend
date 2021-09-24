@@ -139,6 +139,7 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const MinValidators: u32 = 2;
 	pub const BackupValidatorRatio: u32 = 3;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
 
 impl pallet_cf_auction::Config for Runtime {
@@ -155,6 +156,8 @@ impl pallet_cf_auction::Config for Runtime {
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
 	type BackupValidatorRatio = BackupValidatorRatio;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 // FIXME: These would be changed
