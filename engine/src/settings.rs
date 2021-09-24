@@ -8,8 +8,6 @@ use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use web3::types::H160;
 
-use crate::p2p::AccountId;
-
 pub use anyhow::Result;
 use url::Url;
 
