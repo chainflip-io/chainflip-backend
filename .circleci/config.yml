@@ -212,7 +212,7 @@ jobs:
           version: 20.10.7
           docker_layer_caching: true
       - checkout
-      - attache_workspace:
+      - attach_workspace:
           at: ./
       - docker/check:
           docker-username: DOCKER_USERNAME
