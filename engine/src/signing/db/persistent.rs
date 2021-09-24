@@ -31,13 +31,14 @@ impl PersistentKeyDB {
 }
 
 impl KeyDB for PersistentKeyDB {
-    fn update_key(&mut self, key_id: KeyId, key: &KeygenResultInfo) {
+    fn update_key(&mut self, key_id: KeyId, keygen_result_info: &KeygenResultInfo) {
         let mut tx = self.db.transaction();
 
         // TODO: this error should be handled better
-        let key_encoded = bincode::serialize(key).expect("Could not serialize key");
+        let keygen_result_info_encoded =
+            bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        tx.put_vec(0, &key_id.0, key_encoded);
+        tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
