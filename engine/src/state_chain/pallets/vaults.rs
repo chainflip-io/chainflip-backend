@@ -5,7 +5,7 @@ use pallet_cf_vaults::{
     CeremonyId, KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest,
 };
 use sp_runtime::AccountId32;
-use substrate_subxt::{module, system::System, Call, Event};
+use substrate_subxt::{module, system::System, Event};
 
 use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 

@@ -120,17 +120,23 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
-                            // TODO: Increment nonce on success only
                             let mut signer = signer.lock().await;
-                            subxt_client
+                            match subxt_client
                                 .witness_keygen_response(
                                     &*signer,
                                     keygen_request_event.ceremony_id,
                                     response,
                                 )
                                 .await
-                                .unwrap(); // TODO: Handle error
-                            signer.increment_nonce();
+                            {
+                                Ok(_) => signer.increment_nonce(),
+                                Err(e) => {
+                                    slog::error!(
+                                        logger,
+                                        "Could not submit witness_keygen_response for ceremony_id {}: {}", keygen_request_event.ceremony_id, e
+                                    )
+                                }
+                            }
                         }
                         ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                             let signers: Vec<_> = threshold_sig_requst
@@ -203,16 +209,22 @@ pub async fn start(
                                 _ => panic!("Channel closed"),
                             };
                             let mut signer = signer.lock().await;
-                            // TODO: increment nonce only on successful acceptance here
-                            subxt_client
+                            match subxt_client
                                 .witness_threshold_signature_response(
                                     &*signer,
                                     threshold_sig_requst.ceremony_id,
                                     response,
                                 )
                                 .await
-                                .unwrap(); // TODO handle error
-                            signer.increment_nonce();
+                            {
+                                Ok(_) => signer.increment_nonce(),
+                                Err(e) => {
+                                    slog::error!(
+                                        logger,
+                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", threshold_sig_requst.ceremony_id, e
+                                    )
+                                }
+                            }
                         }
                         VaultRotationRequestEvent(vault_rotation_request_event) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
@@ -248,17 +260,23 @@ pub async fn start(
                                             VaultRotationResponse::Error
                                         }
                                     };
-                                    // TODO: Increment nonce only on success
                                     let mut signer = signer.lock().await;
-                                    subxt_client
+                                    match subxt_client
                                         .witness_vault_rotation_response(
                                             &*signer,
                                             vault_rotation_request_event.ceremony_id,
                                             response,
                                         )
                                         .await
-                                        .unwrap(); // TODO: Handle error
-                                    signer.increment_nonce();
+                                    {
+                                        Ok(_) => signer.increment_nonce(),
+                                        Err(e) => {
+                                            slog::error!(
+                                                logger,
+                                                "Could not submit witness_vault_rotation_response for ceremony_id {}: {}", vault_rotation_request_event.ceremony_id, e
+                                            )
+                                        }
+                                    }
                                 }
                                 // Leave this to be explicit about future chains being added
                                 ChainParams::Other(_) => panic!("Chain::Other does not exist"),

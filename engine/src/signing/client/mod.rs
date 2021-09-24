@@ -68,7 +68,7 @@ pub enum MultisigEvent {
 
 // How long we keep individual signing phases around
 // before expiring them
-const PHASE_TIMEOUT: Duration = Duration::from_secs(60);
+const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Start listening for p2p messages and instructions from the SC
 pub fn start<S>(
