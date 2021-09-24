@@ -99,40 +99,40 @@ workflows:
           <<: *ignore_main_branches
   chainflip-backend-release:
     jobs:
-      - build-docker-image:
-          name: build-rust-base
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
-          dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
+      # - build-docker-image:
+      #     name: build-rust-base
+      #     image: chainflip-io/chainflip-backend/rust-base
+      #     tag: latest
+      #     dockerfile: Dockerfile.rust-base
+      #     cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      #     context:
+      #       - ghcr-credentials
+      #     <<: *only_main_branches
       - fmt-validator-package:
-          requires:
-            - build-rust-base
+          # requires:
+          #   - build-rust-base
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - compile-validator-package:
+      - compile-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
             - discord-webhooks
           <<: *only_main_branches
-      - test-validator-package:
-          requires:
-            - compile-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
+      # - test-validator-package:
+      #     requires:
+      #       - compile-validator-package
+      #     context:
+      #       - ghcr-credentials
+      #     <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           extra_build_args: "--build-arg SERVICE=chainflip-engine"
           requires:
-            - test-validator-package
+            - compile-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -141,7 +141,7 @@ workflows:
           image: chainflip-io/chainflip-backend/state-chain-node
           extra_build_args: "--build-arg SERVICE=state-chain-node"
           requires:
-            - test-validator-package
+            - compile-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -274,6 +274,26 @@ jobs:
       - run: sccache -s
       - run: |
           cargo build --locked --release
+          sccache -s
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/release/state-chain-node
+            - target/release/chainflip-engine
+      - discord/status:
+          fail_only: true
+          failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
+          only_for_branches: "develop,main"
+          webhook: $DW_ALERTS_STAGING
+
+  compile-and-test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: |
+          cargo build --locked --release
+          cargo test --lib --locked --release
           sccache -s
       - persist_to_workspace:
           root: ./
