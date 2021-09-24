@@ -446,6 +446,7 @@ impl<T: Config> Auction for Pallet<T> {
 
 						LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 						HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
+						LastMinimumActiveBid::<T>::put(minimum_active_bid);
 
 						update_status(winners.clone(), ChainflipAccountState::Validator);
 

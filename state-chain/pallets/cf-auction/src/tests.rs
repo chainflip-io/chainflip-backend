@@ -70,7 +70,8 @@ mod test {
 		};
 
 		new_test_ext().execute_with(|| {
-			run_auction(NUMBER_OF_BIDDERS);
+			generate_bids(NUMBER_OF_BIDDERS);
+			run_auction();
 			let validate_states = |nodes: Vec<ValidatorId>, state: ChainflipAccountState| {
 				for node in nodes {
 					assert_eq!(MockChainflipAccount::get(&node).state, state);
@@ -119,7 +120,8 @@ mod test {
 			// Run a few auctions and validate groups
 			let auction_bidders = [MAX_VALIDATOR_SIZE - 1, MAX_VALIDATOR_SIZE, 100, 200, 1000];
 			for bidders in auction_bidders.iter() {
-				run_auction(*bidders);
+				generate_bids(*bidders);
+				run_auction();
 				validate_bidder_groups();
 			}
 		});
@@ -145,7 +147,8 @@ mod test {
 	#[test]
 	fn should_promote_passive_node_if_stake_qualifies_for_backup() {
 		new_test_ext().execute_with(|| {
-			run_auction(NUMBER_OF_BIDDERS);
+			generate_bids(NUMBER_OF_BIDDERS);
+			run_auction();
 
 			match AuctionPallet::current_phase() {
 				AuctionPhase::WaitingForBids(..) => {
@@ -207,7 +210,8 @@ mod test {
 	#[test]
 	fn should_demote_backup_validator_on_poor_stake() {
 		new_test_ext().execute_with(|| {
-			run_auction(NUMBER_OF_BIDDERS);
+			generate_bids(NUMBER_OF_BIDDERS);
+			run_auction();
 
 			match AuctionPallet::current_phase() {
 				AuctionPhase::WaitingForBids(..) => {
@@ -229,6 +233,16 @@ mod test {
 				}
 				_ => unreachable!("wrong phase"),
 			}
+		});
+	}
+
+	#[test]
+	fn should_set_last_minimum_active_bid() {
+		new_test_ext().execute_with(|| {
+			generate_bids(NUMBER_OF_BIDDERS);
+			run_auction();
+			MockEmergencyRotation::request_emergency_rotation();
+			assert!(AuctionPallet::last_minimum_active_bid() > 0);
 		});
 	}
 	#[test]

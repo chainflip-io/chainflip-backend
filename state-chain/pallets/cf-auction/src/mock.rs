@@ -49,9 +49,13 @@ pub fn generate_bids(number_of_bids: u32) {
 	});
 }
 
-pub fn run_auction(number_of_bids: u32) {
-	generate_bids(number_of_bids);
+pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
+	BIDDER_SET.with(|cell| {
+		*cell.borrow_mut() = bidders;
+	});
+}
 
+pub fn run_auction() {
 	let _ = AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
 			clear_confirmation();
