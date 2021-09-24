@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error,
+	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastAttemptId, Error,
 	Event as BroadcastEvent, Instance0, RetryQueue,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -13,8 +13,8 @@ enum Scenario {
 }
 
 thread_local! {
-	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
-	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
+	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastAttemptId>> = Default::default();
+	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastAttemptId>> = Default::default();
 }
 
 struct MockCfe;
@@ -54,7 +54,7 @@ impl MockCfe {
 
 	// Accepts an unsigned tx, making sure the nominee has been assigned.
 	fn handle_transaction_signature_request(
-		id: BroadcastId,
+		id: BroadcastAttemptId,
 		nominee: u64,
 		_unsigned_tx: MockUnsignedTx,
 		scenario: Scenario,
@@ -81,7 +81,7 @@ impl MockCfe {
 	}
 
 	// Simulate different outcomes.
-	fn handle_broadcast_request(id: BroadcastId, scenario: Scenario) {
+	fn handle_broadcast_request(id: BroadcastAttemptId, scenario: Scenario) {
 		assert_ok!(match scenario {
 			Scenario::HappyPath => DogeBroadcast::broadcast_success(Origin::root(), id, [0xcf; 4]),
 			Scenario::BroadcastFailure(failure) => {
@@ -95,7 +95,7 @@ impl MockCfe {
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
+		const BROADCAST_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
 		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
@@ -126,7 +126,7 @@ fn test_broadcast_happy_path() {
 #[test]
 fn test_broadcast_rejected() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
+		const BROADCAST_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
 		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
@@ -175,7 +175,7 @@ fn test_broadcast_rejected() {
 #[test]
 fn test_broadcast_failed() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
+		const BROADCAST_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
 		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
@@ -219,7 +219,7 @@ fn test_broadcast_failed() {
 #[test]
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
+		const BROADCAST_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
 		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
