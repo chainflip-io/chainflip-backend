@@ -116,7 +116,7 @@ pub mod pallet {
 		type MinValidators: Get<u32>;
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
-		/// The lifecycle of our auction
+		/// The lifecycle of a vault rotation
 		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// A Chainflip Account
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;

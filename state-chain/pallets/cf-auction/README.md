@@ -17,7 +17,8 @@ During `AuctionPhase::BidsTaken` bidder classification starts where a set of via
 for the next epoch are selected.  Those that don't qualify at this stage are grouped and stored in
 `RemainingBidders` with a backup group size being calculated and stored in `BackupGroupSize`.
 The pallet maintains a sorted list of these remaining bidders which can be viewed as two groups,
-`ChainflipAccountState::Backup` and `ChainflipAccountState::Passive`, using the calculated `BackupGroupSize`.
+`ChainflipAccountState::Backup` and `ChainflipAccountState::Passive`, using the calculated `BackupGroupSize`
+, `HighestPassiveNodeBid` and `LowestBackupValidatorBid` storage items.
 This list and group size are recalculated everytime the process passes through `AuctionPhase::BidsTaken`.
 Their final states are not updated until the process has completed.
 
