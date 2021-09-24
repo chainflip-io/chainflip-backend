@@ -128,7 +128,7 @@ impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type BidderProvider = TestBidderProvider;
+	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
@@ -156,9 +156,9 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct TestBidderProvider;
+pub struct MockBidderProvider;
 
-impl BidderProvider for TestBidderProvider {
+impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
