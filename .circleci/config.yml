@@ -298,6 +298,7 @@ jobs:
 
   compile-validator-package-machine:
     <<: *cargo-base-job
+    resource_class: 2xlarge
     executor: machine-image
     steps:
       - checkout
