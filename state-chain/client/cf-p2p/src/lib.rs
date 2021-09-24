@@ -249,27 +249,35 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 	}
 	impl P2PValidatorNetworkNodeState {
 		// THIS SHOULDN'T GO INTO DEVELOP!!!!
-		fn log_peer_to_validator_mapping(&self, location : &str) {
-			log::info!(
-				"Peer to Validator Id Mapping at {} : {}",
-				location,
-				{
-					use itertools::Itertools;
-					self.peer_to_validator.iter().map(|(peer, validator)| {
-						format!("peer {} -> validator {}", peer, AccountIdBs58::from(validator.unwrap()))
-					}).intersperse(":".to_string()).collect::<String>()
-				}
-			);
-			log::info!(
-				"Validator to Peer Id Mapping at {} : {}",
-				location,
-				{
-					use itertools::Itertools;
-					self.validator_to_peer.iter().map(|(validator, peer)| {
-						format!("validator {} -> peer {}", AccountIdBs58::from(*validator), peer)
-					}).intersperse(":".to_string()).collect::<String>()
-				}
-			);
+		fn log_peer_to_validator_mapping(&self, location: &str) {
+			log::info!("Peer to Validator Id Mapping at {} : {}", location, {
+				use itertools::Itertools;
+				self.peer_to_validator
+					.iter()
+					.map(|(peer, validator)| {
+						format!(
+							"peer {} -> validator {}",
+							peer,
+							AccountIdBs58::from(validator.unwrap())
+						)
+					})
+					.intersperse(":".to_string())
+					.collect::<String>()
+			});
+			log::info!("Validator to Peer Id Mapping at {} : {}", location, {
+				use itertools::Itertools;
+				self.validator_to_peer
+					.iter()
+					.map(|(validator, peer)| {
+						format!(
+							"validator {} -> peer {}",
+							AccountIdBs58::from(*validator),
+							peer
+						)
+					})
+					.intersperse(":".to_string())
+					.collect::<String>()
+			});
 		}
 	}
 	let state = Arc::new(Mutex::new(P2PValidatorNetworkNodeState {
@@ -312,7 +320,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 
 				/// Identify ourselves to the network.
 				fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
-					self.state.lock().unwrap().log_peer_to_validator_mapping("self_identify");
+					self.state
+						.lock()
+						.unwrap()
+						.log_peer_to_validator_mapping("self_identify");
 
 					let mut state = self.state.lock().unwrap();
 					if let Some(_existing_id) = state.local_validator_id {
@@ -334,7 +345,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 				/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
 				/// is empty.
 				fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {
-					self.state.lock().unwrap().log_peer_to_validator_mapping("send");
+					self.state
+						.lock()
+						.unwrap()
+						.log_peer_to_validator_mapping("send");
 
 					let state = self.state.lock().unwrap();
 					if let Some(error) = invalid_p2p_message(&state, &message) {
@@ -357,7 +371,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 
 				/// Broadcast message to all known validators on the network, this will fail silently if the message is empty.
 				fn broadcast(&self, message: MessageBs58) -> Result<u64> {
-					self.state.lock().unwrap().log_peer_to_validator_mapping("broadcast");
+					self.state
+						.lock()
+						.unwrap()
+						.log_peer_to_validator_mapping("broadcast");
 
 					let state = self.state.lock().unwrap();
 					if let Some(error) = invalid_p2p_message(&state, &message) {
@@ -377,7 +394,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 					_metadata: Self::Metadata,
 					subscriber: Subscriber<P2PEvent>,
 				) {
-					self.state.lock().unwrap().log_peer_to_validator_mapping("subscribe_notifications");
+					self.state
+						.lock()
+						.unwrap()
+						.log_peer_to_validator_mapping("subscribe_notifications");
 
 					let (sender, receiver) = unbounded();
 					let subscription_id =
@@ -401,7 +421,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 					_metadata: Option<Self::Metadata>,
 					id: SubscriptionId,
 				) -> jsonrpc_core::Result<bool> {
-					self.state.lock().unwrap().log_peer_to_validator_mapping("subscribe_notifications");
+					self.state
+						.lock()
+						.unwrap()
+						.log_peer_to_validator_mapping("subscribe_notifications");
 
 					Ok(
 						if self
@@ -459,11 +482,17 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 				while let Some(event) = network_event_stream.next().await {
 					match event {
 						Event::SyncConnected { remote } => {
-							state.lock().unwrap().log_peer_to_validator_mapping("SyncConnected");
+							state
+								.lock()
+								.unwrap()
+								.log_peer_to_validator_mapping("SyncConnected");
 							p2p_network_service.reserve_peer(remote);
 						}
 						Event::SyncDisconnected { remote } => {
-							state.lock().unwrap().log_peer_to_validator_mapping("SyncDisconnected");
+							state
+								.lock()
+								.unwrap()
+								.log_peer_to_validator_mapping("SyncDisconnected");
 							p2p_network_service.remove_reserved_peer(remote);
 						}
 						Event::NotificationStreamOpened {
@@ -471,7 +500,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							protocol,
 							role: _,
 						} => {
-							state.lock().unwrap().log_peer_to_validator_mapping("NotificationStreamOpened");
+							state
+								.lock()
+								.unwrap()
+								.log_peer_to_validator_mapping("NotificationStreamOpened");
 
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								let mut state = state.lock().unwrap();
@@ -486,7 +518,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationStreamClosed { remote, protocol } => {
-							state.lock().unwrap().log_peer_to_validator_mapping("NotificationStreamClosed");
+							state
+								.lock()
+								.unwrap()
+								.log_peer_to_validator_mapping("NotificationStreamClosed");
 
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								let mut state = state.lock().unwrap();
@@ -502,7 +537,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							}
 						}
 						Event::NotificationsReceived { remote, messages } => {
-							state.lock().unwrap().log_peer_to_validator_mapping("NotificationsReceived");
+							state
+								.lock()
+								.unwrap()
+								.log_peer_to_validator_mapping("NotificationsReceived");
 
 							let mut messages = messages
 								.into_iter()
