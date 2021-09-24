@@ -145,10 +145,12 @@ pub mod pallet {
 		AlreadyApproved,
 		/// The signer of an extrinsic is no member of the current governance
 		NotMember,
-		/// The proposal was not found - it may have expired or it may already be executed.
+		/// The proposal was not found - it may have expired or it may already be executed
 		ProposalNotFound,
 		/// Decode of call failed
 		DecodeOfCallFailed,
+		/// The majority was not reached when the execution was triggered
+		MajorityNotReached,
 	}
 
 	#[pallet::call]
@@ -201,6 +203,11 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
+			// Ensure that the proposal exists
+			ensure!(
+				<Proposals<T>>::contains_key(id),
+				Error::<T>::ProposalNotFound
+			);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
 			// Governance member don't pay fees
@@ -212,6 +219,11 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
+			// Ensure that the proposal exists
+			ensure!(
+				<Proposals<T>>::contains_key(id),
+				Error::<T>::ProposalNotFound
+			);
 			// Try to execute the proposal
 			Self::execute_proposal(id)?;
 			// Governance member don't pay fees
@@ -322,12 +334,14 @@ impl<T: Config> Pallet<T> {
 					.collect::<Vec<_>>();
 				// Set the new active proposals
 				<ActiveProposals<T>>::set(new_active_proposals);
+				Ok(())
 			} else {
 				// Emit an event if the decode of a call failed
 				return Err(Error::<T>::DecodeOfCallFailed.into());
 			}
+		} else {
+			return Err(Error::<T>::MajorityNotReached.into());
 		}
-		Ok(())
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
@@ -335,10 +349,6 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		ensure!(
-			<Proposals<T>>::contains_key(id),
-			Error::<T>::ProposalNotFound
-		);
 		<Proposals<T>>::mutate(id, |proposal| {
 			// Check already approved
 			if proposal.approved.contains(&account) {
