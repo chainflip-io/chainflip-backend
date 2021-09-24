@@ -14,7 +14,7 @@ mod tests;
 use cf_chains::Chain;
 use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResultWithPostInfo, Parameter, Twox64Concat};
+use frame_support::{dispatch::DispatchResultWithPostInfo, Parameter, Twox64Concat, traits::Get};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -139,6 +139,14 @@ pub mod pallet {
 
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
+
+		/// The timeout duration for the signing stage, measured in number of blocks.
+		#[pallet::constant]
+		type SigningTimeout: Get<BlockNumberFor<Self>>;
+
+		/// The timeout duration for the broadcast stage, measured in number of blocks.
+		#[pallet::constant]
+		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -175,24 +183,20 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// [broadcast_id, validator_id, unsigned_tx]
+		/// [broadcast_attempt_id, validator_id, unsigned_tx]
 		TransactionSigningRequest(
 			BroadcastAttemptId,
 			T::ValidatorId,
 			UnsignedTransactionFor<T, I>,
 		),
-		/// [broadcast_id, signed_tx]
+		/// [broadcast_attempt_id, signed_tx]
 		BroadcastRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
 		/// [broadcast_id]
-		BroadcastComplete(BroadcastAttemptId),
+		BroadcastComplete(BroadcastId),
 		/// [broadcast_id, attempt]
-		RetryScheduled(BroadcastAttemptId, AttemptCount),
+		RetryScheduled(BroadcastId, AttemptCount),
 		/// [broadcast_id, attempt, failed_transaction]
-		BroadcastFailed(
-			BroadcastAttemptId,
-			AttemptCount,
-			UnsignedTransactionFor<T, I>,
-		),
+		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
 	}
 
 	#[pallet::error]
@@ -209,11 +213,7 @@ pub mod pallet {
 			let retries = RetryQueue::<T, I>::take();
 			let retry_count = retries.len();
 			for failed in retries {
-				Self::start_broadcast_attempt(
-					failed.broadcast_id,
-					failed.attempt_count.wrapping_add(1),
-					failed.unsigned_tx,
-				);
+				Self::retry_failed_broadcast(failed);
 			}
 
 			let expiries = Expiries::<T, I>::take(block_number);
@@ -221,12 +221,12 @@ pub mod pallet {
 				match stage {
 					SigningOrBroadcast::SigningStage => {
 						AwaitingSignature::<T, I>::take(id).map(|signing_attempt| {
-							Self::retry(*id, signing_attempt.into());
+							Self::retry_failed_broadcast(signing_attempt.into());
 						});
 					}
 					SigningOrBroadcast::BroadcastStage => {
 						AwaitingBroadcast::<T, I>::take(id).map(|broadcast_attempt| {
-							Self::retry(*id, broadcast_attempt.into());
+							Self::retry_failed_broadcast(broadcast_attempt.into());
 						});
 					}
 				}
@@ -268,20 +268,20 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready(
 			origin: OriginFor<T>,
-			id: BroadcastAttemptId,
+			attempt_id: BroadcastAttemptId,
 			signed_tx: SignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
 			let signing_attempt =
-				AwaitingSignature::<T, I>::get(id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+				AwaitingSignature::<T, I>::get(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			ensure!(
 				signing_attempt.nominee == signer.into(),
 				Error::<T, I>::InvalidSigner
 			);
 
-			AwaitingSignature::<T, I>::remove(id);
+			AwaitingSignature::<T, I>::remove(attempt_id);
 
 			if T::BroadcastConfig::verify_transaction(
 				&signing_attempt.nominee,
@@ -290,9 +290,9 @@ pub mod pallet {
 			)
 			.is_some()
 			{
-				Self::deposit_event(Event::<T, I>::BroadcastRequest(id, signed_tx.clone()));
+				Self::deposit_event(Event::<T, I>::BroadcastRequest(attempt_id, signed_tx.clone()));
 				AwaitingBroadcast::<T, I>::insert(
-					id,
+					attempt_id,
 					BroadcastAttempt {
 						broadcast_id: signing_attempt.broadcast_id,
 						unsigned_tx: signing_attempt.unsigned_tx,
@@ -301,8 +301,17 @@ pub mod pallet {
 						attempt_count: signing_attempt.attempt_count,
 					},
 				);
+
+				// Schedule expiry.
+				let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
+				Expiries::<T, I>::mutate(expiry_block, |entries| {
+					entries.push((SigningOrBroadcast::BroadcastStage, attempt_id))
+				});
 			} else {
-				Self::report_and_retry(id, &signing_attempt.nominee.clone(), signing_attempt.into())
+				Self::report_and_schedule_retry(
+					&signing_attempt.nominee.clone(),
+					signing_attempt.into(),
+				)
 			}
 
 			Ok(().into())
@@ -312,19 +321,16 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn broadcast_success(
 			origin: OriginFor<T>,
-			id: BroadcastAttemptId,
+			attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			ensure!(
-				AwaitingBroadcast::<T, I>::contains_key(id),
-				Error::<T, I>::InvalidBroadcastId
-			);
-
 			// Remove the broadcast now it's completed.
-			AwaitingBroadcast::<T, I>::remove(id);
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(id));
+			let BroadcastAttempt::<T, I> { broadcast_id, .. } =
+				AwaitingBroadcast::<T, I>::take(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
 
 			Ok(().into())
 		}
@@ -334,29 +340,28 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn broadcast_failure(
 			origin: OriginFor<T>,
-			id: BroadcastAttemptId,
+			attempt_id: BroadcastAttemptId,
 			failure: BroadcastFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let failed_attempt =
-				AwaitingBroadcast::<T, I>::take(id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+				AwaitingBroadcast::<T, I>::take(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {
-					Self::report_and_retry(
-						id,
+					Self::report_and_schedule_retry(
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
 					);
 				}
 				BroadcastFailure::TransactionTimeout => {
-					Self::retry(id, failed_attempt.into());
+					Self::schedule_retry(failed_attempt.into());
 				}
 				BroadcastFailure::TransactionFailed => {
 					Self::deposit_event(Event::<T, I>::BroadcastFailed(
-						id,
+						failed_attempt.broadcast_id,
 						failed_attempt.attempt_count,
 						failed_attempt.unsigned_tx,
 					));
@@ -393,6 +398,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		// Schedule expiry.
+		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
+		Expiries::<T, I>::mutate(expiry_block, |entries| {
+			entries.push((SigningOrBroadcast::SigningStage, attempt_id))
+		});
+
 		// Emit the transaction signing request.
 		Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
 			attempt_id,
@@ -401,11 +412,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		));
 	}
 
-	fn report_and_retry(
-		id: BroadcastAttemptId,
-		signer: &T::ValidatorId,
-		failed_attempt: FailedAttempt<T, I>,
-	) {
+	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedAttempt<T, I>) {
 		// TODO: set a sensible penalty and centralise. See #569
 		const PENALTY: i32 = 0;
 		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, PENALTY, signer)
@@ -414,12 +421,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				frame_support::debug::error!("Unable to report unknown validator {:?}", signer);
 				0
 			});
-		Self::retry(id, failed_attempt);
+		Self::schedule_retry(failed);
 	}
 
-	fn retry(id: BroadcastAttemptId, failed_attempt: FailedAttempt<T, I>) {
-		let failed_attempt_count = failed_attempt.attempt_count;
-		RetryQueue::<T, I>::append(failed_attempt);
-		Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt_count));
+	fn schedule_retry(failed: FailedAttempt<T, I>) {
+		RetryQueue::<T, I>::append(&failed);
+		Self::deposit_event(Event::<T, I>::RetryScheduled(
+			failed.broadcast_id,
+			failed.attempt_count,
+		));
+	}
+
+	fn retry_failed_broadcast(failed: FailedAttempt<T, I>) {
+		Self::start_broadcast_attempt(
+			failed.broadcast_id,
+			failed.attempt_count.wrapping_add(1),
+			failed.unsigned_tx,
+		);
 	}
 }
