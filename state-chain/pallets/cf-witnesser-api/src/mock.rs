@@ -31,6 +31,7 @@ frame_support::construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Event<T>, Storage},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Event<T>, Storage},
 	}
 );
 
@@ -174,6 +175,38 @@ impl pallet_cf_signing::Config<Instance0> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, u32>;
 	type OfflineReporter = MockOfflineReporter;
+}
+
+pub struct MockBroadcastConfig;
+
+impl pallet_cf_broadcast::BroadcastConfig<Test> for MockBroadcastConfig {
+	type Chain = Ethereum;
+	type UnsignedTransaction = ();
+	type SignedTransaction = ();
+	type TransactionHash = ();
+
+	fn verify_transaction(
+		signer: &<Test as Chainflip>::ValidatorId,
+		unsigned_tx: &Self::UnsignedTransaction,
+		signed_tx: &Self::SignedTransaction,
+	) -> Option<()> {
+		Some(())
+	}
+}
+
+parameter_types! {
+	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const BroadcastTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+}
+
+impl pallet_cf_broadcast::Config<Instance0> for Test {
+	type Event = Event;
+	type TargetChain = Ethereum;
+	type BroadcastConfig = MockBroadcastConfig;
+	type SignerNomination = MockSignerNomination;
+	type OfflineReporter = MockOfflineReporter;
+	type SigningTimeout = SigningTimeout;
+	type BroadcastTimeout = BroadcastTimeout;
 }
 
 impl VaultRotationHandler for Test {

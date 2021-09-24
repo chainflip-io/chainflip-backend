@@ -14,7 +14,7 @@ mod tests;
 use cf_chains::Chain;
 use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResultWithPostInfo, Parameter, Twox64Concat, traits::Get};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Parameter, Twox64Concat};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -275,8 +275,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt =
-				AwaitingSignature::<T, I>::get(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			let signing_attempt = AwaitingSignature::<T, I>::get(attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			ensure!(
 				signing_attempt.nominee == signer.into(),
@@ -292,7 +292,10 @@ pub mod pallet {
 			)
 			.is_some()
 			{
-				Self::deposit_event(Event::<T, I>::BroadcastRequest(attempt_id, signed_tx.clone()));
+				Self::deposit_event(Event::<T, I>::BroadcastRequest(
+					attempt_id,
+					signed_tx.clone(),
+				));
 				AwaitingBroadcast::<T, I>::insert(
 					attempt_id,
 					BroadcastAttempt {
@@ -305,7 +308,8 @@ pub mod pallet {
 				);
 
 				// Schedule expiry.
-				let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
+				let expiry_block =
+					frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
 				Expiries::<T, I>::mutate(expiry_block, |entries| {
 					entries.push((SigningOrBroadcast::BroadcastStage, attempt_id))
 				});
@@ -330,7 +334,8 @@ pub mod pallet {
 
 			// Remove the broadcast now it's completed.
 			let BroadcastAttempt::<T, I> { broadcast_id, .. } =
-				AwaitingBroadcast::<T, I>::take(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+				AwaitingBroadcast::<T, I>::take(attempt_id)
+					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
 
@@ -348,8 +353,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let failed_attempt =
-				AwaitingBroadcast::<T, I>::take(attempt_id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			let failed_attempt = AwaitingBroadcast::<T, I>::take(attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {

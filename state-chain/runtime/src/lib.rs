@@ -437,8 +437,7 @@ impl pallet_cf_reputation::Config for Runtime {
 
 use frame_support::instances::{Instance0};
 
-impl pallet_cf_signing::Config<Instance0> for Runtime
-{
+impl pallet_cf_signing::Config<Instance0> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
@@ -447,11 +446,19 @@ impl pallet_cf_signing::Config<Instance0> for Runtime
 	type OfflineReporter = Reputation;
 }
 
+parameter_types! {
+	pub const EthereumSigningTimeout: BlockNumber = 5;
+	pub const EthereumBroadcastTimeout: BlockNumber = 10 * MINUTES;
+}
+
 impl pallet_cf_broadcast::Config<Instance0> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
 	type SignerNomination = chainflip::BasicSignerNomination;
+	type OfflineReporter = Reputation;
+	type SigningTimeout = EthereumSigningTimeout;
+	type BroadcastTimeout = EthereumBroadcastTimeout;
 }
 
 construct_runtime!(

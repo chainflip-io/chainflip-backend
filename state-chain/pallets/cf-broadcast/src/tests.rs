@@ -299,14 +299,14 @@ fn test_signature_request_expiry() {
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
 		DogeBroadcast::on_initialize(current_block + 1);
-		
+
 		// Nothing should have changed
 		assert!(
 			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
-			.unwrap()
-			.attempt_count == 0
+				.unwrap()
+				.attempt_count == 0
 		);
-		
+
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
 		DogeBroadcast::on_initialize(expected_expiry_block);
@@ -350,14 +350,14 @@ fn test_broadcast_request_expiry() {
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
 		DogeBroadcast::on_initialize(current_block + 1);
-		
+
 		// Nothing should have changed
 		assert!(
 			AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
-			.unwrap()
-			.attempt_count == 0
+				.unwrap()
+				.attempt_count == 0
 		);
-		
+
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
 		DogeBroadcast::on_initialize(expected_expiry_block);
