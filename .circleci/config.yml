@@ -17,6 +17,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - test/ci-with-machine
 
 only_epic_branches: &only_epic_branches
   filters:
@@ -76,12 +77,12 @@ workflows:
   #          context:
   #            - ghcr-credentials
   #            - discord-webhooks
-  single-job-test:
-    jobs:
-      - all-cargo:
-          context:
-            - ghcr-credentials
-            - discord-webhooks
+  #  single-job-test:
+  #    jobs:
+  #      - all-cargo:
+  #          context:
+  #            - ghcr-credentials
+  #            - discord-webhooks
   chainflip-backend-checks:
     jobs:
       - build-docker-image:
@@ -145,7 +146,8 @@ workflows:
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
-          extra_build_args: "--build-arg SERVICE=chainflip-engine"
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
             - test-validator-package
           context:
@@ -154,7 +156,8 @@ workflows:
       - build-docker-image:
           name: build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
-          extra_build_args: "--build-arg SERVICE=state-chain-node"
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
             - test-validator-package
           context:
@@ -216,7 +219,7 @@ jobs:
       tag:
         type: string
         description: Primary tag of the build
-        default: <<pipeline.git.revision>>
+        default: latest,<<pipeline.git.revision>>
       cache_from:
         type: string
         description: Where to derive the build cache
@@ -269,6 +272,10 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/*
       - run: sccache -s
       - run: |
           cargo check --locked --release
@@ -278,6 +285,8 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - attach_workspace:
+          at: ./
       - run: sccache -s
       - run: |
           cargo test --locked --lib --release
@@ -294,8 +303,7 @@ jobs:
       - persist_to_workspace:
           root: ./
           paths:
-            - target/release/state-chain-node
-            - target/release/chainflip-engine
+            - target/*
       - discord/status:
           fail_only: true
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
