@@ -250,6 +250,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
+			// TODO: This doesn't necessarily have to be witnessed, but *should* be restricted such that it can only
+			// be called internally.
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
