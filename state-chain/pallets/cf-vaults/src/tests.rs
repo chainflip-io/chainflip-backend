@@ -290,7 +290,7 @@ mod test {
 	}
 
 	#[test]
-	fn attempting_to_create_signing_request_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
+	fn attempting_to_call_threshold_sig_resp_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
 	) {
 		new_test_ext().execute_with(|| {
 			assert_err!(
@@ -309,7 +309,7 @@ mod test {
 	}
 
 	#[test]
-	fn attempting_to_create_vault_rotation_request_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
+	fn attempting_to_call_vault_rotation_response_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
 	) {
 		new_test_ext().execute_with(|| {
 			assert_err!(
