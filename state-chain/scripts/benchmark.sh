@@ -1,12 +1,8 @@
 #!/bin/sh
 
-../../target/release/state-chain-node benchmark \
---chain dev \
---execution wasm \
---wasm-execution compiled \
---pallet pallet_cf_reputation \
---extrinsic '*' \
---steps 20 \
---repeat 10 \
---raw \
---output ./
+# build the node with debug features enabled
+cargo build --release --features runtime-benchmarks
+# execute the benchmark for pallet auction
+./target/release/state-chain-node benchmark --extrinsic '*' --pallet pallet_cf_auction --output state-chain/runtime/src/weights --execution=wasm --steps=50 --repeat=20
+# execute the benchmark for pallet reputation
+./target/release/state-chain-node benchmark --extrinsic '*' --pallet pallet_cf_reputation --output state-chain/runtime/src/weights --execution=wasm --steps=50 --repeat=20
