@@ -277,6 +277,24 @@ async fn should_handle_inconsistent_broadcast_sig3() {
     assert_eq!(blamed_parties, vec![AccountId([bad_idx as u8 + 1; 32])]);
 }
 
+async fn check_blamed_paries(mut rx: &mut helpers::InnerEventReceiver, expected: &[usize]) {
+    let (_, blamed_parties) = helpers::check_outcome(&mut rx)
+        .await
+        .expect("should procude outcome")
+        .result
+        .clone()
+        .unwrap_err();
+
+    assert_eq!(
+        blamed_parties,
+        expected
+            .iter()
+            // Needs +1 to map from array idx to signer idx
+            .map(|idx| AccountId([*idx as u8 + 1; 32]))
+            .collect_vec()
+    );
+}
+
 #[tokio::test]
 async fn should_report_on_timeout_before_reqeust_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
@@ -299,19 +317,97 @@ async fn should_report_on_timeout_before_reqeust_to_sign() {
     c1.expire_all();
     c1.cleanup();
 
-    let (_, blamed_parties) = helpers::check_outcome(&mut ctx.rxs[0])
-        .await
-        .expect("should procude outcome")
-        .result
-        .clone()
-        .unwrap_err();
+    check_blamed_paries(&mut ctx.rxs[0], &bad_array_idxs).await;
+}
 
-    assert_eq!(
-        blamed_parties,
-        bad_array_idxs
-            .iter()
-            // Needs +1 to map from array idx to signer idx
-            .map(|idx| AccountId([*idx as u8 + 1; 32]))
-            .collect_vec()
-    );
+#[tokio::test]
+async fn should_report_on_timeout_stage1() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase1.clients[0].clone();
+
+    // This party sends data as expected
+    let good_party_idx = 1;
+    receive_comm1!(c1, good_party_idx, sign_states);
+
+    // This party fails to send data in time
+    let bad_party_idx = 2;
+
+    assert_stage1!(c1);
+
+    c1.expire_all();
+    c1.cleanup();
+
+    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+}
+
+#[tokio::test]
+async fn should_report_on_timeout_stage2() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase2.clients[0].clone();
+
+    // This party sends data as expected
+    let good_party_idx = 1;
+    receive_ver2!(c1, good_party_idx, sign_states);
+
+    // This party fails to send data in time
+    let bad_party_idx = 2;
+
+    assert_stage2!(c1);
+
+    c1.expire_all();
+    c1.cleanup();
+
+    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+}
+
+#[tokio::test]
+async fn should_report_on_timeout_stage3() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase3.as_ref().unwrap().clients[0].clone();
+
+    // This party sends data as expected
+    let good_party_idx = 1;
+    receive_sig3!(c1, good_party_idx, sign_states);
+
+    // This party fails to send data in time
+    let bad_party_idx = 2;
+
+    assert_stage3!(c1);
+
+    c1.expire_all();
+    c1.cleanup();
+
+    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+}
+
+#[tokio::test]
+async fn should_report_on_timeout_stage4() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase4.as_ref().unwrap().clients[0].clone();
+
+    // This party sends data as expected
+    let good_party_idx = 1;
+    receive_ver4!(c1, good_party_idx, sign_states);
+
+    // This party fails to send data in time
+    let bad_party_idx = 2;
+
+    assert_stage4!(c1);
+
+    c1.expire_all();
+    c1.cleanup();
+
+    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
 }

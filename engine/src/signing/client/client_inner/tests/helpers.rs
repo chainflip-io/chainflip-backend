@@ -35,7 +35,7 @@ type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
 use super::{KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID};
 
-type InnerEventReceiver = Pin<
+pub(super) type InnerEventReceiver = Pin<
     Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<InnerEvent>>>,
 >;
 
