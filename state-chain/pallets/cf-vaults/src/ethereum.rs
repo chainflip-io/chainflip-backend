@@ -90,7 +90,9 @@ impl<T: Config>
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
-							vault_rotation.new_public_key,
+							vault_rotation
+								.new_public_key
+								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							signature,
 						) {
 							Ok(payload) => {

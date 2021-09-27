@@ -166,6 +166,8 @@ pub mod pallet {
 		NotConfirmed,
 		/// Failed to make a key generation request
 		FailedToMakeKeygenRequest,
+		/// New public key not set by keygen_response
+		NewPublicKeyNotSet,
 	}
 
 	#[pallet::call]
@@ -257,6 +259,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::InvalidCeremonyId => Error::<T>::InvalidCeremonyId,
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
+			RotationError::NewPublicKeyNotSet => Error::<T>::NewPublicKeyNotSet,
 		}
 	}
 }
@@ -345,7 +348,7 @@ impl<T: Config>
 		VaultRotations::<T>::insert(
 			ceremony_id,
 			VaultRotation {
-				new_public_key: Default::default(),
+				new_public_key: None,
 				keygen_request: request.clone(),
 			},
 		);
@@ -366,7 +369,7 @@ impl<T: Config>
 				if EthereumVault::<T>::get().current_key != new_public_key {
 					VaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
 						if let Some(vault_rotation) = maybe_vault_rotation {
-							(*vault_rotation).new_public_key = new_public_key.clone();
+							(*vault_rotation).new_public_key = Some(new_public_key.clone());
 							EthereumChain::<T>::rotate_vault(
 								ceremony_id,
 								new_public_key,
@@ -459,7 +462,9 @@ impl<T: Config>
 					// At the moment we just have Ethereum to notify
 					match vault_rotation.keygen_request.chain {
 						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
-							vault_rotation.new_public_key,
+							vault_rotation
+								.new_public_key
+								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							tx_hash,
 						),
 					}
