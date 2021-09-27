@@ -160,8 +160,6 @@ pub mod pallet {
 		BadValidators,
 		/// Failed to construct a valid chain specific payload for rotation
 		FailedToConstructPayload,
-		/// Failed to sign the tx for the ethereum chain
-		SignatureResponseFailed,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// Failed to make a key generation request
@@ -199,7 +197,7 @@ pub mod pallet {
 			// We just have the Ethereum chain to handle this Schnorr signature
 			match EthereumChain::<T>::handle_response(ceremony_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(_) => Err(Error::<T>::SignatureResponseFailed.into()),
+				Err(e) => Err(Error::<T>::from(e).into()),
 			}
 		}
 
