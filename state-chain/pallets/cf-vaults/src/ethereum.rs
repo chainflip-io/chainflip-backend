@@ -34,8 +34,6 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
 		) {
-			// Issue is occurring here.
-			// we are getting the previous key but not working
 			Ok(payload) => Self::make_request(
 				ceremony_id,
 				ThresholdSignatureRequest {
@@ -86,7 +84,6 @@ impl<T: Config>
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
-				// Vault rotations try_get with ceremony_id 1 should fail. We haven't supplied the keygen response
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
@@ -130,7 +127,9 @@ impl<T: Config> EthereumChain<T> {
 		let pubkey: Vec<u8> = new_public_key.into();
 		// strip y-parity from key (first byte)
 		let y_parity = pubkey[0];
-		let x_pubkey: [u8; 32] = pubkey[1..].try_into().expect("Should be 32 bytes");
+		let x_pubkey: [u8; 32] = pubkey[1..]
+			.try_into()
+			.map_err(|_| ethabi::Error::InvalidData)?;
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![
