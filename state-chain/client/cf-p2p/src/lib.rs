@@ -389,10 +389,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 		{
 			let mut network_event_stream = p2p_network_service.event_stream();
 
-			fn notify_rpc_subscribers(
-				state : &P2PValidatorNetworkNodeState,
-			    event: P2PEvent
-			) {
+			fn notify_rpc_subscribers(state: &P2PValidatorNetworkNodeState, event: P2PEvent) {
 				for (_subscription_id, sender) in &state.notification_rpc_subscribers {
 					if let Err(e) = sender.unbounded_send(event.clone()) {
 						debug!("Failed to send message: {:?}", e);
@@ -409,7 +406,8 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 						Event::SyncDisconnected { remote } => {
 							p2p_network_service.remove_reserved_peer(remote);
 						}
-						/*A peer has connected to the p2p network*/ Event::NotificationStreamOpened {
+						/*A peer has connected to the p2p network*/
+						Event::NotificationStreamOpened {
 							remote,
 							protocol,
 							role: _,
@@ -426,7 +424,8 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 								}
 							}
 						}
-						/*A peer has disconnected from the p2p network*/ Event::NotificationStreamClosed { remote, protocol } => {
+						/*A peer has disconnected from the p2p network*/
+						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								let mut state = state.lock().unwrap();
 								if let Some(Some(validator_id)) =
@@ -440,7 +439,8 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 								}
 							}
 						}
-						/*Received p2p messages from a peer*/ Event::NotificationsReceived { remote, messages } => {
+						/*Received p2p messages from a peer*/
+						Event::NotificationsReceived { remote, messages } => {
 							let mut messages = messages
 								.into_iter()
 								.filter_map(|(protocol, data)| {
@@ -503,10 +503,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 											}
 										}
 										Err(err) => {
-											log::error!(
-												"Error deserializing p2p message: {}",
-												err
-											);
+											log::error!("Error deserializing p2p message: {}", err);
 										}
 									}
 								}
