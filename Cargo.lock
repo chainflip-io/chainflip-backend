@@ -823,7 +823,6 @@ name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-std",
  "bincode",
  "bs58",
  "futures 0.3.15",
@@ -838,6 +837,9 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-runtime",
+ "tokio 1.7.0",
+ "tokio-compat-02",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -7190,6 +7192,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
+ "lazy_static",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.1",
