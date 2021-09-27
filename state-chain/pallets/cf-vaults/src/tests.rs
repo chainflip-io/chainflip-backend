@@ -309,6 +309,24 @@ mod test {
 	}
 
 	#[test]
+	fn attempting_to_create_vault_rotation_request_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
+	) {
+		new_test_ext().execute_with(|| {
+			assert_err!(
+				VaultsPallet::vault_rotation_response(
+					Origin::root(),
+					// we haven't started a new rotation, so ceremony 1 has not been initialised
+					1,
+					VaultRotationResponse::Success {
+						tx_hash: vec![0; 32].into()
+					}
+				),
+				crate::Error::<MockRuntime>::InvalidCeremonyId,
+			);
+		});
+	}
+
+	#[test]
 	fn should_encode_set_agg_key_with_agg_key() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
