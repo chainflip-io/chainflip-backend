@@ -140,33 +140,34 @@ benchmarks! {
 	// }
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::Test;
-	use frame_support::assert_ok;
-	use sp_io::TestExternalities;
+// #[cfg(test)]
+// mod tests {
+// 	use super::*;
+// 	use crate::mock::Test;
+// 	use frame_support::assert_ok;
+// 	use sp_io::TestExternalities;
 
-	pub fn new_test_ext() -> TestExternalities {
-		let t = frame_system::GenesisConfig::default()
-			.build_storage::<Test>()
-			.unwrap();
-		TestExternalities::new(t)
-	}
+// 	pub fn new_test_ext() -> TestExternalities {
+// 		let t = frame_system::GenesisConfig::default()
+// 			.build_storage::<Test>()
+// 			.unwrap();
+// 		TestExternalities::new(t)
+// 	}
 
-	#[test]
-	fn bench_heartbeat() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_heartbeat::<Test>());
-			assert_ok!(test_benchmark_next_heartbeat::<Test>());
-		});
-	}
+// 	#[test]
+// 	fn bench_heartbeat() {
+// 		new_test_ext().execute_with(|| {
+// 			assert_ok!(test_benchmark_heartbeat::<Test>());
+// 			assert_ok!(test_benchmark_next_heartbeat::<Test>());
+// 		});
+// 	}
 
-	#[test]
-	fn bench_check_liveness() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_check_liveness::<Test>());
-		});
-	}
-}
+// 	#[test]
+// 	fn bench_check_liveness() {
+// 		new_test_ext().execute_with(|| {
+// 			assert_ok!(test_benchmark_check_liveness::<Test>());
+// 		});
+// 	}
+// }
+
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
