@@ -303,7 +303,7 @@ mod test {
 						s: [0; 32],
 					})
 				),
-				crate::Error::<MockRuntime>::InvalidCeremonyId,
+				Error::<MockRuntime>::InvalidCeremonyId,
 			);
 		});
 	}
@@ -321,7 +321,7 @@ mod test {
 						tx_hash: vec![0; 32].into()
 					}
 				),
-				crate::Error::<MockRuntime>::InvalidCeremonyId,
+				Error::<MockRuntime>::InvalidCeremonyId,
 			);
 		});
 	}
@@ -350,12 +350,6 @@ mod test {
 				})
 			));
 		});
-	}
-
-	#[test]
-	#[ignore = "Todo"]
-	fn should_not_accept_threshold_sig_response_before_creating_request() {
-		todo!("do this")
 	}
 
 	#[test]
