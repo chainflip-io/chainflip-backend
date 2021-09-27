@@ -196,7 +196,10 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	) -> Result<bool>;
 }
 
-pub fn new_p2p_validator_network_node<MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static, PN: PeerNetwork + Send + Sync + 'static>(
+pub fn new_p2p_validator_network_node<
+	MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
+	PN: PeerNetwork + Send + Sync + 'static,
+>(
 	p2p_network_service: Arc<PN>,
 	subscription_task_executor: impl Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>>
 		+ Send
@@ -250,7 +253,7 @@ pub fn new_p2p_validator_network_node<MetaData: jsonrpc_pubsub::PubSubMetadata +
 				notification_rpc_subscription_manager: SubscriptionManager,
 				state: Arc<Mutex<P2PValidatorNetworkNodeState>>,
 				p2p_network_service: Arc<P2PNetworkService>,
-				_phantom: std::marker::PhantomData<MetaData>
+				_phantom: std::marker::PhantomData<MetaData>,
 			}
 			fn check_p2p_message_is_valid(
 				state: &P2PValidatorNetworkNodeState,
@@ -266,8 +269,10 @@ pub fn new_p2p_validator_network_node<MetaData: jsonrpc_pubsub::PubSubMetadata +
 					Ok(())
 				}
 			}
-			impl<MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static, PN: PeerNetwork + Send + Sync + 'static> P2PValidatorNetworkNodeRpcApi
-				for RpcRequestHandler<MetaData, PN>
+			impl<
+					MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
+					PN: PeerNetwork + Send + Sync + 'static,
+				> P2PValidatorNetworkNodeRpcApi for RpcRequestHandler<MetaData, PN>
 			{
 				type Metadata = MetaData;
 
@@ -382,7 +387,7 @@ pub fn new_p2p_validator_network_node<MetaData: jsonrpc_pubsub::PubSubMetadata +
 					notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
 						subscription_task_executor,
 					)),
-					_phantom: std::marker::PhantomData::<MetaData>::default()
+					_phantom: std::marker::PhantomData::<MetaData>::default(),
 				},
 			));
 			io
@@ -528,31 +533,28 @@ mod tests {
 	use tokio_stream::wrappers::UnboundedReceiverStream;
 
 	struct TestNetwork {
-		runtime : tokio::runtime::Runtime,
-		validators : Mutex<HashMap<PeerId, tokio::sync::mpsc::UnboundedSender<Event>>>
+		runtime: tokio::runtime::Runtime,
+		validators: Mutex<HashMap<PeerId, tokio::sync::mpsc::UnboundedSender<Event>>>,
 	}
 	impl TestNetwork {
 		fn new() -> Arc<Self> {
 			Arc::new(Self {
-				runtime : tokio::runtime::Builder::new_multi_thread()
+				runtime: tokio::runtime::Builder::new_multi_thread()
 					.enable_all()
 					.build()
 					.unwrap(),
-				validators : Default::default()
+				validators: Default::default(),
 			})
 		}
 	}
 
 	struct TestNetworkInterface {
-		peer_id : PeerId,
-		network : Arc<TestNetwork>
+		peer_id: PeerId,
+		network: Arc<TestNetwork>,
 	}
 	impl TestNetworkInterface {
-		fn new(peer_id: PeerId, network : Arc<TestNetwork>) -> Self {
-			Self {
-				peer_id,
-				network
-			}
+		fn new(peer_id: PeerId, network: Arc<TestNetwork>) -> Self {
+			Self { peer_id, network }
 		}
 	}
 	impl Drop for TestNetworkInterface {
@@ -564,14 +566,20 @@ mod tests {
 				network.runtime.block_on(async move {
 					validators.remove(&peer_id);
 					for remote_sender in validators.values() {
-						remote_sender.send(Event::NotificationStreamClosed {
-							remote: peer_id,
-							protocol: CHAINFLIP_P2P_PROTOCOL_NAME
-						}).unwrap();
-						remote_sender.send(Event::SyncDisconnected { remote: peer_id }).unwrap();
+						remote_sender
+							.send(Event::NotificationStreamClosed {
+								remote: peer_id,
+								protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
+							})
+							.unwrap();
+						remote_sender
+							.send(Event::SyncDisconnected { remote: peer_id })
+							.unwrap();
 					}
 				});
-			}).join().unwrap();
+			})
+			.join()
+			.unwrap();
 		}
 	}
 	impl PeerNetwork for TestNetworkInterface {
@@ -586,13 +594,17 @@ mod tests {
 				let validators = network.validators.lock().unwrap();
 				network.runtime.block_on(async move {
 					if let Some(sender) = validators.get(&who) {
-						sender.send(Event::NotificationsReceived {
-							remote: peer_id,
-							messages: vec![(CHAINFLIP_P2P_PROTOCOL_NAME, message.into())],
-						}).unwrap();
+						sender
+							.send(Event::NotificationsReceived {
+								remote: peer_id,
+								messages: vec![(CHAINFLIP_P2P_PROTOCOL_NAME, message.into())],
+							})
+							.unwrap();
 					}
 				});
-			}).join().unwrap();
+			})
+			.join()
+			.unwrap();
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
@@ -605,38 +617,53 @@ mod tests {
 					for (remote_peer_id, remote_sender) in validators.iter() {
 						use sc_network::ObservedRole;
 
-						remote_sender.send(Event::SyncConnected { remote: peer_id }).unwrap();
-						remote_sender.send(Event::NotificationStreamOpened {
-							remote: peer_id,
-							protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
-							role: ObservedRole::Full
-						}).unwrap();
-						sender.send(Event::SyncConnected { remote: *remote_peer_id }).unwrap();
-						sender.send(Event::NotificationStreamOpened {
-							remote: *remote_peer_id,
-							protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
-							role: ObservedRole::Full
-						}).unwrap();
+						remote_sender
+							.send(Event::SyncConnected { remote: peer_id })
+							.unwrap();
+						remote_sender
+							.send(Event::NotificationStreamOpened {
+								remote: peer_id,
+								protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
+								role: ObservedRole::Full,
+							})
+							.unwrap();
+						sender
+							.send(Event::SyncConnected {
+								remote: *remote_peer_id,
+							})
+							.unwrap();
+						sender
+							.send(Event::NotificationStreamOpened {
+								remote: *remote_peer_id,
+								protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
+								role: ObservedRole::Full,
+							})
+							.unwrap();
 					}
 
 					use std::collections::hash_map;
 					match validators.entry(peer_id) {
 						hash_map::Entry::Occupied(_entry) => Err(()),
 						hash_map::Entry::Vacant(entry) => Ok(entry.insert(sender)),
-					}.unwrap(); // Assumed to be called once
+					}
+					.unwrap(); // Assumed to be called once
 				});
-			}).join().unwrap();
+			})
+			.join()
+			.unwrap();
 			Box::pin(UnboundedReceiverStream::new(receiver))
 		}
 	}
 
-	fn setup_test(peer_id : PeerId, network : Arc<TestNetwork>) -> P2PRpcClient {
+	fn setup_test(peer_id: PeerId, network: Arc<TestNetwork>) -> P2PRpcClient {
 		let (rpc_request_handler, p2p_event_handler_fut) = std::thread::spawn(move || {
 			new_p2p_validator_network_node(
 				Arc::new(TestNetworkInterface::new(peer_id, network)),
-				sc_rpc::testing::TaskExecutor
+				sc_rpc::testing::TaskExecutor,
 			)
-		}).join().unwrap();
+		})
+		.join()
+		.unwrap();
 		let rpc_request_handler = Arc::new(rpc_request_handler);
 		let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(rpc_request_handler);
 
@@ -655,7 +682,15 @@ mod tests {
 		let network = TestNetwork::new();
 		let node_0 = setup_test(PeerId::random(), network.clone());
 
-		node_0.self_identify(AccountIdBs58([0; 32])).compat().await.unwrap();
-		node_0.self_identify(AccountIdBs58([0; 32])).compat().await.unwrap_err();
+		node_0
+			.self_identify(AccountIdBs58([0; 32]))
+			.compat()
+			.await
+			.unwrap();
+		node_0
+			.self_identify(AccountIdBs58([0; 32]))
+			.compat()
+			.await
+			.unwrap_err();
 	}
 }
