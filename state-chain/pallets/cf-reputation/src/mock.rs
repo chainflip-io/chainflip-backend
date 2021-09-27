@@ -16,6 +16,18 @@ use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
 use cf_traits::{EmergencyRotation, Slashing};
 
+impl WeightInfo for () {
+	fn heartbeat(_b: u32) -> Weight {
+		0 as Weight
+	}
+	fn on_initialize(x: u32) -> Weight {
+		0 as Weight
+	}
+	fn update_accrual_ratio(b: u32) -> Weight {
+		0 as Weight
+	}
+}
+
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
 	pub static EMERGENCY_ROTATION_REQUESTED: RefCell<bool> = RefCell::new(false);
@@ -123,6 +135,7 @@ impl Config for Test {
 	type EpochInfo = epoch_info::Mock;
 	type EmergencyRotation = MockEmergencyRotation;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
