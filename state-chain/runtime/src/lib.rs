@@ -439,6 +439,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type WeightInfo = weights::pallet_cf_reputation::WeightInfo<Runtime>;
 }
 
 construct_runtime!(

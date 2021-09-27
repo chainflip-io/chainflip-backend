@@ -30,19 +30,21 @@ use sp_std::marker::PhantomData;
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> pallet_cf_reputation::WeightInfo for WeightInfo<T> {
 	fn heartbeat(_b: u32, ) -> Weight {
-		(11_689_402_000_000 as Weight)
+		(350_500_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn on_initialize(x: u32, ) -> Weight {
-		(74_197_828_000 as Weight)
-			// Standard Error: 8_217_000
-			.saturating_add((302_089_000 as Weight).saturating_mul(x as Weight))
+		(71_182_508_000 as Weight)
+			// Standard Error: 2_785_000
+			.saturating_add((294_576_000 as Weight).saturating_mul(x as Weight))
 			.saturating_add(T::DbWeight::get().reads(366 as Weight))
 			.saturating_add(T::DbWeight::get().writes(365 as Weight))
 	}
-	fn update_accrual_ratio(_b: u32, ) -> Weight {
-		(248_875_000 as Weight)
+	fn update_accrual_ratio(b: u32, ) -> Weight {
+		(135_708_000 as Weight)
+			// Standard Error: 392_000
+			.saturating_add((429_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 }

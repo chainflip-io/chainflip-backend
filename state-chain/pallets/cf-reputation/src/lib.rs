@@ -57,6 +57,12 @@ use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
+pub trait WeightInfo {
+	fn heartbeat(_b: u32) -> Weight;
+	fn on_initialize(x: u32) -> Weight;
+	fn update_accrual_ratio(b: u32) -> Weight;
+}
+
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OfflineCondition {
@@ -95,6 +101,8 @@ pub mod pallet {
 	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::traits::AtLeast32BitUnsigned;
+	use sp_runtime::traits::UniqueSaturatedInto;
+	use sp_runtime::SaturatedConversion;
 	use sp_std::ops::Neg;
 
 	#[pallet::pallet]
@@ -162,6 +170,9 @@ pub mod pallet {
 
 		/// Request an emergency rotation
 		type EmergencyRotation: EmergencyRotation;
+
+		/// Weight info
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -171,8 +182,8 @@ pub mod pallet {
 		/// A request for an emergency rotation is made if needed
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				let liveness_weight = Self::check_liveness();
-				let (network_weight, network_state) = Self::check_network_liveness();
+				Self::check_liveness();
+				let network_state = Self::check_network_liveness();
 
 				if network_state.percentage_online()
 					< T::EmergencyRotationPercentageTrigger::get() as u32
@@ -180,11 +191,8 @@ pub mod pallet {
 					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
 					T::EmergencyRotation::request_emergency_rotation();
 				}
-
-				return liveness_weight + network_weight;
 			}
-
-			Zero::zero()
+			T::WeightInfo::on_initialize(current_block.unique_saturated_into())
 		}
 	}
 
@@ -279,7 +287,7 @@ pub mod pallet {
 		/// the blocks for this heartbeat interval.  Once the block credits have surpassed the accrual
 		/// block number they will earn reputation points based on the accrual ratio.
 		///
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::heartbeat(1))]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
@@ -335,7 +343,7 @@ pub mod pallet {
 		/// The accrual ratio can be updated and would come into play in the current heartbeat interval
 		/// This is only available to sudo
 		///
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_accrual_ratio((*online_credits).saturated_into()))]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,
@@ -472,11 +480,9 @@ pub mod pallet {
 			reputation_points.clamp(floor, ceiling)
 		}
 
-		fn check_network_liveness() -> (Weight, NetworkState) {
+		fn check_network_liveness() -> NetworkState {
 			let (mut online, mut offline) = (0u32, 0u32);
-			let mut weight = 0;
 			for (_, liveness) in ValidatorsLiveness::<T>::iter() {
-				weight += T::DbWeight::get().reads(1);
 				if liveness.is_online() {
 					online += 1
 				} else {
@@ -484,7 +490,7 @@ pub mod pallet {
 				};
 			}
 
-			(weight, NetworkState { online, offline })
+			NetworkState { online, offline }
 		}
 		/// Check liveness of our expected list of validators at the current block.
 		/// For those that we are still *awaiting* on will be penalised reputation points and any online
@@ -492,8 +498,7 @@ pub mod pallet {
 		/// earn points.
 		/// Once the reputation points fall below zero slashing comes into play and is delegated to the
 		/// `Slashing` trait.
-		pub(super) fn check_liveness() -> Weight {
-			let mut weight = 0;
+		pub(super) fn check_liveness() {
 			// Let's run through those that haven't come back to us and those that have
 			ValidatorsLiveness::<T>::translate(|validator_id, mut liveness: Liveness| {
 				// Still waiting on these, penalise and those that are in reputation debt will be
@@ -524,7 +529,6 @@ pub mod pallet {
 								// Reset the credits earned as being online consecutively
 								*online_credits = Zero::zero();
 							}
-							weight += T::DbWeight::get().reads_writes(1, 1);
 
 							*reputation_points
 						},
@@ -534,14 +538,11 @@ pub mod pallet {
 					|| Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
-					weight += T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
+					T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 				}
 
-				weight += T::DbWeight::get().reads(1);
 				Some(liveness.update_current_interval(false))
 			});
-
-			weight
 		}
 	}
 }
