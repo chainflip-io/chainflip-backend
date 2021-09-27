@@ -53,7 +53,8 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				first_ceremony_id,
-				KeygenResponse::Success(vec![1, 2, 3])
+				// this key is different to the genesis key
+				KeygenResponse::Success(vec![1; 33])
 			));
 
 			// A subsequent key generation request
@@ -95,7 +96,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![1, 2, 3])
+				KeygenResponse::Success(vec![1; 33])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -138,7 +139,7 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
-			let new_public_key = vec![1, 2, 3];
+			let new_public_key = vec![1; 33];
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
@@ -198,7 +199,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![1, 2, 3])
+				KeygenResponse::Success(vec![1; 33])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -238,25 +239,30 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
+			let new_public_key = vec![1; 33];
+			let validators = vec![ALICE, BOB, CHARLIE];
 			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
-				vec![],
-				vec![ALICE, BOB, CHARLIE]
+				new_public_key.clone(),
+				validators.clone()
 			));
-			let signing_request = ThresholdSignatureRequest {
+			let expected_signing_request = ThresholdSignatureRequest {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
-					vec![],
+					new_public_key,
 					SchnorrSigTruncPubkey::default(),
 				)
 				.unwrap(),
-				public_key: vec![],
-				validators: vec![ALICE, BOB, CHARLIE],
+				// The CFE stores the pubkey as the compressed 33 byte pubkey
+				// therefore the SC must emit like this
+				public_key: vec![0; 33],
+				validators,
 			};
+			// we need to set the previous key on genesis
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::ThresholdSignatureRequest(
 					0,
-					signing_request
+					expected_signing_request
 				))
 			);
 		});
@@ -268,6 +274,8 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
+
+			// we are still waiting on a keygen response???
 
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),

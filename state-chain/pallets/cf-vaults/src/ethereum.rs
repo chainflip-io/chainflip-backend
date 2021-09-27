@@ -1,3 +1,5 @@
+use core::convert::TryInto;
+
 use crate::ChainParams::Ethereum;
 use crate::{
 	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
@@ -32,12 +34,15 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
 		) {
+			// Issue is occurring here.
+			// we are getting the previous key but not working
 			Ok(payload) => Self::make_request(
 				ceremony_id,
 				ThresholdSignatureRequest {
 					validators,
 					payload,
-					public_key: EthereumVault::<T>::get().previous_key,
+					// we want to sign with the currently active key
+					public_key: EthereumVault::<T>::get().current_key,
 				},
 			),
 			Err(_) => {
@@ -81,6 +86,7 @@ impl<T: Config>
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
+				// Vault rotations try_get with ceremony_id 1 should fail. We haven't supplied the keygen response
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
@@ -119,6 +125,10 @@ impl<T: Config> EthereumChain<T> {
 		new_public_key: T::PublicKey,
 		signature: SchnorrSigTruncPubkey,
 	) -> ethabi::Result<Bytes> {
+		let pubkey: Vec<u8> = new_public_key.into();
+		// strip y-parity from key (first byte)
+		let y_parity = pubkey[0];
+		let x_pubkey: [u8; 32] = pubkey[1..].try_into().expect("Should be 32 bytes");
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![
@@ -131,7 +141,10 @@ impl<T: Config> EthereumChain<T> {
 						ParamType::Address,
 					]),
 				),
-				Param::new("newKey", ParamType::FixedBytes(32)),
+				Param::new(
+					"newKey",
+					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
+				),
 			],
 			vec![],
 			false,
@@ -143,8 +156,10 @@ impl<T: Config> EthereumChain<T> {
 				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
-			// newKey: bytes32
-			Token::FixedBytes(new_public_key.into()),
+			Token::Tuple(vec![
+				Token::Uint(x_pubkey.into()),
+				Token::Uint(y_parity.into()),
+			]),
 		])
 	}
 }
