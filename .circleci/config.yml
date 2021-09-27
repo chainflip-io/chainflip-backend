@@ -236,17 +236,21 @@ jobs:
           -p cf-traits
           -- --check
 
+  # Compile and test the entire chainflip-backend.
+  # We run sccache --show-stats multiple times;
+  # First to check connection, and once after each
+  # cargo function to track the performance of the compilation.
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
-      - run: sccache -s
+      - run: sccache --show-stats
       - run: |
           cargo build --locked --release
-          sccache -s
+          sccache --show-stats
       - run: |
           cargo test --lib --locked --release
-          sccache -s
+          sccache --show-stats
       - persist_to_workspace:
           root: ./
           paths:
@@ -258,17 +262,21 @@ jobs:
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
 
+  # Check and test the entire chainflip-backend.
+  # We run sccache --show-stats multiple times;
+  # First to check connection, and once after each
+  # cargo function to track the performance of the compilation.
   cargo-check-and-test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
-      - run: sccache -s
+      - run: sccache --show-stats
       - run: |
           cargo check --locked --release
-          sccache -s
+          sccache --show-stats
       - run: |
-          cargo build --locked --release
-          sccache -s
+          cargo test --lib --locked --release
+          sccache --show-stats
 
   clone-contracts-repo:
     resource_class: small
@@ -311,7 +319,7 @@ jobs:
             cd eth-contracts
             poetry install --quiet
             poetry run brownie run deploy_and all_events --network hardhat
-      - run: sccache -s
+      - run: sccache --show-stats
       - run: cargo test --locked --release
       - discord/status:
           fail_only: true
