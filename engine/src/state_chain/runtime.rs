@@ -28,7 +28,7 @@ use core::fmt::Debug;
 use codec::{Decode, Encode};
 
 use super::pallets::{
-    auction, emissions, ethereum_signer, reputation, staking, validator, vaults, witness_api,
+    auction, emissions, ethereum_broadcaster, ethereum_signer, reputation, staking, validator, vaults, witness_api,
 };
 
 use pallet_cf_flip::ImbalanceSource;
@@ -173,6 +173,8 @@ impl ethereum_signer::EthereumSigner for StateChainRuntime {
     type KeyId = Vec<u8>;
     type Payload = H256;
 }
+
+impl ethereum_broadcaster::EthereumBroadcaster for StateChainRuntime {}
 
 impl System for StateChainRuntime {
     type Index = u32;

@@ -822,13 +822,14 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=bfa7866)",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
  "ethereum",
  "frame-support",
  "frame-system",
  "hex",
  "parity-scale-codec",
  "rlp",
+ "serde 1.0.126",
  "sp-runtime",
  "sp-std",
 ]
@@ -951,6 +952,7 @@ dependencies = [
  "nats_test_server",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-flip",
  "pallet-cf-reputation",
  "pallet-cf-signing",
@@ -1841,7 +1843,7 @@ dependencies = [
 [[package]]
 name = "ethabi"
 version = "14.1.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=bfa7866#bfa7866611f63960d8bffbc0117691f7b479e533"
+source = "git+https://github.com/chainflip-io/ethabi?rev=1279085#1279085d28798744d2107046a8f0c7221d7e76ce"
 dependencies = [
  "anyhow",
  "ethereum-types 0.11.0",

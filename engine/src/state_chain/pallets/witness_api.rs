@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use super::{
     auction::Auction,
     ethereum_signer::{CeremonyId, EthereumSigner},
+    ethereum_broadcaster::{BroadcastAttemptId},
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;
@@ -38,8 +39,30 @@ pub struct WitnessAuctionConfirmationCall<T: WitnesserApi> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct WitnessSignatureSuccessCall<T: WitnesserApi> {
-    request_id: CeremonyId,
+pub struct WitnessEthSignatureSuccessCall<T: WitnesserApi> {
+    ceremony_id: CeremonyId,
     signature: cf_chains::eth::SchnorrVerificationComponents,
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthSignatureFailedCall<T: WitnesserApi> {
+    ceremony_id: CeremonyId,
+    offenders: Vec<<T as System>::AccountId>,
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthBroadcastSuccessCall<T: WitnesserApi> {
+    broadcast_attempt_id: BroadcastAttemptId,
+    tx_hash: [u8; 32],
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthBroadcastFailureCall<T: WitnesserApi> {
+    broadcast_attempt_id: BroadcastAttemptId,
+    failure: pallet_cf_broadcast::BroadcastFailure,
+    tx_hash: [u8; 32],
     _runtime: PhantomData<T>,
 }
