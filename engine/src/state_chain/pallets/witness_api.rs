@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 
 use super::{
     auction::Auction,
+    ethereum_broadcaster::BroadcastAttemptId,
     ethereum_signer::{CeremonyId, EthereumSigner},
-    ethereum_broadcaster::{BroadcastAttemptId},
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;

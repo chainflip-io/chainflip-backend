@@ -28,7 +28,8 @@ use core::fmt::Debug;
 use codec::{Decode, Encode};
 
 use super::pallets::{
-    auction, emissions, ethereum_broadcaster, ethereum_signer, reputation, staking, validator, vaults, witness_api,
+    auction, emissions, ethereum_broadcaster, ethereum_signer, reputation, staking, validator,
+    vaults, witness_api,
 };
 
 use pallet_cf_flip::ImbalanceSource;
