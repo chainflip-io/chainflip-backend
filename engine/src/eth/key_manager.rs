@@ -344,6 +344,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
+        let tx_hash_str = "0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492";
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let key_manager = KeyManager::new(&settings).unwrap();
@@ -352,9 +353,7 @@ mod tests {
         let refunded_event_signature =
             H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
-                .unwrap();
+        let transaction_hash = H256::from_str(tx_hash_str).unwrap();
 
         match decode_log(
             refunded_event_signature,
@@ -369,8 +368,10 @@ mod tests {
         )
         .unwrap()
         {
-            KeyManagerEvent::Refunded { amount } => {
+            KeyManagerEvent::Refunded { amount, tx_hash } => {
                 assert_eq!(11126819398980, amount);
+                // no 0x
+                assert_eq!(tx_hash_str[2..], hex::encode(tx_hash));
             }
             _ => panic!("Expected KeyManager::Refunded, got a different variant"),
         }
