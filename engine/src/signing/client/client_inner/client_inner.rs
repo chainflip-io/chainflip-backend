@@ -323,8 +323,9 @@ where
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
         slog::debug!(
             self.logger,
-            "[{}] delaying a request to sign",
-            self.my_account_id
+            "[{}] delaying request to sign data: {:?}",
+            self.my_account_id,
+            data
         );
 
         // TODO: check for duplicates?
@@ -352,21 +353,19 @@ where
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
+                let key_id = sign_info.key_id.clone();
                 slog::debug!(
                     self.logger,
-                    "[{}] Received sign instruction",
-                    self.my_account_id
+                    "[{}] Received sign instruction for key_id: {:?}",
+                    self.my_account_id,
+                    key_id
                 );
-
-                let key = self.key_store.get_key(sign_info.key_id.clone());
-
-                match key {
+                match self.key_store.get_key(key_id.clone()) {
                     Some(key) => {
                         self.signing_manager
                             .on_request_to_sign(hash, key.clone(), sign_info);
                     }
                     None => {
-                        // the key is not ready, delay until it is
                         self.add_pending(hash, sign_info);
                     }
                 }
