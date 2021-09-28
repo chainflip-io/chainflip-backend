@@ -249,6 +249,7 @@ jobs:
           -p pallet-cf-broadcast
           -p pallet-cf-signing
           -p cf-traits
+          -p cf-chains
           -- --check
 
   check-validator-package:
