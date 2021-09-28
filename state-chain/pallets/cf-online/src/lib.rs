@@ -66,7 +66,7 @@ pub enum ReportError {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Heartbeat, NetworkState, IsOnline};
+	use cf_traits::{EpochInfo, Heartbeat, NetworkState, IsOnline, Chainflip};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -74,12 +74,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
@@ -90,9 +87,6 @@ pub mod pallet {
 
 		/// A Heartbeat
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId>;
-
-		// An amount of a bid
-		type Amount: Copy;
 	}
 
 	/// Pallet implements [`Hooks`] trait

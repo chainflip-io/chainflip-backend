@@ -13,7 +13,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Heartbeat, NetworkState};
+use cf_traits::{Heartbeat, NetworkState, Chainflip};
 
 thread_local! {
 }
@@ -69,21 +69,26 @@ pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = u64;
 
-	fn heartbeat_submitted(validator_id: Self::ValidatorId) {}
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+	fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight {
+		0
+	}
 
-
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+		0
 	}
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
+impl Chainflip for Test {
+	type ValidatorId = u64;
+	type Amount = u128;
+}
+
 impl Config for Test {
 	type Event = Event;
-	type ValidatorId = u64;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type Amount = u128;
 	type EpochInfo = epoch_info::Mock;
 	type Heartbeat = MockHeartbeat;
 }

@@ -88,7 +88,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Heartbeat, NetworkState, Slashing};
+	use cf_traits::{EpochInfo, Heartbeat, NetworkState, Slashing, Chainflip};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -117,15 +117,9 @@ pub mod pallet {
 	type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
-
-		// An amount of a bid
-		type Amount: Copy;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
