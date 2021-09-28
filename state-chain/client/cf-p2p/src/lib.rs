@@ -653,9 +653,9 @@ mod tests {
 		let try_self_identify =
 			|| async { node_0.self_identify(AccountIdBs58([0; 32])).compat().await };
 
-		assert!(matches!(try_self_identify(), Ok(200u64)));
+		assert!(matches!(try_self_identify().await, Ok(200u64)));
 		assert!(matches!(
-			try_self_identify(),
+			try_self_identify().await,
 			Err(RpcError::JsonRpcError(_))
 		));
 	}
