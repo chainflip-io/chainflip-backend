@@ -46,7 +46,7 @@ cargo-base-job: &cargo-base-job
   environment: &sccache_environment
     SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
 
 
