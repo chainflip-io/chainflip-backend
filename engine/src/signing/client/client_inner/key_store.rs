@@ -53,6 +53,7 @@ mod tests {
     };
 
     #[test]
+    #[ignore = "manual test"]
     fn startup_keystore() {
         let current_path = env::current_dir().unwrap();
         println!("The current directory is: {}", current_path.display());
