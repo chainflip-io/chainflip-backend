@@ -35,10 +35,9 @@ pub async fn start_key_manager_witness(
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
     slog::info!(logger, "Starting KeyManager witness");
 
-    slog::info!(logger, "Load Contract ABI");
+    slog::info!(logger, "Load KeyManager Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Event Stream");
     let mut event_stream = key_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
@@ -46,11 +45,12 @@ pub async fn start_key_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             match result_event.unwrap() {
-                // TODO: Handle unwraps
-                KeyManagerEvent::KeyChange { .. } => {
-                    todo!();
+                KeyManagerEvent::KeyChange { tx_hash, .. } => {
+                    slog::info!(logger, "Keychain event found: {}", hex::encode(tx_hash));
                 }
-                KeyManagerEvent::Refunded { amount } => todo!("Refunded({})", amount),
+                KeyManagerEvent::Refunded { tx_hash, .. } => {
+                    slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
+                }
             }
         }
     })
@@ -125,7 +125,7 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
-        /// Transaction hash that created the event
+        /// Tx hash of the tx that created the event
         tx_hash: [u8; 32],
     },
 
@@ -133,6 +133,8 @@ pub enum KeyManagerEvent {
     Refunded {
         /// The amount of ETH refunded
         amount: u128,
+        /// Tx hash of the tx that created the event
+        tx_hash: [u8; 32],
     },
 }
 
@@ -184,6 +186,7 @@ impl KeyManager {
                     let log = refunded.event.parse_log(raw_log)?;
                     let event = KeyManagerEvent::Refunded {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                        tx_hash,
                     };
                     Ok(event)
                 } else {
