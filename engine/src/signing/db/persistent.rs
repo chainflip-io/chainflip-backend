@@ -12,7 +12,7 @@ use crate::{
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
     /// Rocksdb database instance
-    db: Database,
+    pub db: Database,
     logger: slog::Logger,
 }
 
@@ -20,6 +20,9 @@ impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::default();
         // TODO: Update to kvdb 14 and then can pass in &Path
+
+        // TODO: Error report this path with the fully qualified path it's trying to access.
+        // LOG the path it's accessing even if it doesn't error
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
 
@@ -39,6 +42,11 @@ impl KeyDB for PersistentKeyDB {
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
         tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
+        // commit the tx to the database
+        self.db.write(tx).expect(&format!(
+            "Could not write key share for key_id `{:?}` to database",
+            key_id
+        ));
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
@@ -70,3 +78,5 @@ impl KeyDB for PersistentKeyDB {
             .collect()
     }
 }
+
+// TODO: WRITE TESTS

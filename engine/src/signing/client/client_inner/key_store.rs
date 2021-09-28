@@ -20,6 +20,7 @@ where
 {
     pub fn new(db: S) -> Self {
         let keys = db.load_keys();
+        println!("Keys loaded in from db: {:?}", keys);
 
         KeyStore { keys, db }
     }
@@ -37,5 +38,42 @@ where
     pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo) {
         self.db.update_key(key_id.clone(), &key);
         self.keys.insert(key_id, key);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use super::*;
+
+    use crate::{
+        logging::test_utils::create_test_logger, settings::test_utils::new_test_settings,
+        signing::db::PersistentKeyDB,
+    };
+
+    #[test]
+    fn startup_keystore() {
+        let current_path = env::current_dir().unwrap();
+        println!("The current directory is: {}", current_path.display());
+        let settings = new_test_settings().unwrap();
+        let path_to_db = settings.signing.db_file.as_path();
+        if !path_to_db.exists() {
+            panic!("Db path does not exist")
+        } else {
+            println!("Path does exist, carry on");
+        }
+        println!("here's the path to the db: {}", path_to_db.display());
+        let logger = create_test_logger();
+        let p_db = PersistentKeyDB::new(&path_to_db, &logger);
+        let db = p_db.db;
+
+        let mut tx = db.transaction();
+        tx.put_vec(0, &[0; 2], vec![1; 3]);
+        db.write(tx).unwrap();
+
+        for item in db.iter(0) {
+            println!("Here's an item");
+        }
     }
 }

@@ -36,7 +36,7 @@ async fn main() {
         .set_url(&settings.state_chain.ws_endpoint)
         .build()
         .await
-        .expect("Should create subxt client");
+        .expect("Cannot create subxt client");
 
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
@@ -85,9 +85,10 @@ async fn main() {
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
-        .unwrap();
+        .expect("Cannot create web3 socket");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings, web3.clone()).expect("Cannot start ETH broadcaster");
 
     tokio::join!(
         // Start signing components
