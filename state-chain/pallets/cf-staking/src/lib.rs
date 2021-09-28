@@ -520,6 +520,7 @@ impl<T: Config> Pallet<T> {
 			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
 			match existing_withdrawal_address {
 				// User account exists and both addresses hold a value - the value of both addresses is different
+				// and not null
 				Some(existing)
 					if withdrawal_address != existing && withdrawal_address != ETH_ZERO_ADDRESS =>
 				{
