@@ -4955,6 +4955,7 @@ dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-online",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",

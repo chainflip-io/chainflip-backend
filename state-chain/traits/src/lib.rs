@@ -370,7 +370,7 @@ pub trait Slashing {
 pub trait Heartbeat {
 	type ValidatorId;
 	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: Self::ValidatorId);
+	fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight;
 	/// Called on every heartbeat interval with the current network state
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
 }
