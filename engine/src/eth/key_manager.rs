@@ -35,7 +35,7 @@ pub async fn start_key_manager_witness(
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
     slog::info!(logger, "Starting KeyManager witness");
 
-    slog::info!(logger, "Load KeyManager Contract ABI");
+    slog::info!(logger, "Load Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
     let mut event_stream = key_manager

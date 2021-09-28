@@ -38,7 +38,7 @@ pub async fn start_stake_manager_witness(
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");
 
-    slog::info!(logger, "Load StakeManager Contract ABI");
+    slog::info!(logger, "Load Contract ABI");
     let stake_manager = StakeManager::new(&settings)?;
 
     let mut event_stream = stake_manager
