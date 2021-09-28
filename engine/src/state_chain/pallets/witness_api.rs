@@ -50,15 +50,6 @@ pub struct WitnessKeygenResponseCall<T: WitnesserApi> {
     pub _runtime: PhantomData<T>,
 }
 
-// ===== Calls / Extrinsics =====
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct WitnessSignatureSuccessCall<T: WitnesserApi> {
-    request_id: CeremonyId,
-    signature: cf_chains::eth::SchnorrVerificationComponents,
-    _runtime: PhantomData<T>,
-}
-
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessThresholdSignatureResponseCall<T: WitnesserApi> {
     pub ceremony_id: CeremonyId,
@@ -75,4 +66,18 @@ pub struct WitnessVaultRotationResponseCall<T: WitnesserApi> {
     pub response: VaultRotationResponse<Vec<u8>>,
 
     pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthSignatureSuccessCall<T: WitnesserApi> {
+    ceremony_id: ethereum_signer::CeremonyId,
+    signature: cf_chains::eth::SchnorrVerificationComponents,
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthSignatureFailedCall<T: WitnesserApi> {
+    ceremony_id: ethereum_signer::CeremonyId,
+    offenders: Vec<<T as System>::AccountId>,
+    _runtime: PhantomData<T>,
 }
