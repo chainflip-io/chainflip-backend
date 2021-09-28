@@ -14,7 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{EmergencyRotation, Slashing};
+use cf_traits::{EmergencyRotation, Slashing, Heartbeat, NetworkState};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -105,6 +105,15 @@ impl EmergencyRotation for MockEmergencyRotation {
 	}
 }
 
+pub struct MockHeartbeat;
+impl Heartbeat for MockHeartbeat {
+	type ValidatorId = u64;
+
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+		todo!()
+	}
+}
+
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 300u64;
@@ -122,6 +131,7 @@ impl Config for Test {
 	type EpochInfo = epoch_info::Mock;
 	type EmergencyRotation = MockEmergencyRotation;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type Heartbeat = MockHeartbeat;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

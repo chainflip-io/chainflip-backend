@@ -284,18 +284,21 @@ pub trait Online {
 }
 
 /// A representation of the current network state
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
-pub struct NetworkState {
-	pub online: u32,
-	pub offline: u32,
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct NetworkState<ValidatorId> {
+	pub online: Vec<ValidatorId>,
+	pub offline: Vec<ValidatorId>,
 }
 
-impl NetworkState {
+impl<ValidatorId> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
-		self.online
+		let number_online = self.online.len() as u32;
+		let number_offline = self.offline.len() as u32;
+
+		number_online
 			.saturating_mul(100)
-			.checked_div(self.online + self.offline)
+			.checked_div(number_online + number_offline)
 			.unwrap_or(0)
 	}
 }
@@ -363,8 +366,8 @@ pub trait Slashing {
 }
 
 /// The heartbeat of the network
-trait Heartbeat {
+pub trait Heartbeat {
 	type ValidatorId;
-	/// Called on every heartbeat interval with a list of known 'live' nodes
-	fn on_heartbeat_interval(validators: Vec<Self::ValidatorId>);
+	/// Called on every heartbeat interval with the current network state
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }

@@ -89,7 +89,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online, Slashing};
+	use cf_traits::{EmergencyRotation, EpochInfo, Heartbeat, NetworkState, Online, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -155,6 +155,9 @@ pub mod pallet {
 
 		/// Request an emergency rotation
 		type EmergencyRotation: EmergencyRotation;
+
+		/// A Heartbeat
+		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -164,8 +167,11 @@ pub mod pallet {
 		/// A request for an emergency rotation is made if needed
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
+				// Update the state of liveness for those present
 				let liveness_weight = Self::check_liveness();
 				let (network_weight, network_state) = Self::check_network_liveness();
+				// Provide feedback via the `Heartbeat` interval
+				T::Heartbeat::on_heartbeat_interval(network_state.clone());
 
 				if network_state.percentage_online()
 					< T::EmergencyRotationPercentageTrigger::get() as u32
@@ -251,7 +257,7 @@ pub mod pallet {
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
 		/// An emergency rotation has been requested \[network state\]
-		EmergencyRotationRequested(NetworkState),
+		EmergencyRotationRequested(NetworkState<T::ValidatorId>),
 	}
 
 	#[pallet::error]
@@ -464,15 +470,18 @@ pub mod pallet {
 			reputation_points.clamp(floor, ceiling)
 		}
 
-		fn check_network_liveness() -> (Weight, NetworkState) {
-			let (mut online, mut offline) = (0u32, 0u32);
+		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
+
 			let mut weight = 0;
-			for (_, liveness) in ValidatorsLiveness::<T>::iter() {
+			let mut online: Vec<T::ValidatorId> = Vec::new();
+			let mut offline: Vec<T::ValidatorId> = Vec::new();
+
+			for (validator_id, liveness) in ValidatorsLiveness::<T>::iter() {
 				weight += T::DbWeight::get().reads(1);
 				if liveness.is_online() {
-					online += 1
+					online.push(validator_id);
 				} else {
-					offline += 1
+					offline.push(validator_id);
 				};
 			}
 
