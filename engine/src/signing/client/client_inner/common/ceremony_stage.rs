@@ -1,5 +1,4 @@
 use dyn_clone::DynClone;
-use pallet_cf_vaults::CeremonyId;
 
 use super::P2PSender;
 

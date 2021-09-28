@@ -1,4 +1,3 @@
-#[allow(unused_doc_comments)]
 /*
     Multisig Schnorr
 
@@ -272,7 +271,6 @@ impl LocalSig {
     }
 
     // section 4.2 step 3
-    #[allow(unused_doc_comments)]
     pub fn verify_local_sigs(
         gamma_vec: &Vec<LocalSig>,
         parties_index_vec: &[usize],

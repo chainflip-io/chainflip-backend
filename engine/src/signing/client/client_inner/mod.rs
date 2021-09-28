@@ -15,6 +15,8 @@ mod signing_state;
 mod tests;
 
 pub use client_inner::{InnerEvent, MultisigClient};
+#[cfg(test)]
+mod genesis;
 
 pub use client_inner::{KeygenOutcome, SchnorrSignature, SigningOutcome};
 pub use common::KeygenResultInfo;

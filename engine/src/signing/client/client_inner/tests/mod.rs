@@ -3,7 +3,7 @@ mod frost_unit_tests;
 mod helpers;
 // mod keygen_unit_tests;
 
-// pub use helpers::KeygenPhase1Data;
+pub use helpers::KeygenContext;
 
 use lazy_static::lazy_static;
 #[allow(unused_imports)]

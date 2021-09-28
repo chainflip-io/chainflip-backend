@@ -1,4 +1,4 @@
-use std::{collections::HashMap, pin::Pin, time::Duration};
+use std::{collections::HashMap, convert::TryInto, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
 use pallet_cf_vaults::CeremonyId;
@@ -55,7 +55,17 @@ pub struct KeygenPhase2Data {
 pub struct KeygenPhase3Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub pubkey: secp256k1::PublicKey,
+
+    // These are indexed by signer_idx ( -1 )
     pub sec_keys: Vec<KeygenResultInfo>,
+}
+
+impl Debug for KeygenPhase3Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeygenPhase3Data")
+            .field("pubkey", &self.pubkey)
+            .finish()
+    }
 }
 
 /// Clients received a request to sign and generated (but haven't broadcast) Comm1
@@ -112,7 +122,7 @@ pub fn keygen_delayed_count(client: &MultisigClientNoDB, ceremony_id: CeremonyId
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
-    validator_ids: Vec<AccountId>,
+    account_ids: Vec<AccountId>,
 
     pub rxs: Vec<InnerEventReceiver>,
     /// This clients will match the ones in `key_ready`,
@@ -324,10 +334,17 @@ impl KeygenContext {
     /// Generate context without starting the
     /// keygen ceremony
     pub fn new() -> Self {
-        let validator_ids = super::VALIDATOR_IDS.clone();
+        let account_ids = super::VALIDATOR_IDS.clone();
+        KeygenContext::inner_new(account_ids)
+    }
 
+    pub fn new_with_account_ids(account_ids: Vec<AccountId>) -> Self {
+        KeygenContext::inner_new(account_ids)
+    }
+
+    fn inner_new(account_ids: Vec<AccountId>) -> Self {
         let logger = logging::test_utils::create_test_logger();
-        let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
+        let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -343,7 +360,7 @@ impl KeygenContext {
             .unzip();
 
         KeygenContext {
-            validator_ids,
+            account_ids,
             rxs,
             clients,
             custom_local_sigs: HashMap::new(),
@@ -401,14 +418,14 @@ impl KeygenContext {
         let instant = std::time::Instant::now();
 
         let clients = &mut self.clients;
-        let validator_ids = &self.validator_ids;
+        let account_ids = &self.account_ids;
         let rxs = &mut self.rxs;
 
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
             ceremony_id: KEYGEN_CEREMONY_ID,
-            signers: validator_ids.clone(),
+            signers: account_ids.clone(),
         };
 
         for c in clients.iter_mut() {
@@ -432,7 +449,7 @@ impl KeygenContext {
 
         for sender_idx in 0..=3 {
             let bc1 = bc1_vec[sender_idx].clone();
-            let id = &validator_ids[sender_idx];
+            let id = &account_ids[sender_idx];
 
             let m = keygen_data_to_p2p(bc1, id, KEYGEN_CEREMONY_ID);
 
@@ -485,10 +502,10 @@ impl KeygenContext {
                     continue;
                 }
 
-                let r_id = &validator_ids[receiver_idx];
+                let r_id = &account_ids[receiver_idx];
                 let sec2 = sec2_vec[sender_idx].get(r_id).unwrap();
 
-                let s_id = &validator_ids[sender_idx];
+                let s_id = &account_ids[sender_idx];
                 let m = keygen_data_to_p2p(sec2.clone(), s_id, KEYGEN_CEREMONY_ID);
 
                 clients[receiver_idx].process_p2p_message(m);
@@ -632,7 +649,6 @@ impl KeygenContext {
         };
 
         // *** Distribute local sigs ***
-
         broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.sig3_to_send).await;
 
         // *** Collect Ver4 messages ***

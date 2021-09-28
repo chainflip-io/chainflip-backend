@@ -50,7 +50,7 @@ reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
 serde = {version = "1.0", features = ["derive", "rc"]}
 serde_json = "1.0"
-slog = {version = "2.7.0"}
+slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
 thiserror = "1.0.26"
@@ -69,7 +69,7 @@ frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
 sp-runtime = "3.0.0"
-substrate-subxt = "0.15"
+substrate-subxt = {git = "https://github.com/chainflip-io/substrate-subxt", branch = "all-events"}
 
 # Local deps
 cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
