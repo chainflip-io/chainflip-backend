@@ -89,13 +89,13 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      #      - cargo-check-and-test-validator-package:
-      #          requires:
-      #            - fmt-validator-package
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *ignore_main_branches
-      - cargo-build-and-test-validator-package:
+      - cargo-check-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+      - cargo-test-validator-package:
           requires:
             - fmt-validator-package
           context:
@@ -272,7 +272,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-check-and-test-validator-package:
+  cargo-check-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -280,6 +280,11 @@ jobs:
       - run: |
           cargo check --locked --release
           sccache --show-stats
+  cargo-test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache --show-stats
       - run: |
           cargo test --lib --locked --release
           sccache --show-stats
