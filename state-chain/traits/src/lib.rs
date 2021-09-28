@@ -361,3 +361,10 @@ pub trait Slashing {
 	/// Function which implements the slashing logic
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
 }
+
+/// The heartbeat of the network
+trait Heartbeat {
+	type ValidatorId;
+	/// Called on every heartbeat interval with a list of known 'live' nodes
+	fn on_heartbeat_interval(validators: Vec<Self::ValidatorId>);
+}
