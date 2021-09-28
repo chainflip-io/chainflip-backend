@@ -154,7 +154,7 @@ impl KeyManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
-        slog::info!(logger, "Creating new KeyManager event stream");
+        slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
