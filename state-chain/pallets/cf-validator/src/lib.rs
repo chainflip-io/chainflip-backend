@@ -119,6 +119,10 @@ pub mod pallet {
 
 		/// An auction type
 		type Auction: Auction<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
 	}
 
 	#[pallet::event]
@@ -130,6 +134,8 @@ pub mod pallet {
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// A new epoch has been forced
 		ForceRotationRequested(),
+		/// An emergency rotation has been requested
+		EmergencyRotationRequested(),
 	}
 
 	#[pallet::error]
@@ -411,6 +417,7 @@ pub struct EmergencyRotationOf<T>(PhantomData<T>);
 
 impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
 	fn request_emergency_rotation() {
+		Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
 		Pallet::<T>::force_validator_rotation();
 	}
 }

@@ -89,7 +89,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EmergencyRotation, EpochInfo, Heartbeat, NetworkState, Online, Slashing};
+	use cf_traits::{EpochInfo, Heartbeat, NetworkState, Online, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -140,10 +140,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
-		/// Trigger an emergency rotation on falling below the percentage of online validators
-		#[pallet::constant]
-		type EmergencyRotationPercentageTrigger: Get<u8>;
-
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			AccountId = Self::ValidatorId,
@@ -153,9 +149,6 @@ pub mod pallet {
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
-		/// Request an emergency rotation
-		type EmergencyRotation: EmergencyRotation;
-
 		/// A Heartbeat
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId>;
 	}
@@ -164,21 +157,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// On initializing each block we check liveness and network liveness on every heartbeat interval
-		/// A request for an emergency rotation is made if needed
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				// Update the state of liveness for those present
 				let liveness_weight = Self::check_liveness();
 				let (network_weight, network_state) = Self::check_network_liveness();
-				// Provide feedback via the `Heartbeat` interval
+				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state.clone());
-
-				if network_state.percentage_online()
-					< T::EmergencyRotationPercentageTrigger::get() as u32
-				{
-					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
-					T::EmergencyRotation::request_emergency_rotation();
-				}
 
 				return liveness_weight + network_weight;
 			}
@@ -256,8 +241,6 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
-		/// An emergency rotation has been requested \[network state\]
-		EmergencyRotationRequested(NetworkState<T::ValidatorId>),
 	}
 
 	#[pallet::error]

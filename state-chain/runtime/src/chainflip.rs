@@ -1,9 +1,10 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Witnesser};
-use cf_traits::{BondRotation, EmissionsTrigger};
+use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Validator, Witnesser};
+use cf_traits::{BondRotation, EmergencyRotation, EmissionsTrigger, Heartbeat, NetworkState};
 use frame_support::debug;
-use pallet_cf_validator::EpochTransitionHandler;
+use pallet_cf_validator::{EpochTransitionHandler, EmergencyRotationOf};
 use sp_std::vec::Vec;
+use crate::EmergencyRotationPercentageTrigger;
 
 pub struct ChainflipEpochTransitions;
 
@@ -27,3 +28,24 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
 	}
 }
+
+pub struct ChainflipHeartbeat;
+
+impl Heartbeat for ChainflipHeartbeat {
+	type ValidatorId = AccountId;
+
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+		// We pay rewards to backup validators on each heartbeat interval
+
+		// Check the state of the network and if we are below the emergency rotation trigger
+		// then issue an emergency rotation request
+		if network_state.percentage_online()
+			< EmergencyRotationPercentageTrigger::get() as u32
+		{
+			EmergencyRotationOf::<Runtime>::request_emergency_rotation();
+		}
+	}
+}
+
+#[test]
+fn test_this() {}
