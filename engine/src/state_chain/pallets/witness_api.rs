@@ -42,10 +42,10 @@ pub struct WitnessAuctionConfirmationCall<T: WitnesserApi> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct WitnessVaultRotationResponseCall<T: WitnesserApi> {
+pub struct WitnessKeygenResponseCall<T: WitnesserApi> {
     pub ceremony_id: CeremonyId,
 
-    pub response: VaultRotationResponse<Vec<u8>>,
+    pub response: KeygenResponse<AccountId32, Vec<u8>>,
 
     pub _runtime: PhantomData<T>,
 }
@@ -60,19 +60,19 @@ pub struct WitnessSignatureSuccessCall<T: WitnesserApi> {
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct WitnessKeygenResponseCall<T: WitnesserApi> {
+pub struct WitnessThresholdSignatureResponseCall<T: WitnesserApi> {
     pub ceremony_id: CeremonyId,
 
-    pub response: KeygenResponse<AccountId32, Vec<u8>>,
+    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSigTruncPubkey>,
 
     pub _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct WitnessThresholdSignatureResponseCall<T: WitnesserApi> {
+pub struct WitnessVaultRotationResponseCall<T: WitnesserApi> {
     pub ceremony_id: CeremonyId,
 
-    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSigTruncPubkey>,
+    pub response: VaultRotationResponse<Vec<u8>>,
 
     pub _runtime: PhantomData<T>,
 }
