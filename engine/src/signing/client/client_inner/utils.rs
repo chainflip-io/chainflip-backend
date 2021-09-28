@@ -74,13 +74,11 @@ impl ValidatorMaps {
 }
 
 pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
-    let signers = signers.clone();
-
     let idxs: Vec<_> = (1..=signers.len()).collect();
 
     debug_assert_eq!(idxs.len(), signers.len());
 
-    let mut combined: Vec<_> = signers.into_iter().zip(idxs).collect();
+    let mut combined: Vec<_> = signers.iter().zip(idxs).collect();
 
     combined.sort_by_key(|(v, _)| *v);
 

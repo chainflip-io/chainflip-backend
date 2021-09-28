@@ -60,7 +60,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
             d: self.nonces.d_pub,
             e: self.nonces.e_pub,
         }
-        .into()
     }
 
     should_delay!(SigningData::BroadcastVerificationStage2);
@@ -225,7 +224,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             })
             .collect();
 
-        VerifyLocalSig4 { data }.into()
+        VerifyLocalSig4 { data }
     }
 
     fn should_delay(&self, _: &SigningData) -> bool {
@@ -299,7 +298,7 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
 
     'outer: for i in 0..num_parties {
         let mut value_counts = HashMap::<Vec<u8>, usize>::new();
-        for (_, m) in verification_messages {
+        for m in verification_messages.values() {
             let data = bincode::serialize(&m.data[i]).unwrap();
             *value_counts.entry(data).or_default() += 1;
         }

@@ -59,9 +59,9 @@ impl SigningInfo {
         signers: Vec<AccountId>,
     ) -> Self {
         SigningInfo {
+            data,
             ceremony_id,
             key_id,
-            data,
             signers,
         }
     }
@@ -103,7 +103,7 @@ where
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
     let mut inner = MultisigClient::new(
-        my_account_id.clone(),
+        my_account_id,
         db,
         inner_event_sender,
         PHASE_TIMEOUT,

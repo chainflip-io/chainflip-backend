@@ -44,10 +44,10 @@ impl SigningManager {
 
         // Have to clone so it can be used inside the closure
         let logger = self.logger.clone();
-        self.signing_states.retain(|message_info, state| {
+        self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
                 slog::warn!(logger, "Signing state expired and will be abandoned");
-                let outcome = SigningOutcome::timeout(message_info.clone(), bad_nodes);
+                let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
 
                 events_to_send.push(InnerEvent::SigningResult(outcome));
 

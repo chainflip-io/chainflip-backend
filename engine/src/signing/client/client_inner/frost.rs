@@ -40,8 +40,8 @@ impl SecretNoncePair {
         let d = Scalar::new_random();
         let e = Scalar::new_random();
 
-        let d_pub = &ECPoint::generator() * &d;
-        let e_pub = &ECPoint::generator() * &e;
+        let d_pub = Point::generator() * d;
+        let e_pub = Point::generator() * e;
 
         SecretNoncePair { d, d_pub, e, e_pub }
     }
@@ -338,7 +338,7 @@ pub fn aggregate_signature(
             .fold(Scalar::zero(), |acc, x| acc + x.response);
 
         Ok(SchnorrSignature {
-            s: z.get_element().as_ref().clone(),
+            s: *z.get_element().as_ref(),
             r: group_commitment.get_element(),
         })
     } else {

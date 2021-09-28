@@ -119,7 +119,7 @@ impl SigningState {
                 ceremony_id,
             ),
             own_idx: signer_idx,
-            all_idxs: signer_idxs.clone(),
+            all_idxs: signer_idxs,
             logger: logger.clone(),
         };
 
@@ -138,7 +138,7 @@ impl SigningState {
         self.inner = Some(AuthorisedSigningState {
             ceremony_id,
             stage: Some(Box::new(state)),
-            validator_map: key_info.validator_map.clone(),
+            validator_map: key_info.validator_map,
             result_sender: event_sender,
         });
 

@@ -203,7 +203,7 @@ where
             keygen: KeygenManager::new(
                 my_account_id.clone(),
                 inner_event_sender.clone(),
-                phase_timeout.clone(),
+                phase_timeout,
                 &logger,
             ),
             signing_manager: SigningManager::new(
