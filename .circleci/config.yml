@@ -67,11 +67,16 @@ orbs:
   gh: circleci/github-cli@1.0.4
   doctl: digitalocean/cli@0.1.1
   helm: circleci/helm@1.2.0
+parameters:
+  rust-base:
+    type: boolean
+    default: false
 ######################## /Config ########################
 
 ######################## Workflows ########################
 workflows:
-  chainflip-backend-checks:
+  create-rust-base:
+    when: <<pipeline.parameters.rust-base>>
     jobs:
       - build-docker-image:
           name: build-rust-base
@@ -82,10 +87,9 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
+  chainflip-backend-checks:
+    jobs:
       - fmt-validator-package:
-          requires:
-            - build-rust-base
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
