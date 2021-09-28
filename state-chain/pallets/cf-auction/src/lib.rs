@@ -62,7 +62,7 @@ extern crate assert_matches;
 
 use cf_traits::{
 	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, ChainflipAccount,
-	ChainflipAccountState, Online, RemainingBid, StakerHandler, VaultRotationHandler, VaultRotator,
+	ChainflipAccountState, IsOnline, RemainingBid, StakerHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
@@ -123,7 +123,7 @@ pub mod pallet {
 		/// Convert ValidatorId to AccountId
 		type AccountIdOf: Convert<Self::ValidatorId, Self::AccountId>;
 		/// An online validator
-		type Online: Online<ValidatorId = Self::ValidatorId>;
+		type Online: IsOnline<ValidatorId = Self::ValidatorId>;
 		/// Ratio of backup validators
 		#[pallet::constant]
 		type BackupValidatorRatio: Get<u32>;

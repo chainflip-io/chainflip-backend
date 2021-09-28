@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{BidderProvider, ChainflipAccountData, Online};
+use cf_traits::{BidderProvider, ChainflipAccountData, IsOnline};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -141,7 +141,7 @@ impl pallet_cf_auction::Config for Test {
 }
 
 pub struct MockOnline;
-impl Online for MockOnline {
+impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
 
 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {

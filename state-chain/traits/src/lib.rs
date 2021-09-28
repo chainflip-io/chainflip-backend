@@ -276,7 +276,7 @@ pub trait NonceProvider {
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
 }
 
-pub trait Online {
+pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;
 	/// The online status of the validator
@@ -286,6 +286,7 @@ pub trait Online {
 /// A representation of the current network state
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct NetworkState<ValidatorId> {
+	pub missing: Vec<ValidatorId>,
 	pub online: Vec<ValidatorId>,
 	pub offline: Vec<ValidatorId>,
 }
@@ -368,6 +369,8 @@ pub trait Slashing {
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId;
+	/// A heartbeat has been submitted
+	fn heartbeat_submitted(validator_id: Self::ValidatorId);
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }

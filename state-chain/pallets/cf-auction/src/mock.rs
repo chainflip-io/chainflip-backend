@@ -165,7 +165,7 @@ impl ChainflipAccount for MockChainflipAccount {
 }
 
 pub struct MockOnline;
-impl Online for MockOnline {
+impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
 
 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
