@@ -24,7 +24,7 @@ frame-system = {default-features = false, version = '3.0.0' }
 pallet-transaction-payment = {default-features = false, version = '3.0.0'}
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
-serde = { default-features = false, version = '1.0.119' }
+serde = { optional = true, version = '1.0.119' }
 
 [dev-dependencies]
 sp-core = { version = '3.0.0' }
@@ -40,5 +40,5 @@ std = [
     'pallet-transaction-payment/std',
     'sp-runtime/std',
     'sp-std/std',
-    'serde/std'
+    'serde'
 ]

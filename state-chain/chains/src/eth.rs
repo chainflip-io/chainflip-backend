@@ -6,6 +6,8 @@ use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Token, Uint,
 };
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
@@ -109,6 +111,7 @@ pub struct SchnorrVerificationComponents {
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
 ///
 /// We assume the access_list (EIP-2930) is not required.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct UnsignedTransaction {
 	pub chain_id: u64,
