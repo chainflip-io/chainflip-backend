@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use super::{
     auction::Auction,
     ethereum_broadcaster::BroadcastAttemptId,
-    ethereum_signer::{CeremonyId, EthereumSigner},
+    ethereum_signer::EthereumSigner,
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;
@@ -71,14 +71,14 @@ pub struct WitnessThresholdSignatureResponseCall<T: WitnesserApi> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessEthSignatureSuccessCall<T: WitnesserApi> {
-    ceremony_id: CeremonyId,
+    ceremony_id: ethereum_signer::CeremonyId,
     signature: cf_chains::eth::SchnorrVerificationComponents,
     _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessEthSignatureFailedCall<T: WitnesserApi> {
-    ceremony_id: CeremonyId,
+    ceremony_id: ethereum_signer::CeremonyId,
     offenders: Vec<<T as System>::AccountId>,
     _runtime: PhantomData<T>,
 }
