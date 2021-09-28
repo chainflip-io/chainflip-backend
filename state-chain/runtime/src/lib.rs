@@ -152,7 +152,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinValidators = MinValidators;
 	type Handler = Vaults;
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
-	type Online = Reputation;
+	type Online = Online;
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
 	type BackupValidatorRatio = BackupValidatorRatio;
@@ -439,12 +439,16 @@ parameter_types! {
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type Amount = FlipBalance;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+}
+
+impl pallet_cf_online::Config for Runtime {
+	type Event = Event;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Heartbeat = ChainflipHeartbeat;
 }
@@ -475,6 +479,7 @@ construct_runtime!(
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );

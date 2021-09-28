@@ -16,11 +16,19 @@ use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 /// and Chainflip was born...some base types
-pub trait Chainflip {
+pub trait Chainflip : frame_system::Config {
 	/// An amount for a bid
-	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	type Amount:
+		Member +
+		Parameter +
+		Default +
+		Eq +
+		Ord +
+		Copy +
+		AtLeast32BitUnsigned;
+
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -307,7 +315,7 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 /// To handle those emergency rotations
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
-	fn request_emergency_rotation();
+	fn request_emergency_rotation() -> Weight;
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]

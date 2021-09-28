@@ -8763,6 +8763,7 @@ dependencies = [
  "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-governance",
+ "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",

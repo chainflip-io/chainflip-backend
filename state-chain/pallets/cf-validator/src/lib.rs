@@ -349,9 +349,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn force_validator_rotation() {
+	fn force_validator_rotation() -> Weight {
 		Force::<T>::set(true);
 		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
+
+		T::DbWeight::get().reads_writes(0, 1)
 	}
 }
 
@@ -413,11 +415,9 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-pub struct EmergencyRotationOf<T>(PhantomData<T>);
-
-impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
-	fn request_emergency_rotation() {
+impl<T: Config> EmergencyRotation for Pallet<T> {
+	fn request_emergency_rotation() -> Weight {
 		Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-		Pallet::<T>::force_validator_rotation();
+		Pallet::<T>::force_validator_rotation()
 	}
 }
