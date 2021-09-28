@@ -63,7 +63,6 @@ impl HealthMonitor {
                                             .write(http_200_response.as_bytes())
                                             .await
                                             .expect("Could not write to health check stream");
-                                        slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
                                         stream
                                             .flush()
                                             .await

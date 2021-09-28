@@ -8,8 +8,6 @@ use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use web3::types::H160;
 
-use crate::p2p::AccountId;
-
 pub use anyhow::Result;
 use url::Url;
 
@@ -37,8 +35,6 @@ pub struct HealthCheck {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
-    /// This includes my_id if I'm part of genesis validator set
-    pub genesis_validator_ids: Vec<AccountId>,
     #[serde(deserialize_with = "deser_path")]
     pub db_file: PathBuf,
 }

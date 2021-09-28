@@ -126,7 +126,7 @@ pub mod pallet {
 
 		//*** Vaults pallet witness calls ***//
 
-		/// Witness that a key generation response from 2/3 of our old validators
+		/// Witness a key generation response from 2/3 of our old validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
@@ -140,7 +140,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness that a vault rotation response from 2/3 of our old validators
+		/// Witness a vault rotation response from 2/3 of our old validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]

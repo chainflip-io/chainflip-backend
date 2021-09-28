@@ -9043,8 +9043,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feb057a856b185f95a2b4dff834604a05c224e44fefa2d98a0a51ce9b2d666d0"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -9076,8 +9075,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9995016a22428cb7ffd83193a03eea32f6158a516a0c130bb60c5e5f6c467c44"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
 dependencies = [
  "heck",
  "proc-macro-crate 0.1.5",

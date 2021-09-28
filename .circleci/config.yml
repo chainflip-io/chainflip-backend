@@ -23,7 +23,6 @@ only_epic_branches: &only_epic_branches
     branches:
       only:
         # Uncomment and add your current branch when testing
-        # - update/epic-ci
         - /epic\/.*/
         - /release\/.*/
 
