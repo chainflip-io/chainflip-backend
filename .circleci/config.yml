@@ -7,6 +7,7 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - chore/kyle-testnet
         # Uncomment and add your current branch when testing
         # - update/epic-ci
 only_main_branches: &only_main_branches
@@ -17,6 +18,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - chore/kyle-testnet
 
 only_epic_branches: &only_epic_branches
   filters:
