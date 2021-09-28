@@ -143,7 +143,7 @@ impl Config for Test {
 	type ChainflipAccount = MockChainflipAccount;
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
 }
 

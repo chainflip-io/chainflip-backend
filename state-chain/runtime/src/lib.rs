@@ -152,9 +152,9 @@ impl pallet_cf_auction::Config for Runtime {
 	type Handler = Vaults;
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
 	type Online = Reputation;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type AccountIdOf = ConvertInto;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 // FIXME: These would be changed

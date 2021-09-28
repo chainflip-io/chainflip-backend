@@ -134,10 +134,10 @@ impl pallet_cf_auction::Config for Test {
 	type MinValidators = MinValidators;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockOnline;

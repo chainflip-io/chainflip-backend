@@ -333,10 +333,10 @@ pub trait ChainflipAccount {
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
 }
 
-pub struct ChainflipAccounts<T>(PhantomData<T>);
+pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
-	for ChainflipAccounts<T>
+	for ChainflipAccountStore<T>
 {
 	type AccountId = T::AccountId;
 

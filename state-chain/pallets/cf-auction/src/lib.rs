@@ -118,7 +118,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// The lifecycle of a vault rotation
 		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
-		/// A Chainflip Account
+		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// Convert ValidatorId to AccountId
 		type AccountIdOf: Convert<Self::ValidatorId, Self::AccountId>;
@@ -126,7 +126,7 @@ pub mod pallet {
 		type Online: Online<ValidatorId = Self::ValidatorId>;
 		/// Ratio of backup validators
 		#[pallet::constant]
-		type BackupValidatorRatio: Get<u32>;
+		type ActiveToBackupValidatorRatio: Get<u32>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -334,9 +334,9 @@ impl<T: Config> Auction for Pallet<T> {
 					bids.sort_unstable_by_key(|k| k.1);
 					bids.reverse();
 
-					let validator_set_size = ActiveValidatorSizeRange::<T>::get().1;
+					let validator_set_target_size = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
-					let validator_group_size = min(validator_set_size, number_of_bidders);
+					let validator_group_size = min(validator_set_target_size, number_of_bidders);
 					let validating_set: Vec<_> =
 						bids.iter().take(validator_group_size as usize).collect();
 					let minimum_active_bid = validating_set
@@ -349,7 +349,7 @@ impl<T: Config> Auction for Pallet<T> {
 						.collect();
 					let backup_group_size = min(
 						number_of_bidders - validator_group_size,
-						validator_set_size / T::BackupValidatorRatio::get(),
+						validator_set_target_size / T::ActiveToBackupValidatorRatio::get(),
 					);
 
 					let remaining_bidders: Vec<_> =
@@ -466,7 +466,6 @@ fn current_passive_nodes<T: Config>(
 	remaining_bidders
 		.iter()
 		.skip(BackupGroupSize::<T>::get() as usize)
-		.take(usize::MAX)
 		.map(|bid| bid.clone())
 		.collect()
 }
@@ -501,7 +500,7 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				if let Ok(index) =
 					remaining_bidders.binary_search_by(|bid| validator_id.cmp(&bid.0))
 				{
-					let _ = sp_std::mem::replace(&mut remaining_bidders[index], bid);
+					remaining_bidders[index] = bid
 				}
 			};
 
@@ -522,7 +521,7 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				RemainingBidders::<T>::put(remaining_bids);
 			};
 
-		let change_state = |promote: bool, validator_id: T::ValidatorId| {
+		let promote_or_demote = |promote: bool, validator_id: T::ValidatorId| {
 			T::ChainflipAccount::update_state(
 				&T::AccountIdOf::convert(validator_id.clone()),
 				if promote {
@@ -538,47 +537,43 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 			 remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>| {
 				// Update bid for bidder and state
 				update_stake_for_bidder(remaining_bidders, (validator_id.clone(), amount));
-				change_state(promote, validator_id.clone());
+				promote_or_demote(promote, validator_id.clone());
 
 				sort_remaining_bidders(remaining_bidders);
 
-				let index_of_shifted = BackupGroupSize::<T>::get();
 				let index_of_shifted = if !promote {
-					index_of_shifted.saturating_sub(One::one())
+					BackupGroupSize::<T>::get().saturating_sub(One::one())
 				} else {
-					index_of_shifted
+					BackupGroupSize::<T>::get()
 				};
 
 				match remaining_bidders.get(index_of_shifted as usize) {
 					Some((adjusted_validator_id, _)) => {
-						change_state(!promote, adjusted_validator_id.clone());
+						promote_or_demote(!promote, adjusted_validator_id.clone());
 					}
 					_ => {}
 				}
 			};
 
-		match CurrentPhase::<T>::get() {
-			AuctionPhase::WaitingForBids(..) => {
-				match T::ChainflipAccount::get(&T::AccountIdOf::convert(validator_id.clone())).state
-				{
-					ChainflipAccountState::Passive => {
-						if amount > LowestBackupValidatorBid::<T>::get() {
-							adjust_group(true, &mut RemainingBidders::<T>::get());
-						} else if amount > HighestPassiveNodeBid::<T>::get() {
-							sort_remaining_bidders(&mut RemainingBidders::<T>::get());
-						}
+		if Pallet::<T>::waiting_on_bids() {
+			match T::ChainflipAccount::get(&T::AccountIdOf::convert(validator_id.clone())).state
+			{
+				ChainflipAccountState::Passive => {
+					if amount > LowestBackupValidatorBid::<T>::get() {
+						adjust_group(true, &mut RemainingBidders::<T>::get());
+					} else if amount > HighestPassiveNodeBid::<T>::get() {
+						sort_remaining_bidders(&mut RemainingBidders::<T>::get());
 					}
-					ChainflipAccountState::Backup => {
-						if amount < LowestBackupValidatorBid::<T>::get() {
-							adjust_group(false, &mut RemainingBidders::<T>::get());
-						} else if amount > LowestBackupValidatorBid::<T>::get() {
-							sort_remaining_bidders(&mut RemainingBidders::<T>::get());
-						}
-					}
-					_ => {}
 				}
+				ChainflipAccountState::Backup => {
+					if amount < LowestBackupValidatorBid::<T>::get() {
+						adjust_group(false, &mut RemainingBidders::<T>::get());
+					} else if amount > LowestBackupValidatorBid::<T>::get() {
+						sort_remaining_bidders(&mut RemainingBidders::<T>::get());
+					}
+				}
+				_ => {}
 			}
-			_ => {}
 		}
 	}
 }
