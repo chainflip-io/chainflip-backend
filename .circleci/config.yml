@@ -89,7 +89,13 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - cargo-check-and-test-validator-package:
+      #      - cargo-check-and-test-validator-package:
+      #          requires:
+      #            - fmt-validator-package
+      #          context:
+      #            - ghcr-credentials
+      #          <<: *ignore_main_branches
+      - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
