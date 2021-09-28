@@ -1,10 +1,17 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Validator, Witnesser};
-use cf_traits::{BondRotation, EmergencyRotation, EmissionsTrigger, Heartbeat, NetworkState};
-use frame_support::debug;
-use pallet_cf_validator::{EpochTransitionHandler, EmergencyRotationOf};
-use sp_std::vec::Vec;
+use super::{
+	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
+	Witnesser,
+};
 use crate::EmergencyRotationPercentageTrigger;
+use cf_traits::{
+	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccounts, EmergencyRotation,
+	EmissionsTrigger, EpochInfo, Heartbeat, NetworkState, StakeTransfer,
+};
+use frame_support::{debug, weights::Weight};
+use pallet_cf_validator::EpochTransitionHandler;
+use sp_std::vec::Vec;
+use sp_std::cmp::min;
 
 pub struct ChainflipEpochTransitions;
 
@@ -23,9 +30,53 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in reputation
-		<Reputation as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
+		<Online as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
+	}
+}
+
+trait RewardDistibrution {
+	type EpochInfo: EpochInfo;
+	type StakeTransfer: StakeTransfer;
+	type ValidatorId;
+	
+	fn distribute_rewards(backup_validators: Vec<&Self::ValidatorId>) -> Weight;
+}
+
+struct BackupEmissions;
+impl RewardDistibrution for BackupEmissions {
+	type EpochInfo = Validator;
+	type StakeTransfer = Flip;
+	type ValidatorId = AccountId;
+
+	fn distribute_rewards(backup_validators: Vec<&Self::ValidatorId>) -> Weight {
+		let minimum_active_bid = Self::EpochInfo::bond();
+		// BV emissions cap: 1% of total emissions.
+		let emissions_cap = 0;
+		// rAV: average validator reward earned by each active validator;
+		let average_validator_reward = Rewards::rewards_due_each();
+
+		// TODO map rewards to each and sum the total to calculate the capping factor
+
+		for backup_validator in backup_validators {
+			let backup_validator_stake = Self::StakeTransfer::stakeable_balance(backup_validator);
+			let reward_scaling_factor = min(1, (backup_validator_stake / minimum_active_bid)^2);
+			let backup_validator_reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
+		}
+
+		// rBV: reward earned by a backup validator;
+		//
+		// F: reward scaling factor;
+		// F =  min(1, (BVstake / MAB)^2);
+		// rBV = 0.8 * F * rAV;
+		//
+		//
+		// if the sum of all rBV > BV emission cap, then calculate capping factor CF:
+		// 	CF = emission cap / sum(all rBV),
+		// Then apply factor to rewards
+		// rBV = rBV * capping factor
+		0
 	}
 }
 
@@ -34,16 +85,28 @@ pub struct ChainflipHeartbeat;
 impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-		// We pay rewards to backup validators on each heartbeat interval
+	fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight {
+		<Reputation as Heartbeat>::heartbeat_submitted(validator_id)
+	}
+
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+		// Reputation depends on heartbeats
+		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
+
+		// We pay rewards to online backup validators on each heartbeat interval
+		let backup_validators: Vec<&Self::ValidatorId> = network_state.online.iter().filter(|account_id| {
+			ChainflipAccounts::<Runtime>::get(*account_id).state == ChainflipAccountState::Backup
+		}).collect();
+
+		BackupEmissions::distribute_rewards(backup_validators);
 
 		// Check the state of the network and if we are below the emergency rotation trigger
 		// then issue an emergency rotation request
-		if network_state.percentage_online()
-			< EmergencyRotationPercentageTrigger::get() as u32
-		{
-			EmergencyRotationOf::<Runtime>::request_emergency_rotation();
+		if network_state.percentage_online() < EmergencyRotationPercentageTrigger::get() as u32 {
+			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
 		}
+
+		weight
 	}
 }
 
