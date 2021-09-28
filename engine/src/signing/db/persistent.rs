@@ -21,6 +21,11 @@ impl PersistentKeyDB {
         let config = DatabaseConfig::default();
         // TODO: Update to kvdb 14 and then can pass in &Path
 
+        if !path.exists() {
+            panic!("Db path does not exist");
+        } else {
+            println!("Path does exist, carry on");
+        }
         // TODO: Error report this path with the fully qualified path it's trying to access.
         // LOG the path it's accessing even if it doesn't error
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
