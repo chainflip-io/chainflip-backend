@@ -226,7 +226,7 @@ impl StakeManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
-        slog::info!(logger, "Creating new eth event stream");
+        slog::info!(logger, "Creating new StakeManager event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
