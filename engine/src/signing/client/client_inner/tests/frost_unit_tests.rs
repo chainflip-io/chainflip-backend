@@ -296,7 +296,7 @@ async fn check_blamed_paries(mut rx: &mut helpers::InnerEventReceiver, expected:
 }
 
 #[tokio::test]
-async fn should_report_on_timeout_before_reqeust_to_sign() {
+async fn should_report_on_timeout_before_request_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -410,4 +410,31 @@ async fn should_report_on_timeout_stage4() {
     c1.cleanup();
 
     check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+}
+
+#[tokio::test]
+async fn should_ignore_duplicate_sign_request() {
+    use crate::signing::client::MultisigInstruction;
+    use crate::signing::SigningInfo;
+
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase2.clients[0].clone();
+
+    assert_stage2!(c1);
+
+    // Send another request to sign with the same ceremony_id and key_id
+    let sign_info = SigningInfo::new(
+        SIGN_CEREMONY_ID,
+        ctx.key_id(),
+        MESSAGE_HASH.clone(),
+        SIGNER_IDS.clone(),
+    );
+    c1.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
+
+    // The request should of been rejected and the existing ceremony is unchanged
+    assert_stage2!(c1);
 }

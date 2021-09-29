@@ -327,6 +327,14 @@ impl SigningState {
         }
     }
 
+    /// Check if this stage is in an authorised state
+    pub fn is_authorised(&self) -> bool {
+        match self.inner {
+            Some(_) => true,
+            None => false,
+        }
+    }
+
     #[cfg(test)]
     pub fn get_stage(&self) -> Option<String> {
         self.inner

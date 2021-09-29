@@ -116,6 +116,22 @@ impl SigningManager {
             }
         };
 
+        // Detect duplicate
+        match self.signing_states.get(&ceremony_id) {
+            Some(entry) => {
+                // if the existing entry is already authorised, then reject this request
+                if entry.is_authorised() {
+                    slog::warn!(
+                        self.logger,
+                        "Request to sign ignored: duplicate ceremony_id [ceremony_id: {}]",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+            _ => { /* No duplicate */ }
+        }
+
         // We have the key and have received a request to sign
         let entry = self
             .signing_states

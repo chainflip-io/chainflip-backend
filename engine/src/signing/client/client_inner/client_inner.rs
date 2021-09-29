@@ -229,7 +229,6 @@ where
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
                     "Received a keygen request [ceremony_id: {}]",
@@ -239,7 +238,6 @@ where
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(sign_info) => {
-                // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
                     "Received a request to sign [ceremony_id: {}]",
@@ -266,8 +264,6 @@ where
                             sign_info.key_id,
                             sign_info.ceremony_id
                         );
-
-                        // TODO: check for duplicates?
 
                         self.pending_requests_to_sign
                             .entry(sign_info.key_id.clone())
