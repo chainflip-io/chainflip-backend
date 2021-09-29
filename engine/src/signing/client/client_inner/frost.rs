@@ -393,7 +393,7 @@ mod test_schnorr {
     }
 
     #[test]
-    fn todo_signature() {
+    fn signature_is_contract_compatible() {
         // Given the signing key, nonce and message hash, check that
         // sigma (signature response) is correct and matches the expected
         // (by the KeyManager contract) value
