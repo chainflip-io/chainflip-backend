@@ -347,7 +347,6 @@ pub fn aggregate_signature(
             &response.response,
         ) {
             invalid_idxs.push(*signer_idx);
-            println!("A local signature is NOT valid!!!");
         }
     }
 
