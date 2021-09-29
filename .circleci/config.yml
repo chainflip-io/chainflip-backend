@@ -1,4 +1,4 @@
-# ------------------- anchors ------------------- #
+######################## Anchors ########################
 ignore_main_branches: &ignore_main_branches
   filters:
     branches:
@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        # - update/epic-ci
+#        - test/ci-with-machine
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,6 +17,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+#        - test/ci-with-machine
 
 only_epic_branches: &only_epic_branches
   filters:
@@ -40,15 +41,14 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
-  circleci_ip_ranges: true
   executor: rust-base
   environment: &sccache_environment
-    SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: xlarge
+  resource_class: 2xlarge+
+######################## /Anchors ########################
 
-# ------------------- anchors ------------------- #
 
+######################## Config ########################
 version: 2.1
 executors:
   chainflip-master:
@@ -65,8 +65,16 @@ orbs:
   gh: circleci/github-cli@1.0.4
   doctl: digitalocean/cli@0.1.1
   helm: circleci/helm@1.2.0
+parameters:
+  rust-base:
+    type: boolean
+    default: false
+######################## /Config ########################
+
+######################## Workflows ########################
 workflows:
-  chainflip-backend-checks:
+  create-rust-base:
+    when: <<pipeline.parameters.rust-base>>
     jobs:
       - build-docker-image:
           name: build-rust-base
@@ -74,73 +82,58 @@ workflows:
           image: chainflip-io/chainflip-backend/rust-base
           tag: <<pipeline.git.revision>>
           dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:<<pipeline.git.base_revision>>
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - fmt-validator-package:
-          requires:
-            - build-rust-base
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - check-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - test-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-  chainflip-backend-release:
-    jobs:
-      - build-docker-image:
-          name: build-rust-base
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
-          dockerfile: Dockerfile.rust-base
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
-          <<: *only_main_branches
+  chainflip-backend-checks:
+    jobs:
       - fmt-validator-package:
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+      - cargo-check-validator-package:
           requires:
-            - build-rust-base
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+      - cargo-test-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+
+  chainflip-backend-release:
+    jobs:
+      - fmt-validator-package:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - compile-validator-package:
+      - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
             - discord-webhooks
           <<: *only_main_branches
-      - test-validator-package:
-          requires:
-            - compile-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
-          extra_build_args: "--build-arg SERVICE=chainflip-engine"
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - test-validator-package
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
       - build-docker-image:
           name: build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
-          extra_build_args: "--build-arg SERVICE=state-chain-node"
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - test-validator-package
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -175,7 +168,9 @@ workflows:
             - discord-webhooks
           requires:
             - clone-contracts-repo
+######################## /Workflows ########################
 
+######################## Jobs ########################
 jobs:
   build-docker-image:
     executor: docker/docker
@@ -200,7 +195,7 @@ jobs:
       tag:
         type: string
         description: Primary tag of the build
-        default: <<pipeline.git.revision>>
+        default: latest,<<pipeline.git.revision>>
       cache_from:
         type: string
         description: Where to derive the build cache
@@ -235,7 +230,6 @@ jobs:
       - run: >
           cargo fmt -p chainflip-engine
           -p cf-p2p
-          -p cf-p2p-rpc
           -p pallet-cf-auction
           -p pallet-cf-emissions
           -p pallet-cf-flip
@@ -252,32 +246,21 @@ jobs:
           -p cf-chains
           -- --check
 
-  check-validator-package:
+  # Compile and test the entire chainflip-backend.
+  # We run sccache --show-stats multiple times;
+  # First to check connection, and once after each
+  # cargo function to track the performance of the compilation.
+  cargo-build-and-test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
-      - run: sccache -s
-      - run: |
-          cargo check --locked --release
-          sccache -s
-
-  test-validator-package:
-    <<: *cargo-base-job
-    steps:
-      - checkout
-      - run: sccache -s
-      - run: |
-          cargo test --locked --lib --release
-          sccache -s
-
-  compile-validator-package:
-    <<: *cargo-base-job
-    steps:
-      - checkout
-      - run: sccache -s
+      - run: sccache --show-stats
       - run: |
           cargo build --locked --release
-          sccache -s
+          sccache --show-stats
+      - run: |
+          cargo test --lib --locked --release
+          sccache --show-stats
       - persist_to_workspace:
           root: ./
           paths:
@@ -288,6 +271,27 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
+
+  # Check and test the entire chainflip-backend.
+  # We run sccache --show-stats multiple times;
+  # First to check connection, and once after each
+  # cargo function to track the performance of the compilation.
+  cargo-check-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo check --locked --release
+          sccache --show-stats
+  cargo-test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo test --lib --locked --release
+          sccache --show-stats
 
   clone-contracts-repo:
     resource_class: small
@@ -305,7 +309,6 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
-    circleci_ip_ranges: true
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
@@ -330,7 +333,7 @@ jobs:
             cd eth-contracts
             poetry install --quiet
             poetry run brownie run deploy_and all_events --network hardhat
-      - run: sccache -s
+      - run: sccache --show-stats
       - run: cargo test --locked --release
       - discord/status:
           fail_only: true
@@ -386,3 +389,4 @@ jobs:
           name: Destroy single node
           when: always
           command: helm uninstall bashful -n default
+######################## /Jobs ########################
