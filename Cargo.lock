@@ -838,22 +838,8 @@ name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-std",
  "bincode",
- "futures 0.3.15",
- "log 0.4.14",
- "sc-network",
- "serde 1.0.126",
- "sp-runtime",
-]
-
-[[package]]
-name = "cf-p2p-rpc"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "bs58",
- "cf-p2p",
  "futures 0.3.15",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -865,6 +851,10 @@ dependencies = [
  "serde 1.0.126",
  "serde_json",
  "sp-core",
+ "sp-runtime",
+ "tokio 1.7.0",
+ "tokio-compat-02",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -925,7 +915,7 @@ dependencies = [
  "bincode",
  "bs58",
  "cf-chains",
- "cf-p2p-rpc",
+ "cf-p2p",
  "cf-traits",
  "config",
  "crossbeam-channel",
@@ -8803,9 +8793,9 @@ name = "state-chain-node"
 version = "0.1.0"
 dependencies = [
  "cf-p2p",
- "cf-p2p-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "futures 0.3.15",
  "hex-literal",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",

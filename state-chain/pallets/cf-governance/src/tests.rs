@@ -82,6 +82,8 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// Now execute the proposal
+		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
 		// Expect the Executed event was fired
 		assert_eq!(
 			last_event(),
@@ -179,10 +181,57 @@ fn sudo_extrinsic() {
 		// Do the two necessary approvals
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// Now execute the proposal
+		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(
 			last_event(),
 			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+		);
+	});
+}
+
+#[test]
+fn execute_extrinsic() {
+	new_test_ext().execute_with(|| {
+		// Propose a governance extrinsic
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			mock_extrinsic()
+		));
+		// Try to execute the proposal - expect an MajorityNotReached error
+		assert_noop!(
+			Governance::execute(Origin::signed(BOB), 1),
+			<Error<Test>>::MajorityNotReached
+		);
+		// Approve the proposal
+		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		// Try to execute the proposal - expect an MajorityNotReached error
+		assert_noop!(
+			Governance::execute(Origin::signed(BOB), 1),
+			<Error<Test>>::MajorityNotReached
+		);
+		// Approve the proposal again
+		assert_ok!(Governance::approve(Origin::signed(ALICE), 1));
+		// Execute the proposal and expect an successful execution
+		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
+		// Expect the sudo extrinsic to be executed successfully
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+		);
+		// Check if the storage was cleaned up
+		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
+fn execute_not_existing_proposal() {
+	new_test_ext().execute_with(|| {
+		// Execute a proposal and expect a 404-Error
+		assert_noop!(
+			Governance::execute(Origin::signed(BOB), 1),
+			<Error<Test>>::ProposalNotFound
 		);
 	});
 }
