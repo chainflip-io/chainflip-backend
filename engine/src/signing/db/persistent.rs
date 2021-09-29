@@ -21,11 +21,11 @@ impl PersistentKeyDB {
         let config = DatabaseConfig::default();
         // TODO: Update to kvdb 14 and then can pass in &Path
 
-        if !path.exists() {
-            panic!("Db path does not exist");
-        } else {
-            println!("Path does exist, carry on");
-        }
+        // if !path.exists() {
+        //     panic!("Db path does not exist");
+        // } else {
+        //     println!("Path does exist, carry on");
+        // }
         // TODO: Error report this path with the fully qualified path it's trying to access.
         // LOG the path it's accessing even if it doesn't error
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
@@ -57,7 +57,7 @@ impl KeyDB for PersistentKeyDB {
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
             .iter(0)
-            .filter_map(|(key_id, key)| {
+            .filter_map(|(key_id, key_info)| {
                 let key_id: Vec<u8> = match key_id.try_into() {
                     Ok(key_id) => Some(key_id),
                     Err(err) => {
@@ -67,11 +67,14 @@ impl KeyDB for PersistentKeyDB {
                 }?;
 
                 let key_id: KeyId = KeyId(key_id);
-
-                let key_info = bincode::deserialize(key.as_ref()).unwrap_or_else(|err| {
+                println!("key_id: {:?}", key_id);
+                println!("key info len: {}", key_info.len());
+                let key_info: Vec<u8> = key_info.try_into().unwrap();
+                println!("Here's the key_info {:?}", key_info);
+                let key_info = bincode::deserialize(key_info.as_ref()).unwrap_or_else(|err| {
                     slog::error!(
                         self.logger,
-                        "Could not deserialize key (key_id: {:?}) from DB: {}",
+                        "Could not deserialize key_info (key_id: {:?}) from DB: {}",
                         key_id,
                         err
                     );
