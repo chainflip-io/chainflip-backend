@@ -397,7 +397,7 @@ pub fn new_p2p_validator_network_node<
 			let mut network_event_stream = p2p_network_service.event_stream();
 
 			fn notify_rpc_subscribers(state: &P2PValidatorNetworkNodeState, event: P2PEvent) {
-				for (_subscription_id, sender) in &state.notification_rpc_subscribers {
+				for sender in state.notification_rpc_subscribers.values() {
 					if let Err(e) = sender.unbounded_send(event.clone()) {
 						debug!("Failed to send message: {:?}", e);
 					}
