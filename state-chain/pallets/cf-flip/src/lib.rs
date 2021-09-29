@@ -47,7 +47,7 @@ mod tests;
 mod imbalances;
 mod on_charge_transaction;
 
-use cf_traits::Slashing;
+use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -71,6 +71,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::StakeHandler;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -101,6 +102,9 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
+
+		/// Providing updates on staking activity
+		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -430,6 +434,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
+	type Handler = T::StakeHandler;
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -442,6 +447,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -452,6 +458,8 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		);
 
 		Self::settle(account_id, Self::bridge_out(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
+
 		Ok(())
 	}
 
@@ -461,6 +469,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 		Self::settle(account_id, Self::bridge_in(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		// claim reverts automatically when dropped
 	}
 }

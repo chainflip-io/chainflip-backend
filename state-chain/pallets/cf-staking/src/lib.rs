@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer, StakerHandler};
+use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -148,9 +148,6 @@ pub mod pallet {
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
-
-		/// Providing updates on staking activity
-		type StakerHandler: StakerHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -557,8 +554,6 @@ impl<T: Config> Pallet<T> {
 		// Staking implicitly activates the account. Ignore the error.
 		let _ = AccountRetired::<T>::mutate(account_id, |retired| *retired = false);
 
-		Self::notify_on_stake_changed(account_id);
-
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
 
@@ -591,8 +586,6 @@ impl<T: Config> Pallet<T> {
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
-
-		Self::notify_on_stake_changed(account_id);
 
 		// Try to generate a nonce
 		let nonce = Self::generate_nonce();
@@ -790,10 +783,6 @@ impl<T: Config> Pallet<T> {
 		}
 
 		weight
-	}
-
-	fn notify_on_stake_changed(account_id: &T::AccountId) {
-		T::StakerHandler::stake_updated(account_id.clone(), T::Flip::stakeable_balance(account_id));
 	}
 }
 

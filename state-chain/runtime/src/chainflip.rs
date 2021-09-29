@@ -1,9 +1,10 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Witnesser};
-use cf_traits::{BondRotation, EmissionsTrigger};
+use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser};
+use cf_traits::{BondRotation, EmissionsTrigger, StakeHandler};
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_std::vec::Vec;
+use pallet_cf_auction::HandleStakes;
 
 pub struct ChainflipEpochTransitions;
 
@@ -25,5 +26,15 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Reputation as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
+	}
+}
+
+pub struct ChainflipStakeHandler;
+impl StakeHandler for ChainflipStakeHandler {
+	type ValidatorId = AccountId;
+	type Amount = FlipBalance;
+
+	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
+		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
 	}
 }

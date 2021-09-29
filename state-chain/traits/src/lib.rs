@@ -190,16 +190,17 @@ pub trait BondRotation {
 }
 
 /// Provide feedback on staking
-pub trait StakerHandler {
+pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
 	/// A validator has updated their stake and now has a new total amount
-	fn stake_updated(validator_id: Self::ValidatorId, new_total: Self::Amount);
+	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
+	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;

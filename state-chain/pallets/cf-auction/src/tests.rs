@@ -57,8 +57,10 @@ mod test {
 	fn should_create_correct_size_of_groups() {
 		let expected_group_sizes = |number_of_bidders: u32| {
 			let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
-			let expected_number_of_backup_validators =
-				expected_number_of_validators / BACKUP_VALIDATOR_RATIO;
+			let expected_number_of_backup_validators = min(
+				expected_number_of_validators / BACKUP_VALIDATOR_RATIO,
+				number_of_bidders.saturating_sub(expected_number_of_validators),
+			);
 			let expected_number_of_passive_nodes = number_of_bidders
 				.saturating_sub(expected_number_of_backup_validators)
 				.saturating_sub(expected_number_of_validators);
@@ -117,7 +119,12 @@ mod test {
 			validate_bidder_groups();
 
 			// Run a few auctions and validate groups
-			let auction_bidders = [MAX_VALIDATOR_SIZE - 1, MAX_VALIDATOR_SIZE, 100, 200, 1000];
+			let auction_bidders = [
+				MAX_VALIDATOR_SIZE - 1,
+				MAX_VALIDATOR_SIZE + 1,
+				MAX_VALIDATOR_SIZE * 4 / 3,
+				MAX_VALIDATOR_SIZE + MAX_VALIDATOR_SIZE / BACKUP_VALIDATOR_RATIO + 1,
+			];
 			for bidders in auction_bidders.iter() {
 				run_auction(*bidders);
 				validate_bidder_groups();
@@ -154,23 +161,23 @@ mod test {
 
 					let (bottom_backup_validator, lowest_backup_validator_bid) =
 						backup_validators.last().unwrap();
-					let (top_passive_node, highest_passive_validator_bid) =
+					let (top_passive_node, highest_passive_node_bid) =
 						passive_nodes.first().unwrap();
 					assert_eq!(
 						*lowest_backup_validator_bid,
 						AuctionPallet::lowest_backup_validator_bid()
 					);
 					assert_eq!(
-						*highest_passive_validator_bid,
-						AuctionPallet::highest_passive_validator_bid()
+						*highest_passive_node_bid,
+						AuctionPallet::highest_passive_node_bid()
 					);
 					let new_bid = lowest_backup_validator_bid + 1;
 
 					// Promote a passive node to the backup set
-					HandleStakes::<Test>::stake_updated(*top_passive_node, new_bid);
+					HandleStakes::<Test>::stake_updated(top_passive_node, new_bid);
 
 					assert_eq!(
-						MockChainflipAccount::get(&top_passive_node).state,
+						MockChainflipAccount::get(top_passive_node).state,
 						ChainflipAccountState::Backup
 					);
 
@@ -214,9 +221,9 @@ mod test {
 					let backup_validators = current_backup_validators();
 
 					let (top_backup_validator_id, _) = backup_validators.first().unwrap();
-					let new_bid = AuctionPallet::highest_passive_validator_bid() - 1;
+					let new_bid = AuctionPallet::highest_passive_node_bid() - 1;
 
-					HandleStakes::<Test>::stake_updated(*top_backup_validator_id, new_bid);
+					HandleStakes::<Test>::stake_updated(top_backup_validator_id, new_bid);
 
 					assert_eq!(
 						MockChainflipAccount::get(top_backup_validator_id).state,
@@ -225,12 +232,69 @@ mod test {
 
 					// The top passive node would move upto backup set and the highest passive bid
 					// would be recalculated
-					assert_eq!(AuctionPallet::highest_passive_validator_bid(), new_bid);
+					assert_eq!(AuctionPallet::highest_passive_node_bid(), new_bid);
 				}
 				_ => unreachable!("wrong phase"),
 			}
 		});
 	}
+
+	#[test]
+	fn should_establish_a_new_lowest_backup_validator_bid() {
+		new_test_ext().execute_with(|| {
+			run_auction(NUMBER_OF_BIDDERS);
+			match AuctionPallet::current_phase() {
+				AuctionPhase::WaitingForBids(..) => {
+					// Place bid below lowest backup validator bid but above highest passive node bid
+					// Should see lowest backup validator bid change but the state of the backup
+					// validator would not change
+					let backup_validators = current_backup_validators();
+
+					let new_bid = AuctionPallet::lowest_backup_validator_bid() - 1;
+					// Take the top and update bid
+					let (top_backup_validator_id, _) = backup_validators.first().unwrap();
+					HandleStakes::<Test>::stake_updated(top_backup_validator_id, new_bid);
+
+					assert_eq!(
+						MockChainflipAccount::get(top_backup_validator_id).state,
+						ChainflipAccountState::Backup
+					);
+
+					assert_eq!(AuctionPallet::lowest_backup_validator_bid(), new_bid);
+				}
+				_ => unreachable!("wrong phase"),
+			}
+		});
+	}
+
+	#[test]
+	fn should_establish_a_highest_passive_node_bid() {
+		new_test_ext().execute_with(|| {
+			run_auction(NUMBER_OF_BIDDERS);
+			match AuctionPallet::current_phase() {
+				AuctionPhase::WaitingForBids(..) => {
+					// Place bid above highest passive node bid but below lowest backup validator bid
+					// Should see highest passive node bid change but the state of the passive node
+					// would not change
+					let passive_nodes = current_passive_nodes();
+
+					let new_bid = AuctionPallet::highest_passive_node_bid() + 1;
+					// Take the top and update bid
+					let (bottom_passive_node, _) = passive_nodes.last().unwrap();
+					HandleStakes::<Test>::stake_updated(bottom_passive_node, new_bid);
+
+					assert_eq!(
+						MockChainflipAccount::get(bottom_passive_node).state,
+						ChainflipAccountState::Passive
+					);
+
+					assert_eq!(AuctionPallet::highest_passive_node_bid(), new_bid);
+				}
+				_ => unreachable!("wrong phase"),
+			}
+		});
+	}
+
 	#[test]
 	fn changing_range() {
 		new_test_ext().execute_with(|| {

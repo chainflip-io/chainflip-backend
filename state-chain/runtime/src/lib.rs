@@ -346,6 +346,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = chainflip::ChainflipStakeHandler;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -379,7 +380,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
-	type StakerHandler = pallet_cf_auction::HandleStakes<Self>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
