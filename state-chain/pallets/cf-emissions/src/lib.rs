@@ -179,7 +179,7 @@ impl<T: Config> Pallet<T> {
 
 				Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
 			}
-			_ => (),
+			_ => frame_support::debug::error!("Error during minting rewards for block!"),
 		}
 	}
 }
