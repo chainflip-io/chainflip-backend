@@ -4,7 +4,7 @@ use crate::{
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{BigInt, ECPoint, KeyGenBroadcastMessage1, VerifiableSS, FE, GE},
+        crypto::{BigInt, KeyGenBroadcastMessage1, Point, Scalar, VerifiableSS},
         KeyDB,
     },
 };
@@ -53,13 +53,13 @@ use serde::{Deserialize, Serialize};
 pub struct Broadcast1 {
     pub bc1: KeyGenBroadcastMessage1,
     pub blind: BigInt,
-    pub y_i: GE,
+    pub y_i: Point,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Secret2 {
-    pub vss: VerifiableSS<GE>,
-    pub secret_share: FE,
+    pub vss: VerifiableSS<Point>,
+    pub secret_share: Scalar,
 }
 
 impl From<Secret2> for KeygenData {
@@ -303,6 +303,8 @@ where
     }
 
     fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
+        use crate::signing::crypto::ECPoint;
+
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
         self.process_pending(key_info.clone());

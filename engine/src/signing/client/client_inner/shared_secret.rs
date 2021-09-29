@@ -1,8 +1,8 @@
 use crate::signing::{
     client::client_inner::utils,
     crypto::{
-        BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE,
-        GE,
+        BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, Point, Scalar,
+        VerifiableSS,
     },
 };
 
@@ -25,11 +25,11 @@ pub struct SharedSecretState {
     // Phase 1
     bc1_vec: Vec<KeyGenBroadcastMessage1>,
     blind_vec: Vec<BigInt>,
-    y_vec: Vec<GE>,
+    y_vec: Vec<Point>,
     pub phase1_order: Vec<usize>,
     // Phase 2
-    vss_vec: Vec<VerifiableSS<GE>>,
-    ss_vec: Vec<FE>,
+    vss_vec: Vec<VerifiableSS<Point>>,
+    ss_vec: Vec<Scalar>,
     // Order in which the first broadcasts came in
     phase2_order: Vec<usize>,
     pub params: Parameters,

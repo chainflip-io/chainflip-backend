@@ -14,10 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{client_inner::MultisigMessage, SchnorrSignature};
 
-use crate::signing::crypto::{
-    build_challenge, BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, FE as Scalar,
-    GE as Point,
-};
+use crate::signing::crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar};
 
 use sha2::{Digest, Sha256};
 
@@ -433,4 +430,39 @@ mod test_schnorr {
             &response,
         ));
     }
+}
+
+/// Destructure pubkey into the 32-byte x coordinate and a parity byte
+fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
+    let bytes: [u8; 33] = pubkey.serialize();
+    let pubkey_y_parity = if bytes[0] == 2 { 0u8 } else { 1u8 };
+    let pubkey_x: [u8; 32] = bytes[1..].try_into().expect("Is valid pubkey");
+    return (pubkey_x, pubkey_y_parity);
+}
+
+/// Assembles and hashes the challenge in the correct order for the KeyManager Contract
+fn build_challenge(
+    pubkey: secp256k1::PublicKey,
+    nonce_commitment: secp256k1::PublicKey,
+    message: &[u8],
+) -> Scalar {
+    use sp_core::Hasher;
+    use sp_runtime::traits::Keccak256;
+
+    let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
+
+    let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pubkey);
+
+    // Assemble the challenge in correct order according to this contract:
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
+    let e_bytes: Vec<_> = pubkey_x
+        .iter()
+        .chain([pubkey_y_parity].iter())
+        .chain(message)
+        .chain(eth_addr.iter())
+        .cloned()
+        .collect();
+
+    let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
+    ECScalar::from(&e_bn)
 }

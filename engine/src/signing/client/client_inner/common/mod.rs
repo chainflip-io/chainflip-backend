@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     p2p::{AccountId, P2PMessageCommand},
-    signing::crypto::{KeyShare, Parameters, GE as Point},
+    signing::crypto::{KeyShare, Parameters, Point},
 };
 
 use super::{utils::ValidatorMaps, InnerEvent};

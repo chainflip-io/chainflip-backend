@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, fmt::Debug, pin::Pin, time::Duration};
+use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
 use pallet_cf_vaults::CeremonyId;
@@ -24,7 +24,7 @@ use crate::{
             },
             KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{Keys, GE as Point},
+        crypto::{Keys, Point},
         KeyDBMock, SigningInfo,
     },
 };
@@ -147,9 +147,9 @@ pub struct KeygenContext {
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
-    use crate::signing::crypto::{ECScalar, FE};
+    use crate::signing::crypto::{ECScalar, Scalar};
     frost::LocalSig3 {
-        response: FE::new_random(),
+        response: Scalar::new_random(),
     }
 }
 
