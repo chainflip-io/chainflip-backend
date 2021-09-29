@@ -248,9 +248,9 @@ mod test {
 			));
 			let expected_signing_request = ThresholdSignatureRequest {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
+					[0; 32],
 					new_public_key,
 					SchnorrSigTruncPubkey::default(),
-					0,
 				)
 				.unwrap(),
 				// The CFE stores the pubkey as the compressed 33 byte pubkey
@@ -280,10 +280,13 @@ mod test {
 				VaultsPallet::threshold_signature_response(
 					Origin::root(),
 					1,
-					ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-						eth_pub_key: [0; 20],
-						s: [0; 32],
-					})
+					ThresholdSignatureResponse::Success(
+						[0; 32],
+						SchnorrSigTruncPubkey {
+							eth_pub_key: [0; 20],
+							s: [0; 32],
+						}
+					)
 				),
 				crate::Error::<MockRuntime>::NewPublicKeyNotSet,
 			);
@@ -299,10 +302,13 @@ mod test {
 					Origin::root(),
 					// we haven't started a new rotation, so ceremony 1 has not been initialised
 					1,
-					ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-						eth_pub_key: [0; 20],
-						s: [0; 32],
-					})
+					ThresholdSignatureResponse::Success(
+						[0; 32],
+						SchnorrSigTruncPubkey {
+							eth_pub_key: [0; 20],
+							s: [0; 32],
+						}
+					)
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
 			);
@@ -345,10 +351,13 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				first_ceremony_id,
-				ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-					eth_pub_key: [0; 20],
-					s: [0; 32],
-				})
+				ThresholdSignatureResponse::Success(
+					[0; 32],
+					SchnorrSigTruncPubkey {
+						eth_pub_key: [0; 20],
+						s: [0; 32],
+					}
+				)
 			));
 		});
 	}

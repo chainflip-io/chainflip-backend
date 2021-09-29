@@ -31,9 +31,9 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	) -> Result<(), Self::Error> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
+			[0; 32],
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
-			T::NonceProvider::next_nonce(NonceIdentifier::Ethereum),
 		) {
 			Ok(payload) => Self::make_request(
 				ceremony_id,
@@ -84,15 +84,15 @@ impl<T: Config>
 		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
-			ThresholdSignatureResponse::Success(signature) => {
+			ThresholdSignatureResponse::Success(hash, signature) => {
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
+							hash,
 							vault_rotation
 								.new_public_key
 								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							signature,
-							0,
 						) {
 							Ok(payload) => {
 								// Emit the event
@@ -123,9 +123,9 @@ impl<T: Config> EthereumChain<T> {
 	/// Encode `setAggKeyWithAggKey` call using `ethabi`.  This is a long approach as we are working
 	/// around `no_std` limitations here for the runtime.
 	pub(crate) fn encode_set_agg_key_with_agg_key(
+		message_hash: [u8; 32],
 		new_public_key: T::PublicKey,
 		signature: SchnorrSigTruncPubkey,
-		nonce: u64,
 	) -> ethabi::Result<Bytes> {
 		let pubkey: Vec<u8> = new_public_key.into();
 		// strip y-parity from key (first byte)
@@ -160,9 +160,9 @@ impl<T: Config> EthereumChain<T> {
 		)
 		.encode_input(&vec![
 			Token::Tuple(vec![
-				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),
-				Token::Uint(nonce.into()),
+				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
 			Token::Tuple(vec![

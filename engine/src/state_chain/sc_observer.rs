@@ -177,14 +177,14 @@ pub async fn start(
                             let response = match multisig_event_receiver.recv().await {
                                 Some(event) => match event {
                                     MultisigEvent::MessageSigningResult(SigningOutcome {
-                                        id: _,
+                                        id: message_info,
                                         result,
                                     }) => match result {
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success(
-                                            sig.into()
+                                            message_info.hash.0, sig.into()
                                         ),
                                         Err((err, bad_account_ids)) => {
                                             slog::error!(

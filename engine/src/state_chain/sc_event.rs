@@ -46,5 +46,3 @@ pub fn raw_event_to_sc_event(raw_event: &RawEvent) -> Result<Option<SCEvent>> {
         _ => Ok(None),
     }
 }
-
-// TODO: Tests?
