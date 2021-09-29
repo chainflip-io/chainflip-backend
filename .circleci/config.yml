@@ -41,10 +41,8 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
-  circleci_ip_ranges: true
   executor: rust-base
   environment: &sccache_environment
-    SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
   resource_class: 2xlarge+
 ######################## /Anchors ########################
@@ -309,7 +307,6 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
-    circleci_ip_ranges: true
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
