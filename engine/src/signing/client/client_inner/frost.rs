@@ -260,19 +260,37 @@ pub fn generate_local_sig(
     // This is `R` in a Schnorr signature
     let group_commitment = gen_group_commitment(&commitments, &bindings);
 
-    let challenge = build_challenge(group_commitment.get_element(), key.y.get_element(), msg);
-
     let SecretNoncePair { d, e, .. } = nonces;
 
     let lambda_i = get_lagrange_coeff(own_idx, all_idxs).expect("lagrange coeff");
 
     let rho_i = bindings[&own_idx];
 
-    let lhs = *d + (*e * rho_i);
+    let nonce_share = *d + (*e * rho_i);
 
-    let response = lhs.sub(&(lambda_i * key.x_i * challenge).get_element());
+    let key_share = lambda_i * key.x_i;
+
+    let response =
+        generate_contract_schnorr_sig(key_share, key.y, group_commitment, nonce_share, msg);
 
     SigningResponse { response }
+}
+
+/// Schnorr signature as defined by the Key Manager contract
+fn generate_contract_schnorr_sig(
+    private_key: Scalar,
+    pubkey: Point,
+    nonce_commitment: Point,
+    nonce: Scalar,
+    message: &[u8],
+) -> Scalar {
+    let challenge = build_challenge(
+        pubkey.get_element(),
+        nonce_commitment.get_element(),
+        message,
+    );
+
+    nonce.sub(&(private_key * challenge).get_element())
 }
 
 /// Check the validity of a signature response share.
@@ -282,9 +300,9 @@ fn is_party_resonse_valid(
     lambda_i: &Scalar,
     commitment: &Point,
     challenge: &Scalar,
-    sig: &SigningResponse,
+    signature_response: &Scalar,
 ) -> bool {
-    (Point::generator() * sig.response)
+    (Point::generator() * signature_response)
         == (commitment.sub_point(&(y_i * challenge * lambda_i).get_element()))
 }
 
@@ -304,8 +322,8 @@ pub fn aggregate_signature(
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
     let challenge = build_challenge(
-        group_commitment.get_element(),
         agg_pubkey.get_element(),
+        group_commitment.get_element(),
         msg,
     );
 
@@ -324,7 +342,13 @@ pub fn aggregate_signature(
 
         let response = &responses[array_index];
 
-        if !is_party_resonse_valid(&y_i, &lambda_i, &commitment_i, &challenge, &response) {
+        if !is_party_resonse_valid(
+            &y_i,
+            &lambda_i,
+            &commitment_i,
+            &challenge,
+            &response.response,
+        ) {
             invalid_idxs.push(*signer_idx);
             println!("A local signature is NOT valid!!!");
         }
@@ -343,5 +367,70 @@ pub fn aggregate_signature(
         })
     } else {
         Err(invalid_idxs)
+    }
+}
+
+#[cfg(test)]
+mod test_schnorr {
+
+    use std::str::FromStr;
+
+    use super::*;
+
+    const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
+    const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+    const MESSAGE_HASH: &str = "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e";
+
+    // Through integration tests with the KeyManager contract we know this
+    // to be deemed valid by the contract for the data above
+    const EXPECTED_SIGMA: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
+
+    fn scalar_from_secretkey(secret_key: secp256k1::SecretKey) -> Scalar {
+        let mut scalar = Scalar::new_random();
+        scalar.set_element(secret_key);
+        scalar
+    }
+
+    fn scalar_from_secretkey_hex(secret_key_hex: &str) -> Scalar {
+        let sk = secp256k1::SecretKey::from_str(secret_key_hex).expect("invalid hex");
+        scalar_from_secretkey(sk)
+    }
+
+    #[test]
+    fn todo_signature() {
+        // Given the signing key, nonce and message hash, check that
+        // sigma (signature response) is correct and matches the expected
+        // (by the KeyManager contract) value
+        let message = hex::decode(MESSAGE_HASH).unwrap();
+
+        let nonce = scalar_from_secretkey_hex(NONCE_KEY);
+        let commitment = Point::generator() * nonce;
+
+        let private_key = scalar_from_secretkey_hex(SECRET_KEY);
+        let public_key = Point::generator() * private_key;
+
+        let response =
+            generate_contract_schnorr_sig(private_key, public_key, commitment, nonce, &message);
+
+        assert_eq!(
+            hex::encode(response.get_element().as_ref()),
+            "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538"
+        );
+
+        // Build the challenge again to match how it is done on the receiving side
+        let challenge =
+            build_challenge(public_key.get_element(), commitment.get_element(), &message);
+
+        // A lambda that has no effect on the computation (as a way to adapt multi-party
+        // signing to work for a single party)
+        let dummy_lambda = ECScalar::from(&BigInt::from(1));
+
+        assert!(is_party_resonse_valid(
+            &public_key,
+            &dummy_lambda,
+            &commitment,
+            &challenge,
+            &response,
+        ));
     }
 }

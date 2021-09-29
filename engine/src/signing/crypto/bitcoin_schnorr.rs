@@ -211,13 +211,13 @@ impl Keys {
 
 /// Assembles and hashes the challenge in the correct order for the KeyManager Contract
 pub fn build_challenge(
-    nonce_key: secp256k1::PublicKey,
-    pub_key: secp256k1::PublicKey,
+    pubkey: secp256k1::PublicKey,
+    nonce_commitment: secp256k1::PublicKey,
     message: &[u8],
 ) -> FE {
-    let eth_addr = utils::pubkey_to_eth_addr(pub_key);
+    let eth_addr = utils::pubkey_to_eth_addr(nonce_commitment);
 
-    let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
+    let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(pubkey);
 
     // Assemble the challenge in correct order according to this contract:
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
@@ -418,16 +418,19 @@ mod test_schnorr {
             x_i: sk_1_scalar,
         };
 
-        // create the local_ephemeral_key from the known NONCE_KEY_HEX
-        let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
-        let local_ephemeral_key = KeyShare {
-            y: Secp256k1Point::generator() * &k_scalar,
-            x_i: k_scalar,
+        let nonce_share = {
+            let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
+            KeyShare {
+                y: Secp256k1Point::generator() * &k_scalar,
+                x_i: k_scalar,
+            }
         };
 
         // sign the message
         let message_hash = hex::decode(MESSAGE_HASH_HEX).unwrap();
-        let local_sig = LocalSig::compute(&message_hash, &local_ephemeral_key, &local_private_key);
+        let local_sig = LocalSig::compute(&message_hash, &nonce_share, &local_private_key);
+
+        dbg!(local_sig.get_gamma().get_element());
         let sigma: [u8; 32] = local_sig.get_gamma().get_element().as_ref().clone();
 
         // by using the same key, nonce and message, we should get the same signature (sigma)
@@ -437,7 +440,7 @@ mod test_schnorr {
         let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
         let sig = LegacySignature {
             sigma: scalar_from_secretkey(sigma_key),
-            v: local_ephemeral_key.y,
+            v: nonce_share.y,
         };
 
         let res = sig.verify(&message_hash, &local_private_key.y);
