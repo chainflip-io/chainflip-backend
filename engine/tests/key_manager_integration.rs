@@ -79,7 +79,7 @@ pub async fn test_all_key_manager_events() {
                     panic!("KeyChange event with unexpected key: {:?}", new_key);
                 }
             }
-            KeyManagerEvent::Refunded { amount: _ } => {
+            KeyManagerEvent::Refunded { .. } => {
                 return true
             },
         }
