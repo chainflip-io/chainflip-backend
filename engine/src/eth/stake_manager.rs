@@ -41,72 +41,80 @@ pub async fn start_stake_manager_witness(
     slog::info!(logger, "Load Contract ABI");
     let stake_manager = StakeManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Event Stream");
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
-            async {
-                match result_event.unwrap() {
-                    // TODO: Handle unwraps
-                    StakeManagerEvent::Staked {
+            match result_event.unwrap() {
+                // TODO: Handle unwraps
+                StakeManagerEvent::Staked {
+                    account_id,
+                    amount,
+                    return_addr,
+                    tx_hash,
+                } => {
+                    slog::trace!(
+                        logger,
+                        "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
                         account_id,
                         amount,
                         return_addr,
-                        tx_hash,
-                    } => {
-                        slog::trace!(
-                            logger,
-                            "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
-                            account_id,
-                            amount,
-                            return_addr,
-                            tx_hash
-                        );
-                        let mut signer = signer.lock().await;
-                        subxt_client
-                            .witness_staked(
-                                &*signer,
-                                account_id,
-                                amount,
-                                Some(return_addr.0),
+                        tx_hash
+                    );
+                    let mut signer = signer.lock().await;
+                    match subxt_client
+                        .witness_staked(&*signer, account_id, amount, Some(return_addr.0), tx_hash)
+                        .await
+                    {
+                        Ok(_) => signer.increment_nonce(),
+                        Err(e) => {
+                            slog::error!(
+                                logger,
+                                "Could not submit witness_staked of tx_hash `{:?}`, {}",
                                 tx_hash,
-                            )
-                            .await?;
-                        signer.increment_nonce();
-                    }
-                    StakeManagerEvent::ClaimExecuted {
-                        account_id,
-                        amount,
-                        tx_hash,
-                    } => {
-                        slog::trace!(
-                            logger,
-                            "Sending claim_executed({:?}, {}, {:?}) to the state chain",
-                            account_id,
-                            amount,
-                            tx_hash
-                        );
-                        let mut signer = signer.lock().await;
-                        subxt_client
-                            .witness_claimed(&*signer, account_id, amount, tx_hash)
-                            .await?;
-                        signer.increment_nonce();
-                    }
-                    event => {
-                        slog::warn!(
-                            logger,
-                            "{:?} is not to be submitted to the State Chain",
-                            event
-                        );
+                                e
+                            );
+                        }
                     }
                 }
-                Result::<(), anyhow::Error>::Ok(())
+                StakeManagerEvent::ClaimExecuted {
+                    account_id,
+                    amount,
+                    tx_hash,
+                } => {
+                    slog::trace!(
+                        logger,
+                        "Sending claim_executed({:?}, {}, {:?}) to the state chain",
+                        account_id,
+                        amount,
+                        tx_hash
+                    );
+                    let mut signer = signer.lock().await;
+                    match subxt_client
+                        .witness_claimed(&*signer, account_id, amount, tx_hash)
+                        .await
+                    {
+                        Ok(_) => signer.increment_nonce(),
+                        Err(e) => {
+                            slog::error!(
+                                logger,
+                                "Could not submit witness_claimed of tx_hash `{:?}`, {}",
+                                tx_hash,
+                                e
+                            );
+                        }
+                    }
+                }
+                event => {
+                    slog::warn!(
+                        logger,
+                        "{:?} is not to be submitted to the State Chain",
+                        event
+                    );
+                }
             }
-            .await
-            .unwrap(); // TODO: How to handle call errors
         }
     })
 }
@@ -200,13 +208,14 @@ impl StakeManager {
         })
     }
 
-    // TODO: Maybe try to factor this out (See KeManager)
+    // TODO: Maybe try to factor this out (See KeyManager)
     pub async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
+        slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
