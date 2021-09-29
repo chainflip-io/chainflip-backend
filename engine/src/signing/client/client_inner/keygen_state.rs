@@ -249,7 +249,7 @@ impl KeygenState {
 
                 slog::error!(
                     self.logger,
-                    "phase2 keygen error for key: {:?}, blamed validators: {:?}",
+                    "Phase 2 keygen error for key: {:?}, blamed validators: {:?}",
                     self.ceremony_id,
                     // TODO: this should log the base58 ids
                     &blamed_ids
@@ -265,8 +265,13 @@ impl KeygenState {
 
     fn finalize_phase2(&mut self) -> Option<KeygenResultInfo> {
         match self.sss.finalize_phase2() {
+            // keygen
             Ok(key) => {
-                slog::info!(self.logger, "[{}] SHARED KEY IS READY 👍", self.us());
+                slog::info!(
+                    self.logger,
+                    "[{}] SIGNING SHARED KEY IS READY 👍",
+                    self.us()
+                );
 
                 self.stage = KeygenStage::KeyReady;
 

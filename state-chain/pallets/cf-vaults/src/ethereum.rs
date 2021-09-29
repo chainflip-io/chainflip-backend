@@ -33,6 +33,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		match Self::encode_set_agg_key_with_agg_key(
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
+			T::NonceProvider::next_nonce(NonceIdentifier::Ethereum),
 		) {
 			Ok(payload) => Self::make_request(
 				ceremony_id,
@@ -91,6 +92,7 @@ impl<T: Config>
 								.new_public_key
 								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							signature,
+							0,
 						) {
 							Ok(payload) => {
 								// Emit the event
@@ -123,6 +125,7 @@ impl<T: Config> EthereumChain<T> {
 	pub(crate) fn encode_set_agg_key_with_agg_key(
 		new_public_key: T::PublicKey,
 		signature: SchnorrSigTruncPubkey,
+		nonce: u64,
 	) -> ethabi::Result<Bytes> {
 		let pubkey: Vec<u8> = new_public_key.into();
 		// strip y-parity from key (first byte)
@@ -136,14 +139,19 @@ impl<T: Config> EthereumChain<T> {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						// message hash
 						ParamType::Uint(256),
+						// sig
 						ParamType::Uint(256),
+						// nonce
 						ParamType::Uint(256),
+						// k*G
 						ParamType::Address,
 					]),
 				),
 				Param::new(
 					"newKey",
+					// pubkey_x, pubkey_y_parity
 					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
 				),
 			],
@@ -154,7 +162,7 @@ impl<T: Config> EthereumChain<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(signature.s.into()),
-				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
+				Token::Uint(nonce.into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
 			Token::Tuple(vec![

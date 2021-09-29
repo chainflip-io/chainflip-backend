@@ -250,6 +250,7 @@ mod test {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
 					new_public_key,
 					SchnorrSigTruncPubkey::default(),
+					0,
 				)
 				.unwrap(),
 				// The CFE stores the pubkey as the compressed 33 byte pubkey

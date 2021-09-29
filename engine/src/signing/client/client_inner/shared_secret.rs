@@ -189,6 +189,7 @@ impl SharedSecretState {
     }
 
     pub fn finalize_phase2(&mut self) -> Result<KeygenResult, InvalidSS> {
+        // finalise phase 2 from keygen or signing
         slog::info!(self.logger, "[{}] entering phase 3", self.signer_idx);
 
         self.stage = SharedSecretStage::Done;
