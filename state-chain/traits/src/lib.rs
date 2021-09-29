@@ -261,6 +261,7 @@ pub enum NonceIdentifier {
 }
 
 /// Provide a nonce
+/// TODO: Rename to KeyNonceProvider??
 pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;

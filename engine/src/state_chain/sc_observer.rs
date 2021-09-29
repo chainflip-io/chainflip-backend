@@ -6,7 +6,7 @@ use pallet_cf_vaults::{
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::{traits::Keccak256, AccountId32};
-use std::sync::Arc;
+use std::{convert::TryInto, sync::Arc};
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -146,27 +146,22 @@ pub async fn start(
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let sign_tx =
-                                MultisigInstruction::Sign(
-                                    // TODO: The hashing of the payload should be done on the SC
-                                    // https://github.com/chainflip-io/chainflip-backend/issues/446
-                                    MessageHash(
-                                        Keccak256::hash(
-                                            &threshold_sig_requst
-                                                .threshold_signature_request
-                                                .payload[..],
-                                        )
-                                        .0,
+                            let message_hash: [u8; 32] = threshold_sig_requst
+                                .threshold_signature_request
+                                .payload
+                                .try_into()
+                                .expect("Should be a 32 byte hash");
+                            let sign_tx = MultisigInstruction::Sign(
+                                // TODO: The hashing of the payload should be done on the SC
+                                // https://github.com/chainflip-io/chainflip-backend/issues/446
+                                MessageHash(message_hash),
+                                SigningInfo::new(
+                                    KeyId(
+                                        threshold_sig_requst.threshold_signature_request.public_key,
                                     ),
-                                    SigningInfo::new(
-                                        KeyId(
-                                            threshold_sig_requst
-                                                .threshold_signature_request
-                                                .public_key,
-                                        ),
-                                        signers,
-                                    ),
-                                );
+                                    signers,
+                                ),
+                            );
 
                             // The below will be replaced with one shot channels
                             multisig_instruction_sender

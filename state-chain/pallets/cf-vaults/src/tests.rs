@@ -4,6 +4,8 @@ mod test {
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
 	use frame_support::{assert_err, assert_ok};
+	use sp_core::Hasher;
+	use sp_runtime::traits::Keccak256;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -247,12 +249,17 @@ mod test {
 				validators.clone()
 			));
 			let expected_signing_request = ThresholdSignatureRequest {
-				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
-					[0; 32],
-					new_public_key,
-					SchnorrSigTruncPubkey::default(),
+				// TODO: hardcode a payload here for the test
+				payload: Keccak256::hash(
+					&EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
+						[0; 32],
+						new_public_key,
+						SchnorrSigTruncPubkey::default(),
+					)
+					.unwrap(),
 				)
-				.unwrap(),
+				.0
+				.into(),
 				// The CFE stores the pubkey as the compressed 33 byte pubkey
 				// therefore the SC must emit like this
 				public_key: vec![0; 33],

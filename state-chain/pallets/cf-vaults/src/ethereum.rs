@@ -9,6 +9,8 @@ use crate::{
 use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
+use sp_core::Hasher;
+use sp_runtime::traits::Keccak256;
 use sp_std::prelude::*;
 
 pub struct EthereumChain<T: Config>(PhantomData<T>);
@@ -39,7 +41,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 				ceremony_id,
 				ThresholdSignatureRequest {
 					validators,
-					payload,
+					payload: Keccak256::hash(&payload).0.into(),
 					// we want to sign with the currently active key
 					public_key: EthereumVault::<T>::get().current_key,
 				},
