@@ -4,6 +4,10 @@ use std::marker::PhantomData;
 use super::{auction::Auction, staking::Staking};
 use codec::Encode;
 use pallet_cf_staking::EthereumAddress;
+use pallet_cf_vaults::{
+    CeremonyId, KeygenResponse, SchnorrSigTruncPubkey, ThresholdSignatureResponse,
+    VaultRotationResponse,
+};
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Call};
 
@@ -31,4 +35,33 @@ pub struct WitnessClaimedCall<T: WitnesserApi> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessAuctionConfirmationCall<T: WitnesserApi> {
     auction_index: <T as Auction>::AuctionIndex,
+}
+
+// ===== Calls / Extrinsics =====
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessKeygenResponseCall<T: WitnesserApi> {
+    pub ceremony_id: CeremonyId,
+
+    pub response: KeygenResponse<AccountId32, Vec<u8>>,
+
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessThresholdSignatureResponseCall<T: WitnesserApi> {
+    pub ceremony_id: CeremonyId,
+
+    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSigTruncPubkey>,
+
+    pub _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessVaultRotationResponseCall<T: WitnesserApi> {
+    pub ceremony_id: CeremonyId,
+
+    pub response: VaultRotationResponse<Vec<u8>>,
+
+    pub _runtime: PhantomData<T>,
 }
