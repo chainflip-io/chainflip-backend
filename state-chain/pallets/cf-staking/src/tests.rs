@@ -14,7 +14,7 @@ type FlipEvent = pallet_cf_flip::Event<Test>;
 
 const ETH_DUMMY_SIG: U256 = U256::zero();
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
-const ETH_ZERO_ADDRESS: EthereumAddress = [0u8; 20];
+const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
 /// Checks the deposited events, in reverse order (reverse order mainly because it makes the macro easier to write).

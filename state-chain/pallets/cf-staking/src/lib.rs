@@ -66,7 +66,8 @@ use sp_runtime::{
 	DispatchError,
 };
 
-const ETH_ZERO_ADDRESS: EthereumAddress = [0u8; 20];
+const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
