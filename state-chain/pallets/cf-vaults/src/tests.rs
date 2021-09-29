@@ -3,6 +3,7 @@ mod test {
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
+	use ethabi::Token;
 	use frame_support::{assert_err, assert_ok};
 	use sp_core::Hasher;
 	use sp_runtime::traits::Keccak256;
@@ -241,22 +242,22 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			let new_public_key = vec![1; 33];
+			let mut new_public_key = hex::decode("1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
+			new_public_key.push(1);
 			let validators = vec![ALICE, BOB, CHARLIE];
 			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
 				new_public_key.clone(),
 				validators.clone()
 			));
+			// let new_public_key_x = Token::Uint(10521316663921629387264629518161886172223783929820773409615991397525613232925);
+			// let new_public_key_x = new_public_key_x.to_be_bytes();
+			// let new_public_key_y_parity: u8 = 1;
+			let call_data_no_sig = hex::decode("24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap();
+			println!("Call data as bytes: {:?}", call_data_no_sig);
 			let expected_signing_request = ThresholdSignatureRequest {
-				// TODO: hardcode a payload here for the test
 				payload: Keccak256::hash(
-					&EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
-						[0; 32],
-						new_public_key,
-						SchnorrSigTruncPubkey::default(),
-					)
-					.unwrap(),
+					&call_data_no_sig
 				)
 				.0
 				.into(),

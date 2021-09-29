@@ -37,15 +37,27 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
 		) {
-			Ok(payload) => Self::make_request(
-				ceremony_id,
-				ThresholdSignatureRequest {
-					validators,
-					payload: Keccak256::hash(&payload).0.into(),
-					// we want to sign with the currently active key
-					public_key: EthereumVault::<T>::get().current_key,
-				},
-			),
+			Ok(payload) => {
+				// println!(
+				// 	"payload to hash, as string: {}",
+				// 	String::from_utf8(payload.clone()).unwrap()
+				// );
+				// println!(
+				// 	"Hashing payload to sign: {:?}",
+				// 	hex::decode(&payload).unwrap()
+				// );
+				frame_support::debug::info!("Hashing payload to sign: {:?}", payload);
+				println!("Payload: {:?}", payload);
+				return Self::make_request(
+					ceremony_id,
+					ThresholdSignatureRequest {
+						validators,
+						payload: Keccak256::hash(&payload).0.into(),
+						// we want to sign with the currently active key
+						public_key: EthereumVault::<T>::get().current_key,
+					},
+				);
+			}
 			Err(_) => {
 				Pallet::<T>::abort_rotation();
 				Err(RotationError::FailedToConstructPayload)
