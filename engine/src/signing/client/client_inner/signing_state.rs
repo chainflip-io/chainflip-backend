@@ -529,7 +529,7 @@ impl SigningState {
             }
             Err(InvalidSS(blamed_idxs)) => {
                 slog::error!(self.logger,
-                    "Invalid Phase2 keygen data, abandoning state for message_info: {:?}, Blaming: {:?}",
+                    "Invalid Phase2 signing data, abandoning state for message_info: {:?}, Blaming: {:?}",
                     self.message_info,blamed_idxs
                 );
                 self.update_stage(SigningStage::Abandoned);
