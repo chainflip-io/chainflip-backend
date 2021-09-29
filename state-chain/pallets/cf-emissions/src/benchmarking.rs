@@ -16,9 +16,8 @@ use crate::Pallet as Emissions;
 benchmarks! {
 	on_initialize {
 		let x in 1 .. 1_000;
-		let max_block = x as u64;
 	}: {
-		for b in 0..max_block {
+		for b in 0..x {
 			Emissions::<T>::on_initialize((b as u32).into());
 		}
 	}
