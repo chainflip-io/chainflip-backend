@@ -3,7 +3,7 @@ pub mod conductor;
 pub mod mock;
 pub mod rpc;
 
-pub use cf_p2p_rpc::{P2PEvent, P2PRpcClient};
+pub use cf_p2p::{P2PEvent, P2PRpcClient};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -59,9 +59,6 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
                 }
                 P2PEvent::ValidatorDisconnected(id) => {
                     slog::debug!(self.logger, "Validator '{}' has left the network.", id);
-                }
-                P2PEvent::Error(e) => {
-                    slog::error!(self.logger, "P2P protocol error: {:?}", e);
                 }
             },
             Err(e) => panic!("Subscription stream error: {}", e),
