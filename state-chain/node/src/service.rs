@@ -1,4 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
+#[rustfmt::skip]
 
 use std::sync::Arc;
 use std::time::Duration;
