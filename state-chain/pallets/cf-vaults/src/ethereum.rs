@@ -38,16 +38,6 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			SchnorrSigTruncPubkey::default(),
 		) {
 			Ok(payload) => {
-				// println!(
-				// 	"payload to hash, as string: {}",
-				// 	String::from_utf8(payload.clone()).unwrap()
-				// );
-				// println!(
-				// 	"Hashing payload to sign: {:?}",
-				// 	hex::decode(&payload).unwrap()
-				// );
-				frame_support::debug::info!("Hashing payload to sign: {:?}", payload);
-				println!("Payload: {:?}", payload);
 				return Self::make_request(
 					ceremony_id,
 					ThresholdSignatureRequest {
@@ -143,8 +133,10 @@ impl<T: Config> EthereumChain<T> {
 	) -> ethabi::Result<Bytes> {
 		let pubkey: Vec<u8> = new_public_key.into();
 		// strip y-parity from key (first byte)
-		let y_parity = pubkey[0];
-		let x_pubkey: [u8; 32] = pubkey[1..]
+
+		// TODO: Why?
+		let y_parity = pubkey[32];
+		let x_pubkey: [u8; 32] = pubkey[..32]
 			.try_into()
 			.map_err(|_| ethabi::Error::InvalidData)?;
 		Function::new(
