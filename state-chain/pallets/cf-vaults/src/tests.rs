@@ -242,8 +242,7 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			let mut new_public_key = hex::decode("1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
-			new_public_key.push(1);
+			let new_public_key = hex::decode("011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
 			let validators = vec![ALICE, BOB, CHARLIE];
 			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,

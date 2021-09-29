@@ -135,8 +135,8 @@ impl<T: Config> EthereumChain<T> {
 		// strip y-parity from key (first byte)
 
 		// TODO: Why?
-		let y_parity = pubkey[32];
-		let x_pubkey: [u8; 32] = pubkey[..32]
+		let y_parity = pubkey[0];
+		let x_pubkey: [u8; 32] = pubkey[1..]
 			.try_into()
 			.map_err(|_| ethabi::Error::InvalidData)?;
 		Function::new(
