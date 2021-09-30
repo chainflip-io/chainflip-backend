@@ -3,6 +3,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use std::env;
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
 	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
@@ -91,7 +92,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					stake_manager_address: b"0x".to_vec(),
 					key_manager_address: b"0x".to_vec(),
 					ethereum_chain_id: b"0".to_vec(),
-					ethereum_vault_address: b"0x".to_vec(),
 				},
 			)
 		},
@@ -113,6 +113,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let stake_manager_address = env::var("STAKE_MANAGER_ADDRESS").unwrap();
+	let key_manager_address = env::var("KEY_MANAGER_ADDRESS").unwrap();
+	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID").unwrap();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
@@ -139,10 +142,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				ConfigConfig {
-					stake_manager_address: b"0x".to_vec(),
-					key_manager_address: b"0x".to_vec(),
-					ethereum_chain_id: b"0".to_vec(),
-					ethereum_vault_address: b"0x".to_vec(),
+					stake_manager_address: stake_manager_address.as_bytes().to_vec(),
+					key_manager_address: key_manager_address.as_bytes().to_vec(),
+					ethereum_chain_id: ethereum_chain_id.as_bytes().to_vec(),
 				},
 			)
 		},
@@ -222,10 +224,9 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 				],
 				2,
 				ConfigConfig {
-					stake_manager_address: b"0x".to_vec(),
-					key_manager_address: b"0x".to_vec(),
-					ethereum_chain_id: b"0".to_vec(),
-					ethereum_vault_address: b"0x".to_vec(),
+					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
+					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
+					ethereum_chain_id: b"4".to_vec(),
 				},
 			)
 		},
@@ -327,10 +328,9 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				],
 				3,
 				ConfigConfig {
-					stake_manager_address: b"0x".to_vec(),
-					key_manager_address: b"0x".to_vec(),
-					ethereum_chain_id: b"0".to_vec(),
-					ethereum_vault_address: b"0x".to_vec(),
+					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
+					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
+					ethereum_chain_id: b"4".to_vec(),
 				},
 			)
 		},

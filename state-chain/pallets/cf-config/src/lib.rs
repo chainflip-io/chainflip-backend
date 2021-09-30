@@ -36,10 +36,6 @@ pub mod pallet {
 	#[pallet::getter(fn ethereum_chain_id)]
 	pub type EthereumChainId<T> = StorageValue<_, ConfigItem>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn ethereum_vault_address)]
-	pub type EthereumVaultAddress<T> = StorageValue<_, ConfigItem>;
-
 	#[pallet::event]
 	pub enum Event<T: Config> {}
 
@@ -54,7 +50,6 @@ pub mod pallet {
 		pub stake_manager_address: ConfigItem,
 		pub key_manager_address: ConfigItem,
 		pub ethereum_chain_id: ConfigItem,
-		pub ethereum_vault_address: ConfigItem,
 	}
 
 	#[cfg(feature = "std")]
@@ -64,7 +59,6 @@ pub mod pallet {
 				stake_manager_address: Default::default(),
 				key_manager_address: Default::default(),
 				ethereum_chain_id: Default::default(),
-				ethereum_vault_address: Default::default(),
 			}
 		}
 	}
@@ -76,7 +70,6 @@ pub mod pallet {
 			StakeManagerAddress::<T>::set(Some(self.stake_manager_address.clone()));
 			KeyManagerAddress::<T>::set(Some(self.key_manager_address.clone()));
 			EthereumChainId::<T>::set(Some(self.ethereum_chain_id.clone()));
-			EthereumVaultAddress::<T>::set(Some(self.ethereum_vault_address.clone()));
 		}
 	}
 }
