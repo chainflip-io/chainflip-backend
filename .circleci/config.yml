@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        - bug/ch1978-fix-integration-tests
+#        - bug/ch1978-fix-integration-tests
 only_main_branches: &only_main_branches
   filters:
     branches:
