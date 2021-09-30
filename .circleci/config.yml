@@ -89,6 +89,14 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
+      - build-docker-image:
+          name: build-rust-poetry
+          image: chainflip-io/chainflip-backend/rust-poetry
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+          tag: latest
+          dockerfile: Dockerfile.rust-poetry
+          context:
+            - ghcr-credentials
   chainflip-backend-checks:
     jobs:
       - fmt-validator-package:
@@ -154,13 +162,6 @@ workflows:
   chainflip-integration-tests:
     #    <<: *nightly
     jobs:
-      - build-docker-image:
-          image: chainflip-io/chainflip-backend/rust-poetry
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-          tag: latest
-          dockerfile: Dockerfile.rust-poetry
-          context:
-            - ghcr-credentials
       - run-integration-tests:
           context:
             - github-credentials
