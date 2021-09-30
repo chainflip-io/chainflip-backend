@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! A pallet for managing config items.
+
 pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
@@ -19,6 +21,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Because we want to emit events when there is a config change during
+		/// an runtime upgrade
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 	#[pallet::pallet]
@@ -26,14 +30,17 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
+	/// The address of the ETH stake manager contract
 	pub type StakeManagerAddress<T> = StorageValue<_, ConfigItem>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
+	/// The address of the ETH key manager contract
 	pub type KeyManagerAddress<T> = StorageValue<_, ConfigItem>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
+	/// The address of the ETH chain id
 	pub type EthereumChainId<T> = StorageValue<_, ConfigItem>;
 
 	#[pallet::event]
@@ -63,7 +70,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Sets the genesis governance
+	/// Sets the genesis config
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
