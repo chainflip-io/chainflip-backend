@@ -160,7 +160,7 @@ workflows:
           <<: *only_epic_branches
 
   chainflip-integration-tests:
-    #    <<: *nightly
+    <<: *nightly
     jobs:
       - clone-contracts-repo:
           context:
