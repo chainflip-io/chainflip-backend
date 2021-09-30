@@ -4,9 +4,9 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, ConfigConfig, EmissionsConfig,
-	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
-	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, ConfigConfig, VaultsConfig, DAYS, WASM_BINARY,
 };
 
 const TOTAL_ISSUANCE: FlipBalance = {
@@ -168,9 +168,11 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
 	let dopey_sr25519 =
 		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
-		"three-node-testnet",
+		"three-node-test",
 		ChainType::Live,
 		move || {
 			testnet_genesis(
@@ -205,10 +207,12 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 						.unchecked_into(),
 					),
 				],
-				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				// Sudo account - Snow White
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
+					// Snow White the dictator
+					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -407,6 +411,12 @@ fn testnet_genesis(
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
 		pallet_cf_config: Some(config_set),
+		pallet_cf_vaults: Some(VaultsConfig {
+			ethereum_vault_key: hex_literal::hex![
+				"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"
+			]
+			.to_vec(),
+		}),
 	}
 }
 
