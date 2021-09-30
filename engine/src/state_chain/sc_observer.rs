@@ -4,9 +4,8 @@ use pallet_cf_vaults::{
     KeygenResponse, ThresholdSignatureResponse,
 };
 use slog::o;
-use sp_core::Hasher;
-use sp_runtime::{traits::Keccak256, AccountId32};
-use std::sync::Arc;
+use sp_runtime::AccountId32;
+use std::{convert::TryInto, sync::Arc};
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -120,6 +119,11 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
+                            slog::trace!(
+                                logger,
+                                "Sending new key back to the State Chain {:?}",
+                                response
+                            );
                             let mut signer = signer.lock().await;
                             match subxt_client
                                 .witness_keygen_response(
@@ -146,27 +150,20 @@ pub async fn start(
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let sign_tx =
-                                MultisigInstruction::Sign(
-                                    // TODO: The hashing of the payload should be done on the SC
-                                    // https://github.com/chainflip-io/chainflip-backend/issues/446
-                                    MessageHash(
-                                        Keccak256::hash(
-                                            &threshold_sig_requst
-                                                .threshold_signature_request
-                                                .payload[..],
-                                        )
-                                        .0,
+                            let message_hash: [u8; 32] = threshold_sig_requst
+                                .threshold_signature_request
+                                .payload
+                                .try_into()
+                                .expect("Should be a 32 byte hash");
+                            let sign_tx = MultisigInstruction::Sign(
+                                MessageHash(message_hash),
+                                SigningInfo::new(
+                                    KeyId(
+                                        threshold_sig_requst.threshold_signature_request.public_key,
                                     ),
-                                    SigningInfo::new(
-                                        KeyId(
-                                            threshold_sig_requst
-                                                .threshold_signature_request
-                                                .public_key,
-                                        ),
-                                        signers,
-                                    ),
-                                );
+                                    signers,
+                                ),
+                            );
 
                             // The below will be replaced with one shot channels
                             multisig_instruction_sender
@@ -177,14 +174,14 @@ pub async fn start(
                             let response = match multisig_event_receiver.recv().await {
                                 Some(event) => match event {
                                     MultisigEvent::MessageSigningResult(SigningOutcome {
-                                        id: _,
+                                        id: message_info,
                                         result,
                                     }) => match result {
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success(
-                                            sig.into()
+                                            message_info.hash.0, sig.into()
                                         ),
                                         Err((err, bad_account_ids)) => {
                                             slog::error!(

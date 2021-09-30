@@ -4899,6 +4899,7 @@ dependencies = [
  "ethabi 13.0.0",
  "frame-support",
  "frame-system",
+ "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "serde 1.0.126",

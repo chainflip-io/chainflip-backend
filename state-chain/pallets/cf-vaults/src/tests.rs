@@ -4,6 +4,8 @@ mod test {
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
 	use frame_support::{assert_err, assert_ok};
+	use sp_core::Hasher;
+	use sp_runtime::traits::Keccak256;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -237,21 +239,22 @@ mod test {
 
 	// Ethereum tests
 	#[test]
+	// THIS TEST WILL FAIL IF THE NONCE IS CHANGED IN ENCODE_SET_AGG_KEY_WITH_AGG_KEY
+	// the calldata expects nonce = 0
+	// This should be fixed in the broadcast epic:
+	// https://github.com/chainflip-io/chainflip-backend/pull/495
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			let new_public_key = vec![1; 33];
+			let new_public_key = hex::decode("011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
 			let validators = vec![ALICE, BOB, CHARLIE];
 			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
 				new_public_key.clone(),
 				validators.clone()
 			));
+			let call_data_no_sig = hex::decode("24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap();
 			let expected_signing_request = ThresholdSignatureRequest {
-				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
-					new_public_key,
-					SchnorrSigTruncPubkey::default(),
-				)
-				.unwrap(),
+				payload: Keccak256::hash(&call_data_no_sig).0.into(),
 				// The CFE stores the pubkey as the compressed 33 byte pubkey
 				// therefore the SC must emit like this
 				public_key: vec![0; 33],
@@ -268,6 +271,10 @@ mod test {
 		});
 	}
 
+	// TODO: introduce test to check that the second encoding is consistent with the first.
+	// There was a bug where the nonce was different on the second call to encode (due to the nonce incrementor
+	// being called within the encoding function itself - we can unit test this bug away
+
 	#[test]
 	fn should_error_when_attempting_to_use_use_unset_new_public_key() {
 		new_test_ext().execute_with(|| {
@@ -279,10 +286,13 @@ mod test {
 				VaultsPallet::threshold_signature_response(
 					Origin::root(),
 					1,
-					ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-						eth_pub_key: [0; 20],
-						s: [0; 32],
-					})
+					ThresholdSignatureResponse::Success(
+						[0; 32],
+						SchnorrSigTruncPubkey {
+							eth_pub_key: [0; 20],
+							s: [0; 32],
+						}
+					)
 				),
 				crate::Error::<MockRuntime>::NewPublicKeyNotSet,
 			);
@@ -298,10 +308,13 @@ mod test {
 					Origin::root(),
 					// we haven't started a new rotation, so ceremony 1 has not been initialised
 					1,
-					ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-						eth_pub_key: [0; 20],
-						s: [0; 32],
-					})
+					ThresholdSignatureResponse::Success(
+						[0; 32],
+						SchnorrSigTruncPubkey {
+							eth_pub_key: [0; 20],
+							s: [0; 32],
+						}
+					)
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
 			);
@@ -344,10 +357,13 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				first_ceremony_id,
-				ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
-					eth_pub_key: [0; 20],
-					s: [0; 32],
-				})
+				ThresholdSignatureResponse::Success(
+					[0; 32],
+					SchnorrSigTruncPubkey {
+						eth_pub_key: [0; 20],
+						s: [0; 32],
+					}
+				)
 			));
 		});
 	}
