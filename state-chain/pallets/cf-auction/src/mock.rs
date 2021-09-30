@@ -53,12 +53,14 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 pub fn run_auction(number_of_bids: u32, group: u32) {
 	generate_bids(number_of_bids, group);
 
-	let _ = AuctionPallet::process()
+	AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process()
+			AuctionPallet::process().and(AuctionPallet::process())
 		}))
 		.unwrap();
+
+	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 }
 
 pub fn last_event() -> mock::Event {
@@ -186,7 +188,7 @@ impl BidderProvider for TestBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }

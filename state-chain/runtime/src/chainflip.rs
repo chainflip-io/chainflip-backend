@@ -1,9 +1,9 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser};
-use cf_traits::{BondRotation, EmissionsTrigger, StakeHandler};
+use cf_traits::{BondRotation, EmissionsTrigger, StakeHandler, VaultRotationHandler};
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;
-use pallet_cf_auction::HandleStakes;
+use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 
 pub struct ChainflipEpochTransitions;
 
@@ -35,5 +35,18 @@ impl StakeHandler for ChainflipStakeHandler {
 
 	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
 		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
+	}
+}
+
+pub struct ChainflipVaultRotationHandler;
+impl VaultRotationHandler for ChainflipVaultRotationHandler {
+	type ValidatorId = AccountId;
+
+	fn vault_rotation_aborted() {
+		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
+	}
+
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		VaultRotationEventHandler::<Runtime>::penalise(bad_validators);
 	}
 }

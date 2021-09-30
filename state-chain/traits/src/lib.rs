@@ -74,7 +74,7 @@ pub trait EpochInfo {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
 	/// Waiting for bids, we store the last set of winners and min bid required
-	WaitingForBids(Vec<ValidatorId>, Amount),
+	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
@@ -86,7 +86,7 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
-		AuctionPhase::WaitingForBids(Vec::new(), Amount::default())
+		AuctionPhase::WaitingForBids
 	}
 }
 
@@ -137,12 +137,13 @@ pub trait Auction {
 	fn abort();
 }
 
+/// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
-	/// Abort requested after failed vault rotation
-	fn abort_rotation();
-	// Penalise validators during a vault rotation
-	fn penalise(bad_validators: Vec<Self::ValidatorId>);
+	/// The vault rotation has been aborted
+	fn vault_rotation_aborted();
+	/// Penalise bad validators during a vault rotation
+	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
 /// Errors occurring during a rotation
@@ -189,11 +190,12 @@ pub enum AuctionError {
 	NotConfirmed,
 }
 
-/// Providing bidders for our auction
+/// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+	/// Provide a list of bidders
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 /// Trait for rotate bond after epoch.

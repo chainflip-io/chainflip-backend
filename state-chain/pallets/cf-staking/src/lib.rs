@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -790,7 +790,7 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

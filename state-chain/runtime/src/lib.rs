@@ -41,6 +41,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use crate::chainflip::ChainflipVaultRotationHandler;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -175,7 +176,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
-	type RotationHandler = Auction;
+	type RotationHandler = ChainflipVaultRotationHandler;
 	type NonceProvider = Vaults;
 	type EpochInfo = Validator;
 }

@@ -278,7 +278,7 @@ impl<T: Config> Pallet<T> {
 			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
 		));
 		VaultRotations::<T>::remove_all();
-		T::RotationHandler::abort_rotation();
+		T::RotationHandler::vault_rotation_aborted();
 	}
 
 	/// Provide the next ceremony id
@@ -386,7 +386,7 @@ impl<T: Config>
 				// Abort this key generation request
 				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
-				T::RotationHandler::penalise(bad_validators);
+				T::RotationHandler::penalise(&bad_validators);
 				// Report back we have processed the failure
 				Ok(().into())
 			}
@@ -414,7 +414,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 			// Penalise if we have a set of bad validators and abort the rotation
 			Err(err) => {
 				if let RotationError::BadValidators(bad) = err {
-					T::RotationHandler::penalise(bad);
+					T::RotationHandler::penalise(&bad);
 				}
 				Self::abort_rotation();
 				Err(RotationError::VaultRotationCompletionFailed)

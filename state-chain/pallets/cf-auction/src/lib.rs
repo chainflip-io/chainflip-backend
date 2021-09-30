@@ -260,7 +260,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// to be able to actual join the validating set.  If we manage to pass these tests
 			// we kill the last set of winners stored, set the bond to 0, store this set of
 			// bidders and change our state ready for an 'Auction' to be ran
-			AuctionPhase::WaitingForBids(..) => {
+			AuctionPhase::WaitingForBids => {
 				let mut bidders = T::BidderProvider::get_bidders();
 				// Rule #1 - They are not bad
 				bidders.retain(|(id, _)| !BadValidators::<T>::get().contains(id));
@@ -377,11 +377,13 @@ impl<T: Config> Auction for Pallet<T> {
 							ChainflipAccountState::Passive,
 						);
 
-						// Set phase back to the start
-						CurrentPhase::<T>::put(AuctionPhase::default());
+						let phase =
+							AuctionPhase::ConfirmedValidators(winners.clone(), minimum_active_bid);
+						// Set phase
+						CurrentPhase::<T>::put(phase.clone());
 						// Store the result
 						LastAuctionResult::<T>::put(AuctionResult {
-							winners: winners.clone(),
+							winners: winners,
 							minimum_active_bid,
 						});
 
@@ -389,17 +391,16 @@ impl<T: Config> Auction for Pallet<T> {
 							CurrentAuctionIndex::<T>::get(),
 						));
 
-						Self::deposit_event(Event::AwaitingBidders);
-
-						Ok(AuctionPhase::ConfirmedValidators(
-							winners,
-							minimum_active_bid,
-						))
+						Ok(phase)
 					}
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
 			}
-			AuctionPhase::ConfirmedValidators(..) => Ok(AuctionPhase::default()),
+			AuctionPhase::ConfirmedValidators(..) => {
+				Self::deposit_event(Event::AwaitingBidders);
+				CurrentPhase::<T>::put(AuctionPhase::default());
+				Ok(AuctionPhase::default())
+			}
 		}
 		.map_err(|e| {
 			// Abort the process on error if not waiting for confirmation
@@ -416,17 +417,17 @@ impl<T: Config> Auction for Pallet<T> {
 	}
 }
 
-pub struct VaultRotationEvents<T>(PhantomData<T>);
+pub struct VaultRotationEventHandler<T>(PhantomData<T>);
 
-impl<T: Config> VaultRotationHandler for VaultRotationEvents<T> {
+impl<T: Config> VaultRotationHandler for VaultRotationEventHandler<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn abort_rotation() {
+	fn vault_rotation_aborted() {
 		Pallet::<T>::abort();
 	}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BadValidators::<T>::set(bad_validators);
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		BadValidators::<T>::set(bad_validators.to_vec());
 	}
 }
 

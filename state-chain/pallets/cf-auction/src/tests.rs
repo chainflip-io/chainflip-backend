@@ -32,7 +32,7 @@ mod test {
 			);
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 			// Check we are in the bidders phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Now move to the next phase, this should be the BidsTaken phase
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
 				if bids == expected_bidding());
@@ -98,6 +98,7 @@ mod test {
 
 		new_test_ext().execute_with(|| {
 			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+
 			let validate_states = |nodes: Vec<ValidatorId>, state: ChainflipAccountState| {
 				for node in nodes {
 					assert_eq!(MockChainflipAccount::get(&node).state, state);
@@ -177,7 +178,7 @@ mod test {
 			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
 			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(..) => {
+				AuctionPhase::WaitingForBids => {
 					let backup_validators = current_backup_validators();
 					let passive_nodes = current_passive_nodes();
 
@@ -239,7 +240,7 @@ mod test {
 			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
 			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(..) => {
+				AuctionPhase::WaitingForBids => {
 					let backup_validators = current_backup_validators();
 
 					let (top_backup_validator_id, _) = backup_validators.first().unwrap();
@@ -266,7 +267,7 @@ mod test {
 		new_test_ext().execute_with(|| {
 			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(..) => {
+				AuctionPhase::WaitingForBids => {
 					// Place bid below lowest backup validator bid but above highest passive node bid
 					// Should see lowest backup validator bid change but the state of the backup
 					// validator would not change
@@ -294,7 +295,7 @@ mod test {
 		new_test_ext().execute_with(|| {
 			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(..) => {
+				AuctionPhase::WaitingForBids => {
 					// Place bid above highest passive node bid but below lowest backup validator bid
 					// Should see highest passive node bid change but the state of the passive node
 					// would not change
