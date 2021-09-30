@@ -90,8 +90,14 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				ConfigConfig {
-					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS").unwrap().as_bytes().to_vec(),
-					key_manager_address: env::var("KEY_MANAGER_ADDRESS").unwrap().as_bytes().to_vec(),
+					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
+						.unwrap()
+						.as_bytes()
+						.to_vec(),
+					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
+						.unwrap()
+						.as_bytes()
+						.to_vec(),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID").unwrap().as_bytes().to_vec(),
 				},
 			)
@@ -143,8 +149,14 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				ConfigConfig {
-					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS").unwrap().as_bytes().to_vec(),
-					key_manager_address: env::var("KEY_MANAGER_ADDRESS").unwrap().as_bytes().to_vec(),
+					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
+						.unwrap()
+						.as_bytes()
+						.to_vec(),
+					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
+						.unwrap()
+						.as_bytes()
+						.to_vec(),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID").unwrap().as_bytes().to_vec(),
 				},
 			)
