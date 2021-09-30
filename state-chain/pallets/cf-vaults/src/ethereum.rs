@@ -133,9 +133,7 @@ impl<T: Config> EthereumChain<T> {
 	) -> ethabi::Result<Bytes> {
 		let pubkey: Vec<u8> = new_public_key.into();
 		// strip y-parity from key (first byte)
-
-		// TODO: Why?
-		let y_parity = pubkey[0];
+		let y_parity = if pubkey[0] == 2 { 0u8 } else { 1u8 };
 		let x_pubkey: [u8; 32] = pubkey[1..]
 			.try_into()
 			.map_err(|_| ethabi::Error::InvalidData)?;
