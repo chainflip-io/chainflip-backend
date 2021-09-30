@@ -309,11 +309,11 @@ jobs:
     environment:
       SCCACHE_CACHE_SIZE: 14G
     steps:
-      - checkout
       - gh/setup
       - gh/clone:
           repo: git@github.com:chainflip-io/chainflip-eth-contracts.git
           dir: eth-contracts
+      - checkout
       - run:
           name: Install dependencies & run Hardhat network
           background: true
