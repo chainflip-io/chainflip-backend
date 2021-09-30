@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotation};
+use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
 use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
@@ -29,6 +29,8 @@ pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
+pub const BIDDER_GROUP_A: u32 = 1;
+pub const BIDDER_GROUP_B: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -37,18 +39,19 @@ thread_local! {
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
-pub fn generate_bids(number_of_bids: u32) {
+// offset the ids to create unique bidder groups
+pub fn generate_bids(number_of_bids: u32, group: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
 		for bid_number in (0..number_of_bids as u64).rev() {
-			(*cell).push((bid_number + 1, bid_number * 100));
+			(*cell).push(((bid_number + 1) * group as u64, bid_number * 100));
 		}
 	});
 }
 
-pub fn run_auction(number_of_bids: u32) {
-	generate_bids(number_of_bids);
+pub fn run_auction(number_of_bids: u32, group: u32) {
+	generate_bids(number_of_bids, group);
 
 	let _ = AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
@@ -138,7 +141,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
-	type Handler = MockVaultRotation;
+	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type Online = MockOnline;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
@@ -189,7 +192,7 @@ impl BidderProvider for TestBidderProvider {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	generate_bids(NUMBER_OF_BIDDERS);
+	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
 	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {

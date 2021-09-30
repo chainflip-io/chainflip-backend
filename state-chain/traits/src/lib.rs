@@ -73,13 +73,15 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
-	// Waiting for bids, we store the last set of winners and min bid required
+	/// Waiting for bids, we store the last set of winners and min bid required
 	WaitingForBids(Vec<ValidatorId>, Amount),
-	// Bids are now taken and validated
+	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	// via the trait `VaultRotation`
+	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
+	/// via the trait `VaultRotation`
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
+	/// The confirmed set of validators
+	ConfirmedValidators(Vec<ValidatorId>, Amount),
 }
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
@@ -90,7 +92,15 @@ impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount>
 
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
+/// A bid that has been classified as out of the validating set
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
+
+/// A successful auction result
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct AuctionResult<ValidatorId, Amount> {
+	pub winners: Vec<ValidatorId>,
+	pub minimum_active_bid: Amount,
+}
 
 /// A range of min, max for active validator set
 pub type ActiveValidatorRange = (u32, u32);
@@ -101,7 +111,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
 /// This results in a set of winners and a minimum bid after the auction.  After each successful
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
-/// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
+/// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
 pub trait Auction {
 	type ValidatorId;
@@ -110,20 +120,27 @@ pub trait Auction {
 
 	/// Range describing auction set size
 	fn active_range() -> ActiveValidatorRange;
-	/// Set the auction range
+	/// Set new auction range, returning on success the old value
 	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
+	/// Our last successful auction result
+	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>>;
 	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
-	/// Move the process forward by one step, returns the phase completed or error
+	/// Move our auction process to the next phase returning success with phase completed
+	///
+	/// At each phase we assess the bidders based on a fixed set of criteria which results
+	/// in us arriving at a winning list and a bond set for this auction
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
+	/// Abort the process and back the preliminary phase
+	fn abort();
 }
 
 pub trait VaultRotationHandler {
 	type ValidatorId;
 	/// Abort requested after failed vault rotation
-	fn abort();
+	fn abort_rotation();
 	// Penalise validators during a vault rotation
 	fn penalise(bad_validators: Vec<Self::ValidatorId>);
 }

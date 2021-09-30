@@ -389,7 +389,8 @@ impl<T: Config> Pallet<T> {
 		reserve_id: ReserveId,
 		amount: T::Balance,
 	) -> Result<Surplus<T>, DispatchError> {
-		Surplus::try_from_reserve(reserve_id, amount).ok_or_else(||Error::<T>::InsufficientReserves.into())
+		Surplus::try_from_reserve(reserve_id, amount)
+			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.

@@ -92,7 +92,7 @@ impl Chainflip for Test {
 impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
-	fn abort() {}
+	fn abort_rotation() {}
 	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
 }
 

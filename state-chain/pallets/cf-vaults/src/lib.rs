@@ -278,7 +278,7 @@ impl<T: Config> Pallet<T> {
 			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
 		));
 		VaultRotations::<T>::remove_all();
-		T::RotationHandler::abort();
+		T::RotationHandler::abort_rotation();
 	}
 
 	/// Provide the next ceremony id
