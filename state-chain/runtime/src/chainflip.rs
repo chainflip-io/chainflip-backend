@@ -99,7 +99,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 			Self::Broadcast(contract_call) => {
 				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
 				Call::EthereumBroadcaster(
-					pallet_cf_broadcast::Call::<_, _>::start_sign_and_broadcast(unsigned_tx)
+					pallet_cf_broadcast::Call::<_, _>::start_sign_and_broadcast(unsigned_tx),
 				)
 			}
 		}
@@ -129,11 +129,18 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	type TransactionHash = [u8; 32];
 
 	fn verify_transaction(
-		_signer: &<Runtime as Chainflip>::ValidatorId,
+		signer: &<Runtime as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
+		signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
-		todo!()
+		eth::verify_raw(signed_tx, signer)
+			.map_err(|e| {
+				frame_support::debug::info!(
+					"Ethereum signed transaction verification failed: {:?}.",
+					e
+				)
+			})
+			.ok()
 	}
 }
 
