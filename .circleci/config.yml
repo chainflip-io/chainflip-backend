@@ -312,7 +312,7 @@ jobs:
       - checkout
       - gh/setup
       - gh/clone:
-          repo: https://github.com/chainflip-io/chainflip-eth-contracts.git
+          repo: git@github.com:chainflip-io/chainflip-eth-contracts.git
           dir: eth-contracts
       - run:
           name: Install dependencies & run Hardhat network
