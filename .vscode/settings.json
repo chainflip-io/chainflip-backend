@@ -1,5 +1,6 @@
 {
     "search.exclude": {
         "**/target": true
-    }
+    },
+    "prettier.tabWidth": 2
 }
