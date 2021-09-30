@@ -314,7 +314,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
-      - attache_workspace:
+      - attach_workspace:
           at: ./
       - run:
           name: Install dependencies & run Hardhat network
