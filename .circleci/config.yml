@@ -167,8 +167,6 @@ workflows:
             - github-credentials
             - ghcr-credentials
             - discord-webhooks
-          requires:
-            - build-docker-image
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
