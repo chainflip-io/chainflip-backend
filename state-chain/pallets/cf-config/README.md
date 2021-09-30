@@ -1,4 +1,4 @@
-# Chainflip Config Api Pallet
+# Chainflip Config Pallet
 ## Purpose
 
 This pallet manages general global config items of the protocol. Currently, the following config elements are supported:

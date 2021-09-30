@@ -1,8 +1,8 @@
 [package]
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet providing helper extrinsics for witnessing transactions.'
+description = 'FRAME pallet which manages general global config items of the Chainflip protocol.'
 edition = '2018'
-homepage = 'https://substrate.dev'
+homepage = 'https://chainflip.io'
 license = '<TODO>'
 name = 'pallet-cf-config'
 readme = 'README.md'
@@ -20,12 +20,6 @@ codec = { default-features = false, features = ['derive'], package = 'parity-sca
 frame-system = { default-features = false, version = '3.0.0' }
 frame-support = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
-
-[dev-dependencies]
-serde = { version = "1.0.119" }
-sp-core = { default-features = false, version = '3.0.0' }
-sp-io = { default-features = false, version = '3.0.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
 
 [features]
 default = ['std']
