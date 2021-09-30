@@ -59,6 +59,10 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  rust-poetry:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+        auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
@@ -157,17 +161,13 @@ workflows:
           dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-          requires:
-            - build-docker-image
       - run-integration-tests:
           context:
+            - github-credentials
             - ghcr-credentials
             - discord-webhooks
           requires:
-            - clone-contracts-repo
+            - build-docker-image
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
@@ -306,17 +306,15 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-        auth: *dockerconfig
-      - image: nats
+    executor: rust-poetry
     environment:
-      SCCACHE_REDIS: redis://sccache.chainflip.xyz
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
-      - attach_workspace:
-          at: ./
+      - gh/setup
+      - gh/clone:
+          repo: https://github.com/chainflip-io/chainflip-eth-contracts.git
+          dir: eth-contracts
       - run:
           name: Install dependencies & run Hardhat network
           background: true
