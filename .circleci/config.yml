@@ -228,20 +228,7 @@ jobs:
     steps:
       - checkout
       - run: >
-          cargo fmt -p chainflip-engine
-          -p cf-p2p
-          -p pallet-cf-auction
-          -p pallet-cf-emissions
-          -p pallet-cf-flip
-          -p pallet-cf-rewards
-          -p pallet-cf-reputation
-          -p pallet-cf-staking
-          -p pallet-cf-validator
-          -p pallet-cf-vaults
-          -p pallet-cf-witnesser
-          -p pallet-cf-witnesser-api
-          -p cf-traits
-          -- --check
+          cargo fmt --all -- --check
 
   # Compile and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
