@@ -323,7 +323,7 @@ where
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
         slog::debug!(
             self.logger,
-            "[{}] delaying request to sign data: {:?}",
+            "[{}] delaying request to sign data: {}",
             self.my_account_id,
             data
         );
@@ -346,8 +346,10 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "[{}] Received keygen instruction",
-                    self.my_account_id
+                    "[{}] Received keygen instruction, ceremony_id: {}, participants: {:?}",
+                    self.my_account_id,
+                    keygen_info.ceremony_id,
+                    keygen_info.signers
                 );
 
                 self.keygen.on_keygen_request(keygen_info);
@@ -356,9 +358,10 @@ where
                 let key_id = sign_info.key_id.clone();
                 slog::debug!(
                     self.logger,
-                    "[{}] Received sign instruction for key_id: {:?}",
+                    "[{}] Received sign instruction for key_id: {}, signers: {:?}",
                     self.my_account_id,
-                    key_id
+                    hex::encode(&key_id.0),
+                    &sign_info.signers
                 );
                 match self.key_store.get_key(key_id.clone()) {
                     Some(key) => {
