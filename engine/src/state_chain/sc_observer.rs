@@ -121,6 +121,7 @@ pub async fn start(
                                 None => todo!(),
                             };
                             let mut signer = signer.lock().await;
+                            slog::trace!(logger, "Sending new key back to the State Chain {:?}", response);
                             match subxt_client
                                 .witness_keygen_response(
                                     &*signer,
