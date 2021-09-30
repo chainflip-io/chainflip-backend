@@ -73,24 +73,34 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
-	// Waiting for bids, we store the last set of winners and min bid required
-	WaitingForBids(Vec<ValidatorId>, Amount),
-	// Bids are now taken and validated
+	/// Waiting for bids, we store the last set of winners and min bid required
+	WaitingForBids,
+	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	// via the trait `VaultRotation`
+	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
+	/// via the trait `VaultRotation`
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
+	/// The confirmed set of validators
+	ConfirmedValidators(Vec<ValidatorId>, Amount),
 }
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
-		AuctionPhase::WaitingForBids(Vec::new(), Amount::default())
+		AuctionPhase::WaitingForBids
 	}
 }
 
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
+/// A bid that has been classified as out of the validating set
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
+
+/// A successful auction result
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct AuctionResult<ValidatorId, Amount> {
+	pub winners: Vec<ValidatorId>,
+	pub minimum_active_bid: Amount,
+}
 
 /// A range of min, max for active validator set
 pub type ActiveValidatorRange = (u32, u32);
@@ -101,7 +111,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
 /// This results in a set of winners and a minimum bid after the auction.  After each successful
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
-/// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
+/// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
 pub trait Auction {
 	type ValidatorId;
@@ -110,22 +120,30 @@ pub trait Auction {
 
 	/// Range describing auction set size
 	fn active_range() -> ActiveValidatorRange;
-	/// Set the auction range
+	/// Set new auction range, returning on success the old value
 	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
+	/// Our last successful auction result
+	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>>;
 	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
-	/// Move the process forward by one step, returns the phase completed or error
+	/// Move our auction process to the next phase returning success with phase completed
+	///
+	/// At each phase we assess the bidders based on a fixed set of criteria which results
+	/// in us arriving at a winning list and a bond set for this auction
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
+	/// Abort the process and back the preliminary phase
+	fn abort();
 }
 
+/// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
-	/// Abort requested after failed vault rotation
-	fn abort();
-	// Penalise validators during a vault rotation
-	fn penalise(bad_validators: Vec<Self::ValidatorId>);
+	/// The vault rotation has been aborted
+	fn vault_rotation_aborted();
+	/// Penalise bad validators during a vault rotation
+	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
 /// Errors occurring during a rotation
@@ -147,6 +165,8 @@ pub enum RotationError<ValidatorId> {
 	NotConfirmed,
 	/// Failed to make keygen request
 	FailedToMakeKeygenRequest,
+	/// New public key has not been set by a keygen_response
+	NewPublicKeyNotSet,
 }
 
 /// Rotating vaults
@@ -172,11 +192,12 @@ pub enum AuctionError {
 	NotConfirmed,
 }
 
-/// Providing bidders for our auction
+/// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+	/// Provide a list of bidders
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 /// Trait for rotate bond after epoch.
@@ -186,20 +207,21 @@ pub trait BondRotation {
 
 	/// Sets the validator bond for all new_validator to the new_bond and
 	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
+	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
 }
 
 /// Provide feedback on staking
-pub trait StakerHandler {
+pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
 	/// A validator has updated their stake and now has a new total amount
-	fn stake_updated(validator_id: Self::ValidatorId, new_total: Self::Amount);
+	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
+	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -337,10 +359,10 @@ pub trait ChainflipAccount {
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
 }
 
-pub struct ChainflipAccounts<T>(PhantomData<T>);
+pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
-	for ChainflipAccounts<T>
+	for ChainflipAccountStore<T>
 {
 	type AccountId = T::AccountId;
 

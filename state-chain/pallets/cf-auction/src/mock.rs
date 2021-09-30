@@ -1,11 +1,10 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotation};
-use cf_traits::ChainflipAccountData;
+use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
+use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::traits::ConvertInto;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
@@ -30,6 +29,8 @@ pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
+pub const BIDDER_GROUP_A: u32 = 1;
+pub const BIDDER_GROUP_B: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -38,13 +39,14 @@ thread_local! {
 	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
-// Create a set of descending bids
-pub fn generate_bids(number_of_bids: u32) {
+// Create a set of descending bids, including an invalid bid of amount 0
+// offset the ids to create unique bidder groups
+pub fn generate_bids(number_of_bids: u32, group: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
 		for bid_number in (1..=number_of_bids as u64).rev() {
-			(*cell).push((bid_number, bid_number * 100));
+			(*cell).push((bid_number * group, bid_number * 100));
 		}
 	});
 }
@@ -54,14 +56,17 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 		*cell.borrow_mut() = bidders;
 	});
 }
+pub fn run_auction(number_of_bids: u32, group: u32) {
+	generate_bids(number_of_bids, group);
 
-pub fn run_auction() {
-	let _ = AuctionPallet::process()
+	AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process()
+			AuctionPallet::process().and(AuctionPallet::process())
 		}))
 		.unwrap();
+
+	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 }
 
 pub fn last_event() -> mock::Event {
@@ -156,11 +161,10 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
-	type Handler = MockVaultRotation;
+	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
-	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
@@ -204,23 +208,21 @@ impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	generate_bids(NUMBER_OF_BIDDERS);
+	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
+	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: MockBidderProvider::get_bidders()
-				.iter()
-				.map(|(validator_id, _)| validator_id.clone())
-				.collect(),
-			minimum_active_bid: (NUMBER_OF_BIDDERS as u64 - 1) * 100,
+			winners,
+			minimum_active_bid,
 		}),
 	};
 

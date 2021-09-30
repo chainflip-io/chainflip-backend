@@ -11,6 +11,9 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod genesis;
+
 pub use client_inner::{InnerEvent, MultisigClientInner};
 
 pub use client_inner::{KeygenOutcome, SchnorrSignature, SigningOutcome};

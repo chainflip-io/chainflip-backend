@@ -75,7 +75,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			withdrawal_address: Option<EthereumAddress>,
+			withdrawal_address: EthereumAddress,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -98,7 +98,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness that a key generation response from 2/3 of our old validators
+		/// Witness a key generation response from 2/3 of our old validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
@@ -112,7 +112,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness that a vault rotation response from 2/3 of our old validators
+		/// Witness a vault rotation response from 2/3 of our old validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]

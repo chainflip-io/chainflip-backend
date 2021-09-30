@@ -23,7 +23,7 @@ type ValidatorId = u64;
 thread_local! {
 	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0]);
+	pub static GENESIS_ETHEREUM_AGG_PUB_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0;33]);
 }
 
 construct_runtime!(
@@ -97,10 +97,10 @@ impl Chainflip for MockRuntime {
 
 impl VaultRotationHandler for MockRuntime {
 	type ValidatorId = u64;
-	fn abort() {}
+	fn vault_rotation_aborted() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators.to_vec());
 	}
 }
 
@@ -129,7 +129,7 @@ pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 
 pub fn ethereum_public_key() -> Vec<u8> {
-	GENESIS_ETHEREUM_PUBLIC_KEY.with(|l| l.borrow().to_vec())
+	GENESIS_ETHEREUM_AGG_PUB_KEY.with(|l| l.borrow().to_vec())
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

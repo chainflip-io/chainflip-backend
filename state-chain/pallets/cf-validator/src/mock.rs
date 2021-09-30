@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{BidderProvider, ChainflipAccountData, Online};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, Online};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -135,12 +135,11 @@ impl pallet_cf_auction::Config for Test {
 	type MinValidators = MinValidators;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
-	type AccountIdOf = ConvertInto;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
 	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
-	type BackupValidatorRatio = BackupValidatorRatio;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockOnline;
@@ -164,7 +163,7 @@ impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		let idx = CANDIDATE_IDX.with(|idx| {
 			let new_idx = *idx.borrow_mut() + 1;
 			*idx.borrow_mut() = new_idx;
@@ -180,9 +179,9 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
-		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
-		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
+	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
+		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}
 }
 

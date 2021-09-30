@@ -82,8 +82,8 @@ pub enum ChainParams {
 /// State of a vault rotation
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotation<ValidatorId, PublicKey> {
-	/// Proposed new public key
-	pub new_public_key: PublicKey,
+	/// Proposed new public key. Is None before keygen_response is returned
+	pub new_public_key: Option<PublicKey>,
 	pub keygen_request: KeygenRequest<ValidatorId>,
 }
 
