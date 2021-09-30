@@ -65,7 +65,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
     should_delay!(SigningData::BroadcastVerificationStage2);
 
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
-        // No verfication is necessary here, just generating new stage
+        // No verification is necessary here, just generating new stage
 
         let processor = VerifyCommitmentsBroadcast2 {
             common: self.common.clone(),

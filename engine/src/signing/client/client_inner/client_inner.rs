@@ -221,6 +221,8 @@ where
     pub fn cleanup(&mut self) {
         self.keygen.cleanup();
         self.signing_manager.cleanup();
+
+        // TODO: cleanup stale signing_info in pending_requests_to_sign
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)

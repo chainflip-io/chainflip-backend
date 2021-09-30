@@ -315,7 +315,7 @@ impl SigningState {
 
                     slog::warn!(
                         self.logger,
-                        "Signing ceremony expired before, blaming parties: {:?}",
+                        "Signing ceremony expired, blaming parties: {:?}",
                         blamed_ids,
                     );
 

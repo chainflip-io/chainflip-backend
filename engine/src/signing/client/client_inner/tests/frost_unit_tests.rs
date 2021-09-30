@@ -413,7 +413,7 @@ async fn should_report_on_timeout_stage4() {
 }
 
 #[tokio::test]
-async fn should_ignore_duplicate_sign_request() {
+async fn should_ignore_duplicate_rts() {
     use crate::signing::client::MultisigInstruction;
     use crate::signing::SigningInfo;
 
@@ -427,14 +427,41 @@ async fn should_ignore_duplicate_sign_request() {
     assert_stage2!(c1);
 
     // Send another request to sign with the same ceremony_id and key_id
-    let sign_info = SigningInfo::new(
-        SIGN_CEREMONY_ID,
-        ctx.key_id(),
-        MESSAGE_HASH.clone(),
-        SIGNER_IDS.clone(),
-    );
-    c1.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
+    c1.send_request_to_sign_default(ctx.key_id());
 
     // The request should of been rejected and the existing ceremony is unchanged
     assert_stage2!(c1);
+}
+
+#[tokio::test]
+async fn should_delay_rts_until_key_is_ready() {
+    use crate::signing::client::MultisigInstruction;
+    use crate::signing::SigningInfo;
+
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
+
+    assert_no_stage!(c1);
+
+    // send the request to sign
+    c1.send_request_to_sign_default(ctx.key_id());
+
+    // The request should of been delayed, so the stage is unaffected
+    assert_no_stage!(c1);
+
+    // complete the keygen by sending the sec2 from each other client to client 0
+    for sender_idx in 1..=3 {
+        let s_id = keygen_states.keygen_phase2.clients[sender_idx].get_my_account_id();
+        let sec2 = keygen_states.keygen_phase2.sec2_vec[sender_idx]
+            .get(&c1.get_my_account_id())
+            .unwrap();
+
+        let m = helpers::keygen_data_to_p2p(sec2.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        c1.process_p2p_message(m);
+    }
+
+    // Now that the keygen completed, the rts should have started
+    assert_stage1!(c1);
 }
