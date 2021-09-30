@@ -2,8 +2,8 @@
 use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser};
 use cf_traits::{BondRotation, EmissionsTrigger, StakeHandler, VaultRotationHandler};
 use frame_support::debug;
-use pallet_cf_validator::EpochTransitionHandler;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
+use pallet_cf_validator::EpochTransitionHandler;
 
 pub struct ChainflipEpochTransitions;
 
