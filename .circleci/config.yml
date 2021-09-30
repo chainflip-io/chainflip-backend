@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - test/ci-with-machine
+        - bug/ch1978-fix-integration-tests
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -148,7 +148,7 @@ workflows:
           <<: *only_epic_branches
 
   chainflip-integration-tests:
-    <<: *nightly
+    #    <<: *nightly
     jobs:
       - build-docker-image:
           image: chainflip-io/chainflip-backend/rust-poetry
