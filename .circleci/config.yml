@@ -115,6 +115,12 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
+      - cargo-clippy-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
 
   chainflip-backend-release:
     jobs:
@@ -279,6 +285,12 @@ jobs:
       - run: |
           cargo test --lib --locked --release
           sccache --show-stats
+  cargo-clippy-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: |
+          cargo clippy
 
   clone-contracts-repo:
     resource_class: small
