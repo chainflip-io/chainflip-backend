@@ -358,9 +358,10 @@ where
                 let key_id = sign_info.key_id.clone();
                 slog::debug!(
                     self.logger,
-                    "[{}] Received sign instruction for key_id: {}, signers: {:?}",
+                    "[{}] Received sign instruction for key_id: {}, message_hash: {}, signers: {:?}",
                     self.my_account_id,
                     hex::encode(&key_id.0),
+                    hash,
                     &sign_info.signers
                 );
                 match self.key_store.get_key(key_id.clone()) {

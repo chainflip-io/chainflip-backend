@@ -167,7 +167,7 @@ impl<T: Config> EthereumChain<T> {
 			Token::Tuple(vec![
 				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),
-				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
+				Token::Uint(7.into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
 			Token::Tuple(vec![
