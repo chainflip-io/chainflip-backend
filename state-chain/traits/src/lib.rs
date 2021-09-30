@@ -165,6 +165,8 @@ pub enum RotationError<ValidatorId> {
 	NotConfirmed,
 	/// Failed to make keygen request
 	FailedToMakeKeygenRequest,
+	/// New public key has not been set by a keygen_response
+	NewPublicKeyNotSet,
 }
 
 /// Rotating vaults

@@ -1,5 +1,5 @@
-use structopt::StructOpt;
 use sc_cli::RunCmd;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {
@@ -14,7 +14,7 @@ pub struct Cli {
 pub enum Subcommand {
 	/// Key management cli utilities
 	Key(sc_cli::KeySubcommand),
-	
+
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
 

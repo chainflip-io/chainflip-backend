@@ -66,6 +66,8 @@ use sp_runtime::{
 	DispatchError,
 };
 
+const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -268,7 +270,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
-			withdrawal_address: Option<EthereumAddress>,
+			withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
@@ -512,27 +514,30 @@ impl<T: Config> Pallet<T> {
 	/// Checks the withdrawal address requirements and saves the address if provided
 	fn check_withdrawal_address(
 		account_id: &T::AccountId,
-		withdrawal_address: Option<EthereumAddress>,
+		withdrawal_address: EthereumAddress,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
 		if frame_system::Pallet::<T>::account_exists(account_id) {
 			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
-			match (withdrawal_address, existing_withdrawal_address) {
+			match existing_withdrawal_address {
 				// User account exists and both addresses hold a value - the value of both addresses is different
-				(Some(provided), Some(existing)) if provided != existing => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				// and not null
+				Some(existing)
+					if withdrawal_address != existing && withdrawal_address != ETH_ZERO_ADDRESS =>
+				{
+					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?
 				}
 				// Only the provided address exists:
 				// We only want to add a new withdrawal address if this is the first staking attempt, ie. the account doesn't exist.
-				(Some(provided), None) => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				None if withdrawal_address != ETH_ZERO_ADDRESS => {
+					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?
 				}
 				_ => (),
 			}
 		}
-		//Save the withdrawal address if provided
-		if let Some(provided) = withdrawal_address {
-			WithdrawalAddresses::<T>::insert(account_id, provided);
+		// Save the withdrawal address if provided
+		if withdrawal_address != ETH_ZERO_ADDRESS {
+			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 		}
 		Ok(())
 	}
