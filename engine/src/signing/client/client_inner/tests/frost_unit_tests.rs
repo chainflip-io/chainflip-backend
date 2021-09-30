@@ -414,9 +414,6 @@ async fn should_report_on_timeout_stage4() {
 
 #[tokio::test]
 async fn should_ignore_duplicate_rts() {
-    use crate::signing::client::MultisigInstruction;
-    use crate::signing::SigningInfo;
-
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
 
@@ -429,15 +426,12 @@ async fn should_ignore_duplicate_rts() {
     // Send another request to sign with the same ceremony_id and key_id
     c1.send_request_to_sign_default(ctx.key_id());
 
-    // The request should of been rejected and the existing ceremony is unchanged
+    // The request should have been rejected and the existing ceremony is unchanged
     assert_stage2!(c1);
 }
 
 #[tokio::test]
 async fn should_delay_rts_until_key_is_ready() {
-    use crate::signing::client::MultisigInstruction;
-    use crate::signing::SigningInfo;
-
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -448,7 +442,7 @@ async fn should_delay_rts_until_key_is_ready() {
     // send the request to sign
     c1.send_request_to_sign_default(ctx.key_id());
 
-    // The request should of been delayed, so the stage is unaffected
+    // The request should have been delayed, so the stage is unaffected
     assert_no_stage!(c1);
 
     // complete the keygen by sending the sec2 from each other client to client 0
@@ -464,4 +458,24 @@ async fn should_delay_rts_until_key_is_ready() {
 
     // Now that the keygen completed, the rts should have started
     assert_stage1!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_signing_non_participant() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase2.clients[0].clone();
+
+    assert_stage2!(c1);
+
+    // Make use that the non_participant_id is not a signer
+    let non_participant_id = VALIDATOR_IDS[3].clone();
+    assert!(SIGNER_IDS
+        .iter()
+        .find(|v_id| *v_id == &non_participant_id)
+        .is_none());
+
+    // how are we going to detect that the data was ignored?
 }
