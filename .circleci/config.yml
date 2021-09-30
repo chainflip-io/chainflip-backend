@@ -162,9 +162,13 @@ workflows:
   chainflip-integration-tests:
     #    <<: *nightly
     jobs:
-      - run-integration-tests:
+      - clone-contracts-repo:
           context:
             - github-credentials
+      - run-integration-tests:
+          requires:
+            - clone-contracts-repo
+          context:
             - ghcr-credentials
             - discord-webhooks
 ######################## /Workflows ########################
@@ -309,11 +313,9 @@ jobs:
     environment:
       SCCACHE_CACHE_SIZE: 14G
     steps:
-      - gh/setup
-      - gh/clone:
-          repo: git@github.com:chainflip-io/chainflip-eth-contracts.git
-          dir: eth-contracts
       - checkout
+      - attache_workspace:
+          at: ./
       - run:
           name: Install dependencies & run Hardhat network
           background: true
