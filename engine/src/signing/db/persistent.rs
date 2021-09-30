@@ -49,8 +49,8 @@ impl KeyDB for PersistentKeyDB {
         tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
         // commit the tx to the database
         self.db.write(tx).expect(&format!(
-            "Could not write key share for key_id `{:?}` to database",
-            key_id
+            "Could not write key share for key_id `{}` to database",
+            hex::encode(&key_id.0)
         ));
     }
 

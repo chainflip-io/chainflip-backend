@@ -98,7 +98,7 @@ impl SigningStateManager {
         slog::debug!(
             self.logger,
             "receiving signing data for message: {}",
-            String::from_utf8_lossy(&message.hash.0)
+            hex::encode(&message.hash.0)
         );
 
         match self.signing_states.get_mut(&message) {
@@ -110,7 +110,7 @@ impl SigningStateManager {
                     SigningData::Broadcast1(bc1) => self.add_delayed(message, (sender_id, bc1)),
                     other => slog::warn!(
                         self.logger,
-                        "Unexpected {} for message: {:?}",
+                        "Unexpected {} for message: {}",
                         other,
                         message.hash
                     ),
@@ -142,7 +142,7 @@ impl SigningStateManager {
         slog::debug!(
             self.logger,
             "initiating signing for message: {}",
-            String::from_utf8_lossy(&data.0)
+            hex::encode(&data.0)
         );
 
         if !sign_info.signers.contains(&self.id) {
@@ -192,7 +192,7 @@ impl SigningStateManager {
                 // We have the key and have received a request to sign
                 slog::trace!(
                     self.logger,
-                    "Creating new signing state for message: {:?}",
+                    "Creating new signing state for message: {}",
                     mi.hash
                 );
                 let p2p_sender = self.p2p_sender.clone();

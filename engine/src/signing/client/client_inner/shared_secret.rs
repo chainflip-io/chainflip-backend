@@ -103,6 +103,13 @@ impl SharedSecretState {
         self.blind_vec.push(bc1.blind);
         self.y_vec.push(bc1.y_i);
 
+        slog::trace!(
+            self.logger,
+            "BC1 messages collected: {}/{}",
+            self.bc1_vec.len(),
+            self.params.share_count
+        );
+
         let full = self.bc1_vec.len() == self.params.share_count;
 
         if full {
@@ -178,6 +185,13 @@ impl SharedSecretState {
         self.ss_vec.push(secret_share);
 
         let full = self.vss_vec.len() == self.params.share_count;
+
+        slog::trace!(
+            self.logger,
+            "Sec2 messages collected: {}/{}",
+            self.vss_vec.len(),
+            self.params.share_count
+        );
 
         if full {
             utils::reorg_vector(&mut self.vss_vec, &self.phase2_order);

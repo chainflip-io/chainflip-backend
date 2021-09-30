@@ -81,7 +81,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "KeygenState")),
+            logger: logger.new(o!("ceremony_id" => ceremony_id)),
         };
 
         state.initiate_keygen_inner();
@@ -205,12 +205,7 @@ impl KeygenState {
     }
 
     fn initiate_keygen_inner(&mut self) {
-        slog::trace!(
-            self.logger,
-            "[{}] Initiating keygen for key {:?}",
-            self.us(),
-            self.ceremony_id
-        );
+        slog::trace!(self.logger, "Initiating keygen ");
 
         let bc1 = self.sss.init_phase1();
 
@@ -249,8 +244,7 @@ impl KeygenState {
 
                 slog::error!(
                     self.logger,
-                    "Phase 2 keygen error for key: {:?}, blamed validators: {:?}",
-                    self.ceremony_id,
+                    "Phase 2 keygen error, blamed validators: {:?}",
                     // TODO: this should log the base58 ids
                     &blamed_ids
                 );
@@ -267,11 +261,7 @@ impl KeygenState {
         match self.sss.finalize_phase2() {
             // keygen
             Ok(key) => {
-                slog::info!(
-                    self.logger,
-                    "[{}] SIGNING SHARED KEY IS READY 👍",
-                    self.us()
-                );
+                slog::info!(self.logger, "SIGNING SHARED KEY IS READY: {:?} 👍", key);
 
                 self.stage = KeygenStage::KeyReady;
 
@@ -284,11 +274,7 @@ impl KeygenState {
                 return Some(key_info);
             }
             Err(InvalidSS(blamed_idxs)) => {
-                slog::error!(
-                    self.logger,
-                    "Invalid Phase2 keygen data, abandoning state for key: {:?}",
-                    self.ceremony_id
-                );
+                slog::error!(self.logger, "Invalid Phase2 keygen data, abandoning state");
                 self.stage = KeygenStage::Abandoned;
 
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
