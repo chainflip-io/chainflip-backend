@@ -3,12 +3,13 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use std::env;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, ConfigConfig, VaultsConfig, DAYS, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, ConfigConfig, EmissionsConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS,
+	WASM_BINARY,
 };
+use std::env;
 
 const TOTAL_ISSUANCE: FlipBalance = {
 	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
