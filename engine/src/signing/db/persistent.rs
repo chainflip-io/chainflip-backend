@@ -99,16 +99,16 @@ mod tests {
         assert_ok!(bincode::deserialize::<KeygenResultInfo>(
             bashful_secret_bin.as_ref()
         ));
-        let settings = new_test_settings().unwrap();
         let logger = create_test_logger();
         let key: [u8; 33] = [
             3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132,
             93, 195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
         ];
         let key_id = KeyId(key.into());
+        let db_path = Path::new("db1");
         {
             // Insert the key into the database
-            let p_db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &logger);
+            let p_db = PersistentKeyDB::new(&db_path, &logger);
             let db = p_db.db;
 
             // Add the keyshare to the database
@@ -117,31 +117,36 @@ mod tests {
             db.write(tx).unwrap();
         }
 
-        let p_db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &logger);
+        let p_db = PersistentKeyDB::new(&db_path, &logger);
         let keys = p_db.load_keys();
         keys.get(&key_id).expect("Should have an entry for key");
+        // clean up
+        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
     fn can_update_key() {
-        let settings = new_test_settings().unwrap();
-
         let logger = create_test_logger();
         let key_id = KeyId(vec![0; 33]);
-        let mut p_db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &logger);
+        let db_path = Path::new("db2");
+        {
+            let mut p_db = PersistentKeyDB::new(&db_path, &logger);
 
-        let keys_before = p_db.load_keys();
-        // there should be no key [0; 33] yet
-        assert!(keys_before.get(&key_id).is_none());
+            let keys_before = p_db.load_keys();
+            // there should be no key [0; 33] yet
+            assert!(keys_before.get(&key_id).is_none());
 
-        let keygen_result_info = hex::decode(KEYGEN_RESULT_INFO_HEX)
-            .expect("Should decode hex to valid KeygenResultInfo binary");
-        let keygen_result_info = bincode::deserialize::<KeygenResultInfo>(&keygen_result_info)
-            .expect("Should deserialize binary into KeygenResultInfo");
-        p_db.update_key(&key_id, &keygen_result_info);
+            let keygen_result_info = hex::decode(KEYGEN_RESULT_INFO_HEX)
+                .expect("Should decode hex to valid KeygenResultInfo binary");
+            let keygen_result_info = bincode::deserialize::<KeygenResultInfo>(&keygen_result_info)
+                .expect("Should deserialize binary into KeygenResultInfo");
+            p_db.update_key(&key_id, &keygen_result_info);
 
-        let keys_before = p_db.load_keys();
-        // there should be no key [0; 33] yet
-        assert!(keys_before.get(&key_id).is_some());
+            let keys_before = p_db.load_keys();
+            // there should be no key [0; 33] yet
+            assert!(keys_before.get(&key_id).is_some());
+        }
+        // clean up
+        std::fs::remove_dir_all(db_path).unwrap();
     }
 }
