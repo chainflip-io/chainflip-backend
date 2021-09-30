@@ -47,17 +47,33 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	}
 }
 
+/// A very basic but working implementation of signer nomination. 
+///
+/// For a single signer, takes the first online validator in the validator lookup map. 
+/// 
+/// For multiple signers, takes the first N online validators where N is signing consensus threshold. 
 pub struct BasicSignerNomination;
 
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
 	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		todo!()
+		pallet_cf_validator::ValidatorLookup::iter()
+			.skip_while(|(v, _)| {
+				!<Reputation as cf_traits::Online>::is_online(validator_id)
+			})
+			.first()
+			.expect("Can only panic if all validators are offline.")
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
-		todo!()
+		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
+		pallet_cf_validator::ValidatorLookup::iter()
+			.filter(|| {
+				<Reputation as cf_traits::Online>::is_online(validator_id)
+			})
+			.take(threshold)
+			.collect()
 	}
 }
 
