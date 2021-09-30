@@ -1,9 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // This can be removed after rustc version 1.53.
-#![feature(int_bits_const)]
-
-//! Transaction Broadcast Pallet
-//! https://swimlanes.io/u/1s-nyDuYQ
+#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod mock;
