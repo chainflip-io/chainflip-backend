@@ -5,7 +5,6 @@ use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::traits::ConvertInto;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
@@ -141,7 +140,6 @@ impl Config for Test {
 	type MinValidators = MinValidators;
 	type Handler = MockVaultRotation;
 	type ChainflipAccount = MockChainflipAccount;
-	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
@@ -193,15 +191,13 @@ impl BidderProvider for TestBidderProvider {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	generate_bids(NUMBER_OF_BIDDERS);
 
+	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: TestBidderProvider::get_bidders()
-				.iter()
-				.map(|(validator_id, _)| validator_id.clone())
-				.collect(),
-			minimum_active_bid: (NUMBER_OF_BIDDERS as u64 - 1) * 100,
+			winners,
+			minimum_active_bid,
 		}),
 	};
 

@@ -135,7 +135,6 @@ impl pallet_cf_auction::Config for Test {
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
@@ -177,9 +176,9 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
-		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
-		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
+	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = _new_validators.clone());
+		MIN_BID.with(|l| *l.borrow_mut() = _new_bond);
 	}
 }
 

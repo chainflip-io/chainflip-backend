@@ -8,7 +8,7 @@ mod test {
 	fn we_have_a_set_of_winners_at_genesis() {
 		new_test_ext().execute_with(|| {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(winners, min_bid)
-				if winners.len() == NUMBER_OF_BIDDERS as usize && min_bid > 0
+				if winners.len() == MAX_VALIDATOR_SIZE as usize && min_bid > 0
 			);
 		});
 	}

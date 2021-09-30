@@ -186,7 +186,7 @@ pub trait BondRotation {
 
 	/// Sets the validator bond for all new_validator to the new_bond and
 	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
+	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
 }
 
 /// Provide feedback on staking

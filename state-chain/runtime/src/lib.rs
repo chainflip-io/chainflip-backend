@@ -28,7 +28,6 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
-use sp_runtime::traits::ConvertInto;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -153,7 +152,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
 	type Online = Reputation;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type AccountIdOf = ConvertInto;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
