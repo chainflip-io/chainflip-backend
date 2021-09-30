@@ -44,7 +44,7 @@ impl KeyDB for PersistentKeyDB {
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
             .iter(0)
-            .filter_map(|(key_id, key)| {
+            .filter_map(|(key_id, key_info)| {
                 let key_id: Vec<u8> = match key_id.try_into() {
                     Ok(key_id) => Some(key_id),
                     Err(err) => {
@@ -54,18 +54,19 @@ impl KeyDB for PersistentKeyDB {
                 }?;
 
                 let key_id: KeyId = KeyId(key_id);
-
-                let key_info = bincode::deserialize(key.as_ref()).unwrap_or_else(|err| {
-                    slog::error!(
-                        self.logger,
-                        "Could not deserialize key (key_id: {:?}) from DB: {}",
-                        key_id,
-                        err
-                    );
-                    None
-                })?;
-
-                Some((key_id, key_info))
+                let key_info_bytes: Vec<u8> = key_info.try_into().unwrap();
+                match bincode::deserialize::<KeygenResultInfo>(key_info_bytes.as_ref()) {
+                    Ok(keygen_info) => return Some((key_id, keygen_info)),
+                    Err(err) => {
+                        slog::error!(
+                            self.logger,
+                            "Could not deserialize key_info (key_id: {:?}) from DB: {}",
+                            key_id,
+                            err
+                        );
+                        return None;
+                    }
+                }
             })
             .collect()
     }
