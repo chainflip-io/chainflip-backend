@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer, StakerHandler};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -65,6 +65,8 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
+
+const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -148,9 +150,6 @@ pub mod pallet {
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
-
-		/// Providing updates on staking activity
-		type StakerHandler: StakerHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -271,7 +270,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
-			withdrawal_address: Option<EthereumAddress>,
+			withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
@@ -412,7 +411,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Insert the signature and notify the CFE.
-			claim_details.signature = Some(signature.clone());
+			claim_details.signature = Some(signature);
 
 			PendingClaims::<T>::insert(&account_id, claim_details.clone());
 
@@ -509,33 +508,36 @@ impl<T: Config> Pallet<T> {
 			withdrawal_address,
 			amount,
 		));
-		Err(Error::<T>::WithdrawalAddressRestricted)?
+		Err(Error::<T>::WithdrawalAddressRestricted)
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
 	fn check_withdrawal_address(
 		account_id: &T::AccountId,
-		withdrawal_address: Option<EthereumAddress>,
+		withdrawal_address: EthereumAddress,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
 		if frame_system::Pallet::<T>::account_exists(account_id) {
 			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
-			match (withdrawal_address, existing_withdrawal_address) {
+			match existing_withdrawal_address {
 				// User account exists and both addresses hold a value - the value of both addresses is different
-				(Some(provided), Some(existing)) if provided != existing => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				// and not null
+				Some(existing)
+					if withdrawal_address != existing && withdrawal_address != ETH_ZERO_ADDRESS =>
+				{
+					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?
 				}
 				// Only the provided address exists:
 				// We only want to add a new withdrawal address if this is the first staking attempt, ie. the account doesn't exist.
-				(Some(provided), None) => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				None if withdrawal_address != ETH_ZERO_ADDRESS => {
+					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?
 				}
 				_ => (),
 			}
 		}
-		//Save the withdrawal address if provided
-		if let Some(provided) = withdrawal_address {
-			WithdrawalAddresses::<T>::insert(account_id, provided);
+		// Save the withdrawal address if provided
+		if withdrawal_address != ETH_ZERO_ADDRESS {
+			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 		}
 		Ok(())
 	}
@@ -556,8 +558,6 @@ impl<T: Config> Pallet<T> {
 
 		// Staking implicitly activates the account. Ignore the error.
 		let _ = AccountRetired::<T>::mutate(account_id, |retired| *retired = false);
-
-		Self::notify_on_stake_changed(account_id);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -591,8 +591,6 @@ impl<T: Config> Pallet<T> {
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
-
-		Self::notify_on_stake_changed(account_id);
 
 		// Try to generate a nonce
 		let nonce = Self::generate_nonce();
@@ -644,13 +642,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if *retired {
-						Err(Error::AlreadyRetired)?;
+						return Err(Error::AlreadyRetired);
 					}
 					*retired = true;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -682,7 +680,7 @@ impl<T: Config> Pallet<T> {
 			StateMutability::NonPayable,
 		);
 
-		register_claim.encode_input(&vec![
+		register_claim.encode_input(&[
 			// sigData: SigData(uint, uint, uint)
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
@@ -710,13 +708,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if !*retired {
-						Err(Error::AlreadyActive)?;
+						return Err(Error::AlreadyActive);
 					}
 					*retired = false;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -791,17 +789,13 @@ impl<T: Config> Pallet<T> {
 
 		weight
 	}
-
-	fn notify_on_stake_changed(account_id: &T::AccountId) {
-		T::StakerHandler::stake_updated(account_id.clone(), T::Flip::stakeable_balance(account_id));
-	}
 }
 
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

@@ -139,7 +139,7 @@ impl<T: Config> Pallet<T> {
 	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
 	/// 4. Resets the apportioned rewards counter to zero.
 	/// 5. Updates the list of beneficiaries.
-	pub fn rollover(new_beneficiaries: &Vec<T::AccountId>) -> Result<(), DispatchError> {
+	pub fn rollover(new_beneficiaries: &[T::AccountId]) -> Result<(), DispatchError> {
 		// Sanity check in case we screwed up with the accounting.
 		ensure!(
 			Self::sufficient_reserves(),

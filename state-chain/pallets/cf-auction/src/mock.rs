@@ -1,11 +1,10 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotation};
+use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
 use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::traits::ConvertInto;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
@@ -30,33 +29,43 @@ pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
+pub const BIDDER_GROUP_A: u32 = 1;
+pub const BIDDER_GROUP_B: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
+	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
-pub fn generate_bids(number_of_bids: u32) {
+// offset the ids to create unique bidder groups
+pub fn generate_bids(number_of_bids: u32, group: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
-		for bid_number in (0..number_of_bids as u64).rev() {
-			(*cell).push((bid_number + 1, bid_number * 100));
+		for bid_number in (1..=number_of_bids as u64).rev() {
+			(*cell).push((bid_number * group as u64, bid_number * 100));
 		}
 	});
 }
 
-pub fn run_auction(number_of_bids: u32) {
-	generate_bids(number_of_bids);
+pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
+	BIDDER_SET.with(|cell| {
+		*cell.borrow_mut() = bidders;
+	});
+}
 
-	let _ = AuctionPallet::process()
+pub fn run_auction() {
+	AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process()
+			AuctionPallet::process().and(AuctionPallet::process())
 		}))
 		.unwrap();
+
+	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 }
 
 pub fn last_event() -> mock::Event {
@@ -66,16 +75,9 @@ pub fn last_event() -> mock::Event {
 		.event
 }
 
-// The last is invalid as it has a bid of 0
-pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
-	let mut bidders = TestBidderProvider::get_bidders();
-	bidders.pop();
-	bidders
-}
-
 // The set we would expect
 pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
-	let mut bidders = TestBidderProvider::get_bidders();
+	let mut bidders = MockBidderProvider::get_bidders();
 	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
 	(
 		bidders
@@ -129,22 +131,38 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+}
+
+pub struct MockEmergencyRotation;
+
+impl EmergencyRotation for MockEmergencyRotation {
+	fn request_emergency_rotation() {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow())
+	}
+
+	fn emergency_rotation_completed() {}
 }
 
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type BidderProvider = TestBidderProvider;
+	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
-	type Handler = MockVaultRotation;
+	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
-	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
+	type EmergencyRotation = MockEmergencyRotation;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 pub struct MockChainflipAccount;
@@ -179,29 +197,27 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct TestBidderProvider;
+pub struct MockBidderProvider;
 
-impl BidderProvider for TestBidderProvider {
+impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	generate_bids(NUMBER_OF_BIDDERS);
+	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
+	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: TestBidderProvider::get_bidders()
-				.iter()
-				.map(|(validator_id, _)| validator_id.clone())
-				.collect(),
-			minimum_active_bid: (NUMBER_OF_BIDDERS as u64 - 1) * 100,
+			winners,
+			minimum_active_bid,
 		}),
 	};
 

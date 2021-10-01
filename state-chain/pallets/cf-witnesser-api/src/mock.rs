@@ -3,9 +3,9 @@ use std::time::Duration;
 use crate as pallet_cf_witness_api;
 
 use cf_traits::{
-	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer, impl_mock_staker_handler,
+	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
 	impl_mock_witnesser_for_account_and_call_types, Chainflip, Nonce, NonceIdentifier,
-	NonceProvider, StakerHandler, VaultRotationHandler,
+	NonceProvider, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -68,7 +68,6 @@ impl system::Config for Test {
 }
 
 impl_mock_stake_transfer!(u64, u128);
-impl_mock_staker_handler!(u64, u128);
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
@@ -80,7 +79,6 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
-	type StakerHandler = MockStakerHandler;
 }
 
 type Amount = u64;
@@ -94,8 +92,8 @@ impl Chainflip for Test {
 impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
-	fn abort() {}
-	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
+	fn vault_rotation_aborted() {}
+	fn penalise(_bad_validators: &[Self::ValidatorId]) {}
 }
 
 impl NonceProvider for Test {

@@ -1,4 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use super::{
 	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
 	Witnesser,
@@ -20,19 +21,42 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, new_bond: Self::Amount) {
+	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
-		Rewards::rollover(new_validators).unwrap_or_else(|err| {
+		Rewards::rollover(_new_validators).unwrap_or_else(|err| {
 			debug::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
-		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
+		<Flip as BondRotation>::update_validator_bonds(_new_validators, _new_bond);
 		// Update the list of validators in reputation
-		<Online as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
+		<Online as EpochTransitionHandler>::on_new_epoch(_new_validators, new_bond);
 		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(_new_validators, _new_bond)
+	}
+}
+
+pub struct ChainflipStakeHandler;
+impl StakeHandler for ChainflipStakeHandler {
+	type ValidatorId = AccountId;
+	type Amount = FlipBalance;
+
+	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
+		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
+	}
+}
+
+pub struct ChainflipVaultRotationHandler;
+impl VaultRotationHandler for ChainflipVaultRotationHandler {
+	type ValidatorId = AccountId;
+
+	fn vault_rotation_aborted() {
+		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
+	}
+
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		VaultRotationEventHandler::<Runtime>::penalise(bad_validators);
 	}
 }
 
@@ -40,7 +64,7 @@ trait RewardDistibrution {
 	type EpochInfo: EpochInfo;
 	type StakeTransfer: StakeTransfer;
 	type ValidatorId;
-	
+
 	fn distribute_rewards(backup_validators: Vec<&Self::ValidatorId>) -> Weight;
 }
 

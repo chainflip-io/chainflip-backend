@@ -1,45 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extended_key_value_attributes)]
 
-//! # Chainflip Validator Module
-//!
-//! A module to manage the validator set for the Chainflip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//!
-//! The module contains functionality to manage the validator set used to ensure the Chainflip
-//! State Chain network.  It extends on the functionality offered by the `session` pallet provided by
-//! Parity.  At every epoch block length, or if forced, the `Auction` pallet proposes a set of new
-//! validators.  The process of auction runs over 2 blocks to achieve a finalised candidate set and
-//! anytime after this, based on confirmation of the auction(see `AuctionConfirmation`) the new set
-//! will become the validating set.
-//!
-//! ## Terminology
-//!
-//! - **Validator:** A node that has staked an amount of `FLIP` ERC20 token.
-//!
-//! - **Validator ID:** Equivalent to an Account ID
-//!
-//! - **Epoch:** A period in blocks in which a constant set of validators ensure the network.
-//!
-//! - **Auction** A non defined period of blocks in which we continue with the existing validators
-//!   and assess the new candidate set of their validity as validators.  This functionality is provided
-//!   by the `Auction` pallet.  We rotate the set of validators on each `AuctionPhase::Completed` phase
-//!   completed by the `Auction` pallet.
-//!
-//! - **Session:** A session as defined by the `session` pallet.
-//!
-//! - **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
-//!
-//! ### Dispatchable Functions
-//!
-//! - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
-//! - `force_rotation` - Force a rotation of validators to start on the next block.
-//!
-
+#[doc = include_str!("../README.md")]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -75,12 +37,7 @@ pub trait EpochTransitionHandler {
 	/// A new epoch has started
 	///
 	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
-}
-
-impl<T: Config> EpochTransitionHandler for PhantomData<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
+	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount);
 }
 
 #[frame_support::pallet]
@@ -181,7 +138,6 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -204,6 +160,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// An emergency rotation has been requested
+	#[pallet::storage]
+	#[pallet::getter(fn emergency_rotation_requested)]
+	pub(super) type EmergencyRotationRequested<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// The starting block number for the current epoch
 	#[pallet::storage]
@@ -238,8 +199,11 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
-				T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
+			if let Some(auction_result) = T::Auction::auction_result() {
+				T::EpochTransitionHandler::on_new_epoch(
+					&auction_result.winners,
+					auction_result.minimum_active_bid,
+				);
 			}
 			Pallet::<T>::generate_lookup();
 		}
@@ -300,8 +264,8 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// If we are waiting on bids let's see if we want to start a new rotation
-		return match T::Auction::phase() {
-			AuctionPhase::WaitingForBids(..) => {
+		match T::Auction::phase() {
+			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
 				Self::should_rotate(now) && T::Auction::process().and(T::Auction::process()).is_ok()
@@ -311,9 +275,13 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auction::process().is_ok()
 			}
-			// Failing that do nothing
-			_ => false,
-		};
+			_ => {
+				// If we were in one, mark as completed
+				EmergencyRotationOf::<T>::emergency_rotation_completed();
+				// Do nothing more
+				false
+			}
+		}
 	}
 }
 
@@ -337,7 +305,7 @@ impl<T: Config> Pallet<T> {
 			CurrentEpochStartedAt::<T>::set(now);
 		}
 
-		return end;
+		end
 	}
 
 	/// Generate our validator lookup list
@@ -361,12 +329,12 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// Prepare candidates for a new session
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		return match T::Auction::phase() {
+		match T::Auction::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
 			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
-			AuctionPhase::WaitingForBids(winners, min_bid) => {
+			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
 					// Calculate our new epoch index
@@ -379,14 +347,15 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					// Generate our lookup list of validators
 					Self::generate_lookup();
 					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
+					T::EpochTransitionHandler::on_new_epoch(&winners, minimum_active_bid);
 				}
 
+				let _ = T::Auction::process();
 				None
 			}
 			// Return
 			_ => None,
-		};
+		}
 	}
 
 	/// The current session is ending
@@ -415,9 +384,23 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() -> Weight {
-		Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-		Pallet::<T>::force_validator_rotation()
+pub struct EmergencyRotationOf<T>(PhantomData<T>);
+
+impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
+	fn request_emergency_rotation() {
+		if !Self::emergency_rotation_in_progress() {
+			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
+			Pallet::<T>::force_validator_rotation();
+		}
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EmergencyRotationRequested::<T>::get()
+	}
+
+	fn emergency_rotation_completed() {
+		if Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(false);
+		}
 	}
 }
