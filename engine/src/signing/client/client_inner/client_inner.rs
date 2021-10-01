@@ -44,16 +44,10 @@ impl From<Signature> for SchnorrSignature {
 
 impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
     fn from(cfe_sig: SchnorrSignature) -> Self {
-        // FIXME TESTNET - This should be a property of the key itself
-        // not the signature?
-
         // https://ethereum.stackexchange.com/questions/3542/how-are-ethereum-addresses-generated
         // Start with the public key (128 characters / 64 bytes)
         // Take the Keccak-256 hash of the public key. You should now have a string that is 64 characters / 32 bytes. (note: SHA3-256 eventually became the standard, but Ethereum uses Keccak)
-        // let hash = Keccak256::hash(&cfe_sig.r.serialize_uncompressed()).0;
-        let pubKey: &[u8] = b"035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667";
-        let hash = Keccak256::hash(pubKey);
-
+        let hash = Keccak256::hash(&cfe_sig.r.serialize_uncompressed()).0;
         // Take the last 40 characters / 20 bytes of this public key (Keccak-256). Or, in other words, drop the first 24 characters / 12 bytes. These 40 characters / 20 bytes are the address. When prefixed with 0x it becomes 42 characters long.
         let eth_pub_key: [u8; 20] = hash[12..].try_into().expect("Is valid pubkey");
         Self {
