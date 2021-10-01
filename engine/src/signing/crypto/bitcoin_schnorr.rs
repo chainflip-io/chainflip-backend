@@ -240,9 +240,11 @@ impl LocalSig {
         ]
         .concat();
 
+        println!("e_bytes: {:?}", e_bytes);
+
         let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
         let e: FE = ECScalar::from(&e_bn);
-        println!("Here's the challenge: {:?}", e);
+        println!("Here's the challenge, e: {:?}", e);
         return e;
     }
 
