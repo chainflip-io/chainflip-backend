@@ -29,7 +29,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
-use crate::chainflip::ChainflipVaultRotationHandler;
+use crate::chainflip::{ChainflipVaultRotationHandler, ChainflipStakeHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -138,7 +138,7 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinValidators: u32 = 2;
-	pub const BackupValidatorRatio: u32 = 3;
+	pub const ActiveToBackupValidatorRatio: u32 = 3;
 	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
 
@@ -154,8 +154,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
 	type Online = Reputation;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
-	type BackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
@@ -349,7 +348,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = chainflip::ChainflipStakeHandler;
+	type StakeHandler = ChainflipStakeHandler;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -476,7 +475,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );

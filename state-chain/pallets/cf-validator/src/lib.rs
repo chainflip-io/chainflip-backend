@@ -314,7 +314,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// Do nothing more
 				false
 			}
-		};
+		}
 	}
 }
 

@@ -46,7 +46,7 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
 		for bid_number in (1..=number_of_bids as u64).rev() {
-			(*cell).push((bid_number * group, bid_number * 100));
+			(*cell).push((bid_number * group as u64, bid_number * 100));
 		}
 	});
 }
@@ -56,9 +56,8 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 		*cell.borrow_mut() = bidders;
 	});
 }
-pub fn run_auction(number_of_bids: u32, group: u32) {
-	generate_bids(number_of_bids, group);
 
+pub fn run_auction() {
 	AuctionPallet::process()
 		.and(AuctionPallet::process().and_then(|_| {
 			clear_confirmation();
@@ -75,10 +74,6 @@ pub fn last_event() -> mock::Event {
 		.expect("Event expected")
 		.event
 }
-
-// pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
-// 	MockBidderProvider::get_bidders()
-// }
 
 // The set we would expect
 pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {

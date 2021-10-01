@@ -78,23 +78,21 @@ mod test {
 		});
 	}
 
-	#[test]
-	fn should_create_correct_size_of_groups() {
-		let expected_group_sizes = |number_of_bidders: u32| {
-			let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
-			let expected_number_of_backup_validators = min(
-				expected_number_of_validators / BACKUP_VALIDATOR_RATIO,
-				number_of_bidders.saturating_sub(expected_number_of_validators),
-			);
-			let expected_number_of_passive_nodes = number_of_bidders
-				.saturating_sub(expected_number_of_backup_validators)
-				.saturating_sub(expected_number_of_validators);
-			(
-				expected_number_of_validators,
-				expected_number_of_backup_validators,
-				expected_number_of_passive_nodes,
-			)
-		};
+	fn expected_group_sizes(number_of_bidders: u32) -> (u32, u32, u32) {
+		let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
+		let expected_number_of_backup_validators = min(
+			expected_number_of_validators / BACKUP_VALIDATOR_RATIO,
+			number_of_bidders.saturating_sub(expected_number_of_validators),
+		);
+		let expected_number_of_passive_nodes = number_of_bidders
+			.saturating_sub(expected_number_of_backup_validators)
+			.saturating_sub(expected_number_of_validators);
+		(
+			expected_number_of_validators,
+			expected_number_of_backup_validators,
+			expected_number_of_passive_nodes,
+		)
+	}
 
 	#[test]
 	fn should_create_correct_size_of_groups() {
@@ -120,6 +118,7 @@ mod test {
 						AuctionPallet::remaining_bidders().len() as u32
 							- AuctionPallet::backup_group_size()
 					);
+
 					validate_states(result.winners, ChainflipAccountState::Validator);
 
 					let backup_validators = AuctionPallet::remaining_bidders()
@@ -127,6 +126,7 @@ mod test {
 						.take(AuctionPallet::backup_group_size() as usize)
 						.map(|(validator_id, _)| *validator_id)
 						.collect();
+
 					validate_states(backup_validators, ChainflipAccountState::Backup);
 
 					let passive_nodes = AuctionPallet::remaining_bidders()
@@ -270,7 +270,8 @@ mod test {
 	#[test]
 	fn should_establish_a_new_lowest_backup_validator_bid() {
 		new_test_ext().execute_with(|| {
-			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+			run_auction();
 			match AuctionPallet::current_phase() {
 				AuctionPhase::WaitingForBids => {
 					// Place bid below lowest backup validator bid but above highest passive node bid
@@ -298,7 +299,8 @@ mod test {
 	#[test]
 	fn should_establish_a_highest_passive_node_bid() {
 		new_test_ext().execute_with(|| {
-			run_auction(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+			run_auction();
 			match AuctionPallet::current_phase() {
 				AuctionPhase::WaitingForBids => {
 					// Place bid above highest passive node bid but below lowest backup validator bid
@@ -326,7 +328,7 @@ mod test {
 	#[test]
 	fn should_set_last_minimum_active_bid() {
 		new_test_ext().execute_with(|| {
-			generate_bids(NUMBER_OF_BIDDERS);
+			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 			run_auction();
 			assert!(AuctionPallet::last_minimum_active_bid() > 0);
 		});
@@ -338,7 +340,7 @@ mod test {
 			let number_of_bidders = 150u32;
 			let max_validators = 100u32;
 			// Create some bidders
-			generate_bids(number_of_bidders);
+			generate_bids(number_of_bidders, BIDDER_GROUP_A);
 			// Create a bigger group of validators, 100.
 			AuctionPallet::set_active_range((MIN_VALIDATOR_SIZE, max_validators)).unwrap();
 			// Run auction generate the groups
@@ -357,7 +359,7 @@ mod test {
 			let bidders_in_emergency_network = bids
 				.iter()
 				.skip((max_validators / 2) as usize)
-				.map(|bid| bid.clone())
+				.cloned()
 				.collect();
 
 			set_bidders(bidders_in_emergency_network);
@@ -367,16 +369,12 @@ mod test {
 			// As this was an emergency rotation we should have only have 30% of BVs in the
 			// validating set.  This would mean a total validating set of (30% of max_validators)
 			// as BVs + 50 our old validating set which is left.
-			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(validating_set, _) => {
-					assert_eq!(
-						validating_set.len() as u32,
-						(PercentageOfBackupValidatorsInEmergency::get() * max_validators) / 100
-							+ (max_validators / 2)
-					);
-				}
-				_ => unreachable!("shall not pass"),
-			}
+			let auction_result = AuctionPallet::auction_result().expect("an auction result please");
+			assert_eq!(
+				auction_result.winners.len() as u32,
+				(PercentageOfBackupValidatorsInEmergency::get() * max_validators) / 100
+					+ (max_validators / 2)
+			);
 		});
 	}
 
@@ -440,7 +438,7 @@ mod test {
 	fn should_abort_on_error_in_starting_vault_rotation() {
 		new_test_ext().execute_with(|| {
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
-				if bids == expected_bidding());
+				if bids == MockBidderProvider::get_bidders());
 			// Signal we want to error on vault rotation
 			MockVaultRotator::error_on_start_vault_rotation();
 			assert_matches!(AuctionPallet::process(), Err(..));

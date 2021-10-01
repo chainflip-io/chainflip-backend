@@ -34,7 +34,7 @@ pub trait WeightInfo {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{ChainflipAccount, VaultRotator, EmergencyRotation, RemainingBid};
+	use cf_traits::{ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 
@@ -306,7 +306,7 @@ impl<T: Config> Auction for Pallet<T> {
 					let validator_set_target_size = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
 					let validator_group_size = min(validator_set_target_size, number_of_bidders);
-					let validating_set: Vec<_> =
+					let mut validating_set: Vec<_> =
 						bids.iter().take(validator_group_size as usize).collect();
 
 					if T::EmergencyRotation::emergency_rotation_in_progress() {
@@ -315,29 +315,22 @@ impl<T: Config> Auction for Pallet<T> {
 						// MAB to understand who were BVs and ensure we only maintain the required
 						// amount under this level to avoid a superminority of low collateralised nodes.
 						let last_minimum_active_bid = LastMinimumActiveBid::<T>::get();
-						match validating_set
+						if let Some(position) = validating_set
 							.iter()
 							.position(|(_, amount)| amount < &last_minimum_active_bid)
 						{
-							Some(position) => {
-								let number_of_backup_validators =
-									validator_group_size as usize - position;
+							let number_of_backup_validators =
+								validator_group_size as usize - position;
 
-								let desired_number_of_backup_validators = validator_group_size
-									.saturating_mul(
-										T::PercentageOfBackupValidatorsInEmergency::get(),
-									)
-									.checked_div(100)
-									.unwrap_or_default()
-									as usize;
+							let desired_number_of_backup_validators = validator_group_size
+								.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get())
+								.checked_div(100)
+								.unwrap_or_default() as usize;
 
-								let trim_at_end_by = number_of_backup_validators
-									- desired_number_of_backup_validators;
+							let trim_at_end_by =
+								number_of_backup_validators - desired_number_of_backup_validators;
 
-								validating_set
-									.truncate(validator_group_size as usize - trim_at_end_by);
-							}
-							None => {}
+							validating_set.truncate(validator_group_size as usize - trim_at_end_by);
 						}
 					}
 
@@ -427,7 +420,7 @@ impl<T: Config> Auction for Pallet<T> {
 						CurrentPhase::<T>::put(phase.clone());
 						// Store the result
 						LastAuctionResult::<T>::put(AuctionResult {
-							winners: winners,
+							winners,
 							minimum_active_bid,
 						});
 
@@ -459,6 +452,7 @@ impl<T: Config> Auction for Pallet<T> {
 		CurrentPhase::<T>::put(AuctionPhase::default());
 		Self::deposit_event(Event::AuctionAborted(CurrentAuctionIndex::<T>::get()));
 	}
+}
 
 pub struct VaultRotationEventHandler<T>(PhantomData<T>);
 
