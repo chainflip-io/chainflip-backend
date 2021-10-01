@@ -147,7 +147,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
-	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
+	type WeightInfo = pallet_cf_auction::weights::SubstrateWeight<Runtime>;
 	type Online = Reputation;
 }
 
