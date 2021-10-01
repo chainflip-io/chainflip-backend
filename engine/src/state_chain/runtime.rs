@@ -141,7 +141,7 @@ impl Runtime for StateChainRuntime {
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
         event_type_registry.register_type_size::<u32>("ProposalId");
-        event_type_registry.register_type_size::<NetworkState>("NetworkState");
+        event_type_registry.register_type_size::<NetworkState<AccountId32>>("NetworkState<ValidatorId>");
     }
 }
 
