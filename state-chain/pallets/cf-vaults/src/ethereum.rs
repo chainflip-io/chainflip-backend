@@ -6,7 +6,7 @@ use crate::{
 	SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
 	VaultRotationRequestResponse, VaultRotations,
 };
-use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
+use cf_traits::{RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
 use sp_core::Hasher;

@@ -11,10 +11,7 @@ use futures::{
     TryStreamExt,
 };
 use jsonrpc_core::futures::{Async, AsyncSink, Future, Sink, Stream};
-use jsonrpc_core_client::{
-    transports::{duplex, ws},
-    RpcChannel, RpcError,
-};
+use jsonrpc_core_client::{transports::duplex, RpcChannel, RpcError};
 use thiserror::Error;
 use websocket::{ClientBuilder, OwnedMessage};
 
@@ -132,7 +129,7 @@ where
             match self.stream.poll() {
                 Ok(Async::Ready(Some(message))) => match message {
                     OwnedMessage::Text(data) => return Ok(Async::Ready(Some(data))),
-                    OwnedMessage::Binary(data) => (),
+                    OwnedMessage::Binary(_data) => (),
                     OwnedMessage::Ping(p) => self.queue.push_front(OwnedMessage::Pong(p)),
                     OwnedMessage::Pong(_) => {}
                     OwnedMessage::Close(c) => self.queue.push_front(OwnedMessage::Close(c)),
