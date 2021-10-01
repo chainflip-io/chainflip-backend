@@ -29,7 +29,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
-use crate::chainflip::{ChainflipVaultRotationHandler, ChainflipStakeHandler};
+use crate::chainflip::{ChainflipStakeHandler, ChainflipVaultRotationHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
