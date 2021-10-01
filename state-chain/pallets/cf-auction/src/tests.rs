@@ -326,15 +326,6 @@ mod test {
 	}
 
 	#[test]
-	fn should_set_last_minimum_active_bid() {
-		new_test_ext().execute_with(|| {
-			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
-			run_auction();
-			assert!(AuctionPallet::last_minimum_active_bid() > 0);
-		});
-	}
-
-	#[test]
 	fn should_adjust_groups_in_emergency() {
 		new_test_ext().execute_with(|| {
 			let number_of_bidders = 150u32;
