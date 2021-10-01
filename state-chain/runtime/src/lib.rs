@@ -472,7 +472,7 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		Config: pallet_cf_config::{Module, Call, Event<T>, Config},
+		Gestalt: pallet_cf_config::{Module, Call, Event<T>, Config},
 	}
 );
 

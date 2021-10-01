@@ -4,8 +4,8 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, ConfigConfig, EmissionsConfig,
-	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	FlipConfig, GenesisConfig, GestaltConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
 	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS,
 	WASM_BINARY,
 };
@@ -89,7 +89,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				ConfigConfig {
+				GestaltConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
 						.unwrap()
 						.as_bytes()
@@ -148,7 +148,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
-				ConfigConfig {
+				GestaltConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
 						.unwrap()
 						.as_bytes()
@@ -236,7 +236,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				ConfigConfig {
+				GestaltConfig {
 					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
 					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
 					ethereum_chain_id: b"4".to_vec(),
@@ -340,7 +340,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				ConfigConfig {
+				GestaltConfig {
 					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
 					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
 					ethereum_chain_id: b"4".to_vec(),
@@ -368,7 +368,7 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
-	config_set: ConfigConfig,
+	config_set: GestaltConfig,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
