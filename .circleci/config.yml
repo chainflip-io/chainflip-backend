@@ -289,8 +289,10 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - run: sccache --show-stats
       - run: |
           cargo clippy
+          sccache --show-stats
 
   clone-contracts-repo:
     resource_class: small
