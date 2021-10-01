@@ -66,12 +66,18 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
 pub struct AccountId(pub [u8; 32]);
 
 impl std::fmt::Display for AccountId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
+    }
+}
+
+impl std::fmt::Debug for AccountId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
