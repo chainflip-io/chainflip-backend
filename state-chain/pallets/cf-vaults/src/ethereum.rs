@@ -36,6 +36,9 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			[0; 32],
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
+			// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
+			// https://github.com/chainflip-io/chainflip-backend/pull/495
+			ceremony_id,
 		) {
 			Ok(payload) => Self::make_request(
 				ceremony_id,
@@ -89,12 +92,15 @@ impl<T: Config>
 			ThresholdSignatureResponse::Success(message_hash, signature) => {
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
+						// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
+						// https://github.com/chainflip-io/chainflip-backend/pull/495
 						match Self::encode_set_agg_key_with_agg_key(
 							message_hash,
 							vault_rotation
 								.new_public_key
 								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							signature,
+							ceremony_id,
 						) {
 							Ok(payload) => {
 								// Emit the event
@@ -128,9 +134,11 @@ impl<T: Config> EthereumChain<T> {
 		message_hash: [u8; 32],
 		new_public_key: T::PublicKey,
 		signature: SchnorrSigTruncPubkey,
+		nonce: u64,
 	) -> ethabi::Result<Bytes> {
 		let pubkey: Vec<u8> = new_public_key.into();
-		// strip y-parity from key (first byte)
+		// strip y-parity from key (first byte) and use 0 if even, 1 if odd
+		// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
 		// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/crypto.py
 		let y_parity = if pubkey[0] == 2 { 0u8 } else { 1u8 };
 		let x_pubkey: [u8; 32] = pubkey[1..]
@@ -165,8 +173,7 @@ impl<T: Config> EthereumChain<T> {
 			Token::Tuple(vec![
 				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),
-				// TODO: Use an actual nonce here. Will be fixed in upcoming broadcast PR
-				Token::Uint(0.into()),
+				Token::Uint(nonce.into()),
 				Token::Address(signature.eth_pub_key.into()),
 			]),
 			Token::Tuple(vec![
