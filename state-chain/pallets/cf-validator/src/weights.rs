@@ -33,8 +33,8 @@ pub trait WeightInfo {
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
-pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
+pub struct PalletWeight<T>(PhantomData<T>);
+impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn set_blocks_for_epoch() -> Weight {
 		(95_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))

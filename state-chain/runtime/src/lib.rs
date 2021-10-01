@@ -146,7 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
-	type WeightInfo = pallet_cf_auction::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Reputation;
 }
 
@@ -159,7 +159,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
-	type ValidatorWeightInfo = pallet_cf_validator::weights::SubstrateWeight<Runtime>;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
