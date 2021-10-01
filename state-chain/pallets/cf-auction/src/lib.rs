@@ -141,11 +141,6 @@ pub mod pallet {
 	#[pallet::getter(fn highest_passive_node_bid)]
 	pub(super) type HighestPassiveNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// The last minimum active bid
-	#[pallet::storage]
-	#[pallet::getter(fn last_minimum_active_bid)]
-	pub(super) type LastMinimumActiveBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -314,23 +309,24 @@ impl<T: Config> Auction for Pallet<T> {
 						// of existing BVs in the validating set.  We ensure this by using the last
 						// MAB to understand who were BVs and ensure we only maintain the required
 						// amount under this level to avoid a superminority of low collateralised nodes.
-						let last_minimum_active_bid = LastMinimumActiveBid::<T>::get();
-						if let Some(position) = validating_set
-							.iter()
-							.position(|(_, amount)| amount < &last_minimum_active_bid)
-						{
-							let number_of_backup_validators =
-								validator_group_size as usize - position;
+						if let Some(AuctionResult{minimum_active_bid, ..}) = LastAuctionResult::<T>::get() {
+							if let Some(position) = validating_set
+								.iter()
+								.position(|(_, amount)| amount < &minimum_active_bid)
+							{
+								let number_of_backup_validators =
+									validator_group_size as usize - position;
 
-							let desired_number_of_backup_validators = validator_group_size
-								.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get())
-								.checked_div(100)
-								.unwrap_or_default() as usize;
+								let desired_number_of_backup_validators = validator_group_size
+									.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get())
+									.checked_div(100)
+									.unwrap_or_default() as usize;
 
-							let trim_at_end_by =
-								number_of_backup_validators - desired_number_of_backup_validators;
+								let trim_at_end_by =
+									number_of_backup_validators - desired_number_of_backup_validators;
 
-							validating_set.truncate(validator_group_size as usize - trim_at_end_by);
+								validating_set.truncate(validator_group_size as usize - trim_at_end_by);
+							}
 						}
 					}
 
@@ -394,7 +390,6 @@ impl<T: Config> Auction for Pallet<T> {
 
 						LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 						HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
-						LastMinimumActiveBid::<T>::put(minimum_active_bid);
 
 						update_status(winners.clone(), ChainflipAccountState::Validator);
 
