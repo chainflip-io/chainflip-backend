@@ -7,6 +7,7 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - fix/kyle-testnet-2
         # Uncomment and add your current branch when testing
 #        - bug/ch1978-fix-integration-tests
 only_main_branches: &only_main_branches
@@ -17,6 +18,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - fix/kyle-testnet-2
 #        - test/ci-with-machine
 
 only_epic_branches: &only_epic_branches
