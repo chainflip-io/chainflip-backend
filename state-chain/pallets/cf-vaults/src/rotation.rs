@@ -15,6 +15,7 @@ pub struct SchnorrSigTruncPubkey {
 	pub s: [u8; 32],
 
 	/// Public key hashed and truncated to an ethereum address
+	/// k*G address
 	pub eth_pub_key: [u8; 20],
 }
 

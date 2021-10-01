@@ -129,7 +129,7 @@ where
             match self.stream.poll() {
                 Ok(Async::Ready(Some(message))) => match message {
                     OwnedMessage::Text(data) => return Ok(Async::Ready(Some(data))),
-                    OwnedMessage::Binary(_data) => (),
+                    OwnedMessage::Binary(_) => (),
                     OwnedMessage::Ping(p) => self.queue.push_front(OwnedMessage::Pong(p)),
                     OwnedMessage::Pong(_) => {}
                     OwnedMessage::Close(c) => self.queue.push_front(OwnedMessage::Close(c)),

@@ -50,6 +50,7 @@ impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
         let hash = Keccak256::hash(&cfe_sig.r.serialize_uncompressed()).0;
         // Take the last 40 characters / 20 bytes of this public key (Keccak-256). Or, in other words, drop the first 24 characters / 12 bytes. These 40 characters / 20 bytes are the address. When prefixed with 0x it becomes 42 characters long.
         let eth_pub_key: [u8; 20] = hash[12..].try_into().expect("Is valid pubkey");
+        println!("ETH Pubkey in SchnorrSig -> TruncPubkey: {:?}", eth_pub_key);
         Self {
             s: cfe_sig.s,
             eth_pub_key,

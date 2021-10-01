@@ -220,6 +220,7 @@ impl LocalSig {
         message: &[u8],
     ) -> FE {
         let eth_addr = utils::pubkey_to_eth_addr(pub_key);
+        println!("ETH address in build_challenge: {}", hex::encode(&eth_addr));
 
         let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
 
@@ -331,7 +332,7 @@ impl LocalSig {
 pub struct Signature {
     /// This is `s` in other literature
     pub sigma: FE,
-    /// This is `r` in other literature
+    /// This is `r` in other literature (k * G)
     pub v: GE,
 }
 
