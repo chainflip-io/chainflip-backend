@@ -170,7 +170,6 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}

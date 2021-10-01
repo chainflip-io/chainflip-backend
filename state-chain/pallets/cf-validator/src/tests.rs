@@ -92,11 +92,6 @@ mod test {
 			run_to_block(10);
 			// We should have started another auction
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
-			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(
-				ValidatorPallet::force_rotation(Origin::root()),
-				Error::<Test>::AuctionInProgress
-			);
 			assert_noop!(
 				ValidatorPallet::set_blocks_for_epoch(Origin::root(), 10),
 				Error::<Test>::AuctionInProgress
