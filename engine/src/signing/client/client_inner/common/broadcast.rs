@@ -157,4 +157,9 @@ where
 
         awaited
     }
+
+    #[cfg(test)]
+    fn get_messages_count(&self) -> usize {
+        self.messages.len()
+    }
 }

@@ -168,12 +168,20 @@ impl SigningManager {
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
+
+    pub fn get_messages_count(&self, ceremony_id: CeremonyId) -> Result<usize, ()> {
+        let stage = self.signing_states.get(&ceremony_id).ok_or(())?;
+        match stage.get_messages_count() {
+            Some(count) => Ok(count),
+            None => Err(()),
+        }
+    }
 }
 
 /// Map all signer ids to their corresponding signer idx
 fn project_signers(signer_ids: &[AccountId], info: &KeygenResultInfo) -> Result<Vec<usize>, ()> {
     // There is probably a more efficient way of doing this
-    // for for now this shoud be good enough
+    // for for now this should be good enough
 
     let mut results = Vec::with_capacity(signer_ids.len());
     for id in signer_ids {

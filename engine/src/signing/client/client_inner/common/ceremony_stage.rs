@@ -48,6 +48,9 @@ pub trait CeremonyStage: DynClone + std::fmt::Display {
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> Vec<usize>;
+
+    #[cfg(test)]
+    fn get_messages_count(&self) -> usize;
 }
 
 /// Data useful during any stage of a ceremony

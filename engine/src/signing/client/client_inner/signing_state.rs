@@ -348,6 +348,13 @@ impl SigningState {
     pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
         self.should_expire_at = expiry_time;
     }
+
+    #[cfg(test)]
+    pub fn get_messages_count(&self) -> Option<usize> {
+        self.inner
+            .as_ref()
+            .and_then(|s| s.stage.as_ref().map(|s| s.get_messages_count()))
+    }
 }
 
 /// Data common for signing stages
