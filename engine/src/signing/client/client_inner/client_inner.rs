@@ -43,9 +43,11 @@ impl From<Signature> for SchnorrSignature {
 
 impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
     fn from(cfe_sig: SchnorrSignature) -> Self {
+        let eth_pub_key = pubkey_to_eth_addr(cfe_sig.r);
+        println!("Eth pubkey into TruncPubkey: {:?}", eth_pub_key);
         Self {
             s: cfe_sig.s,
-            eth_pub_key: pubkey_to_eth_addr(cfe_sig.r),
+            eth_pub_key,
         }
     }
 }
