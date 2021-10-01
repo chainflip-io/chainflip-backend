@@ -18,10 +18,15 @@
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
+  },
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
   },
   "Bid": "(ValidatorId, Amount)",
   "CallHash": "[u8;32]",
@@ -102,6 +107,7 @@
   "OnlineCreditsFor": "u64",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
