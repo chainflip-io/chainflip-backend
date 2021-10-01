@@ -137,7 +137,7 @@ impl SigningStateManager {
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
-        sign_info: SigningInfo,
+        mut sign_info: SigningInfo,
     ) {
         slog::debug!(
             self.logger,
@@ -152,6 +152,15 @@ impl SigningStateManager {
             );
             return;
         }
+
+        if sign_info.signers.len() > (key_info.params.threshold + 1) {
+            slog::warn!(
+                self.logger,
+                "Request to sign contains more signers than necessary, truncating the list"
+            );
+
+            sign_info.signers.truncate(key_info.params.threshold + 1);
+        };
 
         let our_idx = match key_info.get_idx(&self.id) {
             Some(idx) => idx,
