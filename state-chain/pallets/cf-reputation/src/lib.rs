@@ -233,7 +233,7 @@ pub mod pallet {
 	impl<T: Config> Heartbeat for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
-		fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight {
+		fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation points

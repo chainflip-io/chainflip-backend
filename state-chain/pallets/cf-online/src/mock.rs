@@ -14,8 +14,19 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
 use cf_traits::{Heartbeat, NetworkState, Chainflip};
+use sp_std::cell::RefCell;
+
+type ValidatorId = u64;
 
 thread_local! {
+	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
+	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
+		NetworkState {
+			missing: vec![],
+			online: vec![],
+			offline: vec![],
+		}
+	);
 }
 
 construct_runtime!(
@@ -67,13 +78,15 @@ parameter_types! {
 
 pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 
-	fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight {
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
+		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
 		0
 	}
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+		NETWORK_STATE.with(|cell| *cell.borrow_mut() = network_state);
 		0
 	}
 }

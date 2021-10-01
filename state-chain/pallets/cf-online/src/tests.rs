@@ -10,14 +10,14 @@ mod tests {
 
 	// Cycle heartbeat interval sending the heartbeat extrinsic in each
 	fn run_heartbeat_intervals(
-		validators: Vec<<Test as frame_system::Config>::AccountId>,
+		validators: &[<Test as frame_system::Config>::AccountId],
 		intervals: u64,
 	) {
 		let start_block_number = System::block_number();
 		// Inclusive
 		for interval in 1..=intervals {
 			let block = interval * HEARTBEAT_BLOCK_INTERVAL;
-			for validator in &validators {
+			for validator in validators {
 				assert_ok!(OnlinePallet::heartbeat(Origin::signed(*validator)));
 			}
 			run_to_block(start_block_number + block);
@@ -45,7 +45,7 @@ mod tests {
 			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				OnlinePallet::heartbeat(Origin::signed(BOB)),
-				<Error<Test>>::AlreadySubmittedHeartbeat
+				Error::<Test>::AlreadySubmittedHeartbeat
 			);
 		});
 	}
@@ -54,9 +54,37 @@ mod tests {
 	fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
 		new_test_ext().execute_with(|| {
 			move_forward_by_heartbeat_intervals(1);
-			run_heartbeat_intervals(vec![ALICE], 1);
+			run_heartbeat_intervals(&[ALICE], 1);
 			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
-			run_heartbeat_intervals(vec![ALICE], 1);
+			run_heartbeat_intervals(&[ALICE], 1);
+			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
+			// Fail to submit for two heartbeats
+			move_forward_by_heartbeat_intervals(2);
+			assert_eq!(<OnlinePallet as IsOnline>::is_online(&ALICE), false);
+		});
+	}
+
+	#[test]
+	fn we_should_see_missing_validators_when_not_having_submitted_one_interval() {
+		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
+			run_heartbeat_intervals(&[ALICE], 1);
+			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
+			run_heartbeat_intervals(&[ALICE], 1);
+			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
+			// Fail to submit for two heartbeats
+			move_forward_by_heartbeat_intervals(2);
+			assert_eq!(<OnlinePallet as IsOnline>::is_online(&ALICE), false);
+		});
+	}
+
+	#[test]
+	fn we_should_see_offline_validators_when_not_having_submitted_one_interval() {
+		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
+			run_heartbeat_intervals(&[ALICE], 1);
+			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
+			run_heartbeat_intervals(&[ALICE], 1);
 			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
 			// Fail to submit for two heartbeats
 			move_forward_by_heartbeat_intervals(2);

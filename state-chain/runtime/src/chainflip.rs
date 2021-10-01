@@ -5,10 +5,7 @@ use super::{
 	Witnesser,
 };
 use crate::EmergencyRotationPercentageTrigger;
-use cf_traits::{
-	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccounts, EmergencyRotation,
-	EmissionsTrigger, EpochInfo, Heartbeat, NetworkState, StakeTransfer,
-};
+use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, NetworkState, StakeTransfer, StakeHandler, VaultRotationHandler};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_std::vec::Vec;
@@ -21,19 +18,19 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
+	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
-		Rewards::rollover(_new_validators).unwrap_or_else(|err| {
+		Rewards::rollover(new_validators).unwrap_or_else(|err| {
 			debug::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
-		<Flip as BondRotation>::update_validator_bonds(_new_validators, _new_bond);
+		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in reputation
-		<Online as EpochTransitionHandler>::on_new_epoch(_new_validators, new_bond);
+		<Online as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(_new_validators, _new_bond)
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
 	}
 }
 
@@ -109,7 +106,7 @@ pub struct ChainflipHeartbeat;
 impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 
-	fn heartbeat_submitted(validator_id: Self::ValidatorId) -> Weight {
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
 		<Reputation as Heartbeat>::heartbeat_submitted(validator_id)
 	}
 
@@ -119,7 +116,7 @@ impl Heartbeat for ChainflipHeartbeat {
 
 		// We pay rewards to online backup validators on each heartbeat interval
 		let backup_validators: Vec<&Self::ValidatorId> = network_state.online.iter().filter(|account_id| {
-			ChainflipAccounts::<Runtime>::get(*account_id).state == ChainflipAccountState::Backup
+			ChainflipAccountStore::<Runtime>::get(*account_id).state == ChainflipAccountState::Backup
 		}).collect();
 
 		BackupEmissions::distribute_rewards(backup_validators);
@@ -133,6 +130,3 @@ impl Heartbeat for ChainflipHeartbeat {
 		weight
 	}
 }
-
-#[test]
-fn test_this() {}

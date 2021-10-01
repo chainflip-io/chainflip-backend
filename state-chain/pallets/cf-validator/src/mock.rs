@@ -137,7 +137,7 @@ impl pallet_cf_auction::Config for Test {
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotation = ValidatorPallet;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
@@ -188,6 +188,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 pub(super) type EpochIndex = u32;
@@ -201,6 +202,7 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = AuctionPallet;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

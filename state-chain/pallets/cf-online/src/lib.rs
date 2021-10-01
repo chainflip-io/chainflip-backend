@@ -157,7 +157,7 @@ pub mod pallet {
 				}
 			});
 
-			T::Heartbeat::heartbeat_submitted(validator_id);
+			T::Heartbeat::heartbeat_submitted(&validator_id);
 
 			Ok(().into())
 		}
@@ -192,7 +192,7 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
 
-		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
+		fn on_new_epoch(new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
 			// Clear our expectations
 			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from

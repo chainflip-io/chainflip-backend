@@ -30,7 +30,7 @@ mod tests {
 	) {
 		for _ in 1..=intervals {
 			for validator_id in &validators {
-				<ReputationPallet as Heartbeat>::heartbeat_submitted(*validator_id);
+				<ReputationPallet as Heartbeat>::heartbeat_submitted(validator_id);
 			}
 		}
 	}
@@ -240,7 +240,7 @@ mod tests {
 					))
 				);
 			};
-			<ReputationPallet as Heartbeat>::heartbeat_submitted(ALICE);
+			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE);
 			offline_test(ParticipateSigningFailed, ALICE, 100);
 			offline_test(BroadcastOutputFailed, ALICE, 100);
 			offline_test(ContradictingSelfDuringSigningCeremony, ALICE, 100);
@@ -251,7 +251,7 @@ mod tests {
 	#[test]
 	fn reporting_participate_in_signing_offline_condition_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
-			<ReputationPallet as Heartbeat>::heartbeat_submitted(ALICE);
+			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE);
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
 			assert_ok!(ReputationPallet::report(

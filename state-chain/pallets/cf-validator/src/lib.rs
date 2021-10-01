@@ -277,7 +277,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			}
 			_ => {
 				// If we were in one, mark as completed
-				EmergencyRotationOf::<T>::emergency_rotation_completed();
+				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
 			}
@@ -384,14 +384,14 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-pub struct EmergencyRotationOf<T>(PhantomData<T>);
-
-impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
-	fn request_emergency_rotation() {
-		if !Self::emergency_rotation_in_progress() {
+impl<T: Config> EmergencyRotation for Pallet<T> {
+	fn request_emergency_rotation() -> Weight {
+		if !EmergencyRotationRequested::<T>::get() {
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Pallet::<T>::force_validator_rotation();
+			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation();
 		}
+
+		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
