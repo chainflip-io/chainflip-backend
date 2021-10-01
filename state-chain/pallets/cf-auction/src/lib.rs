@@ -300,7 +300,8 @@ impl<T: Config> Auction for Pallet<T> {
 
 					let validator_set_target_size = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
-					let validator_group_size = min(validator_set_target_size, number_of_bidders);
+					let mut validator_group_size =
+						min(validator_set_target_size, number_of_bidders) as usize;
 					let mut validating_set: Vec<_> =
 						bids.iter().take(validator_group_size as usize).collect();
 
@@ -317,22 +318,26 @@ impl<T: Config> Auction for Pallet<T> {
 								.iter()
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
+								// Number of validators
+								let number_of_validators = position;
+								// Number of backup validators in existing set
 								let number_of_backup_validators =
-									validator_group_size as usize - position;
+									(validator_group_size - number_of_validators) * 2 / 3;
 
-								let desired_number_of_backup_validators = validator_group_size
-									.saturating_mul(
-										T::PercentageOfBackupValidatorsInEmergency::get(),
-									)
-									.checked_div(100)
-									.unwrap_or_default()
-									as usize;
+								let backup_and_validator_group_size =
+									number_of_validators + number_of_backup_validators;
 
-								let trim_at_end_by = number_of_backup_validators
-									- desired_number_of_backup_validators;
+								let desired_number_of_backup_validators =
+									(backup_and_validator_group_size as u32)
+										.saturating_mul(
+											T::PercentageOfBackupValidatorsInEmergency::get(),
+										)
+										.checked_div(100)
+										.unwrap_or_default() as usize;
 
-								validating_set
-									.truncate(validator_group_size as usize - trim_at_end_by);
+								validator_group_size =
+									number_of_validators + desired_number_of_backup_validators;
+								validating_set.truncate(validator_group_size);
 							}
 						}
 					}
@@ -348,7 +353,7 @@ impl<T: Config> Auction for Pallet<T> {
 						.collect();
 
 					let backup_group_size = min(
-						number_of_bidders - validator_group_size,
+						number_of_bidders - validator_group_size as u32,
 						validator_set_target_size / T::ActiveToBackupValidatorRatio::get(),
 					);
 
