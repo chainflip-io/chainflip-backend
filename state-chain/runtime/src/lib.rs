@@ -2,7 +2,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod chainflip;
-mod weights;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -435,7 +434,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
-use frame_support::instances::{Instance0};
+use frame_support::instances::Instance0;
 
 impl pallet_cf_signing::Config<Instance0> for Runtime {
 	type Event = Event;
