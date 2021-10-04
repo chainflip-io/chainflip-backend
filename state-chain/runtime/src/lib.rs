@@ -4,7 +4,7 @@
 mod chainflip;
 mod weights;
 // A few exports that help ease life for downstream crates.
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, ChainflipAccountData};
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -28,6 +28,8 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
+
+use crate::chainflip::ChainflipVaultRotationHandler;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -135,7 +137,8 @@ pub fn native_version() -> NativeVersion {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = 2;
+	pub const BackupValidatorRatio: u32 = 3;
 }
 
 impl pallet_cf_auction::Config for Runtime {
@@ -145,10 +148,12 @@ impl pallet_cf_auction::Config for Runtime {
 	type AuctionIndex = u64;
 	type Registrar = Session;
 	type ValidatorId = AccountId;
-	type MinAuctionSize = MinAuctionSize;
+	type MinValidators = MinValidators;
 	type Handler = Vaults;
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
 	type Online = Reputation;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 // FIXME: These would be changed
@@ -171,7 +176,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
-	type RotationHandler = Auction;
+	type RotationHandler = ChainflipVaultRotationHandler;
 	type NonceProvider = Vaults;
 	type EpochInfo = Validator;
 }
@@ -259,7 +264,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if an account is fully reaped from the system.
 	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
 	/// The data to be stored in an account.
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = ();
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -340,6 +345,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = chainflip::ChainflipStakeHandler;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

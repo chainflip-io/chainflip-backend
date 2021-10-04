@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{BidderProvider, Online};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, Online};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -34,6 +34,9 @@ impl WeightInfo for () {
 	}
 }
 
+pub const MIN_VALIDATOR_SIZE: u32 = 2;
+pub const MAX_VALIDATOR_SIZE: u32 = 150;
+
 pub struct AuctionWeight;
 
 impl AuctionWeightTrait for AuctionWeight {
@@ -41,9 +44,6 @@ impl AuctionWeightTrait for AuctionWeight {
 		0 as Weight
 	}
 }
-
-pub const MIN_AUCTION_SIZE: u32 = 2;
-pub const MAX_AUCTION_SIZE: u32 = 150;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
@@ -89,7 +89,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -120,7 +120,8 @@ impl pallet_session::Config for Test {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = 2;
+	pub const BackupValidatorRatio: u32 = 3;
 }
 
 impl pallet_cf_auction::Config for Test {
@@ -130,10 +131,12 @@ impl pallet_cf_auction::Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
+	type MinValidators = MinValidators;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockOnline;
@@ -157,7 +160,7 @@ impl BidderProvider for TestBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		let idx = CANDIDATE_IDX.with(|idx| {
 			let new_idx = *idx.borrow_mut() + 1;
 			*idx.borrow_mut() = new_idx;
@@ -173,9 +176,9 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
-		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
-		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
+	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
+		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}
 }
 
@@ -203,7 +206,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		pallet_session: None,
 		pallet_cf_validator: Some(ValidatorPalletConfig {}),
 		pallet_cf_auction: Some(AuctionPalletConfig {
-			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],
 			minimum_active_bid: 0,
 		}),

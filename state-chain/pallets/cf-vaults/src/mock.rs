@@ -97,10 +97,10 @@ impl Chainflip for MockRuntime {
 
 impl VaultRotationHandler for MockRuntime {
 	type ValidatorId = u64;
-	fn abort() {}
+	fn vault_rotation_aborted() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators.to_vec());
 	}
 }
 

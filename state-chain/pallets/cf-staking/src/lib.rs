@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -411,7 +411,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Insert the signature and notify the CFE.
-			claim_details.signature = Some(signature.clone());
+			claim_details.signature = Some(signature);
 
 			PendingClaims::<T>::insert(&account_id, claim_details.clone());
 
@@ -508,7 +508,7 @@ impl<T: Config> Pallet<T> {
 			withdrawal_address,
 			amount,
 		));
-		Err(Error::<T>::WithdrawalAddressRestricted)?
+		Err(Error::<T>::WithdrawalAddressRestricted)
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
@@ -554,10 +554,10 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		let new_total = T::Flip::credit_stake(&account_id, amount);
+		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+		let _ = AccountRetired::<T>::mutate(account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -642,13 +642,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if *retired {
-						Err(Error::AlreadyRetired)?;
+						return Err(Error::AlreadyRetired);
 					}
 					*retired = true;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -680,7 +680,7 @@ impl<T: Config> Pallet<T> {
 			StateMutability::NonPayable,
 		);
 
-		register_claim.encode_input(&vec![
+		register_claim.encode_input(&[
 			// sigData: SigData(uint, uint, uint)
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
@@ -708,13 +708,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if !*retired {
-						Err(Error::AlreadyActive)?;
+						return Err(Error::AlreadyActive);
 					}
 					*retired = false;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -795,7 +795,7 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

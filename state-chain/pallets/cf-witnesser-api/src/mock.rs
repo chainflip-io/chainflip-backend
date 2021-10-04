@@ -92,8 +92,8 @@ impl Chainflip for Test {
 impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
-	fn abort() {}
-	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
+	fn vault_rotation_aborted() {}
+	fn penalise(_bad_validators: &[Self::ValidatorId]) {}
 }
 
 impl NonceProvider for Test {

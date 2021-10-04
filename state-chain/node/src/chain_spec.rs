@@ -361,7 +361,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (min_validators, MAX_VALIDATORS),
+			validator_size_range: (min_validators, MAX_VALIDATORS),
 			winners: initial_authorities
 				.iter()
 				.map(|(validator_id, ..)| validator_id.clone())

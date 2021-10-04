@@ -1,6 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
+use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
+use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -10,12 +11,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-type Amount = u64;
-type ValidatorId = u64;
+pub type Amount = u64;
+pub type ValidatorId = u64;
 
 impl WeightInfo for () {
 	fn set_auction_size_range() -> u64 {
@@ -23,19 +25,69 @@ impl WeightInfo for () {
 	}
 }
 
-pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
-pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
-pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
-pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
-
-pub const MIN_AUCTION_SIZE: u32 = 2;
-pub const MAX_AUCTION_SIZE: u32 = 150;
+pub const MIN_VALIDATOR_SIZE: u32 = 1;
+pub const MAX_VALIDATOR_SIZE: u32 = 3;
+pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
+pub const NUMBER_OF_BIDDERS: u32 = 9;
+pub const BIDDER_GROUP_A: u32 = 1;
+pub const BIDDER_GROUP_B: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
-		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
-	]);
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
+}
+
+// Create a set of descending bids, including an invalid bid of amount 0
+// offset the ids to create unique bidder groups
+pub fn generate_bids(number_of_bids: u32, group: u32) {
+	BIDDER_SET.with(|cell| {
+		let mut cell = cell.borrow_mut();
+		(*cell).clear();
+		for bid_number in (0..number_of_bids as u64).rev() {
+			(*cell).push(((bid_number + 1) * group as u64, bid_number * 100));
+		}
+	});
+}
+
+pub fn run_auction(number_of_bids: u32, group: u32) {
+	generate_bids(number_of_bids, group);
+
+	AuctionPallet::process()
+		.and(AuctionPallet::process().and_then(|_| {
+			clear_confirmation();
+			AuctionPallet::process().and(AuctionPallet::process())
+		}))
+		.unwrap();
+
+	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+}
+
+pub fn last_event() -> mock::Event {
+	frame_system::Pallet::<Test>::events()
+		.pop()
+		.expect("Event expected")
+		.event
+}
+
+// The last is invalid as it has a bid of 0
+pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
+	let mut bidders = TestBidderProvider::get_bidders();
+	bidders.pop();
+	bidders
+}
+
+// The set we would expect
+pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
+	let mut bidders = TestBidderProvider::get_bidders();
+	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
+	(
+		bidders
+			.iter()
+			.map(|(validator_id, _)| *validator_id)
+			.collect(),
+		bidders.last().unwrap().1,
+	)
 }
 
 construct_runtime!(
@@ -71,7 +123,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -79,7 +131,8 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
+	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
 }
 
 impl Config for Test {
@@ -89,10 +142,29 @@ impl Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
-	type WeightInfo = ();
-	type Handler = MockVaultRotation;
+	type MinValidators = MinValidators;
+	type Handler = MockVaultRotator;
+	type ChainflipAccount = MockChainflipAccount;
 	type Online = MockOnline;
+	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type WeightInfo = ();
+}
+
+pub struct MockChainflipAccount;
+
+impl ChainflipAccount for MockChainflipAccount {
+	type AccountId = u64;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
+		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
+	}
+
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+		CHAINFLIP_ACCOUNTS.with(|cell| {
+			cell.borrow_mut()
+				.insert(*account_id, ChainflipAccountData { state });
+		})
+	}
 }
 
 pub struct MockOnline;
@@ -116,18 +188,21 @@ impl BidderProvider for TestBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
+
+	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
-			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
-			winners: vec![JOE_BID.0],
-			minimum_active_bid: JOE_BID.1,
+			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+			winners,
+			minimum_active_bid,
 		}),
 	};
 

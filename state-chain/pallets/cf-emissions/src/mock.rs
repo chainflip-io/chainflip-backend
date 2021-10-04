@@ -76,6 +76,8 @@ impl EnsureOrigin<Origin> for MockEnsureGovernance {
 	}
 }
 
+cf_traits::impl_mock_stake_transfer!(u64, u128);
+
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
@@ -86,6 +88,7 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = MockEnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
 }
 
 pub const MINT_INTERVAL: u64 = 5;

@@ -52,7 +52,6 @@ use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
-use sp_std::vec::Vec;
 
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -398,7 +397,7 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
 
-		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
+		fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
 			// Clear our expectations
 			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from
