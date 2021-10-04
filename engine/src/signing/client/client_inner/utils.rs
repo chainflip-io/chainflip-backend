@@ -55,8 +55,6 @@ impl ValidatorMaps {
 }
 
 pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
-    let signers = signers.clone();
-
     let idxs: Vec<_> = (1..=signers.len()).collect();
 
     debug_assert_eq!(idxs.len(), signers.len());

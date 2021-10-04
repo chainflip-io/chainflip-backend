@@ -3,7 +3,6 @@
 //! # Chainflip governance
 
 use codec::Decode;
-use frame_support::ensure;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnfilteredDispatchable;
 pub use pallet::*;
