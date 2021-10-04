@@ -205,6 +205,23 @@ pub struct SchnorrVerificationComponents {
 	pub k_times_g_addr: [u8; 20],
 }
 
+pub struct SchnorrSignature {
+	s: libsecp256k1::curve::Scalar,
+	r: libsecp256k1::PublicKey,
+}
+
+impl From<SchnorrSignature> for SchnorrVerificationComponents {
+	fn from(sig: SchnorrSignature) -> Self {
+		let mut k_times_g_addr = [0u8; 20];
+		let k_times_g = Keccak256::hash(&sig.r.serialize()[..]);
+		k_times_g_addr.copy_from_slice(&k_times_g[12..]);
+		SchnorrVerificationComponents {
+			s: sig.s.b32(),
+			k_times_g_addr,
+		}
+	}
+}
+
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
 /// with the following fields omitted: nonce,
 ///
@@ -290,5 +307,68 @@ mod tests {
 		bytes[0] = 3;
 		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
 		assert_eq!(key.pub_key_y_parity, 1);
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use ethabi::ethereum_types::H160;
+	use libsecp256k1::{self, PublicKey, SecretKey, curve::Affine};
+	use Keccak256;
+
+	const PUBKEY_COMPRESSED: [u8; 33] = [0u8; 33];
+
+	fn verify_sig_data(sig_data: &SigData) -> bool {
+		let mut pubkey_bytes = PUBKEY_COMPRESSED;
+		pubkey_bytes[0] -= 2;
+		let msg_challenge = Keccak256::hash([
+			&pubkey_bytes[1..],
+			&pubkey_bytes[..1],
+			sig_data.msg_hash.as_bytes(), // msghash
+			sig_data.k_times_g_addr.as_bytes(), // nonceTimesGeneratorAddr
+		]
+		.concat()
+		.as_ref());
+
+		let e = SecretKey::parse(&msg_challenge.as_fixed_bytes()).expect("msg_challenge is always a 32 byte hash");
+
+		let s = {
+			let mut buf = [0u8; 32];
+			sig_data.sig.to_big_endian(&mut buf[..]);
+			SecretKey::parse(&buf).unwrap()
+		};
+
+		let sG = PublicKey::from_secret_key(&s);
+		
+		let mut pk = PublicKey::parse_compressed(&PUBKEY_COMPRESSED).expect("public key should always be valid");
+		pk.tweak_mul_assign(&e).expect("succeeds for all e != 0");
+
+		let mut k_times_g_reconstructed: Affine = sG.into().neg();
+
+		if sig_data.k_times_g_addr == H160::from_slice(&Keccak256::hash((sG - pk).as_bytes().as_ref())[12..]) {
+			true
+		} else {
+			false
+		}
+	}
+
+	fn test_verify_threshold_signature(
+		message: &H256,
+		signature: &SchnorrSignature,
+		pubkey: &PublicKey,
+	) -> bool {
+		let mut pubkey_bytes = pubkey.serialize_compressed();
+		pubkey_bytes[0] -= 2;
+		let msg_challenge = Keccak256::hash([
+			&pubkey_bytes[1..],
+			&pubkey_bytes[..1],
+			message.as_bytes(),
+			signature.r.serialize().as_ref(),
+		]
+		.concat()
+		.as_ref());
+
+		false
 	}
 }

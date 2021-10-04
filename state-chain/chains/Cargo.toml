@@ -13,6 +13,9 @@ frame-system = { default-features = false, version = '3.0.0' }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 sp-runtime = { default-features = false, version = '3.0.0' }
 
+# Cryptography
+libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
+
 # Ethereum
 ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
 ethereum = {default-features = false, version = "0.9"}
@@ -33,6 +36,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'hex/std',
+    'libsecp256k1/std',
     'rlp/std',
     'serde',
     'sp-runtime/std',
