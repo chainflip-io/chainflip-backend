@@ -24,13 +24,13 @@ mod test {
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
-			assert!(VaultsPallet::no_active_vault_rotations());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
 			// Request index 2
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
 			// Confirm we have a new vault rotation process running
-			assert!(!VaultsPallet::no_active_vault_rotations());
+			assert!(!VaultsPallet::no_active_chain_vault_rotations());
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
@@ -82,7 +82,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::no_active_vault_rotations());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![BOB, CHARLIE]);
@@ -129,7 +129,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::no_active_vault_rotations());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);
@@ -367,7 +367,6 @@ mod test {
 				KeygenResponse::Success(vec![1; 33])
 			));
 			// we have never created a request to sign, but we received a response?
-			// this is at least better than before
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				first_ceremony_id,

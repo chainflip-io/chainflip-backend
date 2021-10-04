@@ -47,6 +47,7 @@ pub trait ChainVault {
 	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
 }
 
+// Umm, where?
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
@@ -164,7 +165,7 @@ pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
-			ActiveVaultRotations::<T>::contains_key($index),
+			ActiveChainVaultRotations::<T>::contains_key($index),
 			RotationError::InvalidCeremonyId
 		);
 	};

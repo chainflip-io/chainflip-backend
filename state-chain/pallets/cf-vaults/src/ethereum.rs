@@ -2,7 +2,7 @@ use core::convert::TryInto;
 
 use crate::ChainParams::Ethereum;
 use crate::{
-	ActiveVaultRotations, CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet,
+	ActiveChainVaultRotations, CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet,
 	RequestResponse, SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
 	VaultRotationRequestResponse,
 };
@@ -34,7 +34,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
 			[0; 32],
-			new_public_key.clone(),
+			new_public_key.clone(), 
 			SchnorrSigTruncPubkey::default(),
 			// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
 			// https://github.com/chainflip-io/chainflip-backend/pull/495
@@ -93,7 +93,7 @@ impl<T: Config>
 				message_hash,
 				signature,
 			} => {
-				match ActiveVaultRotations::<T>::try_get(ceremony_id) {
+				match ActiveChainVaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
 						// https://github.com/chainflip-io/chainflip-backend/pull/495
