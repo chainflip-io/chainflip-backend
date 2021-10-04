@@ -297,6 +297,25 @@ mod test {
 	}
 
 	#[test]
+	fn should_error_when_attempting_to_use_use_new_public_key_same_as_old() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
+
+			assert_err!(
+				VaultsPallet::keygen_response(
+					Origin::root(),
+					1,
+					// this key is different to the genesis key
+					KeygenResponse::Success(vec![0; 33])
+				),
+				Error::<MockRuntime>::KeyUnchanged
+			);
+		});
+	}
+
+	#[test]
 	fn attempting_to_call_threshold_sig_resp_on_uninitialised_ceremony_id_fails_with_invalid_ceremony_id(
 	) {
 		new_test_ext().execute_with(|| {

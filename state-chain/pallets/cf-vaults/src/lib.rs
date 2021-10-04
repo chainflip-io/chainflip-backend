@@ -149,7 +149,7 @@ pub mod pallet {
 		/// We have an empty validator set
 		EmptyValidatorSet,
 		/// The key generation response failed
-		KeyResponseFailed,
+		KeyUnchanged,
 		/// A vault rotation has failed
 		VaultRotationCompletionFailed,
 		/// A key generation response has failed
@@ -253,7 +253,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::VaultRotationCompletionFailed => {
 				Error::<T>::VaultRotationCompletionFailed
 			}
-			RotationError::KeyResponseFailed => Error::<T>::KeyResponseFailed,
+			RotationError::KeyUnchanged => Error::<T>::KeyUnchanged,
 			RotationError::InvalidCeremonyId => Error::<T>::InvalidCeremonyId,
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
@@ -379,7 +379,7 @@ impl<T: Config>
 					})
 				} else {
 					Pallet::<T>::abort_rotation();
-					Err(RotationError::KeyResponseFailed)
+					Err(RotationError::KeyUnchanged)
 				}
 			}
 			KeygenResponse::Error(bad_validators) => {

@@ -133,8 +133,8 @@ pub enum RotationError<ValidatorId> {
 	EmptyValidatorSet,
 	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
-	/// The key generation response failed
-	KeyResponseFailed,
+	/// The keygen response says the newly generated key is the same as the old key
+	KeyUnchanged,
 	/// Failed to construct a valid chain specific payload for rotation
 	FailedToConstructPayload,
 	/// Vault rotation completion failed
