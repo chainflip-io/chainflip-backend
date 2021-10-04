@@ -424,7 +424,7 @@ async fn should_ignore_duplicate_rts() {
     assert_stage2!(c1);
 
     // Send another request to sign with the same ceremony_id and key_id
-    c1.send_request_to_sign_default(ctx.key_id());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert_stage2!(c1);
@@ -440,7 +440,7 @@ async fn should_delay_rts_until_key_is_ready() {
     assert_no_stage!(c1);
 
     // send the request to sign
-    c1.send_request_to_sign_default(ctx.key_id());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been delayed, so the stage is unaffected
     assert_no_stage!(c1);
@@ -493,4 +493,29 @@ async fn should_ignore_signing_non_participant() {
 
     // The message should of been ignored and the client stage should not advanced/fail
     assert_stage2!(c1);
+}
+
+#[tokio::test]
+async fn should_fail_rts_with_unknown_signer_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
+
+    assert_no_stage!(c1);
+
+    // Get an id that was not in the keygen and substitute it in the signer list
+    let unknown_signer_id = AccountId([0; 32]);
+    assert!(VALIDATOR_IDS
+        .iter()
+        .find(|v_id| *v_id == &unknown_signer_id)
+        .is_none());
+    let mut signer_ids = SIGNER_IDS.clone();
+    signer_ids[1] = unknown_signer_id;
+
+    // Send the rts with the modified signer_ids
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
 }
