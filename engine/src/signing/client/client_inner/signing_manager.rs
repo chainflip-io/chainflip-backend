@@ -68,7 +68,7 @@ impl SigningManager {
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
-        signers: Vec<AccountId>,
+        mut signers: Vec<AccountId>,
         ceremony_id: CeremonyId,
     ) {
         slog::debug!(
@@ -76,6 +76,25 @@ impl SigningManager {
             "Processing a request to sign [ceremony_id: {}]",
             ceremony_id
         );
+
+        // Hack to truncate the signers
+        if signers.len() > (key_info.params.threshold + 1) {
+            slog::warn!(
+                self.logger,
+                "Request to sign contains more signers than necessary, truncating the list [ceremony_id: {}]",
+                ceremony_id
+            );
+            signers.truncate(key_info.params.threshold + 1);
+        }
+
+        if signers.len() != key_info.params.threshold + 1 {
+            slog::warn!(
+                self.logger,
+                "Request to sign ignored: incorrect number of signers [ceremony_id: {}]",
+                ceremony_id
+            );
+            return;
+        }
 
         if !signers.contains(&self.id) {
             // TODO: alert

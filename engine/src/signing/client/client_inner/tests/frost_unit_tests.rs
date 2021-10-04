@@ -420,7 +420,6 @@ async fn should_ignore_duplicate_rts() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
-
     assert_stage2!(c1);
 
     // Send another request to sign with the same ceremony_id and key_id
@@ -436,7 +435,6 @@ async fn should_delay_rts_until_key_is_ready() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
-
     assert_no_stage!(c1);
 
     // send the request to sign
@@ -467,7 +465,6 @@ async fn should_ignore_signing_non_participant() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
-
     assert_stage2!(c1);
 
     // send all but 1 ver2 data to the client
@@ -498,7 +495,6 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready.clients[0].clone();
-
     assert_no_stage!(c1);
 
     // Get an id that was not in the keygen and substitute it in the signer list
@@ -520,15 +516,40 @@ async fn should_ignore_rts_if_not_participating() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready.clients[3].clone();
-
     assert_no_stage!(c1);
 
     // Make sure our id is not in the signers list
     assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
 
-    // send the request to sign
+    // Send the request to sign
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The rts should not have started a ceremony
     assert_no_stage!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_rts_with_incorrect_amount_of_signers() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    assert_no_stage!(c1);
+
+    // Send the request to sign with not enough signers
+    let mut signer_ids = SIGNER_IDS.clone();
+    let _ = signer_ids.pop();
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
+
+    // TODO: This part of the test will not work while the truncating hack/fix is in the signing_manager
+    // Send the request to sign with too many signers
+    // let mut signer_ids = SIGNER_IDS.clone();
+    // signer_ids.push(VALIDATOR_IDS[3].clone());
+    // c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // // The rts should not have started a ceremony
+    // assert_no_stage!(c1);
 }
