@@ -128,6 +128,12 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
+      - cargo-clippy-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
       - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
