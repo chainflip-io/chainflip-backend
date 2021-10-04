@@ -15,6 +15,9 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
@@ -23,10 +26,6 @@ use sp_runtime::{
 	offchain::storage_lock::BlockNumberProvider,
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
 };
-
-pub trait WeightInfo {
-	fn on_initialize(x: u32) -> Weight;
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -70,7 +69,7 @@ pub mod pallet {
 		type MintInterval: Get<Self::BlockNumber>;
 
 		/// Benchmark stuff
-		type WeightInfo: WeightInfo;
+		type WeightInfo: weights::WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -110,7 +109,6 @@ pub mod pallet {
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
 			}
-
 			T::WeightInfo::on_initialize(current_block.unique_saturated_into())
 		}
 	}
