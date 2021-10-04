@@ -371,47 +371,76 @@ mod test_schnorr {
     use curv::elliptic::curves::traits::{ECPoint, ECScalar};
     use std::str::FromStr;
 
+    struct SignatureTestData {
+        sigma: String,
+        message_hash: String,
+        nonce_key: String,
+        secret_key: String,
+    }
+
     // This test data has been signed and validated on the KeyManager.sol contract
+    fn init_test_data() -> Vec<SignatureTestData> {
+        let mut test_data: Vec<SignatureTestData> = vec![];
+        let sig_test_1 = SignatureTestData {
+            sigma: "20f636176ca66035bbc4ba178040847508742711f8a3426c715fbfa9fdd528fc".to_string(),
+            message_hash: "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e"
+                .to_string(),
+            nonce_key: "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2"
+                .to_string(),
+            secret_key: "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
+                .to_string(),
+        };
+        test_data.push(sig_test_1);
 
-    const SIGMA_HEX: &str = "20f636176ca66035bbc4ba178040847508742711f8a3426c715fbfa9fdd528fc";
-    const MESSAGE_HASH_HEX: &str =
-        "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e";
-    const NONCE_KEY_HEX: &str = "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2";
-    const SECRET_KEY_HEX: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
+        let sig_test_2 = SignatureTestData {
+            sigma: "20f636176ca66035bbc4ba178040847508742711f8a3426c715fbfa9fdd528fc".to_string(),
+            message_hash: "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e"
+                .to_string(),
+            nonce_key: "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2"
+                .to_string(),
+            secret_key: "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
+                .to_string(),
+        };
+        test_data.push(sig_test_2);
+        test_data
+    }
 
+    // Tests 2 signatures
     #[test]
-    fn test_signature() {
-        // using the known SECRET_KEY_HEX, build the local_private_key
-        let sk_1_scalar = scalar_from_secretkey_hex(SECRET_KEY_HEX).unwrap();
-        let local_private_key = SharedKeys {
-            y: Secp256k1Point::generator() * &sk_1_scalar,
-            x_i: sk_1_scalar,
-        };
+    fn test_signature_success() {
+        for data in init_test_data() {
+            // using the known SECRET_KEY_HEX, build the local_private_key
+            let sk_1_scalar = scalar_from_secretkey_hex(&data.secret_key).unwrap();
+            let local_private_key = SharedKeys {
+                y: Secp256k1Point::generator() * &sk_1_scalar,
+                x_i: sk_1_scalar,
+            };
 
-        // create the k_times_g from the known NONCE_KEY_HEX
-        let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
-        let k_times_g = SharedKeys {
-            y: Secp256k1Point::generator() * &k_scalar,
-            x_i: k_scalar,
-        };
+            // create the k_times_g from the known NONCE_KEY_HEX
+            let k_scalar = scalar_from_secretkey_hex(&data.nonce_key).unwrap();
+            let k_times_g = SharedKeys {
+                y: Secp256k1Point::generator() * &k_scalar,
+                x_i: k_scalar,
+            };
 
-        // sign the message
-        let message_hash = hex::decode(MESSAGE_HASH_HEX).unwrap();
-        let local_sig = LocalSig::compute(&message_hash, &k_times_g, &local_private_key);
-        let sigma: [u8; 32] = local_sig.get_gamma().get_element().as_ref().clone();
+            // sign the message
+            let message_hash = hex::decode(&data.message_hash).unwrap();
+            let local_sig = LocalSig::compute(&message_hash, &k_times_g, &local_private_key);
+            let sigma: [u8; 32] = local_sig.get_gamma().get_element().as_ref().clone();
 
-        // by using the same key, nonce and message, we should get the same signature (sigma)
-        assert_eq!(hex::encode(&sigma), SIGMA_HEX);
+            // by using the same key, nonce and message, we should get the same signature (sigma)
+            assert_eq!(hex::encode(&sigma), &data.sigma[..]);
 
-        // turn the sigma into a proper signature and run it though the verify function.
-        let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
-        let sig = Signature {
-            sigma: scalar_from_secretkey(sigma_key),
-            v: k_times_g.y,
-        };
+            // turn the sigma into a proper signature and run it though the verify function.
+            let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
+            let sig = Signature {
+                sigma: scalar_from_secretkey(sigma_key),
+                v: k_times_g.y,
+            };
 
-        let res = sig.verify(&message_hash, &local_private_key.y);
-        assert!(res.is_ok());
+            let res = sig.verify(&message_hash, &local_private_key.y);
+            assert!(res.is_ok());
+        }
     }
 
     fn scalar_from_secretkey(secret_key: secp256k1::SecretKey) -> Secp256k1Scalar {

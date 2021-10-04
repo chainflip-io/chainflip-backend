@@ -45,5 +45,4 @@ std = [
   'sp-io/std',
   'log/std',
   'ethabi/std',
-  'hex/std',
 ]
