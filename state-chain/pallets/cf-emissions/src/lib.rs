@@ -44,7 +44,7 @@ pub mod pallet {
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
 
-		/// An implmentation of the [Issuance] trait.
+		/// An implementation of the [Issuance] trait.
 		type Issuance: Issuance<
 			Balance = Self::FlipBalance,
 			AccountId = Self::AccountId,
@@ -60,6 +60,18 @@ pub mod pallet {
 		/// How frequently to mint.
 		#[pallet::constant]
 		type MintInterval: Get<Self::BlockNumber>;
+
+		/// Validator inflation for emissions
+		#[pallet::constant]
+		type ValidatorEmissionInflation: Get<u8>;
+
+		/// Backup Validator inflation for emissions
+		#[pallet::constant]
+		type BackupValidatorEmissionInflation: Get<u8>;
+
+		/// Blocks per day.
+		#[pallet::constant]
+		type BlocksPerDay: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -67,14 +79,20 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	#[pallet::getter(fn emissions_per_block)]
-	/// The amount of Flip to mint per block.
-	pub type EmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn last_mint_block)]
 	/// The block number at which we last minted Flip.
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn validator_block_emissions)]
+	/// The block number at which we last minted Flip.
+	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validator_block_emissions)]
+	/// The block number at which we last minted Flip.
+	pub type BackupValidatorEmissionPerBlock<T: Config> =
+		StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
@@ -107,27 +125,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		/// Emission rate at genesis.
-		pub emission_per_block: T::FlipBalance,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self {
-				emission_per_block: Zero::zero(),
-			}
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {
-			EmissionPerBlock::<T>::set(self.emission_per_block);
-		}
-	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -156,7 +153,7 @@ impl<T: Config> Pallet<T> {
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = EmissionPerBlock::<T>::get()
+		let reward_amount = ValidatorEmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
 			.ok_or(T::DbWeight::get().reads(2))?;
 
@@ -181,9 +178,37 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+pub trait UpdateBlockEmissions<T: Config> {
+	fn update_validator_block_emission(emission: T::FlipBalance);
+	fn update_backup_validator_block_emission(emission: T::FlipBalance);
+}
+
+impl<T: Config> UpdateBlockEmissions<T> for Pallet<T> {
+	fn update_validator_block_emission(emission: T::FlipBalance) {
+		ValidatorEmissionPerBlock::<T>::put(emission);
+	}
+
+	fn update_backup_validator_block_emission(emission: T::FlipBalance) {
+		BackupValidatorEmissionPerBlock::<T>::put(emission);
+	}
+}
+
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() {
 		let block_number = frame_system::Pallet::<T>::current_block_number();
 		let _ = Self::mint_rewards_for_block(block_number);
+
+		// Calculate blocks emissions and update
+		Self::update_validator_block_emission(
+			T::Issuance::total_issuance() * T::ValidatorEmissionInflation::get().into()
+				/ 100u32.into() / 365u32.into()
+				/ T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
+		);
+
+		Self::update_backup_validator_block_emission(
+			T::Issuance::total_issuance() * T::BackupValidatorEmissionInflation::get().into()
+				/ 100u32.into() / 365u32.into()
+				/ T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
+		);
 	}
 }

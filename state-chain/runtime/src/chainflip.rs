@@ -1,21 +1,18 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
+	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, System, Validator,
 	Witnesser,
 };
-use crate::EmergencyRotationPercentageTrigger;
-use cf_traits::{
-	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+use crate::{EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
+use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
 	EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, Issuance, NetworkState,
 	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
-use pallet_cf_flip::FlipIssuance;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_std::cmp::min;
 use sp_std::vec::Vec;
-use frame_support::traits::Imbalance;
 
 pub struct ChainflipEpochTransitions;
 
@@ -71,11 +68,13 @@ trait RewardDistribution {
 	/// An implementation of the [Issuance] trait.
 	type Issuance: Issuance;
 
+	/// Distribute rewards
 	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight;
 }
 
-struct BackupEmissions;
-impl RewardDistribution for BackupEmissions {
+struct BackupValidatorEmissions;
+
+impl RewardDistribution for BackupValidatorEmissions {
 	type EpochInfo = Validator;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
@@ -88,11 +87,16 @@ impl RewardDistribution for BackupEmissions {
 	// TODO calculated in pallet and configurable with extrinsics
 
 	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight {
+		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
-		// BV emissions cap: 1% of total emissions.
-		let emissions_cap = 1_000_000; // TODO grab this from pub fn from emissions
-							   // rAV: average validator reward earned by each active validator;
-		let average_validator_reward = Rewards::rewards_due_each();
+		// Our emission cap for this heartbeat interval
+		let emissions_cap = Emissions::backup_validator_block_emissions() * HeartbeatBlockInterval::get() as u128;
+		// We distribute backup rewards every heartbeat interval
+		// These are the rewards for this epoch, we don't know the size of the epoch in blocks
+		// so this needs to be weighted for 150 blocks
+		let block_emissions = System::block_number() - Emissions::last_mint_block();
+		let average_validator_reward =
+			Rewards::rewards_due_each() * HeartbeatBlockInterval::get() as u128 / block_emissions as u128 ;
 
 		let mut total_rewards = 0;
 
@@ -151,7 +155,7 @@ impl Heartbeat for ChainflipHeartbeat {
 			})
 			.collect();
 
-		BackupEmissions::distribute_rewards(&backup_validators);
+		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are below the emergency rotation trigger
 		// then issue an emergency rotation request

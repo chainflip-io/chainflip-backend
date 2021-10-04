@@ -397,6 +397,8 @@ impl pallet_cf_governance::Config for Runtime {
 
 parameter_types! {
 	pub const MintInterval: u32 = 10 * MINUTES;
+	pub const ValidatorEmissionInflation: u8 = 10;
+	pub const BackupValidatorEmissionInflation: u8 = 1;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
@@ -405,7 +407,10 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
+	type ValidatorEmissionInflation = ValidatorEmissionInflation;
+	type BackupValidatorEmissionInflation = BackupValidatorEmissionInflation;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
@@ -465,7 +470,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},

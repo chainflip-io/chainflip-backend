@@ -1,5 +1,6 @@
 use crate::{mock::*, Pallet};
 use pallet_cf_flip::Pallet as Flip;
+use crate::UpdateBlockEmissions;
 
 #[test]
 fn test_should_mint() {
@@ -15,7 +16,7 @@ fn test_should_mint() {
 
 #[test]
 fn test_should_mint_at() {
-	new_test_ext(vec![], None, None).execute_with(|| {
+	new_test_ext(vec![], None).execute_with(|| {
 		// It has been `MINT_INTERVAL` blocks since the last mint.
 		assert_eq!(Pallet::<Test>::should_mint_at(MINT_INTERVAL).0, true);
 		// It hasn't yet been `MINT_INTERVAL` blocks since the last mint.
@@ -32,7 +33,10 @@ mod test_block_rewards {
 	use super::*;
 
 	fn test_with(block_number: u64, emissions_per_block: u128, expected_mint: u128) {
-		new_test_ext(vec![1, 2], Some(1000), Some(emissions_per_block)).execute_with(|| {
+		new_test_ext(vec![1, 2], Some(1000)).execute_with(|| {
+
+			Pallet::<Test>::update_validator_block_emission(emissions_per_block);
+
 			let before = Flip::<Test>::total_issuance();
 			let _weights = Pallet::<Test>::mint_rewards_for_block(block_number);
 			let after = Flip::<Test>::total_issuance();
@@ -61,8 +65,10 @@ mod test_block_rewards {
 fn test_duplicate_emission_should_be_noop() {
 	const EMISSION_RATE: u128 = 10;
 
-	new_test_ext(vec![1, 2], None, Some(EMISSION_RATE)).execute_with(|| {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
 		const BLOCK_NUMBER: u64 = 5;
+
+		Pallet::<Test>::update_validator_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
 		let _weights = Pallet::<Test>::mint_rewards_for_block(BLOCK_NUMBER);

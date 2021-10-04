@@ -28,7 +28,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Config<T>, Storage, Event<T>},
+		Emissions: pallet_cf_emissions::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -95,6 +95,9 @@ pub const MINT_INTERVAL: u64 = 5;
 
 parameter_types! {
 	pub const MintInterval: u64 = MINT_INTERVAL;
+	pub const ValidatorEmissionInflation: u8 = 10;
+	pub const BackupValidatorEmissionInflation: u8 = 1;
+
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -124,24 +127,25 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type MintInterval = MintInterval;
+	type ValidatorEmissionInflation = ValidatorEmissionInflation;
+	type BackupValidatorEmissionInflation = BackupValidatorEmissionInflation;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(
 	validators: Vec<u64>,
-	issuance: Option<u128>,
-	emissions: Option<u128>,
+	issuance: Option<u128>
 ) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000u128);
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: emissions.unwrap_or(total_issuance / 100),
-		}),
 	};
+
 	for v in validators {
 		epoch_info::Mock::add_validator(v);
 	}
+
 	config.build_storage().unwrap().into()
 }

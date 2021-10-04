@@ -4,9 +4,9 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, FlipBalance,
 	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS, WASM_BINARY,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
 
 const TOTAL_ISSUANCE: FlipBalance = {
@@ -17,22 +17,6 @@ const TOTAL_ISSUANCE: FlipBalance = {
 };
 
 const MAX_VALIDATORS: u32 = 150;
-
-const BLOCK_EMISSIONS: FlipBalance = {
-	// TODO This needs to be configurable
-	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
-	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 / DAYS as u128
-};
-
-const BACKUP_VALIDATOR_BLOCK_EMISSIONS: FlipBalance = {
-	// TODO This needs to be configurable
-	const ANNUAL_INFLATION_PERCENT: FlipBalance = 1;
-	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 / DAYS as u128
-};
 
 // Number of blocks to be online to accrue a point
 pub const ACCRUAL_BLOCKS: u32 = 2500;
@@ -383,10 +367,7 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: BLOCK_EMISSIONS,
-			..Default::default()
-		}),
+
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
