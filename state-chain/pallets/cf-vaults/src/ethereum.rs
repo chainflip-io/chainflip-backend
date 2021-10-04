@@ -1,5 +1,3 @@
-use core::convert::TryInto;
-
 use crate::crypto::destructure_pubkey;
 use crate::ChainParams::Ethereum;
 use crate::{
@@ -172,7 +170,7 @@ impl<T: Config> EthereumChain<T> {
 				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),
 				Token::Uint(nonce.into()),
-				Token::Address(signature.eth_pub_key.into()),
+				Token::Address(signature.k_times_g_address.into()),
 			]),
 			Token::Tuple(vec![
 				Token::Uint(pubkey_x.into()),

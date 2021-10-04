@@ -405,7 +405,6 @@ mod test_schnorr {
         test_data
     }
 
-    // Tests 2 signatures
     #[test]
     fn test_signature_success() {
         for data in init_test_data() {

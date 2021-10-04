@@ -14,8 +14,8 @@ pub struct SchnorrSigTruncPubkey {
 	// s: secp256k1::SecretKey,
 	pub s: [u8; 32],
 
-	/// Public key hashed and truncated to an ethereum address
-	pub eth_pub_key: [u8; 20],
+	/// Public key hashed and truncated to an ethereum compatible address
+	pub k_times_g_address: [u8; 20],
 }
 
 /// A request/response trait
