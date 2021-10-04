@@ -29,8 +29,8 @@ use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
 use curv::BigInt;
 
 use itertools::Itertools;
+use pallet_cf_vaults::crypto::destructure_pubkey;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
 
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -201,8 +201,8 @@ impl LocalSig {
         let alpha_i = local_private_key.x_i.clone();
 
         let e = LocalSig::build_challenge(
-            local_private_key.y.get_element(),
             local_ephemeral_key.y.get_element(),
+            local_private_key.y.get_element(),
             message,
         );
 
@@ -218,9 +218,10 @@ impl LocalSig {
         pub_key: secp256k1::PublicKey,
         message: &[u8],
     ) -> FE {
-        let eth_addr = utils::pubkey_to_eth_addr(pub_key);
+        let k_times_g_address = utils::pubkey_to_eth_addr(nonce_key);
 
-        let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
+        let (pubkey_x, pubkey_y_parity) =
+            destructure_pubkey(pub_key.serialize().into()).expect("Should be valid pubkey");
 
         // Assemble the challenge in correct order according to this contract:
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
@@ -228,21 +229,13 @@ impl LocalSig {
             pubkey_x.to_vec(),
             [pubkey_y_parity].to_vec(),
             message.to_vec(),
-            eth_addr.to_vec(),
+            k_times_g_address.to_vec(),
         ]
         .concat();
 
         let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
         let e: FE = ECScalar::from(&e_bn);
         e
-    }
-
-    fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
-        let pubkey_bytes: [u8; 33] = pubkey.serialize();
-        let pubkey_y_parity_byte = pubkey_bytes[0];
-        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
-        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
-        return (pubkey_x, pubkey_y_parity);
     }
 
     #[cfg(test)]
@@ -330,7 +323,7 @@ impl LocalSig {
 pub struct Signature {
     /// This is `s` in other literature
     pub sigma: FE,
-    /// This is `r` in other literature
+    /// This is `r` in other literature (k * G)
     pub v: GE,
 }
 
@@ -353,7 +346,7 @@ impl Signature {
     }
 
     pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
-        let e = LocalSig::build_challenge(pubkey_y.get_element(), self.v.get_element(), message);
+        let e = LocalSig::build_challenge(self.v.get_element(), pubkey_y.get_element(), message);
 
         let g: GE = GE::generator();
         let sigma_g = g * &self.sigma;
@@ -379,11 +372,12 @@ mod test_schnorr {
     use std::str::FromStr;
 
     // This test data has been signed and validated on the KeyManager.sol contract
-    const SECRET_KEY_HEX: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
-    const NONCE_KEY_HEX: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+
+    const SIGMA_HEX: &str = "20f636176ca66035bbc4ba178040847508742711f8a3426c715fbfa9fdd528fc";
     const MESSAGE_HASH_HEX: &str =
         "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e";
-    const SIGMA_HEX: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
+    const NONCE_KEY_HEX: &str = "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2";
+    const SECRET_KEY_HEX: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
 
     #[test]
     fn test_signature() {
@@ -394,16 +388,16 @@ mod test_schnorr {
             x_i: sk_1_scalar,
         };
 
-        // create the local_ephemeral_key from the known NONCE_KEY_HEX
+        // create the k_times_g from the known NONCE_KEY_HEX
         let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
-        let local_ephemeral_key = SharedKeys {
+        let k_times_g = SharedKeys {
             y: Secp256k1Point::generator() * &k_scalar,
             x_i: k_scalar,
         };
 
         // sign the message
         let message_hash = hex::decode(MESSAGE_HASH_HEX).unwrap();
-        let local_sig = LocalSig::compute(&message_hash, &local_ephemeral_key, &local_private_key);
+        let local_sig = LocalSig::compute(&message_hash, &k_times_g, &local_private_key);
         let sigma: [u8; 32] = local_sig.get_gamma().get_element().as_ref().clone();
 
         // by using the same key, nonce and message, we should get the same signature (sigma)
@@ -413,7 +407,7 @@ mod test_schnorr {
         let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
         let sig = Signature {
             sigma: scalar_from_secretkey(sigma_key),
-            v: local_ephemeral_key.y,
+            v: k_times_g.y,
         };
 
         let res = sig.verify(&message_hash, &local_private_key.y);
