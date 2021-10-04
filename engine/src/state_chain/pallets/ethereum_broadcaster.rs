@@ -64,6 +64,7 @@ mod test_events_decoding {
             _marker: Default::default(),
         };
 
+        // Strip first two bytes - equivalent to the module and variant (thanks subxt).
         let encoded = event.encode()[2..].to_vec();
 
         assert_eq!(

@@ -151,24 +151,30 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	/// A counter for incrementing the broadcast attempt id.
 	#[pallet::storage]
 	pub type BroadcastAttemptIdCounter<T, I = ()> = StorageValue<_, BroadcastAttemptId, ValueQuery>;
 
+	/// A counter for incrementing the broadcast id.
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
+	/// Live transaction signing requests.
 	#[pallet::storage]
-	pub type AwaitingSignature<T: Config<I>, I: 'static = ()> =
+	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastAttemptId, SigningAttempt<T, I>, OptionQuery>;
 
+	/// Live broadcast requests.
 	#[pallet::storage]
 	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastAttemptId, BroadcastAttempt<T, I>, OptionQuery>;
 
+	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
-	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
+	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<FailedAttempt<T, I>>, ValueQuery>;
 
+	/// A mapping from block number to a list of signing or broadcast attempts that expire at that block number.
 	#[pallet::storage]
 	pub type Expiries<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -192,7 +198,7 @@ pub mod pallet {
 		/// [broadcast_id]
 		BroadcastComplete(BroadcastId),
 		/// [broadcast_id, attempt]
-		RetryScheduled(BroadcastId, AttemptCount),
+		BroadcastRetryScheduled(BroadcastId, AttemptCount),
 		/// [broadcast_id, attempt, failed_transaction]
 		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
 	}
@@ -208,7 +214,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			let retries = RetryQueue::<T, I>::take();
+			let retries = BroadcastRetryQueue::<T, I>::take();
 			let retry_count = retries.len();
 			for failed in retries {
 				Self::retry_failed_broadcast(failed);
@@ -218,7 +224,7 @@ pub mod pallet {
 			for (stage, id) in expiries.iter() {
 				match stage {
 					SigningOrBroadcast::SigningStage => {
-						AwaitingSignature::<T, I>::take(id).map(|signing_attempt| {
+						AwaitingTransactionSignature::<T, I>::take(id).map(|signing_attempt| {
 							Self::retry_failed_broadcast(signing_attempt.into());
 						});
 					}
@@ -273,7 +279,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt = AwaitingSignature::<T, I>::get(attempt_id)
+			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			ensure!(
@@ -281,7 +287,7 @@ pub mod pallet {
 				Error::<T, I>::InvalidSigner
 			);
 
-			AwaitingSignature::<T, I>::remove(attempt_id);
+			AwaitingTransactionSignature::<T, I>::remove(attempt_id);
 
 			if T::BroadcastConfig::verify_transaction(
 				&signing_attempt.nominee,
@@ -393,7 +399,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Select a signer for this broadcast.
 		let nominated_signer = T::SignerNomination::nomination_with_seed(attempt_id);
 
-		AwaitingSignature::<T, I>::insert(
+		AwaitingTransactionSignature::<T, I>::insert(
 			attempt_id,
 			SigningAttempt::<T, I> {
 				broadcast_id,
@@ -430,8 +436,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn schedule_retry(failed: FailedAttempt<T, I>) {
-		RetryQueue::<T, I>::append(&failed);
-		Self::deposit_event(Event::<T, I>::RetryScheduled(
+		BroadcastRetryQueue::<T, I>::append(&failed);
+		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
 			failed.broadcast_id,
 			failed.attempt_count,
 		));
