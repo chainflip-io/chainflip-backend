@@ -8,7 +8,7 @@ use sp_std::prelude::*;
 pub type CeremonyId = u64;
 
 /// Schnorr Signature type
-#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
+#[derive(PartialEq, Decode, Default, Encode, Eq, Clone, RuntimeDebug, Copy)]
 pub struct SchnorrSigTruncPubkey {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
@@ -120,8 +120,11 @@ pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
-	// Signature
-	Success(Signature),
+	Success {
+		// what we sign over
+		message_hash: [u8; 32],
+		signature: Signature,
+	},
 	// Bad validators
 	Error(Vec<ValidatorId>),
 }

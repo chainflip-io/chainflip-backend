@@ -34,8 +34,9 @@ where
     }
 
     // Save `key` under key `key_id` overwriting if exists
+    // TODO: Can we borrow KeyId here too?
     pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo) {
-        self.db.update_key(key_id.clone(), &key);
+        self.db.update_key(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

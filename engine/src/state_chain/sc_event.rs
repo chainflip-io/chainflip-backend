@@ -24,7 +24,7 @@ pub enum SCEvent {
 /// - Vaults
 ///   - KeygenRequest
 ///   - ThresholdSignatureRequest
-///   - VaultRotationRequestEvent
+///   - VaultRotationRequest
 pub fn raw_event_to_sc_event(raw_event: &RawEvent) -> Result<Option<SCEvent>> {
     match raw_event.module.as_str() {
         "Vaults" => match raw_event.variant.as_str() {
@@ -37,7 +37,7 @@ pub fn raw_event_to_sc_event(raw_event: &RawEvent) -> Result<Option<SCEvent>> {
                 )?
                 .into(),
             )),
-            "VaultRotationRequestEvent" => Ok(Some(
+            "VaultRotationRequest" => Ok(Some(
                 VaultRotationRequestEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),

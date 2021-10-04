@@ -19,10 +19,10 @@ impl KeyDBMock {
 }
 
 impl KeyDB for KeyDBMock {
-    fn update_key(&mut self, key_id: KeyId, key: &KeygenResultInfo) {
+    fn update_key(&mut self, key_id: &KeyId, key: &KeygenResultInfo) {
         let val = bincode::serialize(key).unwrap();
 
-        self.kv_db.insert(key_id, val);
+        self.kv_db.insert(key_id.to_owned(), val);
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
