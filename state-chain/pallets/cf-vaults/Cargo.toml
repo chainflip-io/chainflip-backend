@@ -27,6 +27,7 @@ sp-std = {version = "3.0.0", default-features = false}
 ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = 'a53cb47'}
 
 [dev-dependencies]
+hex = {version = "0.4", default-features = false}
 sp-core = {default-features = false, version = '3.0.0'}
 sp-io = {version = "3.0.0", default-features = false}
 sp-std = {version = "3.0.0", default-features = false}
@@ -44,4 +45,5 @@ std = [
   'sp-io/std',
   'log/std',
   'ethabi/std',
+  'hex/std',
 ]

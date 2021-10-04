@@ -16,6 +16,12 @@ pub struct KeygenResult {
     pub vss: Vec<VerifiableSS<GE>>,
 }
 
+impl std::fmt::Display for KeygenResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.get_public_key_bytes()))
+    }
+}
+
 impl KeygenResult {
     pub fn get_public_key(&self) -> GE {
         self.shared_keys.y

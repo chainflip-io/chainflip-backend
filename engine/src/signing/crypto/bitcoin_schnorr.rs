@@ -1,4 +1,3 @@
-#[allow(unused_doc_comments)]
 /*
     Multisig Schnorr
 
