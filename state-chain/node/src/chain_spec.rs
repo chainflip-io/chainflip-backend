@@ -19,7 +19,16 @@ const TOTAL_ISSUANCE: FlipBalance = {
 const MAX_VALIDATORS: u32 = 150;
 
 const BLOCK_EMISSIONS: FlipBalance = {
+	// TODO This needs to be configurable
 	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
+	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
+	// Note: DAYS is the number of blocks in a day.
+	ANNUAL_INFLATION / 365 / DAYS as u128
+};
+
+const BACKUP_VALIDATOR_BLOCK_EMISSIONS: FlipBalance = {
+	// TODO This needs to be configurable
+	const ANNUAL_INFLATION_PERCENT: FlipBalance = 1;
 	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
 	// Note: DAYS is the number of blocks in a day.
 	ANNUAL_INFLATION / 365 / DAYS as u128
