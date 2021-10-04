@@ -314,29 +314,22 @@ impl<T: Config> Auction for Pallet<T> {
 							minimum_active_bid, ..
 						}) = LastAuctionResult::<T>::get()
 						{
-							if let Some(position) = validating_set
+							if let Some(number_of_validators) = validating_set
 								.iter()
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
-								// Number of validators
-								let number_of_validators = position;
 								// Number of backup validators in existing set
 								let number_of_backup_validators =
 									(validator_group_size - number_of_validators) * 2 / 3;
 
-								let backup_and_validator_group_size =
-									number_of_validators + number_of_backup_validators;
-
 								let desired_number_of_backup_validators =
-									(backup_and_validator_group_size as u32)
-										.saturating_mul(
-											T::PercentageOfBackupValidatorsInEmergency::get(),
-										)
-										.checked_div(100)
-										.unwrap_or_default() as usize;
+									(number_of_backup_validators as u32).saturating_mul(
+										T::PercentageOfBackupValidatorsInEmergency::get(),
+									) / 100;
 
 								validator_group_size =
-									number_of_validators + desired_number_of_backup_validators;
+									number_of_validators + desired_number_of_backup_validators as usize;
+
 								validating_set.truncate(validator_group_size);
 							}
 						}

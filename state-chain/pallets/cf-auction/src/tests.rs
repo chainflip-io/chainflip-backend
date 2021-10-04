@@ -342,9 +342,9 @@ mod test {
 			// This will mean we would have max_validators / 2 or 50 and after the first
 			// auction we would have 1/3 BVs of max_validators or 33 giving us a total set of
 			// bidders of 83.  However, in an emergency rotation we want to ensure we have
-			// a maximum of 30% BVs in the active set of rather 30% of 83 or no more than
-			// 24(rounded down int math) BVs.  This would mean when we come to the next active set we would have
-			// 50 of the original active set plus no more than 25 BVs or 50 + 25 = 75.
+			// a maximum of 30% BVs in the active set of rather 30% of 33 or no more than
+			// 9(rounded down int math) BVs.  This would mean when we come to the next active set we would have
+			// 50 of the original active set plus no more than 9 BVs or 50 + 9 = 59.
 			let mut bids = MockBidderProvider::get_bidders();
 			// Sort and take the top half out `max_validators / 2`
 			bids.sort_unstable_by_key(|k| k.1);
@@ -378,13 +378,12 @@ mod test {
 			// and the remaining BVs or 100/3
 			assert_eq!(number_of_backup_validators, max_validators / 3);
 
-			let number_of_emergency_bidders = bidders_in_emergency_network.len();
 			set_bidders(bidders_in_emergency_network);
 
 			// Let's now run the emergency auction
 			// We have a set of 100 bidders, 50 validators, 33 backup validators and 17 passive nodes
 			// If this wasn't an emergency rotation we would see the same distribution after an auction
-			// but as we have requested an emergency rotation we should see 50 plus (50 + 33) * 30% as
+			// but as we have requested an emergency rotation we should see 50 plus 33 * 30% as
 			// validators or rather the winners.
 			run_auction();
 
@@ -392,15 +391,8 @@ mod test {
 			assert_eq!(
 				auction_result.winners.len() as u32,
 				(PercentageOfBackupValidatorsInEmergency::get()
-					* (number_of_validators + number_of_backup_validators))
+					* number_of_backup_validators)
 					/ 100 + number_of_validators
-			);
-
-			// This would leave a 1/3 or less of backup validators of our emergency bidding set.
-			// In this case this would be 100 bidders minus the winners in the auction
-			assert_eq!(
-				AuctionPallet::backup_group_size() as usize,
-				number_of_emergency_bidders - auction_result.winners.len()
 			);
 		});
 	}
