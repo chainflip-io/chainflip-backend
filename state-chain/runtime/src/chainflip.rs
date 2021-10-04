@@ -4,12 +4,18 @@ use super::{
 	Witnesser,
 };
 use crate::EmergencyRotationPercentageTrigger;
-use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, NetworkState, StakeHandler, StakeTransfer, VaultRotationHandler, Issuance};
+use cf_traits::{
+	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+	EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, Issuance, NetworkState,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
+};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
+use pallet_cf_flip::FlipIssuance;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_std::cmp::min;
 use sp_std::vec::Vec;
+use frame_support::traits::Imbalance;
 
 pub struct ChainflipEpochTransitions;
 
@@ -59,10 +65,11 @@ impl VaultRotationHandler for ChainflipVaultRotationHandler {
 
 trait RewardDistribution {
 	type EpochInfo: EpochInfo;
-	type Issuance: Issuance;
 	type StakeTransfer: StakeTransfer;
 	type ValidatorId;
-	type Amount;
+	type FlipBalance;
+	/// An implementation of the [Issuance] trait.
+	type Issuance: Issuance;
 
 	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight;
 }
@@ -70,10 +77,10 @@ trait RewardDistribution {
 struct BackupEmissions;
 impl RewardDistribution for BackupEmissions {
 	type EpochInfo = Validator;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
+	type FlipBalance = FlipBalance;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
 	// Would need to calculate emissions for the 150 blocks the heartbeat is
@@ -87,9 +94,9 @@ impl RewardDistribution for BackupEmissions {
 							   // rAV: average validator reward earned by each active validator;
 		let average_validator_reward = Rewards::rewards_due_each();
 
-		let mut total_rewards: Self::Amount = 0;
+		let mut total_rewards = 0;
 
-		let mut rewards: Vec<(&Self::ValidatorId, Self::Amount)> = backup_validators
+		let mut rewards: Vec<(&Self::ValidatorId, Self::FlipBalance)> = backup_validators
 			.iter()
 			.map(|backup_validator| {
 				let backup_validator_stake =
@@ -106,14 +113,15 @@ impl RewardDistribution for BackupEmissions {
 		if total_rewards > emissions_cap {
 			rewards = rewards
 				.into_iter()
-				.map(|(validator_id, reward)| (validator_id, (reward * emissions_cap) / total_rewards))
+				.map(|(validator_id, reward)| {
+					(validator_id, (reward * emissions_cap) / total_rewards)
+				})
 				.collect();
 		}
 
 		// Distribute rewards
 		for (validator_id, reward) in rewards {
-			let x = Issuance::mint(reward);
-			Flip::settle(&validator_id, x.into());
+			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
 		}
 
 		0
