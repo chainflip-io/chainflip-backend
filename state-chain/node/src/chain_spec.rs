@@ -98,7 +98,10 @@ pub fn development_config() -> Result<ChainSpec, String> {
 						.unwrap()
 						.as_bytes()
 						.to_vec(),
-					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID").unwrap().as_bytes().to_vec(),
+					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
+						.unwrap()
+						.parse::<u32>()
+						.unwrap(),
 				},
 			)
 		},
@@ -120,9 +123,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
-	let stake_manager_address = env::var("STAKE_MANAGER_ADDRESS").unwrap();
-	let key_manager_address = env::var("KEY_MANAGER_ADDRESS").unwrap();
-	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID").unwrap();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
@@ -157,7 +157,10 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						.unwrap()
 						.as_bytes()
 						.to_vec(),
-					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID").unwrap().as_bytes().to_vec(),
+					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
+						.unwrap()
+						.parse::<u32>()
+						.unwrap(),
 				},
 			)
 		},
@@ -237,9 +240,15 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 				],
 				2,
 				GestaltConfig {
-					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
-					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
-					ethereum_chain_id: b"4".to_vec(),
+					stake_manager_address: hex_literal::hex![
+						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+					]
+					.to_vec(),
+					key_manager_address: hex_literal::hex![
+						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+					]
+					.to_vec(),
+					ethereum_chain_id: 4,
 				},
 			)
 		},
@@ -341,9 +350,15 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				],
 				3,
 				GestaltConfig {
-					stake_manager_address: b"0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F".to_vec(),
-					key_manager_address: b"0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f".to_vec(),
-					ethereum_chain_id: b"4".to_vec(),
+					stake_manager_address: hex_literal::hex![
+						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+					]
+					.to_vec(),
+					key_manager_address: hex_literal::hex![
+						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+					]
+					.to_vec(),
+					ethereum_chain_id: 4,
 				},
 			)
 		},
