@@ -58,17 +58,27 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
 	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		pallet_cf_validator::ValidatorLookup::iter()
+		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
 			.skip_while(|(id, _)| !<Reputation as cf_traits::Online>::is_online(id))
+			.take(1)
+			.collect::<Vec<_>>()
 			.first()
 			.expect("Can only panic if all validators are offline.")
+			.0
+			.clone()
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
 		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
-		pallet_cf_validator::ValidatorLookup::iter()
-			.filter(|(id, _)| <Reputation as cf_traits::Online>::is_online(id))
-			.take(threshold)
+		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
+			.filter_map(|(id, _)| {
+				if <Reputation as cf_traits::Online>::is_online(&id) {
+					Some(id)
+				} else {
+					None
+				}
+			})
+			.take(threshold as usize)
 			.collect()
 	}
 }
