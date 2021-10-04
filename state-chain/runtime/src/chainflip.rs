@@ -82,10 +82,6 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	// Would need to calculate emissions for the 150 blocks the heartbeat is
-	// TODO These should be configurable items in the emission pallet: Block emissions for Validator and BV
-	// TODO calculated in pallet and configurable with extrinsics
-
 	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight {
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
