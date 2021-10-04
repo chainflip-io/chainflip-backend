@@ -468,15 +468,11 @@ async fn should_ignore_signing_non_participant() {
     assert_stage2!(c1);
 
     // send all but 1 ver2 data to the client
-    for sender_idx in 1..sign_states.sign_phase2.clients.len() - 2 {
-        let s_id = sign_states.sign_phase2.clients[sender_idx].get_my_account_id();
-        let ver2 = sign_states.sign_phase2.ver2_vec[sender_idx].clone();
+    receive_ver2!(c1, 1, sign_states);
 
-        let m = helpers::sig_data_to_p2p(ver2, &s_id);
-        c1.process_p2p_message(m);
-    }
+    assert_stage2!(c1);
 
-    // Make use that the non_participant_id is not a signer
+    // Make sure that the non_participant_id is not a signer
     let non_participant_idx = 3;
     let non_participant_id = VALIDATOR_IDS[non_participant_idx].clone();
     assert!(!SIGNER_IDS.contains(&non_participant_id));
@@ -485,7 +481,7 @@ async fn should_ignore_signing_non_participant() {
     let ver2 = sign_states.sign_phase2.ver2_vec[non_participant_idx - 1].clone();
     c1.process_p2p_message(helpers::sig_data_to_p2p(ver2, &non_participant_id));
 
-    // The message should of been ignored and the client stage should not advanced/fail
+    // The message should have been ignored and the client stage should not advanced/fail
     assert_stage2!(c1);
 }
 
