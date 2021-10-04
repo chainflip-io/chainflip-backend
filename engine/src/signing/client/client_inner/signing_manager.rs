@@ -168,14 +168,6 @@ impl SigningManager {
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
-
-    pub fn get_messages_count(&self, ceremony_id: CeremonyId) -> Result<usize, ()> {
-        let stage = self.signing_states.get(&ceremony_id).ok_or(())?;
-        match stage.get_messages_count() {
-            Some(count) => Ok(count),
-            None => Err(()),
-        }
-    }
 }
 
 /// Map all signer ids to their corresponding signer idx

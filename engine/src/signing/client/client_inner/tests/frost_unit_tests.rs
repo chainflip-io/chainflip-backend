@@ -470,6 +470,15 @@ async fn should_ignore_signing_non_participant() {
 
     assert_stage2!(c1);
 
+    // send all but 1 ver2 data to the client
+    for sender_idx in 1..sign_states.sign_phase2.clients.len() - 2 {
+        let s_id = sign_states.sign_phase2.clients[sender_idx].get_my_account_id();
+        let ver2 = sign_states.sign_phase2.ver2_vec[sender_idx].clone();
+
+        let m = helpers::sig_data_to_p2p(ver2, &s_id);
+        c1.process_p2p_message(m);
+    }
+
     // Make use that the non_participant_id is not a signer
     let non_participant_idx = 3;
     let non_participant_id = VALIDATOR_IDS[non_participant_idx].clone();
@@ -478,26 +487,10 @@ async fn should_ignore_signing_non_participant() {
         .find(|v_id| *v_id == &non_participant_id)
         .is_none());
 
-    // See how many messages the stage has before
-    let message_count_before = c1
-        .signing_manager
-        .get_messages_count(SIGN_CEREMONY_ID)
-        .unwrap();
-
     // Send some ver2 data from the non-participant to the client
     let ver2 = sign_states.sign_phase2.ver2_vec[non_participant_idx - 1].clone();
     c1.process_p2p_message(helpers::sig_data_to_p2p(ver2, &non_participant_id));
 
-    // Now see how many messages the stage has so we can compare it to before
-    let message_count_after = c1
-        .signing_manager
-        .get_messages_count(SIGN_CEREMONY_ID)
-        .unwrap();
-
-    // The message count should not of increased if the non-participant was ignored correctly
-    // println!(
-    //     "message count before / after: {} / {}",
-    //     message_count_before, message_count_after
-    // );
-    assert_eq!(message_count_before, message_count_after);
+    // The message should of been ignored and the client stage should not advanced/fail
+    assert_stage2!(c1);
 }
