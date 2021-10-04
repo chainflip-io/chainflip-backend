@@ -1,10 +1,10 @@
 [package]
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet which manages general global config items of the Chainflip protocol.'
+description = 'FRAME pallet which manages general global environment items of the Chainflip protocol.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-config'
+name = 'pallet-cf-environment'
 readme = 'README.md'
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'

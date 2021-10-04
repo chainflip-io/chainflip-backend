@@ -4,8 +4,8 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GestaltConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, EnvironmentConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
 	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS,
 	WASM_BINARY,
 };
@@ -89,7 +89,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				GestaltConfig {
+				EnvironmentConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
 						.unwrap()
 						.as_bytes()
@@ -148,7 +148,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
-				GestaltConfig {
+				EnvironmentConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
 						.unwrap()
 						.as_bytes()
@@ -239,7 +239,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				GestaltConfig {
+				EnvironmentConfig {
 					stake_manager_address: hex_literal::hex![
 						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
 					]
@@ -349,7 +349,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				GestaltConfig {
+				EnvironmentConfig {
 					stake_manager_address: hex_literal::hex![
 						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
 					]
@@ -383,7 +383,7 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
-	config_set: GestaltConfig,
+	config_set: EnvironmentConfig,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -438,7 +438,7 @@ fn testnet_genesis(
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
-		pallet_cf_config: Some(config_set),
+		pallet_cf_environment: Some(config_set),
 		pallet_cf_vaults: Some(VaultsConfig {
 			ethereum_vault_key: hex_literal::hex![
 				"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"

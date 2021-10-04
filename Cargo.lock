@@ -4873,17 +4873,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-config"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "serde 1.0.126",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4897,6 +4886,17 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-environment"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
  "sp-std",
 ]
 
@@ -8743,8 +8743,8 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
- "pallet-cf-config",
  "pallet-cf-emissions",
+ "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-reputation",
