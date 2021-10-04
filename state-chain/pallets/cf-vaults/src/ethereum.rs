@@ -89,7 +89,10 @@ impl<T: Config>
 		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
-			ThresholdSignatureResponse::Success(message_hash, signature) => {
+			ThresholdSignatureResponse::Success {
+				message_hash,
+				signature,
+			} => {
 				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic

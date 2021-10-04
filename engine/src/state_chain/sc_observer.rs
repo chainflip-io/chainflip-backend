@@ -180,9 +180,10 @@ pub async fn start(
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
-                                        >::Success(
-                                            message_info.hash.0, sig.into()
-                                        ),
+                                        >::Success {
+                                            message_hash: message_info.hash.0,
+                                            signature: sig.into(),
+                                        },
                                         Err((err, bad_account_ids)) => {
                                             slog::error!(
                                                 logger,

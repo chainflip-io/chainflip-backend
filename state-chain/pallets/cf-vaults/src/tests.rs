@@ -286,13 +286,10 @@ mod test {
 				VaultsPallet::threshold_signature_response(
 					Origin::root(),
 					1,
-					ThresholdSignatureResponse::Success(
-						[0; 32],
-						SchnorrSigTruncPubkey {
-							eth_pub_key: [0; 20],
-							s: [0; 32],
-						}
-					)
+					ThresholdSignatureResponse::Success {
+						message_hash: [0; 32],
+						signature: SchnorrSigTruncPubkey::default()
+					}
 				),
 				crate::Error::<MockRuntime>::NewPublicKeyNotSet,
 			);
@@ -308,13 +305,10 @@ mod test {
 					Origin::root(),
 					// we haven't started a new rotation, so ceremony 1 has not been initialised
 					1,
-					ThresholdSignatureResponse::Success(
-						[0; 32],
-						SchnorrSigTruncPubkey {
-							eth_pub_key: [0; 20],
-							s: [0; 32],
-						}
-					)
+					ThresholdSignatureResponse::Success {
+						message_hash: [0; 32],
+						signature: SchnorrSigTruncPubkey::default()
+					}
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
 			);
@@ -357,13 +351,10 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				first_ceremony_id,
-				ThresholdSignatureResponse::Success(
-					[0; 32],
-					SchnorrSigTruncPubkey {
-						eth_pub_key: [0; 20],
-						s: [0; 32],
-					}
-				)
+				ThresholdSignatureResponse::Success {
+					message_hash: [0; 32],
+					signature: SchnorrSigTruncPubkey::default()
+				}
 			));
 		});
 	}
