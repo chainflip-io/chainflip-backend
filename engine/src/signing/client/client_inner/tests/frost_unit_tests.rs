@@ -482,10 +482,7 @@ async fn should_ignore_signing_non_participant() {
     // Make use that the non_participant_id is not a signer
     let non_participant_idx = 3;
     let non_participant_id = VALIDATOR_IDS[non_participant_idx].clone();
-    assert!(SIGNER_IDS
-        .iter()
-        .find(|v_id| *v_id == &non_participant_id)
-        .is_none());
+    assert!(!SIGNER_IDS.contains(&non_participant_id));
 
     // Send some ver2 data from the non-participant to the client
     let ver2 = sign_states.sign_phase2.ver2_vec[non_participant_idx - 1].clone();
@@ -496,7 +493,7 @@ async fn should_ignore_signing_non_participant() {
 }
 
 #[tokio::test]
-async fn should_fail_rts_with_unknown_signer_id() {
+async fn should_ignore_rts_with_unknown_signer_id() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -506,15 +503,31 @@ async fn should_fail_rts_with_unknown_signer_id() {
 
     // Get an id that was not in the keygen and substitute it in the signer list
     let unknown_signer_id = AccountId([0; 32]);
-    assert!(VALIDATOR_IDS
-        .iter()
-        .find(|v_id| *v_id == &unknown_signer_id)
-        .is_none());
+    assert!(!VALIDATOR_IDS.contains(&unknown_signer_id));
     let mut signer_ids = SIGNER_IDS.clone();
     signer_ids[1] = unknown_signer_id;
 
     // Send the rts with the modified signer_ids
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_rts_if_not_participating() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[3].clone();
+
+    assert_no_stage!(c1);
+
+    // Make sure our id is not in the signers list
+    assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
+
+    // send the request to sign
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The rts should not have started a ceremony
     assert_no_stage!(c1);
