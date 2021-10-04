@@ -2,9 +2,9 @@ use core::convert::TryInto;
 
 use crate::ChainParams::Ethereum;
 use crate::{
-	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
-	SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
-	VaultRotationRequestResponse, VaultRotations,
+	ActiveVaultRotations, CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet,
+	RequestResponse, SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
+	VaultRotationRequestResponse,
 };
 use cf_traits::{RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
@@ -93,7 +93,7 @@ impl<T: Config>
 				message_hash,
 				signature,
 			} => {
-				match VaultRotations::<T>::try_get(ceremony_id) {
+				match ActiveVaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
 						// https://github.com/chainflip-io/chainflip-backend/pull/495

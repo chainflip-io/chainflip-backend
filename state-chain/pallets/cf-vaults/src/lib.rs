@@ -112,8 +112,8 @@ pub mod pallet {
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
-	#[pallet::getter(fn vault_rotations)]
-	pub(super) type VaultRotations<T: Config> =
+	#[pallet::getter(fn active_vault_rotations)]
+	pub(super) type ActiveVaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, CeremonyId, VaultRotation<T::ValidatorId, T::PublicKey>>;
 
 	/// A map of Nonces for chains supported
@@ -276,9 +276,9 @@ impl<T: Config> Pallet<T> {
 	/// Abort all rotations registered and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(
-			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
+			ActiveVaultRotations::<T>::iter().map(|(k, _)| k).collect(),
 		));
-		VaultRotations::<T>::remove_all();
+		ActiveVaultRotations::<T>::remove_all();
 		T::RotationHandler::abort();
 	}
 
@@ -290,8 +290,8 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn rotations_complete() -> bool {
-		VaultRotations::<T>::iter().count() == 0
+	fn no_active_vault_rotations() -> bool {
+		ActiveVaultRotations::<T>::iter().count() == 0
 	}
 }
 
@@ -314,7 +314,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 
 	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
 		// The 'exit' point for the pallet, no rotations left to process
-		if Pallet::<T>::rotations_complete() {
+		if Pallet::<T>::no_active_vault_rotations() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -343,7 +343,7 @@ impl<T: Config>
 		ceremony_id: CeremonyId,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		VaultRotations::<T>::insert(
+		ActiveVaultRotations::<T>::insert(
 			ceremony_id,
 			VaultRotation {
 				new_public_key: None,
@@ -365,7 +365,7 @@ impl<T: Config>
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				if EthereumVault::<T>::get().current_key != new_public_key {
-					VaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
+					ActiveVaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
 						if let Some(vault_rotation) = maybe_vault_rotation {
 							(*vault_rotation).new_public_key = Some(new_public_key.clone());
 							EthereumChain::<T>::rotate_vault(
@@ -456,7 +456,7 @@ impl<T: Config>
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
 			VaultRotationResponse::Success { tx_hash } => {
-				if let Some(vault_rotation) = VaultRotations::<T>::take(ceremony_id) {
+				if let Some(vault_rotation) = ActiveVaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
 					match vault_rotation.keygen_request.chain {
 						Chain::Ethereum => EthereumChain::<T>::vault_rotated(

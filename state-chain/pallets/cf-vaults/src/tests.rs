@@ -24,13 +24,13 @@ mod test {
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_vault_rotations());
 			// Request index 2
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
 			// Confirm we have a new vault rotation process running
-			assert!(!VaultsPallet::rotations_complete());
+			assert!(!VaultsPallet::no_active_vault_rotations());
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
@@ -82,7 +82,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_vault_rotations());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![BOB, CHARLIE]);
@@ -100,6 +100,8 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![1; 33])
 			));
+
+			// We haven't got a signing response here though? this should fail, no?
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
 				Ok(VaultRotationRequest {
@@ -118,17 +120,16 @@ mod test {
 				))
 			);
 
-			assert_eq!(
+			assert_err!(
 				VaultsPallet::request_vault_rotation(
 					VaultsPallet::current_request(),
 					Err(RotationError::BadValidators(vec![ALICE, BOB]))
-				)
-				.err(),
-				Some(RotationError::VaultRotationCompletionFailed)
+				),
+				RotationError::VaultRotationCompletionFailed
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_vault_rotations());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);

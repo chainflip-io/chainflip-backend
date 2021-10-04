@@ -164,7 +164,7 @@ pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
-			VaultRotations::<T>::contains_key($index),
+			ActiveVaultRotations::<T>::contains_key($index),
 			RotationError::InvalidCeremonyId
 		);
 	};
