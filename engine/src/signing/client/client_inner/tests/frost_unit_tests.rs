@@ -296,7 +296,7 @@ async fn check_blamed_paries(mut rx: &mut helpers::InnerEventReceiver, expected:
 }
 
 #[tokio::test]
-async fn should_report_on_timeout_before_reqeust_to_sign() {
+async fn should_report_on_timeout_before_request_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -410,4 +410,142 @@ async fn should_report_on_timeout_stage4() {
     c1.cleanup();
 
     check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+}
+
+#[tokio::test]
+async fn should_ignore_duplicate_rts() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase2.clients[0].clone();
+    assert_stage2!(c1);
+
+    // Send another request to sign with the same ceremony_id and key_id
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // The request should have been rejected and the existing ceremony is unchanged
+    assert_stage2!(c1);
+}
+
+#[tokio::test]
+async fn should_delay_rts_until_key_is_ready() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
+    assert_no_stage!(c1);
+
+    // send the request to sign
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // The request should have been delayed, so the stage is unaffected
+    assert_no_stage!(c1);
+
+    // complete the keygen by sending the sec2 from each other client to client 0
+    for sender_idx in 1..=3 {
+        let s_id = keygen_states.keygen_phase2.clients[sender_idx].get_my_account_id();
+        let sec2 = keygen_states.keygen_phase2.sec2_vec[sender_idx]
+            .get(&c1.get_my_account_id())
+            .unwrap();
+
+        let m = helpers::keygen_data_to_p2p(sec2.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        c1.process_p2p_message(m);
+    }
+
+    // Now that the keygen completed, the rts should have started
+    assert_stage1!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_signing_non_participant() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_phase2.clients[0].clone();
+    assert_stage2!(c1);
+
+    // send all but 1 ver2 data to the client
+    receive_ver2!(c1, 1, sign_states);
+
+    assert_stage2!(c1);
+
+    // Make sure that the non_participant_id is not a signer
+    let non_participant_idx = 3;
+    let non_participant_id = VALIDATOR_IDS[non_participant_idx].clone();
+    assert!(!SIGNER_IDS.contains(&non_participant_id));
+
+    // Send some ver2 data from the non-participant to the client
+    let ver2 = sign_states.sign_phase2.ver2_vec[non_participant_idx - 1].clone();
+    c1.process_p2p_message(helpers::sig_data_to_p2p(ver2, &non_participant_id));
+
+    // The message should have been ignored and the client stage should not advanced/fail
+    assert_stage2!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_rts_with_unknown_signer_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    assert_no_stage!(c1);
+
+    // Get an id that was not in the keygen and substitute it in the signer list
+    let unknown_signer_id = AccountId([0; 32]);
+    assert!(!VALIDATOR_IDS.contains(&unknown_signer_id));
+    let mut signer_ids = SIGNER_IDS.clone();
+    signer_ids[1] = unknown_signer_id;
+
+    // Send the rts with the modified signer_ids
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_rts_if_not_participating() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[3].clone();
+    assert_no_stage!(c1);
+
+    // Make sure our id is not in the signers list
+    assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
+
+    // Send the request to sign
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
+}
+
+#[tokio::test]
+async fn should_ignore_rts_with_incorrect_amount_of_signers() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    assert_no_stage!(c1);
+
+    // Send the request to sign with not enough signers
+    let mut signer_ids = SIGNER_IDS.clone();
+    let _ = signer_ids.pop();
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony
+    assert_no_stage!(c1);
+
+    // TODO: This part of the test will not work while the truncating hack/fix is in the signing_manager
+    // Send the request to sign with too many signers
+    // let mut signer_ids = SIGNER_IDS.clone();
+    // signer_ids.push(VALIDATOR_IDS[3].clone());
+    // c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // // The rts should not have started a ceremony
+    // assert_no_stage!(c1);
 }

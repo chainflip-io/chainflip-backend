@@ -895,3 +895,11 @@ pub fn create_invalid_bc1() -> Broadcast1 {
 
     Broadcast1 { bc1, blind, y_i }
 }
+
+impl MultisigClientNoDB {
+    /// runs the MultisigInstruction::Sign with the default id, message hash
+    pub fn send_request_to_sign_default(&mut self, key_id: KeyId, signers: Vec<AccountId>) {
+        let sign_info = SigningInfo::new(SIGN_CEREMONY_ID, key_id, MESSAGE_HASH.clone(), signers);
+        self.process_multisig_instruction(MultisigInstruction::Sign(sign_info));
+    }
+}

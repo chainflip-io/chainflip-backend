@@ -129,6 +129,16 @@ where
             return ProcessMessageResult::Ignored;
         }
 
+        if !self.common.all_idxs.contains(&signer_idx) {
+            slog::warn!(
+                self.common.logger,
+                "Ignoring a message from non-participant for stage {} from party [{}]",
+                self,
+                signer_idx
+            );
+            return ProcessMessageResult::Ignored;
+        }
+
         self.messages.insert(signer_idx, m);
 
         if self.messages.len() == self.common.all_idxs.len() {

@@ -112,6 +112,14 @@ impl SigningState {
     ) {
         let logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
 
+        if self.inner.is_some() {
+            slog::warn!(
+                self.logger,
+                "Request to sign ignored: duplicate ceremony_id"
+            );
+            return;
+        }
+
         let common = CeremonyCommon {
             p2p_sender: SigningP2PSender::new(
                 key_info.validator_map.clone(),
@@ -212,6 +220,8 @@ impl SigningState {
                 let stage = authorised_state.stage.as_mut().unwrap();
 
                 // TODO: check that the party is a signer for this ceremony
+
+                // delay the data if we are not ready for it
                 if stage.should_delay(&m) {
                     self.add_delayed(id, m);
                     return;
@@ -315,7 +325,7 @@ impl SigningState {
 
                     slog::warn!(
                         self.logger,
-                        "Signing ceremony expired before, blaming parties: {:?}",
+                        "Signing ceremony expired, blaming parties: {:?}",
                         blamed_ids,
                     );
 
