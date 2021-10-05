@@ -3,7 +3,7 @@ mod tests {
 	use crate::OfflineCondition::*;
 	use crate::*;
 	use cf_traits::mocks::epoch_info::Mock;
-	use cf_traits::{NetworkState, Heartbeat, EpochInfo};
+	use cf_traits::{EpochInfo, Heartbeat, NetworkState};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
@@ -41,7 +41,7 @@ mod tests {
 		run_heartbeat_intervals(vec![validator], intervals + 1 /* roundup */);
 	}
 
-	type MockNetworkState = NetworkState::<<Test as frame_system::Config>::AccountId>;
+	type MockNetworkState = NetworkState<<Test as frame_system::Config>::AccountId>;
 	fn dead_network() -> MockNetworkState {
 		MockNetworkState {
 			missing: Mock::current_validators(),
