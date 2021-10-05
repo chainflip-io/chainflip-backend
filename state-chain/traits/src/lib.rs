@@ -1,19 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod mocks;
-
 use codec::{Decode, Encode};
-use frame_support::pallet_prelude::Member;
-use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
-use frame_support::traits::StoredMap;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
-	traits::{Imbalance, SignedImbalance},
 	Parameter,
+	traits::{Imbalance, SignedImbalance},
 };
+use frame_support::pallet_prelude::Member;
+use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
+
+pub mod mocks;
+pub mod constants;
 
 /// and Chainflip was born...some base types
 pub trait Chainflip {
@@ -190,6 +190,17 @@ pub enum AuctionError {
 	NotConfirmed,
 }
 
+/// Handler for Epoch life cycle events.
+pub trait EpochTransitionHandler {
+	/// The id type used for the validators.
+	type ValidatorId;
+	type Amount: Copy;
+	/// A new epoch has started
+	///
+	/// The new set of validator `new_validators` are now validating
+	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
+}
+
 /// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;
@@ -271,6 +282,18 @@ pub trait RewardsDistribution {
 
 	/// The execution weight of calling the distribution function.
 	fn execution_weight() -> Weight;
+}
+
+pub trait RewardRollover {
+	type AccountId;
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	///
+	/// 1. Checks that all entitlements can be honoured, ie. there are enough reserves.
+	/// 2. Credits all current beneficiaries with any remaining reward entitlements.
+	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
+	/// 4. Resets the apportioned rewards counter to zero.
+	/// 5. Updates the list of beneficiaries.
+	fn rollover(new_beneficiaries: &Vec<Self::AccountId>) -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.
