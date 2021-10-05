@@ -61,7 +61,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-cf_traits::impl_mock_origin_check!(Origin);
+cf_traits::impl_mock_never_failing_origin_check!(Origin);
 
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;

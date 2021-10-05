@@ -1,10 +1,6 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::StakeTransfer;
-use frame_support::{
-	parameter_types,
-	traits::{EnsureOrigin, HandleLifetime},
-	weights::IdentityFee,
-};
+use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -65,7 +61,7 @@ parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;
 }
 
-cf_traits::impl_mock_origin_check!(Origin);
+cf_traits::impl_mock_never_failing_origin_check!(Origin);
 
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
