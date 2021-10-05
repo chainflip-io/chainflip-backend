@@ -93,6 +93,12 @@ pub struct P2PMessageCommand {
     pub data: Vec<u8>,
 }
 
+impl P2PMessageCommand {
+    pub fn new(destination: AccountId, data: Vec<u8>) -> Self {
+        P2PMessageCommand { destination, data }
+    }
+}
+
 /// A command to the conductor to send message `data` to
 /// validator `destination`
 #[derive(Clone, Debug, Serialize, Deserialize)]

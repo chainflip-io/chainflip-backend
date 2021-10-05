@@ -2,7 +2,6 @@ use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
-use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -80,7 +79,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!("ceremony_id" => ceremony_id)),
+            logger: logger.new(slog::o!("ceremony_id" => ceremony_id)),
         };
 
         state.initiate_keygen_inner();
@@ -227,7 +226,7 @@ impl KeygenState {
                     .map(|(idx, secret2)| {
                         let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, secret2);
                         let secret2 = MultisigMessage::from(wrapped);
-                        let data = serde_json::to_vec(&secret2).unwrap();
+                        let data = bincode::serialize(&secret2).unwrap();
                         MessageToSend { to_idx: idx, data }
                     })
                     .collect_vec();
@@ -332,7 +331,7 @@ impl KeygenState {
 
             let message = P2PMessageCommand {
                 destination,
-                data: serde_json::to_vec(&msg).unwrap(),
+                data: bincode::serialize(&msg).unwrap(),
             };
 
             let event = InnerEvent::P2PMessageCommand(message);

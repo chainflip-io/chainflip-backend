@@ -7,7 +7,10 @@ use crate::{
     logging::COMPONENT_KEY,
     p2p::AccountId,
     signing::{
-        client::{client_inner::utils::get_index_mapping, CeremonyId, KeygenInfo},
+        client::{
+            client_inner::utils::{get_index_mapping, threshold_from_share_count},
+            CeremonyId, KeygenInfo,
+        },
         crypto,
     },
 };
@@ -230,33 +233,6 @@ impl KeygenManager {
     }
 }
 
-/// Note that the resulting `threshold` is the maximum number
-/// of parties *not* enough to generate a signature,
-/// i.e. at least `t+1` parties are required.
-/// This follow the notation in the multisig library that
-/// we are using and in the corresponding literature.
-
-// TODO: Another place this code is - should be in one place
-fn threshold_from_share_count(share_count: usize) -> usize {
-    let doubled = share_count * 2;
-
-    if doubled % 3 == 0 {
-        doubled / 3 - 1
-    } else {
-        doubled / 3
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn check_threshold_calculation() {
-    assert_eq!(threshold_from_share_count(150), 99);
-    assert_eq!(threshold_from_share_count(100), 66);
-    assert_eq!(threshold_from_share_count(90), 59);
-    assert_eq!(threshold_from_share_count(3), 1);
-    assert_eq!(threshold_from_share_count(4), 2);
-}
-
 #[cfg(test)]
 impl KeygenManager {
     pub fn get_state_for(&self, ceremony_id: CeremonyId) -> Option<&KeygenState> {
@@ -267,8 +243,8 @@ impl KeygenManager {
         self.get_state_for(ceremony_id).map(|s| s.get_stage())
     }
 
-    pub fn set_timeout(&mut self, phase_timeout: Duration) {
-        self.phase_timeout = phase_timeout;
+    pub fn expire_all(&mut self) {
+        self.phase_timeout = std::time::Duration::from_secs(0);
     }
 
     pub fn get_delayed_count(&self, ceremony_id: CeremonyId) -> usize {

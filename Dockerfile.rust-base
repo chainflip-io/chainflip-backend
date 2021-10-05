@@ -28,4 +28,5 @@ ARG NIGHTLY=nightly-2021-03-24
 # Download and set nightly as the default Rust compiler
 RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
-    && rustup component add rustfmt
+    && rustup component add rustfmt \
+    && rustup component add clippy

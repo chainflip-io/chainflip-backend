@@ -1,15 +1,12 @@
+use futures::StreamExt;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+
 use crate::{
     logging,
-    signing::{
-        client::{client_inner::MultisigClientInner, PHASE_TIMEOUT},
-        KeyId,
-    },
+    signing::client::{client_inner::MultisigClient, PHASE_TIMEOUT},
 };
 
-use super::{
-    helpers::{self, message_and_sign_info},
-    MESSAGE_HASH,
-};
+use super::helpers;
 
 #[tokio::test]
 async fn check_signing_db() {
@@ -21,10 +18,7 @@ async fn check_signing_db() {
     let mut ctx = helpers::KeygenContext::new();
 
     // 1. Generate a key. It should automatically be written to a database
-    let keygen_states = ctx.generate().await;
-    let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id);
+    let _ = ctx.generate().await;
 
     // 2. Extract the clients' database
     let client1 = ctx.get_client(0);
@@ -34,11 +28,15 @@ async fn check_signing_db() {
     let id = client1.get_my_account_id();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let logger = logging::test_utils::create_test_logger();
-    let restarted_client = MultisigClientInner::new(id, db, tx, PHASE_TIMEOUT, &logger);
+    let restarted_client = MultisigClient::new(id, db, tx, PHASE_TIMEOUT, &logger);
 
     // 4. Replace the client
-    ctx.substitute_client_at(0, restarted_client, rx);
+    ctx.substitute_client_at(
+        0,
+        restarted_client,
+        Box::pin(UnboundedReceiverStream::new(rx).peekable()),
+    );
 
     // 5. Signing should not crash
-    ctx.sign(message_info, sign_info).await;
+    ctx.sign().await;
 }
