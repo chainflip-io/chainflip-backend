@@ -232,7 +232,6 @@ impl StakeManager {
         &self,
     ) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
-        println!("Here's the staked event sig: {:?}", staked.signature);
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
