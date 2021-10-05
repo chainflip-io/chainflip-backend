@@ -9,7 +9,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::vec::Vec;
 
-	type EthereumAddress = Vec<u8>;
+	type EthereumAddress = [u8; 20];
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
