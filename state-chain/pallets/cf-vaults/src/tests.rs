@@ -1,7 +1,6 @@
 mod test {
 	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
-	use crate::rotation::ChainParams::Other;
 	use crate::*;
 	use frame_support::{assert_err, assert_ok};
 	use sp_core::Hasher;
@@ -14,6 +13,8 @@ mod test {
 			.event
 	}
 
+	const FAKE_CALL_DATA_WITH_SIG: &str = "24969d5d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000001010101010101010101010101010101010101010101010101010101010101010000000000000000000000000000000000000000000000000000000000000001";
+
 	#[test]
 	fn keygen_request() {
 		new_test_ext().execute_with(|| {
@@ -24,13 +25,13 @@ mod test {
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
 			// Request index 2
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
 			// Confirm we have a new vault rotation process running
-			assert!(!VaultsPallet::rotations_complete());
+			assert!(!VaultsPallet::no_active_chain_vault_rotations());
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
@@ -82,7 +83,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![BOB, CHARLIE]);
@@ -90,7 +91,7 @@ mod test {
 	}
 
 	#[test]
-	fn vault_rotation_request() {
+	fn vault_rotation_request_abort_on_failed() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
@@ -100,35 +101,23 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![1; 33])
 			));
-			assert_ok!(VaultsPallet::request_vault_rotation(
-				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
-			));
 
-			// Check the event emitted
-			assert_eq!(
-				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
-					1,
-					VaultRotationRequest {
-						chain: Other(vec![])
-					}
-				))
-			);
-
-			assert_eq!(
-				VaultsPallet::request_vault_rotation(
+			assert_err!(
+				VaultsPallet::threshold_signature_response(
+					Origin::root(),
 					VaultsPallet::current_request(),
-					Err(RotationError::BadValidators(vec![ALICE, BOB]))
-				)
-				.err(),
-				Some(RotationError::VaultRotationCompletionFailed)
+					ThresholdSignatureResponse::Error(vec![ALICE, BOB])
+				),
+				crate::Error::<MockRuntime>::BadValidators
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_complete());
+			assert!(VaultsPallet::no_active_chain_vault_rotations());
+
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![1]))
+			);
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);
@@ -147,23 +136,28 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(new_public_key.clone())
 			));
-			assert_ok!(VaultsPallet::request_vault_rotation(
+
+			assert_ok!(VaultsPallet::threshold_signature_response(
+				Origin::root(),
 				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
+				ThresholdSignatureResponse::Success {
+					message_hash: [0; 32],
+					signature: SchnorrSigTruncPubkey::default(),
+				}
 			));
 
-			// Check the event emitted
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
 					VaultsPallet::current_request(),
 					VaultRotationRequest {
-						chain: Other(vec![])
+						chain: ChainParams::Ethereum(hex::decode(FAKE_CALL_DATA_WITH_SIG).unwrap())
 					}
 				))
 			);
+
+			// We should have an active validator in the count
+			assert!(!VaultsPallet::no_active_chain_vault_rotations());
 
 			let tx_hash = "tx_hash".as_bytes().to_vec();
 			assert_ok!(VaultsPallet::vault_rotation_response(
@@ -185,9 +179,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
-					VaultsPallet::current_request()
-				))
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(1))
 			);
 		});
 	}
@@ -203,11 +195,14 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![1; 33])
 			));
-			assert_ok!(VaultsPallet::request_vault_rotation(
+
+			assert_ok!(VaultsPallet::threshold_signature_response(
+				Origin::root(),
 				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
+				ThresholdSignatureResponse::Success {
+					message_hash: [0; 32],
+					signature: SchnorrSigTruncPubkey::default(),
+				}
 			));
 
 			// Check the event emitted
@@ -216,7 +211,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
 					VaultsPallet::current_request(),
 					VaultRotationRequest {
-						chain: Other(vec![])
+						chain: ChainParams::Ethereum(hex::decode(FAKE_CALL_DATA_WITH_SIG).unwrap())
 					}
 				))
 			);
@@ -230,9 +225,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
-					VaultsPallet::current_request()
-				]))
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![1]))
 			);
 		});
 	}
@@ -243,7 +236,7 @@ mod test {
 	// the calldata expects nonce = 0
 	// This should be fixed in the broadcast epic:
 	// https://github.com/chainflip-io/chainflip-backend/pull/495
-	fn try_starting_a_vault_rotation() {
+	fn try_starting_a_chain_vault_rotation() {
 		new_test_ext().execute_with(|| {
 			let new_public_key = hex::decode("011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
 			let validators = vec![ALICE, BOB, CHARLIE];
@@ -271,10 +264,6 @@ mod test {
 		});
 	}
 
-	// TODO: introduce test to check that the second encoding is consistent with the first.
-	// There was a bug where the nonce was different on the second call to encode (due to the nonce incrementor
-	// being called within the encoding function itself - we can unit test this bug away
-
 	#[test]
 	fn should_error_when_attempting_to_use_use_unset_new_public_key() {
 		new_test_ext().execute_with(|| {
@@ -292,6 +281,25 @@ mod test {
 					}
 				),
 				crate::Error::<MockRuntime>::NewPublicKeyNotSet,
+			);
+		});
+	}
+
+	#[test]
+	fn should_error_when_attempting_to_use_use_new_public_key_same_as_old() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
+
+			assert_err!(
+				VaultsPallet::keygen_response(
+					Origin::root(),
+					1,
+					// this key is different to the genesis key
+					KeygenResponse::Success(vec![0; 33])
+				),
+				Error::<MockRuntime>::KeyUnchanged
 			);
 		});
 	}
@@ -330,32 +338,6 @@ mod test {
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
 			);
-		});
-	}
-
-	#[test]
-	fn should_encode_set_agg_key_with_agg_key() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(vec![
-				ALICE, BOB, CHARLIE
-			]));
-			let first_ceremony_id = VaultsPallet::current_request();
-			assert_ok!(VaultsPallet::keygen_response(
-				Origin::root(),
-				first_ceremony_id,
-				// this key is different to the genesis key
-				KeygenResponse::Success(vec![1; 33])
-			));
-			// we have never created a request to sign, but we received a response?
-			// this is at least better than before
-			assert_ok!(VaultsPallet::threshold_signature_response(
-				Origin::root(),
-				first_ceremony_id,
-				ThresholdSignatureResponse::Success {
-					message_hash: [0; 32],
-					signature: SchnorrSigTruncPubkey::default()
-				}
-			));
 		});
 	}
 

@@ -272,8 +272,6 @@ pub async fn start(
                                         }
                                     }
                                 }
-                                // Leave this to be explicit about future chains being added
-                                ChainParams::Other(_) => panic!("Chain::Other does not exist"),
                             }
                         }
                     },
