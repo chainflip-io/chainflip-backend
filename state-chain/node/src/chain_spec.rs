@@ -96,13 +96,13 @@ pub fn development_config() -> Result<ChainSpec, String> {
 						.as_bytes()
 						.to_vec()
 						.try_into()
-						.expect("can not cast to eth address"),
+						.expect("address cast failed"),
 					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
 						.expect("KEY_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec()
 						.try_into()
-						.expect("can not cast to eth address"),
+						.expect("address cast failed"),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
 						.expect("ETHEREUM_CHAIN_ID not set")
 						.parse::<u32>()
@@ -159,13 +159,13 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						.as_bytes()
 						.to_vec()
 						.try_into()
-						.expect("can not cast to eth address"),
+						.expect("address cast failed"),
 					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
 						.expect("KEY_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec()
 						.try_into()
-						.expect("can not cast to eth address"),
+						.expect("address cast failed"),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
 						.expect("ETHEREUM_CHAIN_ID not set")
 						.parse::<u32>()
@@ -254,13 +254,13 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					]
 					.to_vec()
 					.try_into()
-					.expect("can not cast to eth address"),
+					.expect("address cast failed"),
 					key_manager_address: hex_literal::hex![
 						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
 					]
 					.to_vec()
 					.try_into()
-					.expect("can not cast to eth address"),
+					.expect("address cast failed"),
 					ethereum_chain_id: 4,
 				},
 			)
@@ -368,13 +368,13 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					]
 					.to_vec()
 					.try_into()
-					.expect("can not cast to eth address"),
+					.expect("address cast failed"),
 					key_manager_address: hex_literal::hex![
 						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
 					]
 					.to_vec()
 					.try_into()
-					.expect("can not cast to eth address"),
+					.expect("address cast failed"),
 					ethereum_chain_id: 4,
 				},
 			)
