@@ -55,7 +55,7 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo};
+use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo, EpochTransitionHandler};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -64,22 +64,6 @@ use sp_std::prelude::*;
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
-
-/// Handler for Epoch life cycle events.
-pub trait EpochTransitionHandler {
-	/// The id type used for the validators.
-	type ValidatorId;
-	type Amount: Copy;
-	/// A new epoch has started
-	///
-	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
-}
-
-impl<T: Config> EpochTransitionHandler for PhantomData<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
-}
 
 #[frame_support::pallet]
 pub mod pallet {

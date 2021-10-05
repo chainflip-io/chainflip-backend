@@ -800,6 +800,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "hex-literal",
+ "pallet-aura",
+ "pallet-authorship",
+ "pallet-cf-auction",
+ "pallet-cf-emissions",
+ "pallet-cf-flip",
+ "pallet-cf-governance",
+ "pallet-cf-reputation",
+ "pallet-cf-rewards",
+ "pallet-cf-staking",
+ "pallet-cf-validator",
+ "pallet-cf-vaults",
+ "pallet-cf-witnesser",
+ "pallet-cf-witnesser-api",
+ "pallet-grandpa",
+ "pallet-offences",
+ "pallet-randomness-collective-flip",
+ "pallet-session",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-inherents",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "state-chain-runtime",
+]
+
+[[package]]
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [

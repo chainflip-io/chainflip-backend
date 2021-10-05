@@ -1,10 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+
 mod chainflip;
-// A few exports that help ease life for downstream crates.
-use cf_traits::Chainflip;
+
 use core::time::Duration;
+
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness},
@@ -15,8 +16,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_cf_flip::FlipSlasher;
-use pallet_cf_reputation::ReputationPenalty;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -40,12 +39,16 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
+// A few exports that help ease life for downstream crates.
+use cf_traits::constants::{common::*, time::*};
+use cf_traits::Chainflip;
+use pallet_cf_flip::FlipSlasher;
+use pallet_cf_reputation::ReputationPenalty;
+use crate::chainflip::ChainflipEpochTransitions;
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
-
-/// An index to a block.
-pub type BlockNumber = u32;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -69,11 +72,6 @@ pub type Hash = sp_core::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
-
-pub type FlipBalance = u128;
-
-/// The type used as an epoch index.
-pub type EpochIndex = u32;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -109,21 +107,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 1,
 };
 
-/// This determines the average expected block time that we are targeting.
-/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
-/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
-/// up by `pallet_aura` to implement `fn slot_duration()`.
-///
-/// Change this to adjust the block time.
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
-
-pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
-
-// Time is measured by number of blocks.
-pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
-pub const HOURS: BlockNumber = MINUTES * 60;
-pub const DAYS: BlockNumber = HOURS * 24;
-
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
@@ -141,7 +124,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type AuctionIndex = u64;
+	type AuctionIndex = AuctionIndex;
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
@@ -158,11 +141,11 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
+	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
-	type Auction = Auction;
+	type Auction = Auctioneer;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -170,7 +153,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
-	type RotationHandler = Auction;
+	type RotationHandler = Auctioneer;
 	type NonceProvider = Vaults;
 	type EpochInfo = Validator;
 }
@@ -351,10 +334,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type Amount = FlipBalance;
 }
 
-/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
-const SECS_IN_AN_HOUR: u64 = 3600;
-const REGISTRATION_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
-
 parameter_types! {
 	/// 4 days. When a claim is signed, there needs to be enough time left to be able to cash it in.
 	pub const MinClaimTTL: Duration = Duration::from_secs(2 * REGISTRATION_DELAY);
@@ -458,7 +437,7 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		Auctioneer: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
@@ -654,7 +633,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
-			add_benchmark!(params, batches, pallet_cf_auction, Auction);
+			add_benchmark!(params, batches, pallet_cf_auction, Auctioneer);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

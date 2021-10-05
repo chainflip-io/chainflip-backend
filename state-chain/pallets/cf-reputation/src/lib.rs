@@ -50,7 +50,7 @@ mod tests;
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
-use pallet_cf_validator::EpochTransitionHandler;
+use cf_traits::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
