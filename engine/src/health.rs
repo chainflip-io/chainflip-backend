@@ -96,8 +96,6 @@ impl HealthMonitor {
 mod test {
 
     use crate::logging;
-    use crate::testing::assert_ok;
-    use tokio::process::Command;
 
     use super::*;
 

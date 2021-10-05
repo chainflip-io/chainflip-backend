@@ -169,14 +169,13 @@ pub async fn start(
                             let response = match multisig_event_receiver.recv().await {
                                 Some(event) => match event {
                                     MultisigEvent::MessageSigningResult(SigningOutcome {
-                                        id: message_info,
+                                        id: _,
                                         result,
                                     }) => match result {
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success {
-                                            // TODO: shouldn't this be ceremony_id?
                                             message_hash,
                                             signature: sig.into(),
                                         },
