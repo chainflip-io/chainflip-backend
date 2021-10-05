@@ -1,10 +1,10 @@
 // We want to re-export certain types here
 // to make sure all of our dependencies on
 // this module are in one place
-mod bitcoin_schnorr;
 mod error;
+mod schnorr;
 
-pub use bitcoin_schnorr::{KeyGenBroadcastMessage1, KeyShare, Keys, Parameters};
+pub use schnorr::{KeyGenBroadcastMessage1, KeyShare, Keys, Parameters};
 
 pub use error::{InvalidKey, InvalidSS, InvalidSig};
 

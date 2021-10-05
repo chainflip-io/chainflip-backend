@@ -1,5 +1,4 @@
-use core::convert::TryInto;
-
+use crate::crypto::destructure_pubkey;
 use crate::ChainParams::Ethereum;
 use crate::{
 	ActiveChainVaultRotations, CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet,
@@ -139,14 +138,8 @@ impl<T: Config> EthereumChain<T> {
 		signature: SchnorrSigTruncPubkey,
 		nonce: u64,
 	) -> ethabi::Result<Bytes> {
-		let pubkey: Vec<u8> = new_public_key.into();
-		// strip y-parity from key (first byte) and use 0 if even, 1 if odd
-		// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-		// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/crypto.py
-		let y_parity = if pubkey[0] == 2 { 0u8 } else { 1u8 };
-		let x_pubkey: [u8; 32] = pubkey[1..]
-			.try_into()
-			.map_err(|_| ethabi::Error::InvalidData)?;
+		let (pubkey_x, pubkey_y_parity) =
+			destructure_pubkey(new_public_key.into()).map_err(|_| ethabi::Error::InvalidData)?;
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![
@@ -177,11 +170,11 @@ impl<T: Config> EthereumChain<T> {
 				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),
 				Token::Uint(nonce.into()),
-				Token::Address(signature.eth_pub_key.into()),
+				Token::Address(signature.k_times_g_address.into()),
 			]),
 			Token::Tuple(vec![
-				Token::Uint(x_pubkey.into()),
-				Token::Uint(y_parity.into()),
+				Token::Uint(pubkey_x.into()),
+				Token::Uint(pubkey_y_parity.into()),
 			]),
 		])
 	}
