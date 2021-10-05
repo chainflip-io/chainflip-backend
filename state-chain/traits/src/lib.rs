@@ -307,7 +307,7 @@ pub trait IsOnline {
 }
 
 /// A representation of the current network state
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId> {
 	pub missing: Vec<ValidatorId>,
 	pub online: Vec<ValidatorId>,

@@ -129,11 +129,3 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext
 }
-
-pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		ReputationPallet::on_finalize(System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		ReputationPallet::on_initialize(System::block_number());
-	}
-}
