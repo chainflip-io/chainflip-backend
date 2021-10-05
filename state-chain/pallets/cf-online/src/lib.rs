@@ -50,11 +50,11 @@ mod tests;
 mod liveness;
 
 use frame_support::pallet_prelude::*;
+use liveness::*;
 pub use pallet::*;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
-use liveness::*;
 
 /// Error on reporting an offline condition
 #[derive(Debug, PartialEq)]
@@ -66,7 +66,7 @@ pub enum ReportError {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Heartbeat, NetworkState, IsOnline, Chainflip};
+	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -203,7 +203,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-
 		/// Check liveness of our expected list of validators at the current block.
 		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
 			let mut weight = 0;
@@ -215,7 +214,9 @@ pub mod pallet {
 			ValidatorsLiveness::<T>::translate(|validator_id, mut liveness: Liveness| {
 				weight += T::DbWeight::get().reads_writes(1, 1);
 				if liveness.is_online() {
-					if !liveness.has_submitted() { missing.push(validator_id.clone()); }
+					if !liveness.has_submitted() {
+						missing.push(validator_id.clone());
+					}
 					online.push(validator_id);
 				} else {
 					offline.push(validator_id);
@@ -224,7 +225,14 @@ pub mod pallet {
 				Some(liveness.update_current_interval(false))
 			});
 
-			(weight, NetworkState { online, offline, missing })
+			(
+				weight,
+				NetworkState {
+					online,
+					offline,
+					missing,
+				},
+			)
 		}
 	}
 }

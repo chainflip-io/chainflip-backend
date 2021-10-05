@@ -133,10 +133,7 @@ impl pallet_cf_emissions::Config for Test {
 }
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext(
-	validators: Vec<u64>,
-	issuance: Option<u128>
-) -> sp_io::TestExternalities {
+pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
 	let config = GenesisConfig {
 		frame_system: Default::default(),

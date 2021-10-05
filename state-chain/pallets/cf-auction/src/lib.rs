@@ -13,7 +13,11 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, ChainflipAccount, ChainflipAccountState, IsOnline, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator, AuctionResult, EmergencyRotation};
+use cf_traits::{
+	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, AuctionResult, BidderProvider,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid,
+	StakeHandler, VaultRotationHandler, VaultRotator,
+};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
@@ -30,7 +34,9 @@ pub trait WeightInfo {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator, AuctionResult};
+	use cf_traits::{
+		AuctionResult, ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator,
+	};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 

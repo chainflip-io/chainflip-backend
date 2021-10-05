@@ -13,7 +13,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Heartbeat, NetworkState, Chainflip};
+use cf_traits::{Chainflip, Heartbeat, NetworkState};
 use sp_std::cell::RefCell;
 
 type ValidatorId = u64;

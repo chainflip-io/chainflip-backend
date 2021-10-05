@@ -29,6 +29,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
+use crate::chainflip::ChainflipHeartbeat;
 use crate::chainflip::{ChainflipStakeHandler, ChainflipVaultRotationHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -42,7 +43,6 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use crate::chainflip::ChainflipHeartbeat;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]

@@ -47,7 +47,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Heartbeat, NetworkState, Slashing, Chainflip};
+	use cf_traits::{Chainflip, EpochInfo, Heartbeat, NetworkState, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 

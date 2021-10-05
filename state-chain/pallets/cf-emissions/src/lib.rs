@@ -178,9 +178,13 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// Updating and calculating emissions per block for validators and backup validators
 pub trait BlockEmissions<T: Config> {
+	/// Update the emissions per block for a validator
 	fn update_validator_block_emission(emission: T::FlipBalance) -> Weight;
+	/// Update the emissions per block for a backup validator
 	fn update_backup_validator_block_emission(emission: T::FlipBalance) -> Weight;
+	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
 }
 
@@ -206,7 +210,7 @@ impl<T: Config> BlockEmissions<T> for Pallet<T> {
 			/ 100u32.into();
 
 		if let Some(validator_block_emission) =
-		(validator_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
+			(validator_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
 		{
 			weight += Self::update_validator_block_emission(validator_block_emission);
 		}
@@ -217,7 +221,7 @@ impl<T: Config> BlockEmissions<T> for Pallet<T> {
 			/ 100u32.into();
 
 		if let Some(backup_block_emission) =
-		(backup_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
+			(backup_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
 		{
 			weight += Self::update_backup_validator_block_emission(backup_block_emission);
 		}
@@ -234,7 +238,10 @@ impl<T: Config> EmissionsTrigger for Pallet<T> {
 			Ok(weight) => weight,
 			Err(weight) => {
 				frame_support::debug::RuntimeLogger::init();
-				frame_support::debug::error!("Failed to mint rewards at block {:?}", current_block_number);
+				frame_support::debug::error!(
+					"Failed to mint rewards at block {:?}",
+					current_block_number
+				);
 				weight
 			}
 		}

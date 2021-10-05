@@ -16,16 +16,9 @@ use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 /// and Chainflip was born...some base types
-pub trait Chainflip : frame_system::Config {
+pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
-	type Amount:
-		Member +
-		Parameter +
-		Default +
-		Eq +
-		Ord +
-		Copy +
-		AtLeast32BitUnsigned;
+	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 	/// An identity for a validator
 	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;

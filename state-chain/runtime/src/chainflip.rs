@@ -103,6 +103,7 @@ impl RewardDistribution for BackupValidatorEmissions {
 
 		let mut total_rewards = 0;
 
+		// Calculate rewards for each backup validator and total rewards for capping
 		let mut rewards: Vec<(&Self::ValidatorId, Self::FlipBalance)> = backup_validators
 			.iter()
 			.map(|backup_validator| {
@@ -116,7 +117,7 @@ impl RewardDistribution for BackupValidatorEmissions {
 			})
 			.collect();
 
-		// Cap if needed and mint the rewards to be distributed
+		// Cap if needed
 		if total_rewards > emissions_cap {
 			rewards = rewards
 				.into_iter()
@@ -126,7 +127,8 @@ impl RewardDistribution for BackupValidatorEmissions {
 				.collect();
 		}
 
-		// Distribute rewards
+		// Distribute rewards one by one
+		// N.B. This could be more optimal
 		for (validator_id, reward) in rewards {
 			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
 		}
