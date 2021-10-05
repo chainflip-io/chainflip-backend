@@ -48,10 +48,10 @@ pub async fn start_stake_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             match result_event.unwrap() {
-                // TODO: Handle unwraps
                 StakeManagerEvent::Staked {
                     account_id,
                     amount,
+                    staker: _,
                     return_addr,
                     tx_hash,
                 } => {
@@ -136,6 +136,8 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was staked.
         amount: u128,
+        /// The address which made the `Stake` transaction
+        staker: ethabi::Address,
         /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
         return_addr: ethabi::Address,
         /// Transaction hash that created the event
@@ -230,6 +232,7 @@ impl StakeManager {
         &self,
     ) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
+        println!("Here's the staked event sig: {:?}", staked.signature);
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
@@ -256,6 +259,7 @@ impl StakeManager {
                     let event = StakeManagerEvent::Staked {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                        staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
                         tx_hash,
                     };
@@ -336,7 +340,7 @@ mod tests {
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
-            H256::from_str("0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52")
+            H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
                 .unwrap();
         let transaction_hash =
             H256::from_str("0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa")
@@ -349,12 +353,13 @@ mod tests {
                     staked_event_signature,
                     H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
                 ],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000001").unwrap()
             }
         ).unwrap() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                staker,
                 return_addr,
                 tx_hash,
             } => {
@@ -363,6 +368,10 @@ mod tests {
                         .unwrap();
                 assert_eq!(account_id, expected_account_id);
                 assert_eq!(amount, 40000000000000000000000u128);
+                assert_eq!(staker,
+                    web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
+                    .unwrap()
+                );
                 assert_eq!(
                     return_addr,
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")

@@ -186,6 +186,12 @@
       {
         "indexed": false,
         "internalType": "address",
+        "name": "staker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
         "name": "returnAddr",
         "type": "address"
       }
