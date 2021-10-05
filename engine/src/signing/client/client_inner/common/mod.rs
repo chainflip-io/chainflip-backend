@@ -1,4 +1,5 @@
 pub mod broadcast;
+pub mod broadcast_verification;
 mod ceremony_stage;
 
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
@@ -91,4 +92,13 @@ impl RawP2PSender {
             eprintln!("Could not send p2p message: {}", err);
         }
     }
+}
+
+/// Data received by a single party for a given
+/// stage from all parties (includes our own for
+/// simplicity). Used for broadcast verification.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BroadcastVerificationMessage<T: Clone> {
+    /// Data is expected to be ordered by signer_idx
+    pub data: Vec<T>,
 }

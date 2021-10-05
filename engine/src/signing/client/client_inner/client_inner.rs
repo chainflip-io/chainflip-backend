@@ -19,7 +19,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
     common::KeygenResultInfo, frost::SigningDataWrapped, key_store::KeyStore,
-    keygen_manager::KeygenManager, signing_manager::SigningManager,
+    keygen_data::KeygenData, keygen_manager::KeygenManager, signing_manager::SigningManager,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,15 +59,15 @@ pub struct Secret2 {
     pub secret_share: Scalar,
 }
 
-impl From<Secret2> for KeygenData {
+impl From<Secret2> for LegacyKeygenData {
     fn from(sec2: Secret2) -> Self {
-        KeygenData::Secret2(sec2)
+        LegacyKeygenData::Secret2(sec2)
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub ceremony_id: CeremonyId,
-    pub message: KeygenData,
+    pub data: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
@@ -77,7 +77,7 @@ impl KeyGenMessageWrapped {
     {
         KeyGenMessageWrapped {
             ceremony_id,
-            message: m.into(),
+            data: m.into(),
         }
     }
 }
@@ -89,22 +89,22 @@ impl From<KeyGenMessageWrapped> for MultisigMessage {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum KeygenData {
+pub enum LegacyKeygenData {
     Broadcast1(Broadcast1),
     Secret2(Secret2),
 }
 
-impl From<Broadcast1> for KeygenData {
+impl From<Broadcast1> for LegacyKeygenData {
     fn from(bc1: Broadcast1) -> Self {
-        KeygenData::Broadcast1(bc1)
+        LegacyKeygenData::Broadcast1(bc1)
     }
 }
 
-impl Display for KeygenData {
+impl Display for LegacyKeygenData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            KeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
-            KeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
+            LegacyKeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
+            LegacyKeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
         }
     }
 }
@@ -162,6 +162,8 @@ pub enum InnerEvent {
     KeygenResult(KeygenOutcome),
 }
 
+pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
+
 impl From<P2PMessageCommand> for InnerEvent {
     fn from(m: P2PMessageCommand) -> Self {
         InnerEvent::P2PMessageCommand(m)
@@ -175,6 +177,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
+    // keygen: LegacyKeygenManager,
     keygen: KeygenManager,
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
@@ -197,12 +200,7 @@ where
         MultisigClient {
             my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
-            keygen: KeygenManager::new(
-                my_account_id.clone(),
-                inner_event_sender.clone(),
-                phase_timeout,
-                &logger,
-            ),
+            keygen: KeygenManager::new(my_account_id.clone(), inner_event_sender.clone(), &logger),
             signing_manager: SigningManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
@@ -348,29 +346,26 @@ where
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
-            Ok(MultisigMessage::KeyGenMessage(multisig_message)) => {
+            Ok(MultisigMessage::KeyGenMessage(keygen_message)) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let ceremony_id = multisig_message.ceremony_id;
+                let ceremony_id = keygen_message.ceremony_id;
 
-                if let Some(key) = self
-                    .keygen
-                    .process_keygen_message(sender_id, multisig_message)
-                {
+                if let Some(key) = self.keygen.process_keygen_data(sender_id, keygen_message) {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(multisig_message)) => {
+            Ok(MultisigMessage::SigningMessage(signing_message)) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
                 self.signing_manager
-                    .process_signing_data(sender_id, multisig_message);
+                    .process_signing_data(sender_id, signing_message);
             }
             Err(_) => {
                 slog::warn!(

@@ -5,7 +5,10 @@ use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::signing::client::client_inner::frost;
+use crate::signing::client::client_inner::{
+    frost::{self, VerifyComm2, VerifyLocalSig4},
+    keygen_data::{self, KeygenData},
+};
 
 use frost::{LocalSig3, SigningCommitment, SigningData, SigningDataWrapped};
 
@@ -15,11 +18,8 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::{
-                    Broadcast1, KeyGenMessageWrapped, KeygenData, MultisigMessage, Secret2,
-                },
+                client_inner::{Broadcast1, KeyGenMessageWrapped, MultisigMessage},
                 common::KeygenResultInfo,
-                keygen_state::KeygenStage,
                 InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
             },
             KeyId, KeygenInfo, MultisigInstruction,
@@ -30,29 +30,88 @@ use crate::{
 };
 
 type MultisigClientNoDB = MultisigClient<KeyDBMock>;
-type BroadcastVerification2 = frost::BroadcastVerificationMessage<SigningCommitment>;
-type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
 use super::{KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID};
+
+macro_rules! recv_data_keygen {
+    ($rx:expr, $variant: path) => {{
+        let (_, m) = recv_multisig_message($rx).await;
+
+        match m {
+            MultisigMessage::KeyGenMessage(KeyGenMessageWrapped {
+                data: $variant(data),
+                ..
+            }) => data,
+            _ => {
+                eprintln!("Received message is not {}", stringify!($variant));
+                panic!();
+            }
+        }
+    }};
+}
+
+macro_rules! recv_all_data_keygen {
+    ($rxs:expr, $variant: path) => {{
+        let mut messages = vec![];
+
+        let count = $rxs.len();
+
+        for rx in $rxs.iter_mut() {
+            let comm1 = recv_data_keygen!(rx, $variant);
+            messages.push(comm1);
+
+            // ignore (count(other nodes) - 1) messages
+            for _ in 0..count - 2 {
+                let _ = recv_data_keygen!(rx, $variant);
+            }
+        }
+
+        messages
+    }};
+}
+
+macro_rules! distribute_data_keygen {
+    ($clients:expr, $account_ids: expr, $messages: expr) => {{
+        for sender_idx in 0..$account_ids.len() {
+            let message = $messages[sender_idx].clone();
+            let id = &$account_ids[sender_idx];
+
+            let m = keygen_data_to_p2p(message, id, KEYGEN_CEREMONY_ID);
+
+            for receiver_idx in 0..$account_ids.len() {
+                if receiver_idx != sender_idx {
+                    $clients[receiver_idx].process_p2p_message(m.clone());
+                }
+            }
+        }
+    }};
+}
 
 pub(super) type InnerEventReceiver = Pin<
     Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<InnerEvent>>>,
 >;
 
-/// Clients generated bc1, but haven't sent them
+/// Clients generated comm1, but haven't sent them
 pub struct KeygenPhase1Data {
     pub clients: Vec<MultisigClientNoDB>,
-    pub bc1_vec: Vec<Broadcast1>,
+    pub comm1_vec: Vec<keygen_data::Comm1>,
 }
 
-/// Clients generated sec2, but haven't sent them
+/// Clients generated ver2, but haven't sent them
 pub struct KeygenPhase2Data {
     pub clients: Vec<MultisigClientNoDB>,
     /// The key in the map is the index of the desitnation node
-    pub sec2_vec: Vec<HashMap<AccountId, Secret2>>,
+    pub ver2_vec: Vec<keygen_data::VerifyComm2>,
 }
 
+/// Clients generated sec3, but haven't sent them
 pub struct KeygenPhase3Data {
+    pub clients: Vec<MultisigClientNoDB>,
+    /// The key in the map is the index of the desitnation node
+    pub sec3: Vec<HashMap<AccountId, keygen_data::SecretShare3>>,
+}
+
+pub struct KeyReadyData {
     pub clients: Vec<MultisigClientNoDB>,
     pub pubkey: secp256k1::PublicKey,
 
@@ -60,9 +119,9 @@ pub struct KeygenPhase3Data {
     pub sec_keys: Vec<KeygenResultInfo>,
 }
 
-impl Debug for KeygenPhase3Data {
+impl Debug for KeyReadyData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KeygenPhase3Data")
+        f.debug_struct("KeyReadyData")
             .field("pubkey", &self.pubkey)
             .finish()
     }
@@ -95,7 +154,9 @@ pub struct SigningPhase4Data {
 pub struct ValidKeygenStates {
     pub keygen_phase1: KeygenPhase1Data,
     pub keygen_phase2: KeygenPhase2Data,
-    pub key_ready: KeygenPhase3Data,
+    pub keygen_phase3: KeygenPhase3Data,
+    // pub keygen_phase4: KeygenPhase4Data,
+    pub key_ready: KeyReadyData,
 }
 
 pub struct ValidSigningStates {
@@ -108,15 +169,8 @@ pub struct ValidSigningStates {
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub fn keygen_stage_for(
-    client: &MultisigClientNoDB,
-    ceremony_id: CeremonyId,
-) -> Option<KeygenStage> {
+pub fn keygen_stage_for(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> Option<String> {
     client.get_keygen().get_stage_for(ceremony_id)
-}
-
-pub fn keygen_delayed_count(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> usize {
-    client.get_keygen().get_delayed_count(ceremony_id)
 }
 
 /// Contains the states at different points of key generation
@@ -175,7 +229,7 @@ async fn collect_all_comm1(rxs: &mut Vec<InnerEventReceiver>) -> Vec<SigningComm
     comm1_vec
 }
 
-async fn collect_all_ver2(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVerification2> {
+async fn collect_all_ver2(rxs: &mut Vec<InnerEventReceiver>) -> Vec<VerifyComm2> {
     let mut ver2_vec = vec![];
 
     for sender_idx in SIGNER_IDXS.iter() {
@@ -224,7 +278,7 @@ async fn collect_all_local_sigs3(
     local_sigs
 }
 
-async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVerification4> {
+async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<VerifyLocalSig4> {
     let mut ver4_vec = vec![];
 
     for sender_idx in SIGNER_IDXS.iter() {
@@ -269,10 +323,7 @@ async fn broadcast_all_comm1(
     }
 }
 
-async fn broadcast_all_ver2(
-    clients: &mut Vec<MultisigClientNoDB>,
-    ver2_vec: &Vec<BroadcastVerification2>,
-) {
+async fn broadcast_all_ver2(clients: &mut Vec<MultisigClientNoDB>, ver2_vec: &Vec<VerifyComm2>) {
     for sender_idx in SIGNER_IDXS.iter() {
         for receiver_idx in SIGNER_IDXS.iter() {
             if sender_idx != receiver_idx {
@@ -313,7 +364,7 @@ async fn broadcast_all_local_sigs(
 
 async fn broadcast_all_ver4(
     clients: &mut Vec<MultisigClientNoDB>,
-    ver4_vec: &Vec<BroadcastVerification4>,
+    ver4_vec: &Vec<VerifyLocalSig4>,
 ) {
     for sender_idx in SIGNER_IDXS.iter() {
         for receiver_idx in SIGNER_IDXS.iter() {
@@ -432,86 +483,96 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
         }
 
-        let mut bc1_vec = vec![];
+        let comm1_vec = recv_all_data_keygen!(rxs, KeygenData::Comm1);
 
-        for rx in rxs.iter_mut() {
-            let bc1 = recv_bc1_keygen(rx).await;
-            bc1_vec.push(bc1);
-
-            // ignore (n(other nodes) - 1) messages
-            for _ in 0..self.account_ids.len() - 2 {
-                let _ = recv_bc1_keygen(rx).await;
-            }
-        }
-
-        let phase1_clients = clients.clone();
-
-        // *** Distribute BC1, so we can advance and generate Secret2 ***
-
-        for sender_idx in 0..self.account_ids.len() {
-            let bc1 = bc1_vec[sender_idx].clone();
-            let id = &account_ids[sender_idx];
-
-            let m = keygen_data_to_p2p(bc1, id, KEYGEN_CEREMONY_ID);
-
-            for receiver_idx in 0..self.account_ids.len() {
-                if receiver_idx != sender_idx {
-                    clients[receiver_idx].process_p2p_message(m.clone());
-                }
-            }
-        }
-
-        for c in clients.iter() {
-            assert_eq!(
-                keygen_stage_for(c, KEYGEN_CEREMONY_ID),
-                Some(KeygenStage::AwaitingSecret2)
-            );
-        }
-
-        let mut sec2_vec = vec![];
-
-        for rx in rxs.iter_mut() {
-            let mut sec2_map = HashMap::new();
-
-            // each receiver receives messages from all *other* nodes (hence - 1)
-            for i in 0..self.account_ids.len() - 1 {
-                println!("recv_secret2_keygen, i: {}", i);
-                let (dest, sec2) = recv_secret2_keygen(rx).await;
-                sec2_map.insert(dest, sec2);
-            }
-
-            sec2_vec.push(sec2_map);
-        }
-
-        let phase2_clients = clients.clone();
+        println!("Received all comm1");
 
         let keygen_phase1 = KeygenPhase1Data {
-            clients: phase1_clients,
-            bc1_vec,
+            clients: clients.clone(),
+            comm1_vec: comm1_vec.clone(),
         };
+
+        distribute_data_keygen!(clients, self.account_ids, comm1_vec);
+
+        println!("Distributed all comm1");
+
+        // TODO: fix this:
+
+        // for c in clients.iter() {
+        //     assert_eq!(
+        //         keygen_stage_for(c, KEYGEN_CEREMONY_ID),
+        //         Some(KeygenStage::AwaitingSecret2)
+        //     );
+        // }
+
+        let ver2_vec = recv_all_data_keygen!(rxs, KeygenData::Verify2);
 
         let keygen_phase2 = KeygenPhase2Data {
-            clients: phase2_clients,
-            sec2_vec: sec2_vec.clone(),
+            clients: clients.clone(),
+            ver2_vec: ver2_vec.clone(),
         };
 
-        // *** Distribute Secret2s, so we can advance and generate Signing Key ***
+        // *** Distribute VerifyComm2s, so we can advance and generate Secret3 ***
+
+        distribute_data_keygen!(clients, self.account_ids, ver2_vec);
+
+        // *** Collect all Secret3
+
+        let mut sec3_vec = vec![];
+
+        for rx in rxs.iter_mut() {
+            let mut sec3_map = HashMap::new();
+            for i in 0..self.account_ids.len() - 1 {
+                println!("recv secret3 keygen, i: {}", i);
+                let (dest, sec3) = recv_secret3_keygen(rx).await;
+                sec3_map.insert(dest, sec3);
+            }
+
+            sec3_vec.push(sec3_map);
+        }
+
+        println!("Received all sec3");
+
+        let keygen_phase3 = KeygenPhase3Data {
+            clients: clients.clone(),
+            sec3: sec3_vec.clone(),
+        };
+
+        // Distribute secret 3
 
         for sender_idx in 0..self.account_ids.len() {
             for receiver_idx in 0..self.account_ids.len() {
-                if sender_idx == receiver_idx {
-                    continue;
+                if sender_idx != receiver_idx {
+                    let r_id = &account_ids[receiver_idx];
+
+                    let sec3_map = &sec3_vec[sender_idx];
+                    let sec3 = sec3_map.get(r_id).unwrap();
+
+                    let s_id = &account_ids[sender_idx];
+                    let m = keygen_data_to_p2p(sec3.clone(), s_id, KEYGEN_CEREMONY_ID);
+
+                    clients[receiver_idx].process_p2p_message(m);
                 }
-
-                let r_id = &account_ids[receiver_idx];
-                let sec2 = sec2_vec[sender_idx].get(r_id).unwrap();
-
-                let s_id = &account_ids[sender_idx];
-                let m = keygen_data_to_p2p(sec2.clone(), s_id, KEYGEN_CEREMONY_ID);
-
-                clients[receiver_idx].process_p2p_message(m);
             }
         }
+
+        println!("Distributed all sec3");
+
+        let complaints = recv_all_data_keygen!(rxs, KeygenData::Complaints4);
+
+        println!("Collected all complaints");
+
+        distribute_data_keygen!(clients, self.account_ids, complaints);
+
+        println!("Distributed all complaints");
+
+        let ver_complaints = recv_all_data_keygen!(rxs, KeygenData::VerifyComplaints5);
+
+        println!("Collected all verify complaints");
+
+        distribute_data_keygen!(clients, self.account_ids, ver_complaints);
+
+        println!("Distributed all verify complaints");
 
         let mut pubkeys = vec![];
         for mut r in rxs.iter_mut() {
@@ -538,7 +599,7 @@ impl KeygenContext {
             sec_keys.push(key.clone());
         }
 
-        let keygen_phase3 = KeygenPhase3Data {
+        let key_ready = KeyReadyData {
             clients: clients.clone(),
             pubkey: pubkeys[0],
             sec_keys,
@@ -546,10 +607,15 @@ impl KeygenContext {
 
         println!("Keygen ceremony took: {:?}", instant.elapsed());
 
+        for rx in rxs.iter_mut() {
+            assert_channel_empty(rx).await;
+        }
+
         ValidKeygenStates {
             keygen_phase1,
             keygen_phase2,
-            key_ready: keygen_phase3,
+            keygen_phase3,
+            key_ready,
         }
     }
 
@@ -685,7 +751,12 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
 // If we timeout, the channel is empty at the time of retrieval
 pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
-    assert!(check_for_inner_event(rx).await.is_none());
+    match check_for_inner_event(rx).await {
+        None => {}
+        Some(event) => {
+            panic!("Channel is not empty: {:?}", event);
+        }
+    }
 }
 
 /// Skip all non-signal messages
@@ -756,21 +827,6 @@ async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (AccountId, Multi
     )
 }
 
-async fn recv_bc1_keygen(rx: &mut InnerEventReceiver) -> Broadcast1 {
-    let (_, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage::KeyGenMessage(wrapped) = m {
-        let KeyGenMessageWrapped { message, .. } = wrapped;
-
-        if let KeygenData::Broadcast1(bc1) = message {
-            return bc1;
-        }
-    }
-
-    eprintln!("Received message is not Broadcast1 (keygen)");
-    panic!();
-}
-
 async fn recv_comm1_signing(rx: &mut InnerEventReceiver) -> frost::Comm1 {
     let (_, m) = recv_multisig_message(rx).await;
 
@@ -797,18 +853,20 @@ async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
     panic!();
 }
 
-async fn recv_secret2_keygen(rx: &mut InnerEventReceiver) -> (AccountId, Secret2) {
+async fn recv_secret3_keygen(
+    rx: &mut InnerEventReceiver,
+) -> (AccountId, keygen_data::SecretShare3) {
     let (dest, m) = recv_multisig_message(rx).await;
 
     if let MultisigMessage::KeyGenMessage(wrapped) = m {
-        let KeyGenMessageWrapped { message, .. } = wrapped;
+        let KeyGenMessageWrapped { data: message, .. } = wrapped;
 
-        if let KeygenData::Secret2(sec2) = message {
-            return (dest, sec2);
+        if let KeygenData::SecretShares3(sec3) = message {
+            return (dest, sec3);
         }
     }
 
-    eprintln!("Received message is not Secret2 (keygen)");
+    eprintln!("Received message is not Secret3 (keygen)");
     panic!();
 }
 

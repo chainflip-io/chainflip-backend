@@ -8,12 +8,13 @@ use super::frost::SigningDataWrapped;
 use super::InnerEvent;
 use crate::p2p::AccountId;
 
+use crate::signing::client::client_inner::utils::project_signers;
 use crate::signing::{MessageHash, SigningOutcome};
 
 use super::signing_state::SigningState;
 
 /// Responsible for mapping ceremonies to signing states and
-/// Generating signer indexes based on the list of paries
+/// Generating signer indexes based on the list of parties
 #[derive(Clone)]
 pub struct SigningManager {
     id: AccountId,
@@ -122,7 +123,7 @@ impl SigningManager {
         };
 
         // Check that signer ids are known for this key
-        let signer_idxs = match project_signers(&signers, &key_info) {
+        let signer_idxs = match project_signers(&signers, &key_info.validator_map) {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
                 // TODO: alert
@@ -149,7 +150,6 @@ impl SigningManager {
             key_info,
             data,
             self.event_sender.clone(),
-            &self.logger,
         );
     }
 
@@ -189,18 +189,4 @@ impl SigningManager {
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
-}
-
-/// Map all signer ids to their corresponding signer idx
-fn project_signers(signer_ids: &[AccountId], info: &KeygenResultInfo) -> Result<Vec<usize>, ()> {
-    // There is probably a more efficient way of doing this
-    // for for now this should be good enough
-
-    let mut results = Vec::with_capacity(signer_ids.len());
-    for id in signer_ids {
-        let idx = info.get_idx(id).ok_or(())?;
-        results.push(idx);
-    }
-
-    Ok(results)
 }

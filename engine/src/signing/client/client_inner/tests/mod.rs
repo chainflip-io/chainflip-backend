@@ -2,6 +2,7 @@ mod db_tests;
 mod frost_unit_tests;
 mod helpers;
 // mod keygen_unit_tests;
+mod keygen_frost_unit_tests;
 
 pub use helpers::KeygenContext;
 

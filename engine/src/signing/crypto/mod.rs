@@ -17,3 +17,29 @@ pub use curv::{
     },
     BigInt,
 };
+
+pub trait ScalarExt {
+    type Scalar;
+
+    fn one() -> Scalar;
+
+    fn from_usize(a: usize) -> Scalar;
+
+    fn sub_scalar(self, a: Self) -> Self;
+}
+
+impl ScalarExt for Scalar {
+    type Scalar = Scalar;
+
+    fn one() -> Self {
+        Self::from_usize(1usize)
+    }
+
+    fn from_usize(a: usize) -> Self {
+        ECScalar::from(&BigInt::from(a as u32))
+    }
+
+    fn sub_scalar(self, a: Self) -> Self {
+        self.sub(&a.get_element())
+    }
+}

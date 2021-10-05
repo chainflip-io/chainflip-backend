@@ -98,6 +98,7 @@ pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
     }
 }
 
+// TODO: remove this in favor of always using ValidatorMaps?
 /// Sort validators and find our index
 pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
     let mut signers = signers.to_owned();
@@ -108,6 +109,24 @@ pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
 
     // idx in multisig start at 1
     pos.map(|idx| idx + 1)
+}
+
+// TODO: should this be a part of ValidatorMaps?
+/// Map all signer ids to their corresponding signer idx
+pub fn project_signers(
+    signer_ids: &[AccountId],
+    validator_maps: &ValidatorMaps,
+) -> Result<Vec<usize>, ()> {
+    // There is probably a more efficient way of doing this
+    // for for now this should be good enough
+
+    let mut results = Vec::with_capacity(signer_ids.len());
+    for id in signer_ids {
+        let idx = validator_maps.get_idx(id).ok_or(())?;
+        results.push(idx);
+    }
+
+    Ok(results)
 }
 
 /// Derive display to match the type's name

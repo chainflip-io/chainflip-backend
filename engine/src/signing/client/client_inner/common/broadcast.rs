@@ -9,6 +9,15 @@ use super::{
     P2PSender,
 };
 
+/// Used by individual stages to distinguish between
+/// a public message that should be broadcast to everyone
+/// an secret messages that should be delivered to different
+/// parties in private
+pub enum DataToSend<T> {
+    Broadcast(T),
+    Private(HashMap<usize, T>),
+}
+
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
 pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
@@ -17,7 +26,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     type Message: Clone + Into<D> + TryFrom<D>;
 
     /// Init the stage, returning the data to broadcast
-    fn init(&self) -> Self::Message;
+    fn init(&self) -> DataToSend<Self::Message>;
 
     /// For a given message, signal if it needs to be delayed
     /// until the next stage
@@ -60,19 +69,6 @@ where
             processor,
         }
     }
-
-    /// Send `data` to all ceremony parties (excluding ourselves)
-    fn broadcast(&self, data: impl Into<D> + Clone + Display) {
-        let data = data.into();
-
-        for idx in &self.common.all_idxs {
-            if *idx == self.common.own_idx {
-                continue;
-            }
-
-            self.common.p2p_sender.send(*idx, data.clone());
-        }
-    }
 }
 
 impl<D, Result, P, Sender> Display for BroadcastStage<D, Result, P, Sender>
@@ -97,12 +93,31 @@ where
     type Result = Result;
 
     fn init(&mut self) {
-        let data = self.processor.init();
+        match self.processor.init() {
+            DataToSend::Broadcast(data) => {
+                for destination_idx in &self.common.all_idxs {
+                    if *destination_idx == self.common.own_idx {
+                        // Save our own share
+                        self.messages.insert(self.common.own_idx, data.clone());
+                        continue;
+                    }
 
-        // Save our own share
-        self.messages.insert(self.common.own_idx, data.clone());
+                    self.common
+                        .p2p_sender
+                        .send(*destination_idx, data.clone().into());
+                }
+            }
+            DataToSend::Private(messages) => {
+                for (destination_idx, data) in messages {
+                    if destination_idx == self.common.own_idx {
+                        self.messages.insert(self.common.own_idx, data);
+                        continue;
+                    }
 
-        self.broadcast(data.into());
+                    self.common.p2p_sender.send(destination_idx, data.into());
+                }
+            }
+        }
     }
 
     fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {
