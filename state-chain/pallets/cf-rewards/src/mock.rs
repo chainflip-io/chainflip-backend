@@ -60,15 +60,8 @@ impl system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
-pub struct MockEnsureGovernance;
 
-impl EnsureOrigin<Origin> for MockEnsureGovernance {
-	type Success = ();
-
-	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
-		Ok(().into())
-	}
-}
+cf_traits::impl_mock_origin_check!(Origin);
 
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
@@ -78,7 +71,7 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = NeverFailingOriginCheck;
 	type BlocksPerDay = BlocksPerDay;
 }
 
