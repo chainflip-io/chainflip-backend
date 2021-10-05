@@ -22,9 +22,9 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	type Error = RotationError<T::ValidatorId>;
 
 	/// The initial phase has completed with success and we are notified of this from `Vaults`.
-	/// Now the specifics for this chain/vault are processed.  In the case for Ethereum we request
-	/// to have the function `setAggKeyWithAggKey` signed by the **old** set of validators.
-	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
+	/// Now the specifics for this chain/vault are processed.  In the case of Ethereum we request
+	/// to have the function `setAggKeyWithAggKey` signed by the **current** set of validators.
+	/// A payload is built and emitted as a `ThresholdSignatureRequest`, failing this an error is reported
 	/// back to `Vaults`
 	fn rotate_vault(
 		ceremony_id: CeremonyId,
