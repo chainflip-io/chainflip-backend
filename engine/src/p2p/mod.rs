@@ -3,7 +3,7 @@ pub mod conductor;
 pub mod mock;
 pub mod rpc;
 
-pub use cf_p2p_rpc::{P2PEvent, P2PRpcClient};
+pub use cf_p2p::{P2PEvent, P2PRpcClient};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -60,21 +60,24 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
                 P2PEvent::ValidatorDisconnected(id) => {
                     slog::debug!(self.logger, "Validator '{}' has left the network.", id);
                 }
-                P2PEvent::Error(e) => {
-                    slog::error!(self.logger, "P2P protocol error: {:?}", e);
-                }
             },
             Err(e) => panic!("Subscription stream error: {}", e),
         }
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
 pub struct AccountId(pub [u8; 32]);
 
 impl std::fmt::Display for AccountId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
+    }
+}
+
+impl std::fmt::Debug for AccountId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -88,6 +91,12 @@ pub struct P2PMessage {
 pub struct P2PMessageCommand {
     pub destination: AccountId,
     pub data: Vec<u8>,
+}
+
+impl P2PMessageCommand {
+    pub fn new(destination: AccountId, data: Vec<u8>) -> Self {
+        P2PMessageCommand { destination, data }
+    }
 }
 
 /// A command to the conductor to send message `data` to

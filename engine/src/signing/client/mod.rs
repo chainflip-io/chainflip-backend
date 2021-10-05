@@ -3,9 +3,9 @@ mod client_inner;
 use std::time::Duration;
 
 use crate::{
-    logging::SIGNING_SUB_COMPONENT,
+    logging::COMPONENT_KEY,
     p2p::{AccountId, P2PMessageCommand},
-    signing::db::KeyDB,
+    signing::KeyDB,
 };
 use futures::StreamExt;
 use pallet_cf_vaults::CeremonyId;
@@ -13,15 +13,22 @@ use slog::o;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, MultisigClientInner};
+use self::client_inner::{InnerEvent, MultisigClient};
 
 pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, SigningOutcome};
-
-use super::MessageHash;
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
+pub struct MessageHash(pub [u8; 32]);
+
+impl std::fmt::Display for MessageHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
 
 /// Public key compressed (33 bytes - 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
@@ -44,20 +51,32 @@ impl KeygenInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
+    data: MessageHash,
+    ceremony_id: CeremonyId,
     key_id: KeyId,
     signers: Vec<AccountId>,
 }
 
 impl SigningInfo {
-    pub fn new(key_id: KeyId, signers: Vec<AccountId>) -> Self {
-        SigningInfo { key_id, signers }
+    pub fn new(
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        data: MessageHash,
+        signers: Vec<AccountId>,
+    ) -> Self {
+        SigningInfo {
+            data,
+            ceremony_id,
+            key_id,
+            signers,
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
-    Sign(MessageHash, SigningInfo),
+    Sign(SigningInfo),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,13 +103,13 @@ pub fn start<S>(
 where
     S: KeyDB,
 {
-    let logger = logger.new(o!(SIGNING_SUB_COMPONENT => "MultisigClient"));
+    let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
 
     slog::info!(logger, "Starting");
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
-    let mut inner = MultisigClientInner::new(
-        my_account_id.clone(),
+    let mut inner = MultisigClient::new(
+        my_account_id,
         db,
         inner_event_sender,
         PHASE_TIMEOUT,

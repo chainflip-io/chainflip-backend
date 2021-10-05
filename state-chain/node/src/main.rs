@@ -3,10 +3,11 @@
 
 mod chain_spec;
 #[macro_use]
+#[rustfmt::skip]
 mod service;
 mod cli;
+#[rustfmt::skip]
 mod command;
-mod rpc;
 
 fn main() -> sc_cli::Result<()> {
 	command::run()

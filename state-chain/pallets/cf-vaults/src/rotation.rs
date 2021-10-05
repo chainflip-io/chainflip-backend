@@ -1,4 +1,3 @@
-use cf_traits::RotationError;
 use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
@@ -8,7 +7,7 @@ use sp_std::prelude::*;
 pub type CeremonyId = u64;
 
 /// Schnorr Signature type
-#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
+#[derive(PartialEq, Decode, Default, Encode, Eq, Clone, RuntimeDebug, Copy)]
 pub struct SchnorrSigTruncPubkey {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
@@ -47,19 +46,6 @@ pub trait ChainVault {
 	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
 }
 
-/// Events coming in from our chain.  This is used to callback from the request to complete the vault
-/// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
-pub trait ChainHandler {
-	type ValidatorId;
-	type Error;
-	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
-	/// Feedback is provided back on this step
-	fn request_vault_rotation(
-		ceremony_id: CeremonyId,
-		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
-	) -> Result<(), Self::Error>;
-}
-
 /// Chain types supported
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum Chain {
@@ -75,8 +61,6 @@ pub enum ChainParams {
 	/// The value is the call data encoded for the final transaction
 	/// to request the key rotation via `setAggKeyWithAggKey`
 	Ethereum(Vec<u8>),
-	/// This is a placeholder, not to be used in production
-	Other(Vec<u8>),
 }
 
 /// State of a vault rotation
@@ -120,8 +104,11 @@ pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
-	// Signature
-	Success(Signature),
+	Success {
+		// what we sign over
+		message_hash: [u8; 32],
+		signature: Signature,
+	},
 	// Bad validators
 	Error(Vec<ValidatorId>),
 }
@@ -161,7 +148,7 @@ pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
-			VaultRotations::<T>::contains_key($index),
+			ActiveChainVaultRotations::<T>::contains_key($index),
 			RotationError::InvalidCeremonyId
 		);
 	};

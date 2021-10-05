@@ -38,6 +38,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
@@ -54,10 +57,6 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
-
-pub trait WeightInfo {
-	fn set_auction_size_range() -> Weight;
-}
 
 #[frame_support::pallet]
 pub mod pallet {
