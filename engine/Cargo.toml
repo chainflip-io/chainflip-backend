@@ -58,6 +58,8 @@ tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = "0.17.0"
+dyn-clone = "1.0.4"
+sha2 = "0.9.5"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}

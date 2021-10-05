@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::signing::{db::KeyDB, KeyId};
+use crate::signing::{KeyDB, KeyId};
 
 use super::common::KeygenResultInfo;
 
@@ -29,8 +29,8 @@ where
         &self.db
     }
 
-    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
-        self.keys.get(&key_id)
+    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
+        self.keys.get(key_id)
     }
 
     // Save `key` under key `key_id` overwriting if exists

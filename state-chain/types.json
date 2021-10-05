@@ -45,12 +45,6 @@
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
-  "EthSigningTxResponse": {
-    "_enum": {
-      "Success": "(Vec<u8>)",
-      "Error": "(Vec<ValidatorId>)"
-    }
-  },
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {

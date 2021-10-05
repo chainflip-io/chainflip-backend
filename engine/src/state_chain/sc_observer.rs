@@ -142,28 +142,23 @@ pub async fn start(
                                 }
                             }
                         }
-                        ThresholdSignatureRequestEvent(threshold_sig_requst) => {
-                            let signers: Vec<_> = threshold_sig_requst
-                                .threshold_signature_request
+                        ThresholdSignatureRequestEvent(event) => {
+                            let req = event.threshold_signature_request;
+
+                            let signers: Vec<_> = req
                                 .validators
                                 .iter()
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let message_hash: [u8; 32] = threshold_sig_requst
-                                .threshold_signature_request
-                                .payload
-                                .try_into()
-                                .expect("Should be a 32 byte hash");
-                            let sign_tx = MultisigInstruction::Sign(
+                            let message_hash: [u8; 32] =
+                                req.payload.try_into().expect("Should be a 32 byte hash");
+                            let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
+                                event.ceremony_id,
+                                KeyId(req.public_key),
                                 MessageHash(message_hash),
-                                SigningInfo::new(
-                                    KeyId(
-                                        threshold_sig_requst.threshold_signature_request.public_key,
-                                    ),
-                                    signers,
-                                ),
-                            );
+                                signers,
+                            ));
 
                             // The below will be replaced with one shot channels
                             multisig_instruction_sender
@@ -181,7 +176,8 @@ pub async fn start(
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success {
-                                            message_hash: message_info.hash.0,
+                                            // TODO: shouldn't this be ceremony_id?
+                                            message_hash,
                                             signature: sig.into(),
                                         },
                                         Err((err, bad_account_ids)) => {
@@ -210,7 +206,7 @@ pub async fn start(
                             match subxt_client
                                 .witness_threshold_signature_response(
                                     &*signer,
-                                    threshold_sig_requst.ceremony_id,
+                                    event.ceremony_id,
                                     response,
                                 )
                                 .await
@@ -219,7 +215,7 @@ pub async fn start(
                                 Err(e) => {
                                     slog::error!(
                                         logger,
-                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", threshold_sig_requst.ceremony_id, e
+                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", event.ceremony_id, e
                                     )
                                 }
                             }
@@ -276,8 +272,6 @@ pub async fn start(
                                         }
                                     }
                                 }
-                                // Leave this to be explicit about future chains being added
-                                ChainParams::Other(_) => panic!("Chain::Other does not exist"),
                             }
                         }
                     },

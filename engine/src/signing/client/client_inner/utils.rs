@@ -4,6 +4,25 @@ use crate::p2p::AccountId;
 
 use serde::{Deserialize, Serialize};
 
+/// Note that the resulting `threshold` is the maximum number
+/// of parties *not* enough to generate a signature,
+/// i.e. at least `t+1` parties are required.
+/// This follows the notation in the multisig library that
+/// we are using and in the corresponding literature.
+pub fn threshold_from_share_count(share_count: usize) -> usize {
+    ((share_count * 2) - 1) / 3
+}
+
+#[cfg(test)]
+#[test]
+fn check_threshold_calculation() {
+    assert_eq!(threshold_from_share_count(150), 99);
+    assert_eq!(threshold_from_share_count(100), 66);
+    assert_eq!(threshold_from_share_count(90), 59);
+    assert_eq!(threshold_from_share_count(3), 1);
+    assert_eq!(threshold_from_share_count(4), 2);
+}
+
 pub fn reorg_vector<T: Clone>(v: &mut Vec<T>, order: &[usize]) {
     assert_eq!(v.len(), order.len());
 
@@ -59,7 +78,7 @@ pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
 
     debug_assert_eq!(idxs.len(), signers.len());
 
-    let mut combined: Vec<_> = signers.into_iter().zip(idxs).collect();
+    let mut combined: Vec<_> = signers.iter().zip(idxs).collect();
 
     combined.sort_by_key(|(v, _)| *v);
 
@@ -89,6 +108,17 @@ pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
 
     // idx in multisig start at 1
     pos.map(|idx| idx + 1)
+}
+
+/// Derive display to match the type's name
+macro_rules! derive_display_as_type_name {
+    ($name: ty) => {
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, stringify!($name))
+            }
+        }
+    };
 }
 
 #[cfg(test)]
