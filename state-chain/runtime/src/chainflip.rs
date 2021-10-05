@@ -1,16 +1,18 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, System, Validator,
+	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
 	Witnesser,
 };
-use crate::{EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
-use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
+use cf_traits::{
+	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
 	EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, Issuance, NetworkState,
 	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_validator::EpochTransitionHandler;
+use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_std::cmp::min;
 use sp_std::vec::Vec;
 
@@ -64,7 +66,8 @@ trait RewardDistribution {
 	type EpochInfo: EpochInfo;
 	type StakeTransfer: StakeTransfer;
 	type ValidatorId;
-	type FlipBalance;
+	type BlockNumber;
+	type FlipBalance: UniqueSaturatedFrom<Self::BlockNumber> + AtLeast32BitUnsigned;
 	/// An implementation of the [Issuance] trait.
 	type Issuance: Issuance;
 
@@ -78,6 +81,7 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type EpochInfo = Validator;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
+	type BlockNumber = BlockNumber;
 	type FlipBalance = FlipBalance;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
@@ -86,13 +90,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_block_emissions() * HeartbeatBlockInterval::get() as u128;
-		// We distribute backup rewards every heartbeat interval
-		// These are the rewards for this epoch, we don't know the size of the epoch in blocks
-		// so this needs to be weighted for 150 blocks
-		let block_emissions = System::block_number() - Emissions::last_mint_block();
-		let average_validator_reward =
-			Rewards::rewards_due_each() * HeartbeatBlockInterval::get() as u128 / block_emissions as u128 ;
+		let emissions_cap = Emissions::backup_validator_emission_per_block()
+			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+
+		// Emissions for this heartbeat interval for the active set
+		let validator_rewards = Emissions::validator_emission_per_block()
+			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+
+		// The average validator emission
+		let average_validator_reward: Self::FlipBalance = validator_rewards
+			/ Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
 
 		let mut total_rewards = 0;
 
