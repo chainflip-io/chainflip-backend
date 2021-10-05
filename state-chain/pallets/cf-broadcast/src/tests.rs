@@ -1,6 +1,7 @@
 use crate::{
 	mock::*, AwaitingBroadcast, AwaitingTransactionSignature, BroadcastAttemptId, BroadcastFailure,
 	BroadcastId, BroadcastRetryQueue, Error, Event as BroadcastEvent, Instance0,
+	SigningOrBroadcast,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
@@ -10,11 +11,13 @@ enum Scenario {
 	HappyPath,
 	BadSigner,
 	BroadcastFailure(BroadcastFailure),
+	Timeout,
 }
 
 thread_local! {
 	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
+	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<(BroadcastAttemptId, SigningOrBroadcast)>> = Default::default();
 }
 
 struct MockCfe;
@@ -32,6 +35,10 @@ impl MockCfe {
 		match event {
 			Event::pallet_cf_broadcast_Instance0(broadcast_event) => match broadcast_event {
 				BroadcastEvent::TransactionSigningRequest(attempt_id, nominee, unsigned_tx) => {
+					if let Scenario::Timeout = scenario {
+						// Ignore the request.
+						return;
+					}
 					Self::handle_transaction_signature_request(
 						attempt_id,
 						nominee,
@@ -40,6 +47,10 @@ impl MockCfe {
 					);
 				}
 				BroadcastEvent::BroadcastRequest(attempt_id, _signed_tx) => {
+					if let Scenario::Timeout = scenario {
+						// Ignore the request.
+						return;
+					}
 					Self::handle_broadcast_request(attempt_id, scenario);
 				}
 				BroadcastEvent::BroadcastComplete(broadcast_id) => {
@@ -51,7 +62,18 @@ impl MockCfe {
 				BroadcastEvent::BroadcastFailed(broadcast_id, _, _) => {
 					FAILED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
 				}
-				BroadcastEvent::__Ignore(_, _) => unimplemented!(),
+				BroadcastEvent::TransactionSigningAttemptExpired(broadcast_id) => EXPIRED_ATTEMPTS
+					.with(|cell| {
+						cell.borrow_mut()
+							.push((broadcast_id, SigningOrBroadcast::SigningStage))
+					}),
+				BroadcastEvent::TransactionBroadcastAttemptExpired(broadcast_id) => {
+					EXPIRED_ATTEMPTS.with(|cell| {
+						cell.borrow_mut()
+							.push((broadcast_id, SigningOrBroadcast::BroadcastStage))
+					})
+				}
+				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -277,11 +299,11 @@ fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			DogeBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx::Valid),
-			Error::<Test, Instance0>::InvalidBroadcastId
+			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
 			DogeBroadcast::broadcast_success(Origin::root(), 0, [0u8; 4]),
-			Error::<Test, Instance0>::InvalidBroadcastId
+			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
 			DogeBroadcast::broadcast_failure(
@@ -290,7 +312,7 @@ fn test_invalid_id_is_noop() {
 				BroadcastFailure::TransactionFailed,
 				[0u8; 4]
 			),
-			Error::<Test, Instance0>::InvalidBroadcastId
+			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 	})
 }
@@ -315,6 +337,7 @@ fn test_signature_request_expiry() {
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
 		DogeBroadcast::on_initialize(current_block + 1);
+		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
 		assert!(
@@ -326,33 +349,35 @@ fn test_signature_request_expiry() {
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
 		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockCfe::respond(Scenario::Timeout);
 
-		// Old attempt has expired.
-		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
-		);
-		// New attempt is live with same broadcast_id and incremented attempt_count.
-		assert!({
-			let new_attempt =
-				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
-					.unwrap();
-			new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
-		});
+		let check_end_state = || {
+			// Old attempt has expired.
+			assert!(
+				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+					.is_none()
+			);
+			assert_eq!(
+				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				(BROADCAST_ATTEMPT_ID, SigningOrBroadcast::SigningStage),
+			);
+
+			// New attempt is live with same broadcast_id and incremented attempt_count.
+			assert!({
+				let new_attempt =
+					AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
+						.unwrap();
+				new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
+			});
+		};
+
+		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
 		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockCfe::respond(Scenario::Timeout);
 
-		// Old attempt has expired.
-		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
-		);
-		// New attempt is live with same broadcast_id and incremented attempt_count.
-		assert!({
-			let new_attempt =
-				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
-					.unwrap();
-			new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
-		});
+		check_end_state();
 	})
 }
 
@@ -372,6 +397,7 @@ fn test_broadcast_request_expiry() {
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
 		DogeBroadcast::on_initialize(current_block + 1);
+		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
 		assert!(
@@ -383,28 +409,30 @@ fn test_broadcast_request_expiry() {
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
 		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockCfe::respond(Scenario::Timeout);
 
-		// Old attempt has expired.
-		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
-		// New attempt is live with same broadcast_id and incremented attempt_count.
-		assert!({
-			let new_attempt =
-				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
-					.unwrap();
-			new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
-		});
+		let check_end_state = || {
+			// Old attempt has expired.
+			assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
+			assert_eq!(
+				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				(BROADCAST_ATTEMPT_ID, SigningOrBroadcast::BroadcastStage),
+			);
+			// New attempt is live with same broadcast_id and incremented attempt_count.
+			assert!({
+				let new_attempt =
+					AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
+						.unwrap();
+				new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
+			});
+		};
+
+		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
 		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockCfe::respond(Scenario::Timeout);
 
-		// Old attempt has expired.
-		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
-		// New attempt is live with same broadcast_id and incremented attempt_count.
-		assert!({
-			let new_attempt =
-				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
-					.unwrap();
-			new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
-		});
+		check_end_state();
 	})
 }

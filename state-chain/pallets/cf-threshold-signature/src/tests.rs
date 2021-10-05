@@ -44,7 +44,11 @@ impl MockCfe {
 						SIGNATURE.to_string(),
 					),
 					Scenario::RetryPath => {
-						DogeThresholdSigner::signature_failed(Origin::root(), req_id, vec![RANDOM_NOMINEE])
+						DogeThresholdSigner::signature_failed(
+							Origin::root(),
+							req_id,
+							vec![RANDOM_NOMINEE],
+						)
 					}
 				});
 			}
