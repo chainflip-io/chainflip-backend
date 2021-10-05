@@ -34,7 +34,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
 			[0; 32],
-			new_public_key.clone(), 
+			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
 			// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
 			// https://github.com/chainflip-io/chainflip-backend/pull/495

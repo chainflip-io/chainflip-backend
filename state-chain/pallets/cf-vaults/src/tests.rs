@@ -91,7 +91,7 @@ mod test {
 	}
 
 	#[test]
-	fn vault_rotation_request() {
+	fn vault_rotation_request_abort_on_failed() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
@@ -101,15 +101,6 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![1; 33])
 			));
-
-			// assert_ok!(VaultsPallet::threshold_signature_response(
-			// 	Origin::root(),
-			// 	VaultsPallet::current_request(),
-			// 	ThresholdSignatureResponse::Success {
-			// 		message_hash: [0; 32],
-			// 		signature: SchnorrSigTruncPubkey::default(),
-			// 	}
-			// ));
 
 			assert_err!(
 				VaultsPallet::threshold_signature_response(
@@ -188,9 +179,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
-					VaultsPallet::current_request()
-				))
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(1))
 			);
 		});
 	}
@@ -236,9 +225,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
-					VaultsPallet::current_request()
-				]))
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![1]))
 			);
 		});
 	}
@@ -351,31 +338,6 @@ mod test {
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
 			);
-		});
-	}
-
-	#[test]
-	fn should_encode_set_agg_key_with_agg_key() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(vec![
-				ALICE, BOB, CHARLIE
-			]));
-			let first_ceremony_id = VaultsPallet::current_request();
-			assert_ok!(VaultsPallet::keygen_response(
-				Origin::root(),
-				first_ceremony_id,
-				// this key is different to the genesis key
-				KeygenResponse::Success(vec![1; 33])
-			));
-			// we have never created a request to sign, but we received a response?
-			assert_ok!(VaultsPallet::threshold_signature_response(
-				Origin::root(),
-				first_ceremony_id,
-				ThresholdSignatureResponse::Success {
-					message_hash: [0; 32],
-					signature: SchnorrSigTruncPubkey::default()
-				}
-			));
 		});
 	}
 
