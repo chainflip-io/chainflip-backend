@@ -327,8 +327,8 @@ impl<T: Config> Auction for Pallet<T> {
 										T::PercentageOfBackupValidatorsInEmergency::get(),
 									) / 100;
 
-								validator_group_size =
-									number_of_validators + desired_number_of_backup_validators as usize;
+								validator_group_size = number_of_validators
+									+ desired_number_of_backup_validators as usize;
 
 								validating_set.truncate(validator_group_size);
 							}

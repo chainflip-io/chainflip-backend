@@ -390,8 +390,7 @@ mod test {
 			let auction_result = AuctionPallet::auction_result().expect("an auction result please");
 			assert_eq!(
 				auction_result.winners.len() as u32,
-				(PercentageOfBackupValidatorsInEmergency::get()
-					* number_of_backup_validators)
+				(PercentageOfBackupValidatorsInEmergency::get() * number_of_backup_validators)
 					/ 100 + number_of_validators
 			);
 		});
