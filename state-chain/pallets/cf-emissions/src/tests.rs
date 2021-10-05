@@ -1,6 +1,6 @@
 use crate::{mock::*, Pallet};
 use pallet_cf_flip::Pallet as Flip;
-use crate::UpdateBlockEmissions;
+use crate::BlockEmissions;
 
 #[test]
 fn test_should_mint() {

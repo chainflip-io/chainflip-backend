@@ -286,7 +286,7 @@ pub trait RewardsDistribution {
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
-	fn trigger_emissions();
+	fn trigger_emissions() -> Weight;
 }
 
 /// A nonce

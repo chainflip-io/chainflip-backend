@@ -16,6 +16,7 @@ use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
+use sp_runtime::traits::CheckedDiv;
 use sp_runtime::{
 	offchain::storage_lock::BlockNumberProvider,
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
@@ -84,12 +85,12 @@ pub mod pallet {
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn validator_block_emissions)]
+	#[pallet::getter(fn validator_emission_per_block)]
 	/// The block number at which we last minted Flip.
 	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn backup_validator_block_emissions)]
+	#[pallet::getter(fn backup_validator_emission_per_block)]
 	/// The block number at which we last minted Flip.
 	pub type BackupValidatorEmissionPerBlock<T: Config> =
 		StorageValue<_, T::FlipBalance, ValueQuery>;
@@ -124,7 +125,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
-
 }
 
 impl<T: Config> Pallet<T> {
@@ -147,7 +147,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
-	/// minted and distributes this a as a reward via [RewardsDistribution].
+	/// minted and distributes this as a reward via [RewardsDistribution].
 	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
@@ -155,7 +155,7 @@ impl<T: Config> Pallet<T> {
 
 		let reward_amount = ValidatorEmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
-			.ok_or(T::DbWeight::get().reads(2))?;
+			.ok_or_else(|| T::DbWeight::get().reads(2))?;
 
 		let exec_weight = if reward_amount.is_zero() {
 			0
@@ -178,37 +178,65 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub trait UpdateBlockEmissions<T: Config> {
-	fn update_validator_block_emission(emission: T::FlipBalance);
-	fn update_backup_validator_block_emission(emission: T::FlipBalance);
+pub trait BlockEmissions<T: Config> {
+	fn update_validator_block_emission(emission: T::FlipBalance) -> Weight;
+	fn update_backup_validator_block_emission(emission: T::FlipBalance) -> Weight;
+	fn calculate_block_emissions() -> Weight;
 }
 
-impl<T: Config> UpdateBlockEmissions<T> for Pallet<T> {
-	fn update_validator_block_emission(emission: T::FlipBalance) {
+impl<T: Config> BlockEmissions<T> for Pallet<T> {
+	fn update_validator_block_emission(emission: T::FlipBalance) -> Weight {
 		ValidatorEmissionPerBlock::<T>::put(emission);
+		T::DbWeight::get().writes(1)
 	}
 
-	fn update_backup_validator_block_emission(emission: T::FlipBalance) {
+	fn update_backup_validator_block_emission(emission: T::FlipBalance) -> Weight {
 		BackupValidatorEmissionPerBlock::<T>::put(emission);
+		T::DbWeight::get().writes(1)
+	}
+
+	fn calculate_block_emissions() -> Weight {
+		const DAYS_IN_YEAR: u32 = 365;
+		let mut weight = 0;
+		// Calculate blocks emissions and update
+		let blocks_per_day = T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get());
+		// Validators
+		let validator_block_emission = T::Issuance::total_issuance()
+			* T::ValidatorEmissionInflation::get().into()
+			/ 100u32.into();
+
+		if let Some(validator_block_emission) =
+		(validator_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
+		{
+			weight += Self::update_validator_block_emission(validator_block_emission);
+		}
+
+		// Backup validators
+		let backup_block_emission = T::Issuance::total_issuance()
+			* T::BackupValidatorEmissionInflation::get().into()
+			/ 100u32.into();
+
+		if let Some(backup_block_emission) =
+		(backup_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
+		{
+			weight += Self::update_backup_validator_block_emission(backup_block_emission);
+		}
+
+		weight
 	}
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
-	fn trigger_emissions() {
-		let block_number = frame_system::Pallet::<T>::current_block_number();
-		let _ = Self::mint_rewards_for_block(block_number);
-
-		// Calculate blocks emissions and update
-		Self::update_validator_block_emission(
-			T::Issuance::total_issuance() * T::ValidatorEmissionInflation::get().into()
-				/ 100u32.into() / 365u32.into()
-				/ T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
-		);
-
-		Self::update_backup_validator_block_emission(
-			T::Issuance::total_issuance() * T::BackupValidatorEmissionInflation::get().into()
-				/ 100u32.into() / 365u32.into()
-				/ T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
-		);
+	fn trigger_emissions() -> Weight {
+		Pallet::<T>::calculate_block_emissions();
+		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		match Self::mint_rewards_for_block(current_block_number) {
+			Ok(weight) => weight,
+			Err(weight) => {
+				frame_support::debug::RuntimeLogger::init();
+				frame_support::debug::error!("Failed to mint rewards at block {:?}", current_block_number);
+				weight
+			}
+		}
 	}
 }
