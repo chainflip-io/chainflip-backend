@@ -18,17 +18,16 @@ pub use pallet::*;
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
+/// The reasons for which a broadcast might fail.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum BroadcastFailure {
-	/// The transaction was rejected because of some user error.
+	/// The transaction was rejected because of some user error, for example, insuffient funds.
 	TransactionRejected,
-	/// The transaction failed for some unknown reason.
+	/// The transaction failed for some unknown reason and we don't know how to recover.
 	TransactionFailed,
-	/// The transaction stalled.
-	TransactionTimeout,
 }
 
-/// The [TransactionContext] should contain all the state required to construct and process transactions for a given
+/// The [BroadcastConfig] should contain all the state required to construct and process transactions for a given
 /// chain.
 pub trait BroadcastConfig<T: Chainflip> {
 	/// A chain identifier.
@@ -395,9 +394,6 @@ pub mod pallet {
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
 					);
-				}
-				BroadcastFailure::TransactionTimeout => {
-					Self::schedule_retry(failed_attempt.into());
 				}
 				BroadcastFailure::TransactionFailed => {
 					Self::deposit_event(Event::<T, I>::BroadcastFailed(
