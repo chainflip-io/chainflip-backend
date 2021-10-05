@@ -148,7 +148,7 @@ pub mod pallet {
 		InvalidCeremonyId,
 		/// We have an empty validator set
 		EmptyValidatorSet,
-		/// The key generation response failed
+		/// The key in the response is not different to the current key
 		KeyUnchanged,
 		/// A vault rotation has failed
 		VaultRotationCompletionFailed,
