@@ -1,6 +1,7 @@
-use std::{collections::HashMap, convert::TryInto, fmt::Display, time::Duration};
+use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use crate::{
+    eth::utils::pubkey_to_eth_addr,
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
@@ -10,8 +11,6 @@ use crate::{
 };
 
 use pallet_cf_vaults::CeremonyId;
-use sp_core::Hasher;
-use sp_runtime::traits::Keccak256;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
@@ -29,15 +28,9 @@ pub struct SchnorrSignature {
 
 impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
     fn from(cfe_sig: SchnorrSignature) -> Self {
-        // https://ethereum.stackexchange.com/questions/3542/how-are-ethereum-addresses-generated
-        // Start with the public key (128 characters / 64 bytes)
-        // Take the Keccak-256 hash of the public key. You should now have a string that is 64 characters / 32 bytes. (note: SHA3-256 eventually became the standard, but Ethereum uses Keccak)
-        let hash = Keccak256::hash(&cfe_sig.r.serialize_uncompressed()).0;
-        // Take the last 40 characters / 20 bytes of this public key (Keccak-256). Or, in other words, drop the first 24 characters / 12 bytes. These 40 characters / 20 bytes are the address. When prefixed with 0x it becomes 42 characters long.
-        let eth_pub_key: [u8; 20] = hash[12..].try_into().expect("Is valid pubkey");
         Self {
             s: cfe_sig.s,
-            eth_pub_key,
+            k_times_g_address: pubkey_to_eth_addr(cfe_sig.r),
         }
     }
 }

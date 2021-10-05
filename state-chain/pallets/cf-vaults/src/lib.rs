@@ -57,6 +57,7 @@ use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use sp_runtime::traits::One;
 
+pub mod crypto;
 mod ethereum;
 pub mod rotation;
 

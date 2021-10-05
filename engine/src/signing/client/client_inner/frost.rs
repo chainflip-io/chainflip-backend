@@ -13,6 +13,7 @@ use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use super::{client_inner::MultisigMessage, SchnorrSignature};
+use pallet_cf_vaults::crypto::destructure_pubkey;
 
 use crate::signing::crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar};
 
@@ -431,14 +432,6 @@ mod test_schnorr {
     }
 }
 
-/// Destructure pubkey into the 32-byte x coordinate and a parity byte
-fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
-    let bytes: [u8; 33] = pubkey.serialize();
-    let pubkey_y_parity = if bytes[0] == 2 { 0u8 } else { 1u8 };
-    let pubkey_x: [u8; 32] = bytes[1..].try_into().expect("Is valid pubkey");
-    return (pubkey_x, pubkey_y_parity);
-}
-
 /// Assembles and hashes the challenge in the correct order for the KeyManager Contract
 fn build_challenge(
     pubkey: secp256k1::PublicKey,
@@ -450,7 +443,8 @@ fn build_challenge(
 
     let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
 
-    let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pubkey);
+    let (pubkey_x, pubkey_y_parity) =
+        destructure_pubkey(pubkey.serialize().to_vec()).expect("Should be valid pubkey");
 
     // Assemble the challenge in correct order according to this contract:
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
