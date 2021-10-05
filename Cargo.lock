@@ -924,8 +924,8 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-flip",
  "pallet-cf-reputation",
- "pallet-cf-signing",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "parity-scale-codec",
@@ -4839,7 +4839,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-signing",
+ "pallet-cf-threshold-signature",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -4932,7 +4932,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-signing"
+name = "pallet-cf-staking"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
+ "ethereum-types 0.12.0",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip",
+ "pallet-cf-threshold-signature",
+ "pallet-cf-validator",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "substrate-wasm-builder",
+]
+
+[[package]]
+name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
@@ -4947,28 +4969,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "pallet-cf-staking"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
- "ethereum-types 0.12.0",
- "frame-support",
- "frame-system",
- "pallet-cf-flip",
- "pallet-cf-signing",
- "pallet-cf-validator",
- "parity-scale-codec",
- "serde 1.0.126",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -5037,8 +5037,8 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-broadcast",
- "pallet-cf-signing",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-vaults",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -8739,8 +8739,8 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
- "pallet-cf-signing",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",

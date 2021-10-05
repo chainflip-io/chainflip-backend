@@ -367,7 +367,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type ThresholdSigner = EthereumSigner;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -436,7 +436,7 @@ impl pallet_cf_reputation::Config for Runtime {
 
 use frame_support::instances::Instance0;
 
-impl pallet_cf_signing::Config<Instance0> for Runtime {
+impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
@@ -487,7 +487,7 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );

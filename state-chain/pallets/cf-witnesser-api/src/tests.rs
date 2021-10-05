@@ -81,7 +81,11 @@ mod staking_witness_tests {
 
 			// The call we are witnessing.
 			let call: Call =
-				pallet_cf_signing::Call::<Test, Instance0>::signature_success(STAKER, ()).into();
+				pallet_cf_threshold_signature::Call::<Test, Instance0>::signature_success(
+					STAKER,
+					(),
+				)
+				.into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_eth_signature_success(
@@ -95,7 +99,7 @@ mod staking_witness_tests {
 			// Second vote - fails because there is no pending request. Expected behaviour.
 			assert_noop!(
 				WitnessApi::witness_eth_signature_success(Origin::signed(WITNESS), STAKER, (),),
-				pallet_cf_signing::Error::<Test, Instance0>::InvalidCeremonyId
+				pallet_cf_threshold_signature::Error::<Test, Instance0>::InvalidCeremonyId
 			);
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);

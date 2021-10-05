@@ -172,7 +172,7 @@ impl vaults::Vaults for StateChainRuntime {}
 
 impl reputation::Reputation for StateChainRuntime {}
 
-impl ethereum_signer::EthereumSigner for StateChainRuntime {
+impl ethereum_signer::EthereumThresholdSigner for StateChainRuntime {
     type KeyId = Vec<u8>;
     type Payload = H256;
 }

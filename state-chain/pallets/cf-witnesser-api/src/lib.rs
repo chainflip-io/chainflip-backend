@@ -21,11 +21,11 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};
-	use pallet_cf_signing::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_staking::{
 		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
 		FlipBalance,
 	};
+	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_vaults::rotation::{CeremonyId, KeygenResponse, VaultRotationResponse};
 	use pallet_cf_vaults::{
 		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
@@ -70,8 +70,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::CeremonyId,
-			signature: <<T as pallet_cf_signing::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
+			id: pallet_cf_threshold_signature::CeremonyId,
+			signature: <<T as pallet_cf_threshold_signature::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = SigningCall::<T, Instance0>::signature_success(id, signature);
@@ -85,7 +85,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::CeremonyId,
+			id: pallet_cf_threshold_signature::CeremonyId,
 			offenders: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

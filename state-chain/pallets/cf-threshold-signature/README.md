@@ -1,4 +1,4 @@
-# Chainflip Signing pallet
+# Chainflip Threshold Signing pallet
 
 This is a pallet for requesting threshold signatures.
 

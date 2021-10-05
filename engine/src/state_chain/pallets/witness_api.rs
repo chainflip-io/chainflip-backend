@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use super::{
     auction::Auction,
     ethereum_broadcaster::BroadcastAttemptId,
-    ethereum_signer::{self, EthereumSigner},
+    ethereum_signer::{self, EthereumThresholdSigner},
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;
@@ -19,7 +19,7 @@ use substrate_subxt::{module, system::System, Call};
 type EthTransactionHash = [u8; 32];
 
 #[module]
-pub trait WitnesserApi: System + Staking + Auction + EthereumSigner {}
+pub trait WitnesserApi: System + Staking + Auction + EthereumThresholdSigner {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessStakedCall<T: WitnesserApi> {
