@@ -22,7 +22,6 @@ sp-core = {default-features = false, version = '3.0.0'}
 sp-io = {version = "3.0.0", default-features = false}
 sp-runtime = {version = "3.0.0", default-features = false}
 sp-std = {version = "3.0.0", default-features = false}
-hex = {version = "0.4", default-features = false}
 
 #Non-substrate external deps
 ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = 'a53cb47'}
@@ -31,6 +30,7 @@ ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethab
 sp-core = {default-features = false, version = '3.0.0'}
 sp-io = {version = "3.0.0", default-features = false}
 sp-std = {version = "3.0.0", default-features = false}
+hex = {version = "0.4", default-features = false}
 
 [features]
 default = ['std']
@@ -45,5 +45,4 @@ std = [
   'sp-io/std',
   'log/std',
   'ethabi/std',
-  'hex/std',
 ]
