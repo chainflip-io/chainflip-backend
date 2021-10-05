@@ -120,7 +120,7 @@ pub const BROADCAST_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber =
 
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
-	pub const BroadcastTimeout: <Test as frame_system::Config>::BlockNumber = BROADCAST_EXPIRY_BLOCKS;
+	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = BROADCAST_EXPIRY_BLOCKS;
 }
 
 impl pallet_cf_broadcast::Config<Instance0> for Test {
@@ -130,7 +130,7 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type SignerNomination = MockNominator;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;
-	type BroadcastTimeout = BroadcastTimeout;
+	type TransmissionTimeout = TransmissionTimeout;
 }
 
 // Build genesis storage according to the mock runtime.

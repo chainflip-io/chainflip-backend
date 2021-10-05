@@ -78,7 +78,7 @@ mod test_events_decoding {
         const ATTEMPT_ID: u64 = 42;
         let signed_transaction = RawSignedTransaction::default();
 
-        let event: Event = BroadcastEvent::<Runtime, Instance0>::BroadcastRequest(
+        let event: Event = BroadcastEvent::<Runtime, Instance0>::TransmissionRequest(
             ATTEMPT_ID,
             signed_transaction.clone(),
         )

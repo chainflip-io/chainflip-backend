@@ -447,7 +447,7 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
 
 parameter_types! {
 	pub const EthereumSigningTimeout: BlockNumber = 5;
-	pub const EthereumBroadcastTimeout: BlockNumber = 10 * MINUTES;
+	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
 }
 
 impl pallet_cf_broadcast::Config<Instance0> for Runtime {
@@ -457,7 +457,7 @@ impl pallet_cf_broadcast::Config<Instance0> for Runtime {
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type OfflineReporter = Reputation;
 	type SigningTimeout = EthereumSigningTimeout;
-	type BroadcastTimeout = EthereumBroadcastTimeout;
+	type TransmissionTimeout = EthereumTransmissionTimeout;
 }
 
 construct_runtime!(

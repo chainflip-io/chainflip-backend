@@ -196,7 +196,7 @@ impl pallet_cf_broadcast::BroadcastConfig<Test> for MockBroadcastConfig {
 
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = 10;
-	pub const BroadcastTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 }
 
 impl pallet_cf_broadcast::Config<Instance0> for Test {
@@ -206,7 +206,7 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type SignerNomination = MockSignerNomination;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;
-	type BroadcastTimeout = BroadcastTimeout;
+	type TransmissionTimeout = TransmissionTimeout;
 }
 
 impl VaultRotationHandler for Test {
