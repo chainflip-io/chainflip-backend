@@ -84,7 +84,7 @@ workflows:
           name: build-rust-base
           extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
           image: chainflip-io/chainflip-backend/rust-base
-          tag: <<pipeline.git.revision>>
+          tag: latest
           dockerfile: Dockerfile.rust-base
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
@@ -115,10 +115,22 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
+      - cargo-clippy-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
 
   chainflip-backend-release:
     jobs:
       - fmt-validator-package:
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - cargo-clippy-validator-package:
+          requires:
+            - fmt-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -278,6 +290,14 @@ jobs:
       - run: sccache --show-stats
       - run: |
           cargo test --lib --locked --release
+          sccache --show-stats
+  cargo-clippy-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo clippy
           sccache --show-stats
 
   clone-contracts-repo:
