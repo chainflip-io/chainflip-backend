@@ -241,12 +241,16 @@ where
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(sign_info) => {
+                let key_id = &sign_info.key_id;
+
                 slog::debug!(
                     self.logger,
                     "Received a request to sign, ceremony_id: {}, message_hash: {}, signers: {:?}",
-                    sign_info.ceremony_id
+                    sign_info.ceremony_id,
+                    sign_info.data,
+                    sign_info.signers
                 );
-                match self.key_store.get_key(key_id.clone()) {
+                match self.key_store.get_key(&key_id) {
                     Some(key) => {
                         self.signing_manager.on_request_to_sign(
                             sign_info.data,
@@ -373,7 +377,7 @@ where
         &self.keygen
     }
 
-    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
+    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
         self.key_store.get_key(key_id)
     }
 

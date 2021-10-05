@@ -151,14 +151,11 @@ pub async fn start(
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let message_hash: [u8; 32] = threshold_sig_requst
-                                .threshold_signature_request
-                                .payload
-                                .try_into()
-                                .expect("Should be a 32 byte hash");
+                            let message_hash: [u8; 32] =
+                                req.payload.try_into().expect("Should be a 32 byte hash");
                             let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
-                                ceremony_id,
-                                KeyId(threshold_sig_requst.threshold_signature_request.public_key),
+                                event.ceremony_id,
+                                KeyId(req.public_key),
                                 MessageHash(message_hash),
                                 signers,
                             ));
@@ -179,7 +176,8 @@ pub async fn start(
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success {
-                                            message_hash: message_info.hash.0,
+                                            // TODO: shouldn't this be ceremony_id?
+                                            message_hash,
                                             signature: sig.into(),
                                         },
                                         Err((err, bad_account_ids)) => {

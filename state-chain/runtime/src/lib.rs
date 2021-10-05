@@ -2,7 +2,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod chainflip;
-mod weights;
 // A few exports that help ease life for downstream crates.
 use cf_traits::Chainflip;
 use core::time::Duration;
@@ -147,7 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
-	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
+	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Reputation;
 }
 
@@ -160,7 +159,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
-	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;

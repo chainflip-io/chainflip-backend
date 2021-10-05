@@ -533,7 +533,7 @@ impl KeygenContext {
         self.key_id = Some(key_id.clone());
 
         for c in clients.iter() {
-            let key = c.get_key(key_id.clone()).expect("key must be present");
+            let key = c.get_key(&key_id).expect("key must be present");
             sec_keys.push(key.clone());
         }
 
