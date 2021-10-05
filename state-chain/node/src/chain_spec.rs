@@ -91,17 +91,17 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				1,
 				EnvironmentConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
-						.unwrap()
+						.expect("STAKE_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec(),
 					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
-						.unwrap()
+						.expect("KEY_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec(),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
-						.unwrap()
+						.expect("ETHEREUM_CHAIN_ID not set")
 						.parse::<u32>()
-						.unwrap(),
+						.expect("chain id is no unsigned int"),
 				},
 			)
 		},
@@ -150,17 +150,17 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				1,
 				EnvironmentConfig {
 					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
-						.unwrap()
+						.expect("STAKE_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec(),
 					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
-						.unwrap()
+						.expect("KEY_MANAGER_ADDRESS not set")
 						.as_bytes()
 						.to_vec(),
 					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
-						.unwrap()
+						.expect("ETHEREUM_CHAIN_ID not set")
 						.parse::<u32>()
-						.unwrap(),
+						.expect("chain id is no unsigned int"),
 				},
 			)
 		},

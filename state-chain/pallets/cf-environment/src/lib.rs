@@ -9,6 +9,8 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_std::vec::Vec;
 
+	type EthereumAddress = Vec<u8>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -29,12 +31,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
 	/// The address of the ETH stake manager contract
-	pub type StakeManagerAddress<T> = StorageValue<_, Vec<u8>>;
+	pub type StakeManagerAddress<T> = StorageValue<_, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
-	pub type KeyManagerAddress<T> = StorageValue<_, Vec<u8>>;
+	pub type KeyManagerAddress<T> = StorageValue<_, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
@@ -52,8 +54,8 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub stake_manager_address: Vec<u8>,
-		pub key_manager_address: Vec<u8>,
+		pub stake_manager_address: EthereumAddress,
+		pub key_manager_address: EthereumAddress,
 		pub ethereum_chain_id: u32,
 	}
 
