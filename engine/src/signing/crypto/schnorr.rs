@@ -393,12 +393,12 @@ mod test_schnorr {
         test_data.push(sig_test_1);
 
         let sig_test_2 = SignatureTestData {
-            sigma: "20f636176ca66035bbc4ba178040847508742711f8a3426c715fbfa9fdd528fc".to_string(),
-            message_hash: "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e"
+            sigma: "dff37e7b66e4d1e231b11f48cad58767027a7b6ece6954d9db8c53f41b997b5a".to_string(),
+            message_hash: "cf264a2e5b263160249d7c894b1d3482c60463a1dc7bf59afbdbe9649dde98e4"
                 .to_string(),
             nonce_key: "5fe7f977e71dba2ea1a68e21057beebb9be2ac30c6410aa38d4f3fbe41dcffd2"
                 .to_string(),
-            secret_key: "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
+            secret_key: "fccb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
                 .to_string(),
         };
         test_data.push(sig_test_2);
