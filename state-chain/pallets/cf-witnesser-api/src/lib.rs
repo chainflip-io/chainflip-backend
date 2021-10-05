@@ -75,7 +75,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			withdrawal_address: Option<EthereumAddress>,
+			withdrawal_address: EthereumAddress,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

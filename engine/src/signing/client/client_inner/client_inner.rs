@@ -233,8 +233,9 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a keygen request [ceremony_id: {}]",
-                    keygen_info.ceremony_id
+                    "Received a keygen request, ceremony_id: {}, participants: {:?}",
+                    keygen_info.ceremony_id,
+                    keygen_info.signers
                 );
 
                 self.keygen.on_keygen_request(keygen_info);
@@ -242,13 +243,10 @@ where
             MultisigInstruction::Sign(sign_info) => {
                 slog::debug!(
                     self.logger,
-                    "Received a request to sign [ceremony_id: {}]",
+                    "Received a request to sign, ceremony_id: {}, message_hash: {}, signers: {:?}",
                     sign_info.ceremony_id
                 );
-
-                let key = self.key_store.get_key(sign_info.key_id.clone());
-
-                match key {
+                match self.key_store.get_key(key_id.clone()) {
                     Some(key) => {
                         self.signing_manager.on_request_to_sign(
                             sign_info.data,

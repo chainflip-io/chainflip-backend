@@ -35,7 +35,7 @@ async fn main() {
         .set_url(&settings.state_chain.ws_endpoint)
         .build()
         .await
-        .expect("Should create subxt client");
+        .expect("Could not create subxt client");
 
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
@@ -55,10 +55,12 @@ async fn main() {
         use substrate_subxt::{system::AccountStoreExt, Signer};
         let mut pair_signer = substrate_subxt::PairSigner::new(key_pair.clone());
         let account_id = pair_signer.account_id();
+
+        // TODO If there's a tx made on this account *not* from this program, the nonce's will go out of sync
         let nonce = subxt_client
             .account(&account_id, None)
             .await
-            .expect("Should be able to fetch account info")
+            .expect("Could not fetch account info")
             .nonce;
         slog::info!(root_logger, "Initial state chain nonce is: {}", nonce);
         pair_signer.set_nonce(nonce);
@@ -84,9 +86,10 @@ async fn main() {
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
-        .unwrap();
+        .expect("Failed to create Web3 WebSocket");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
 
     tokio::join!(
         // Start signing components

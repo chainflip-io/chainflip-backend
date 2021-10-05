@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - test/ci-with-machine
+#        - bug/ch1978-fix-integration-tests
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -41,10 +41,8 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
-  circleci_ip_ranges: true
   executor: rust-base
   environment: &sccache_environment
-    SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
   resource_class: 2xlarge+
 ######################## /Anchors ########################
@@ -60,6 +58,10 @@ executors:
   rust-base:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+  rust-poetry:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
@@ -85,6 +87,14 @@ workflows:
           tag: <<pipeline.git.revision>>
           dockerfile: Dockerfile.rust-base
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+          context:
+            - ghcr-credentials
+      - build-docker-image:
+          name: build-rust-poetry
+          image: chainflip-io/chainflip-backend/rust-poetry
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+          tag: latest
+          dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
   chainflip-backend-checks:
@@ -152,24 +162,15 @@ workflows:
   chainflip-integration-tests:
     <<: *nightly
     jobs:
-      - build-docker-image:
-          image: chainflip-io/chainflip-backend/rust-poetry
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-          tag: latest
-          dockerfile: Dockerfile.rust-poetry
-          context:
-            - ghcr-credentials
       - clone-contracts-repo:
           context:
             - github-credentials
-          requires:
-            - build-docker-image
       - run-integration-tests:
+          requires:
+            - clone-contracts-repo
           context:
             - ghcr-credentials
             - discord-webhooks
-          requires:
-            - clone-contracts-repo
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
@@ -230,21 +231,7 @@ jobs:
     steps:
       - checkout
       - run: >
-          cargo fmt -p chainflip-engine
-          -p cf-p2p
-          -p cf-p2p-rpc
-          -p pallet-cf-auction
-          -p pallet-cf-emissions
-          -p pallet-cf-flip
-          -p pallet-cf-rewards
-          -p pallet-cf-reputation
-          -p pallet-cf-staking
-          -p pallet-cf-validator
-          -p pallet-cf-vaults
-          -p pallet-cf-witnesser
-          -p pallet-cf-witnesser-api
-          -p cf-traits
-          -- --check
+          cargo fmt --all -- --check
 
   # Compile and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
@@ -309,13 +296,8 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
-    circleci_ip_ranges: true
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-        auth: *dockerconfig
-      - image: nats
+    executor: rust-poetry
     environment:
-      SCCACHE_REDIS: redis://sccache.chainflip.xyz
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout

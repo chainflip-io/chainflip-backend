@@ -24,6 +24,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
 
+impl std::fmt::Display for MessageHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
+
 /// Public key compressed (33 bytes - 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId(pub Vec<u8>);

@@ -7,7 +7,7 @@ mod staking_witness_tests {
 
 	use super::*;
 	const ETH_TX_HASH: [u8; 32] = [0; 32];
-	const RETURN_ADDRESS: Option<[u8; 20]> = None;
+	const RETURN_ADDRESS: [u8; 20] = [0xff; 20];
 	const STAKE: u128 = 100;
 	const STAKER: u64 = 12345;
 	const WITNESS: u64 = 67890;
