@@ -250,9 +250,6 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
 			RotationError::BadValidators(_) => Error::<T>::BadValidators,
 			RotationError::FailedToConstructPayload => Error::<T>::FailedToConstructPayload,
-			RotationError::VaultRotationCompletionFailed => {
-				Error::<T>::VaultRotationCompletionFailed
-			}
 			RotationError::KeyUnchanged => Error::<T>::KeyUnchanged,
 			RotationError::InvalidCeremonyId => Error::<T>::InvalidCeremonyId,
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
@@ -391,35 +388,6 @@ impl<T: Config>
 				T::RotationHandler::penalise(bad_validators);
 				// Report back we have processed the failure
 				Ok(().into())
-			}
-		}
-	}
-}
-
-// We have now had feedback from the vault/chain that we can proceed with the final request for the
-// vault rotation
-impl<T: Config> ChainHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
-
-	/// Try to complete the final vault rotation with feedback from the chain implementation over
-	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
-	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
-	fn request_vault_rotation(
-		ceremony_id: CeremonyId,
-		result: Result<VaultRotationRequest, RotationError<T::ValidatorId>>,
-	) -> Result<(), Self::Error> {
-		ensure_index!(ceremony_id);
-		match result {
-			// All good, forward on the request
-			Ok(request) => VaultRotationRequestResponse::<T>::make_request(ceremony_id, request),
-			// Penalise if we have a set of bad validators and abort the rotation
-			Err(err) => {
-				if let RotationError::BadValidators(bad) = err {
-					T::RotationHandler::penalise(bad);
-				}
-				Self::abort_rotation();
-				Err(RotationError::VaultRotationCompletionFailed)
 			}
 		}
 	}

@@ -137,8 +137,6 @@ pub enum RotationError<ValidatorId> {
 	KeyUnchanged,
 	/// Failed to construct a valid chain specific payload for rotation
 	FailedToConstructPayload,
-	/// Vault rotation completion failed
-	VaultRotationCompletionFailed,
 	/// The vault rotation is not confirmed
 	NotConfirmed,
 	/// Failed to make keygen request

@@ -1,7 +1,6 @@
 mod test {
 	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
-	use crate::rotation::ChainParams::Other;
 	use crate::*;
 	use frame_support::{assert_err, assert_ok};
 	use sp_core::Hasher;
@@ -13,6 +12,8 @@ mod test {
 			.expect("Event expected")
 			.event
 	}
+
+	const FAKE_CALL_DATA_WITH_SIG: &str = "24969d5d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000001010101010101010101010101010101010101010101010101010101010101010000000000000000000000000000000000000000000000000000000000000001";
 
 	#[test]
 	fn keygen_request() {
@@ -101,35 +102,31 @@ mod test {
 				KeygenResponse::Success(vec![1; 33])
 			));
 
-			// We haven't got a signing response here though? this should fail, no?
-			assert_ok!(VaultsPallet::request_vault_rotation(
-				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
-			));
-
-			// Check the event emitted
-			assert_eq!(
-				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
-					1,
-					VaultRotationRequest {
-						chain: Other(vec![])
-					}
-				))
-			);
+			// assert_ok!(VaultsPallet::threshold_signature_response(
+			// 	Origin::root(),
+			// 	VaultsPallet::current_request(),
+			// 	ThresholdSignatureResponse::Success {
+			// 		message_hash: [0; 32],
+			// 		signature: SchnorrSigTruncPubkey::default(),
+			// 	}
+			// ));
 
 			assert_err!(
-				VaultsPallet::request_vault_rotation(
+				VaultsPallet::threshold_signature_response(
+					Origin::root(),
 					VaultsPallet::current_request(),
-					Err(RotationError::BadValidators(vec![ALICE, BOB]))
+					ThresholdSignatureResponse::Error(vec![ALICE, BOB])
 				),
-				RotationError::VaultRotationCompletionFailed
+				crate::Error::<MockRuntime>::BadValidators
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
 			assert!(VaultsPallet::no_active_chain_vault_rotations());
+
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![1]))
+			);
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);
@@ -148,23 +145,28 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(new_public_key.clone())
 			));
-			assert_ok!(VaultsPallet::request_vault_rotation(
+
+			assert_ok!(VaultsPallet::threshold_signature_response(
+				Origin::root(),
 				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
+				ThresholdSignatureResponse::Success {
+					message_hash: [0; 32],
+					signature: SchnorrSigTruncPubkey::default(),
+				}
 			));
 
-			// Check the event emitted
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
 					VaultsPallet::current_request(),
 					VaultRotationRequest {
-						chain: Other(vec![])
+						chain: ChainParams::Ethereum(hex::decode(FAKE_CALL_DATA_WITH_SIG).unwrap())
 					}
 				))
 			);
+
+			// We should have an active validator in the count
+			assert!(!VaultsPallet::no_active_chain_vault_rotations());
 
 			let tx_hash = "tx_hash".as_bytes().to_vec();
 			assert_ok!(VaultsPallet::vault_rotation_response(
@@ -204,11 +206,14 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![1; 33])
 			));
-			assert_ok!(VaultsPallet::request_vault_rotation(
+
+			assert_ok!(VaultsPallet::threshold_signature_response(
+				Origin::root(),
 				VaultsPallet::current_request(),
-				Ok(VaultRotationRequest {
-					chain: ChainParams::Other(vec![])
-				})
+				ThresholdSignatureResponse::Success {
+					message_hash: [0; 32],
+					signature: SchnorrSigTruncPubkey::default(),
+				}
 			));
 
 			// Check the event emitted
@@ -217,7 +222,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
 					VaultsPallet::current_request(),
 					VaultRotationRequest {
-						chain: Other(vec![])
+						chain: ChainParams::Ethereum(hex::decode(FAKE_CALL_DATA_WITH_SIG).unwrap())
 					}
 				))
 			);
@@ -244,7 +249,7 @@ mod test {
 	// the calldata expects nonce = 0
 	// This should be fixed in the broadcast epic:
 	// https://github.com/chainflip-io/chainflip-backend/pull/495
-	fn try_starting_a_vault_rotation() {
+	fn try_starting_a_chain_vault_rotation() {
 		new_test_ext().execute_with(|| {
 			let new_public_key = hex::decode("011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d").unwrap();
 			let validators = vec![ALICE, BOB, CHARLIE];
@@ -271,10 +276,6 @@ mod test {
 			);
 		});
 	}
-
-	// TODO: introduce test to check that the second encoding is consistent with the first.
-	// There was a bug where the nonce was different on the second call to encode (due to the nonce incrementor
-	// being called within the encoding function itself - we can unit test this bug away
 
 	#[test]
 	fn should_error_when_attempting_to_use_use_unset_new_public_key() {
