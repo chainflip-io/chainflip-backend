@@ -100,13 +100,13 @@ pub mod pallet {
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
-		pub fn witness_eth_broadcast_success(
+		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
 			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::broadcast_success(id, tx_hash);
+			let call = BroadcastCall::<T, Instance0>::transmission_success(id, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -115,14 +115,14 @@ pub mod pallet {
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
-		pub fn witness_eth_broadcast_failure(
+		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
-			failure: pallet_cf_broadcast::BroadcastFailure,
+			failure: pallet_cf_broadcast::TransmissionFailure,
 			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::broadcast_failure(id, failure, tx_hash);
+			let call = BroadcastCall::<T, Instance0>::transmission_failure(id, failure, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}

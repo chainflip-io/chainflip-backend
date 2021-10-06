@@ -79,7 +79,7 @@ pub struct WitnessEthBroadcastSuccessCall<T: WitnesserApi> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessEthBroadcastFailureCall<T: WitnesserApi> {
     broadcast_attempt_id: BroadcastAttemptId,
-    failure: pallet_cf_broadcast::BroadcastFailure,
+    failure: pallet_cf_broadcast::TransmissionFailure,
     tx_hash: [u8; 32],
     _runtime: PhantomData<T>,
 }

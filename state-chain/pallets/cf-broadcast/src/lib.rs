@@ -20,7 +20,7 @@ use sp_std::prelude::*;
 
 /// The reasons for which a broadcast might fail.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum BroadcastFailure {
+pub enum TransmissionFailure {
 	/// The transaction was rejected because of some user error, for example, insuffient funds.
 	TransactionRejected,
 	/// The transaction failed for some unknown reason and we don't know how to recover.
@@ -40,7 +40,7 @@ pub trait BroadcastConfig<T: Chainflip> {
 	type TransactionHash: Parameter;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated signer.
-	/// 
+	///
 	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the validaty of the
 	/// returned transaction for this `Chain` and can include verification of the byte encoding, the transaction
 	/// content, metadata, signer idenity, etc.
@@ -101,13 +101,13 @@ pub mod pallet {
 	///
 	/// Implements `From` for both [BroadcastAttempt] and [TransactionSigningAttempt] for easy conversion.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-	pub struct FailedAttempt<T: Config<I>, I: 'static> {
+	pub struct FailedBroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
 		pub attempt_count: AttemptCount,
 		pub unsigned_tx: UnsignedTransactionFor<T, I>,
 	}
 
-	impl<T: Config<I>, I: 'static> From<TransmissionAttempt<T, I>> for FailedAttempt<T, I> {
+	impl<T: Config<I>, I: 'static> From<TransmissionAttempt<T, I>> for FailedBroadcastAttempt<T, I> {
 		fn from(failed: TransmissionAttempt<T, I>) -> Self {
 			Self {
 				broadcast_id: failed.broadcast_id,
@@ -117,7 +117,9 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config<I>, I: 'static> From<TransactionSigningAttempt<T, I>> for FailedAttempt<T, I> {
+	impl<T: Config<I>, I: 'static> From<TransactionSigningAttempt<T, I>>
+		for FailedBroadcastAttempt<T, I>
+	{
 		fn from(failed: TransactionSigningAttempt<T, I>) -> Self {
 			Self {
 				broadcast_id: failed.broadcast_id,
@@ -191,7 +193,7 @@ pub mod pallet {
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<FailedAttempt<T, I>>, ValueQuery>;
+		StorageValue<_, Vec<FailedBroadcastAttempt<T, I>>, ValueQuery>;
 
 	/// A mapping from block number to a list of signing or broadcast attempts that expire at that block number.
 	#[pallet::storage]
@@ -220,10 +222,8 @@ pub mod pallet {
 		BroadcastRetryScheduled(BroadcastId, AttemptCount),
 		/// A broadcast has failed irrecoverably. [broadcast_id, attempt, failed_transaction]
 		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
-		/// The transaction signing stage for the broadcast attempt timed out. [broadcast_attempt_id]
-		TransactionSigningAttemptExpired(BroadcastAttemptId),
-		/// The transmission stage for the broadcast attempt timed out. [broadcast_attempt_id]
-		TransmissionAttemptExpired(BroadcastAttemptId),
+		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. [broadcast_attempt_id, stage]
+		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 	}
 
 	#[pallet::error]
@@ -246,21 +246,23 @@ pub mod pallet {
 
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
-				let notify_and_retry = |attempt: FailedAttempt<T, I>| {
-					Self::deposit_event(Event::<T, I>::TransactionSigningAttemptExpired(
-						*attempt_id,
-					));
+				let notify_and_retry = |attempt: FailedBroadcastAttempt<T, I>| {
+					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired(*attempt_id, *stage));
 					Self::retry_failed_broadcast(attempt.into());
 				};
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						AwaitingTransactionSignature::<T, I>::take(attempt_id)
-							.map(|attempt| notify_and_retry(attempt.into()));
+						if let Some(attempt) =
+							AwaitingTransactionSignature::<T, I>::take(attempt_id)
+						{
+							notify_and_retry(attempt.into());
+						}
 					}
 					BroadcastStage::Transmission => {
-						AwaitingTransmission::<T, I>::take(attempt_id)
-							.map(|attempt| notify_and_retry(attempt.into()));
+						if let Some(attempt) = AwaitingTransmission::<T, I>::take(attempt_id) {
+							notify_and_retry(attempt.into());
+						}
 					}
 				}
 			}
@@ -358,7 +360,7 @@ pub mod pallet {
 
 		/// Nodes have witnessed that the transaction has reached finality on the target chain.
 		#[pallet::weight(10_000)]
-		pub fn broadcast_success(
+		pub fn transmission_success(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
@@ -378,10 +380,10 @@ pub mod pallet {
 		/// Nodes have witnessed that something went wrong during transmission. See [BroadcastFailure] for categories
 		/// of failures that may be reported.
 		#[pallet::weight(10_000)]
-		pub fn broadcast_failure(
+		pub fn transmission_failure(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
-			failure: BroadcastFailure,
+			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
@@ -390,13 +392,13 @@ pub mod pallet {
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			match failure {
-				BroadcastFailure::TransactionRejected => {
+				TransmissionFailure::TransactionRejected => {
 					Self::report_and_schedule_retry(
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
 					);
 				}
-				BroadcastFailure::TransactionFailed => {
+				TransmissionFailure::TransactionFailed => {
 					Self::deposit_event(Event::<T, I>::BroadcastFailed(
 						failed_attempt.broadcast_id,
 						failed_attempt.attempt_count,
@@ -449,7 +451,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		));
 	}
 
-	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedAttempt<T, I>) {
+	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
 		// TODO: set a sensible penalty and centralise. See #569
 		const PENALTY: i32 = 0;
 		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, PENALTY, signer)
@@ -462,7 +464,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
-	fn schedule_retry(failed: FailedAttempt<T, I>) {
+	fn schedule_retry(failed: FailedBroadcastAttempt<T, I>) {
 		BroadcastRetryQueue::<T, I>::append(&failed);
 		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
 			failed.broadcast_id,
@@ -471,7 +473,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Retry a failed attempt by starting anew with incremented attempt_count.
-	fn retry_failed_broadcast(failed: FailedAttempt<T, I>) {
+	fn retry_failed_broadcast(failed: FailedBroadcastAttempt<T, I>) {
 		Self::start_broadcast_attempt(
 			failed.broadcast_id,
 			failed.attempt_count.wrapping_add(1),
