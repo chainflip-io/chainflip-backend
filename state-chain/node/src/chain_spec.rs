@@ -61,15 +61,13 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 /// Get the values for the state-chain environment.
 pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
 	let stake_manager_address: [u8; 20] =
-		hex::encode(env::var("STAKE_MANAGER_ADDRESS").expect("STAKE_MANAGER_ADDRESS not set"))
-			.as_bytes()
-			.to_vec()
+		hex::decode(env::var("STAKE_MANAGER_ADDRESS").expect("STAKE_MANAGER_ADDRESS not set"))
+			.unwrap()
 			.try_into()
 			.expect("address cast failed");
 	let key_manager_address: [u8; 20] =
-		hex::encode(env::var("KEY_MANAGER_ADDRESS").expect("KEY_MANAGER_ADDRESS not set"))
-			.as_bytes()
-			.to_vec()
+		hex::decode(env::var("KEY_MANAGER_ADDRESS").expect("KEY_MANAGER_ADDRESS not set"))
+			.unwrap()
 			.try_into()
 			.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
