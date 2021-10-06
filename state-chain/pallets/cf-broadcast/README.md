@@ -8,7 +8,7 @@ This pallet manages the lifecycle of transaction broadcasts to other chains. We 
 in a transaction broadcast:
 
 1. The transaction needs to be encoded and signed by a validator.
-2. The signed tranaction needs to be sent to the external chain, where we hope it will be mined asap.
+2. The signed tranaction needs to be transmitted to the external chain, where we hope it will be mined asap.
 
 See the swimlanes diagram for more detail.
 
