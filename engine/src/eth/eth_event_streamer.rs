@@ -32,8 +32,12 @@ pub async fn new_eth_event_stream<
                 .build(),
         )
         .await?;
+
+    slog::debug!(&logger, "Created future logs stream");
     let from_block = U64::from(from_block);
     let current_block = web3.eth().block_number().await?;
+
+    slog::debug!(&logger, "Got current block");
 
     // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
     // request past block via http and prepend them to the stream manually.
@@ -54,6 +58,8 @@ pub async fn new_eth_event_stream<
         (vec![], from_block)
     };
 
+    slog::debug!(&logger, "Got vec of past logs");
+
     let future_logs =
         future_logs
             .map_err(anyhow::Error::new)
@@ -71,7 +77,7 @@ pub async fn new_eth_event_stream<
                 }
             });
 
-    slog::info!(logger, "Future logs fetched");
+    slog::debug!(logger, "Future logs filtermap created");
     let logger = logger.clone();
     Ok(tokio_stream::iter(past_logs)
         .map(|log| Ok(log))
