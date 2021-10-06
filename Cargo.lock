@@ -803,6 +803,7 @@ dependencies = [
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
