@@ -1,5 +1,6 @@
 //! Types and functions that are common to ethereum.
 pub mod register_claim;
+pub mod set_agg_key_with_agg_key;
 
 use codec::{Decode, Encode};
 use ethabi::{
@@ -97,6 +98,54 @@ impl Tokenizable for SigData {
 	}
 }
 
+/// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct ChainflipKey {
+	/// The public key as a 32-byte array.
+	pub_key_x: [u8; 32],
+	/// The parity bit can be odd or even.
+	pub_key_y_parity: u8,
+}
+
+impl ChainflipKey {
+	pub fn from_x_y_bytes(bytes: [u8; 33]) -> Self {
+		let [pub_key_x @ .., pub_key_y_parity] = bytes;
+		Self { pub_key_x, pub_key_y_parity }
+	}
+
+	pub fn from_y_x_bytes(bytes: [u8; 33]) -> Self {
+		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
+		Self { pub_key_x, pub_key_y_parity }
+	}
+}
+
+impl From<(u8, [u8; 32])> for ChainflipKey {
+	fn from(tuple: (u8, [u8; 32])) -> Self {
+		Self {
+			pub_key_x: tuple.1,
+			pub_key_y_parity: tuple.0,
+		}
+	}
+}
+
+impl From<([u8; 32], u8)> for ChainflipKey {
+	fn from(tuple: ([u8; 32], u8)) -> Self {
+		Self {
+			pub_key_x: tuple.0,
+			pub_key_y_parity: tuple.1,
+		}
+	}
+}
+
+impl Tokenizable for ChainflipKey {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![
+			Token::Uint(Uint::from_big_endian(&self.pub_key_x[..])),
+			Token::Uint(self.pub_key_y_parity.into()),
+		])
+	}
+}
+
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -150,7 +199,4 @@ pub trait ChainflipContractCall {
 
 	/// Add the threshold signature to the contract call.
 	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents);
-
-	/// Create a new call from the old one, with a new nonce and discarding the old signature.
-	fn into_new(self, new_nonce: u64) -> Self;
 }
