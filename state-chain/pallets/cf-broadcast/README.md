@@ -16,11 +16,21 @@ See the swimlanes diagram for more detail.
 
 ### Terminology
 
-Signing Attempt: A unique attempt at requesting a transaction signature from a nominated signer.
-Broadcast Attempt: A unique attempt at broadcasting a signed transaction to its target chain.
+Broadcast: The act of signing and transmitting a transaction to some target blockchain.
+Transaction Signing Attempt: A unique attempt at requesting a transaction signature from a nominated signer.
+Transmission Attempt: A unique attempt at actually sending a signed transaction to its target chain.
 Unsigned transaction: The details of the transaction to be encoded and signed by the nominated signer.
 Signed transaction: The complete transaction along with the signature, byte-encoded according to the target chain's
   serialization scheme.
+
+The various Ids:
+
+- Each broadcast is assigned a unique `broadcast_id`.
+- Each broadcast can go through multiple attempts - each attempt has a unique `broadcast_attempt_id`.
+- The `broadcast_attempt_id` is used for both steps: signing and transmission. If either of these steps fails,
+  we restart a new attempt with a new `broadcast_attempt_id` for the broadcast. The `broadcast_id` remains unchanged.
+- The `broadcast_attempt_id` will not necessarily increment uniformly for a given broadcast. 
+- The broadcast has a counter to count the number of attempts that have been made so far (since we can't rely on `broadcast_attempt_id` as it's *globally* unique)
 
 ## Dependencies
 
