@@ -30,8 +30,7 @@ The various Ids:
 - The `broadcast_attempt_id` is used for both steps: signing and transmission. If either of these steps fails,
   we restart a new attempt with a new `broadcast_attempt_id` for the broadcast. The `broadcast_id` remains unchanged.
 - The `broadcast_attempt_id` will not necessarily increment uniformly for a given broadcast. 
-- The broadcast has a counter
-  to count the number of attempts that have been made so far.
+- The broadcast has a counter to count the number of attempts that have been made so far (since we can't rely on `broadcast_attempt_id` as it's *globally* unique)
 
 ## Dependencies
 
