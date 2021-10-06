@@ -3,12 +3,12 @@
 mod tests {
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
-	use sp_runtime::Storage;
-	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
-	use state_chain_runtime::opaque::SessionKeys;
-	use sp_core::crypto::{Public, Pair};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
+	use sp_runtime::Storage;
+	use state_chain_runtime::opaque::SessionKeys;
+	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -73,7 +73,10 @@ mod tests {
 						(
 							x.0.clone(),
 							x.0.clone(),
-							SessionKeys { aura: get_from_seed::<AuraId>("wally"), grandpa: get_from_seed::<GrandpaId>("wally") },
+							SessionKeys {
+								aura: get_from_seed::<AuraId>(&x.0.clone().to_string()),
+								grandpa: get_from_seed::<GrandpaId>(&x.0.clone().to_string()),
+							},
 						)
 					})
 					.collect::<Vec<_>>(),
@@ -151,13 +154,13 @@ mod tests {
 			ExtBuilder::default()
 				.accounts(vec![
 					(AccountId::from(ALICE), GENESIS_BALANCE),
-					// (AccountId::from(BOB), GENESIS_BALANCE),
-					// (AccountId::from(CHARLIE), GENESIS_BALANCE),
+					(AccountId::from(BOB), GENESIS_BALANCE),
+					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
 				.winners(vec![
 					AccountId::from(ALICE),
-					// AccountId::from(BOB),
-					// AccountId::from(CHARLIE),
+					AccountId::from(BOB),
+					AccountId::from(CHARLIE),
 				])
 				.root(AccountId::from(ALICE))
 				.build()
@@ -168,20 +171,20 @@ mod tests {
 						Flip::stakeable_balance(&AccountId::from(ALICE)),
 						GENESIS_BALANCE
 					);
-					// assert_eq!(
-					// 	Flip::stakeable_balance(&AccountId::from(BOB)),
-					// 	GENESIS_BALANCE
-					// );
-					// assert_eq!(
-					// 	Flip::stakeable_balance(&AccountId::from(CHARLIE)),
-					// 	GENESIS_BALANCE
-					// );
+					assert_eq!(
+						Flip::stakeable_balance(&AccountId::from(BOB)),
+						GENESIS_BALANCE
+					);
+					assert_eq!(
+						Flip::stakeable_balance(&AccountId::from(CHARLIE)),
+						GENESIS_BALANCE
+					);
 
 					assert_matches!(Auctioneer::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
 						if winners == vec![
 							AccountId::from(ALICE),
-							// AccountId::from(BOB),
-							// AccountId::from(CHARLIE),
+							AccountId::from(BOB),
+							AccountId::from(CHARLIE),
 						] && minimum_active_bid == GENESIS_BALANCE
 					);
 
@@ -191,19 +194,29 @@ mod tests {
 					);
 
 					assert_eq!(
+						Validator::validator_lookup(AccountId::from(BOB)),
+						Some(())
+					);
+
+					assert_eq!(
+						Validator::validator_lookup(AccountId::from(CHARLIE)),
+						Some(())
+					);
+
+					assert_eq!(
 						Reputation::validator_liveness(AccountId::from(ALICE)),
 						Some(1)
 					);
 
-					// assert_eq!(
-					// 	Reputation::validator_liveness(AccountId::from(BOB)),
-					// 	Some(1)
-					// );
-					//
-					// assert_eq!(
-					// 	Reputation::validator_liveness(AccountId::from(CHARLIE)),
-					// 	Some(1)
-					// );
+					assert_eq!(
+						Reputation::validator_liveness(AccountId::from(BOB)),
+						Some(1)
+					);
+
+					assert_eq!(
+						Reputation::validator_liveness(AccountId::from(CHARLIE)),
+						Some(1)
+					);
 				});
 		}
 	}
