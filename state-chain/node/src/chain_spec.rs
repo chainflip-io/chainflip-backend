@@ -58,6 +58,31 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
 }
 
+/// Get the values for the state-chain environment.
+pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
+	let stake_manager_address: [u8; 20] =
+		hex::encode(env::var("STAKE_MANAGER_ADDRESS").expect("STAKE_MANAGER_ADDRESS not set"))
+			.as_bytes()
+			.to_vec()
+			.try_into()
+			.expect("address cast failed");
+	let key_manager_address: [u8; 20] =
+		hex::encode(env::var("KEY_MANAGER_ADDRESS").expect("KEY_MANAGER_ADDRESS not set"))
+			.as_bytes()
+			.to_vec()
+			.try_into()
+			.expect("address cast failed");
+	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
+		.expect("ETHEREUM_CHAIN_ID not set")
+		.parse::<u32>()
+		.expect("chain id is no unsigned int");
+	(
+		stake_manager_address,
+		key_manager_address,
+		ethereum_chain_id,
+	)
+}
+
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 	(
@@ -70,7 +95,7 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 /// Start a single node development chain
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
 		"dev",
@@ -91,22 +116,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
-						.expect("STAKE_MANAGER_ADDRESS not set")
-						.as_bytes()
-						.to_vec()
-						.try_into()
-						.expect("address cast failed"),
-					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
-						.expect("KEY_MANAGER_ADDRESS not set")
-						.as_bytes()
-						.to_vec()
-						.try_into()
-						.expect("address cast failed"),
-					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
-						.expect("ETHEREUM_CHAIN_ID not set")
-						.parse::<u32>()
-						.expect("chain id is no unsigned int"),
+					stake_manager_address: stake_manager_address,
+					key_manager_address: key_manager_address,
+					ethereum_chain_id: ethereum_chain_id,
 				},
 			)
 		},
@@ -128,6 +140,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
@@ -154,22 +167,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: env::var("STAKE_MANAGER_ADDRESS")
-						.expect("STAKE_MANAGER_ADDRESS not set")
-						.as_bytes()
-						.to_vec()
-						.try_into()
-						.expect("address cast failed"),
-					key_manager_address: env::var("KEY_MANAGER_ADDRESS")
-						.expect("KEY_MANAGER_ADDRESS not set")
-						.as_bytes()
-						.to_vec()
-						.try_into()
-						.expect("address cast failed"),
-					ethereum_chain_id: env::var("ETHEREUM_CHAIN_ID")
-						.expect("ETHEREUM_CHAIN_ID not set")
-						.parse::<u32>()
-						.expect("chain id is no unsigned int"),
+					stake_manager_address: stake_manager_address,
+					key_manager_address: key_manager_address,
+					ethereum_chain_id: ethereum_chain_id,
 				},
 			)
 		},
@@ -251,16 +251,10 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 				EnvironmentConfig {
 					stake_manager_address: hex_literal::hex![
 						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					]
-					.to_vec()
-					.try_into()
-					.expect("address cast failed"),
+					],
 					key_manager_address: hex_literal::hex![
 						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					]
-					.to_vec()
-					.try_into()
-					.expect("address cast failed"),
+					],
 					ethereum_chain_id: 4,
 				},
 			)
@@ -365,16 +359,10 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				EnvironmentConfig {
 					stake_manager_address: hex_literal::hex![
 						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					]
-					.to_vec()
-					.try_into()
-					.expect("address cast failed"),
+					],
 					key_manager_address: hex_literal::hex![
 						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					]
-					.to_vec()
-					.try_into()
-					.expect("address cast failed"),
+					],
 					ethereum_chain_id: 4,
 				},
 			)
