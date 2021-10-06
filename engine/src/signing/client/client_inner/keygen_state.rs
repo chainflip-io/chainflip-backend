@@ -111,9 +111,10 @@ impl KeygenState {
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
-        // Should be safe to unwrap because the `idx` is carefully
-        // chosen by our on module
-        let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
+        let id = self
+            .maps_for_validator_id_and_idx
+            .get_id(idx)
+            .expect("Idx carefully chosen by our own module");
         id
     }
 
