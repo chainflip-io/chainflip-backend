@@ -12,6 +12,8 @@ use sp_std::vec::Vec;
 
 const FIVE_DAYS_IN_SECONDS: u64 = 432000;
 
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
