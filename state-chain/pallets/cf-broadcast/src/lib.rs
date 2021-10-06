@@ -242,24 +242,21 @@ pub mod pallet {
 
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
+				let notify_and_retry = |attempt: FailedAttempt<T, I>| {
+					Self::deposit_event(Event::<T, I>::TransactionSigningAttemptExpired(
+						*attempt_id,
+					));
+					Self::retry_failed_broadcast(attempt.into());
+				};
+
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						AwaitingTransactionSignature::<T, I>::take(attempt_id).map(
-							|signing_attempt| {
-								Self::deposit_event(
-									Event::<T, I>::TransactionSigningAttemptExpired(*attempt_id),
-								);
-								Self::retry_failed_broadcast(signing_attempt.into());
-							},
-						);
+						AwaitingTransactionSignature::<T, I>::take(attempt_id)
+							.map(|attempt| notify_and_retry(attempt.into()));
 					}
 					BroadcastStage::Transmission => {
-						AwaitingTransmission::<T, I>::take(attempt_id).map(|transmission_attempt| {
-							Self::deposit_event(Event::<T, I>::TransmissionAttemptExpired(
-								*attempt_id,
-							));
-							Self::retry_failed_broadcast(transmission_attempt.into());
-						});
+						AwaitingTransmission::<T, I>::take(attempt_id)
+							.map(|attempt| notify_and_retry(attempt.into()));
 					}
 				}
 			}
@@ -374,7 +371,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong during transmission. The transaction may have been rejected 
+		/// Nodes have witnessed that something went wrong during transmission. The transaction may have been rejected
 		/// outright or may have stalled on the target chain.
 		#[pallet::weight(10_000)]
 		pub fn broadcast_failure(
