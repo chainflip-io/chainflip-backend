@@ -432,11 +432,9 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
         }
 
-        println!("Processing the multisig instruction, keygen");
         let mut bc1_vec = vec![];
 
         for rx in rxs.iter_mut() {
-            println!("Here's a recv");
             let bc1 = recv_bc1_keygen(rx).await;
             bc1_vec.push(bc1);
 
