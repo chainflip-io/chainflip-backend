@@ -3,8 +3,8 @@ use std::time::Duration;
 use crate as pallet_cf_witness_api;
 
 use cf_traits::{
-	impl_mock_never_failing_origin_check, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, Chainflip, Nonce, NonceIdentifier,
+	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
+	mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip, Nonce, NonceIdentifier,
 	NonceProvider, VaultRotationHandler,
 };
 use frame_support::parameter_types;
@@ -33,7 +33,6 @@ frame_support::construct_runtime!(
 );
 
 impl_mock_witnesser_for_account_and_call_types!(u64, Call);
-impl_mock_never_failing_origin_check!(Origin);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -74,7 +73,7 @@ impl pallet_cf_staking::Config for Test {
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
 	type Nonce = u64;
-	type EnsureWitnessed = NeverFailingOriginCheck;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
@@ -105,7 +104,7 @@ impl NonceProvider for Test {
 
 impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
-	type EnsureWitnessed = NeverFailingOriginCheck;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;

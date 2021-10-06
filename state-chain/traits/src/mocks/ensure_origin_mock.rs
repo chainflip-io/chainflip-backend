@@ -1,14 +1,13 @@
-#[macro_export]
-macro_rules! impl_mock_never_failing_origin_check {
-	($origin:ty) => {
-		pub struct NeverFailingOriginCheck;
+use std::marker::PhantomData;
 
-		impl frame_support::traits::EnsureOrigin<$origin> for NeverFailingOriginCheck {
-			type Success = ();
+pub struct NeverFailingOriginCheck<T>(PhantomData<T>);
 
-			fn try_origin(_o: $origin) -> Result<Self::Success, $origin> {
-				Ok(())
-			}
-		}
-	};
+impl<T: frame_system::Config> frame_support::traits::EnsureOrigin<T::Origin>
+	for NeverFailingOriginCheck<T>
+{
+	type Success = ();
+
+	fn try_origin(_o: T::Origin) -> Result<Self::Success, T::Origin> {
+		Ok(())
+	}
 }

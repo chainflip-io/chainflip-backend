@@ -1,6 +1,6 @@
 use crate as pallet_cf_rewards;
-use cf_traits::StakeTransfer;
-use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
+use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer};
+use frame_support::{assert_ok, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -61,8 +61,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-cf_traits::impl_mock_never_failing_origin_check!(Origin);
-
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
@@ -71,7 +69,7 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 }
 

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate as pallet_cf_staking;
-use frame_support::{parameter_types, traits::EnsureOrigin};
+use frame_support::parameter_types;
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
@@ -14,7 +14,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-use cf_traits::mocks::{epoch_info, time_source};
+use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info, time_source};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -65,8 +65,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-cf_traits::impl_mock_never_failing_origin_check!(Origin);
-
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
@@ -75,7 +73,7 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 }
 

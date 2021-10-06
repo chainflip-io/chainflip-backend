@@ -1,10 +1,7 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use frame_support::{
-	parameter_types,
-	traits::{EnsureOrigin, Imbalance},
-};
+use frame_support::{parameter_types, traits::Imbalance};
 use frame_system as system;
 use pallet_cf_flip;
 use sp_core::H256;
@@ -17,7 +14,10 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{mocks::epoch_info, RewardsDistribution};
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
+	RewardsDistribution,
+};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -70,13 +70,11 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
-cf_traits::impl_mock_never_failing_origin_check!(Origin);
-
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 }
 
