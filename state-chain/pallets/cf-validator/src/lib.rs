@@ -381,6 +381,7 @@ pub struct EmergencyRotationOf<T>(PhantomData<T>);
 impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
 	fn request_emergency_rotation() {
 		if !Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::force_validator_rotation();
 		}
 	}
