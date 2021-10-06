@@ -120,9 +120,9 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 			}
 			Self::Broadcast(contract_call) => {
 				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
-				Call::EthereumBroadcaster(
-					pallet_cf_broadcast::Call::<_, _>::start_broadcast(unsigned_tx),
-				)
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					unsigned_tx,
+				))
 			}
 		}
 	}

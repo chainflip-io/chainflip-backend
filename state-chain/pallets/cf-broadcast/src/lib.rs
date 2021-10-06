@@ -247,7 +247,10 @@ pub mod pallet {
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
 				let notify_and_retry = |attempt: FailedBroadcastAttempt<T, I>| {
-					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired(*attempt_id, *stage));
+					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired(
+						*attempt_id,
+						*stage,
+					));
 					Self::retry_failed_broadcast(attempt.into());
 				};
 
