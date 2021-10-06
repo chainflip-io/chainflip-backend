@@ -123,7 +123,7 @@ pub mod pallet {
 		}
 	}
 
-	/// For tagging the signing or broadcasting stage of the sign-and-broadcast.
+	/// For tagging the signing or transmission stage of the broadcast
 	#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub enum BroadcastStage {
 		TransactionSigning,
