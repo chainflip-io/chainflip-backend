@@ -13,7 +13,6 @@ use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 pub mod mocks;
-pub mod constants;
 
 /// and Chainflip was born...some base types
 pub trait Chainflip {
