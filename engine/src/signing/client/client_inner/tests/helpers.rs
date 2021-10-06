@@ -438,7 +438,7 @@ impl KeygenContext {
             let bc1 = recv_bc1_keygen(rx).await;
             bc1_vec.push(bc1);
 
-            // ignore peer id - 2
+            // ignore (n(other nodes) - 1) messages
             for _ in 0..self.account_ids.len() - 2 {
                 let _ = recv_bc1_keygen(rx).await;
             }
@@ -473,7 +473,7 @@ impl KeygenContext {
         for rx in rxs.iter_mut() {
             let mut sec2_map = HashMap::new();
 
-            // each receiver receives messags from all *other* nodes (hence - 1)
+            // each receiver receives messages from all *other* nodes (hence - 1)
             for i in 0..self.account_ids.len() - 1 {
                 println!("recv_secret2_keygen, i: {}", i);
                 let (dest, sec2) = recv_secret2_keygen(rx).await;
