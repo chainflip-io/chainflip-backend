@@ -300,7 +300,7 @@ pub mod pallet {
 		/// to be transmitted. The signed transaction is stored on-chain so that any node can potentially transmit it to
 		/// the target chain. Emits an event that will trigger the transmission to the target chain.
 		#[pallet::weight(10_000)]
-		pub fn transaction_ready(
+		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
 			signed_tx: SignedTransactionFor<T, I>,

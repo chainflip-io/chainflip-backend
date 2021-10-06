@@ -89,7 +89,7 @@ impl MockCfe {
 		assert_eq!(nominee, RANDOM_NOMINEE);
 		// Invalid signer refused.
 		assert_noop!(
-			DogeBroadcast::transaction_ready(
+			DogeBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
 				MockSignedTx::Valid,
@@ -97,7 +97,7 @@ impl MockCfe {
 			Error::<Test, Instance0>::InvalidSigner
 		);
 		// Only the nominee can return the signed tx.
-		assert_ok!(DogeBroadcast::transaction_ready(
+		assert_ok!(DogeBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(nominee).into(),
 			attempt_id,
 			match scenario {
@@ -298,7 +298,11 @@ fn test_bad_signature() {
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			DogeBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx::Valid),
+			DogeBroadcast::transaction_ready_for_transmission(
+				RawOrigin::Signed(0).into(),
+				0,
+				MockSignedTx::Valid
+			),
 			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
