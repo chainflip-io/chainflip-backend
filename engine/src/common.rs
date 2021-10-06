@@ -43,6 +43,7 @@ impl<T> Mutex<T> {
             }),
         }
     }
+    #[allow(clippy::needless_lifetimes)]
     pub async fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
         let guard = self.mutex.lock().await;
 

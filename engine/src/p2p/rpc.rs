@@ -96,17 +96,14 @@ where
     }
 
     fn poll_complete(&mut self) -> Result<Async<()>, Self::SinkError> {
-        loop {
-            match self.queue.pop_front() {
-                Some(request) => match self.sink.start_send(request) {
-                    Ok(AsyncSink::Ready) => continue,
-                    Ok(AsyncSink::NotReady(request)) => {
-                        self.queue.push_front(request);
-                        break;
-                    }
-                    Err(error) => return Err(RpcError::Other(error.into())),
-                },
-                None => break,
+        while let Some(request) = self.queue.pop_front() {
+            match self.sink.start_send(request) {
+                Ok(AsyncSink::Ready) => continue,
+                Ok(AsyncSink::NotReady(request)) => {
+                    self.queue.push_front(request);
+                    break;
+                }
+                Err(error) => return Err(RpcError::Other(error.into())),
             }
         }
         self.sink

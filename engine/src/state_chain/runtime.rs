@@ -48,6 +48,7 @@ pub struct SCDefaultExtra<T: System> {
     genesis_hash: T::Hash,
 }
 
+#[allow(clippy::type_complexity)]
 impl<T: System + Clone + Debug + Eq + Send + Sync> SignedExtra<T> for SCDefaultExtra<T> {
     type Extra = (
         CheckSpecVersion<T>,

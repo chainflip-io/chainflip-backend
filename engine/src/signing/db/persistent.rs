@@ -41,10 +41,12 @@ impl KeyDB for PersistentKeyDB {
         tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
 
         // commit the tx to the database
-        self.db.write(tx).expect(&format!(
-            "Could not write key share for key_id `{}` to database",
-            hex::encode(&key_id.0)
-        ));
+        self.db.write(tx).unwrap_or_else(|_| {
+            panic!(
+                "Could not write key share for key_id `{}` to database",
+                hex::encode(&key_id.0)
+            )
+        });
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
@@ -62,7 +64,7 @@ impl KeyDB for PersistentKeyDB {
                 let key_id: KeyId = KeyId(key_id);
                 let key_info_bytes: Vec<u8> = key_info.try_into().unwrap();
                 match bincode::deserialize::<KeygenResultInfo>(key_info_bytes.as_ref()) {
-                    Ok(keygen_info) => return Some((key_id, keygen_info)),
+                    Ok(keygen_info) => Some((key_id, keygen_info)),
                     Err(err) => {
                         slog::error!(
                             self.logger,
@@ -70,7 +72,7 @@ impl KeyDB for PersistentKeyDB {
                             key_id,
                             err
                         );
-                        return None;
+                        None
                     }
                 }
             })

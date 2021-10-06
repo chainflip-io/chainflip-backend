@@ -136,10 +136,11 @@ impl SigningManager {
         };
 
         // We have the key and have received a request to sign
+        let logger = self.logger.clone();
         let entry = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert(SigningState::new_unauthorised(self.logger.clone()));
+            .or_insert_with(|| SigningState::new_unauthorised(logger));
 
         entry.on_request_to_sign(
             ceremony_id,
@@ -165,10 +166,11 @@ impl SigningManager {
             ceremony_id
         );
 
+        let logger = self.logger.clone();
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert(SigningState::new_unauthorised(self.logger.clone()));
+            .or_insert_with(|| SigningState::new_unauthorised(logger));
 
         state.process_message(sender_id, data);
     }

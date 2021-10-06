@@ -64,7 +64,7 @@ impl Keys {
         Keys {
             u_i: u,
             y_i: y,
-            party_index: index.clone(),
+            party_index: index,
         }
     }
 
@@ -81,9 +81,9 @@ impl Keys {
     pub fn phase1_verify_com_phase2_distribute(
         &self,
         params: &Parameters,
-        blind_vec: &Vec<BigInt>,
-        y_vec: &Vec<GE>,
-        bc1_vec: &Vec<KeyGenBroadcastMessage1>,
+        blind_vec: &[BigInt],
+        y_vec: &[GE],
+        bc1_vec: &[KeyGenBroadcastMessage1],
         parties: &[usize],
     ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), InvalidKey> {
         // test length:
@@ -115,7 +115,7 @@ impl Keys {
         );
 
         match invalid_decom_indexes.len() {
-            0 => Ok((vss_scheme, secret_shares, self.party_index.clone())),
+            0 => Ok((vss_scheme, secret_shares, self.party_index)),
             _ => Err(InvalidKey(invalid_decom_indexes)),
         }
     }
@@ -123,9 +123,9 @@ impl Keys {
     pub fn phase2_verify_vss_construct_keypair(
         &self,
         params: &Parameters,
-        y_vec: &Vec<GE>,
-        secret_shares_vec: &Vec<FE>,
-        vss_scheme_vec: &Vec<VerifiableSS<GE>>,
+        y_vec: &[GE],
+        secret_shares_vec: &[FE],
+        vss_scheme_vec: &[VerifiableSS<GE>],
         index: &usize,
     ) -> Result<(KeyShare, Vec<GE>), InvalidSS> {
         assert_eq!(y_vec.len(), params.share_count);
