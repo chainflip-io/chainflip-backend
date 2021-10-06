@@ -51,15 +51,16 @@ pub async fn start_stake_manager_witness(
                 StakeManagerEvent::Staked {
                     account_id,
                     amount,
-                    staker: _,
+                    staker,
                     return_addr,
                     tx_hash,
                 } => {
                     slog::trace!(
                         logger,
-                        "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
+                        "Sending witness_staked({:?}, {}, {:?}, {:?}, {:?}) to state chain",
                         account_id,
                         amount,
+                        staker,
                         return_addr,
                         tx_hash
                     );
