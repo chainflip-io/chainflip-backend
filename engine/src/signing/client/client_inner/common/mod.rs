@@ -47,10 +47,9 @@ impl KeygenResultInfo {
     }
 
     pub fn get_id(&self, idx: usize) -> AccountId {
-        // providing an invalid idx is considered a programmer error here
         self.validator_map
             .get_id(idx)
-            .expect("invalid index")
+            .expect("ProgrammerError, invalid index")
             .clone()
     }
 }
@@ -80,9 +79,12 @@ impl RawP2PSender {
     }
 
     pub fn send(&self, idx: usize, data: Vec<u8>) {
-        let id = self.validator_map.get_id(idx).unwrap().clone();
+        let id = self
+            .validator_map
+            .get_id(idx)
+            .expect("`idx` should carefully selected by caller")
+            .clone();
 
-        // combine id and serialized data
         let msg = P2PMessageCommand::new(id, data);
 
         if let Err(err) = self.sender.send(msg.into()) {

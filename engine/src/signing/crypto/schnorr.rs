@@ -147,6 +147,7 @@ impl Keys {
             })
             .collect_vec();
 
+        // TODO: Why is it safe to unwrap in these 3 places below. Use expect and explain why
         match invalid_idxs.len() {
             0 => {
                 let mut y_vec_iter = y_vec.iter();
