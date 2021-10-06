@@ -147,6 +147,7 @@ mod tests {
 		use super::*;
 		use cf_traits::{Auction, AuctionPhase, StakeTransfer};
 		use state_chain_runtime::{Auctioneer, Flip, Reputation, Validator};
+
 		#[test]
 		// Naming will follow..
 		fn state_of_genesis_is_as_expected() {
@@ -165,58 +166,39 @@ mod tests {
 				.root(AccountId::from(ALICE))
 				.build()
 				.execute_with(|| {
-					// Confirmation that we have our assumed state at block 0
+					// Confirmation that we have our assumed state at block 1
 					assert_eq!(Flip::total_issuance(), TOTAL_ISSUANCE);
-					assert_eq!(
-						Flip::stakeable_balance(&AccountId::from(ALICE)),
-						GENESIS_BALANCE
-					);
-					assert_eq!(
-						Flip::stakeable_balance(&AccountId::from(BOB)),
-						GENESIS_BALANCE
-					);
-					assert_eq!(
-						Flip::stakeable_balance(&AccountId::from(CHARLIE)),
-						GENESIS_BALANCE
-					);
+
+					let accounts = [
+						AccountId::from(ALICE),
+						AccountId::from(BOB),
+						AccountId::from(CHARLIE),
+					];
+
+					for account in accounts.iter() {
+						assert_eq!(
+							Flip::stakeable_balance(account),
+							GENESIS_BALANCE
+						);
+					}
 
 					assert_matches!(Auctioneer::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
-						if winners == vec![
-							AccountId::from(ALICE),
-							AccountId::from(BOB),
-							AccountId::from(CHARLIE),
-						] && minimum_active_bid == GENESIS_BALANCE
+						if winners == accounts && minimum_active_bid == GENESIS_BALANCE
 					);
 
-					assert_eq!(
-						Validator::validator_lookup(AccountId::from(ALICE)),
-						Some(())
-					);
+					for account in accounts.iter() {
+						assert_eq!(
+							Validator::validator_lookup(account),
+							Some(())
+						);
+					}
 
-					assert_eq!(
-						Validator::validator_lookup(AccountId::from(BOB)),
-						Some(())
-					);
-
-					assert_eq!(
-						Validator::validator_lookup(AccountId::from(CHARLIE)),
-						Some(())
-					);
-
-					assert_eq!(
-						Reputation::validator_liveness(AccountId::from(ALICE)),
-						Some(1)
-					);
-
-					assert_eq!(
-						Reputation::validator_liveness(AccountId::from(BOB)),
-						Some(1)
-					);
-
-					assert_eq!(
-						Reputation::validator_liveness(AccountId::from(CHARLIE)),
-						Some(1)
-					);
+					for account in accounts.iter() {
+						assert_eq!(
+							Reputation::validator_liveness(account),
+							Some(1)
+						);
+					}
 				});
 		}
 	}
