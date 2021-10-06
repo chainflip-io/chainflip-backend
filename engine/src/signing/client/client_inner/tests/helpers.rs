@@ -432,28 +432,31 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
         }
 
+        println!("Processing the multisig instruction, keygen");
         let mut bc1_vec = vec![];
 
         for rx in rxs.iter_mut() {
+            println!("Here's a recv");
             let bc1 = recv_bc1_keygen(rx).await;
             bc1_vec.push(bc1);
 
-            // ignore the next message
-            let _ = recv_bc1_keygen(rx).await;
-            let _ = recv_bc1_keygen(rx).await;
+            // ignore peer id - 2
+            for _ in 0..self.account_ids.len() - 2 {
+                let _ = recv_bc1_keygen(rx).await;
+            }
         }
 
         let phase1_clients = clients.clone();
 
         // *** Distribute BC1, so we can advance and generate Secret2 ***
 
-        for sender_idx in 0..=3 {
+        for sender_idx in 0..self.account_ids.len() {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &account_ids[sender_idx];
 
             let m = keygen_data_to_p2p(bc1, id, KEYGEN_CEREMONY_ID);
 
-            for receiver_idx in 0..=3 {
+            for receiver_idx in 0..self.account_ids.len() {
                 if receiver_idx != sender_idx {
                     clients[receiver_idx].process_p2p_message(m.clone());
                 }
@@ -472,8 +475,8 @@ impl KeygenContext {
         for rx in rxs.iter_mut() {
             let mut sec2_map = HashMap::new();
 
-            // Should generate three messages (one for each of the other three parties)
-            for i in 0u32..3 {
+            // each receiver receives messags from all *other* nodes (hence - 1)
+            for i in 0..self.account_ids.len() - 1 {
                 println!("recv_secret2_keygen, i: {}", i);
                 let (dest, sec2) = recv_secret2_keygen(rx).await;
                 sec2_map.insert(dest, sec2);
@@ -496,8 +499,8 @@ impl KeygenContext {
 
         // *** Distribute Secret2s, so we can advance and generate Signing Key ***
 
-        for sender_idx in 0..=3 {
-            for receiver_idx in 0..=3 {
+        for sender_idx in 0..self.account_ids.len() {
+            for receiver_idx in 0..self.account_ids.len() {
                 if sender_idx == receiver_idx {
                     continue;
                 }
