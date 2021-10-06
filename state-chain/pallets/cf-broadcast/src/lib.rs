@@ -375,8 +375,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong during transmission. The transaction may have been rejected
-		/// outright or may have stalled on the target chain.
+		/// Nodes have witnessed that something went wrong during transmission. See [BroadcastFailure] for categories
+		/// of failures that may be reported.
 		#[pallet::weight(10_000)]
 		pub fn broadcast_failure(
 			origin: OriginFor<T>,
