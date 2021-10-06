@@ -17,6 +17,9 @@ features = ['derive']
 package = 'parity-scale-codec'
 version = '2.0'
 
+[dev-dependencies]
+hex-literal = "0.3.1"
+
 [dependencies]
 hex-literal = {optional = true, version = '0.3.1'}
 serde = {features = ['derive'], optional = true, version = '1.0.119'}

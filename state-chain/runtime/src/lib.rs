@@ -2,8 +2,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
-mod chainflip;
-
 use core::time::Duration;
 
 pub use frame_support::{
@@ -39,12 +37,15 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// A few exports that help ease life for downstream crates.
-use cf_traits::constants::{common::*, time::*};
 use cf_traits::Chainflip;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
+
 use crate::chainflip::ChainflipEpochTransitions;
+
+mod chainflip;
+pub mod constants;
+use constants::common::*;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]

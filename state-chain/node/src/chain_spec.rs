@@ -9,26 +9,7 @@ use state_chain_runtime::{
 	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS, WASM_BINARY,
 };
 
-const TOTAL_ISSUANCE: FlipBalance = {
-	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-	const TOKEN_DECIMALS: u32 = 18;
-	const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-	TOKEN_ISSUANCE * TOKEN_FRACTIONS
-};
-
-const MAX_VALIDATORS: u32 = 150;
-
-const BLOCK_EMISSIONS: FlipBalance = {
-	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
-	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 / DAYS as u128
-};
-
-// Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS: u32 = 2500;
-// Number of accrual points
-pub const ACCRUAL_POINTS: i32 = 1;
+use state_chain_runtime::constants::common::*;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
