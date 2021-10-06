@@ -5,10 +5,20 @@ mod tests {
 	use frame_support::traits::GenesisBuild;
 	use sp_runtime::Storage;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
+	use state_chain_runtime::opaque::SessionKeys;
+	use sp_core::crypto::{Public, Pair};
+	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+	use sp_finality_grandpa::AuthorityId as GrandpaId;
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
+
+	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+		TPublic::Pair::from_string(&format!("//{}", seed), None)
+			.expect("static values are valid; qed")
+			.public()
+	}
 
 	pub struct ExtBuilder {
 		accounts: Vec<(AccountId, FlipBalance)>,
@@ -43,6 +53,21 @@ mod tests {
 		}
 
 		fn configure_storages(&self, storage: &mut Storage) {
+			pallet_session::GenesisConfig::<Runtime> {
+				keys: self
+					.accounts
+					.iter()
+					.map(|x| {
+						(
+							x.0.clone(),
+							x.0.clone(),
+							SessionKeys { aura: get_from_seed::<AuraId>("wally"), grandpa: get_from_seed::<GrandpaId>("wally") },
+						)
+					})
+					.collect::<Vec<_>>(),
+			}
+			.assimilate_storage(storage)
+			.unwrap();
 
 			pallet_cf_flip::GenesisConfig::<Runtime> {
 				total_issuance: TOTAL_ISSUANCE,
@@ -94,7 +119,7 @@ mod tests {
 			.unwrap();
 
 			<pallet_cf_validator::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
-				&pallet_cf_validator::GenesisConfig{},
+				&pallet_cf_validator::GenesisConfig {},
 				storage,
 			)
 			.unwrap();

@@ -838,6 +838,7 @@ dependencies = [
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-core",
+ "sp-finality-grandpa",
  "sp-inherents",
  "sp-offchain",
  "sp-runtime",
