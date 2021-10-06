@@ -40,6 +40,10 @@ pub trait BroadcastConfig<T: Chainflip> {
 	type TransactionHash: Parameter;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated signer.
+	/// 
+	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the validaty of the
+	/// returned transaction for this `Chain` and can include verification of the byte encoding, the transaction
+	/// content, metadata, signer idenity, etc.
 	fn verify_transaction(
 		signer: &T::ValidatorId,
 		unsigned_tx: &Self::UnsignedTransaction,
