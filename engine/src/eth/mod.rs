@@ -24,7 +24,7 @@ use web3::{
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
-    #[error("Unexpected event signature in log subscription: {0:#}")]
+    #[error("Unexpected event signature in log subscription: {0:?}")]
     UnexpectedEvent(H256),
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
