@@ -20,7 +20,7 @@ impl KeyDBMock {
 
 impl KeyDB for KeyDBMock {
     fn update_key(&mut self, key_id: &KeyId, key: &KeygenResultInfo) {
-        let val = bincode::serialize(key).expect("Should by serializable key");
+        let val = bincode::serialize(key).expect("Should be serializable key");
 
         self.kv_db.insert(key_id.to_owned(), val);
     }
