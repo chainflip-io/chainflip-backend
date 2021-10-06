@@ -1,3 +1,4 @@
+#![feature(assert_matches)]
 #[cfg(test)]
 mod tests {
 	use frame_support::sp_io::TestExternalities;
@@ -5,34 +6,43 @@ mod tests {
 	use sp_runtime::Storage;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 
-	pub struct ExtBuilder;
-	impl ExtBuilder {
-		fn configure_storages(storage: &mut Storage) {
-			let bashful_sr25519 = hex_literal::hex![
-				"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-			];
-			let doc_sr25519 = hex_literal::hex![
-				"8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"
-			];
-			let dopey_sr25519 = hex_literal::hex![
-				"ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"
-			];
-			let snow_white = hex_literal::hex![
-				"ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"
-			];
+	pub const ALICE: [u8; 32] = [4u8; 32];
+	pub const BOB: [u8; 32] = [5u8; 32];
+	pub const CHARLIE: [u8; 32] = [6u8; 32];
 
-			let endowed_accounts: Vec<AccountId> = vec![
-				bashful_sr25519.into(),
-				doc_sr25519.into(),
-				dopey_sr25519.into(),
-				snow_white.into(),
-			];
-			let winners: Vec<AccountId> = vec![
-				bashful_sr25519.into(),
-				doc_sr25519.into(),
-				dopey_sr25519.into(),
-			];
-			let root_key = snow_white;
+	pub struct ExtBuilder {
+		accounts: Vec<(AccountId, FlipBalance)>,
+		winners: Vec<AccountId>,
+		root: AccountId,
+	}
+
+	impl Default for ExtBuilder {
+		fn default() -> Self {
+			Self {
+				accounts: vec![],
+				winners: vec![],
+				root: AccountId::default(),
+			}
+		}
+	}
+
+	impl ExtBuilder {
+		fn accounts(mut self, accounts: Vec<(AccountId, FlipBalance)>) -> Self {
+			self.accounts = accounts;
+			self
+		}
+
+		fn winners(mut self, winners: Vec<AccountId>) -> Self {
+			self.winners = winners;
+			self
+		}
+
+		fn root(mut self, root: AccountId) -> Self {
+			self.root = root;
+			self
+		}
+
+		fn configure_storages(&self, storage: &mut Storage) {
 
 			pallet_cf_flip::GenesisConfig::<Runtime> {
 				total_issuance: TOTAL_ISSUANCE,
@@ -41,17 +51,14 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_staking::GenesisConfig::<Runtime> {
-				genesis_stakers: endowed_accounts
-					.iter()
-					.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
-					.collect::<Vec<(AccountId, FlipBalance)>>(),
+				genesis_stakers: self.accounts.clone(),
 			}
 			.assimilate_storage(storage)
 			.unwrap();
 
 			pallet_cf_auction::GenesisConfig::<Runtime> {
 				auction_size_range: (1, MAX_VALIDATORS),
-				winners,
+				winners: self.winners.clone(),
 				minimum_active_bid: TOTAL_ISSUANCE / 100,
 			}
 			.assimilate_storage(storage)
@@ -65,7 +72,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
-				members: vec![root_key.into()],
+				members: vec![self.root.clone()],
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			}
 			.assimilate_storage(storage)
@@ -85,15 +92,21 @@ mod tests {
 			}
 			.assimilate_storage(storage)
 			.unwrap();
+
+			<pallet_cf_validator::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+				&pallet_cf_validator::GenesisConfig{},
+				storage,
+			)
+			.unwrap();
 		}
 
 		/// Default ext configuration with BlockNumber 1
-		pub fn build() -> TestExternalities {
+		pub fn build(&self) -> TestExternalities {
 			let mut storage = frame_system::GenesisConfig::default()
 				.build_storage::<Runtime>()
 				.unwrap();
 
-			Self::configure_storages(&mut storage);
+			self.configure_storages(&mut storage);
 
 			let mut ext = TestExternalities::from(storage);
 			ext.execute_with(|| System::set_block_number(1));
@@ -102,6 +115,71 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn should_run() {}
+	mod genesis {
+		use super::*;
+		use cf_traits::{Auction, AuctionPhase, StakeTransfer};
+		use state_chain_runtime::{Auctioneer, Flip, Reputation, Validator};
+		#[test]
+		// Naming will follow..
+		fn state_of_genesis_is_as_expected() {
+			const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
+			ExtBuilder::default()
+				.accounts(vec![
+					(AccountId::from(ALICE), GENESIS_BALANCE),
+					(AccountId::from(BOB), GENESIS_BALANCE),
+					(AccountId::from(CHARLIE), GENESIS_BALANCE),
+				])
+				.winners(vec![
+					AccountId::from(ALICE),
+					AccountId::from(BOB),
+					AccountId::from(CHARLIE),
+				])
+				.root(AccountId::from(ALICE))
+				.build()
+				.execute_with(|| {
+					// Confirmation that we have our assumed state at block 0
+					assert_eq!(Flip::total_issuance(), TOTAL_ISSUANCE);
+					assert_eq!(
+						Flip::stakeable_balance(&AccountId::from(ALICE)),
+						GENESIS_BALANCE
+					);
+					assert_eq!(
+						Flip::stakeable_balance(&AccountId::from(BOB)),
+						GENESIS_BALANCE
+					);
+					assert_eq!(
+						Flip::stakeable_balance(&AccountId::from(CHARLIE)),
+						GENESIS_BALANCE
+					);
+
+					assert_matches!(Auctioneer::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
+						if winners == vec![
+							AccountId::from(ALICE),
+							AccountId::from(BOB),
+							AccountId::from(CHARLIE),
+						] && minimum_active_bid == GENESIS_BALANCE
+					);
+
+					assert_eq!(
+						Validator::validator_lookup(AccountId::from(ALICE)),
+						Some(())
+					);
+
+					assert_eq!(
+						Reputation::validator_liveness(AccountId::from(ALICE)),
+						Some(1)
+					);
+
+					assert_eq!(
+						Reputation::validator_liveness(AccountId::from(BOB)),
+						Some(1)
+					);
+
+					assert_eq!(
+						Reputation::validator_liveness(AccountId::from(CHARLIE)),
+						Some(1)
+					);
+				});
+		}
+	}
 }
