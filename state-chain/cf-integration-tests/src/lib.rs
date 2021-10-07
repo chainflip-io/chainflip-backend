@@ -13,6 +13,7 @@ mod tests {
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
+	pub const ERIN: [u8; 32] = [7u8; 32];
 
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 		TPublic::Pair::from_string(&format!("//{}", seed), None)
@@ -145,11 +146,27 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{Auction, AuctionPhase, StakeTransfer};
-		use state_chain_runtime::{Auctioneer, Flip, Reputation, Validator};
+		use cf_traits::{Auction, AuctionPhase, NonceIdentifier, StakeTransfer};
+		use state_chain_runtime::{
+			Auctioneer, Emissions, Flip, Governance, Reputation, Rewards, Session, Validator,
+			Vaults,
+		};
 
 		#[test]
-		// Naming will follow..
+		// The following state is to be expected at genesis
+		// 1. Total issuance
+		// 2. The genesis validators are all staked equally
+		// 3. The minimum active bid is set at the stake for a genesis validator
+		// 3. The genesis validators are available via validator_lookup()
+		// 4. The genesis validators are in the session
+		// 5. No auction has been run yet
+		// 6. The genesis validators are considered online for this heartbeat interval
+		// 7. No emissions have been made
+		// 8. No rewards have been distributed
+		// 9. No vault rotation has occurred
+		// 10. Relevant nonce are at 0
+		// 11. Governance has its member
+		// 12. There have been no proposals
 		fn state_of_genesis_is_as_expected() {
 			const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 			ExtBuilder::default()
@@ -163,7 +180,7 @@ mod tests {
 					AccountId::from(BOB),
 					AccountId::from(CHARLIE),
 				])
-				.root(AccountId::from(ALICE))
+				.root(AccountId::from(ERIN))
 				.build()
 				.execute_with(|| {
 					// Confirmation that we have our assumed state at block 1
@@ -176,29 +193,36 @@ mod tests {
 					];
 
 					for account in accounts.iter() {
-						assert_eq!(
-							Flip::stakeable_balance(account),
-							GENESIS_BALANCE
-						);
+						assert_eq!(Flip::stakeable_balance(account), GENESIS_BALANCE);
 					}
 
+					assert_eq!(Auctioneer::current_auction_index(), 0);
 					assert_matches!(Auctioneer::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
 						if winners == accounts && minimum_active_bid == GENESIS_BALANCE
 					);
 
+					assert_eq!(Session::validators(), accounts);
+
 					for account in accounts.iter() {
-						assert_eq!(
-							Validator::validator_lookup(account),
-							Some(())
-						);
+						assert_eq!(Validator::validator_lookup(account), Some(()));
 					}
 
 					for account in accounts.iter() {
-						assert_eq!(
-							Reputation::validator_liveness(account),
-							Some(1)
-						);
+						assert_eq!(Reputation::validator_liveness(account), Some(1));
 					}
+
+					assert_eq!(Emissions::last_mint_block(), 0);
+
+					assert_eq!(
+						Rewards::offchain_funds(pallet_cf_rewards::VALIDATOR_REWARDS),
+						0
+					);
+
+					assert_eq!(Vaults::current_request(), 0);
+					assert_eq!(Vaults::chain_nonces(NonceIdentifier::Ethereum), None);
+
+					assert!(Governance::members().contains(&AccountId::from(ERIN)));
+					assert_eq!(Governance::number_of_proposals(), 0);
 				});
 		}
 	}
