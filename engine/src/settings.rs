@@ -115,7 +115,7 @@ impl Settings {
         s.merge(File::with_name(file))?;
 
         // merge in the environment, overwrite anything that matches
-        s.merge(Environment::new().separator("."))?;
+        s.merge(Environment::new().separator("__"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         let s: Settings = s.try_into()?;
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_init_config_from_file_and_env() {
-        let eth_node_key = "ETH.NODE_ENDPOINT";
+        let eth_node_key = "ETH__NODE_ENDPOINT";
         let fake_endpoint = "ws://fake.rinkeby.endpoint/flippy1234";
         std::env::set_var(eth_node_key, fake_endpoint);
 
