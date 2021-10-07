@@ -27,7 +27,7 @@ pub async fn test_all_key_manager_events() {
         .event_stream(&web3, settings.eth.from_block, &root_logger)
         .await
         .unwrap()
-        .take_until(tokio::time::sleep(std::time::Duration::from_millis(5)))
+        .take_until(tokio::time::sleep(std::time::Duration::from_millis(10)))
         .collect::<Vec<_>>()
         .await
         .into_iter()
