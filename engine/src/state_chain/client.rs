@@ -9,7 +9,7 @@ use futures::{Stream, TryFutureExt};
 use itertools::Itertools;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
-    twox_128, Bytes, Pair,
+    Bytes, Pair,
 };
 use sp_runtime::generic::Era;
 use std::convert::TryFrom;
@@ -126,6 +126,7 @@ pub type EventInfo = (
 
 pub struct StateChainClient {
     pub metadata: substrate_subxt::Metadata,
+    events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
     nonce: Mutex<<RuntimeImplForSigningExtrinsics as System>::Index>,
@@ -176,17 +177,11 @@ impl StateChainClient {
         &self,
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
-        let system_event_storage_key = vec![StorageKey(
-            std::array::IntoIter::new([
-                std::array::IntoIter::new(twox_128(b"System")),
-                std::array::IntoIter::new(twox_128(b"Events")),
-            ])
-            .flatten()
-            .collect::<Vec<_>>(),
-        )];
-
         self.state_rpc_client
-            .query_storage_at(system_event_storage_key, Some(block_header.hash()))
+            .query_storage_at(
+                vec![self.events_storage_key.clone()],
+                Some(block_header.hash()),
+            )
             .compat()
             .await
             .map_err(anyhow::Error::msg)?
@@ -264,7 +259,6 @@ pub async fn connect_to_state_chain(
 
     Ok((
         Arc::new(StateChainClient {
-            metadata,
             runtime_version: state_rpc_client
                 .runtime_version(None)
                 .compat()
@@ -286,17 +280,11 @@ pub async fn connect_to_state_chain(
                 > = Decode::decode(
                     &mut &state_rpc_client
                         .storage(
-                            StorageKey(
-                                std::array::IntoIter::new([
-                                    std::array::IntoIter::new(twox_128(b"System")),
-                                    std::array::IntoIter::new(twox_128(b"Account")),
-                                    std::array::IntoIter::new(twox_128(
-                                        &signer.account_id().encode()[..],
-                                    )),
-                                ])
-                                .flatten()
-                                .collect::<Vec<_>>(),
-                            ),
+                            metadata
+                                .module("System")?
+                                .storage("Account")?
+                                .map()?
+                                .key(&signer.account_id()),
                             None,
                         )
                         .compat()
@@ -310,6 +298,8 @@ pub async fn connect_to_state_chain(
             signer,
             author_rpc_client,
             state_rpc_client,
+            events_storage_key: metadata.module("System")?.storage("Events")?.prefix(),
+            metadata,
         }),
         chain_rpc_client
             .subscribe_finalized_heads()
