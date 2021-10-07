@@ -10,7 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{RewardsDistribution, RewardRollover};
+use cf_traits::{RewardRollover, RewardsDistribution};
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance},
@@ -101,7 +101,7 @@ impl<T: Config> RewardRollover for Pallet<T> {
 
 		// Credit each validator with their remaining due rewards.
 		for (account_id, already_received) in
-		ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
+			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
 		{
 			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
 		}
