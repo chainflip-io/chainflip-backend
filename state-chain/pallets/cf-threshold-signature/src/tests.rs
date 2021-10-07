@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_signing, mock::*, Error};
+use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
 use frame_support::instances::Instance0;
 use frame_support::traits::Hooks;
 use frame_support::{assert_noop, assert_ok};
@@ -25,8 +25,8 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_signing_Instance0(
-				pallet_cf_signing::Event::ThresholdSignatureRequest(
+			Event::pallet_cf_threshold_signature_Instance0(
+				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 					req_id,
 					key_id,
 					signers,
@@ -38,13 +38,17 @@ impl MockCfe {
 				assert_eq!(payload, DOGE_PAYLOAD);
 
 				assert_ok!(match scenario {
-					Scenario::HappyPath => DogeSigning::signature_success(
+					Scenario::HappyPath => DogeThresholdSigner::signature_success(
 						Origin::root(),
 						req_id,
 						SIGNATURE.to_string(),
 					),
 					Scenario::RetryPath => {
-						DogeSigning::signature_failed(Origin::root(), req_id, vec![RANDOM_NOMINEE])
+						DogeThresholdSigner::signature_failed(
+							Origin::root(),
+							req_id,
+							vec![RANDOM_NOMINEE],
+						)
 					}
 				});
 			}
@@ -57,16 +61,16 @@ impl MockCfe {
 fn happy_path() {
 	new_test_ext().execute_with(|| {
 		// Initiate request
-		let request_id = DogeSigning::request_signature(DogeSigningContext {
+		let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
 			message: "Amazing!".to_string(),
 		});
-		let pending = DogeSigning::pending_request(request_id).unwrap();
+		let pending = DogeThresholdSigner::pending_request(request_id).unwrap();
 		assert_eq!(pending.attempt, 0);
 		assert_eq!(pending.signatories, vec![RANDOM_NOMINEE]);
 
 		// Wrong request id is a no-op
 		assert_noop!(
-			DogeSigning::signature_success(
+			DogeThresholdSigner::signature_success(
 				Origin::root(),
 				request_id + 1,
 				"MaliciousSignature".to_string()
@@ -78,11 +82,11 @@ fn happy_path() {
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Request is complete
-		assert!(DogeSigning::pending_request(request_id).is_none());
+		assert!(DogeThresholdSigner::pending_request(request_id).is_none());
 
 		// Call back has executed.
 		assert_eq!(
-			MockCallback::<DogeSigningContext>::get_stored_callback(),
+			MockCallback::<DogeThresholdSignerContext>::get_stored_callback(),
 			Some("So Amazing! Such Wow!".to_string())
 		);
 	});
@@ -92,10 +96,10 @@ fn happy_path() {
 fn retry_path() {
 	new_test_ext().execute_with(|| {
 		// Initiate request
-		let request_id = DogeSigning::request_signature(DogeSigningContext {
+		let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
 			message: "Amazing!".to_string(),
 		});
-		let pending = DogeSigning::pending_request(request_id).unwrap();
+		let pending = DogeThresholdSigner::pending_request(request_id).unwrap();
 		assert_eq!(pending.attempt, 0);
 		assert_eq!(pending.signatories, vec![RANDOM_NOMINEE]);
 
@@ -103,11 +107,11 @@ fn retry_path() {
 		MockCfe::respond(Scenario::RetryPath);
 
 		// Request is complete
-		assert!(DogeSigning::pending_request(request_id).is_none());
+		assert!(DogeThresholdSigner::pending_request(request_id).is_none());
 
 		// Call back has *not* executed.
 		assert_eq!(
-			MockCallback::<DogeSigningContext>::get_stored_callback(),
+			MockCallback::<DogeThresholdSignerContext>::get_stored_callback(),
 			None
 		);
 
@@ -115,16 +119,16 @@ fn retry_path() {
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
 
 		// Scheduled for retry.
-		assert_eq!(DogeSigning::retry_queue().len(), 1);
+		assert_eq!(DogeThresholdSigner::retry_queue().len(), 1);
 
 		// Process retries.
-		<DogeSigning as Hooks<BlockNumberFor<Test>>>::on_initialize(0);
+		<DogeThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(0);
 
 		// No longer pending retry.
-		assert!(DogeSigning::retry_queue().is_empty());
+		assert!(DogeThresholdSigner::retry_queue().is_empty());
 
 		// We have a new request pending.
-		let pending = DogeSigning::pending_request(request_id + 1).unwrap();
+		let pending = DogeThresholdSigner::pending_request(request_id + 1).unwrap();
 		assert_eq!(pending.attempt, 1);
 		assert_eq!(pending.signatories, vec![RANDOM_NOMINEE]);
 	});

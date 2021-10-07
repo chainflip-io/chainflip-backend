@@ -47,17 +47,39 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	}
 }
 
+/// A very basic but working implementation of signer nomination.
+///
+/// For a single signer, takes the first online validator in the validator lookup map.
+///
+/// For multiple signers, takes the first N online validators where N is signing consensus threshold.
 pub struct BasicSignerNomination;
 
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
 	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		todo!()
+		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
+			.skip_while(|(id, _)| !<Reputation as cf_traits::Online>::is_online(id))
+			.take(1)
+			.collect::<Vec<_>>()
+			.first()
+			.expect("Can only panic if all validators are offline.")
+			.0
+			.clone()
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
-		todo!()
+		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
+		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
+			.filter_map(|(id, _)| {
+				if <Reputation as cf_traits::Online>::is_online(&id) {
+					Some(id)
+				} else {
+					None
+				}
+			})
+			.take(threshold as usize)
+			.collect()
 	}
 }
 
@@ -98,9 +120,9 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 			}
 			Self::Broadcast(contract_call) => {
 				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
-				Call::EthereumBroadcaster(
-					pallet_cf_broadcast::Call::<_, _>::start_sign_and_broadcast(unsigned_tx)
-				)
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					unsigned_tx,
+				))
 			}
 		}
 	}
@@ -129,11 +151,18 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	type TransactionHash = [u8; 32];
 
 	fn verify_transaction(
-		_signer: &<Runtime as Chainflip>::ValidatorId,
+		signer: &<Runtime as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
+		signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
-		todo!()
+		eth::verify_raw(signed_tx, signer)
+			.map_err(|e| {
+				frame_support::debug::info!(
+					"Ethereum signed transaction verification failed: {:?}.",
+					e
+				)
+			})
+			.ok()
 	}
 }
 

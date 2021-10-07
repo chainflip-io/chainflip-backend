@@ -1,7 +1,6 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, SignerNomination};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
-use frame_support::instances::Instance0;
 use frame_support::parameter_types;
 use frame_system;
 use sp_core::H256;
@@ -56,6 +55,7 @@ impl frame_system::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
 	type KeyId = u32;
@@ -92,7 +92,10 @@ pub struct MockBroadcast;
 pub struct MockUnsignedTx;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockSignedTx;
+pub enum MockSignedTx {
+	Valid,
+	Invalid,
+}
 
 impl BroadcastConfig<Test> for MockBroadcast {
 	type Chain = Doge;
@@ -103,10 +106,21 @@ impl BroadcastConfig<Test> for MockBroadcast {
 	fn verify_transaction(
 		_signer: &<Test as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
+		signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
-		Some(())
+		match signed_tx {
+			MockSignedTx::Valid => Some(()),
+			MockSignedTx::Invalid => None,
+		}
 	}
+}
+
+pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
+pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
+
+parameter_types! {
+	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
+	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
 }
 
 impl pallet_cf_broadcast::Config<Instance0> for Test {
@@ -114,6 +128,9 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type TargetChain = Doge;
 	type BroadcastConfig = MockBroadcast;
 	type SignerNomination = MockNominator;
+	type OfflineReporter = MockOfflineReporter;
+	type SigningTimeout = SigningTimeout;
+	type TransmissionTimeout = TransmissionTimeout;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -3,7 +3,8 @@ use std::marker::PhantomData;
 
 use super::{
     auction::Auction,
-    ethereum_signer::{self, EthereumSigner},
+    ethereum_broadcaster::BroadcastAttemptId,
+    ethereum_signer::{self, EthereumThresholdSigner},
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;
@@ -18,7 +19,7 @@ use substrate_subxt::{module, system::System, Call};
 type EthTransactionHash = [u8; 32];
 
 #[module]
-pub trait WitnesserApi: System + Staking + Auction + EthereumSigner {}
+pub trait WitnesserApi: System + Staking + Auction + EthereumThresholdSigner {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessStakedCall<T: WitnesserApi> {
@@ -65,7 +66,22 @@ pub struct WitnessVaultRotationResponseCall<T: WitnesserApi> {
 
     pub response: VaultRotationResponse<Vec<u8>>,
 
-    pub _runtime: PhantomData<T>,
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthBroadcastSuccessCall<T: WitnesserApi> {
+    broadcast_attempt_id: BroadcastAttemptId,
+    tx_hash: [u8; 32],
+    _runtime: PhantomData<T>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct WitnessEthBroadcastFailureCall<T: WitnesserApi> {
+    broadcast_attempt_id: BroadcastAttemptId,
+    failure: pallet_cf_broadcast::TransmissionFailure,
+    tx_hash: [u8; 32],
+    _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]

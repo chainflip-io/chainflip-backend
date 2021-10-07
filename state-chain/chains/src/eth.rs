@@ -6,6 +6,8 @@ use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Token, Uint,
 };
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
@@ -50,7 +52,7 @@ pub struct SigData {
 	/// The address value derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of `nonceTimesGeneratorAddress`
-	/// is a generated as part of each signing round (ie. as part of the Schnorr signature) to prevent certain 
+	/// is a generated as part of each signing round (ie. as part of the Schnorr signature) to prevent certain
 	/// classes of cryptographic attacks.
 	k_times_g_addr: Address,
 }
@@ -109,6 +111,7 @@ pub struct SchnorrVerificationComponents {
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
 ///
 /// We assume the access_list (EIP-2930) is not required.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct UnsignedTransaction {
 	pub chain_id: u64,
@@ -134,7 +137,6 @@ pub fn verify_raw<SignerId>(
 	Ok(())
 }
 
-
 /// Represents calls to Chainflip contracts requiring a threshold signature.
 pub trait ChainflipContractCall {
 	/// Whether or not the call has been signed.
@@ -146,7 +148,7 @@ pub trait ChainflipContractCall {
 	/// The payload data over which the threshold signature should be made.
 	fn signing_payload(&self) -> H256;
 
-	/// Add the threshold signature to the contract call. 
+	/// Add the threshold signature to the contract call.
 	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents);
 
 	/// Create a new call from the old one, with a new nonce and discarding the old signature.

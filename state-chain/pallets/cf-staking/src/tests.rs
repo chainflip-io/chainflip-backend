@@ -7,13 +7,13 @@ use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
-use pallet_cf_signing::Instance0;
+use pallet_cf_threshold_signature::Instance0;
 use sp_core::U256;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
-type SigningEvent = pallet_cf_signing::Event<Test, Instance0>;
+type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance0>;
 
 const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents = eth::SchnorrVerificationComponents {
 	s: [0xcf; 32],
@@ -119,9 +119,9 @@ fn staked_amount_is_added_and_subtracted() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::pallet_cf_threshold_signature_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from BOB
-			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::pallet_cf_threshold_signature_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
@@ -279,7 +279,7 @@ fn staked_and_claimed_events_must_match() {
 				assert_eq!(claimed_amount, STAKE);
 			},
 			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
-			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::pallet_cf_threshold_signature_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // Claim debited from account
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => {
 				assert_eq!(added, STAKE);
@@ -350,7 +350,7 @@ fn signature_is_inserted() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
+			Event::pallet_cf_threshold_signature_Instance0(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
 				// Insert a signature.
 				assert_ok!(Signer::signature_success(
 					Origin::root(),
@@ -621,7 +621,9 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::pallet_cf_threshold_signature_Instance0(
+				SigningEvent::ThresholdSignatureRequest(..)
+			),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE

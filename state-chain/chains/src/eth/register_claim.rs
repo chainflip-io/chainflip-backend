@@ -1,8 +1,6 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{
-	ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable,
-};
+use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
 
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
@@ -121,16 +119,16 @@ impl RegisterClaim {
 
 #[cfg(test)]
 mod test_register_claim {
-	use frame_support::assert_ok;
 	use super::*;
+	use frame_support::assert_ok;
 
-		#[test]
-		// There have been obtuse test failures due to the loading of the contract failing
-		// It uses a different ethabi to the CFE, so we test separately
-		fn just_load_the_contract() {
-			assert_ok!(ethabi::Contract::load(
-				std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
-			));
+	#[test]
+	// There have been obtuse test failures due to the loading of the contract failing
+	// It uses a different ethabi to the CFE, so we test separately
+	fn just_load_the_contract() {
+		assert_ok!(ethabi::Contract::load(
+			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+		));
 	}
 
 	#[test]
@@ -158,12 +156,20 @@ mod test_register_claim {
 
 		// Replace the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::insert_signature(&mut register_claim_runtime, &SchnorrVerificationComponents {
-			s: FAKE_SIG,
-			k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-		});
-		assert_eq!(ChainflipContractCall::signing_payload(&register_claim_runtime), FAKE_HASH.into());
-		assert!(ChainflipContractCall::has_signature(&register_claim_runtime));
+		ChainflipContractCall::insert_signature(
+			&mut register_claim_runtime,
+			&SchnorrVerificationComponents {
+				s: FAKE_SIG,
+				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
+			},
+		);
+		assert_eq!(
+			ChainflipContractCall::signing_payload(&register_claim_runtime),
+			FAKE_HASH.into()
+		);
+		assert!(ChainflipContractCall::has_signature(
+			&register_claim_runtime
+		));
 		let runtime_payload = ChainflipContractCall::abi_encoded(&register_claim_runtime);
 
 		assert_eq!(

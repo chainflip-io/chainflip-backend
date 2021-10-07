@@ -33,7 +33,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Signer: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		Signer: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
@@ -81,7 +81,7 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(AccountId);
 cf_traits::impl_mock_offline_conditions!(AccountId);
 
-impl pallet_cf_signing::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type SigningContext = ClaimSigningContext;

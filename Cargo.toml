@@ -12,7 +12,7 @@ members = [
   'state-chain/pallets/cf-auction',
   'state-chain/pallets/cf-vaults',
   'state-chain/pallets/cf-emissions',
-  'state-chain/pallets/cf-signing',
+  'state-chain/pallets/cf-threshold-signature',
   'state-chain/pallets/cf-rewards',
   'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-broadcast',

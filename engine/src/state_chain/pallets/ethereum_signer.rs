@@ -9,14 +9,14 @@ use substrate_subxt::{module, system::System, Event};
 pub type CeremonyId = u64;
 
 #[module]
-pub trait EthereumSigner: System {
+pub trait EthereumThresholdSigner: System {
     type KeyId: Member + Parameter + Serialize + DeserializeOwned;
     type Payload: Member + Parameter + Serialize + DeserializeOwned;
 }
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
-pub struct ThresholdSignatureRequest<S: EthereumSigner> {
+pub struct ThresholdSignatureRequest<S: EthereumThresholdSigner> {
     /// The ceremony id.
     ceremony_id: CeremonyId,
     /// The id of the key to be used for signing.
@@ -31,7 +31,7 @@ pub struct ThresholdSignatureRequest<S: EthereumSigner> {
 mod test_events_decoding {
     use super::*;
     use crate::state_chain::runtime::StateChainRuntime;
-    use pallet_cf_signing::{Event as SigningEvent, Instance0};
+    use pallet_cf_threshold_signature::{Event as ThresholdSigningEvent, Instance0};
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
     use state_chain_runtime::{Event, Runtime};
@@ -39,11 +39,11 @@ mod test_events_decoding {
     #[test]
     fn test_threshold_signature_request() {
         let signatories = vec![AccountKeyring::Alice.to_account_id()];
-        let key_id: <StateChainRuntime as EthereumSigner>::KeyId = b"current_key".to_vec();
+        let key_id: <StateChainRuntime as EthereumThresholdSigner>::KeyId = b"current_key".to_vec();
         const CEREMONY_ID: u64 = 42;
-        const PAYLOAD: <StateChainRuntime as EthereumSigner>::Payload = H256([0xcf; 32]);
+        const PAYLOAD: <StateChainRuntime as EthereumThresholdSigner>::Payload = H256([0xcf; 32]);
 
-        let event: Event = SigningEvent::<Runtime, Instance0>::ThresholdSignatureRequest(
+        let event: Event = ThresholdSigningEvent::<Runtime, Instance0>::ThresholdSignatureRequest(
             CEREMONY_ID,
             key_id.clone(),
             signatories.clone(),

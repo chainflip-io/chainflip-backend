@@ -14,10 +14,11 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-runtime = { default-features = false, version = '3.0.0' }
 
 # Ethereum
-ethabi = {default-features = false, features = ['codec'], git = 'https://github.com/chainflip-io/ethabi', rev = 'bfa7866'}
+ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
 ethereum = {default-features = false, version = "0.9"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
+serde = {optional = true, version = "1.0.126", features = ['derive']}
 
 [features]
 default = ['std']
@@ -29,6 +30,7 @@ std = [
     'frame-system/std',
     'hex/std',
     'rlp/std',
+    'serde',
     'sp-runtime/std',
     'sp-std/std',
 ]

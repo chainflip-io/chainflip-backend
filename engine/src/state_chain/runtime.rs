@@ -28,7 +28,8 @@ use core::fmt::Debug;
 use codec::{Decode, Encode};
 
 use super::pallets::{
-    auction, emissions, ethereum_signer, reputation, staking, validator, vaults, witness_api,
+    auction, emissions, ethereum_broadcaster, ethereum_signer, reputation, staking, validator,
+    vaults, witness_api,
 };
 
 use pallet_cf_flip::ImbalanceSource;
@@ -144,6 +145,8 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
         event_type_registry.register_type_size::<u32>("ProposalId");
         event_type_registry.register_type_size::<NetworkState>("NetworkState");
+        event_type_registry.register_type_size::<[u8; 20]>("EthereumAddress");
+        event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
     }
 }
 
@@ -169,10 +172,12 @@ impl vaults::Vaults for StateChainRuntime {}
 
 impl reputation::Reputation for StateChainRuntime {}
 
-impl ethereum_signer::EthereumSigner for StateChainRuntime {
+impl ethereum_signer::EthereumThresholdSigner for StateChainRuntime {
     type KeyId = Vec<u8>;
     type Payload = H256;
 }
+
+impl ethereum_broadcaster::EthereumBroadcaster for StateChainRuntime {}
 
 impl System for StateChainRuntime {
     type Index = u32;

@@ -20,11 +20,12 @@ pub mod pallet {
 		dispatch::DispatchResultWithPostInfo, instances::Instance0, pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_signing::{Call as SigningCall, Config as SigningConfig};
+	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};
 	use pallet_cf_staking::{
 		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
 		FlipBalance,
 	};
+	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_vaults::rotation::{CeremonyId, KeygenResponse, VaultRotationResponse};
 	use pallet_cf_vaults::{
 		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
@@ -40,12 +41,14 @@ pub mod pallet {
 		+ StakingConfig
 		+ VaultsConfig
 		+ SigningConfig<Instance0, TargetChain = Ethereum>
+		+ BroadcastConfig<Instance0, TargetChain = Ethereum>
 	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
 			+ From<VaultsCall<Self>>
-			+ From<SigningCall<Self, Instance0>>;
+			+ From<SigningCall<Self, Instance0>>
+			+ From<BroadcastCall<Self, Instance0>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
@@ -67,8 +70,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::CeremonyId,
-			signature: <<T as pallet_cf_signing::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
+			id: pallet_cf_threshold_signature::CeremonyId,
+			signature: <<T as pallet_cf_threshold_signature::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = SigningCall::<T, Instance0>::signature_success(id, signature);
@@ -80,13 +83,46 @@ pub mod pallet {
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
-		pub fn witness_signature_failed(
+		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::CeremonyId,
+			id: pallet_cf_threshold_signature::CeremonyId,
 			offenders: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = SigningCall::<T, Instance0>::signature_failed(id, offenders);
+			T::Witnesser::witness(who, call.into())?;
+			Ok(().into())
+		}
+
+		//*** Broadcast pallet witness calls ***//
+
+		/// Witness the successful completion of an outgoing broadcast.
+		///
+		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		#[pallet::weight(10_000)]
+		pub fn witness_eth_transmission_success(
+			origin: OriginFor<T>,
+			id: pallet_cf_broadcast::BroadcastAttemptId,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = BroadcastCall::<T, Instance0>::transmission_success(id, tx_hash);
+			T::Witnesser::witness(who, call.into())?;
+			Ok(().into())
+		}
+
+		/// Witness the failure of an outgoing broadcast.
+		///
+		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		#[pallet::weight(10_000)]
+		pub fn witness_eth_transmission_failure(
+			origin: OriginFor<T>,
+			id: pallet_cf_broadcast::BroadcastAttemptId,
+			failure: pallet_cf_broadcast::TransmissionFailure,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = BroadcastCall::<T, Instance0>::transmission_failure(id, failure, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}

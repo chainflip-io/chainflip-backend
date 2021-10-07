@@ -18,7 +18,8 @@ cf-chains = {path = '../../chains', default-features = false}
 cf-traits = {path = '../../traits', default-features = false}
 pallet-cf-staking = {path = '../cf-staking', default-features = false}
 pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
-pallet-cf-signing = {path = '../cf-signing', default-features = false}
+pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
+pallet-cf-broadcast = {path = '../cf-broadcast', default-features = false}
 
 # Substrate stuff
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
@@ -43,7 +44,8 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'pallet-cf-staking/std',
-  'pallet-cf-signing/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-threshold-signature/std',
   'pallet-cf-vaults/std',
   'sp-std/std',
   'sp-core/std',

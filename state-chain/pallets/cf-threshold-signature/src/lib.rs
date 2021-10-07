@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Signing Pallet
+#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
+#![doc = include_str!("../README.md")]
+
 #[cfg(test)]
 pub mod mock;
 
@@ -104,6 +106,7 @@ pub mod pallet {
 				return 0;
 			}
 
+			// Process pending retries.
 			for request in RetryQueue::<T, I>::take() {
 				Self::request_attempt(
 					request.chain_signing_context,

@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_signing};
+use crate::{self as pallet_cf_threshold_signature};
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -22,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeSigning: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -97,7 +97,7 @@ impl<Ctx: SigningContext<Test>> MockCallback<Ctx> {
 	}
 }
 
-impl UnfilteredDispatchable for MockCallback<DogeSigningContext> {
+impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
 	type Origin = Origin;
 
 	fn dispatch_bypass_filter(
@@ -158,13 +158,13 @@ pub struct Doge;
 impl cf_chains::Chain for Doge {}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct DogeSigningContext {
+pub struct DogeThresholdSignerContext {
 	pub message: String,
 }
 
 pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
 
-impl SigningContext<Test> for DogeSigningContext {
+impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;
 	type Payload = [u8; 4];
 	type Signature = String;
@@ -179,10 +179,10 @@ impl SigningContext<Test> for DogeSigningContext {
 	}
 }
 
-impl pallet_cf_signing::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
-	type SigningContext = DogeSigningContext;
+	type SigningContext = DogeThresholdSignerContext;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
