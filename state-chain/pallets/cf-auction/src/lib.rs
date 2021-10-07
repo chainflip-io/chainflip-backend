@@ -46,7 +46,7 @@ pub use weights::WeightInfo;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online,
+	Auctioneer, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online,
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
@@ -202,7 +202,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Auction for Pallet<T> {
+impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;

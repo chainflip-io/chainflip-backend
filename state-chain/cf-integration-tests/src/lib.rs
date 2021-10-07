@@ -146,7 +146,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{Auction, AuctionPhase, NonceIdentifier, StakeTransfer};
+		use cf_traits::{Auctioneer, AuctionPhase, NonceIdentifier, StakeTransfer};
 		use state_chain_runtime::{
 			Auction, Emissions, Flip, Governance, Reputation, Rewards, Session, Validator, Vaults,
 		};
@@ -195,8 +195,8 @@ mod tests {
 						assert_eq!(Flip::stakeable_balance(account), GENESIS_BALANCE);
 					}
 
-					assert_eq!(Auctioneer::current_auction_index(), 0);
-					assert_matches!(Auctioneer::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
+					assert_eq!(Auction::current_auction_index(), 0);
+					assert_matches!(Auction::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
 						if winners == accounts && minimum_active_bid == GENESIS_BALANCE
 					);
 

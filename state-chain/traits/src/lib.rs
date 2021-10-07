@@ -97,9 +97,9 @@ pub type AuctionRange = (u32, u32);
 /// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
 /// This results in a set of winners and a minimum bid after the auction.  After each successful
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
-/// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
+/// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
-pub trait Auction {
+pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
