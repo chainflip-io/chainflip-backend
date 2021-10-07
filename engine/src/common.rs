@@ -43,7 +43,7 @@ impl<T> Mutex<T> {
             }),
         }
     }
-    pub async fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
+    pub async fn lock(&self) -> MutexGuard<'_, T> {
         let guard = self.mutex.lock().await;
 
         if guard.deref().poisoned {

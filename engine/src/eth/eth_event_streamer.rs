@@ -23,11 +23,13 @@ pub async fn new_eth_event_stream<
     logger: &slog::Logger,
 ) -> Result<impl Stream<Item = Result<Event>>, anyhow::Error> {
     // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
-    let future_logs = web3
-        .eth_subscribe()
+    let future_logs = web3.eth_subscribe();
+
+    println!("Get subscribe");
+    let future_logs = future_logs
         .subscribe_logs(
             FilterBuilder::default()
-                .from_block(BlockNumber::Pending)
+                .from_block(BlockNumber::Latest)
                 .address(vec![deployed_address])
                 .build(),
         )
@@ -112,7 +114,7 @@ pub async fn new_eth_event_stream<
 mod tests {
 
     use crate::{
-        eth::{key_manager::KeyManager, new_synced_web3_client},
+        eth::{key_manager::KeyManager, new_synced_web3_client, stake_manager::StakeManager},
         logging, settings,
     };
 
@@ -128,6 +130,27 @@ mod tests {
         let key_manager = KeyManager::new(&settings).unwrap();
 
         key_manager
+            .event_stream(
+                &new_synced_web3_client(&settings, &logger).await.unwrap(),
+                settings.eth.from_block,
+                &logger,
+            )
+            .await
+            .unwrap()
+            .collect::<Vec<_>>()
+            .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
+    async fn subscribe_to_stake_manager_events() {
+        let logger = logging::test_utils::create_test_logger();
+
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let stake_manager = StakeManager::new(&settings).unwrap();
+
+        stake_manager
             .event_stream(
                 &new_synced_web3_client(&settings, &logger).await.unwrap(),
                 settings.eth.from_block,

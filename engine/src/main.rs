@@ -103,21 +103,21 @@ async fn main() {
             shutdown_client_rx,
             &root_logger,
         ),
-        p2p::conductor::start(
-            p2p_rpc::connect(
-                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
-                    "Should be valid ws endpoint: {}",
-                    settings.state_chain.ws_endpoint
-                )),
-                AccountId(pair_signer.lock().await.signer().public().0)
-            )
-            .await
-            .expect("unable to connect p2p rpc client"),
-            p2p_message_sender,
-            p2p_message_command_receiver,
-            p2p_shutdown_rx,
-            &root_logger.clone()
-        ),
+        // p2p::conductor::start(
+        //     p2p_rpc::connect(
+        //         &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
+        //             "Should be valid ws endpoint: {}",
+        //             settings.state_chain.ws_endpoint
+        //         )),
+        //         AccountId(pair_signer.lock().await.signer().public().0)
+        //     )
+        //     .await
+        //     .expect("unable to connect p2p rpc client"),
+        //     p2p_message_sender,
+        //     p2p_message_command_receiver,
+        //     p2p_shutdown_rx,
+        //     &root_logger.clone()
+        // ),
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
