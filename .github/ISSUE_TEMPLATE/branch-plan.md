@@ -7,10 +7,12 @@ assignees: ''
 
 ---
 
-**English description of the proposed features to be introduced by this branch**
+## English description of the proposed features to be introduced by this branch
+
 A clear and concise description of what ths proposed branch will introduce to the codebase. Ideally in plain English.
 
-**Describe the solution you'd like to implement**
+## Describe the solution you'd like to implement
+
 A more thorough technical description of the code to be introduced. Including but not limited to:
 
 ### Dependencies
@@ -46,14 +48,18 @@ A more thorough technical description of the code to be introduced. Including bu
 
 ---
 
-**~~Clubhouse~~ Shortcut Story Link**
+### ~~Clubhouse~~ Shortcut Story Link
+
 [CH-XXXX].
 
-**Describe alternatives you've considered**
+### Describe alternatives you've considered
+
 A clear and concise description of any alternative solutions you've considered.
 
-**Additional context**
+### Additional context
+
 Add any other context or screenshots about the request here. E.g. Swimlanes.
 
-**Tag specific people for comment**
+### Tag specific people for comment
+
 Tag folks here

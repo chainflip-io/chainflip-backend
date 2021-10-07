@@ -24,19 +24,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
-impl WeightInfo for () {
-	fn set_blocks_for_epoch() -> u64 {
-		0 as Weight
-	}
-
-	fn force_rotation() -> u64 {
-		0 as Weight
-	}
-}
-
-pub const MIN_VALIDATOR_SIZE: u32 = 2;
-pub const MAX_VALIDATOR_SIZE: u32 = 150;
-
 pub struct AuctionWeight;
 
 impl AuctionWeightTrait for AuctionWeight {

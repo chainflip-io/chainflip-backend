@@ -66,12 +66,18 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
 pub struct AccountId(pub [u8; 32]);
 
 impl std::fmt::Display for AccountId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
+    }
+}
+
+impl std::fmt::Debug for AccountId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -85,6 +91,12 @@ pub struct P2PMessage {
 pub struct P2PMessageCommand {
     pub destination: AccountId,
     pub data: Vec<u8>,
+}
+
+impl P2PMessageCommand {
+    pub fn new(destination: AccountId, data: Vec<u8>) -> Self {
+        P2PMessageCommand { destination, data }
+    }
 }
 
 /// A command to the conductor to send message `data` to

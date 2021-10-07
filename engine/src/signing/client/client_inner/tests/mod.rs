@@ -1,35 +1,32 @@
 mod db_tests;
+mod frost_unit_tests;
 mod helpers;
-mod keygen_unit_tests;
-mod signing_unit_tests;
+// mod keygen_unit_tests;
 
-pub use helpers::{KeygenContext, KeygenPhase1Data};
+pub use helpers::KeygenContext;
 
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::*;
+use pallet_cf_vaults::CeremonyId;
 
-use super::client_inner::*;
-use helpers::*;
-
-use super::keygen_state::KeygenStage;
-use super::signing_state::SigningStage;
+// use helpers::*;
 
 use crate::{
     p2p::AccountId,
-    signing::{
-        client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
-        MessageHash, MessageInfo,
-    },
+    signing::{client::KeygenInfo, MessageHash},
 };
 
 use std::convert::TryInto;
-use std::time::Duration;
+
+pub const KEYGEN_CEREMONY_ID: CeremonyId = 0;
+pub const SIGN_CEREMONY_ID: CeremonyId = 0;
 
 lazy_static! {
+
     static ref VALIDATOR_IDS: Vec<AccountId> =
-        vec![AccountId([1; 32]), AccountId([2; 32]), AccountId([3; 32]),];
-    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
+        [1, 2, 3, 4].iter().map(|i| AccountId([*i; 32])).collect();
+    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1, 2];
     static ref SIGNER_IDS: Vec<AccountId> = SIGNER_IDXS
         .iter()
         .map(|idx| VALIDATOR_IDS[*idx].clone())
@@ -40,10 +37,6 @@ lazy_static! {
             .try_into()
             .unwrap()
     );
-}
-
-lazy_static! {
-    static ref CEREMONY_ID: u64 = 0;
     static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
         .as_bytes()
         .try_into()
@@ -55,7 +48,7 @@ lazy_static! {
         .try_into()
         .unwrap();
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
-        ceremony_id: *CEREMONY_ID,
+        ceremony_id: KEYGEN_CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
 }

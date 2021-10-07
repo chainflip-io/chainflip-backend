@@ -4,15 +4,15 @@ use super::tests::KeygenContext;
 use crate::p2p::AccountId;
 
 // Generate the keys for genesis
+// Run test to ensure it doesn't panic
 #[tokio::test]
-#[ignore = "Run manually to generate genesis key shares/shards"]
 pub async fn genesis_keys() {
     println!("Generating keys");
     let bashful =
         hex::decode("36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911").unwrap();
-    println!("bashful: {:?}", bashful);
     let bashful: [u8; 32] = bashful.try_into().unwrap();
     let bashful = AccountId(bashful);
+    println!("bashful: {:?}", bashful);
 
     let doc =
         hex::decode("8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04").unwrap();

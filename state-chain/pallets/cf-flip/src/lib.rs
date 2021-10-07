@@ -1,42 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! Flip Token Pallet
-//!
-//! Loosely based on Parity's Balances pallet.
-//!
-//! Provides some low-level helpers for creating balance updates that maintain the accounting of funds.
-//!
-//! Exposes higher-level operations via the [cf_traits::StakeTransfer] and [cf_traits::Issuance] traits.
-//!
-//! ## Imbalances
-//!
-//! Imbalances are not very intuitive but the idea is this: if you want to manipulate the balance of FLIP in the
-//! system, there always need to be two equal and opposite [Imbalance]s. Any excess is reverted according to the
-//! implementation of [imbalances::RevertImbalance] when the imbalance is dropped.
-//!
-//! A [Deficit] means that there is an excess of funds *in the accounts* that needs to be reconciled. Either we have
-//! credited some funds to an account, or we have debited funds from some external source without putting them anywhere.
-//! Think of it like this: if we credit an account, we need to pay for it somehow. Either by debiting from another, or
-//! by minting some tokens, or by bridging them from outside (aka. staking).
-//!
-//! A [Surplus] is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
-//! an account has been debited some amount, or we have minted some tokens. These need to be allocated somewhere.
-//!
-//! ## Reserves
-//!
-//! Reserves can be thought of as on-chain accounts, however unlike accounts they have no public key associated. Instead,
-//! a reserve is identified by a four-byte [`ReserveId`]. Reserves can be used to allocate funds internally, for example
-//! for setting aside funds to be distributed as rewards, or for use as a treasury.
-//!
-//! ### Example
-//!
-//! A [burn](Pallet::burn) creates a [Deficit]: the total issuance has been reduced so we need a [Surplus] from
-//! somewhere that we can offset against this. Usually, we want to debit an account to burn (slash) funds. We may also
-//! want to burn funds that are held in a trading pool, for example. In this case we might withdraw from a pool to create
-//! a surplus to offset the burn. The pool's balance might be held in some reserve.
-//!
-//! If the [Deficit] created by the burn goes out of scope without being offset, the change is reverted, effectively
-//! minting the tokens and adding them back to the total issuance.
+#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod mock;

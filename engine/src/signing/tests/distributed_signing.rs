@@ -4,17 +4,16 @@ use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
 };
-use slog::o;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    logging::{self, COMPONENT_KEY},
+    logging,
     p2p::{
         self,
         mock::{MockChannelEventHandler, NetworkMock},
         AccountId,
     },
-    signing::db::KeyDBMock,
+    signing::KeyDBMock,
 };
 
 use lazy_static::lazy_static;
@@ -48,7 +47,6 @@ async fn coordinate_signing(
     active_indices: &[usize],
     logger: &slog::Logger,
 ) -> Result<(), ()> {
-    let logger = logger.new(o!(COMPONENT_KEY => "CoordinateSigning"));
     // get a keygen request ready with all of the VALIDATOR_IDS
     let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 
@@ -81,26 +79,27 @@ async fn coordinate_signing(
         panic!("Expecting a successful keygen result");
     };
 
-    // get a signing request ready with the list of signer_ids
-    let sign_info = SigningInfo::new(key_id, signer_ids);
-
     // Only some clients should receive the instruction to sign
     for i in active_indices {
         let n = &nodes[*i];
 
         n.multisig_instruction_tx
-            .send(MultisigInstruction::Sign(
+            .send(MultisigInstruction::Sign(SigningInfo::new(
+                0, /* ceremony_id */
+                key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE.clone()),
-                sign_info.clone(),
-            ))
+                signer_ids.clone(),
+            )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
 
         n.multisig_instruction_tx
-            .send(MultisigInstruction::Sign(
+            .send(MultisigInstruction::Sign(SigningInfo::new(
+                1, /* ceremony_id */
+                key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE2.clone()),
-                sign_info.clone(),
-            ))
+                signer_ids.clone(),
+            )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
     }
@@ -172,6 +171,7 @@ async fn distributed_signing() {
 
     // Start the futures for each node
     let mut node_client_and_conductor_futs = vec![];
+
     let mut shutdown_txs = vec![];
     let mut fake_nodes = vec![];
     for i in 0..N_PARTIES {

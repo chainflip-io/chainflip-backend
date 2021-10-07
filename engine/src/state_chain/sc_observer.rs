@@ -4,9 +4,8 @@ use pallet_cf_vaults::{
     KeygenResponse, ThresholdSignatureResponse,
 };
 use slog::o;
-use sp_core::Hasher;
-use sp_runtime::{traits::Keccak256, AccountId32};
-use std::sync::Arc;
+use sp_runtime::AccountId32;
+use std::{convert::TryInto, sync::Arc};
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -120,6 +119,11 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
+                            slog::trace!(
+                                logger,
+                                "Sending new key back to the State Chain {:?}",
+                                response
+                            );
                             let mut signer = signer.lock().await;
                             match subxt_client
                                 .witness_keygen_response(
@@ -138,35 +142,23 @@ pub async fn start(
                                 }
                             }
                         }
-                        ThresholdSignatureRequestEvent(threshold_sig_requst) => {
-                            let signers: Vec<_> = threshold_sig_requst
-                                .threshold_signature_request
+                        ThresholdSignatureRequestEvent(event) => {
+                            let req = event.threshold_signature_request;
+
+                            let signers: Vec<_> = req
                                 .validators
                                 .iter()
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let sign_tx =
-                                MultisigInstruction::Sign(
-                                    // TODO: The hashing of the payload should be done on the SC
-                                    // https://github.com/chainflip-io/chainflip-backend/issues/446
-                                    MessageHash(
-                                        Keccak256::hash(
-                                            &threshold_sig_requst
-                                                .threshold_signature_request
-                                                .payload[..],
-                                        )
-                                        .0,
-                                    ),
-                                    SigningInfo::new(
-                                        KeyId(
-                                            threshold_sig_requst
-                                                .threshold_signature_request
-                                                .public_key,
-                                        ),
-                                        signers,
-                                    ),
-                                );
+                            let message_hash: [u8; 32] =
+                                req.payload.try_into().expect("Should be a 32 byte hash");
+                            let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
+                                event.ceremony_id,
+                                KeyId(req.public_key),
+                                MessageHash(message_hash),
+                                signers,
+                            ));
 
                             // The below will be replaced with one shot channels
                             multisig_instruction_sender
@@ -183,9 +175,10 @@ pub async fn start(
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
                                             pallet_cf_vaults::SchnorrSigTruncPubkey,
-                                        >::Success(
-                                            sig.into()
-                                        ),
+                                        >::Success {
+                                            message_hash,
+                                            signature: sig.into(),
+                                        },
                                         Err((err, bad_account_ids)) => {
                                             slog::error!(
                                                 logger,
@@ -212,7 +205,7 @@ pub async fn start(
                             match subxt_client
                                 .witness_threshold_signature_response(
                                     &*signer,
-                                    threshold_sig_requst.ceremony_id,
+                                    event.ceremony_id,
                                     response,
                                 )
                                 .await
@@ -221,7 +214,7 @@ pub async fn start(
                                 Err(e) => {
                                     slog::error!(
                                         logger,
-                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", threshold_sig_requst.ceremony_id, e
+                                        "Could not submit witness_threshold_signature_response for ceremony_id {}: {}", event.ceremony_id, e
                                     )
                                 }
                             }
@@ -278,8 +271,6 @@ pub async fn start(
                                         }
                                     }
                                 }
-                                // Leave this to be explicit about future chains being added
-                                ChainParams::Other(_) => panic!("Chain::Other does not exist"),
                             }
                         }
                     },

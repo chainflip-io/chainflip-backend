@@ -45,6 +45,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
@@ -58,11 +61,6 @@ use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, OpaqueKeys};
 use sp_std::prelude::*;
-
-pub trait WeightInfo {
-	fn set_blocks_for_epoch() -> Weight;
-	fn force_rotation() -> Weight;
-}
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;

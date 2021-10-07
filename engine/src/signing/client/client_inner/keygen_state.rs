@@ -2,11 +2,9 @@ use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
-use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    logging::SIGNING_SUB_COMPONENT,
     p2p::{AccountId, P2PMessageCommand},
     signing::{
         client::client_inner::{
@@ -81,7 +79,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "KeygenState")),
+            logger: logger.new(slog::o!("ceremony_id" => ceremony_id)),
         };
 
         state.initiate_keygen_inner();
@@ -113,9 +111,10 @@ impl KeygenState {
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
-        // Should be safe to unwrap because the `idx` is carefully
-        // chosen by our on module
-        let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
+        let id = self
+            .maps_for_validator_id_and_idx
+            .get_id(idx)
+            .expect("Idx carefully chosen by our own module");
         id
     }
 
@@ -205,12 +204,7 @@ impl KeygenState {
     }
 
     fn initiate_keygen_inner(&mut self) {
-        slog::trace!(
-            self.logger,
-            "[{}] Initiating keygen for key {:?}",
-            self.us(),
-            self.ceremony_id
-        );
+        slog::trace!(self.logger, "Initiating keygen");
 
         let bc1 = self.sss.init_phase1();
 
@@ -233,7 +227,7 @@ impl KeygenState {
                     .map(|(idx, secret2)| {
                         let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, secret2);
                         let secret2 = MultisigMessage::from(wrapped);
-                        let data = serde_json::to_vec(&secret2).unwrap();
+                        let data = bincode::serialize(&secret2).unwrap();
                         MessageToSend { to_idx: idx, data }
                     })
                     .collect_vec();
@@ -249,8 +243,7 @@ impl KeygenState {
 
                 slog::error!(
                     self.logger,
-                    "phase2 keygen error for key: {:?}, blamed validators: {:?}",
-                    self.ceremony_id,
+                    "Phase 2 keygen error, blamed validators: {:?}",
                     // TODO: this should log the base58 ids
                     &blamed_ids
                 );
@@ -266,7 +259,7 @@ impl KeygenState {
     fn finalize_phase2(&mut self) -> Option<KeygenResultInfo> {
         match self.sss.finalize_phase2() {
             Ok(key) => {
-                slog::info!(self.logger, "[{}] SHARED KEY IS READY 👍", self.us());
+                slog::info!(self.logger, "SIGNING SHARED KEY IS READY: {:?} 👍", key);
 
                 self.stage = KeygenStage::KeyReady;
 
@@ -279,11 +272,7 @@ impl KeygenState {
                 return Some(key_info);
             }
             Err(InvalidSS(blamed_idxs)) => {
-                slog::error!(
-                    self.logger,
-                    "Invalid Phase2 keygen data, abandoning state for key: {:?}",
-                    self.ceremony_id
-                );
+                slog::error!(self.logger, "Invalid Phase2 keygen data, abandoning state");
                 self.stage = KeygenStage::Abandoned;
 
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
@@ -343,7 +332,7 @@ impl KeygenState {
 
             let message = P2PMessageCommand {
                 destination,
-                data: serde_json::to_vec(&msg).unwrap(),
+                data: bincode::serialize(&msg).unwrap(),
             };
 
             let event = InnerEvent::P2PMessageCommand(message);

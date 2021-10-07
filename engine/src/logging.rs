@@ -1,8 +1,6 @@
 // ==== Logging key constants ====
 pub const COMPONENT_KEY: &str = "component";
 
-pub const SIGNING_SUB_COMPONENT: &str = "signing-sub-component";
-
 pub mod utils {
     use slog::{o, Drain, Fuse, Level, OwnedKVList, Record};
     use std::result;
