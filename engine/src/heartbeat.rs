@@ -71,13 +71,9 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::create_test_logger();
 
-        let (_account_id, state_chain_client, _event_stream, block_stream) = connect_to_state_chain(&settings).await.unwrap();
+        let (_account_id, state_chain_client, _event_stream, block_stream) =
+            connect_to_state_chain(&settings).await.unwrap();
 
-        start(
-            state_chain_client,
-            block_stream,
-            &logger,
-        )
-        .await;
+        start(state_chain_client, block_stream, &logger).await;
     }
 }

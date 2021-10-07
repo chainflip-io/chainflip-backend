@@ -25,8 +25,8 @@ pub mod interface {
     use frame_support::unsigned::TransactionValidityError;
     use frame_system::Phase;
     use futures::compat::{Future01CompatExt, Stream01CompatExt};
-    use futures::{Stream, TryFutureExt};
     use futures::StreamExt;
+    use futures::{Stream, TryFutureExt};
     use sp_core::{
         storage::{StorageChangeSet, StorageKey},
         twox_128, Bytes, Pair,
@@ -157,11 +157,7 @@ pub mod interface {
         author_rpc_client: AuthorRpcClient,
     }
     impl StateChainClient {
-        pub async fn submit_extrinsic<Extrinsic>(
-            &self,
-            logger: &slog::Logger,
-            extrinsic: Extrinsic,
-        )
+        pub async fn submit_extrinsic<Extrinsic>(&self, logger: &slog::Logger, extrinsic: Extrinsic)
         where
             state_chain_runtime::Call: std::convert::From<Extrinsic>,
             Extrinsic: std::fmt::Debug + Clone,
@@ -177,19 +173,26 @@ pub mod interface {
                     state_chain_runtime::Call::from(extrinsic.clone()).encode(),
                 ),
                 &self.signer,
-            ).map_err(anyhow::Error::new).and_then(|signed_extrinic| {
-                self
-                    .author_rpc_client
+            )
+            .map_err(anyhow::Error::new)
+            .and_then(|signed_extrinic| {
+                self.author_rpc_client
                     .submit_extrinsic(Bytes::from(signed_extrinic.encode()))
                     .compat()
                     .map_err(anyhow::Error::msg)
-            }).await
+            })
+            .await
             {
                 Ok(_) => {
                     *nonce += 1;
                 }
                 Err(error) => {
-                    slog::error!(logger, "Could not submit extrinsic: {:?}, {}", extrinsic, error);
+                    slog::error!(
+                        logger,
+                        "Could not submit extrinsic: {:?}, {}",
+                        extrinsic,
+                        error
+                    );
                 }
             }
         }
