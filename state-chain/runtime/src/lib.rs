@@ -449,7 +449,7 @@ construct_runtime!(
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
 		Auctioneer: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
-		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
+		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},

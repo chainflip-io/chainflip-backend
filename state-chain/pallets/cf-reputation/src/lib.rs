@@ -52,6 +52,7 @@ use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
 use sp_runtime::traits::Zero;
+use sp_std::vec::Vec;
 
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -274,16 +275,18 @@ pub mod pallet {
 		/// block number they will earn reputation points based on the accrual ratio.
 		///
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+
+			// If the validator doesn't exist we insert in the map and continue
+			// If present we confirm they have already submitted or not
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
-				!ValidatorsLiveness::<T>::get(&validator_id)
-					.unwrap_or(SUBMITTED)
-					.has_submitted(),
+				!ValidatorsLiveness::<T>::get(&validator_id).unwrap_or_default().has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
+
 			// Update this validator from the hot list
 			ValidatorsLiveness::<T>::mutate(&validator_id, |maybe_liveness| {
 				if let Some(mut liveness) = *maybe_liveness {

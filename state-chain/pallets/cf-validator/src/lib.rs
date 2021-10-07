@@ -203,18 +203,23 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig<T: Config> {
+		pub blocks_per_epoch: T::BlockNumber
+	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {}
+			Self {
+				blocks_per_epoch: Zero::zero(),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			if let Some(auction_result) = T::Auction::auction_result() {
 				T::EpochTransitionHandler::on_new_epoch(
 					&auction_result.winners,

@@ -137,7 +137,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
-		<ReputationPallet as EpochTransitionHandler>::on_new_epoch(&vec![ALICE], 0);
 		System::set_block_number(1);
 	});
 

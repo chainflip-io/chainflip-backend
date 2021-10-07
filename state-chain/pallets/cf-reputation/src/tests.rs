@@ -200,6 +200,7 @@ mod tests {
 	#[test]
 	fn missing_a_heartbeat_submission_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
+			ReputationPallet::heartbeat(Origin::signed(ALICE));
 			// We are starting out with zero points
 			assert_eq!(reputation_points(ALICE), 0);
 			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
@@ -312,7 +313,6 @@ mod tests {
 				number_of_accruals as i32 * ACCRUAL_POINTS
 			);
 			// Rotation to Bob
-			ReputationPallet::on_new_epoch(&vec![BOB], 0);
 			submit_heartbeats_for_accrual_blocks(BOB, number_of_accruals);
 			assert_eq!(
 				reputation_points(ALICE),
@@ -342,11 +342,6 @@ mod tests {
 	#[test]
 	fn should_trigger_an_emergency_rotation_when_we_drop_to_less_than_eighty_percent() {
 		new_test_ext().execute_with(|| {
-			<ReputationPallet as EpochTransitionHandler>::on_new_epoch(
-				&vec![ALICE, BOB, CHARLIE, DAVE, ERIN],
-				Zero::zero(),
-			);
-
 			run_heartbeat_intervals(vec![ALICE, CHARLIE, BOB, DAVE, ERIN], 1);
 			assert!(<ReputationPallet as Online>::is_online(&ALICE));
 			assert!(<ReputationPallet as Online>::is_online(&BOB));

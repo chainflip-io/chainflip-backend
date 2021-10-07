@@ -318,7 +318,9 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {}),
+		pallet_cf_validator: Some(ValidatorConfig {
+			blocks_per_block: 7 * DAYS,
+		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
 				.iter()
