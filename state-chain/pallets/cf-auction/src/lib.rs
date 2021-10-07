@@ -46,7 +46,7 @@ pub use weights::WeightInfo;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auctioneer, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online,
+	AuctionError, AuctionPhase, AuctionRange, Auctioneer, BidderProvider, Online,
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
