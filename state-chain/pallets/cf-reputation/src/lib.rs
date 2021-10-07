@@ -182,6 +182,7 @@ pub mod pallet {
 	}
 
 	type Liveness = u8;
+	const NOT_SUBMITTED: u8 = 0;
 	const SUBMITTED: u8 = 1;
 
 	/// Liveness bitmap tracking intervals
@@ -385,10 +386,6 @@ pub mod pallet {
 				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
-			// A list of those we expect to be online, which are our set of validators
-			for validator_id in T::EpochInfo::current_validators().iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, SUBMITTED);
-			}
 		}
 	}
 
@@ -404,7 +401,7 @@ pub mod pallet {
 			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from
 			for validator_id in new_validators.iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, SUBMITTED);
+				ValidatorsLiveness::<T>::insert(validator_id, NOT_SUBMITTED);
 			}
 		}
 	}
