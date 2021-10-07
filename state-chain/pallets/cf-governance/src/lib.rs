@@ -154,7 +154,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Propose a governance ensured extrinsic
+		/// Propose a governance ensured extrinsic.
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
 		#[pallet::weight(10_000)]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -184,7 +188,15 @@ pub mod pallet {
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
-		/// Sets a new set of governance members
+
+		/// **Can only be called via the Governance Origin**
+		///
+		/// Sets a new set of governance members. Note that this can be called with an empty vector
+		/// to remove the possibility to govern the chain at all.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](Error::BadOrigin): the caller is not the Governance Origin.
 		#[pallet::weight(10_000)]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -196,7 +208,14 @@ pub mod pallet {
 			<Members<T>>::put(accounts);
 			Ok(().into())
 		}
-		/// Approve a proposal by a given proposal id
+
+		/// Approve a proposal.
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
+		/// - [ProposalNotFound](Error::ProposalNotFound): there is no Proposal with this `id`.
+		/// - [AlreadyApproved](Error::AlreadyApproved): this Governance Member has already approved this Proposal.
 		#[pallet::weight(10_000)]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -212,7 +231,15 @@ pub mod pallet {
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
-		/// Execute the proposal
+
+		/// Execute a proposal
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
+		/// - [ProposalNotFound](Error::ProposalNotFound): there is no Proposal with this `id`.
+		/// - [DecodeOfCallFailed](Error::DecodeOfCallFailed): the call is not a valid extrinsic submission.
+		/// - [MajorityNotReached](Error::MajorityNotReached): the Proposal has not achieved Quorum.
 		#[pallet::weight(10_000)]
 		pub fn execute(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -228,7 +255,14 @@ pub mod pallet {
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
+
+		/// **Can only be called via the Governance Origin**
+		///
 		/// Execute an extrinsic as root
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](Error::BadOrigin): the caller is not the Governance Origin.
 		#[pallet::weight(10_000)]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
