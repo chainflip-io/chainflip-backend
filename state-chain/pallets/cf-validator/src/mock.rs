@@ -32,6 +32,9 @@ impl AuctionWeightTrait for AuctionWeight {
 	}
 }
 
+pub const MIN_VALIDATOR_SIZE: u32 = 1;
+pub const MAX_VALIDATOR_SIZE: u32 = 3;
+
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
@@ -107,7 +110,7 @@ impl pallet_session::Config for Test {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 2;
+	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = 3;
 }
 
