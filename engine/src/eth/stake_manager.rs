@@ -1,7 +1,7 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use crate::state_chain::sc_observer::interface::StateChainClient;
+use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{

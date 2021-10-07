@@ -1,4 +1,4 @@
-use crate::state_chain::sc_observer::interface::StateChainClient;
+use crate::state_chain::client::StateChainClient;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -61,7 +61,7 @@ pub async fn start<BlockStream>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{logging, settings, state_chain::sc_observer::interface::connect_to_state_chain};
+    use crate::{logging, settings, state_chain::client::connect_to_state_chain};
 
     use super::*;
 

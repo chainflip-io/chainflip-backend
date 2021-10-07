@@ -26,7 +26,7 @@ async fn main() {
         .await;
 
     let (account_id, sc_state_chain_client, sc_event_stream, sc_block_stream) =
-        state_chain::sc_observer::interface::connect_to_state_chain(&settings)
+        state_chain::client::connect_to_state_chain(&settings)
             .await
             .unwrap();
 

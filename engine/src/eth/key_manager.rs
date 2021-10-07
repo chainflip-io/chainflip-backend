@@ -1,7 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use crate::state_chain::sc_observer::interface::StateChainClient;
+use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
