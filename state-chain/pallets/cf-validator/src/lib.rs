@@ -55,7 +55,7 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo, EpochTransitionHandler};
+use cf_traits::{Auctioneer, AuctionPhase, EmergencyRotation, EpochInfo, EpochTransitionHandler};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -100,7 +100,7 @@ pub mod pallet {
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// An auction type
-		type Auction: Auction<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auction: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	#[pallet::event]

@@ -112,7 +112,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
 /// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
-pub trait Auction {
+pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
