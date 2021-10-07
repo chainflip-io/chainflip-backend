@@ -6,6 +6,7 @@ use frame_system::Phase;
 use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::StreamExt;
 use futures::{Stream, TryFutureExt};
+use itertools::Itertools;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     twox_128, Bytes, Pair,
@@ -128,8 +129,10 @@ pub struct StateChainClient {
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
     nonce: Mutex<<RuntimeImplForSigningExtrinsics as System>::Index>,
-    signer: substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
+    pub signer:
+        substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
+    state_rpc_client: StateRpcClient,
 }
 impl StateChainClient {
     pub async fn submit_extrinsic<Extrinsic>(&self, logger: &slog::Logger, extrinsic: Extrinsic)
@@ -169,14 +172,50 @@ impl StateChainClient {
             }
         }
     }
+    pub async fn events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<Vec<EventInfo>> {
+        let system_event_storage_key = vec![StorageKey(
+            std::array::IntoIter::new([
+                std::array::IntoIter::new(twox_128(b"System")),
+                std::array::IntoIter::new(twox_128(b"Events")),
+            ])
+            .flatten()
+            .collect::<Vec<_>>(),
+        )];
+
+        self.state_rpc_client
+            .query_storage_at(system_event_storage_key, Some(block_header.hash()))
+            .compat()
+            .await
+            .map_err(anyhow::Error::msg)?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            Vec::<(
+                                Phase,
+                                state_chain_runtime::Event,
+                                Vec<state_chain_runtime::Hash>,
+                            )>::decode(&mut &data.0[..])
+                            .map_err(anyhow::Error::msg)
+                        })
+                    })
+                    .flatten_ok()
+            })
+            .flatten()
+            .collect::<Result<Vec<_>>>()
+    }
 }
 
 pub async fn connect_to_state_chain(
     settings: &settings::Settings,
 ) -> Result<(
-    <RuntimeImplForSigningExtrinsics as System>::AccountId,
     Arc<StateChainClient>,
-    impl Stream<Item = Result<EventInfo>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
 )> {
     use substrate_subxt::Signer;
@@ -204,13 +243,13 @@ pub async fn connect_to_state_chain(
             .map_err(anyhow::Error::msg)?;
 
     let chain_rpc_client =
-		crate::common::alt_jsonrpc_connect::connect::<ChainRpcClient>(rpc_server_url)
+        crate::common::alt_jsonrpc_connect::connect::<ChainRpcClient>(rpc_server_url)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?;
 
     let state_rpc_client =
-		crate::common::alt_jsonrpc_connect::connect::<StateRpcClient>(rpc_server_url)
+        crate::common::alt_jsonrpc_connect::connect::<StateRpcClient>(rpc_server_url)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?;
@@ -224,118 +263,54 @@ pub async fn connect_to_state_chain(
     )?)?;
 
     Ok((
-        signer.account_id().clone(),
-        {
-            Arc::new(StateChainClient {
-                metadata,
-                runtime_version: state_rpc_client
-                    .runtime_version(None)
-                    .compat()
-                    .await
-                    .map_err(anyhow::Error::msg)?,
-                genesis_hash: match chain_rpc_client
-                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                    .compat()
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                {
-                    sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
-                    _ => Err(anyhow::Error::msg("Genesis block doesn't exist?")),
-                }?,
-                nonce: Mutex::new({
-                    let account_info: frame_system::AccountInfo<
-                        <RuntimeImplForSigningExtrinsics as System>::Index,
-                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
-                    > = Decode::decode(
-                        &mut &state_rpc_client
-                            .storage(
-                                StorageKey(
-                                    std::array::IntoIter::new([
-                                        std::array::IntoIter::new(twox_128(b"System")),
-                                        std::array::IntoIter::new(twox_128(b"Account")),
-                                        std::array::IntoIter::new(twox_128(
-                                            &signer.account_id().encode()[..],
-                                        )),
-                                    ])
-                                    .flatten()
-                                    .collect::<Vec<_>>(),
-                                ),
-                                None,
-                            )
-                            .compat()
-                            .await
-                            .map_err(anyhow::Error::msg)?
-                            .ok_or(anyhow::Error::msg("Account doesn't exist"))?
-                            .0[..],
-                    )?;
-                    account_info.nonce
-                }),
-                signer,
-                author_rpc_client,
-            })
-        },
-        // TODO: Remove duplicate finalized header subscriptions (By merging the heartbeat into the sc_observer)
-        {
-            let system_event_storage_key = vec![StorageKey(
-                std::array::IntoIter::new([
-                    std::array::IntoIter::new(twox_128(b"System")),
-                    std::array::IntoIter::new(twox_128(b"Events")),
-                ])
-                .flatten()
-                .collect::<Vec<_>>(),
-            )];
-
-            chain_rpc_client
-                .subscribe_finalized_heads()
+        Arc::new(StateChainClient {
+            metadata,
+            runtime_version: state_rpc_client
+                .runtime_version(None)
+                .compat()
+                .await
+                .map_err(anyhow::Error::msg)?,
+            genesis_hash: match chain_rpc_client
+                .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
                 .compat()
                 .await
                 .map_err(anyhow::Error::msg)?
-                .compat()
-                .then(move |result_header| {
-                    let state_rpc_client = state_rpc_client.clone();
-                    let system_event_storage_key = system_event_storage_key.clone();
-                    async move {
-                        use itertools::Itertools;
-                        tokio_stream::iter(
-                            std::iter::once(match result_header {
-                                Ok(header) => state_rpc_client
-                                    .query_storage_at(system_event_storage_key, Some(header.hash()))
-                                    .compat()
-                                    .await
-                                    .map_err(anyhow::Error::msg)
-                                    .map(|storage_change_sets| {
-                                        storage_change_sets
-                                            .into_iter()
-                                            .map(|storage_change_set| {
-                                                let StorageChangeSet { block: _, changes } =
-                                                    storage_change_set;
-                                                changes
-                                                    .into_iter()
-                                                    .filter_map(|(_storage_key, option_data)| {
-                                                        option_data.map(|data| {
-                                                            Vec::<(
-                                                                Phase,
-                                                                state_chain_runtime::Event,
-                                                                Vec<state_chain_runtime::Hash>,
-                                                            )>::decode(
-                                                                &mut &data.0[..]
-                                                            )
-                                                            .map_err(anyhow::Error::msg)
-                                                        })
-                                                    })
-                                                    .flatten_ok()
-                                            })
-                                            .flatten()
-                                    }),
-                                Err(error) => Err(anyhow::Error::msg(error)),
-                            })
-                            .flatten_ok()
-                            .map(|result_result| result_result.and_then(std::convert::identity)),
+            {
+                sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
+                _ => Err(anyhow::Error::msg("Genesis block doesn't exist?")),
+            }?,
+            nonce: Mutex::new({
+                let account_info: frame_system::AccountInfo<
+                    <RuntimeImplForSigningExtrinsics as System>::Index,
+                    <RuntimeImplForSigningExtrinsics as System>::AccountData,
+                > = Decode::decode(
+                    &mut &state_rpc_client
+                        .storage(
+                            StorageKey(
+                                std::array::IntoIter::new([
+                                    std::array::IntoIter::new(twox_128(b"System")),
+                                    std::array::IntoIter::new(twox_128(b"Account")),
+                                    std::array::IntoIter::new(twox_128(
+                                        &signer.account_id().encode()[..],
+                                    )),
+                                ])
+                                .flatten()
+                                .collect::<Vec<_>>(),
+                            ),
+                            None,
                         )
-                    }
-                })
-                .flatten()
-        },
+                        .compat()
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                        .ok_or(anyhow::Error::msg("Account doesn't exist"))?
+                        .0[..],
+                )?;
+                account_info.nonce
+            }),
+            signer,
+            author_rpc_client,
+            state_rpc_client,
+        }),
         chain_rpc_client
             .subscribe_finalized_heads()
             .compat()

@@ -1,13 +1,13 @@
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
-    heartbeat,
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::Settings,
     signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     state_chain,
 };
 use slog::{o, Drain};
+use substrate_subxt::Signer;
 
 #[tokio::main]
 async fn main() {
@@ -25,10 +25,11 @@ async fn main() {
         .run()
         .await;
 
-    let (account_id, sc_state_chain_client, sc_event_stream, sc_block_stream) =
+    let (state_chain_client, state_chain_block_stream) =
         state_chain::client::connect_to_state_chain(&settings)
             .await
             .unwrap();
+    let account_id = AccountId(*state_chain_client.signer.account_id().as_ref()); /*TODO: Use the correct sc types*/
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
@@ -56,7 +57,7 @@ async fn main() {
     tokio::join!(
         // Start signing components
         signing::start(
-            AccountId(*account_id.as_ref()), /*TODO*/
+            account_id.clone(),
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
@@ -71,7 +72,7 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                AccountId(*account_id.as_ref()) /*TODO*/
+                account_id
             )
             .await
             .expect("unable to connect p2p rpc client"),
@@ -80,12 +81,11 @@ async fn main() {
             p2p_shutdown_rx,
             &root_logger.clone()
         ),
-        heartbeat::start(sc_state_chain_client.clone(), sc_block_stream, &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
             &settings,
-            sc_state_chain_client.clone(),
-            sc_event_stream,
+            state_chain_client.clone(),
+            state_chain_block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
@@ -95,7 +95,7 @@ async fn main() {
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,
-            sc_state_chain_client.clone(),
+            state_chain_client.clone(),
             &root_logger
         )
         .await
@@ -103,7 +103,7 @@ async fn main() {
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
-            sc_state_chain_client.clone(),
+            state_chain_client.clone(),
             &root_logger
         )
         .await
