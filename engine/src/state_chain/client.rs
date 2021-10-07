@@ -198,19 +198,19 @@ pub async fn connect_to_state_chain(
     // TODO connect only once
 
     let author_rpc_client =
-        crate::p2p::rpc::alt_jsonrpc_connect::connect::<AuthorRpcClient>(rpc_server_url)
+        crate::common::alt_jsonrpc_connect::connect::<AuthorRpcClient>(rpc_server_url)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?;
 
     let chain_rpc_client =
-        crate::p2p::rpc::alt_jsonrpc_connect::connect::<ChainRpcClient>(rpc_server_url)
+		crate::common::alt_jsonrpc_connect::connect::<ChainRpcClient>(rpc_server_url)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?;
 
     let state_rpc_client =
-        crate::p2p::rpc::alt_jsonrpc_connect::connect::<StateRpcClient>(rpc_server_url)
+		crate::common::alt_jsonrpc_connect::connect::<StateRpcClient>(rpc_server_url)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?;
