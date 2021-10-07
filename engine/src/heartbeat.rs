@@ -1,26 +1,27 @@
-use crate::common::Mutex;
+use crate::state_chain::sc_observer::interface::StateChainClient;
 use std::sync::Arc;
 
+use anyhow::Result;
+use futures::{Stream, StreamExt};
 use slog::o;
-use substrate_subxt::{Client, PairSigner};
 
 use crate::logging::COMPONENT_KEY;
-use crate::state_chain::runtime::StateChainRuntime;
-
-use crate::state_chain::pallets::reputation::HeartbeatCallExt;
 
 /// Starts the CFE heartbeat.
 /// Submits a heartbeat to the SC on start up and then every HeartbeatBlockInterval / 2 blocks
-pub async fn start(
-    subxt_client: Client<StateChainRuntime>,
-    signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
+pub async fn start<BlockStream>(
+    state_chain_client: Arc<StateChainClient>,
+    block_stream: BlockStream,
     logger: &slog::Logger,
-) {
+) where
+    BlockStream: Stream<Item = Result<state_chain_runtime::Header>>,
+{
     let logger = logger.new(o!(COMPONENT_KEY => "Heartbeat"));
     slog::info!(logger, "Starting");
 
-    let heartbeat_block_interval = subxt_client
-        .metadata()
+    // TODO: Could this a be a constant shared between the state chain and the cfe, to avoid needing to load it
+    let heartbeat_block_interval = state_chain_client
+        .metadata
         .module("Reputation")
         .expect("No module 'Reputation' in chain metadata")
         .constant("HeartbeatBlockInterval")
@@ -28,24 +29,9 @@ pub async fn start(
         .value::<u32>()
         .expect("Could not decode HeartbeatBlockInterval to u32");
 
-    async fn submit_heartbeat(
-        subxt_client: &Client<StateChainRuntime>,
-        signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
-        logger: &slog::Logger,
-    ) {
-        let mut signer = signer.lock().await;
-        match subxt_client.heartbeat(&*signer).await {
-            Ok(_) => {
-                slog::info!(logger, "Sent heartbeat successfully");
-                signer.increment_nonce();
-            }
-            Err(e) => {
-                slog::error!(logger, "Failed to submit heartbeat: {:?}", e);
-            }
-        }
-    }
-
-    submit_heartbeat(&subxt_client, signer.clone(), &logger).await;
+    state_chain_client
+        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+        .await;
 
     slog::info!(
         logger,
@@ -53,30 +39,29 @@ pub async fn start(
         heartbeat_block_interval,
     );
 
-    let mut blocks = subxt_client
-        .subscribe_finalized_blocks()
-        .await
-        .expect("Should subscribe to finalised blocks");
-
-    while let Some(block_header) = blocks.next().await {
-        // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-        if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
-            slog::info!(
-                logger,
-                "Sending heartbeat at block: {}",
-                block_header.number
-            );
-            submit_heartbeat(&subxt_client, signer.clone(), &logger).await
+    let mut block_stream = Box::pin(block_stream);
+    while let Some(result_block_header) = block_stream.next().await {
+        if let Ok(block_header) = result_block_header {
+            // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
+            if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
+                == 0
+            {
+                slog::info!(
+                    logger,
+                    "Sending heartbeat at block: {}",
+                    block_header.number
+                );
+                state_chain_client
+                    .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+                    .await;
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use sp_keyring::AccountKeyring;
-    use substrate_subxt::ClientBuilder;
-
-    use crate::{logging, settings};
+    use crate::{logging, settings, state_chain::sc_observer::interface::connect_to_state_chain};
 
     use super::*;
 
@@ -86,16 +71,11 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::create_test_logger();
 
-        let alice = AccountKeyring::Alice.pair();
-        let pair_signer = Arc::new(Mutex::new(PairSigner::new(alice)));
+        let (_account_id, state_chain_client, _event_stream, block_stream) = connect_to_state_chain(&settings).await.unwrap();
 
         start(
-            ClientBuilder::<StateChainRuntime>::new()
-                .set_url(&settings.state_chain.ws_endpoint)
-                .build()
-                .await
-                .expect("Should create subxt client"),
-            pair_signer,
+            state_chain_client,
+            block_stream,
             &logger,
         )
         .await;

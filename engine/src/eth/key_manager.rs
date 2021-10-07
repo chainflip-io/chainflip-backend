@@ -1,15 +1,13 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use crate::common::Mutex;
+use crate::state_chain::sc_observer::interface::StateChainClient;
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::runtime::StateChainRuntime,
 };
 use std::sync::Arc;
-use substrate_subxt::{Client, PairSigner};
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
@@ -28,8 +26,7 @@ use slog::o;
 pub async fn start_key_manager_witness(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    _signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
-    _subxt_client: Client<StateChainRuntime>,
+    _state_chain_client: Arc<StateChainClient>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
@@ -44,6 +41,7 @@ pub async fn start_key_manager_witness(
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
+            // TODO: Handle unwraps
             match result_event.unwrap() {
                 KeyManagerEvent::KeyChange { tx_hash, .. } => {
                     slog::info!(logger, "Keychain event found: {}", hex::encode(tx_hash));

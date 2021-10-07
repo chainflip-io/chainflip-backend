@@ -1,19 +1,13 @@
-use std::sync::Arc;
-
 use chainflip_engine::{
-    common::Mutex,
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     heartbeat,
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::Settings,
     signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
-    state_chain::{self, runtime::StateChainRuntime},
+    state_chain,
 };
 use slog::{o, Drain};
-use sp_core::Pair;
-use std::{convert::TryInto, fs};
-use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
 async fn main() {
@@ -31,42 +25,10 @@ async fn main() {
         .run()
         .await;
 
-    let subxt_client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(&settings.state_chain.ws_endpoint)
-        .build()
-        .await
-        .expect("Could not create subxt client");
-
-    let key_pair = sp_core::sr25519::Pair::from_seed(&{
-        // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
-        // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
-        let seed: [u8; 32] = hex::decode(
-            &fs::read_to_string(&settings.state_chain.signing_key_file)
-                .expect("Cannot read state chain signing key file")
-                .replace("\"", ""),
-        )
-        .expect("Failed to decode seed")
-        .try_into()
-        .expect("Seed has wrong length");
-        seed
-    });
-
-    let pair_signer = {
-        use substrate_subxt::{system::AccountStoreExt, Signer};
-        let mut pair_signer = substrate_subxt::PairSigner::new(key_pair.clone());
-        let account_id = pair_signer.account_id();
-
-        // TODO If there's a tx made on this account *not* from this program, the nonce's will go out of sync
-        let nonce = subxt_client
-            .account(&account_id, None)
+    let (account_id, sc_state_chain_client, sc_event_stream, sc_block_stream) =
+        state_chain::sc_observer::interface::connect_to_state_chain(&settings)
             .await
-            .expect("Could not fetch account info")
-            .nonce;
-        slog::info!(root_logger, "Initial state chain nonce is: {}", nonce);
-        pair_signer.set_nonce(nonce);
-        // Allow in the future many witnessers to increment the nonce of this signer
-        Arc::new(Mutex::new(pair_signer))
-    };
+            .unwrap();
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
@@ -94,7 +56,7 @@ async fn main() {
     tokio::join!(
         // Start signing components
         signing::start(
-            AccountId(key_pair.public().0),
+            AccountId(*account_id.as_ref()), /*TODO*/
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
@@ -109,7 +71,7 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                AccountId(pair_signer.lock().await.signer().public().0)
+                AccountId(*account_id.as_ref()) /*TODO*/
             )
             .await
             .expect("unable to connect p2p rpc client"),
@@ -118,12 +80,12 @@ async fn main() {
             p2p_shutdown_rx,
             &root_logger.clone()
         ),
-        heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
+        heartbeat::start(sc_state_chain_client.clone(), sc_block_stream, &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
             &settings,
-            subxt_client.clone(),
-            pair_signer.clone(),
+            sc_state_chain_client.clone(),
+            sc_event_stream,
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
@@ -133,8 +95,7 @@ async fn main() {
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,
-            pair_signer.clone(),
-            subxt_client.clone(),
+            sc_state_chain_client.clone(),
             &root_logger
         )
         .await
@@ -142,8 +103,7 @@ async fn main() {
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
-            pair_signer.clone(),
-            subxt_client,
+            sc_state_chain_client.clone(),
             &root_logger
         )
         .await
