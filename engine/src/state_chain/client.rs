@@ -234,7 +234,7 @@ pub async fn connect_to_state_chain(
 
     let rpc_server_url = &url::Url::parse(settings.state_chain.ws_endpoint.as_str())?;
 
-    // TODO connect only once
+    // TODO connect only once (Using a single RpcChannel)
 
     let author_rpc_client =
         crate::common::alt_jsonrpc_connect::connect::<AuthorRpcClient>(rpc_server_url)
