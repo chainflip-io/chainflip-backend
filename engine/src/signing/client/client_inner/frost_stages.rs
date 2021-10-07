@@ -106,8 +106,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             .all_idxs
             .iter()
             .map(|idx| {
-                // All indexes should be present at this point.
-                self.commitments.get(&idx).cloned().unwrap()
+                self.commitments
+                    .get(&idx)
+                    .cloned()
+                    .expect("All indexes should be present here")
             })
             .collect();
 
@@ -219,8 +221,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             .all_idxs
             .iter()
             .map(|idx| {
-                // All indexes should be present at this point
-                self.local_sigs.get(&idx).cloned().unwrap()
+                self.local_sigs
+                    .get(&idx)
+                    .cloned()
+                    .expect("All indexes should be present here")
             })
             .collect();
 
@@ -299,13 +303,15 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
     'outer: for i in 0..num_parties {
         let mut value_counts = HashMap::<Vec<u8>, usize>::new();
         for m in verification_messages.values() {
-            let data = bincode::serialize(&m.data[i]).unwrap();
+            let data =
+                bincode::serialize(&m.data[i]).expect("Could not serialise broadcast message data");
             *value_counts.entry(data).or_default() += 1;
         }
 
         for (data, count) in value_counts {
             if count > threshold {
-                let data = bincode::deserialize(&data).unwrap();
+                let data = bincode::deserialize::<T>(&data)
+                    .expect("Could not deserialise broadcast message data");
                 agreed_on_values.push(data);
                 continue 'outer;
             }

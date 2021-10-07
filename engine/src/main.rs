@@ -138,7 +138,7 @@ async fn main() {
             &root_logger
         )
         .await
-        .unwrap(),
+        .expect("Could not start StakeManager witness"),
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
@@ -147,6 +147,6 @@ async fn main() {
             &root_logger
         )
         .await
-        .unwrap(),
+        .expect("Could not start KeyManager witness"),
     );
 }
