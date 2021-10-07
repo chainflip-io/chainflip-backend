@@ -90,7 +90,6 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_should_reward_reputation_points() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			let number_of_accruals = 10;
 			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
 			// Alice should now have 10 points
@@ -104,7 +103,6 @@ mod tests {
 	#[test]
 	fn missing_heartbeats_should_see_loss_of_reputation_points() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(reputation_points(ALICE), 0);
 			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
 			submit_heartbeats_for_accrual_blocks(ALICE, 1);
@@ -127,7 +125,6 @@ mod tests {
 	#[test]
 	fn missing_heartbeats_should_see_slashing_when_we_hit_negative() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(reputation_points(ALICE), 0);
 			let expected_slashes = 10;
 			for _ in 0..expected_slashes {
@@ -141,7 +138,6 @@ mod tests {
 	#[test]
 	fn updating_accrual_rate_should_affect_reputation_points() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(
 					Origin::signed(ALICE),
@@ -204,10 +200,9 @@ mod tests {
 	#[test]
 	fn missing_a_heartbeat_submission_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
-			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
 			// We are starting out with zero points
 			assert_eq!(reputation_points(ALICE), 0);
+			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
 			// Interval 1 - with no heartbeat we will lose `points` per `block`
 			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(
@@ -310,7 +305,6 @@ mod tests {
 	#[test]
 	fn on_new_epoch_should_see_new_set_of_validators_and_those_before_maintain_reputation() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			let number_of_accruals = 10;
 			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
 			assert_eq!(
@@ -348,7 +342,6 @@ mod tests {
 	#[test]
 	fn should_trigger_an_emergency_rotation_when_we_drop_to_less_than_eighty_percent() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			<ReputationPallet as EpochTransitionHandler>::on_new_epoch(
 				&vec![ALICE, BOB, CHARLIE, DAVE, ERIN],
 				Zero::zero(),
