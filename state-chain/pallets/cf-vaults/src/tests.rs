@@ -2,7 +2,7 @@ mod tests {
 	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
 	use crate::*;
-	use frame_support::{assert_err, assert_ok};
+	use frame_support::{assert_err, assert_noop, assert_ok};
 	use sp_core::Hasher;
 	use sp_runtime::traits::Keccak256;
 
@@ -19,9 +19,9 @@ mod tests {
 	fn keygen_request() {
 		new_test_ext().execute_with(|| {
 			// An empty set and an error is thrown back, request index 1
-			assert_eq!(
+			assert_noop!(
 				VaultsPallet::start_vault_rotation(vec![]),
-				Err(RotationError::EmptyValidatorSet)
+				Error::<MockRuntime>::EmptyValidatorSet
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment

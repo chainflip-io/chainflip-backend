@@ -1759,21 +1759,6 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "13.0.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=a53cb47#a53cb47d43cd89434a2228f95695da2dc01f036b"
-dependencies = [
- "anyhow",
- "ethereum-types 0.11.0",
- "hex",
- "serde 1.0.126",
- "serde_json",
- "sha3 0.9.1",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
 version = "14.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c52991643379afc90bfe2df3c64d53983e59c35a82ba6e75c997cfc2880d8524"
@@ -5013,12 +4998,11 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 13.0.0",
  "frame-support",
  "frame-system",
  "hex",
- "log 0.4.14",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",

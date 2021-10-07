@@ -136,38 +136,19 @@ pub trait VaultRotationHandler {
 	fn penalise(bad_validators: Vec<Self::ValidatorId>);
 }
 
-/// Errors occurring during a rotation
-#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
-pub enum RotationError<ValidatorId> {
-	/// An invalid request index
-	InvalidCeremonyId,
-	/// Empty validator set provided
-	EmptyValidatorSet,
-	/// A set of badly acting validators
-	BadValidators(Vec<ValidatorId>),
-	/// The keygen response says the newly generated key is the same as the old key
-	KeyUnchanged,
-	/// Failed to construct a valid chain specific payload for rotation
-	FailedToConstructPayload,
-	/// The vault rotation is not confirmed
-	NotConfirmed,
-	/// Failed to make keygen request
-	FailedToMakeKeygenRequest,
-	/// New public key has not been set by a keygen_response
-	NewPublicKeyNotSet,
-}
-
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
+	type RotationError;
+
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
 		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>>;
+	) -> Result<(), Self::RotationError>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
+	fn finalize_rotation() -> Result<(), Self::RotationError>;
 }
 
 /// An error has occurred during an auction
