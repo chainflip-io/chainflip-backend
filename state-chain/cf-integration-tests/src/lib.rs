@@ -146,7 +146,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{Auctioneer, AuctionPhase, NonceIdentifier, StakeTransfer};
+		use cf_traits::{AuctionPhase, Auctioneer, NonceIdentifier, StakeTransfer};
 		use state_chain_runtime::{
 			Auction, Emissions, Flip, Governance, Reputation, Rewards, Session, Validator, Vaults,
 		};
