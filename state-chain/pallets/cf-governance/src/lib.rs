@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # Chainflip governance
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 use codec::Decode;
 use frame_support::traits::EnsureOrigin;
@@ -128,13 +128,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new proposal was submitted [proposal_id]
+		/// A new proposal was submitted \[proposal_id\]
 		Proposed(ProposalId),
-		/// A proposal was executed [proposal_id]
+		/// A proposal was executed \[proposal_id\]
 		Executed(ProposalId),
-		/// A proposal is expired [proposal_id]
+		/// A proposal is expired \[proposal_id\]
 		Expired(ProposalId),
-		/// A proposal was approved [proposal_id]
+		/// A proposal was approved \[proposal_id\]
 		Approved(ProposalId),
 	}
 
