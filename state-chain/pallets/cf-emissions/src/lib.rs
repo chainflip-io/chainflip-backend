@@ -154,6 +154,10 @@ impl<T: Config> Pallet<T> {
 	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
+		if blocks_elapsed == Zero::zero() {
+			return Ok(T::DbWeight::get().reads(1));
+		}
+
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
 		let reward_amount = EmissionPerBlock::<T>::get()
