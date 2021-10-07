@@ -159,7 +159,7 @@ mod tests {
 		// 3. The genesis validators are available via validator_lookup()
 		// 4. The genesis validators are in the session
 		// 5. No auction has been run yet
-		// 6. The genesis validators are considered online for this heartbeat interval
+		// 6. The genesis validators are considered offline for this heartbeat interval
 		// 7. No emissions have been made
 		// 8. No rewards have been distributed
 		// 9. No vault rotation has occurred
@@ -207,7 +207,7 @@ mod tests {
 					}
 
 					for account in accounts.iter() {
-						assert_eq!(Reputation::validator_liveness(account), Some(1));
+						assert_eq!(Reputation::validator_liveness(account), Some(0));
 					}
 
 					assert_eq!(Emissions::last_mint_block(), 0);
