@@ -23,6 +23,7 @@ use curv::elliptic::curves::traits::*;
 use curv::cryptographic_primitives::commitments::hash_commitment::HashCommitment;
 use curv::cryptographic_primitives::commitments::traits::Commitment;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
+use curv::elliptic::curves::secp256_k1::Secp256k1Point;
 use curv::BigInt;
 
 use itertools::Itertools;
@@ -59,7 +60,8 @@ pub struct KeyShare {
 impl Keys {
     pub fn phase1_create(index: usize) -> Keys {
         let u: FE = ECScalar::new_random();
-        let y = &ECPoint::generator() * &u;
+        let unscaled_point: Secp256k1Point = ECPoint::generator();
+        let y = unscaled_point * u;
 
         Keys {
             u_i: u,
@@ -153,7 +155,7 @@ impl Keys {
             let y0 = y_vec_iter
                 .next()
                 .expect("Not called until we have a threshold greater than 0");
-            let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);
+            let y = y_vec_iter.fold(*y0, |acc, x| acc + x);
             let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
 
             let n = params.share_count;
