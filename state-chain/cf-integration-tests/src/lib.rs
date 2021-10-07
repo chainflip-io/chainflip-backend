@@ -148,8 +148,7 @@ mod tests {
 		use super::*;
 		use cf_traits::{Auction, AuctionPhase, NonceIdentifier, StakeTransfer};
 		use state_chain_runtime::{
-			Auctioneer, Emissions, Flip, Governance, Reputation, Rewards, Session, Validator,
-			Vaults,
+			Auction, Emissions, Flip, Governance, Reputation, Rewards, Session, Validator, Vaults,
 		};
 
 		#[test]

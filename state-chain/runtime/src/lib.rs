@@ -146,7 +146,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
-	type Auction = Auctioneer;
+	type Auction = Auction;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -154,7 +154,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
-	type RotationHandler = Auctioneer;
+	type RotationHandler = Auction;
 	type NonceProvider = Vaults;
 	type EpochInfo = Validator;
 }
@@ -438,7 +438,7 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Auctioneer: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
@@ -634,7 +634,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
-			add_benchmark!(params, batches, pallet_cf_auction, Auctioneer);
+			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

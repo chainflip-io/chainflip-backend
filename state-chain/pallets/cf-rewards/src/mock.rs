@@ -1,5 +1,5 @@
 use crate as pallet_cf_rewards;
-use cf_traits::{StakeTransfer, RewardRollover};
+use cf_traits::{RewardRollover, StakeTransfer};
 use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
 use frame_system as system;
 use sp_core::H256;

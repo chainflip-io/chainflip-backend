@@ -1,5 +1,5 @@
 use crate::{mock::*, ApportionedRewards, Error, OnDemandRewardsDistribution, VALIDATOR_REWARDS};
-use cf_traits::{Issuance, RewardsDistribution, RewardRollover};
+use cf_traits::{Issuance, RewardRollover, RewardsDistribution};
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 use pallet_cf_flip::FlipIssuance;
@@ -238,7 +238,9 @@ fn test_rollover() {
 		check_balance_integrity();
 
 		// Do a rollover.
-		assert_ok!(<FlipRewards as RewardRollover>::rollover(&vec![CHARLIE, ALICE]));
+		assert_ok!(<FlipRewards as RewardRollover>::rollover(&vec![
+			CHARLIE, ALICE
+		]));
 
 		// Rewards should be fully distributed and entitlements reset to zero
 		assert_eq!(Flip::total_issuance(), 1_051);
