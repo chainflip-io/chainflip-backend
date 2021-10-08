@@ -5,10 +5,14 @@
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
-use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainId};
+use cf_chains::{
+	eth::{self, set_agg_key_with_agg_key::SetAggKeyWithAggKey, ChainflipKey},
+	ChainId, Ethereum,
+};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Nonce, NonceIdentifier, NonceProvider, VaultRotationHandler, VaultRotator,
+	Chainflip, Nonce, NonceProvider, ThresholdSigner, VaultRotationHandler,
+	VaultRotator,
 };
 pub use pallet::*;
 
@@ -26,7 +30,6 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -43,17 +46,22 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// The chain.
-		type TargetChain: cf_chains::Chain;
+
 		/// A public key
-		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default + MaybeSerializeDeserialize;
+		type PublicKey: Member
+			+ Parameter
+			+ Into<ChainflipKey>
+			+ Default
+			+ MaybeSerializeDeserialize;
+
 		/// A transaction
-		type TransactionHash: Member + Parameter + Into<Vec<u8>> + Default;
+		type TransactionHash: Member + Parameter + Into<eth::TxHash> + Default;
+
 		/// Rotation handler
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 
 		/// For reporting misbehaving validators.
-		type OfflineReporter: OfflineReporter;
+		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 
 		/// Top-level Ethereum signing context needs to support `SetAggKeyWithAggKey`.
 		type SigningContext: From<SetAggKeyWithAggKey>;
@@ -74,8 +82,7 @@ pub mod pallet {
 	/// The Vault for this instance
 	#[pallet::storage]
 	#[pallet::getter(fn eth_vault)]
-	pub(super) type EthereumVault<T: Config> =
-		StorageValue<_, Vault<T::PublicKey, T::TransactionHash>, ValueQuery>;
+	pub(super) type EthereumVault<T: Config> = StorageValue<_, Vault<T>>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
@@ -87,7 +94,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
-		StorageMap<_, Blake2_128Concat, NonceIdentifier, Nonce>;
+		StorageMap<_, Blake2_128Concat, ChainId, Nonce>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn active_windows)]
@@ -105,7 +112,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequest(CeremonyId, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(CeremonyId, KeygenRequest<T>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(CeremonyId),
 		/// The vault for the request has rotated \[request_index\]
@@ -140,6 +147,8 @@ pub mod pallet {
 		FailedToMakeKeygenRequest,
 		/// New public key not set by keygen_response
 		NewPublicKeyNotSet,
+		///
+		NoActiveRotation,
 	}
 
 	#[pallet::call]
@@ -150,13 +159,16 @@ pub mod pallet {
 		pub fn keygen_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
+			response: KeygenResponse<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure_index!(ceremony_id);
 			match response {
 				KeygenResponse::Success(new_public_key) => {
-					if EthereumVault::<T>::get().current_key != new_public_key {
+					let vault = EthereumVault::<T>::get().ok_or_else(|| {
+						Error::<T>::NoActiveRotation
+					})?;
+					if vault.current_key != new_public_key {
 						ActiveChainVaultRotations::<T>::mutate(
 							ceremony_id,
 							|maybe_vault_rotation| {
@@ -164,6 +176,11 @@ pub mod pallet {
 									(*vault_rotation).new_public_key = Some(new_public_key.clone());
 									
 									// TODO: initiate signing & broadcast of the new public key via setAggKeyWithAggKey.
+
+									T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
+										<Self as NonceProvider>::next_nonce(),
+										new_public_key,
+									));
 
 									Ok(().into())
 
@@ -181,13 +198,21 @@ pub mod pallet {
 					// TODO: 
 					// - Centralise penalty points. 
 					// - Define offline condition(s) for keygen failures.
-					const PENALTY: u32 = 15;
-					for validator_id in bad_validators() {
+					const PENALTY: i32 = 15;
+					for offender in bad_validators {
 						T::OfflineReporter::report(
 							OfflineCondition::ParticipateSigningFailed,
 							PENALTY,
-							validator_id
-						);
+							&offender
+						)
+						.unwrap_or_else(|e| {
+							frame_support::debug::error!(
+								"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+								offender,
+								e
+							);
+							0
+						});
 					}
 					Pallet::<T>::abort_rotation();
 					Ok(().into())
@@ -201,7 +226,7 @@ pub mod pallet {
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: VaultRotationResponse<T::TransactionHash>,
+			response: VaultRotationResponse<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -218,11 +243,16 @@ pub mod pallet {
 									.ok_or_else(|| Error::<T>::NewPublicKeyNotSet)?;
 						// At the moment we just have Ethereum to notify
 						match vault_rotation.keygen_request.chain {
-							ChainId::Ethereum => EthereumVault::<T>::mutate(|vault| {
-								(*vault).previous_key = (*vault).current_key.clone();
-								(*vault).current_key = new_public_key;
-								(*vault).tx_hash = tx_hash;
-							}),
+							ChainId::Ethereum => EthereumVault::<T>::try_mutate(|maybe_vault| {
+								maybe_vault.as_mut().map(|vault| {
+									(*vault).previous_key = (*vault).current_key.clone();
+									(*vault).current_key = new_public_key;
+									(*vault).tx_hash = tx_hash;
+								})
+								.ok_or_else(|| {
+									Error::<T>::NoActiveRotation
+								})
+							})?,
 						}
 					}
 					// This request is complete
@@ -255,7 +285,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			EthereumVault::<T>::set(Vault {
+			EthereumVault::<T>::put(Vault {
 				previous_key: Default::default(),
 				current_key: self.ethereum_vault_key.clone(),
 				tx_hash: Default::default(),
@@ -264,9 +294,9 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> NonceProvider for Pallet<T> {
-	fn next_nonce(identifier: NonceIdentifier) -> Nonce {
-		ChainNonces::<T>::mutate(identifier, |nonce| {
+impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
+	fn next_nonce() -> Nonce {
+		ChainNonces::<T>::mutate(ChainId::Ethereum, |nonce| {
 			let new_nonce = nonce.unwrap_or_default().saturating_add(One::one());
 			*nonce = Some(new_nonce);
 			new_nonce
@@ -301,7 +331,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 
 		// Create a KeyGenRequest for the target chain.
 		let keygen_request = KeygenRequest {
-			chain: <T as Config>::TargetChain::CHAIN_ID,
+			chain: ChainId::Ethereum,
 			validator_candidates: candidates.clone(),
 		};
 

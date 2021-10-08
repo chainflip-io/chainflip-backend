@@ -12,7 +12,7 @@ pub type CeremonyId = u64;
 pub struct VaultRotation<T: Config> {
 	/// Proposed new public key. Is None before keygen_response is returned
 	pub new_public_key: Option<T::PublicKey>,
-	pub keygen_request: KeygenRequest<T::ValidatorId>,
+	pub keygen_request: KeygenRequest<T>,
 }
 
 pub struct VaultRotationNew<T: Config> {
@@ -36,40 +36,37 @@ pub enum VaultRotationStatus<T: Config> {
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<ValidatorId> {
+pub struct KeygenRequest<T: Config> {
 	/// A Chain's Id.
 	pub(crate) chain: ChainId,
 	/// The set of validators from which we would like to generate the key
-	pub validator_candidates: Vec<ValidatorId>,
+	pub validator_candidates: Vec<T::ValidatorId>,
 }
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
+pub enum KeygenResponse<T: Config> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
-	Success(PublicKey),
+	Success(T::PublicKey),
 	/// Something went wrong and it failed.
-	Error(Vec<ValidatorId>),
+	Error(Vec<T::ValidatorId>),
 }
 
 /// The Vault's keys, public that is
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Vault<T: Config> {
 	/// The previous key
-	pub previous_key: PublicKey,
+	pub previous_key: T::PublicKey,
 	/// The current key
-	pub current_key: PublicKey,
+	pub current_key: T::PublicKey,
 	/// The transaction hash for the vault rotation to the current key
-	pub tx_hash: TransactionHash,
+	pub tx_hash: T::TransactionHash,
 }
 
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
-	Success {
-		tx_hash: TransactionHash,
-		block_number: u64,
-	},
+pub enum VaultRotationResponse<T: Config> {
+	Success { tx_hash: T::TransactionHash },
 	Error,
 }
 

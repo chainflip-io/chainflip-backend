@@ -3,9 +3,9 @@ pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
 
 use codec::{Decode, Encode};
-use ethabi::{
+pub use ethabi::{
 	ethereum_types::{H256, U256},
-	Address, Token, Uint,
+	Address, Hash as TxHash, Token, Uint,
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};

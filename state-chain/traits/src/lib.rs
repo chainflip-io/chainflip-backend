@@ -243,18 +243,10 @@ pub trait EmissionsTrigger {
 /// A nonce
 pub type Nonce = u64;
 
-/// A identifier for the chain a nonce is required
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum NonceIdentifier {
-	Ethereum = 1,
-	Bitcoin = 2,
-	Dot = 3,
-}
-
 /// Provide a nonce
-pub trait NonceProvider {
+pub trait NonceProvider<C: Chain> {
 	/// Provide the next nonce for the chain identified
-	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+	fn next_nonce() -> Nonce;
 }
 
 pub trait Online {
