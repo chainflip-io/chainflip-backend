@@ -103,6 +103,12 @@ impl EmergencyRotation for MockEmergencyRotation {
 			*requested.borrow_mut() = true;
 		});
 	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EMERGENCY_ROTATION_REQUESTED.with(|cell| *cell.borrow())
+	}
+
+	fn emergency_rotation_completed() {}
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;

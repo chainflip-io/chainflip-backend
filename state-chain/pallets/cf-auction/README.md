@@ -35,6 +35,10 @@ bid marked by `BackupGroupSize`
 
 At any point in time the auction may be aborted using `Auction::abort()` returning state to `WaitingForBids`.
 
+At any point an Emergency rotation can be called via the `EmergencyRotation::request_emergency_rotation()` in which when
+a new auction is called it will classify as per the conditions set out for an emergency rotation which are to ensure no
+more than 30% of ex backup validators get promoted to the active set in this new auction.
+
 ## Terminology
 - **Bidder:** A staker that has put their bid forward to be considered in the auction
 - **Winners:** Those bidders that have been evaluated and have been included in the the winning set
@@ -43,3 +47,5 @@ At any point in time the auction may be aborted using `Auction::abort()` returni
 - **Backup Validator** A group of bidders who make up a group size of ideally 1/3 of the desired validator
   group size.  They are expected to act as a reserve in that they are fully functioning nodes that are ready
   to become a validator during any upcoming rotation.
+- **Emergency Rotation** A rotation can be called in which classification of bidders is such that a maximum of 30% of
+  the new active set can only be formed by ex backup validators. 

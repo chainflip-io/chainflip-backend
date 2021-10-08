@@ -3,7 +3,7 @@
 #![recursion_limit = "256"]
 
 // A few exports that help ease life for downstream crates.
-use cf_traits::{ChainflipAccountData};
+use cf_traits::{Chainflip, ChainflipAccountData};
 use core::time::Duration;
 
 pub use frame_support::{
@@ -16,6 +16,8 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_flip::FlipSlasher;
+use pallet_cf_reputation::ReputationPenalty;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -27,7 +29,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
-use crate::chainflip::ChainflipVaultRotationHandler;
+use crate::chainflip::{ChainflipStakeHandler, ChainflipVaultRotationHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -123,7 +125,8 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinValidators: u32 = 1;
-	pub const BackupValidatorRatio: u32 = 3;
+	pub const ActiveToBackupValidatorRatio: u32 = 3;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
 
 impl pallet_cf_auction::Config for Runtime {
@@ -137,7 +140,9 @@ impl pallet_cf_auction::Config for Runtime {
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Reputation;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 // FIXME: These would be changed
@@ -329,7 +334,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = chainflip::ChainflipStakeHandler;
+	type StakeHandler = ChainflipStakeHandler;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -641,7 +646,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
-			add_benchmark!(params, batches, pallet_cf_auction, Auctioneer);
+			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
