@@ -238,12 +238,10 @@ pub mod pallet {
 			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 
-			// If the validator doesn't exist we insert in the map and continue
-			// If present we confirm they have already submitted or not
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
 				!ValidatorsLiveness::<T>::get(&validator_id)
-					.unwrap_or_default()
+					.unwrap_or(SUBMITTED)
 					.has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);

@@ -294,12 +294,6 @@ pub trait RewardsDistribution {
 pub trait RewardRollover {
 	type AccountId;
 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
-	///
-	/// 1. Checks that all entitlements can be honoured, ie. there are enough reserves.
-	/// 2. Credits all current beneficiaries with any remaining reward entitlements.
-	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
-	/// 4. Resets the apportioned rewards counter to zero.
-	/// 5. Updates the list of beneficiaries.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
