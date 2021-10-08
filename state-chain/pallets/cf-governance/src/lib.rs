@@ -156,9 +156,13 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Propose a governance ensured extrinsic.
 		///
+		/// ## Events
+		///
+		/// - [Proposed](Event::Proposed): Successfully proposed the extrinsic to Governance Members.
+		///
 		/// ## Errors
 		///
-		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
+		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
 		#[pallet::weight(10_000)]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -194,9 +198,13 @@ pub mod pallet {
 		/// Sets a new set of governance members. Note that this can be called with an empty vector
 		/// to remove the possibility to govern the chain at all.
 		///
+		/// ## Events
+		///
+		/// - None
+		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](Error::BadOrigin): the caller is not the Governance Origin.
+		/// - [BadOrigin](Error::BadOrigin): The caller is not the Governance Origin.
 		#[pallet::weight(10_000)]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -209,13 +217,17 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Approve a proposal.
+		/// Approve a Proposal.
+		///
+		/// ## Events
+		///
+		/// - [Approved](Event::Approved): The Proposal was successfully approved.
 		///
 		/// ## Errors
 		///
-		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
-		/// - [ProposalNotFound](Error::ProposalNotFound): there is no Proposal with this `id`.
-		/// - [AlreadyApproved](Error::AlreadyApproved): this Governance Member has already approved this Proposal.
+		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
+		/// - [ProposalNotFound](Error::ProposalNotFound): There is no Proposal with this ID.
+		/// - [AlreadyApproved](Error::AlreadyApproved): This Governance Member has already approved this Proposal.
 		#[pallet::weight(10_000)]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -228,11 +240,15 @@ pub mod pallet {
 			);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
-			// Governance member don't pay fees
+			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
 
-		/// Execute a proposal
+		/// Execute a Proposal.
+		///
+		/// ## Events
+		///
+		/// - [Executed](Event::Executed): The Proposal was successfully executed.
 		///
 		/// ## Errors
 		///
