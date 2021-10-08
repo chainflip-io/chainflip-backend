@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - fix/eth-subscribe
+#        - feature/ch332-rust-doc
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -121,6 +121,12 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
 
   chainflip-backend-release:
     jobs:
@@ -141,6 +147,12 @@ workflows:
             - ghcr-credentials
             - discord-webhooks
           <<: *only_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
@@ -299,6 +311,18 @@ jobs:
       - run: |
           cargo clippy
           sccache --show-stats
+
+  cargo-doc-validator-package:
+    <<: *cargo-base-job
+    shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo doc --workspace --document-private-items --no-deps
+          sccache --show-stats
+      - store_artifacts:
+          path: target/doc/
 
   clone-contracts-repo:
     resource_class: small
