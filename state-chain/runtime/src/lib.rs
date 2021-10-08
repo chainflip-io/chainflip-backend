@@ -2,8 +2,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
-mod chainflip;
-
 // A few exports that help ease life for downstream crates.
 use cf_traits::{ChainflipAccountData};
 use core::time::Duration;

@@ -5,7 +5,7 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipConfig,
+	opaque::SessionKeys, AccountId, AuctioneerConfig, AuraConfig, EmissionsConfig, FlipConfig,
 	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
 	StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
@@ -319,7 +319,7 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			blocks_per_block: 7 * DAYS,
+			blocks_per_epoch: 7 * DAYS,
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
@@ -342,7 +342,7 @@ fn testnet_genesis(
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
-		pallet_cf_auction: Some(AuctionConfig {
+		pallet_cf_auction: Some(AuctioneerConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),
 			winners: initial_authorities
 				.iter()

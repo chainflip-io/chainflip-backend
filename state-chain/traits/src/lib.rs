@@ -11,6 +11,7 @@ use frame_support::{
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
+use frame_support::traits::StoredMap;
 
 pub mod mocks;
 
@@ -197,7 +198,7 @@ pub trait EpochTransitionHandler {
 	/// A new epoch has started
 	///
 	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
+	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {}
 }
 
 /// Providing bidders for an auction
@@ -292,7 +293,7 @@ pub trait RewardRollover {
 	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
 	/// 4. Resets the apportioned rewards counter to zero.
 	/// 5. Updates the list of beneficiaries.
-	fn rollover(new_beneficiaries: &Vec<Self::AccountId>) -> Result<(), DispatchError>;
+	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.

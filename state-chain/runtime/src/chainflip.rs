@@ -1,8 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Witnesser};
+use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser};
 use cf_traits::{BondRotation, EpochTransitionHandler, EmissionsTrigger, StakeHandler, VaultRotationHandler, RewardRollover};
 use frame_support::debug;
-use sp_std::vec::Vec;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 
 pub struct ChainflipEpochTransitions;

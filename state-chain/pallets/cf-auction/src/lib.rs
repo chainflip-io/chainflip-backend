@@ -272,12 +272,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// Rule #4 - Confirm that the validators are 'online'
 				bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #5 - Confirm we have our set size
-				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
+				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					frame_support::debug::RuntimeLogger::init();
 					frame_support::debug::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
 						bidders.len(),
-						AuctionSizeRange::<T>::get().0
+						ActiveValidatorSizeRange::<T>::get().0
 					);
 					return Err(AuctionError::MinValidatorSize);
 				};

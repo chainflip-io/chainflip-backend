@@ -92,7 +92,7 @@ pub mod pallet {
 impl<T: Config> RewardRollover for Pallet<T> {
 	type AccountId = T::AccountId;
 
-	fn rollover(new_beneficiaries: &Vec<Self::AccountId>) -> Result<(), DispatchError> {
+	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError> {
 		// Sanity check in case we screwed up with the accounting.
 		ensure!(
 			Self::sufficient_reserves(),
