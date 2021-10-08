@@ -268,7 +268,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #4 - Confirm that the validators are 'online'
-				// bidders.retain(|(id, _)| T::Online::is_online(id));
+				bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					frame_support::debug::RuntimeLogger::init();
