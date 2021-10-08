@@ -152,7 +152,7 @@ impl StateChainClient {
                     self.genesis_hash,
                     nonce,
                     substrate_subxt::Encoded(
-                        state_chain_runtime::Call::from(extrinsic.clone()).encode(),
+                        state_chain_runtime::Call::from(extrinsic).encode(),
                     ),
                     &self.signer,
                 )
