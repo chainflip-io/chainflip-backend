@@ -201,11 +201,7 @@ impl StateChainClient {
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
                         option_data.map(|data| {
-                            Vec::<(
-                                Phase,
-                                state_chain_runtime::Event,
-                                Vec<state_chain_runtime::Hash>,
-                            )>::decode(&mut &data.0[..])
+                            Vec::<EventInfo>::decode(&mut &data.0[..])
                             .map_err(anyhow::Error::msg)
                         })
                     })
