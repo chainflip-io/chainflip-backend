@@ -62,7 +62,7 @@ pub mod pallet {
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// An auction type
-		type Auction: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
 		/// Trigger an emergency rotation on falling below the percentage of online validators
 		#[pallet::constant]

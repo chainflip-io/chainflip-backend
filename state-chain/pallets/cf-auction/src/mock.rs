@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
-use cf_traits::{Bid, ChainflipAccountData};
+use cf_traits::{Bid, ChainflipAccountData, EmergencyRotation};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;

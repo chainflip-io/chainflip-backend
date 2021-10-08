@@ -4,14 +4,9 @@ use super::{
 	Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
-use cf_traits::{
-	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-	EmergencyRotation, EmissionsTrigger, EpochInfo, Heartbeat, Issuance, NetworkState,
-	StakeHandler, StakeTransfer, VaultRotationHandler,
-};
+use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochTransitionHandler, EpochInfo, Heartbeat, Issuance, NetworkState, StakeHandler, StakeTransfer, VaultRotationHandler, RewardRollover};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
-use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_std::cmp::min;
 use sp_std::vec::Vec;

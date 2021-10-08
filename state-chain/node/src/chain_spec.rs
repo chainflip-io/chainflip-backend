@@ -5,7 +5,7 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, FlipBalance,
 	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
 	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
@@ -355,10 +355,6 @@ fn testnet_genesis(
 		}),
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
-		}),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: BLOCK_EMISSIONS,
-			..Default::default()
 		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],

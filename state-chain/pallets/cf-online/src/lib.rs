@@ -52,7 +52,7 @@ mod liveness;
 use frame_support::pallet_prelude::*;
 use liveness::*;
 pub use pallet::*;
-use pallet_cf_validator::EpochTransitionHandler;
+use cf_traits::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 

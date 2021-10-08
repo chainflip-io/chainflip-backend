@@ -3,9 +3,7 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
-mod weights;
 // A few exports that help ease life for downstream crates.
-use cf_traits::{Chainflip, ChainflipAccountData};
 use core::time::Duration;
 
 pub use frame_support::{
@@ -29,8 +27,6 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
-use crate::chainflip::ChainflipHeartbeat;
-use crate::chainflip::{ChainflipStakeHandler, ChainflipVaultRotationHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -45,7 +41,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
-	ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
+	ChainflipHeartbeat, ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
 };
 pub use cf_traits::FlipBalance;
 use cf_traits::{Auctioneer, BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
@@ -137,7 +133,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinValidators = MinValidators;
 	type Handler = Vaults;
-	type WeightInfo = weights::pallet_cf_auction::PalletWeight<Runtime>;
+	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Online;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
