@@ -112,13 +112,14 @@ impl pallet_session::Config for Test {
 parameter_types! {
 	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = 3;
+	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
 
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type BidderProvider = TestBidderProvider;
+	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
@@ -126,6 +127,8 @@ impl pallet_cf_auction::Config for Test {
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
@@ -144,9 +147,9 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct TestBidderProvider;
+pub struct MockBidderProvider;
 
-impl BidderProvider for TestBidderProvider {
+impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 

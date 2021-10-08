@@ -324,6 +324,10 @@ impl NetworkState {
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
 	fn request_emergency_rotation();
+	/// Is there an emergency rotation in progress
+	fn emergency_rotation_in_progress() -> bool;
+	/// Signal that the emergency rotation has completed
+	fn emergency_rotation_completed();
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]

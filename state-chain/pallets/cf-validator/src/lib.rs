@@ -1,45 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extended_key_value_attributes)]
 
-//! # Chainflip Validator Module
-//!
-//! A module to manage the validator set for the Chainflip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//!
-//! The module contains functionality to manage the validator set used to ensure the Chainflip
-//! State Chain network.  It extends on the functionality offered by the `session` pallet provided by
-//! Parity.  At every epoch block length, or if forced, the `Auction` pallet proposes a set of new
-//! validators.  The process of auction runs over 2 blocks to achieve a finalised candidate set and
-//! anytime after this, based on confirmation of the auction(see `AuctionConfirmation`) the new set
-//! will become the validating set.
-//!
-//! ## Terminology
-//!
-//! - **Validator:** A node that has staked an amount of `FLIP` ERC20 token.
-//!
-//! - **Validator ID:** Equivalent to an Account ID
-//!
-//! - **Epoch:** A period in blocks in which a constant set of validators ensure the network.
-//!
-//! - **Auction** A non defined period of blocks in which we continue with the existing validators
-//!   and assess the new candidate set of their validity as validators.  This functionality is provided
-//!   by the `Auction` pallet.  We rotate the set of validators on each `AuctionPhase::Completed` phase
-//!   completed by the `Auction` pallet.
-//!
-//! - **Session:** A session as defined by the `session` pallet.
-//!
-//! - **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
-//!
-//! ### Dispatchable Functions
-//!
-//! - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
-//! - `force_rotation` - Force a rotation of validators to start on the next block.
-//!
-
+#[doc = include_str!("../README.md")]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -168,7 +130,6 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -191,6 +152,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// An emergency rotation has been requested
+	#[pallet::storage]
+	#[pallet::getter(fn emergency_rotation_requested)]
+	pub(super) type EmergencyRotationRequested<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// The starting block number for the current epoch
 	#[pallet::storage]
@@ -301,8 +267,12 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auction::process().is_ok()
 			}
-			// Failing that do nothing
-			_ => false,
+			_ => {
+				// If we were in one, mark as completed
+				EmergencyRotationOf::<T>::emergency_rotation_completed();
+				// Do nothing more
+				false
+			}
 		}
 	}
 }
@@ -408,6 +378,19 @@ pub struct EmergencyRotationOf<T>(PhantomData<T>);
 
 impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
 	fn request_emergency_rotation() {
-		Pallet::<T>::force_validator_rotation();
+		if !Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(true);
+			Pallet::<T>::force_validator_rotation();
+		}
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EmergencyRotationRequested::<T>::get()
+	}
+
+	fn emergency_rotation_completed() {
+		if Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(false);
+		}
 	}
 }
