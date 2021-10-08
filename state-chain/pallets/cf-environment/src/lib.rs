@@ -7,7 +7,6 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_std::vec::Vec;
 
 	type EthereumAddress = [u8; 20];
 
