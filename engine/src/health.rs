@@ -93,7 +93,7 @@ impl HealthMonitor {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::logging;
 
