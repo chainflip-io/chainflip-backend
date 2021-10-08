@@ -314,7 +314,7 @@ jobs:
           cargo doc --workspace --document-private-items --no-deps
           sccache --show-stats
       - store_artifacts:
-          path: /target/doc/*
+          path: target/doc/*
 
   clone-contracts-repo:
     resource_class: small
