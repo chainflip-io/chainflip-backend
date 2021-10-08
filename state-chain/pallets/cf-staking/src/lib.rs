@@ -151,19 +151,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A validator has staked some FLIP on the Ethereum chain. [account_id, stake_added, total_stake]
+		/// A validator has staked some FLIP on the Ethereum chain. \[account_id, stake_added, total_stake\]
 		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
 
-		/// A validator has claimed their FLIP on the Ethereum chain. [account_id, claimed_amount]
+		/// A validator has claimed their FLIP on the Ethereum chain. \[account_id, claimed_amount\]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
-		/// The staked amount should be refunded to the provided Ethereum address. [account_id, refund_amount, eth_address]
+		/// The staked amount should be refunded to the provided Ethereum address. \[account_id, refund_amount, eth_address\]
 		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
 
-		/// A claim request has been validated and needs to be signed. [account_id, msg_hash]
+		/// A claim request has been validated and needs to be signed. \[account_id, msg_hash\]
 		ClaimSigRequested(AccountId<T>, U256),
 
-		/// A claim signature has been issued by the signer module. [msg_hash, nonce, sig, account_id, amount, eth_address, expiry_timestamp]
+		/// A claim signature has been issued by the signer module. \[msg_hash, nonce, sig, account_id, amount, eth_address, expiry_timestamp\]
 		ClaimSignatureIssued(
 			U256,
 			T::Nonce,
@@ -174,16 +174,16 @@ pub mod pallet {
 			Duration,
 		),
 
-		/// An account has retired and will no longer take part in auctions. [account_id]
+		/// An account has retired and will no longer take part in auctions. \[account_id\]
 		AccountRetired(AccountId<T>),
 
-		/// A previously retired account  has been re-activated. [account_id]
+		/// A previously retired account  has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
-		/// A claim has expired without being redeemed. [account_id, nonce, amount]
+		/// A claim has expired without being redeemed. \[account_id, nonce, amount\]
 		ClaimExpired(AccountId<T>, T::Nonce, FlipBalance<T>),
 
-		/// A stake attempt has failed. [account_id, eth_address, amount]
+		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
 	}
 
@@ -231,11 +231,15 @@ pub mod pallet {
 		///
 		/// If the account doesn't exist, we create it.
 		///
+		/// ## Events
+		///
+		/// - [FailedStakeAttempt](Event::FailedStakeAttempt): The stake was rejected. This happens if the
+		///   withdrawal address provided does not match the withdrawal address we already have in storage for
+		///   the account_id
+		/// - [Staked](Event::Staked): The stake has been successfully registered.
+		///
 		/// ## Errors
 		///
-		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The account has already specified
-		///   a withdrawal address via some previous stake, and this stake attempted to change that address, which
-		///   is not supported.
 		/// - [BadOrigin](Error::BadOrigin): The extrinsic was not dispatched by the witness origin.
 		#[pallet::weight(10_000)]
 		pub fn staked(
@@ -247,12 +251,10 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_err() {
-				Ok(().into())
-			} else {
+			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
-				Ok(().into())
 			}
+			Ok(().into())
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
@@ -264,6 +266,10 @@ pub mod pallet {
 		/// An account can only have one pending claim at a time, and until this claim has been redeemed or expired,
 		/// the funds wrapped up in the claim are inaccessible and are not counted towards a Validator's Auction Bid.
 		///
+		/// ## Events
+		///
+		/// - [ClaimSigRequested](Event::ClaimSigRequested): We successfully requested a signature over the claim details.
+		///
 		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim): The account may not have a claim already pending. Any pending
@@ -272,6 +278,10 @@ pub mod pallet {
 		///   auction.
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
 		///   funds.
+		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The withdrawal address specified
+		///   does not match the one on file, and the one on file is not the ETH_ZERO_ADDRESS
+		/// - [EthEncodingFailed](Error::EthEncodingFailed): The claim request could not be encoded as a valid
+		///   Ethereum transaction.
 		#[pallet::weight(10_000)]
 		pub fn claim(
 			origin: OriginFor<T>,
@@ -286,6 +296,14 @@ pub mod pallet {
 		/// Get *all* FLIP that is held for me by the system, signed by my validator key.
 		///
 		/// Same as [claim] except first calculates the maximum claimable amount.
+		///
+		/// ## Events
+		///
+		/// - See [claim]
+		///
+		/// ## Errors
+		///
+		/// - See [claim]
 		#[pallet::weight(10_000)]
 		pub fn claim_all(
 			origin: OriginFor<T>,
@@ -304,6 +322,10 @@ pub mod pallet {
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already been authorised
 		/// by validator multisig. This merely signals that the claimant has in fact redeemed their funds via the
 		/// StakeManager Smart Contract and allows us to finalise any on-chain cleanup.
+		///
+		/// ## Events
+		///
+		/// - [ClaimSettled](Event::ClaimSettled): The claim was successfully settled and balances are resolved.
 		///
 		/// ## Errors
 		///
@@ -354,6 +376,11 @@ pub mod pallet {
 		/// Validators are no longer responsible for the execution of this claim, since the claiming user is
 		/// expected to read the signature from claim storage, and use it to compose a transaction to the
 		/// StakeManager Smart Contract, which they will then broadcast themselves.
+		///
+		/// ## Events
+		///
+		/// - [ClaimSignatureIssued](Event::ClaimSignatureIssued): Successfully issued a claim signature
+		///   signed by the Validator quorum.
 		///
 		/// ## Errors
 		///
@@ -414,6 +441,10 @@ pub mod pallet {
 		/// Signals a validator's intent to withdraw their stake after the next auction and desist from future auctions.
 		/// Should only be called by accounts that are not already retired.
 		///
+		/// ## Events
+		///
+		/// - [AccountRetired](Event::AccountRetired): The account has successfully retired from the auction.
+		///
 		/// ## Errors
 		///
 		/// - [AlreadyRetired](Error::AlreadyRetired): The account is already retired.
@@ -427,6 +458,11 @@ pub mod pallet {
 
 		/// Signals a retired validator's intent to re-activate their stake and participate in the next validator auction.
 		/// Should only be called if the account is in a retired state.
+		///
+		/// ## Events
+		///
+		/// - [AccountActivated](Event::AccountActivated): The account has successfully re-activated and will
+		///   be re-considrered for future auctions.
 		///
 		/// ## Errors
 		///
