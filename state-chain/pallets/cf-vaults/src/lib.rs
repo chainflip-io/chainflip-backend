@@ -5,11 +5,11 @@
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
+use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainId};
 use cf_traits::{
-	Nonce, NonceIdentifier, NonceProvider, VaultRotationHandler,
-	VaultRotator,
+	offline_conditions::{OfflineCondition, OfflineReporter},
+	Nonce, NonceIdentifier, NonceProvider, VaultRotationHandler, VaultRotator,
 };
-use cf_chains::{Chain, ChainId};
 pub use pallet::*;
 
 pub use crate::rotation::*;
@@ -26,7 +26,7 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, NonceProvider};
+	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -51,6 +51,15 @@ pub mod pallet {
 		type TransactionHash: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
+
+		/// For reporting misbehaving validators.
+		type OfflineReporter: OfflineReporter;
+
+		/// Top-level Ethereum signing context needs to support `SetAggKeyWithAggKey`.
+		type SigningContext: From<SetAggKeyWithAggKey>;
+
+		/// Threshold signer.
+		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -169,11 +178,18 @@ pub mod pallet {
 					}
 				}
 				KeygenResponse::Error(bad_validators) => {
-					// Abort this key generation request
+					// TODO: 
+					// - Centralise penalty points. 
+					// - Define offline condition(s) for keygen failures.
+					const PENALTY: u32 = 15;
+					for validator_id in bad_validators() {
+						T::OfflineReporter::report(
+							OfflineCondition::ParticipateSigningFailed,
+							PENALTY,
+							validator_id
+						);
+					}
 					Pallet::<T>::abort_rotation();
-					// Do as you wish with these, I wash my hands..
-					T::RotationHandler::penalise(bad_validators);
-					// Report back we have processed the failure
 					Ok(().into())
 				}
 			}
