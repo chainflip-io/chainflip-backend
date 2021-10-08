@@ -100,7 +100,7 @@ pub mod pallet {
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// An auction type
-		type Auction: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	#[pallet::event]
@@ -138,7 +138,7 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure!(
 				number_of_blocks >= T::MinEpoch::get(),
 				Error::<T>::InvalidEpoch
@@ -157,7 +157,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -220,7 +220,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			if let Some(auction_result) = T::Auction::auction_result() {
+			if let Some(auction_result) = T::Auctioneer::auction_result() {
 				T::EpochTransitionHandler::on_new_epoch(
 					&auction_result.winners,
 					auction_result.minimum_active_bid,
@@ -252,7 +252,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn bond() -> Self::Amount {
-		match T::Auction::phase() {
+		match T::Auctioneer::phase() {
 			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
 			_ => Zero::zero(),
 		}
@@ -263,7 +263,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn is_auction_phase() -> bool {
-		!T::Auction::waiting_on_bids()
+		!T::Auctioneer::waiting_on_bids()
 	}
 }
 
@@ -285,16 +285,16 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// If we are waiting on bids let's see if we want to start a new rotation
-		match T::Auction::phase() {
+		match T::Auctioneer::phase() {
 			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_rotate(now) && T::Auction::process().and(T::Auction::process()).is_ok()
+				Self::should_rotate(now) && T::Auctioneer::process().and(T::Auctioneer::process()).is_ok()
 			}
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
-				T::Auction::process().is_ok()
+				T::Auctioneer::process().is_ok()
 			}
 			// Failing that do nothing
 			_ => false,
@@ -344,7 +344,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// Prepare candidates for a new session
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		match T::Auction::phase() {
+		match T::Auctioneer::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
 			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
@@ -365,7 +365,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					T::EpochTransitionHandler::on_new_epoch(&winners, minimum_active_bid);
 				}
 
-				let _ = T::Auction::process();
+				let _ = T::Auctioneer::process();
 				None
 			}
 			// Return
