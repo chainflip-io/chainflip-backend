@@ -31,7 +31,6 @@ pub async fn start<BlockStream>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    // TODO: Could this a be a constant shared between the state chain and the cfe, to avoid needing to load it
     let heartbeat_block_interval = state_chain_client
         .metadata
         .module("Reputation")
@@ -268,7 +267,7 @@ pub async fn start<BlockStream>(
                 Err(error) => {
                     slog::error!(
                         logger,
-                        "Didn't events at block {}. {}",
+                        "Failed to decode events at block {}. {}",
                         block_header.number,
                         error,
                     );

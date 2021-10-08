@@ -141,7 +141,7 @@ impl StateChainClient {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
     {
-        slog::trace!(logger, "Submitting state chain extrinsic: {:?}", extrinsic);
+        slog::trace!(logger, "Submitting extrinsic: {:?}", extrinsic);
         let mut nonce = self.nonce.lock().await;
 
         match substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
