@@ -2,10 +2,6 @@
 
 A module to manage the reputation of our validators for the ChainFlip State Chain
 
-- [`Config`]
-- [`Call`]
-- [`Module`]
-
 ## Overview
 
 The module contains functionality to measure the liveness of our validators.  This is measured
