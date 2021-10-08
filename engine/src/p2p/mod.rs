@@ -31,7 +31,7 @@ pub trait P2PNetworkClient {
 
 /// Handles P2P network events.
 #[async_trait]
-pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
+pub trait NetworkEventHandler<C: P2PNetworkClient> {
     async fn handle_event(&self, event: C::NetworkEvent);
 }
 
