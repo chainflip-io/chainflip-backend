@@ -3,15 +3,20 @@
 //! # Chainflip governance
 
 use codec::Decode;
+use codec::Encode;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnfilteredDispatchable;
+use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
+use sp_std::boxed::Box;
 use sp_std::ops::Add;
+use sp_std::vec;
 use sp_std::vec::Vec;
 
 const FIVE_DAYS_IN_SECONDS: u64 = 432000;
 
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(test)]
@@ -31,7 +36,6 @@ pub mod pallet {
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::boxed::Box;
-	use sp_std::vec;
 	use sp_std::vec::Vec;
 
 	use crate::FIVE_DAYS_IN_SECONDS;
@@ -64,6 +68,7 @@ pub mod pallet {
 		type Call: Member
 			+ FullCodec
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ From<frame_system::Call<Self>>
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
@@ -165,23 +170,8 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
-			// Generate the next proposal id
-			let id = Self::get_next_id();
-			// Insert a new proposal
-			<Proposals<T>>::insert(
-				id,
-				Proposal {
-					call: call.encode(),
-					approved: vec![],
-				},
-			);
-			// Update the proposal counter
-			<ProposalCount<T>>::put(id);
-			// Add the proposal to the active proposals array
-			<ActiveProposals<T>>::append((
-				id,
-				T::TimeSource::now().as_secs() + <ExpiryTime<T>>::get(),
-			));
+			// Push proposal
+			let id = Self::push_proposal(call);
 			Self::deposit_event(Event::Proposed(id));
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
@@ -305,6 +295,24 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	/// jkjk
+	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
+		// Generate the next proposal id
+		let id = Self::get_next_id();
+		// Insert a new proposal
+		<Proposals<T>>::insert(
+			id,
+			Proposal {
+				call: call.encode(),
+				approved: vec![],
+			},
+		);
+		// Update the proposal counter
+		<ProposalCount<T>>::put(id);
+		// Add the proposal to the active proposals array
+		<ActiveProposals<T>>::append((id, T::TimeSource::now().as_secs() + <ExpiryTime<T>>::get()));
+		id
+	}
 	/// Returns the next proposal id
 	fn get_next_id() -> ProposalId {
 		<ProposalCount<T>>::get().add(1)
