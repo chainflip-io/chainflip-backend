@@ -89,40 +89,37 @@ pub async fn start<BlockStream>(
                                     .map_err(|_| "Receiver should exist")
                                     .unwrap();
 
-                                let response = match multisig_event_receiver.recv().await {
-                                    Some(event) => match event {
-                                        MultisigEvent::KeygenResult(KeygenOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(pubkey) => {
-                                                KeygenResponse::<AccountId32, Vec<u8>>::Success(
-                                                    pubkey.serialize().into(),
-                                                )
-                                            }
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Keygen failed with error: {:?}",
-                                                    err
-                                                );
-                                                let bad_account_ids: Vec<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
-                                                KeygenResponse::Error(bad_account_ids)
-                                            }
-                                        },
-                                        MultisigEvent::MessageSigningResult(
-                                            message_signing_result,
-                                        ) => {
-                                            panic!(
-                                                "Expecting KeygenResult, got: {:?}",
-                                                message_signing_result
+                                let response = match multisig_event_receiver.recv().await.expect("Channel closed!") {
+                                    MultisigEvent::KeygenResult(KeygenOutcome {
+                                        id: _,
+                                        result,
+                                    }) => match result {
+                                        Ok(pubkey) => {
+                                            KeygenResponse::<AccountId32, Vec<u8>>::Success(
+                                                pubkey.serialize().into(),
+                                            )
+                                        }
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Keygen failed with error: {:?}",
+                                                err
                                             );
+                                            let bad_account_ids: Vec<_> = bad_account_ids
+                                                .iter()
+                                                .map(|v| AccountId32::from(v.0))
+                                                .collect();
+                                            KeygenResponse::Error(bad_account_ids)
                                         }
                                     },
-                                    None => todo!(),
+                                    MultisigEvent::MessageSigningResult(
+                                        message_signing_result,
+                                    ) => {
+                                        panic!(
+                                            "Expecting KeygenResult, got: {:?}",
+                                            message_signing_result
+                                        );
+                                    }
                                 };
                                 state_chain_client
                                     .submit_extrinsic(
@@ -163,40 +160,37 @@ pub async fn start<BlockStream>(
                                     .map_err(|_| "Receiver should exist")
                                     .unwrap();
 
-                                let response = match multisig_event_receiver.recv().await {
-                                    Some(event) => match event {
-                                        MultisigEvent::MessageSigningResult(SigningOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(sig) => ThresholdSignatureResponse::<
-                                                AccountId32,
-                                                pallet_cf_vaults::SchnorrSigTruncPubkey,
-                                            >::Success {
-                                                message_hash,
-                                                signature: sig.into(),
-                                            },
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Signing failed with error: {:?}",
-                                                    err
-                                                );
-                                                let bad_account_ids: Vec<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
-                                                ThresholdSignatureResponse::Error(bad_account_ids)
-                                            }
+                                let response = match multisig_event_receiver.recv().await.expect("Channel closed!") {
+                                    MultisigEvent::MessageSigningResult(SigningOutcome {
+                                        id: _,
+                                        result,
+                                    }) => match result {
+                                        Ok(sig) => ThresholdSignatureResponse::<
+                                            AccountId32,
+                                            pallet_cf_vaults::SchnorrSigTruncPubkey,
+                                        >::Success {
+                                            message_hash,
+                                            signature: sig.into(),
                                         },
-                                        MultisigEvent::KeygenResult(keygen_result) => {
-                                            panic!(
-                                                "Expecting MessageSigningResult, got: {:?}",
-                                                keygen_result
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Signing failed with error: {:?}",
+                                                err
                                             );
+                                            let bad_account_ids: Vec<_> = bad_account_ids
+                                                .iter()
+                                                .map(|v| AccountId32::from(v.0))
+                                                .collect();
+                                            ThresholdSignatureResponse::Error(bad_account_ids)
                                         }
                                     },
-                                    _ => panic!("Channel closed"),
+                                    MultisigEvent::KeygenResult(keygen_result) => {
+                                        panic!(
+                                            "Expecting MessageSigningResult, got: {:?}",
+                                            keygen_result
+                                        );
+                                    }
                                 };
                                 state_chain_client
                                     .submit_extrinsic(
