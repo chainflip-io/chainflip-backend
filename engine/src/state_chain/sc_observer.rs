@@ -89,7 +89,11 @@ pub async fn start<BlockStream>(
                                     .map_err(|_| "Receiver should exist")
                                     .unwrap();
 
-                                let response = match multisig_event_receiver.recv().await.expect("Channel closed!") {
+                                let response = match multisig_event_receiver
+                                    .recv()
+                                    .await
+                                    .expect("Channel closed!")
+                                {
                                     MultisigEvent::KeygenResult(KeygenOutcome {
                                         id: _,
                                         result,
@@ -112,9 +116,7 @@ pub async fn start<BlockStream>(
                                             KeygenResponse::Error(bad_account_ids)
                                         }
                                     },
-                                    MultisigEvent::MessageSigningResult(
-                                        message_signing_result,
-                                    ) => {
+                                    MultisigEvent::MessageSigningResult(message_signing_result) => {
                                         panic!(
                                             "Expecting KeygenResult, got: {:?}",
                                             message_signing_result
@@ -160,7 +162,11 @@ pub async fn start<BlockStream>(
                                     .map_err(|_| "Receiver should exist")
                                     .unwrap();
 
-                                let response = match multisig_event_receiver.recv().await.expect("Channel closed!") {
+                                let response = match multisig_event_receiver
+                                    .recv()
+                                    .await
+                                    .expect("Channel closed!")
+                                {
                                     MultisigEvent::MessageSigningResult(SigningOutcome {
                                         id: _,
                                         result,

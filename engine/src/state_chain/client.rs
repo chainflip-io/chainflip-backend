@@ -136,27 +136,33 @@ pub struct StateChainClient {
     state_rpc_client: StateRpcClient,
 }
 impl StateChainClient {
-	async fn inner_submit_extrinsic<Extrinsic>(&self, nonce: u32, extrinsic: Extrinsic) -> Result<sp_core::H256>
-	where
-		state_chain_runtime::Call: std::convert::From<Extrinsic>,
+    async fn inner_submit_extrinsic<Extrinsic>(
+        &self,
+        nonce: u32,
+        extrinsic: Extrinsic,
+    ) -> Result<sp_core::H256>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
-	{
-		self.author_rpc_client
-			.submit_extrinsic(Bytes::from(
-				substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
-					&self.runtime_version,
-					self.genesis_hash,
-					nonce,
-					substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode()),
-					&self.signer,
-				)
-				.await?
-				.encode()
-			))
-			.compat()
-			.map_err(anyhow::Error::msg)
-			.await
-	}
+    {
+        self.author_rpc_client
+            .submit_extrinsic(Bytes::from(
+                substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
+                    &self.runtime_version,
+                    self.genesis_hash,
+                    nonce,
+                    substrate_subxt::Encoded(
+                        state_chain_runtime::Call::from(extrinsic.clone()).encode(),
+                    ),
+                    &self.signer,
+                )
+                .await?
+                .encode(),
+            ))
+            .compat()
+            .map_err(anyhow::Error::msg)
+            .await
+    }
 
     pub async fn submit_extrinsic<Extrinsic>(&self, logger: &slog::Logger, extrinsic: Extrinsic)
     where
@@ -164,16 +170,16 @@ impl StateChainClient {
         Extrinsic: std::fmt::Debug + Clone,
     {
         slog::trace!(logger, "Submitting extrinsic: {:?}", extrinsic);
-		let mut nonce = self.nonce.lock().await;
+        let mut nonce = self.nonce.lock().await;
 
         match self.inner_submit_extrinsic(*nonce, extrinsic.clone()).await {
-			Ok(_) => *nonce += 1,
-			Err(error) => slog::error!(
-				logger,
-				"Could not submit extrinsic: {:?}, {}",
-				extrinsic,
-				error
-			)
+            Ok(_) => *nonce += 1,
+            Err(error) => slog::error!(
+                logger,
+                "Could not submit extrinsic: {:?}, {}",
+                extrinsic,
+                error
+            ),
         }
     }
     pub async fn events(
@@ -260,7 +266,7 @@ pub async fn connect_to_state_chain(
             .map_err(anyhow::Error::msg)?[..],
     )?)?;
 
-	let system_pallet_metadata = metadata.module("System")?;
+    let system_pallet_metadata = metadata.module("System")?;
 
     Ok((
         Arc::new(StateChainClient {
