@@ -107,9 +107,9 @@ async fn main() {
         p2p::conductor::start(
             p2p_rpc::connect(
                 &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).unwrap_or_else(
-                    |_| panic!(
-                        "Should be valid ws endpoint: {}",
-                        settings.state_chain.ws_endpoint
+                    |e| panic!(
+                        "Should be valid ws endpoint: {}: {}",
+                        settings.state_chain.ws_endpoint, e
                     )
                 ),
                 AccountId(pair_signer.lock().await.signer().public().0)

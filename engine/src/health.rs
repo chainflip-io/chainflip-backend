@@ -35,7 +35,10 @@ impl HealthMonitor {
         let listener = TcpListener::bind(self.bind_address.clone())
             .await
             .unwrap_or_else(|e| {
-                panic!("Could not bind TCP listener to {}: ", self.bind_address, e)
+                panic!(
+                    "Could not bind TCP listener to {}: {}",
+                    self.bind_address, e
+                )
             });
 
         let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();

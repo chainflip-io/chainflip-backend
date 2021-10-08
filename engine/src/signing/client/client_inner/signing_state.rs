@@ -52,7 +52,7 @@ impl P2PSender for SigningP2PSender {
     fn send(&self, reciever_idx: usize, data: Self::Data) {
         let msg: MultisigMessage = SigningDataWrapped::new(data, self.ceremony_id).into();
         let data = bincode::serialize(&msg)
-            .unwrap_or_else(|_| panic!("Could not serialise MultisigMessage: {:?}", msg));
+            .unwrap_or_else(|e| panic!("Could not serialise MultisigMessage: {:?}: {}", msg, e));
         self.sender.send(reciever_idx, data);
     }
 }

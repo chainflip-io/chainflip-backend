@@ -86,10 +86,11 @@ impl EthBroadcaster {
         let key = read_to_string(settings.eth.private_key_file.as_path())?;
         Ok(Self {
             web3,
-            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|_| {
+            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
                 panic!(
-                    "Should read in secret key from: {}",
+                    "Should read in secret key from: {}: {}",
                     settings.eth.private_key_file.display(),
+                    e,
                 )
             }),
         })
