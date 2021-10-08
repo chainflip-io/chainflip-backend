@@ -28,7 +28,7 @@ use crate::{common::Mutex, settings};
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
 
-// Substrate_subxt's Runtime trait allows use to use it's extrinsic signing code
+// Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeImplForSigningExtrinsics {}
 impl System for RuntimeImplForSigningExtrinsics {
