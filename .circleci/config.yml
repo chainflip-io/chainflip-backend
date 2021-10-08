@@ -147,6 +147,12 @@ workflows:
             - ghcr-credentials
             - discord-webhooks
           <<: *only_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
