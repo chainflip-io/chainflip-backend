@@ -163,6 +163,10 @@ impl pallet_cf_validator::Config for Runtime {
 	type Auction = Auction;
 }
 
+impl pallet_cf_environment::Config for Runtime {
+	type Event = Event;
+}
+
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type PublicKey = Vec<u8>;
@@ -469,6 +473,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},

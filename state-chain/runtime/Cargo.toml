@@ -40,6 +40,7 @@ pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = f
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
 pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
 pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
+pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -126,4 +127,5 @@ std = [
   'pallet-cf-vaults/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-threshold-signature/std',
+  'pallet-cf-environment/std'
 ]

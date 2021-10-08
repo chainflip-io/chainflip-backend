@@ -7,6 +7,7 @@ A module to manage the reputation of our validators for the ChainFlip State Chai
 - [`Module`]
 
 ## Overview
+
 The module contains functionality to measure the liveness of our validators.  This is measured
 with a *heartbeat* which should be submitted via the extrinsic `heartbeat()` within the time
 period set by the *heartbeat interval*.  By continuing to submit heartbeats the validator will
@@ -19,6 +20,7 @@ met.  Falling into negative reputation leads to the eventual slashing of FLIP.  
 is positive slashing stops.
 
 ## Terminology
+
 - **Validator:** A node in our network that is producing blocks.
 - **Heartbeat:** A term used to measure the liveness of a validator.
 - **Heartbeat interval:** The duration in time, measured in blocks we would expect to receive a

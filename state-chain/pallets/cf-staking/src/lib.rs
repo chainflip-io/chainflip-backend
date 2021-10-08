@@ -1,41 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # Chainflip staking
-//!
-//! The responsiblities of this [pallet](Pallet) can be broken down into:
-//!
-//! ## Staking
-//!
-//! - Stake is added via the Ethereum StakeManager contract. `Staked` events emitted from this contract should trigger
-//!   a witnessed call to [Pallet::staked].
-//! - Any stake added in this way is considered as an implicit bid for a validator slot.
-//! - If stake is added to a non-existent account, it will not be counted and will be refunded instead.
-//!
-//! ## Claiming
-//!
-//! - A claim request is made via a signed call to `claim`.
-//! - The claimant who is a current validator is subject to the bond - an amount equal to the current bond is locked
-//!   and cannot be claimed. For example if an account has 120 FLIP staked, and the current bond is 40 FLIP, their
-//!   claimable balance would be 80 FLIP.
-//! - An event is emitted with the claim parameters that need to be signed by the CFE signing module.
-//! - Once a valid signature is generated, this is posted to the state chain along with the expiry timestamp.
-//!
-//! ## Claim expiry
-//!
-//! - When a claim expires, it will no longer be claimable on ethereum, so is re-credited to the originating account.
-//!
-//! ## Retiring
-//!
-//! - Accounts are considered active (not retired) by default.
-//! - Any active account can make a signed call to the [`retire`](Pallet::retire_account) extrinsic to change their status to
-//!   retired.
-//! - Only active accounts should be included as active bidders for the auction.
-//!
-//! ## Account creation and deletion
-//!
-//! - When a staker adds stake for the first time, this creates an account.
-//! - When a user claims all remaining funds, their account is deleted.
-//!
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod mock;
@@ -175,25 +140,25 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A validator has staked some FLIP on the Ethereum chain. [validator_id, stake_added, total_stake]
+		/// A validator has staked some FLIP on the Ethereum chain. \[account_id, stake_added, total_stake\]
 		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
 
-		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
+		/// A validator has claimed their FLIP on the Ethereum chain. \[account_id, claimed_amount\]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
-		/// A claim signature has been issued by the signer module. [node_id, signed_payload]
+		/// A claim signature has been issued by the signer module. \[account_id, signed_payload\]
 		ClaimSignatureIssued(AccountId<T>, Vec<u8>),
 
-		/// An account has retired and will no longer take part in auctions. [who]
+		/// An account has retired and will no longer take part in auctions. \[account_id\]
 		AccountRetired(AccountId<T>),
 
-		/// A previously retired account  has been re-activated. [who]
+		/// A previously retired account  has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
-		/// A claim has expired without being redeemed. [who, nonce, amount]
+		/// A claim has expired without being redeemed. \[account_id, nonce, amount\]
 		ClaimExpired(AccountId<T>, FlipBalance<T>),
 
-		/// A stake attempt has failed. [who, address, amount]
+		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
 	}
 
@@ -235,11 +200,22 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Funds have been staked to an account via the StakeManager smart contract.
+		/// **This call can only be dispatched from the configured witness origin.**
+		///
+		/// Funds have been staked to an account via the StakeManager Smart Contract.
 		///
 		/// If the account doesn't exist, we create it.
 		///
-		/// **This call can only be dispatched from the configured witness origin.**
+		/// ## Events
+		///
+		/// - [FailedStakeAttempt](Event::FailedStakeAttempt): The stake was rejected. This happens if the
+		///   withdrawal address provided does not match the withdrawal address we already have in storage for
+		///   the account_id
+		/// - [Staked](Event::Staked): The stake has been successfully registered.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](Error::BadOrigin): The extrinsic was not dispatched by the witness origin.
 		#[pallet::weight(10_000)]
 		pub fn staked(
 			origin: OriginFor<T>,
@@ -250,23 +226,26 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_err() {
-				Ok(().into())
-			} else {
+			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
-				Ok(().into())
 			}
+			Ok(().into())
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
 		///
 		/// On success, emits a [ClaimSigRequested](Events::ClaimSigRequested) event. The attached claim request needs
-		/// to be signed by a threshold of validators in order to be become valid.
+		/// to be signed by a threshold of validators in order to produce valid data that can be submitted to the
+		/// StakeManager Smart Contract.
 		///
 		/// An account can only have one pending claim at a time, and until this claim has been redeemed or expired,
-		/// the funds wrapped up in the claim are inaccessible and are not counted towards validator auction bidding.
+		/// the funds wrapped up in the claim are inaccessible and are not counted towards a Validator's Auction Bid.
 		///
-		/// ## Error conditions:
+		/// ## Events
+		///
+		/// - [ClaimSigRequested](Event::ClaimSigRequested): We successfully requested a signature over the claim details.
+		///
+		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim): The account may not have a claim already pending. Any pending
 		///   claim must be finalized or expired before a new claim can be requested.
@@ -274,6 +253,10 @@ pub mod pallet {
 		///   auction.
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
 		///   funds.
+		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The withdrawal address specified
+		///   does not match the one on file, and the one on file is not the ETH_ZERO_ADDRESS
+		/// - [EthEncodingFailed](Error::EthEncodingFailed): The claim request could not be encoded as a valid
+		///   Ethereum transaction.
 		#[pallet::weight(10_000)]
 		pub fn claim(
 			origin: OriginFor<T>,
@@ -287,7 +270,15 @@ pub mod pallet {
 
 		/// Get *all* FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// Same as [claim] except calculate the maximum claimable amount and submits a claim for that.
+		/// Same as [claim] except first calculates the maximum claimable amount.
+		///
+		/// ## Events
+		///
+		/// - See [claim]
+		///
+		/// ## Errors
+		///
+		/// - See [claim]
 		#[pallet::weight(10_000)]
 		pub fn claim_all(
 			origin: OriginFor<T>,
@@ -299,18 +290,23 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// **This call can only be dispatched from the configured witness origin.**
+		///
 		/// Previously staked funds have been reclaimed.
 		///
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already been authorised
 		/// by validator multisig. This merely signals that the claimant has in fact redeemed their funds via the
-		/// `StakeManager` contract and allows us finalise any on-chain cleanup.
+		/// StakeManager Smart Contract and allows us to finalise any on-chain cleanup.
 		///
-		/// ## Error conditions:
+		/// ## Events
 		///
-		/// - [NoPendingClaim](Error::NoPendingClaim)
-		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
+		/// - [ClaimSettled](Event::ClaimSettled): The claim was successfully settled and balances are resolved.
 		///
-		/// **This call can only be dispatched from the configured witness origin.**
+		/// ## Errors
+		///
+		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
+		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): Claimed amount is not the same as witnessed amount.
+		/// - [BadOrigin](Error::BadOrigin): The extrinsic was not dispatched by the witness origin.
 		#[pallet::weight(10_000)]
 		pub fn claimed(
 			origin: OriginFor<T>,
@@ -349,11 +345,25 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// The claim signature generated by the CFE should be posted here so it can be stored on-chain.
+		/// **This call can only be dispatched from the configured witness origin.**
 		///
-		/// Error conditions:
-		/// - [SignatureAlreadyIssued](Error::SignatureAlreadyIssued): The signature was already issued.
+		/// The claim signature generated by the CFE should be posted here so it can be stored on-chain. The
+		/// Validators are no longer responsible for the execution of this claim, since the claiming user is
+		/// expected to read the signature from claim storage, and use it to compose a transaction to the
+		/// StakeManager Smart Contract, which they will then broadcast themselves.
+		///
+		/// ## Events
+		///
+		/// - [ClaimSignatureIssued](Event::ClaimSignatureIssued): Successfully issued a claim signature
+		///   signed by the Validator quorum.
+		///
+		/// ## Errors
+		///
 		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
+		/// - [SignatureAlreadyIssued](Error::SignatureAlreadyIssued): The signature was already issued.
+		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): The claim is not valid.
+		/// - [SignatureTooLate](Error::SignatureTooLate): We're calling this function after the expiration of
+		///   the claim.
 		#[pallet::weight(10_000)]
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
@@ -391,32 +401,37 @@ pub mod pallet {
 		/// Signals a validator's intent to withdraw their stake after the next auction and desist from future auctions.
 		/// Should only be called by accounts that are not already retired.
 		///
-		/// Error conditions:
+		/// ## Events
+		///
+		/// - [AccountRetired](Event::AccountRetired): The account has successfully retired from the auction.
+		///
+		/// ## Errors
 		///
 		/// - [AlreadyRetired](Error::AlreadyRetired): The account is already retired.
 		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
 		#[pallet::weight(10_000)]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-
 			Self::retire(&who)?;
-
 			Ok(().into())
 		}
 
 		/// Signals a retired validator's intent to re-activate their stake and participate in the next validator auction.
 		/// Should only be called if the account is in a retired state.
 		///
-		/// Error conditions:
+		/// ## Events
+		///
+		/// - [AccountActivated](Event::AccountActivated): The account has successfully re-activated and will
+		///   be re-considrered for future auctions.
+		///
+		/// ## Errors
 		///
 		/// - [AlreadyActive](Error::AlreadyActive): The account is not in a retired state.
 		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
 		#[pallet::weight(10_000)]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-
 			Self::activate(&who)?;
-
 			Ok(().into())
 		}
 	}

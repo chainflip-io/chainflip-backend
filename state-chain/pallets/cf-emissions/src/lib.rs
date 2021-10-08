@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! A pallet for managing the FLIP emissions schedule.
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;

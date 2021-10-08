@@ -383,13 +383,19 @@ jobs:
       - run:
           name: Dump logs (state-chain-node)
           when: always
-          command: kubectl logs -l app.kubernetes.io/name=state-chain-node
+          command: kubectl logs -l app.kubernetes.io/name=state-chain-node --tail -1 > node.log
       - run:
           name: Dump logs (chainflip-engine)
           when: always
-          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine
+          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine --tail -1 > engine.log
+      - run: |
+          mkdir artifacts
+          mv *.log artifacts
+      - store_artifacts:
+          path: artifacts
       - run:
           name: Destroy single node
           when: always
           command: helm uninstall bashful -n default
+      - run: echo $TEST_NODE_LOG_URL
 ######################## /Jobs ########################
