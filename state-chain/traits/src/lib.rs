@@ -15,6 +15,13 @@ use frame_support::traits::StoredMap;
 
 pub mod mocks;
 
+/// An index to a block.
+pub type BlockNumber = u32;
+pub type FlipBalance = u128;
+/// The type used as an epoch index.
+pub type EpochIndex = u32;
+pub type AuctionIndex = u64;
+
 /// and Chainflip was born...some base types
 pub trait Chainflip {
 	/// An amount for a bid

@@ -1,10 +1,5 @@
 pub mod common {
-	/// An index to a block.
-	pub type BlockNumber = u32;
-	pub type FlipBalance = u128;
-	/// The type used as an epoch index.
-	pub type EpochIndex = u32;
-	pub type AuctionIndex = u64;
+	use cf_traits::{BlockNumber, FlipBalance};
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;

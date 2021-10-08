@@ -17,6 +17,8 @@ mod tests {
 		Validator, Vaults,
 	};
 
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];

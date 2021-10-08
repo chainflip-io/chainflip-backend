@@ -41,7 +41,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, EpochIndex, FlipBalance, BlockNumber};
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
 
@@ -130,7 +130,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type AuctionIndex = u64;
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinValidators = MinValidators;

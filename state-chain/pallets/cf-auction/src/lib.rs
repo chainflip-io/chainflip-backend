@@ -33,7 +33,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::RemainingBid;
+	use cf_traits::{RemainingBid, AuctionIndex};
 	use cf_traits::{ChainflipAccount, VaultRotator};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
@@ -65,8 +65,6 @@ pub mod pallet {
 		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
-		/// An index for the current auction
-		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -108,7 +106,7 @@ pub mod pallet {
 	/// The index of the auction we are in
 	#[pallet::storage]
 	#[pallet::getter(fn current_auction_index)]
-	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
+	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, AuctionIndex, ValueQuery>;
 
 	/// Validators that have been reported as being bad
 	#[pallet::storage]
@@ -140,17 +138,17 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An auction phase has started \[auction_index\]
-		AuctionStarted(T::AuctionIndex),
+		AuctionStarted(AuctionIndex),
 		/// An auction has a set of winners \[auction_index, winners\]
-		AuctionCompleted(T::AuctionIndex, Vec<T::ValidatorId>),
+		AuctionCompleted(AuctionIndex, Vec<T::ValidatorId>),
 		/// The auction has been confirmed off-chain \[auction_index\]
-		AuctionConfirmed(T::AuctionIndex),
+		AuctionConfirmed(AuctionIndex),
 		/// Awaiting bidders for the auction
 		AwaitingBidders,
 		/// The active validator range upper limit has changed \[before, after\]
 		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
 		/// The auction was aborted \[auction_index\]
-		AuctionAborted(T::AuctionIndex),
+		AuctionAborted(AuctionIndex),
 	}
 
 	#[pallet::error]
@@ -270,7 +268,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #4 - Confirm that the validators are 'online'
-				bidders.retain(|(id, _)| T::Online::is_online(id));
+				// bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					frame_support::debug::RuntimeLogger::init();
@@ -285,7 +283,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				let phase = AuctionPhase::BidsTaken(bidders);
 				CurrentPhase::<T>::put(phase.clone());
 
-				CurrentAuctionIndex::<T>::mutate(|idx| *idx + One::one());
+				CurrentAuctionIndex::<T>::mutate(|idx| *idx = *idx + 1);
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				Ok(phase)
