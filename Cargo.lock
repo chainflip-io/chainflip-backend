@@ -4788,6 +4788,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-environment"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
@@ -8571,6 +8582,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "futures 0.3.15",
+ "hex",
  "hex-literal",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -8620,6 +8632,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-auction",
  "pallet-cf-emissions",
+ "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-reputation",
