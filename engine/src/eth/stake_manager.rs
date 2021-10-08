@@ -1,19 +1,16 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use crate::common::Mutex;
+use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::pallets::witness_api::*,
-    state_chain::runtime::StateChainRuntime,
 };
 
 use sp_runtime::AccountId32;
-use substrate_subxt::{Client, PairSigner};
 
 use web3::{
     ethabi::{self, RawLog},
@@ -31,8 +28,7 @@ use slog::o;
 pub async fn start_stake_manager_witness(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
-    subxt_client: Client<StateChainRuntime>,
+    state_chain_client: Arc<StateChainClient>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
@@ -47,66 +43,40 @@ pub async fn start_stake_manager_witness(
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
+            // TODO: Handle unwraps
             match result_event.unwrap() {
                 StakeManagerEvent::Staked {
                     account_id,
                     amount,
-                    staker,
+                    staker: _,
                     return_addr,
                     tx_hash,
                 } => {
-                    slog::trace!(
-                        logger,
-                        "Sending witness_staked({:?}, {}, {:?}, {:?}, {:?}) to state chain",
-                        account_id,
-                        amount,
-                        staker,
-                        return_addr,
-                        tx_hash
-                    );
-                    let mut signer = signer.lock().await;
-                    match subxt_client
-                        .witness_staked(&*signer, account_id, amount, Some(return_addr.0), tx_hash)
-                        .await
-                    {
-                        Ok(_) => signer.increment_nonce(),
-                        Err(e) => {
-                            slog::error!(
-                                logger,
-                                "Could not submit witness_staked of tx_hash `{:?}`, {}",
+                    state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_staked(
+                                account_id,
+                                amount,
+                                return_addr.0,
                                 tx_hash,
-                                e
-                            );
-                        }
-                    }
+                            ),
+                        )
+                        .await;
                 }
                 StakeManagerEvent::ClaimExecuted {
                     account_id,
                     amount,
                     tx_hash,
                 } => {
-                    slog::trace!(
-                        logger,
-                        "Sending claim_executed({:?}, {}, {:?}) to the state chain",
-                        account_id,
-                        amount,
-                        tx_hash
-                    );
-                    let mut signer = signer.lock().await;
-                    match subxt_client
-                        .witness_claimed(&*signer, account_id, amount, tx_hash)
-                        .await
-                    {
-                        Ok(_) => signer.increment_nonce(),
-                        Err(e) => {
-                            slog::error!(
-                                logger,
-                                "Could not submit witness_claimed of tx_hash `{:?}`, {}",
-                                tx_hash,
-                                e
-                            );
-                        }
-                    }
+                    state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_claimed(
+                                account_id, amount, tx_hash,
+                            ),
+                        )
+                        .await;
                 }
                 event => {
                     slog::warn!(
