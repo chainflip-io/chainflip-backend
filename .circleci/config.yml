@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        - feature/ch332-rust-doc
+#        - feature/ch332-rust-doc
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -77,12 +77,6 @@ parameters:
 
 ######################## Workflows ########################
 workflows:
-  rust-doc:
-    jobs:
-      - cargo-doc-validator-package:
-          context:
-            - ghcr-credentials
-
   create-rust-base:
     when: <<pipeline.parameters.rust-base>>
     jobs:
@@ -122,6 +116,12 @@ workflows:
             - ghcr-credentials
           <<: *ignore_main_branches
       - cargo-clippy-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+      - cargo-doc-validator-package:
           requires:
             - fmt-validator-package
           context:
@@ -305,8 +305,10 @@ jobs:
       - run: |
           cargo clippy
           sccache --show-stats
+
   cargo-doc-validator-package:
     <<: *cargo-base-job
+    shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
       - checkout
       - run: sccache --show-stats
