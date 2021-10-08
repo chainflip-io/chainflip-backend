@@ -242,7 +242,9 @@ pub mod pallet {
 			// If present we confirm they have already submitted or not
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
-				!ValidatorsLiveness::<T>::get(&validator_id).unwrap_or_default().has_submitted(),
+				!ValidatorsLiveness::<T>::get(&validator_id)
+					.unwrap_or_default()
+					.has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
 

@@ -1,9 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+mod chainflip;
+pub mod constants;
 
-// A few exports that help ease life for downstream crates.
-use cf_traits::{Chainflip, ChainflipAccountData};
 use core::time::Duration;
 
 pub use frame_support::{
@@ -16,8 +16,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_cf_flip::FlipSlasher;
-use pallet_cf_reputation::ReputationPenalty;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -29,7 +27,6 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
-use crate::chainflip::{ChainflipStakeHandler, ChainflipVaultRotationHandler};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -43,15 +40,14 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::{Chainflip, EpochIndex, FlipBalance, BlockNumber};
+use crate::chainflip::{
+	ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
+};
+pub use cf_traits::FlipBalance;
+use cf_traits::{BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
+use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
-
-use crate::chainflip::ChainflipEpochTransitions;
-
-mod chainflip;
-pub mod constants;
-use constants::common::*;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]

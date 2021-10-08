@@ -100,7 +100,10 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(
+				T::Auctioneer::waiting_on_bids(),
+				Error::<T>::AuctionInProgress
+			);
 			ensure!(
 				number_of_blocks >= T::MinEpoch::get(),
 				Error::<T>::InvalidEpoch
@@ -119,7 +122,10 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(
+				T::Auctioneer::waiting_on_bids(),
+				Error::<T>::AuctionInProgress
+			);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -171,7 +177,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub blocks_per_epoch: T::BlockNumber
+		pub blocks_per_epoch: T::BlockNumber,
 	}
 
 	#[cfg(feature = "std")]
@@ -256,7 +262,10 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_rotate(now) && T::Auctioneer::process().and(T::Auctioneer::process()).is_ok()
+				Self::should_rotate(now)
+					&& T::Auctioneer::process()
+						.and(T::Auctioneer::process())
+						.is_ok()
 			}
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them

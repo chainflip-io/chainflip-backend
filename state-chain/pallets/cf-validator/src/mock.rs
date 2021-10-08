@@ -54,7 +54,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -121,7 +121,6 @@ impl pallet_cf_auction::Config for Test {
 	type ValidatorId = ValidatorId;
 	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
-	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
@@ -197,7 +196,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_session: None,
-		pallet_cf_validator: Some(ValidatorPalletConfig {}),
+		pallet_cf_validator: Some(ValidatorPalletConfig {
+			blocks_per_epoch: 0,
+		}),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],

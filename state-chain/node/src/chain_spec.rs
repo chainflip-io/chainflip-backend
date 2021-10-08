@@ -5,9 +5,9 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctioneerConfig, AuraConfig, EmissionsConfig, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
@@ -342,7 +342,7 @@ fn testnet_genesis(
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
-		pallet_cf_auction: Some(AuctioneerConfig {
+		pallet_cf_auction: Some(AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),
 			winners: initial_authorities
 				.iter()

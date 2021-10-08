@@ -148,7 +148,6 @@ impl Config for Test {
 	type ValidatorId = ValidatorId;
 	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
-	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
 	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;

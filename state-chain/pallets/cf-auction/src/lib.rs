@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 extern crate assert_matches;
 
 use cf_traits::{
-	ActiveValidatorRange, Auctioneer, AuctionError, AuctionPhase, AuctionResult, BidderProvider,
+	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
 	ChainflipAccount, ChainflipAccountState, EmergencyRotation, Online, RemainingBid, StakeHandler,
 	VaultRotationHandler, VaultRotator,
 };
@@ -33,10 +33,10 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{RemainingBid, AuctionIndex};
-	use cf_traits::{ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator};
+	use cf_traits::{
+		AuctionIndex, ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator,
+	};
 	use frame_support::traits::ValidatorRegistration;
-	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -65,9 +65,6 @@ pub mod pallet {
 		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
-		/// Minimum amount of validators
-		#[pallet::constant]
-		type MinValidators: Get<u32>;
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 		/// The lifecycle of a vault rotation

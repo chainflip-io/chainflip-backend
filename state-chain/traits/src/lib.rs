@@ -3,6 +3,7 @@
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::traits::StoredMap;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	traits::{Imbalance, SignedImbalance},
@@ -11,7 +12,6 @@ use frame_support::{
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
-use frame_support::traits::StoredMap;
 
 pub mod mocks;
 

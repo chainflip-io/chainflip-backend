@@ -200,7 +200,7 @@ mod tests {
 	#[test]
 	fn missing_a_heartbeat_submission_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
-			ReputationPallet::heartbeat(Origin::signed(ALICE));
+			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 			// We are starting out with zero points
 			assert_eq!(reputation_points(ALICE), 0);
 			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
