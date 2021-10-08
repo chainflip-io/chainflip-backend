@@ -19,12 +19,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
-impl WeightInfo for () {
-	fn set_auction_size_range() -> u64 {
-		0 as Weight
-	}
-}
-
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
@@ -155,7 +149,6 @@ impl Config for Test {
 	type ValidatorId = ValidatorId;
 	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
-	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
 	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;

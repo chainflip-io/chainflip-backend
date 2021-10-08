@@ -15,11 +15,17 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
+/// An index to a block.
+pub type BlockNumber = u32;
+pub type FlipBalance = u128;
+/// The type used as an epoch index.
+pub type EpochIndex = u32;
+pub type AuctionIndex = u64;
+
 /// and Chainflip was born...some base types
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
-
 	/// An identity for a validator
 	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 }
@@ -74,12 +80,12 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
-	/// Waiting for bids, we store the last set of winners and min bid required
+	/// Waiting for bids
 	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	/// via the trait `VaultRotation`
+	/// from the trait `VaultRotation`
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
 	ConfirmedValidators(Vec<ValidatorId>, Amount),
@@ -114,7 +120,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
 /// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
-pub trait Auction {
+pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
@@ -156,12 +162,10 @@ pub enum RotationError<ValidatorId> {
 	EmptyValidatorSet,
 	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
-	/// The key generation response failed
-	KeyResponseFailed,
+	/// The keygen response says the newly generated key is the same as the old key
+	KeyUnchanged,
 	/// Failed to construct a valid chain specific payload for rotation
 	FailedToConstructPayload,
-	/// Vault rotation completion failed
-	VaultRotationCompletionFailed,
 	/// The vault rotation is not confirmed
 	NotConfirmed,
 	/// Failed to make keygen request
@@ -191,6 +195,17 @@ pub enum AuctionError {
 	InvalidRange,
 	Abort,
 	NotConfirmed,
+}
+
+/// Handler for Epoch life cycle events.
+pub trait EpochTransitionHandler {
+	/// The id type used for the validators.
+	type ValidatorId;
+	type Amount: Copy;
+	/// A new epoch has started
+	///
+	/// The new set of validator `new_validators` are now validating
+	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {}
 }
 
 /// Providing bidders for an auction
@@ -274,6 +289,12 @@ pub trait RewardsDistribution {
 
 	/// The execution weight of calling the distribution function.
 	fn execution_weight() -> Weight;
+}
+
+pub trait RewardRollover {
+	type AccountId;
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.

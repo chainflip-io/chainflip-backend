@@ -27,7 +27,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
-		Rewards::rollover(new_validators).unwrap_or_else(|err| {
+		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
 			debug::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch

@@ -10,7 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::RewardsDistribution;
+use cf_traits::{RewardRollover, RewardsDistribution};
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance},
@@ -89,6 +89,42 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> RewardRollover for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	/// 1. Checks that all entitlements can be honoured, ie. there are enough reserves.
+	/// 2. Credits all current beneficiaries with any remaining reward entitlements.
+	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
+	/// 4. Resets the apportioned rewards counter to zero.
+	/// 5. Updates the list of beneficiaries.
+	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError> {
+		// Sanity check in case we screwed up with the accounting.
+		ensure!(
+			Self::sufficient_reserves(),
+			Error::<T>::InsufficientReserves
+		);
+
+		// Credit each validator with their remaining due rewards.
+		for (account_id, already_received) in
+			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
+		{
+			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
+		}
+
+		// Roll over any dust remaining in the reserve.
+		let dust = Flip::<T>::reserved_balance(VALIDATOR_REWARDS);
+		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, dust);
+
+		// Set the new beneficiaries
+		for account_id in new_beneficiaries {
+			ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, account_id, T::Balance::zero())
+		}
+		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, new_beneficiaries.len() as u32);
+		Ok(())
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// The amount of rewards still due to this account.
 	fn rewards_due(account_id: &T::AccountId) -> T::Balance {
@@ -130,39 +166,6 @@ impl<T: Config> Pallet<T> {
 			account_id.clone(),
 			reward_amount,
 		));
-	}
-
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
-	///
-	/// 1. Checks that all entitlements can be honoured, ie. there are enough reserves.
-	/// 2. Credits all current beneficiaries with any remaining reward entitlements.
-	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
-	/// 4. Resets the apportioned rewards counter to zero.
-	/// 5. Updates the list of beneficiaries.
-	pub fn rollover(new_beneficiaries: &[T::AccountId]) -> Result<(), DispatchError> {
-		// Sanity check in case we screwed up with the accounting.
-		ensure!(
-			Self::sufficient_reserves(),
-			Error::<T>::InsufficientReserves
-		);
-
-		// Credit each validator with their remaining due rewards.
-		for (account_id, already_received) in
-			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
-		{
-			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
-		}
-
-		// Roll over any dust remaining in the reserve.
-		let dust = Flip::<T>::reserved_balance(VALIDATOR_REWARDS);
-		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, dust);
-
-		// Set the new beneficiaries
-		for account_id in new_beneficiaries {
-			ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, account_id, T::Balance::zero())
-		}
-		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, new_beneficiaries.len() as u32);
-		Ok(())
 	}
 
 	/// The total rewards due to each beneficiary.

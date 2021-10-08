@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
+use cf_traits::{Auctioneer, Bid, BidderProvider, ChainflipAccountData, IsOnline};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -24,19 +24,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
-impl WeightInfo for () {
-	fn set_blocks_for_epoch() -> u64 {
-		0 as Weight
-	}
-
-	fn force_rotation() -> u64 {
-		0 as Weight
-	}
-}
-
-pub const MIN_VALIDATOR_SIZE: u32 = 2;
-pub const MAX_VALIDATOR_SIZE: u32 = 150;
-
 pub struct AuctionWeight;
 
 impl AuctionWeightTrait for AuctionWeight {
@@ -44,6 +31,9 @@ impl AuctionWeightTrait for AuctionWeight {
 		0 as Weight
 	}
 }
+
+pub const MIN_VALIDATOR_SIZE: u32 = 1;
+pub const MAX_VALIDATOR_SIZE: u32 = 3;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
@@ -64,7 +54,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -120,7 +110,7 @@ impl pallet_session::Config for Test {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 2;
+	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = 3;
 	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
 }
@@ -131,7 +121,6 @@ impl pallet_cf_auction::Config for Test {
 	type ValidatorId = ValidatorId;
 	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
-	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
@@ -201,7 +190,7 @@ impl Config for Test {
 	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
-	type Auction = AuctionPallet;
+	type Auctioneer = AuctionPallet;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
@@ -209,7 +198,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_session: None,
-		pallet_cf_validator: Some(ValidatorPalletConfig {}),
+		pallet_cf_validator: Some(ValidatorPalletConfig {
+			blocks_per_epoch: 0,
+		}),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],

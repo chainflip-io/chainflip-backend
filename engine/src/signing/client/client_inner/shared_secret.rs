@@ -1,13 +1,8 @@
-use slog::o;
-
-use crate::{
-    logging::SIGNING_SUB_COMPONENT,
-    signing::{
-        client::client_inner::utils,
-        crypto::{
-            BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS,
-            FE, GE,
-        },
+use crate::signing::{
+    client::client_inner::utils,
+    crypto::{
+        BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, Point, Scalar,
+        VerifiableSS,
     },
 };
 
@@ -30,11 +25,11 @@ pub struct SharedSecretState {
     // Phase 1
     bc1_vec: Vec<KeyGenBroadcastMessage1>,
     blind_vec: Vec<BigInt>,
-    y_vec: Vec<GE>,
+    y_vec: Vec<Point>,
     pub phase1_order: Vec<usize>,
     // Phase 2
-    vss_vec: Vec<VerifiableSS<GE>>,
-    ss_vec: Vec<FE>,
+    vss_vec: Vec<VerifiableSS<Point>>,
+    ss_vec: Vec<Scalar>,
     // Order in which the first broadcasts came in
     phase2_order: Vec<usize>,
     pub params: Parameters,
@@ -66,7 +61,7 @@ impl SharedSecretState {
             phase2_order: vec![],
             params,
             signer_idx: idx,
-            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "SharedSecretState")),
+            logger: logger.clone(),
         }
     }
 
@@ -103,6 +98,13 @@ impl SharedSecretState {
         self.blind_vec.push(bc1.blind);
         self.y_vec.push(bc1.y_i);
 
+        slog::trace!(
+            self.logger,
+            "BC1 messages collected: {}/{}",
+            self.bc1_vec.len(),
+            self.params.share_count
+        );
+
         let full = self.bc1_vec.len() == self.params.share_count;
 
         if full {
@@ -127,36 +129,34 @@ impl SharedSecretState {
 
         let params = &self.params;
 
-        let res = self
+        let (vss_scheme, secret_shares, _idx) = self
             .key
-            .phase1_verify_com_phase2_distribute(params, blind_vec, y_vec, bc1_vec, &parties);
+            .phase1_verify_com_phase2_distribute(params, blind_vec, y_vec, bc1_vec, &parties)?;
 
-        res.map(|(vss_scheme, secret_shares, _idx)| {
-            slog::debug!(self.logger, "[{}] phase 1 successful ✅", self.signer_idx);
+        slog::debug!(self.logger, "[{}] phase 1 successful ✅", self.signer_idx);
 
-            assert_eq!(secret_shares.len(), parties.len());
+        assert_eq!(secret_shares.len(), parties.len());
 
-            let mut messages = vec![];
+        let mut messages = vec![];
 
-            // Share secret shares with the right parties
-            for (idx, ss) in parties.iter().zip(secret_shares) {
-                if *idx == self.signer_idx {
-                    // Save our own value
-                    self.vss_vec.push(vss_scheme.clone());
-                    self.ss_vec.push(ss.clone());
-                    self.phase2_order.push(self.signer_idx);
-                } else {
-                    let secret2 = Secret2 {
-                        vss: vss_scheme.clone(),
-                        secret_share: ss.clone(),
-                    };
+        // Share secret shares with the right parties
+        for (idx, ss) in parties.iter().zip(secret_shares) {
+            if *idx == self.signer_idx {
+                // Save our own value
+                self.vss_vec.push(vss_scheme.clone());
+                self.ss_vec.push(ss.clone());
+                self.phase2_order.push(self.signer_idx);
+            } else {
+                let secret2 = Secret2 {
+                    vss: vss_scheme.clone(),
+                    secret_share: ss.clone(),
+                };
 
-                    messages.push((*idx, secret2));
-                }
+                messages.push((*idx, secret2));
             }
+        }
 
-            messages
-        })
+        Ok(messages)
     }
 
     pub fn process_phase2(&mut self, sender_idx: usize, sec2: Secret2) -> StageStatus {
@@ -179,6 +179,13 @@ impl SharedSecretState {
 
         let full = self.vss_vec.len() == self.params.share_count;
 
+        slog::trace!(
+            self.logger,
+            "Sec2 messages collected: {}/{}",
+            self.vss_vec.len(),
+            self.params.share_count
+        );
+
         if full {
             utils::reorg_vector(&mut self.vss_vec, &self.phase2_order);
             utils::reorg_vector(&mut self.ss_vec, &self.phase2_order);
@@ -200,18 +207,15 @@ impl SharedSecretState {
         let ss_vec = &self.ss_vec;
         let vss_vec = &self.vss_vec;
 
-        let res = self
+        let (key_share, party_public_keys) = self
             .key
-            .phase2_verify_vss_construct_keypair(params, y_vec, ss_vec, vss_vec, index);
+            .phase2_verify_vss_construct_keypair(params, y_vec, ss_vec, vss_vec, index)?;
 
-        res.map(|shared_keys| {
-            slog::info!(self.logger, "[{}] phase 3 successful ✅", self.signer_idx);
+        slog::info!(self.logger, "[{}] phase 3 successful ✅", self.signer_idx);
 
-            KeygenResult {
-                keys: self.key.clone(),
-                shared_keys,
-                vss: self.vss_vec.clone(),
-            }
+        Ok(KeygenResult {
+            key_share,
+            party_public_keys,
         })
     }
 

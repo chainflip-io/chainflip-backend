@@ -839,7 +839,7 @@ mod tests {
 			},
 			// node_1
 			async {
-				let (node, mut stream) =
+				let (_node, mut stream) =
 					new_node_with_subscribe_and_self_identify_and_wait_for_peer_self_identifies(
 						PeerId::random(),
 						&node_1_account_id,

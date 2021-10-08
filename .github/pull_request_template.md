@@ -1,7 +1,7 @@
 ## State Chain
 
 - [ ] Does this break CFE compatibility (API) - If yes/not sure, have you tagged relevant Engine Echidna on the PR?
-  - [ ] Type sizes on subxt (you can run the ignored test in `sc_observer.rs` with a running state chain and Nats and it will tell  you what types are missing from the runtime (`engine/src/state_chain/runtime.rs`)
+  - [ ] Type sizes on subxt (you can run the ignored test in `sc_observer.rs` and it will tell you what types are missing from the runtime (`engine/src/state_chain/runtime.rs`)
 - [ ] Were any changes to the genesis config of any pallets? If yes:
    - [ ] Has the Chainspec been updated accordingly?
    - [ ] Has the chainspec version been incremented?

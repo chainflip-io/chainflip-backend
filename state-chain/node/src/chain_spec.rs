@@ -3,25 +3,12 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, FlipBalance, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
+	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
-
-const TOTAL_ISSUANCE: FlipBalance = {
-	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-	const TOKEN_DECIMALS: u32 = 18;
-	const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-	TOKEN_ISSUANCE * TOKEN_FRACTIONS
-};
-
-const MAX_VALIDATORS: u32 = 150;
-
-// Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS: u32 = 2500;
-// Number of accrual points
-pub const ACCRUAL_POINTS: i32 = 1;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -331,7 +318,9 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {}),
+		pallet_cf_validator: Some(ValidatorConfig {
+			blocks_per_epoch: 7 * DAYS,
+		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -367,7 +356,10 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-
+		pallet_cf_emissions: Some(EmissionsConfig {
+			emission_per_block: BLOCK_EMISSIONS,
+			..Default::default()
+		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
@@ -377,7 +369,7 @@ fn testnet_genesis(
 		}),
 		pallet_cf_vaults: Some(VaultsConfig {
 			ethereum_vault_key: hex_literal::hex![
-				"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"
+				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
 			]
 			.to_vec(),
 		}),

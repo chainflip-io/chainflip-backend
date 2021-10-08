@@ -98,7 +98,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a key generation response from 2/3 of our old validators
+		/// Witness a key generation response from 2/3 of our current validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
@@ -112,7 +112,19 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a vault rotation response from 2/3 of our old validators
+		/// Witness a threshold signature response from 2/3 of our current validators
+		#[pallet::weight(10_000)]
+		pub fn witness_threshold_signature_response(
+			origin: OriginFor<T>,
+			ceremony_id: CeremonyId,
+			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		/// Witness a vault rotation response from 2/3 of our current validators
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
@@ -123,17 +135,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::vault_rotation_response(ceremony_id, response);
-			T::Witnesser::witness(who, call.into())
-		}
-
-		#[pallet::weight(10_000)]
-		pub fn witness_threshold_signature_response(
-			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

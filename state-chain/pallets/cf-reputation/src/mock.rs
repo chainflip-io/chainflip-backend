@@ -125,6 +125,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		<ReputationPallet as EpochTransitionHandler>::on_new_epoch(&[ALICE], 0);
 	});
 
 	ext

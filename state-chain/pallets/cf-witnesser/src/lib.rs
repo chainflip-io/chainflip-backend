@@ -38,7 +38,7 @@ mod mock;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::EpochInfo;
+use cf_traits::{EpochInfo, EpochTransitionHandler};
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
@@ -315,7 +315,7 @@ where
 	}
 }
 
-impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
+impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
