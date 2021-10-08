@@ -240,7 +240,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](Error::BadOrigin): The extrinsic was not dispatched by the witness origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
 		#[pallet::weight(10_000)]
 		pub fn staked(
 			origin: OriginFor<T>,
@@ -259,7 +259,7 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// On success, emits a [ClaimSigRequested](Events::ClaimSigRequested) event. The attached claim request needs
+		/// On success, emits a [ClaimSigRequested](Event::ClaimSigRequested) event. The attached claim request needs
 		/// to be signed by a threshold of validators in order to produce valid data that can be submitted to the
 		/// StakeManager Smart Contract.
 		///
@@ -276,7 +276,7 @@ pub mod pallet {
 		///   claim must be finalized or expired before a new claim can be requested.
 		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during
 		///   auction.
-		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
+		/// - [InsufficientLiquidity](cf_flip::InsufficientLiquidity): The amount requested exceeds available
 		///   funds.
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The withdrawal address specified
 		///   does not match the one on file, and the one on file is not the ETH_ZERO_ADDRESS
@@ -295,15 +295,15 @@ pub mod pallet {
 
 		/// Get *all* FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// Same as [claim] except first calculates the maximum claimable amount.
+		/// Same as [claim](Self::claim) except first calculates the maximum claimable amount.
 		///
 		/// ## Events
 		///
-		/// - See [claim]
+		/// - See [claim](Self::claim)
 		///
 		/// ## Errors
 		///
-		/// - See [claim]
+		/// - See [claim](Self::claim)
 		#[pallet::weight(10_000)]
 		pub fn claim_all(
 			origin: OriginFor<T>,
@@ -331,7 +331,7 @@ pub mod pallet {
 		///
 		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
 		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): Claimed amount is not the same as witnessed amount.
-		/// - [BadOrigin](Error::BadOrigin): The extrinsic was not dispatched by the witness origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
 		#[pallet::weight(10_000)]
 		pub fn claimed(
 			origin: OriginFor<T>,
@@ -502,7 +502,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Checks that the call orginates from the witnesser by delegating to the configured implementation of
-	/// `[EnsureWitnessed](cf_traits::EnsureWitnessed)`.
+	/// [EnsureWitnessed](Config::EnsureWitnessed).
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
 	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
