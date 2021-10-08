@@ -2,10 +2,6 @@
 
 A module to manage the reputation of our validators for the ChainFlip State Chain
 
-- [`Config`]
-- [`Call`]
-- [`Module`]
-
 ## Overview
 
 The module contains functionality to measure the liveness of our validators.  This is measured
@@ -21,21 +17,21 @@ is positive slashing stops.
 
 ## Terminology
 
-- **Validator:** A node in our network that is producing blocks.
-- **Heartbeat:** A term used to measure the liveness of a validator.
-- **Heartbeat interval:** The duration in time, measured in blocks we would expect to receive a
+- Validator: A node in our network that is producing blocks.
+- Heartbeat: A term used to measure the liveness of a validator.
+- Heartbeat interval: The duration in time, measured in blocks we would expect to receive a
   *heartbeat* from a validator.
-- **Online:** A node that is online has successfully submitted a heartbeat during the current
+- Online: A node that is online has successfully submitted a heartbeat during the current
   heartbeat interval.
-- **Offline:** A node that is considered offline when they have *not* submitted a heartbeat during
+- Offline: A node that is considered offline when they have *not* submitted a heartbeat during
   the last heartbeat interval.
-- **Online credits:** A credit accrued by being continuously online which inturn is used to earn.
+- Online credits: A credit accrued by being continuously online which inturn is used to earn.
   *reputation points*.  Failing to stay *online* results in losing all of their *online credits*.
-- **Reputation points:** A point system which allows validators to earn reputation by being *online*.
+- Reputation points: A point system which allows validators to earn reputation by being *online*.
   They lose reputation points by being meeting one of the *offline conditions*.
-- **Offline conditions:** One of the following conditions: *missed heartbeat*, *failed to broadcast
+- Offline conditions: One of the following conditions: *missed heartbeat*, *failed to broadcast
   an output*, *failed to participate in a signing ceremony*, *not enough performance credits* and
   *contradicting self during signing ceremony*.  Each condition has its associated penalty in
   reputation points.
-- **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
+- Slashing: The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
   pallet when a validator's reputation points fall below zero *and* they are *offline*.
