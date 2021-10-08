@@ -73,12 +73,12 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
-	/// Waiting for bids, we store the last set of winners and min bid required
+	/// Waiting for bids
 	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	/// via the trait `VaultRotation`
+	/// from the trait `VaultRotation`
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
 	ConfirmedValidators(Vec<ValidatorId>, Amount),

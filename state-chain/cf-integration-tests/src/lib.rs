@@ -178,7 +178,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionPhase, Auctioneer, NonceIdentifier, StakeTransfer};
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
 
 		const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -212,11 +212,14 @@ mod tests {
 		// 10. Relevant nonce are at 0
 		// 11. Governance has its member
 		// 12. There have been no proposals
-		// 13. The epoch rotation is programmed for 7 days
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
-				assert_eq!(Flip::total_issuance(), TOTAL_ISSUANCE);
+				assert_eq!(
+					Flip::total_issuance(),
+					TOTAL_ISSUANCE,
+					"we have issued the total issuance"
+				);
 
 				let accounts = [
 					AccountId::from(ALICE),
@@ -225,38 +228,78 @@ mod tests {
 				];
 
 				for account in accounts.iter() {
-					assert_eq!(Flip::stakeable_balance(account), GENESIS_BALANCE);
+					assert_eq!(
+						Flip::stakeable_balance(account),
+						GENESIS_BALANCE,
+						"the account has its stake"
+					);
 				}
 
-				// assert_eq!(Auction::current_auction_index(), 0);
-				// assert_matches!(Auction::phase(), AuctionPhase::WaitingForBids(winners, minimum_active_bid)
-				// 	if winners == accounts && minimum_active_bid == GENESIS_BALANCE
-				// );
-				//
-				// assert_eq!(Session::validators(), accounts);
-				//
-				// assert_eq!(Validator::epoch_number_of_blocks(), 7 * DAYS);
-				//
-				// for account in accounts.iter() {
-				// 	assert_eq!(Validator::validator_lookup(account), Some(()));
-				// }
-				//
-				// for account in accounts.iter() {
-				// 	assert_eq!(Reputation::validator_liveness(account), Some(0));
-				// }
-				//
-				// assert_eq!(Emissions::last_mint_block(), 0);
-				//
-				// assert_eq!(
-				// 	Rewards::offchain_funds(pallet_cf_rewards::VALIDATOR_REWARDS),
-				// 	0
-				// );
-				//
-				// assert_eq!(Vaults::current_request(), 0);
-				// assert_eq!(Vaults::chain_nonces(NonceIdentifier::Ethereum), None);
-				//
-				// assert!(Governance::members().contains(&AccountId::from(ERIN)));
-				// assert_eq!(Governance::number_of_proposals(), 0);
+				assert_eq!(
+					Auction::current_auction_index(),
+					0,
+					"we should have had no auction yet"
+				);
+				assert_matches!(
+					Auction::auction_result(),
+					Some(AuctionResult {
+						minimum_active_bid: GENESIS_BALANCE,
+						winners: accounts
+					})
+				);
+
+				assert_eq!(
+					Session::validators(),
+					accounts,
+					"the validators are those expected at genesis"
+				);
+
+				assert_eq!(
+					Validator::epoch_number_of_blocks(),
+					0,
+					"epochs will not rotate automatically from genesis"
+				);
+
+				for account in accounts.iter() {
+					assert_eq!(
+						Validator::validator_lookup(account),
+						Some(()),
+						"validator is present in lookup"
+					);
+				}
+
+				for account in accounts.iter() {
+					assert_eq!(
+						Reputation::validator_liveness(account),
+						Some(0),
+						"validator has yet to send its heartbeats"
+					);
+				}
+
+				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
+
+				assert_eq!(
+					Rewards::offchain_funds(pallet_cf_rewards::VALIDATOR_REWARDS),
+					0,
+					"no rewards"
+				);
+
+				assert_eq!(Vaults::current_request(), 0, "no key generation requests");
+				assert_eq!(
+					Vaults::chain_nonces(NonceIdentifier::Ethereum),
+					None,
+					"nonce not incremented"
+				);
+
+				assert!(
+					Governance::members().contains(&AccountId::from(ERIN)),
+					"expected governor"
+				);
+				assert_eq!(
+					Governance::number_of_proposals(),
+					0,
+					"no proposal for governance"
+				);
 			});
 		}
 	}
@@ -264,7 +307,7 @@ mod tests {
 	mod epoch {
 		use super::*;
 		use crate::tests::run_to_block;
-		use cf_traits::{AuctionPhase, Auctioneer, EpochInfo, StakeTransfer};
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer};
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::{Auction, Flip, Origin, Reputation, Validator, WitnesserApi};
 
@@ -272,7 +315,7 @@ mod tests {
 		const TX_HASH: EthTransactionHash = [211u8; 32];
 
 		#[test]
-		// An epoch has completed
+		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
 		// 1.  When the epoch is reached an auction is started and completed
 		// 2.  Stakers that were above the genesis MAB are now validating the network
 		fn epoch_rotates() {
@@ -283,6 +326,11 @@ mod tests {
 				.execute_with(|| {
 					// Move to block before epoch
 					run_to_block(EPOCH_BLOCKS - 1);
+					assert_eq!(
+						Auction::current_auction_index(),
+						0,
+						"we should have had no auction yet"
+					);
 					// New users stake in the network
 					const STAKER_1: [u8; 32] = [100u8; 32];
 					const STAKER_2: [u8; 32] = [101u8; 32];
@@ -292,7 +340,6 @@ mod tests {
 					let validators = Validator::current_validators();
 
 					for staker in stakers.iter() {
-
 						pallet_cf_staking::Call::<Runtime>::staked(
 							AccountId::from(STAKER_1),
 							10_000_000,
@@ -312,23 +359,45 @@ mod tests {
 
 						assert_eq!(
 							Flip::stakeable_balance(&AccountId::from(*staker)),
-							10_000_000
+							10_000_000,
+							"Should have stakeable balance"
 						);
 
-						assert_ok!(Reputation::heartbeat(Origin::signed(AccountId::from(*staker))));
+						assert_ok!(Reputation::heartbeat(Origin::signed(AccountId::from(
+							*staker
+						))));
 					}
 
-					assert_eq!(Auction::current_auction_index(), 0);
-					run_to_block(EPOCH_BLOCKS);
-					assert_eq!(Auction::current_auction_index(), 1);
+					assert_eq!(
+						Auction::current_auction_index(),
+						0,
+						"we should have had no auction yet"
+					);
 
-					// if let AuctionPhase::WinnersSelected(winners, minimum_active_bid) =
-					// 	Auction::phase()
-					// {
-					// 	assert_eq!(winners.len(), stakers.len());
-					// } else {
-					// 	panic!("invalid phase")
-					// }
+					run_to_block(EPOCH_BLOCKS);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					if let Some(AuctionResult {
+						winners,
+						minimum_active_bid,
+					}) = Auction::auction_result()
+					{
+						assert_eq!(
+							winners,
+							stakers
+								.iter()
+								.map(|account_id| AccountId::from(*account_id))
+								.collect::<Vec<_>>(),
+							"new stakers should be the winners of this auction"
+						);
+					} else {
+						unreachable!("we should have an auction result")
+					}
 				});
 		}
 	}

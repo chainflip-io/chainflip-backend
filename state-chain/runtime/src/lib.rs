@@ -122,7 +122,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 2;
+	pub const MinValidators: u32 = 1;
 	pub const BackupValidatorRatio: u32 = 3;
 }
 
