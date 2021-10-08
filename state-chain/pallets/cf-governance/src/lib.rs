@@ -204,7 +204,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](Error::BadOrigin): The caller is not the Governance Origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin): The caller is not the Governance Origin.
 		#[pallet::weight(10_000)]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -278,7 +278,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](Error::BadOrigin): the caller is not the Governance Origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin): the caller is not the Governance Origin.
 		#[pallet::weight(10_000)]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
