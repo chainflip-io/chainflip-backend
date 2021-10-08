@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! A pallet for distributing validator rewards.
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 pub use pallet::*;
 
