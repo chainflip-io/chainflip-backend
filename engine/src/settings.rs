@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use config::{Config, ConfigError, Environment, File};
+use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use web3::types::H160;
 
@@ -106,25 +106,6 @@ impl Settings {
 
         Ok(s)
     }
-
-    /// Load settings in from TOML and overwrite if matching env vars exist
-    pub fn from_file_and_env(file: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-
-        // merging in the configuration file
-        s.merge(File::with_name(file))?;
-
-        // merge in the environment, overwrite anything that matches
-        s.merge(Environment::new().separator("__"))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        let s: Settings = s.try_into()?;
-
-        // make sure the settings are clean
-        s.validate_settings()?;
-
-        Ok(s)
-    }
 }
 
 /// Parse the URL and check that it is a valid websocket url
@@ -180,25 +161,6 @@ mod tests {
         let test_settings = test_utils::new_test_settings().unwrap();
 
         assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
-    }
-
-    #[test]
-    fn test_init_config_from_file_and_env() {
-        let eth_node_key = "ETH__NODE_ENDPOINT";
-        let fake_endpoint = "ws://fake.rinkeby.endpoint/flippy1234";
-        std::env::set_var(eth_node_key, fake_endpoint);
-
-        let test_settings = test_utils::new_test_settings().unwrap();
-
-        // ensure the standard settings read *doesn't* merge environment vars
-        assert_eq!(test_settings.eth.node_endpoint, "ws://localhost:8545");
-        let settings_with_env = Settings::from_file_and_env("config/Testing.toml").unwrap();
-
-        // ensure the file and env settings *does* read environment vars
-        assert_eq!(settings_with_env.eth.node_endpoint, fake_endpoint);
-
-        // clean up
-        std::env::remove_var(eth_node_key);
     }
 
     #[test]
