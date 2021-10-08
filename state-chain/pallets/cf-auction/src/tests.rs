@@ -51,7 +51,7 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(
-					0,
+					1,
 					expected_validating_set().0
 				)),
 			);

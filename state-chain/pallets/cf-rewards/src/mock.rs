@@ -1,5 +1,5 @@
 use crate as pallet_cf_rewards;
-use cf_traits::StakeTransfer;
+use cf_traits::{RewardRollover, StakeTransfer};
 use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
 use frame_system as system;
 use sp_core::H256;
@@ -123,7 +123,7 @@ pub fn new_test_ext(
 			beneficiaries.push(acct.clone());
 		}
 		// Rollover to initialize pallet state.
-		assert_ok!(FlipRewards::rollover(&beneficiaries));
+		assert_ok!(<FlipRewards as RewardRollover>::rollover(&beneficiaries));
 	});
 	ext
 }

@@ -7,10 +7,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use cf_traits::EpochTransitionHandler;
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
-use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 
 /// Conditions as judged as offline
@@ -141,6 +141,7 @@ pub mod pallet {
 	}
 
 	type Liveness = u8;
+	const NOT_SUBMITTED: u8 = 0;
 	const SUBMITTED: u8 = 1;
 
 	/// Liveness bitmap tracking intervals
@@ -189,6 +190,7 @@ pub mod pallet {
 	/// The liveness of our validators
 	///
 	#[pallet::storage]
+	#[pallet::getter(fn validator_liveness)]
 	pub(super) type ValidatorsLiveness<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness, OptionQuery>;
 
@@ -232,9 +234,10 @@ pub mod pallet {
 		/// block number they will earn reputation points based on the accrual ratio.
 		///
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
 				!ValidatorsLiveness::<T>::get(&validator_id)
@@ -242,6 +245,7 @@ pub mod pallet {
 					.has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
+
 			// Update this validator from the hot list
 			ValidatorsLiveness::<T>::mutate(&validator_id, |maybe_liveness| {
 				if let Some(mut liveness) = *maybe_liveness {
@@ -343,10 +347,6 @@ pub mod pallet {
 				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
-			// A list of those we expect to be online, which are our set of validators
-			for validator_id in T::EpochInfo::current_validators().iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, 1);
-			}
 		}
 	}
 
@@ -357,12 +357,12 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
 
-		fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+		fn on_new_epoch(new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
 			// Clear our expectations
 			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from
 			for validator_id in new_validators.iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, 0);
+				ValidatorsLiveness::<T>::insert(validator_id, NOT_SUBMITTED);
 			}
 		}
 	}

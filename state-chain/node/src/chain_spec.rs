@@ -3,32 +3,12 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
 	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS, WASM_BINARY,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
-
-const TOTAL_ISSUANCE: FlipBalance = {
-	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-	const TOKEN_DECIMALS: u32 = 18;
-	const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-	TOKEN_ISSUANCE * TOKEN_FRACTIONS
-};
-
-const MAX_VALIDATORS: u32 = 150;
-
-const BLOCK_EMISSIONS: FlipBalance = {
-	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
-	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 / DAYS as u128
-};
-
-// Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS: u32 = 2500;
-// Number of accrual points
-pub const ACCRUAL_POINTS: i32 = 1;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -338,7 +318,9 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {}),
+		pallet_cf_validator: Some(ValidatorConfig {
+			blocks_per_epoch: 7 * DAYS,
+		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
 				.iter()
