@@ -73,7 +73,10 @@ pub async fn start<BlockStream>(
                         for (_phase, event, _topics) in events {
                             match event {
                                 state_chain_runtime::Event::pallet_cf_vaults(
-                                    pallet_cf_vaults::Event::KeygenRequest(ceremony_id, keygen_request),
+                                    pallet_cf_vaults::Event::KeygenRequest(
+                                        ceremony_id,
+                                        keygen_request,
+                                    ),
                                 ) => {
                                     let signers: Vec<_> = keygen_request
                                         .validator_candidates
@@ -117,7 +120,9 @@ pub async fn start<BlockStream>(
                                                 KeygenResponse::Error(bad_account_ids)
                                             }
                                         },
-                                        MultisigEvent::MessageSigningResult(message_signing_result) => {
+                                        MultisigEvent::MessageSigningResult(
+                                            message_signing_result,
+                                        ) => {
                                             panic!(
                                                 "Expecting KeygenResult, got: {:?}",
                                                 message_signing_result
@@ -274,13 +279,9 @@ pub async fn start<BlockStream>(
                         );
                     }
                 }
-            },
+            }
             Err(error) => {
-                slog::error!(
-                    logger,
-                    "Failed to decode block header: {}",
-                    error,
-                );
+                slog::error!(logger, "Failed to decode block header: {}", error,);
             }
         }
     }
