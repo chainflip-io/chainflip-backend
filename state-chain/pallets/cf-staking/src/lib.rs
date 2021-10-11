@@ -276,12 +276,14 @@ pub mod pallet {
 		///   claim must be finalized or expired before a new claim can be requested.
 		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during
 		///   auction.
-		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
-		///   funds.
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The withdrawal address specified
 		///   does not match the one on file, and the one on file is not the ETH_ZERO_ADDRESS
 		/// - [EthEncodingFailed](Error::EthEncodingFailed): The claim request could not be encoded as a valid
 		///   Ethereum transaction.
+		///
+		/// ## Dependencies
+		///
+		/// - [StakeTransfer]
 		#[pallet::weight(10_000)]
 		pub fn claim(
 			origin: OriginFor<T>,

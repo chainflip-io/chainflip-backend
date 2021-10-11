@@ -71,7 +71,7 @@ pub mod pallet {
 		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}
 
-	/// Pallet implements [`Hooks`] trait
+	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
