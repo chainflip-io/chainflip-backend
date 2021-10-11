@@ -273,7 +273,8 @@ where
     }
 
     /// Process requests to sign that required the key in `key_info`
-    fn process_pending(&mut self, key_info: KeygenResultInfo) {
+    /// This is triggered immediately after the key is generated
+    fn process_signing_requests_pending_key_generation(&mut self, key_info: KeygenResultInfo) {
         if let Some(reqs) = self
             .pending_requests_to_sign
             .remove(&KeyId(key_info.key.get_public_key_bytes()))
@@ -300,7 +301,7 @@ where
 
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
-        self.process_pending(key_info.clone());
+        self.process_signing_requests_pending_key_generation(key_info.clone());
 
         // NOTE: we only notify the SC after we have successfully saved the key
 
