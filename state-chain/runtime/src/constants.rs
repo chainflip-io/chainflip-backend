@@ -36,5 +36,4 @@ pub mod common {
 
 	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
-
 }
