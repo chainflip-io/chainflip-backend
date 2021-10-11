@@ -39,6 +39,16 @@ Once the project has been built, the following command can be used to explore al
 The provided `cargo run` command will launch a temporary node and its state will be discarded after you terminate the
 process. After the project has been built, there are other ways to launch the node.
 
+### Configuration
+
+For local development you need to set the following env vars:
+
+```bash
+export STAKE_MANAGER_ADDRESS="x0..."
+export KEY_MANAGER_ADDRESS="x0..."
+export ETHEREUM_CHAIN_ID=4
+```
+
 ### Single-Node Development Chain
 
 This command will start the single-node development chain with persistent state:

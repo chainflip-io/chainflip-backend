@@ -37,6 +37,7 @@ pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-featur
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
+pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -121,4 +122,5 @@ std = [
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
   'pallet-cf-reputation/std',
+  'pallet-cf-environment/std'
 ]

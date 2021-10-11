@@ -1,19 +1,14 @@
-use std::collections::VecDeque;
-
 use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
 use anyhow::Result;
 use async_trait::async_trait;
 use cf_p2p::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
-use failure::Error;
 use futures::{
     compat::{Future01CompatExt, Stream01CompatExt},
     stream::BoxStream,
     TryStreamExt,
 };
-use jsonrpc_core::futures::{Async, AsyncSink, Future, Sink, Stream};
-use jsonrpc_core_client::{transports::duplex, RpcChannel, RpcError};
+use jsonrpc_core_client::RpcError;
 use thiserror::Error;
-use websocket::{ClientBuilder, OwnedMessage};
 
 #[derive(Error, Debug)]
 pub enum RpcClientError {
@@ -25,127 +20,8 @@ pub enum RpcClientError {
     SubscriptionError(RpcError),
 }
 
-/////////////////////////////////////
-/// This code was copied from jsonrpc_client_transports 15.1.0 src/transports/ws.rs
-/// The only change was to apply compat() to the rpc_client future before passing it to the tokio::spawn() call
-
-/// Connect to a JSON-RPC websocket server.
-///
-/// Uses an unbuffered channel to queue outgoing rpc messages.
-pub fn inner_connect<T>(url: &url::Url) -> impl Future<Item = T, Error = RpcError>
-where
-    T: From<RpcChannel>,
-{
-    let client_builder = ClientBuilder::from_url(url);
-    do_connect(client_builder)
-}
-
-fn do_connect<T>(client_builder: ClientBuilder) -> impl Future<Item = T, Error = RpcError>
-where
-    T: From<RpcChannel>,
-{
-    client_builder
-        .async_connect(None)
-        .map(|(client, _)| {
-            let (sink, stream) = client.split();
-            let (sink, stream) = WebsocketClient::new(sink, stream).split();
-            let (rpc_client, sender) = duplex(sink, stream);
-            let rpc_client = rpc_client.map_err(|error| eprintln!("{:?}", error));
-            tokio::spawn(rpc_client.compat());
-            sender.into()
-        })
-        .map_err(|error| RpcError::Other(error.into()))
-}
-
-struct WebsocketClient<TSink, TStream> {
-    sink: TSink,
-    stream: TStream,
-    queue: VecDeque<OwnedMessage>,
-}
-
-impl<TSink, TStream, TError> WebsocketClient<TSink, TStream>
-where
-    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
-    TStream: Stream<Item = OwnedMessage, Error = TError>,
-    TError: Into<Error>,
-{
-    pub fn new(sink: TSink, stream: TStream) -> Self {
-        Self {
-            sink,
-            stream,
-            queue: VecDeque::new(),
-        }
-    }
-}
-
-impl<TSink, TStream, TError> Sink for WebsocketClient<TSink, TStream>
-where
-    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
-    TStream: Stream<Item = OwnedMessage, Error = TError>,
-    TError: Into<Error>,
-{
-    type SinkItem = String;
-    type SinkError = RpcError;
-
-    fn start_send(
-        &mut self,
-        request: Self::SinkItem,
-    ) -> Result<AsyncSink<Self::SinkItem>, Self::SinkError> {
-        self.queue.push_back(OwnedMessage::Text(request));
-        Ok(AsyncSink::Ready)
-    }
-
-    fn poll_complete(&mut self) -> Result<Async<()>, Self::SinkError> {
-        while let Some(request) = self.queue.pop_front() {
-            match self.sink.start_send(request) {
-                Ok(AsyncSink::Ready) => continue,
-                Ok(AsyncSink::NotReady(request)) => {
-                    self.queue.push_front(request);
-                    break;
-                }
-                Err(error) => return Err(RpcError::Other(error.into())),
-            }
-        }
-        self.sink
-            .poll_complete()
-            .map_err(|error| RpcError::Other(error.into()))
-    }
-}
-
-impl<TSink, TStream, TError> Stream for WebsocketClient<TSink, TStream>
-where
-    TSink: Sink<SinkItem = OwnedMessage, SinkError = TError>,
-    TStream: Stream<Item = OwnedMessage, Error = TError>,
-    TError: Into<Error>,
-{
-    type Item = String;
-    type Error = RpcError;
-
-    fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
-        loop {
-            match self.stream.poll() {
-                Ok(Async::Ready(Some(message))) => match message {
-                    OwnedMessage::Text(data) => return Ok(Async::Ready(Some(data))),
-                    OwnedMessage::Binary(_) => (),
-                    OwnedMessage::Ping(p) => self.queue.push_front(OwnedMessage::Pong(p)),
-                    OwnedMessage::Pong(_) => {}
-                    OwnedMessage::Close(c) => self.queue.push_front(OwnedMessage::Close(c)),
-                },
-                Ok(Async::Ready(None)) => {
-                    // TODO try to reconnect (#411).
-                    return Ok(Async::Ready(None));
-                }
-                Ok(Async::NotReady) => return Ok(Async::NotReady),
-                Err(error) => return Err(RpcError::Other(error.into())),
-            }
-        }
-    }
-}
-
-///////////////////////////
-
 pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
-    let client = inner_connect::<P2PRpcClient>(url)
+    let client = crate::common::alt_jsonrpc_connect::connect::<P2PRpcClient>(url)
         .compat()
         .await
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;

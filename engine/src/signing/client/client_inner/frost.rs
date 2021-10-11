@@ -1,4 +1,4 @@
-//! The types and operations as discussed in https://eprint.iacr.org/2020/852.pdf.
+//! The types and operations as discussed in <https://eprint.iacr.org/2020/852.pdf>.
 //! Comments in this file reference sections from this document.
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.

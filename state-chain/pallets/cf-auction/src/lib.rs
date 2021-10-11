@@ -1,35 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # Chainflip Auction Module
-//!
-//! A module to manage auctions for the Chainflip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//! The module contains functionality to run a contest or auction in which a set of bidders are
-//! provided via the `BidderProvider` trait.  Calling `Auction::process()` we push forward the state
-//! of our auction.
-//!
-//! First we are looking for bidders in the `AuctionPhase::WaitingForBids` phase in which we
-//! validate their suitability for the next phase `AuctionPhase::BidsTaken`.
-//! During the `AuctionPhase::BidsTaken` phase we run an auction which selects a list of winners and
-//! sets the state to `WinnersSelected` and giving us our winners and the minimum bid.
-//! The caller would then finally call `Auction::process()` to finalise the auction, this can only
-//! happen on confirmation via the `AuctionConfirmation` trait. From which it would move to
-//! `WaitingForBids` for the next auction to be started.
-//!
-//! At any point in time the auction can be aborted using `Auction::abort()` returning state to
-//! `WaitingForBids`.
-//!
-//! ## Terminology
-//! - **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
-//! - **Winners:** Those bidders that have been evaluated and have been included in the the winning set
-//! - **Minimum Bid:** The minimum bid required to be included in the Winners set
-//! - **Auction Range:** A range specifying the minimum number of bidders we require and an upper range
-//!	  specifying the maximum size for the winning set
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;

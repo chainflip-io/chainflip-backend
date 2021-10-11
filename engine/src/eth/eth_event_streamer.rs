@@ -27,7 +27,7 @@ pub async fn new_eth_event_stream<
         .eth_subscribe()
         .subscribe_logs(
             FilterBuilder::default()
-                .from_block(BlockNumber::Pending)
+                .from_block(BlockNumber::Latest)
                 .address(vec![deployed_address])
                 .build(),
         )
