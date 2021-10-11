@@ -55,7 +55,7 @@ pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
-use sp_runtime::traits::One;
+use sp_runtime::traits::{One, Saturating};
 
 pub mod crypto;
 mod ethereum;
@@ -73,6 +73,12 @@ pub mod pallet {
 	use crate::rotation::SchnorrSigTruncPubkey;
 	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	pub struct BlockHeightWindow {
+		pub from: u64,
+		pub to: Option<u64>,
+	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -122,6 +128,18 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
 		StorageMap<_, Blake2_128Concat, NonceIdentifier, Nonce>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn active_windows)]
+	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		Chain,
+		Blake2_128Concat,
+		<T::EpochInfo as EpochInfo>::EpochIndex,
+		BlockHeightWindow,
+		ValueQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -426,16 +444,41 @@ impl<T: Config>
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
-			VaultRotationResponse::Success { tx_hash } => {
+			VaultRotationResponse::Success { tx_hash, block_number } => {
 				if let Some(vault_rotation) = ActiveChainVaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
 					match vault_rotation.keygen_request.chain {
-						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
-							vault_rotation
-								.new_public_key
-								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
-							tx_hash,
-						),
+						Chain::Ethereum => {
+							// This is roughly the number of blocks for 14 days in Ethereum
+							const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
+
+							// Record this new incoming set for the current epoch
+							ActiveWindows::<T>::insert(
+								Chain::Ethereum,
+								T::EpochInfo::epoch_index(),
+								BlockHeightWindow {
+									from: block_number,
+									to: None,
+								},
+							);
+
+							// Set the leaving block number for the outgoing set
+							ActiveWindows::<T>::mutate(
+								Chain::Ethereum,
+								T::EpochInfo::epoch_index().saturating_sub(1u32.into()),
+								|outgoing_set| {
+									(*outgoing_set).to =
+										Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+								},
+							);
+
+							EthereumChain::<T>::vault_rotated(
+								vault_rotation
+									.new_public_key
+									.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
+								tx_hash,
+							)
+						},
 					}
 				}
 				// This request is complete

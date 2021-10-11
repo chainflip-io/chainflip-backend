@@ -165,6 +165,7 @@ mod tests {
 				VaultsPallet::current_request(),
 				VaultRotationResponse::Success {
 					tx_hash: tx_hash.clone(),
+					block_number: 0,
 				}
 			));
 
@@ -333,7 +334,8 @@ mod tests {
 					// we haven't started a new rotation, so ceremony 1 has not been initialised
 					1,
 					VaultRotationResponse::Success {
-						tx_hash: vec![0; 32].into()
+						tx_hash: vec![0; 32].into(),
+						block_number: 0,
 					}
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,

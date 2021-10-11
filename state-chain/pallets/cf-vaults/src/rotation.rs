@@ -140,7 +140,7 @@ pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
-	Success { tx_hash: TransactionHash },
+	Success { tx_hash: TransactionHash, block_number: u64 },
 	Error,
 }
 
