@@ -53,6 +53,7 @@ fn reorg_vector_works() {
     }
 }
 
+// Rename to ValidatorIdx map
 /// Mappings from signer_idx to Validator Id and back
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorMaps {

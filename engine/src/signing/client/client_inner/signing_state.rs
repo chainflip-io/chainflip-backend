@@ -111,7 +111,7 @@ impl SigningState {
         event_sender: EventSender,
         logger: &slog::Logger,
     ) {
-        let logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
+        self.logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
 
         if self.inner.is_some() {
             slog::warn!(
@@ -129,7 +129,7 @@ impl SigningState {
             ),
             own_idx: signer_idx,
             all_idxs: signer_idxs,
-            logger: logger.clone(),
+            logger: self.logger.clone(),
         };
 
         let processor = AwaitCommitments1::new(
@@ -150,9 +150,6 @@ impl SigningState {
             validator_map: key_info.validator_map,
             result_sender: event_sender,
         });
-
-        // Use the updated logger once we know the ceremony id
-        self.logger = logger;
 
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a request
@@ -176,6 +173,7 @@ impl SigningState {
     }
 
     /// Try to process delayed messages
+    /// Process messages waiting for?
     fn process_delayed(&mut self) {
         let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -244,7 +242,12 @@ impl SigningState {
                         // This is the only point at which we can get the result (apart from the timeout)
                         match state.finalize() {
                             StageResult::NextStage(mut stage) => {
-                                slog::debug!(self.logger, "Ceremony transitions to {}", &stage);
+                                slog::debug!(
+                                    self.logger,
+                                    "Ceremony `{}` transitions to {}",
+                                    authorised_state.ceremony_id,
+                                    &stage
+                                );
 
                                 stage.init();
 

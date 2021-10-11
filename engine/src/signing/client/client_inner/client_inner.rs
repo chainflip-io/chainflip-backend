@@ -245,7 +245,7 @@ where
                 );
                 match self.key_store.get_key(&key_id) {
                     Some(key) => {
-                        self.signing_manager.on_request_to_sign(
+                        self.signing_manager.start_signing_data(
                             sign_info.data,
                             key.clone(),
                             sign_info.signers,
@@ -286,7 +286,7 @@ where
                     signing_info.ceremony_id
                 );
 
-                self.signing_manager.on_request_to_sign(
+                self.signing_manager.start_signing_data(
                     signing_info.data,
                     key_info.clone(),
                     signing_info.signers,
@@ -304,7 +304,6 @@ where
         self.process_signing_requests_pending_key_generation(key_info.clone());
 
         // NOTE: we only notify the SC after we have successfully saved the key
-
         if let Err(err) =
             self.inner_event_sender
                 .send(InnerEvent::KeygenResult(KeygenOutcome::success(
@@ -322,16 +321,13 @@ where
     }
 
     /// Process message from another validator
+    /// all messages
     pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
         let P2PMessage { sender_id, data } = p2p_message;
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
             Ok(MultisigMessage::KeyGenMessage(multisig_message)) => {
-                // NOTE: we should be able to process Keygen messages
-                // even when we are "signing"... (for example, if we want to
-                // generate a new key)
-
                 let ceremony_id = multisig_message.ceremony_id;
 
                 if let Some(key) = self
@@ -344,10 +340,9 @@ where
                 }
             }
             Ok(MultisigMessage::SigningMessage(multisig_message)) => {
-                // NOTE: we should be able to process Signing messages
-                // even when we are generating a new key (for example,
-                // we should be able to receive phase1 messages before we've
-                // finalized the signing key locally)
+                // should this be "process signing request"
+                // and the other one be "process signing data"?
+                // the request happens
                 self.signing_manager
                     .process_signing_data(sender_id, multisig_message);
             }

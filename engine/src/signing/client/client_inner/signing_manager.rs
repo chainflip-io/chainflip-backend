@@ -16,6 +16,7 @@ use super::signing_state::SigningState;
 /// Generating signer indexes based on the list of paries
 #[derive(Clone)]
 pub struct SigningManager {
+    // rename acctid
     id: AccountId,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
     signing_states: HashMap<CeremonyId, SigningState>,
@@ -42,7 +43,6 @@ impl SigningManager {
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // Have to clone so it can be used inside the closure
         let logger = self.logger.clone();
         self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
@@ -64,7 +64,7 @@ impl SigningManager {
         }
     }
 
-    pub fn on_request_to_sign(
+    pub fn start_signing_data(
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
@@ -77,7 +77,7 @@ impl SigningManager {
             ceremony_id
         );
 
-        // Hack to truncate the signers
+        // Hack to truncate the signers - ticket?
         if signers.len() > (key_info.params.threshold + 1) {
             slog::warn!(
                 self.logger,
@@ -96,6 +96,8 @@ impl SigningManager {
             return;
         }
 
+        // try combine
+        // y warn
         if !signers.contains(&self.id) {
             // TODO: alert
             slog::warn!(

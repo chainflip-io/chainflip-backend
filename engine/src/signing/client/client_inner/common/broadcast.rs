@@ -16,7 +16,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     /// during this stage
     type Message: Clone + Into<D> + TryFrom<D>;
 
-    /// Init the stage, returning the data to broadcast
+    /// Init the stage, returning the data to broadcast to??
     fn init(&self) -> Self::Message;
 
     /// For a given message, signal if it needs to be delayed
@@ -38,6 +38,7 @@ where
 {
     common: CeremonyCommon<D, Sender>,
     /// Messages collected so far
+    /// Map<destination node idx, message>
     messages: HashMap<usize, P::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
