@@ -69,10 +69,12 @@ async fn main() {
         ),
         p2p::conductor::start(
             p2p_rpc::connect(
-                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
-                    "Should be valid ws endpoint: {}",
-                    settings.state_chain.ws_endpoint
-                )),
+                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).unwrap_or_else(
+                    |e| panic!(
+                        "Should be valid ws endpoint: {}: {}",
+                        settings.state_chain.ws_endpoint, e
+                    )
+                ),
                 account_id
             )
             .await

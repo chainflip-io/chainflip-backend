@@ -63,6 +63,7 @@ impl<T> SignedExtra<T> for SCDefaultExtra<T>
 where
     T: System + Clone + Debug + Eq + Send + Sync,
 {
+    #[allow(clippy::type_complexity)]
     type Extra = (
         CheckSpecVersion<T>,
         CheckTxVersion<T>,
@@ -216,6 +217,7 @@ impl StateChainClient {
     }
 }
 
+#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     settings: &settings::Settings,
 ) -> Result<(
@@ -231,7 +233,7 @@ pub async fn connect_to_state_chain(
             hex::decode(
                 &std::fs::read_to_string(&settings.state_chain.signing_key_file)?.replace("\"", ""),
             )
-            .map_err(|err| anyhow::Error::new(err))?,
+            .map_err(anyhow::Error::new)?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
@@ -300,7 +302,7 @@ pub async fn connect_to_state_chain(
                         .compat()
                         .await
                         .map_err(anyhow::Error::msg)?
-                        .ok_or(anyhow::Error::msg("Account doesn't exist"))?
+                        .ok_or_else(|| anyhow::Error::msg("Account doesn't exist"))?
                         .0[..],
                 )?;
                 account_info.nonce
