@@ -151,17 +151,15 @@ mod tests {
 
     #[test]
     fn init_default_config() {
-        let settings = Settings::new();
-        let settings = settings.unwrap();
+        let settings = Settings::new().unwrap();
 
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]
     fn test_init_config_with_testing_config() {
-        let test_settings = test_utils::new_test_settings();
+        let test_settings = test_utils::new_test_settings().unwrap();
 
-        let test_settings = test_settings.unwrap();
         assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
