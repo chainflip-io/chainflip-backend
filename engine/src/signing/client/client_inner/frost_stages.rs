@@ -28,7 +28,7 @@ type SigningCeremonyCommon = CeremonyCommon<SigningData, SigningP2PSender>;
 
 // *********** Await Commitments1 *************
 
-/// Stage 1: Generate an broadcast our secret nonce pair
+/// Stage 1: Generate a broadcast our (secret, nonce) pair
 /// and collect those from all other parties
 #[derive(Clone)]
 pub struct AwaitCommitments1 {
@@ -189,7 +189,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             commitments: self.commitments,
-            local_sigs: messages,
+            sig_shares_received: messages,
         };
 
         let stage = BroadcastStage::new(processor, self.common);
@@ -205,8 +205,9 @@ struct VerifyLocalSigsBroadcastStage4 {
     signing_common: SigningStateCommonInfo,
     /// Nonce commitments from all parties (verified to be correctly broadcast)
     commitments: Vec<Comm1>,
+
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
-    local_sigs: HashMap<usize, LocalSig3>,
+    sig_shares_received: HashMap<usize, LocalSig3>,
 }
 
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4);
@@ -221,7 +222,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             .all_idxs
             .iter()
             .map(|idx| {
-                self.local_sigs
+                self.sig_shares_received
                     .get(&idx)
                     .cloned()
                     .expect("All indexes should be present here")
@@ -236,7 +237,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
         false
     }
 
-    /// Verify that signature shares have been broadcast correctly, and if so,
+    /// Verify that signature shares have been broadcast correctly by? other nodes? us?, and if so,
     /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
         let local_sigs = match verify_broadcasts(&self.common.all_idxs, &messages) {

@@ -71,6 +71,8 @@ where
                 continue;
             }
 
+            // Could `send()` be inlined here? we have this trait abstraction
+            // and implementation abstraction, but it's only used once?
             self.common.p2p_sender.send(*idx, data.clone());
         }
     }

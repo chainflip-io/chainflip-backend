@@ -67,14 +67,17 @@ pub trait P2PSender: Clone {
 #[derive(Clone)]
 pub struct RawP2PSender {
     validator_map: Arc<ValidatorMaps>,
-    sender: UnboundedSender<InnerEvent>,
+    inner_event_sender: UnboundedSender<InnerEvent>,
 }
 
 impl RawP2PSender {
-    pub fn new(validator_map: Arc<ValidatorMaps>, sender: UnboundedSender<InnerEvent>) -> Self {
+    pub fn new(
+        validator_map: Arc<ValidatorMaps>,
+        inner_event_sender: UnboundedSender<InnerEvent>,
+    ) -> Self {
         RawP2PSender {
             validator_map,
-            sender,
+            inner_event_sender,
         }
     }
 
@@ -87,8 +90,6 @@ impl RawP2PSender {
 
         let msg = P2PMessageCommand::new(id, data);
 
-        if let Err(err) = self.sender.send(msg.into()) {
-            eprintln!("Could not send p2p message: {}", err);
-        }
+        self.inner_event_sender.send(msg.into()).unwrap()
     }
 }
