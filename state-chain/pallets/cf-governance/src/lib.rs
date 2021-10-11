@@ -295,7 +295,7 @@ where
 }
 
 impl<T: Config> Pallet<T> {
-	/// jkjk
+	/// Push a proposal
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
 		// Generate the next proposal id
 		let id = Self::get_next_id();

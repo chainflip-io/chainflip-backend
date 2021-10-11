@@ -31,9 +31,12 @@ benchmarks! {
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	// execute {
-	// 	let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
 	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	<Members<T>>::put(vec![caller.clone()]);
+	// 	let members = vec![caller.clone()];
+	//  // TODO: use call secured by Governance
+	// 	// let call = Call::<T>::new_membership_set(members);
+	// 	let call = pallet::Call::<T>::new_membership_set(members);
+	// 	<Members<T>>::put(members);
 	// 	let id = Governance::<T>::push_proposal(Box::new(call));
 	// 	Governance::<T>::try_approve(caller.clone(), id);
 	// }: _(RawOrigin::Signed(caller.clone()), id)
@@ -43,6 +46,7 @@ benchmarks! {
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
 	on_initialize {
+		//TODO: set the time
 		for _n in 1..100 {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
 			Governance::<T>::push_proposal(call);
