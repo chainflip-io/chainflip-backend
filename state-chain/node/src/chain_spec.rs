@@ -60,18 +60,22 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 
 /// Get the values for the state-chain environment.
 pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
-	let stake_manager_address: [u8; 20] =
-		hex::decode(env::var("STAKE_MANAGER_ADDRESS").expect("STAKE_MANAGER_ADDRESS not set"))
-			.unwrap()
-			.try_into()
-			.expect("address cast failed");
-	let key_manager_address: [u8; 20] =
-		hex::decode(env::var("KEY_MANAGER_ADDRESS").expect("KEY_MANAGER_ADDRESS not set"))
-			.unwrap()
-			.try_into()
-			.expect("address cast failed");
+	let stake_manager_address: [u8; 20] = hex::decode(
+		env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
+	let key_manager_address: [u8; 20] = hex::decode(
+		env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or(String::from("36fB9E46D6cBC14600D9089FD7Ce95bCf664179f")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.expect("ETHEREUM_CHAIN_ID not set")
+		.unwrap_or(String::from("4"))
 		.parse::<u32>()
 		.expect("chain id is no unsigned int");
 	(
