@@ -4,7 +4,6 @@
 
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
-
 use cf_chains::{
 	eth::{self, set_agg_key_with_agg_key::SetAggKeyWithAggKey, ChainflipKey},
 	ChainId, Ethereum,
@@ -15,17 +14,37 @@ use cf_traits::{
 	VaultRotator,
 };
 pub use pallet::*;
-
-pub use crate::rotation::VaultRotationResponse;
-pub use crate::rotation::*;
 use sp_runtime::traits::One;
-
-pub mod rotation;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+/// Id type used for the KeyGen ceremony.
+pub type CeremonyId = u64;
+
+/// The current status of a vault rotation.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum VaultRotationStatus<T: Config> {
+	AwaitingKeygen {
+		keygen_ceremony_id: CeremonyId,
+		candidates: Vec<T::ValidatorId>,
+	},
+	AwaitingRotation {
+		new_public_key: T::PublicKey,
+	},
+	Complete {
+		tx_hash: T::TransactionHash,
+	},
+}
+
+/// A single vault.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Vault<T: Config> {
+	/// The current key
+	pub current_key: T::PublicKey,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -80,22 +99,21 @@ pub mod pallet {
 	#[pallet::getter(fn current_request)]
 	pub(super) type CurrentRequest<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// The Vault for this instance
+	/// The active vaults for the current epoch.
 	#[pallet::storage]
-	#[pallet::getter(fn eth_vault)]
+	#[pallet::getter(fn vaults)]
 	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault<T>>;
 
-	/// A map acting as a list of our current vault rotations
+	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
-	#[pallet::getter(fn active_chain_vault_rotations)]
-	pub(super) type ActiveChainVaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, CeremonyId, VaultRotation<T>>;
+	#[pallet::getter(fn pending_vault_rotations)]
+	pub(super) type PendingVaultRotations<T: Config> =
+		StorageMap<_, Blake2_128Concat, ChainId, VaultRotationStatus<T>>;
 
-	/// A map of Nonces for chains supported
+	/// Threshold key nonces for each chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonces)]
-	pub(super) type ChainNonces<T: Config> =
-		StorageMap<_, Blake2_128Concat, ChainId, Nonce>;
+	pub(super) type ChainNonces<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Nonce>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn active_windows)]
@@ -114,12 +132,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Request a key generation \[ceremony_id, chain_id, participants\]
 		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
-		/// Request a rotation of the vault for this chain \[ceremony_id, request\]
-		VaultRotationRequest(CeremonyId),
-		/// The vault for the request has rotated \[ceremony_id\]
-		VaultRotationCompleted(CeremonyId),
+		/// The vault for the request has rotated \[chain_id\]
+		VaultRotationCompleted(ChainId),
 		/// A rotation of vaults has been aborted \[ceremony_ides\]
-		RotationAborted(Vec<CeremonyId>),
+		RotationAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 	}
@@ -130,33 +146,20 @@ pub mod pallet {
 		InvalidCeremonyId,
 		/// We have an empty validator set
 		EmptyValidatorSet,
-		/// The key in the response is not different to the current key
-		KeyUnchanged,
-		/// A vault rotation has failed
-		VaultRotationCompletionFailed,
-		/// A key generation response has failed
-		KeygenResponseFailed,
-		/// A vault rotation has failed
-		VaultRotationFailed,
-		/// A set of badly acting validators
-		BadValidators,
-		/// Failed to construct a valid chain specific payload for rotation
-		FailedToConstructPayload,
 		/// The rotation has not been confirmed
 		NotConfirmed,
-		/// Failed to make a key generation request
-		FailedToMakeKeygenRequest,
-		/// New public key not set by keygen_response
-		NewPublicKeyNotSet,
-		///
+		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
 		/// The specified chain is not supported.
 		UnsupportedChain,
+		/// The requested call is invalid based on the current rotation state.
+		InvalidRotationStatus,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A key generation succeeded. Update the state of the rotation and attempt to
+		/// A key generation succeeded. Update the state of the rotation and attempt to broadcast the setAggKey
+		/// transaction.
 		#[pallet::weight(10_000)]
 		pub fn keygen_success(
 			origin: OriginFor<T>,
@@ -165,23 +168,29 @@ pub mod pallet {
 			new_public_key: T::PublicKey,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure_index!(ceremony_id);
 
-			let vault = Vaults::<T>::get(chain_id).ok_or(Error::<T>::UnsupportedChain)?;
-			if vault.current_key == new_public_key {
-				// TODO: we probably shouldn't be updating the state if we're returning an error.
-				Pallet::<T>::abort_rotation();
-				return Err(Error::<T>::KeyUnchanged.into());
-			}
+			let rotation =
+				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
+			let pending_ceremony_id = ensure_variant!(
+				VaultRotationStatus::<T>::AwaitingKeygen { keygen_ceremony_id, .. } => keygen_ceremony_id,
+				rotation,
+				Error::<T>::InvalidRotationStatus,
+			);
+			ensure!(
+				pending_ceremony_id == ceremony_id,
+				Error::<T>::InvalidCeremonyId
+			);
 
-			// TODO: we only want to do this once *all* of the keygen ceremonies have succeeded.
-			ActiveChainVaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
-				*maybe_vault_rotation = Some(VaultRotation {
-					new_public_key: Some(new_public_key.clone()),
-				});
-			});
+			PendingVaultRotations::<T>::insert(
+				chain_id,
+				VaultRotationStatus::<T>::AwaitingRotation {
+					new_public_key: new_public_key.clone(),
+				},
+			);
 
-			// TODO: This is implicitly also broadcasts the transaction - could be made clearer.
+			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded so we might need an
+			//          intermediate VaultRotationStatus::AwaitingOtherKeygens.
+			//       2. This is implicitly also broadcasts the transaction - could be made clearer.
 			T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
 				<Self as NonceProvider<Ethereum>>::next_nonce(),
 				new_public_key,
@@ -191,14 +200,28 @@ pub mod pallet {
 		}
 
 		/// Key generation failed. We report the guilty parties and abort.
+		///
+		/// If key generation fails for *any* chain we need to abort *all* chains.
 		#[pallet::weight(10_000)]
 		pub fn keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
+			chain_id: ChainId,
 			guilty_validators: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure_index!(ceremony_id);
+
+			let rotation =
+				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
+			let pending_ceremony_id = ensure_variant!(
+				VaultRotationStatus::<T>::AwaitingKeygen { keygen_ceremony_id, .. } => keygen_ceremony_id,
+				rotation,
+				Error::<T>::InvalidRotationStatus,
+			);
+			ensure!(
+				pending_ceremony_id == ceremony_id,
+				Error::<T>::InvalidCeremonyId
+			);
 
 			// TODO:
 			// - Centralise penalty points.
@@ -223,45 +246,47 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// A vault rotation transaction succeeeded.
+		/// A vault rotation event has been witnessed, we update the vault with the new key.
 		#[pallet::weight(10_000)]
-		pub fn vault_rotation_success(
+		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
 			chain_id: ChainId,
+			new_public_key: T::PublicKey,
 			_tx_hash: T::TransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let new_key = ActiveChainVaultRotations::<T>::get(ceremony_id)
-				.ok_or(Error::<T>::InvalidCeremonyId)?
-				.new_public_key
-				.ok_or(Error::<T>::NewPublicKeyNotSet)?;
+			let rotation =
+				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
+
+			let expected_new_key = ensure_variant!(
+				VaultRotationStatus::<T>::AwaitingRotation { new_public_key } => new_public_key,
+				rotation,
+				Error::<T>::InvalidRotationStatus
+			);
+
+			// If the keys don't match, we don't have much choice but to trust the witnessed one over the one
+			// we expected, but we should log the issue nonetheless.
+			if new_public_key != expected_new_key {
+				frame_support::debug::warn!(
+					"Unexpected new agg key witnessed for {:?}. Expected {:?}, got {:?}.",
+					chain_id,
+					expected_new_key,
+					new_public_key,
+				)
+			}
 
 			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
 				if let Some(mut vault) = maybe_vault.as_mut() {
-					vault.current_key = new_key;
+					vault.current_key = new_public_key;
 					Ok(())
 				} else {
-					Err(Error::<T>::InvalidCeremonyId)
+					Err(Error::<T>::UnsupportedChain)
 				}
 			})?;
 
-			Pallet::<T>::deposit_event(Event::VaultRotationCompleted(ceremony_id));
+			Pallet::<T>::deposit_event(Event::VaultRotationCompleted(chain_id));
 
-			Ok(().into())
-		}
-
-		/// A vault rotation response received from a vault rotation request and handled
-		/// by [VaultRotationRequestResponse::handle_response]
-		#[pallet::weight(10_000)]
-		pub fn vault_rotation_abort(
-			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure_index!(ceremony_id);
-			Pallet::<T>::abort_rotation();
 			Ok(().into())
 		}
 	}
@@ -283,9 +308,12 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			Vaults::<T>::insert(ChainId::Ethereum, Vault {
-				current_key: self.ethereum_vault_key.clone(),
-			});
+			Vaults::<T>::insert(
+				ChainId::Ethereum,
+				Vault {
+					current_key: self.ethereum_vault_key.clone(),
+				},
+			);
 		}
 	}
 }
@@ -304,16 +332,14 @@ impl<T: Config> Pallet<T> {
 	/// Abort all rotations registered and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(
-			ActiveChainVaultRotations::<T>::iter()
-				.map(|(k, _)| k)
-				.collect(),
+			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
 		));
-		ActiveChainVaultRotations::<T>::remove_all();
+		PendingVaultRotations::<T>::remove_all();
 		T::RotationHandler::abort();
 	}
 
 	fn no_active_chain_vault_rotations() -> bool {
-		ActiveChainVaultRotations::<T>::iter().count() == 0
+		PendingVaultRotations::<T>::iter().count() == 0
 	}
 }
 
@@ -330,11 +356,16 @@ impl<T: Config> VaultRotator for Pallet<T> {
 			*id
 		});
 
-		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, ChainId::Ethereum, candidates.clone()));
-		ActiveChainVaultRotations::<T>::insert(
+		Pallet::<T>::deposit_event(Event::KeygenRequest(
 			ceremony_id,
-			VaultRotation {
-				new_public_key: None,
+			ChainId::Ethereum,
+			candidates.clone(),
+		));
+		PendingVaultRotations::<T>::insert(
+			ChainId::Ethereum,
+			VaultRotationStatus::<T>::AwaitingKeygen {
+				keygen_ceremony_id: ceremony_id,
+				candidates,
 			},
 		);
 
@@ -352,4 +383,29 @@ impl<T: Config> VaultRotator for Pallet<T> {
 			Err(Error::<T>::NotConfirmed)
 		}
 	}
+}
+
+/// Takes three arguments: a pattern, a variable expression and an error literal.
+///
+/// If the variable matches the pattern, returns it, otherwise returns an error. The pattern may optionally have an
+/// expression attached to process and return inner arguments.
+///
+/// ## Example
+///
+/// let x = ensure_variant!(Some(..), optional_value, Error::<T>::ValueIsNone);
+///
+/// let 2x = ensure_variant!(Some(x) => { 2 * x }, optional_value, Error::<T>::ValueIsNone);
+///
+#[macro_export]
+macro_rules! ensure_variant {
+	( $variant:pat => $varexp:expr, $var:expr, $err:expr $(,)? ) => {
+		if let $variant = $var {
+					$varexp
+				} else {
+					frame_support::fail!($err)
+				}
+	};
+	( $variant:pat, $var:expr, $err:expr $(,)? ) => {
+		ensure_variant!($variant => { $var }, $var, $err)
+	};
 }
