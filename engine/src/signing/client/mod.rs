@@ -1,6 +1,6 @@
 mod client_inner;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     logging::COMPONENT_KEY,
@@ -70,6 +70,29 @@ impl SigningInfo {
             key_id,
             signers,
         }
+    }
+}
+
+const PENDING_SIGN_DURATION: Duration = Duration::from_secs(120);
+
+/// A wrapper around SigningInfo that contains the timeout info for cleanup
+#[derive(Clone, Debug)]
+pub struct PendingSigningInfo {
+    pub should_expire_at: Instant,
+    pub signing_info: SigningInfo,
+}
+
+impl PendingSigningInfo {
+    pub fn new(signing_info: SigningInfo) -> Self {
+        PendingSigningInfo {
+            should_expire_at: Instant::now() + PENDING_SIGN_DURATION,
+            signing_info,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn set_expiry_time(&mut self, expiry_time: Instant) {
+        self.should_expire_at = expiry_time;
     }
 }
 

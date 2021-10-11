@@ -1,10 +1,14 @@
-use std::{collections::HashMap, fmt::Display, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    time::{Duration, Instant},
+};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
-        client::{KeyId, MultisigInstruction, SigningInfo},
+        client::{KeyId, MultisigInstruction, PendingSigningInfo},
         crypto::{BigInt, KeyGenBroadcastMessage1, Point, Scalar, VerifiableSS},
         KeyDB,
     },
@@ -175,7 +179,7 @@ where
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
-    pending_requests_to_sign: HashMap<KeyId, Vec<SigningInfo>>,
+    pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     logger: slog::Logger,
 }
 
@@ -215,7 +219,24 @@ where
         self.keygen.cleanup();
         self.signing_manager.cleanup();
 
-        // TODO: cleanup stale signing_info in pending_requests_to_sign
+        // cleanup stale signing_info in pending_requests_to_sign
+        let logger_c = self.logger.clone();
+        self.pending_requests_to_sign
+            .retain(|key_id, pending_signing_infos| {
+                pending_signing_infos.retain(|pending| {
+                    if pending.should_expire_at < Instant::now() {
+                        slog::warn!(
+                            logger_c,
+                            "Request to sign expired waiting for key id: {:?}, ceremony id: {:?}",
+                            key_id,
+                            pending.signing_info.ceremony_id,
+                        );
+                        return false;
+                    }
+                    true
+                });
+                !pending_signing_infos.is_empty()
+            });
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
@@ -265,7 +286,7 @@ where
                         self.pending_requests_to_sign
                             .entry(sign_info.key_id.clone())
                             .or_default()
-                            .push(sign_info);
+                            .push(PendingSigningInfo::new(sign_info));
                     }
                 }
             }
@@ -278,7 +299,8 @@ where
             .pending_requests_to_sign
             .remove(&KeyId(key_info.key.get_public_key_bytes()))
         {
-            for signing_info in reqs {
+            for pending in reqs {
+                let signing_info = pending.signing_info;
                 slog::debug!(
                     self.logger,
                     "Processing a pending requests to sign [ceremony_id: {}]",
@@ -386,5 +408,12 @@ where
     pub fn expire_all(&mut self) {
         self.keygen.expire_all();
         self.signing_manager.expire_all();
+
+        self.pending_requests_to_sign.retain(|_, pending_infos| {
+            for pending in pending_infos {
+                pending.set_expiry_time(std::time::Instant::now());
+            }
+            true
+        });
     }
 }
