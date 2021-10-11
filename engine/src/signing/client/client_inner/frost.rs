@@ -368,7 +368,7 @@ pub fn aggregate_signature(
 }
 
 #[cfg(test)]
-mod test_schnorr {
+mod tests {
 
     use std::str::FromStr;
 

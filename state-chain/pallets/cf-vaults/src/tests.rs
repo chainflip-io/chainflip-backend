@@ -1,4 +1,4 @@
-mod test {
+mod tests {
 	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
 	use crate::*;
