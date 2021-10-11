@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Auctioneer, Bid, BidderProvider, ChainflipAccountData, IsOnline};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,

@@ -5,7 +5,7 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, FlipBalance, FlipConfig,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, FlipBalance, EmissionsConfig, FlipConfig,
 	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
 	StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
@@ -368,6 +368,10 @@ fn testnet_genesis(
 				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
 			]
 			.to_vec(),
+		}),
+		pallet_cf_emissions: Some(EmissionsConfig {
+			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
+			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 		}),
 	}
 }
