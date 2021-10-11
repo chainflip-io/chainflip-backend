@@ -236,7 +236,7 @@ impl<T: Config> Pallet<T> {
 	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level
 	/// account exists so should only be used with accounts that are known to exist.
 	///
-	/// Use `try_debit` instead when the existence of the account is unsure.
+	/// Use [try_debit](Self::try_debit) instead when the existence of the account is unsure.
 	///
 	/// Debiting creates a surplus since we now have some funds that need to be allocated somewhere.
 	pub fn debit(account_id: &T::AccountId, amount: T::Balance) -> Surplus<T> {
@@ -244,7 +244,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Debits an account's staked balance, if the account exists and sufficient funds are available, otherwise returns `None`.
-	/// Unlike [debit], does not create the account if it doesn't exist.
+	/// Unlike [debit](Self::debit), does not create the account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
 		Surplus::try_from_acct(account_id, amount)
 	}
@@ -283,7 +283,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Settles an imbalance against an account. Any excess is reverted to source according to the rules defined in
-	/// [imbalances::RevertImbalance].
+	/// RevertImbalance.
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
 		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
 		let (from, to, amount) = match &imbalance {

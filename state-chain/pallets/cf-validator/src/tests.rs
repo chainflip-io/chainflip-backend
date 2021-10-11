@@ -1,4 +1,4 @@
-mod test {
+mod tests {
 	use crate::*;
 	use crate::{mock::*, Error};
 	use cf_traits::mocks::vault_rotation::clear_confirmation;

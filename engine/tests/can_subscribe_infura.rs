@@ -15,7 +15,7 @@ mod common;
 pub async fn test_all_key_manager_events() {
     let root_logger = utils::create_cli_logger();
 
-    let settings = Settings::from_file_and_env("config/Testing.toml").unwrap();
+    let settings = test_settings_from_file_and_env().unwrap();
 
     let web3 = new_synced_web3_client(&settings, &root_logger)
         .await
@@ -37,7 +37,7 @@ pub async fn test_all_key_manager_events() {
         .expect("Error in event stream");
 }
 
-fn settings_from_file_and_env() -> Result<Settings> {
+fn test_settings_from_file_and_env() -> Result<Settings> {
     let mut s = Config::new();
 
     // merging in the configuration file
@@ -56,7 +56,7 @@ fn settings_from_file_and_env() -> Result<Settings> {
 }
 
 mod test {
-    use crate::settings_from_file_and_env;
+    use crate::test_settings_from_file_and_env;
 
     #[test]
     fn test_init_config_from_file_and_env() {
@@ -64,7 +64,7 @@ mod test {
         let fake_endpoint = "ws://fake.rinkeby.endpoint/flippy1234";
         std::env::set_var(eth_node_key, fake_endpoint);
 
-        let settings_with_env = settings_from_file_and_env().unwrap();
+        let settings_with_env = test_settings_from_file_and_env().unwrap();
 
         // ensure the file and env settings *does* read environment vars
         assert_eq!(settings_with_env.eth.node_endpoint, fake_endpoint);

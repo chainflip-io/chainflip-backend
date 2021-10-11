@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(StakeManager::new(&settings).is_ok());
+        assert_ok!(StakeManager::new(&settings));
     }
 
     #[test]
