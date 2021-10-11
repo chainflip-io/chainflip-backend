@@ -422,3 +422,14 @@ pub trait Heartbeat {
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
 }
+
+/// Updating and calculating emissions per block for validators and backup validators
+pub trait BlockEmissions {
+	type Balance;
+	/// Update the emissions per block for a validator
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Update the emissions per block for a backup validator
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Calculate the emissions per block
+	fn calculate_block_emissions() -> Weight;
+}

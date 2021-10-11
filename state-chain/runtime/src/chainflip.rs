@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
 use cf_traits::{
-	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+	BlockEmissions, BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
 	EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler, Heartbeat, Issuance,
 	NetworkState, RewardRollover, StakeHandler, StakeTransfer, VaultRotationHandler,
 };
@@ -23,6 +23,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type Amount = FlipBalance;
 
 	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+		// Calculate block emissions on every epoch
+		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.

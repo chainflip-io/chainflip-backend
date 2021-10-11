@@ -12,7 +12,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
+use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
@@ -22,10 +22,14 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
 };
 
+type BasisPoints = u32;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::ensure_root;
+	use frame_system::pallet_prelude::OriginFor;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -62,14 +66,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MintInterval: Get<Self::BlockNumber>;
 
-		/// Validator inflation for emissions
-		#[pallet::constant]
-		type ValidatorEmissionInflation: Get<u8>;
-
-		/// Backup Validator inflation for emissions
-		#[pallet::constant]
-		type BackupValidatorEmissionInflation: Get<u8>;
-
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
@@ -95,12 +91,26 @@ pub mod pallet {
 	pub type BackupValidatorEmissionPerBlock<T: Config> =
 		StorageValue<_, T::FlipBalance, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn validator_emission_inflation)]
+	pub(super) type ValidatorEmissionInflation<T: Config> =
+		StorageValue<_, BasisPoints, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validator_emission_inflation)]
+	pub(super) type BackupValidatorEmissionInflation<T: Config> =
+		StorageValue<_, BasisPoints, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Emissions have been distributed. [block_number, amount_minted]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
+		/// Validator inflation emission has been updated [new]
+		ValidatorInflationEmissionsUpdated(BasisPoints),
+		/// Backup Validator inflation emission has been updated [new]
+		BackupValidatorInflationEmissionsUpdated(BasisPoints),
 	}
 
 	// Errors inform users that something went wrong.
@@ -108,6 +118,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Emissions calculation resulted in overflow.
 		Overflow,
+		/// Invalid percentage
+		InvalidPercentage,
 	}
 
 	#[pallet::hooks]
@@ -124,7 +136,57 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(10_000)]
+		pub(super) fn update_validator_emission_per_block(
+			origin: OriginFor<T>,
+			inflation: BasisPoints,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			ValidatorEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::ValidatorInflationEmissionsUpdated(inflation));
+			Ok(().into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub(super) fn update_backup_validator_emission_per_block(
+			origin: OriginFor<T>,
+			inflation: BasisPoints,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			BackupValidatorEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(
+				inflation,
+			));
+			Ok(().into())
+		}
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub validator_emission_inflation: BasisPoints,
+		pub backup_validator_emission_inflation: BasisPoints,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				validator_emission_inflation: 0,
+				backup_validator_emission_inflation: 0,
+			}
+		}
+	}
+
+	/// On genesis, we expect a set of validators to expect heartbeats from.
+	///
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
+			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -182,61 +244,46 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// Updating and calculating emissions per block for validators and backup validators
-pub trait BlockEmissions<T: Config> {
-	/// Update the emissions per block for a validator
-	fn update_validator_block_emission(emission: T::FlipBalance) -> Weight;
-	/// Update the emissions per block for a backup validator
-	fn update_backup_validator_block_emission(emission: T::FlipBalance) -> Weight;
-	/// Calculate the emissions per block
-	fn calculate_block_emissions() -> Weight;
-}
+impl<T: Config> BlockEmissions for Pallet<T> {
+	type Balance = T::FlipBalance;
 
-impl<T: Config> BlockEmissions<T> for Pallet<T> {
-	fn update_validator_block_emission(emission: T::FlipBalance) -> Weight {
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight {
 		ValidatorEmissionPerBlock::<T>::put(emission);
 		T::DbWeight::get().writes(1)
 	}
 
-	fn update_backup_validator_block_emission(emission: T::FlipBalance) -> Weight {
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight {
 		BackupValidatorEmissionPerBlock::<T>::put(emission);
 		T::DbWeight::get().writes(1)
 	}
 
 	fn calculate_block_emissions() -> Weight {
-		const DAYS_IN_YEAR: u32 = 365;
-		let mut weight = 0;
-		// Calculate blocks emissions and update
-		let blocks_per_day = T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get());
-		// Validators
-		let validator_block_emission = T::Issuance::total_issuance()
-			* T::ValidatorEmissionInflation::get().into()
-			/ 100u32.into();
+		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
+			const DAYS_IN_YEAR: u32 = 365;
 
-		if let Some(validator_block_emission) =
-			(validator_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
-		{
-			weight += Self::update_validator_block_emission(validator_block_emission);
+			((T::Issuance::total_issuance() * inflation.into())
+				/ 10_000u32.into()
+				/ DAYS_IN_YEAR.into())
+			.checked_div(&T::FlipBalance::unique_saturated_from(
+				T::BlocksPerDay::get(),
+			))
+			.expect("blocks per day should be greater than zero")
 		}
 
-		// Backup validators
-		let backup_block_emission = T::Issuance::total_issuance()
-			* T::BackupValidatorEmissionInflation::get().into()
-			/ 100u32.into();
+		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
+			ValidatorEmissionInflation::<T>::get(),
+		));
 
-		if let Some(backup_block_emission) =
-			(backup_block_emission / DAYS_IN_YEAR.into()).checked_div(&blocks_per_day)
-		{
-			weight += Self::update_backup_validator_block_emission(backup_block_emission);
-		}
+		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
+			BackupValidatorEmissionInflation::<T>::get(),
+		));
 
-		weight
+		0
 	}
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() -> Weight {
-		Pallet::<T>::calculate_block_emissions();
 		let current_block_number = frame_system::Pallet::<T>::current_block_number();
 		match Self::mint_rewards_for_block(current_block_number) {
 			Ok(weight) => weight,
