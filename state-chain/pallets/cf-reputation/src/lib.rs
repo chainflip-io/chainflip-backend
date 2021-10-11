@@ -112,10 +112,7 @@ pub mod pallet {
 	pub(super) type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
 
-	/// A map tracking our validators.  We record the number of blocks they have been alive
-	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
-	/// if a `heartbeat()` transaction is submitted that they are alive during the entire
-	/// `HeartbeatInterval` of blocks.
+	/// A map tracking our validators.  We record the number of reputation points that they may have.
 	///
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
@@ -127,7 +124,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An offline condition has been met
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
-		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
+		/// The accrual rate for our reputation points has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
 	}
 
@@ -190,8 +187,8 @@ pub mod pallet {
 		}
 	}
 
-	/// On genesis we are initializing the accrual ratio confirming that it is greater than the
-	/// heartbeat interval.  We also expect a set of validators to expect heartbeats from.
+	/// On genesis, we are initializing the accrual ratio confirming that it is greater than the
+	/// heartbeat interval.
 	///
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
@@ -233,6 +230,9 @@ pub mod pallet {
 	impl<T: Config> Heartbeat for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
+		/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
+		/// heartbeat interval.  These block credits are transformed to reputation points based on
+		/// the accrual ratio.
 		fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
