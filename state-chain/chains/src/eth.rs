@@ -100,14 +100,14 @@ impl Tokenizable for SigData {
 
 /// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct ChainflipKey {
+pub struct AggKey {
 	/// The public key as a 32-byte array.
 	pub_key_x: [u8; 32],
 	/// The parity bit can be odd or even.
 	pub_key_y_parity: u8,
 }
 
-impl ChainflipKey {
+impl AggKey {
 	pub fn from_x_y_bytes(bytes: [u8; 33]) -> Self {
 		let [pub_key_x @ .., pub_key_y_parity] = bytes;
 		Self { pub_key_x, pub_key_y_parity }
@@ -119,7 +119,7 @@ impl ChainflipKey {
 	}
 }
 
-impl From<(u8, [u8; 32])> for ChainflipKey {
+impl From<(u8, [u8; 32])> for AggKey {
 	fn from(tuple: (u8, [u8; 32])) -> Self {
 		Self {
 			pub_key_x: tuple.1,
@@ -128,7 +128,7 @@ impl From<(u8, [u8; 32])> for ChainflipKey {
 	}
 }
 
-impl From<([u8; 32], u8)> for ChainflipKey {
+impl From<([u8; 32], u8)> for AggKey {
 	fn from(tuple: ([u8; 32], u8)) -> Self {
 		Self {
 			pub_key_x: tuple.0,
@@ -137,7 +137,7 @@ impl From<([u8; 32], u8)> for ChainflipKey {
 	}
 }
 
-impl Tokenizable for ChainflipKey {
+impl Tokenizable for AggKey {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::Uint(Uint::from_big_endian(&self.pub_key_x[..])),

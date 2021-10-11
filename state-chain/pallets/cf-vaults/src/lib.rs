@@ -2,10 +2,8 @@
 #![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 
-use frame_support::pallet_prelude::*;
-use sp_std::prelude::*;
 use cf_chains::{
-	eth::{self, set_agg_key_with_agg_key::SetAggKeyWithAggKey, ChainflipKey},
+	eth::{self, set_agg_key_with_agg_key::SetAggKeyWithAggKey, AggKey},
 	ChainId, Ethereum,
 };
 use cf_traits::{
@@ -13,8 +11,10 @@ use cf_traits::{
 	Chainflip, Nonce, NonceProvider, SigningContext, ThresholdSigner, VaultRotationHandler,
 	VaultRotator,
 };
+use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::One;
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod mock;
@@ -70,7 +70,7 @@ pub mod pallet {
 		/// A public key
 		type PublicKey: Member
 			+ Parameter
-			+ Into<ChainflipKey>
+			+ Into<AggKey>
 			+ Default
 			+ MaybeSerializeDeserialize;
 

@@ -1,6 +1,6 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable, ChainflipKey};
+use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable, AggKey};
 
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Uint};
@@ -13,7 +13,7 @@ pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new public key.
-	pub new_key: ChainflipKey,
+	pub new_key: AggKey,
 }
 
 impl ChainflipContractCall for SetAggKeyWithAggKey {
@@ -35,7 +35,7 @@ impl ChainflipContractCall for SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<ChainflipKey>>(
+	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(
 		nonce: Nonce,
 		new_key: Key,
 	) -> Self {
