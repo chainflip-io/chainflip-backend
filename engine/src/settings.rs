@@ -167,9 +167,15 @@ mod tests {
 
     #[test]
     fn test_websocket_url_parsing() {
-        assert_ok!(parse_websocket_url("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-        assert_ok!(parse_websocket_url("wss://network.my_eth_node:80/<secret_key>"));
-        assert_ok!(parse_websocket_url("wss://network.my_eth_node/<secret_key>"));
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+        ));
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node:80/<secret_key>"
+        ));
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node/<secret_key>"
+        ));
         assert_ok!(parse_websocket_url("ws://network.my_eth_node/<secret_key>"));
         assert_ok!(parse_websocket_url("wss://network.my_eth_node"));
         assert!(parse_websocket_url(

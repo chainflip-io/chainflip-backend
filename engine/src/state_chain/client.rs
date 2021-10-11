@@ -151,9 +151,7 @@ impl StateChainClient {
                     &self.runtime_version,
                     self.genesis_hash,
                     nonce,
-                    substrate_subxt::Encoded(
-                        state_chain_runtime::Call::from(extrinsic).encode(),
-                    ),
+                    substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic).encode()),
                     &self.signer,
                 )
                 .await?
@@ -201,8 +199,7 @@ impl StateChainClient {
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
                         option_data.map(|data| {
-                            Vec::<EventInfo>::decode(&mut &data.0[..])
-                            .map_err(anyhow::Error::msg)
+                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
                         })
                     })
                     .flatten_ok()
