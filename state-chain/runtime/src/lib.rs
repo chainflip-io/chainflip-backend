@@ -380,6 +380,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type Event = Event;
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {

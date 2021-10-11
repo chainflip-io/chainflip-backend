@@ -19,6 +19,9 @@ const FIVE_DAYS_IN_SECONDS: u64 = 432000;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -38,7 +41,7 @@ pub mod pallet {
 	use sp_std::boxed::Box;
 	use sp_std::vec::Vec;
 
-	use crate::FIVE_DAYS_IN_SECONDS;
+	use crate::{WeightInfo, FIVE_DAYS_IN_SECONDS};
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -72,6 +75,8 @@ pub mod pallet {
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -162,7 +167,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Propose a governance ensured extrinsic
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
@@ -177,7 +182,7 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 		/// Sets a new set of governance members
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
 			accounts: Vec<T::AccountId>,
@@ -189,7 +194,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 		/// Approve a proposal by a given proposal id
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
@@ -221,7 +226,7 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 		/// Execute an extrinsic as root
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
