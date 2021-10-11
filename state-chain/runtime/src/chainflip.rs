@@ -4,7 +4,11 @@ use super::{
 	Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
-use cf_traits::{BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochTransitionHandler, EpochInfo, Heartbeat, Issuance, NetworkState, StakeHandler, StakeTransfer, VaultRotationHandler, RewardRollover};
+use cf_traits::{
+	BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+	EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler, Heartbeat, Issuance,
+	NetworkState, RewardRollover, StakeHandler, StakeTransfer, VaultRotationHandler,
+};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};

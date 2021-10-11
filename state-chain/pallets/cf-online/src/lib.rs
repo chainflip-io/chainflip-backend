@@ -30,10 +30,10 @@ mod tests;
 
 mod liveness;
 
+use cf_traits::EpochTransitionHandler;
 use frame_support::pallet_prelude::*;
 use liveness::*;
 pub use pallet::*;
-use cf_traits::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
@@ -198,7 +198,11 @@ pub mod pallet {
 
 			(
 				weight,
-				NetworkState { missing, online, offline	},
+				NetworkState {
+					missing,
+					online,
+					offline,
+				},
 			)
 		}
 	}

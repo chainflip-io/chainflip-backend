@@ -16,7 +16,11 @@ pub use weights::WeightInfo;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{ActiveValidatorRange, Auctioneer, AuctionError, AuctionPhase, AuctionResult, BidderProvider, ChainflipAccount, ChainflipAccountState, IsOnline, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator, EmergencyRotation};
+use cf_traits::{
+	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid,
+	StakeHandler, VaultRotationHandler, VaultRotator,
+};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
@@ -29,7 +33,10 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AuctionResult, ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator, AuctionIndex};
+	use cf_traits::{
+		AuctionIndex, AuctionResult, ChainflipAccount, EmergencyRotation, RemainingBid,
+		VaultRotator,
+	};
 	use frame_support::traits::ValidatorRegistration;
 
 	#[pallet::pallet]

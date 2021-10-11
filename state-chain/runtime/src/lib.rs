@@ -41,7 +41,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
-	ChainflipHeartbeat, ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
+	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
+	ChainflipVaultRotationHandler,
 };
 pub use cf_traits::FlipBalance;
 use cf_traits::{Auctioneer, BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
