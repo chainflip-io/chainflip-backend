@@ -288,7 +288,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				let phase = AuctionPhase::BidsTaken(bidders);
 				CurrentPhase::<T>::put(phase.clone());
 
-				CurrentAuctionIndex::<T>::mutate(|idx| *idx = *idx + 1);
+				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				Ok(phase)

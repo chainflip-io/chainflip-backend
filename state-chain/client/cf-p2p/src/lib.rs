@@ -285,7 +285,7 @@ pub fn new_p2p_validator_network_node<
 						))
 					} else {
 						let validator_id: AccountId = validator_id.into();
-						state.local_validator_id = Some(validator_id.clone());
+						state.local_validator_id = Some(validator_id);
 						encode_and_send(
 							&self.p2p_network_service,
 							P2PMessage::SelfIdentify(validator_id),
@@ -336,9 +336,7 @@ pub fn new_p2p_validator_network_node<
 						self.notification_rpc_subscription_manager
 							.add(subscriber, |sink| {
 								sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-									.send_all(
-										receiver.map(|x| Ok::<_, ()>(x)).compat().map(|x| Ok(x)),
-									)
+									.send_all(receiver.map(Ok::<_, ()>).compat().map(Ok))
 									.map(|_| ())
 							});
 					self.state
@@ -471,7 +469,7 @@ pub fn new_p2p_validator_network_node<
 													);
 												}
 												Entry::Occupied(mut entry) => {
-													if let Some(_) = entry.get() {
+													if entry.get().is_some() {
 														log::warn!(
 															"Received a duplicate identification {:?} for peer {:?}",
 															validator_id,

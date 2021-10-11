@@ -162,7 +162,7 @@ impl<T: Config> Pallet<T> {
 
 		let reward_amount = EmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
-			.ok_or(T::DbWeight::get().reads(2))?;
+			.ok_or_else(|| T::DbWeight::get().reads(2))?;
 
 		let exec_weight = if reward_amount.is_zero() {
 			0

@@ -358,7 +358,6 @@ fn testnet_genesis(
 		}),
 		pallet_cf_emissions: Some(EmissionsConfig {
 			emission_per_block: BLOCK_EMISSIONS,
-			..Default::default()
 		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],

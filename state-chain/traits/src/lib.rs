@@ -308,6 +308,7 @@ pub type Nonce = u64;
 
 /// A identifier for the chain a nonce is required
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[allow(clippy::unnecessary_cast)]
 pub enum NonceIdentifier {
 	Ethereum = 1,
 	Bitcoin = 2,

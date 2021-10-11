@@ -285,7 +285,7 @@ impl<T: Config> Pallet<T> {
 	/// Provide the next ceremony id
 	fn next_ceremony_id() -> CeremonyId {
 		CurrentRequest::<T>::mutate(|next_ceremony_id| {
-			*next_ceremony_id = *next_ceremony_id + 1;
+			*next_ceremony_id += 1;
 			*next_ceremony_id
 		})
 	}
@@ -305,7 +305,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: Chain::Ethereum,
-			validator_candidates: candidates.clone(),
+			validator_candidates: candidates,
 		};
 
 		KeygenRequestResponse::<T>::make_request(Self::next_ceremony_id(), keygen_request)
@@ -388,7 +388,7 @@ impl<T: Config>
 				// Do as you wish with these, I wash my hands..
 				T::RotationHandler::penalise(&bad_validators);
 				// Report back we have processed the failure
-				Ok(().into())
+				Ok(())
 			}
 		}
 	}
@@ -433,7 +433,7 @@ impl<T: Config>
 						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
 							vault_rotation
 								.new_public_key
-								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
+								.ok_or(RotationError::NewPublicKeyNotSet)?,
 							tx_hash,
 						),
 					}

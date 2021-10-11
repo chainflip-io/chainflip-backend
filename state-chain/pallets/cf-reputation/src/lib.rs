@@ -147,15 +147,15 @@ pub mod pallet {
 	/// Liveness bitmap tracking intervals
 	trait LivenessTracker {
 		/// Online status
-		fn is_online(self) -> bool;
+		fn is_online(&self) -> bool;
 		/// Update state of current interval
 		fn update_current_interval(&mut self, online: bool) -> Self;
 		/// State of submission for the current interval
-		fn has_submitted(self) -> bool;
+		fn has_submitted(&self) -> bool;
 	}
 
 	impl LivenessTracker for Liveness {
-		fn is_online(self) -> bool {
+		fn is_online(&self) -> bool {
 			// Online for 2 * `HeartbeatBlockInterval` or 2 lsb
 			self & 0x3 != 0
 		}
@@ -166,7 +166,7 @@ pub mod pallet {
 			*self
 		}
 
-		fn has_submitted(self) -> bool {
+		fn has_submitted(&self) -> bool {
 			self & 0x1 == 0x1
 		}
 	}
@@ -271,14 +271,14 @@ pub mod pallet {
 					     reputation_points,
 					 }| {
 						// Accrue some online credits of `HeartbeatInterval` size
-						*online_credits = *online_credits + Self::online_credit_reward();
+						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points
 						if *online_credits >= credits {
 							// Swap these credits for reputation
-							*online_credits = *online_credits - credits;
+							*online_credits -= credits;
 							// Update reputation
-							*reputation_points = *reputation_points + rewarded_points;
+							*reputation_points += rewarded_points;
 						}
 					},
 				);

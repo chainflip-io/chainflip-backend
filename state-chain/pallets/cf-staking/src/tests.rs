@@ -664,7 +664,7 @@ fn test_claim_payload() {
 		runtime_payload,
 		// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 		register_claim
-			.encode_input(&vec![
+			.encode_input(&[
 				// sigData: SigData(uint, uint, uint)
 				Token::Tuple(vec![
 					Token::Uint(ethabi::Uint::zero()),
