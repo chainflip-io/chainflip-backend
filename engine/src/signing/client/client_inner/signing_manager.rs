@@ -141,7 +141,7 @@ impl SigningManager {
             .entry(ceremony_id)
             .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
-        entry.on_request_to_sign(
+        entry.on_request_to_sign_with_state(
             ceremony_id,
             our_idx,
             signer_idxs,

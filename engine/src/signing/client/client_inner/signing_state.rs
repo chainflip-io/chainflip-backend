@@ -99,7 +99,7 @@ const STAGE_DURATION: Duration = Duration::from_secs(15);
 impl SigningState {
     /// Upgrade existing state to authorised (with a key) if it isn't already,
     /// and process any delayed messages
-    pub fn on_request_to_sign(
+    pub fn on_request_to_sign_with_state(
         &mut self,
         // TODO: see if we can make states unaware of their own
         // ceremony ids (by delegating p2p messaging upstream)
