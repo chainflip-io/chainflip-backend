@@ -7,6 +7,7 @@
   },
   "Address": "MultiAddress",
   "Amount": "TokenAmount",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
       "BondIsZero",
@@ -23,6 +24,13 @@
     }
   },
   "AuctionRange": "(u32,u32)",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
   "CallHash": "[u8;32]",
   "ChainParams": {
     "_enum": {
@@ -69,6 +77,7 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
+  "KeyId": "Vec<u8>",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
@@ -83,6 +92,7 @@
     ]
   },
   "OnlineCreditsFor": "u64",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
   "ReputationPenalty": {
@@ -97,7 +107,9 @@
     "k_times_g_addr": "[u8; 20]"
   },
   "Signature": "H256",
+  "SignedTransactionFor": "Vec<u8>",
   "TokenAmount": "u128",
+  "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "TransactionHash": "Vec<u8>",
   "Vault": {
