@@ -97,10 +97,14 @@ pub struct SigningState {
 const STAGE_DURATION: Duration = Duration::from_secs(15);
 
 impl SigningState {
+    // This could be inlined?
+    // or at least, it could be renamed to what it does, not when it's called
+    // e.g. `authorise_and_trigger_delayed_processing`
     /// Upgrade existing state to authorised (with a key) if it isn't already,
     /// and process any delayed messages
     pub fn on_request_to_sign_with_state(
         &mut self,
+        // +1 I think this is a good idea
         // TODO: see if we can make states unaware of their own
         // ceremony ids (by delegating p2p messaging upstream)
         ceremony_id: CeremonyId,
@@ -113,6 +117,8 @@ impl SigningState {
     ) {
         self.logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
 
+        // why would this be a sign of duplicate ceremony id?
+        // it's not exactly clear - I guess this would be resolved by the above TODO
         if self.inner.is_some() {
             slog::warn!(
                 self.logger,
@@ -162,7 +168,8 @@ impl SigningState {
 
     /// Create State w/o access to key info (and other data available
     /// after a request to sign) with the only purpose of being
-    /// able to keep delayed messages in the same place
+    /// able to keep delayed messages in the same place the rest of the signing
+    /// state will be kept, once authorised
     pub fn new_unauthorised(logger: slog::Logger) -> Self {
         SigningState {
             inner: None,
@@ -173,7 +180,6 @@ impl SigningState {
     }
 
     /// Try to process delayed messages
-    /// Process messages waiting for?
     fn process_delayed(&mut self) {
         let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -208,7 +214,9 @@ impl SigningState {
     }
 
     /// Process message `m` from party `id`
-    pub fn process_message(&mut self, id: AccountId, m: SigningData) {
+    // id -> account_id (we have idx, ceremony_id, account_id, key_id.... specific is much better)
+    // also would be better to name this var `signing_data` or at least something better than `m`
+    pub fn process_message_from(&mut self, id: AccountId, m: SigningData) {
         match &mut self.inner {
             None => {
                 self.add_delayed(id, m);
@@ -218,6 +226,7 @@ impl SigningState {
                     "The value is only None for a brief period of time, when we swap states, below",
                 );
 
+                // this is already done in (what I've called) `start_signing_data`
                 // TODO: check that the party is a signer for this ceremony
 
                 // delay the data if we are not ready for it

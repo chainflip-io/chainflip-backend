@@ -24,6 +24,8 @@ pub enum ProcessMessageResult {
     Ignored,
 }
 
+// I'm a little confused by this. What was the reasoning for having this? it's only implemented
+// on the broadcast stage, but not any of the other stages?
 /// Defines actions that any given stage of a ceremony should be able to perform
 pub trait CeremonyStage: DynClone + std::fmt::Display {
     // Message type to be processed by a particular stage
@@ -34,9 +36,9 @@ pub trait CeremonyStage: DynClone + std::fmt::Display {
     /// Perform initial computation for this stage (and initiate communication with other parties)
     fn init(&mut self);
 
-    /// Process message from signer at index `signer_idx`. Precodintion: the signer is a valid
-    /// holder of the key and selected to participate in this ceremony (TODO: also check that
-    /// we haven't processed a message from them?)
+    /// Process message from signer at index `signer_idx`. Precondition: the signer is a valid
+    /// holder of the key *and* was selected to participate in this ceremony (TODO: also check that
+    /// we haven't processed a message from them?) - the phrasing of this TODO is a little unclear
     fn process_message(&mut self, signer_idx: usize, m: Self::Message) -> ProcessMessageResult;
 
     /// This is how individual stages signal messages that should be processed in the next stage

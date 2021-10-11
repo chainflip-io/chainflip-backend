@@ -222,6 +222,7 @@ where
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
             MultisigInstruction::KeyGen(keygen_info) => {
+                // either delete the below comment or link to an issue. It's confusing
                 // For now disable generating a new key when we already have one
 
                 slog::debug!(

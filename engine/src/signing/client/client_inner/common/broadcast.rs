@@ -9,6 +9,8 @@ use super::{
     P2PSender,
 };
 
+// BroadcastStageProcessor is a bit weird a name I think
+
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
 pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
@@ -20,7 +22,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     fn init(&self) -> Self::Message;
 
     /// For a given message, signal if it needs to be delayed
-    /// until the next stage
+    /// Delay only those messages that are for the very next stage
     fn should_delay(&self, m: &D) -> bool;
 
     /// Determines how the data for this stage (of type `Self::Message`)
@@ -100,6 +102,7 @@ where
     type Result = Result;
 
     fn init(&mut self) {
+        // where does init() go
         let data = self.processor.init();
 
         // Save our own share

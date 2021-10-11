@@ -23,6 +23,7 @@ pub struct KeygenResult {
 }
 
 impl KeygenResult {
+    /// Get the KeygenResult's public key as a Point
     pub fn get_public_key(&self) -> Point {
         self.key_share.y
     }
@@ -42,11 +43,11 @@ pub struct KeygenResultInfo {
 }
 
 impl KeygenResultInfo {
-    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
-        self.validator_map.get_idx(id)
+    pub fn get_idx(&self, account_id: &AccountId) -> Option<usize> {
+        self.validator_map.get_idx(account_id)
     }
 
-    pub fn get_id(&self, idx: usize) -> AccountId {
+    pub fn get_account_id(&self, idx: usize) -> AccountId {
         self.validator_map
             .get_id(idx)
             .expect("ProgrammerError, invalid index")

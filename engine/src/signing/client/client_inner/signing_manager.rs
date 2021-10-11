@@ -16,7 +16,7 @@ use super::signing_state::SigningState;
 /// Generating signer indexes based on the list of paries
 #[derive(Clone)]
 pub struct SigningManager {
-    // rename acctid
+    // rename to `my_account_id`
     id: AccountId,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
     signing_states: HashMap<CeremonyId, SigningState>,
@@ -77,7 +77,7 @@ impl SigningManager {
             ceremony_id
         );
 
-        // Hack to truncate the signers - ticket?
+        // ======  Hack to truncate the signers - ticket? ========
         if signers.len() > (key_info.params.threshold + 1) {
             slog::warn!(
                 self.logger,
@@ -86,6 +86,7 @@ impl SigningManager {
             );
             signers.truncate(key_info.params.threshold + 1);
         }
+        // ======= END HACK ======
 
         if signers.len() != key_info.params.threshold + 1 {
             slog::warn!(
@@ -98,6 +99,8 @@ impl SigningManager {
 
         // try combine
         // y warn
+
+        // thhis is saying "We are not in the set of signers nominated"
         if !signers.contains(&self.id) {
             // TODO: alert
             slog::warn!(
@@ -108,6 +111,7 @@ impl SigningManager {
             return;
         }
 
+        // this is saying our account id is not existent for this key
         let our_idx = match key_info.get_idx(&self.id) {
             Some(idx) => idx,
             None => {
@@ -138,12 +142,12 @@ impl SigningManager {
         };
 
         // We have the key and have received a request to sign
-        let entry = self
+        let signing_state = self
             .signing_states
             .entry(ceremony_id)
             .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
-        entry.on_request_to_sign_with_state(
+        signing_state.on_request_to_sign_with_state(
             ceremony_id,
             our_idx,
             signer_idxs,
@@ -152,12 +156,13 @@ impl SigningManager {
             self.event_sender.clone(),
             &self.logger,
         );
+
+        signing_state.process_delayed();
     }
 
+    /// Check if we have state for this data and delegate message to that state
+    /// Delay message otherwise
     pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
-        // Check if we have state for this data and delegate message to that state
-        // Delay message otherwise
-
         let SigningDataWrapped { data, ceremony_id } = wdata;
 
         slog::trace!(
@@ -192,12 +197,16 @@ impl SigningManager {
 }
 
 /// Map all signer ids to their corresponding signer idx
-fn project_signers(signer_ids: &[AccountId], info: &KeygenResultInfo) -> Result<Vec<usize>, ()> {
+fn project_signers(
+    signer_account_ids: &[AccountId],
+    info: &KeygenResultInfo,
+) -> Result<Vec<usize>, ()> {
+    // TODO / or remove the commment
     // There is probably a more efficient way of doing this
     // for for now this should be good enough
 
-    let mut results = Vec::with_capacity(signer_ids.len());
-    for id in signer_ids {
+    let mut results = Vec::with_capacity(signer_account_ids.len());
+    for id in signer_account_ids {
         let idx = info.get_idx(id).ok_or(())?;
         results.push(idx);
     }

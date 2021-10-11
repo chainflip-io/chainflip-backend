@@ -34,9 +34,9 @@ pub struct SecretNoncePair {
     pub e_pub: Point,
 }
 
+// could inline this
 impl SecretNoncePair {
-    /// Generate a random pair of nonces
-    pub fn sample_random() -> Self {
+    pub fn generate_random_pair() -> Self {
         let d = Scalar::new_random();
         let e = Scalar::new_random();
 
@@ -70,6 +70,7 @@ pub struct BroadcastVerificationMessage<T: Clone> {
     pub data: Vec<T>,
 }
 
+// same here, why do we need type aliases here?
 pub type VerifyComm2 = BroadcastVerificationMessage<Comm1>;
 pub type VerifyLocalSig4 = BroadcastVerificationMessage<LocalSig3>;
 
@@ -123,6 +124,7 @@ macro_rules! derive_impls_for_signing_data {
 /// of the FROST signing protocol
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SigningData {
+    // Assuming `Comm` is for "Commitment" ... we can just name it "CommitmentStage1" - not confused with communication
     CommStage1(Comm1),
     BroadcastVerificationStage2(VerifyComm2),
     LocalSigStage3(LocalSig3),

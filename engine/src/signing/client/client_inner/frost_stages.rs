@@ -44,7 +44,7 @@ impl AwaitCommitments1 {
         AwaitCommitments1 {
             common,
             signing_common,
-            nonces: SecretNoncePair::sample_random(),
+            nonces: SecretNoncePair::generate_random_pair(),
         }
     }
 }
@@ -207,6 +207,7 @@ struct VerifyLocalSigsBroadcastStage4 {
     commitments: Vec<Comm1>,
 
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
+    // I found "local_sigs" confusing. It sounds like they're sigs we generated locally
     sig_shares_received: HashMap<usize, LocalSig3>,
 }
 
@@ -237,9 +238,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
         false
     }
 
-    /// Verify that signature shares have been broadcast correctly by? other nodes? us?, and if so,
+    /// Verify the signature shares broadcast by other nodes and
     /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
+        // seems weird that we say "verify broadcast" rather than saying we are verifying the thing that's being broadcast
         let local_sigs = match verify_broadcasts(&self.common.all_idxs, &messages) {
             Ok(sigs) => sigs,
             Err(blamed_parties) => {
