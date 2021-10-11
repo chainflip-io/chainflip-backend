@@ -232,6 +232,15 @@ pub mod pallet {
 		/// the blocks for this heartbeat interval.  Once the block credits have surpassed the accrual
 		/// block number they will earn reputation points based on the accrual ratio.
 		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): This is not a staked node.
+		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
+		///   submitted the heartbeat for this interval.
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
@@ -287,6 +296,15 @@ pub mod pallet {
 		/// The accrual ratio can be updated and would come into play in the current heartbeat interval
 		/// This is only available to sudo
 		///
+		/// ## Events
+		///
+		/// - [AccrualRatioUpdated](Event::AccrualRatioUpdated): The accrual ratio was successfully updated.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints): If points < zero.
+		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits): If online_credits < zero
+		///   or online_credits possible per interval is more than the blocks per interval.
 		#[pallet::weight(10_000)]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,
