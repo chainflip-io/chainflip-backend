@@ -12,7 +12,7 @@ use cf_chains::eth::{
 	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
 };
 use cf_traits::{
-	BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
+	BidderProvider, EpochInfo, NonceProvider, SigningContext, StakeTransfer, ThresholdSigner,
 };
 use core::time::Duration;
 use frame_support::{
@@ -84,10 +84,10 @@ pub mod pallet {
 		>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider;
+		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
 		/// Top-level Ethereum signing context needs to support `RegisterClaim`.
-		type SigningContext: From<RegisterClaim>;
+		type SigningContext: From<RegisterClaim> + SigningContext<Self, Chain = cf_chains::Ethereum>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
@@ -574,7 +574,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let transaction = RegisterClaim::new_unsigned(
-			T::NonceProvider::next_nonce(NonceIdentifier::Ethereum),
+			T::NonceProvider::next_nonce(),
 			<T as Config>::AccountId::from_ref(account_id).as_ref(),
 			amount,
 			&address,

@@ -11,13 +11,13 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, Nonce, NonceProvider, ThresholdSigner, VaultRotationHandler,
+	Chainflip, Nonce, NonceProvider, SigningContext, ThresholdSigner, VaultRotationHandler,
 	VaultRotator,
 };
 pub use pallet::*;
 
+pub use crate::rotation::VaultRotationResponse;
 pub use crate::rotation::*;
-pub use crate::rotation::{KeygenRequest, VaultRotationResponse};
 use sp_runtime::traits::One;
 
 pub mod rotation;
@@ -43,7 +43,8 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Chainflip {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -64,7 +65,7 @@ pub mod pallet {
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 
 		/// Top-level Ethereum signing context needs to support `SetAggKeyWithAggKey`.
-		type SigningContext: From<SetAggKeyWithAggKey>;
+		type SigningContext: From<SetAggKeyWithAggKey> + SigningContext<Self, Chain = Ethereum>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
@@ -82,7 +83,7 @@ pub mod pallet {
 	/// The Vault for this instance
 	#[pallet::storage]
 	#[pallet::getter(fn eth_vault)]
-	pub(super) type EthereumVault<T: Config> = StorageValue<_, Vault<T>>;
+	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault<T>>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
@@ -111,13 +112,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Request a key generation \[request_index, request\]
-		KeygenRequest(CeremonyId, KeygenRequest<T>),
-		/// Request a rotation of the vault for this chain \[request_index, request\]
+		/// Request a key generation \[ceremony_id, chain_id, participants\]
+		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
+		/// Request a rotation of the vault for this chain \[ceremony_id, request\]
 		VaultRotationRequest(CeremonyId),
-		/// The vault for the request has rotated \[request_index\]
+		/// The vault for the request has rotated \[ceremony_id\]
 		VaultRotationCompleted(CeremonyId),
-		/// A rotation of vaults has been aborted \[request_indexes\]
+		/// A rotation of vaults has been aborted \[ceremony_ides\]
 		RotationAborted(Vec<CeremonyId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
@@ -149,120 +150,118 @@ pub mod pallet {
 		NewPublicKeyNotSet,
 		///
 		NoActiveRotation,
+		/// The specified chain is not supported.
+		UnsupportedChain,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A key generation response received from a key generation request and handled
-		/// by [KeygenRequestResponse::handle_response]
+		/// A key generation succeeded. Update the state of the rotation and attempt to
 		#[pallet::weight(10_000)]
-		pub fn keygen_response(
+		pub fn keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: KeygenResponse<T>,
+			chain_id: ChainId,
+			new_public_key: T::PublicKey,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure_index!(ceremony_id);
-			match response {
-				KeygenResponse::Success(new_public_key) => {
-					let vault = EthereumVault::<T>::get().ok_or_else(|| {
-						Error::<T>::NoActiveRotation
-					})?;
-					if vault.current_key != new_public_key {
-						ActiveChainVaultRotations::<T>::mutate(
-							ceremony_id,
-							|maybe_vault_rotation| {
-								if let Some(vault_rotation) = maybe_vault_rotation {
-									(*vault_rotation).new_public_key = Some(new_public_key.clone());
-									
-									// TODO: initiate signing & broadcast of the new public key via setAggKeyWithAggKey.
 
-									T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
-										<Self as NonceProvider>::next_nonce(),
-										new_public_key,
-									));
-
-									Ok(().into())
-
-								} else {
-									Err(Error::<T>::InvalidCeremonyId.into())
-								}
-							},
-						)
-					} else {
-						Pallet::<T>::abort_rotation();
-						Err(Error::<T>::KeyUnchanged.into())
-					}
-				}
-				KeygenResponse::Error(bad_validators) => {
-					// TODO: 
-					// - Centralise penalty points. 
-					// - Define offline condition(s) for keygen failures.
-					const PENALTY: i32 = 15;
-					for offender in bad_validators {
-						T::OfflineReporter::report(
-							OfflineCondition::ParticipateSigningFailed,
-							PENALTY,
-							&offender
-						)
-						.unwrap_or_else(|e| {
-							frame_support::debug::error!(
-								"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-								offender,
-								e
-							);
-							0
-						});
-					}
-					Pallet::<T>::abort_rotation();
-					Ok(().into())
-				}
+			let vault = Vaults::<T>::get(chain_id).ok_or(Error::<T>::UnsupportedChain)?;
+			if vault.current_key == new_public_key {
+				// TODO: we probably shouldn't be updating the state if we're returning an error.
+				Pallet::<T>::abort_rotation();
+				return Err(Error::<T>::KeyUnchanged.into());
 			}
+
+			// TODO: we only want to do this once *all* of the keygen ceremonies have succeeded.
+			ActiveChainVaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
+				*maybe_vault_rotation = Some(VaultRotation {
+					new_public_key: Some(new_public_key.clone()),
+				});
+			});
+
+			// TODO: This is implicitly also broadcasts the transaction - could be made clearer.
+			T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
+				<Self as NonceProvider<Ethereum>>::next_nonce(),
+				new_public_key,
+			));
+
+			Ok(().into())
+		}
+
+		/// Key generation failed. We report the guilty parties and abort.
+		#[pallet::weight(10_000)]
+		pub fn keygen_failure(
+			origin: OriginFor<T>,
+			ceremony_id: CeremonyId,
+			guilty_validators: Vec<T::ValidatorId>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			ensure_index!(ceremony_id);
+
+			// TODO:
+			// - Centralise penalty points.
+			// - Define offline condition(s) for keygen failures.
+			const PENALTY: i32 = 15;
+			for offender in guilty_validators {
+				T::OfflineReporter::report(
+					OfflineCondition::ParticipateSigningFailed,
+					PENALTY,
+					&offender,
+				)
+				.unwrap_or_else(|e| {
+					frame_support::debug::error!(
+						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+						offender,
+						e
+					);
+					0
+				});
+			}
+			Pallet::<T>::abort_rotation();
+			Ok(().into())
+		}
+
+		/// A vault rotation transaction succeeeded.
+		#[pallet::weight(10_000)]
+		pub fn vault_rotation_success(
+			origin: OriginFor<T>,
+			ceremony_id: CeremonyId,
+			chain_id: ChainId,
+			_tx_hash: T::TransactionHash,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let new_key = ActiveChainVaultRotations::<T>::get(ceremony_id)
+				.ok_or(Error::<T>::InvalidCeremonyId)?
+				.new_public_key
+				.ok_or(Error::<T>::NewPublicKeyNotSet)?;
+
+			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
+				if let Some(mut vault) = maybe_vault.as_mut() {
+					vault.current_key = new_key;
+					Ok(())
+				} else {
+					Err(Error::<T>::InvalidCeremonyId)
+				}
+			})?;
+
+			Pallet::<T>::deposit_event(Event::VaultRotationCompleted(ceremony_id));
+
+			Ok(().into())
 		}
 
 		/// A vault rotation response received from a vault rotation request and handled
 		/// by [VaultRotationRequestResponse::handle_response]
 		#[pallet::weight(10_000)]
-		pub fn vault_rotation_response(
+		pub fn vault_rotation_abort(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: VaultRotationResponse<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
 			ensure_index!(ceremony_id);
-			// Feedback to vaults
-			// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
-			// need to rollback any if one of the group of vault rotations fails
-			match response {
-				VaultRotationResponse::Success { tx_hash } => {
-					if let Some(vault_rotation) = ActiveChainVaultRotations::<T>::take(ceremony_id)
-					{
-						let new_public_key = vault_rotation
-									.new_public_key
-									.ok_or_else(|| Error::<T>::NewPublicKeyNotSet)?;
-						// At the moment we just have Ethereum to notify
-						match vault_rotation.keygen_request.chain {
-							ChainId::Ethereum => EthereumVault::<T>::try_mutate(|maybe_vault| {
-								maybe_vault.as_mut().map(|vault| {
-									(*vault).previous_key = (*vault).current_key.clone();
-									(*vault).current_key = new_public_key;
-									(*vault).tx_hash = tx_hash;
-								})
-								.ok_or_else(|| {
-									Error::<T>::NoActiveRotation
-								})
-							})?,
-						}
-					}
-					// This request is complete
-					Pallet::<T>::deposit_event(Event::VaultRotationCompleted(ceremony_id));
-				}
-				VaultRotationResponse::Error => {
-					Pallet::<T>::abort_rotation();
-				}
-			}
-
+			Pallet::<T>::abort_rotation();
 			Ok(().into())
 		}
 	}
@@ -281,14 +280,11 @@ pub mod pallet {
 		}
 	}
 
-	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			EthereumVault::<T>::put(Vault {
-				previous_key: Default::default(),
+			Vaults::<T>::insert(ChainId::Ethereum, Vault {
 				current_key: self.ethereum_vault_key.clone(),
-				tx_hash: Default::default(),
 			});
 		}
 	}
@@ -329,23 +325,16 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T>::EmptyValidatorSet);
 
-		// Create a KeyGenRequest for the target chain.
-		let keygen_request = KeygenRequest {
-			chain: ChainId::Ethereum,
-			validator_candidates: candidates.clone(),
-		};
-
 		let ceremony_id = CurrentRequest::<T>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, keygen_request.clone()));
+		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, ChainId::Ethereum, candidates.clone()));
 		ActiveChainVaultRotations::<T>::insert(
 			ceremony_id,
 			VaultRotation {
 				new_public_key: None,
-				keygen_request,
 			},
 		);
 
@@ -355,7 +344,6 @@ impl<T: Config> VaultRotator for Pallet<T> {
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
 		// The 'exit' point for the pallet, no rotations left to process
 		if Pallet::<T>::no_active_chain_vault_rotations() {
-			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
 			Ok(())
