@@ -122,7 +122,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// A threshold signature ceremony has succeeded. 
+		/// A threshold signature ceremony has succeeded.
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
