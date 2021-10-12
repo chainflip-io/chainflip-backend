@@ -207,11 +207,10 @@ pub trait EpochTransitionHandler {
 	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with a
 	/// `_new_bond`
 	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		_new_validators: &[Self::ValidatorId],
-		_new_bond: Self::Amount,
-	) {
-	}
+		old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	);
 }
 
 /// Providing bidders for an auction

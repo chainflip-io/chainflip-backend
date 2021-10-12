@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
-#![feature(assert_matches)]
 
 #[doc = include_str!("../README.md")]
 #[cfg(test)]
