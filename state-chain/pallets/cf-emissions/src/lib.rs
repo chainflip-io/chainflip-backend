@@ -82,7 +82,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn validator_emission_per_block)]
-	/// The block number at which we last minted Flip.
+	/// The amount of Flip we mint to validators per block.
 	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
