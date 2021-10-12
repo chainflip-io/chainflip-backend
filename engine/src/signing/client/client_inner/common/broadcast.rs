@@ -102,13 +102,12 @@ where
     type Result = Result;
 
     fn init(&mut self) {
-        // where does init() go
-        let data = self.processor.init();
+        let message = self.processor.init();
 
         // Save our own share
-        self.messages.insert(self.common.own_idx, data.clone());
+        self.messages.insert(self.common.own_idx, message.clone());
 
-        self.broadcast(data.into());
+        self.broadcast(message.into());
     }
 
     fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {

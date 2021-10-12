@@ -102,7 +102,7 @@ impl SigningState {
     // e.g. `authorise_and_trigger_delayed_processing`
     /// Upgrade existing state to authorised (with a key) if it isn't already,
     /// and process any delayed messages
-    pub fn on_request_to_sign_with_state(
+    pub fn start_signing_data_with_state(
         &mut self,
         // +1 I think this is a good idea
         // TODO: see if we can make states unaware of their own
@@ -146,13 +146,13 @@ impl SigningState {
             },
         );
 
-        let mut state = BroadcastStage::new(processor, common);
+        let mut bc_stage = BroadcastStage::new(processor, common);
 
-        state.init();
+        bc_stage.init();
 
         self.inner = Some(AuthorisedSigningState {
             ceremony_id,
-            stage: Some(Box::new(state)),
+            stage: Some(Box::new(bc_stage)),
             validator_map: key_info.validator_map,
             result_sender: event_sender,
         });
@@ -216,7 +216,8 @@ impl SigningState {
     /// Process message `m` from party `id`
     // id -> account_id (we have idx, ceremony_id, account_id, key_id.... specific is much better)
     // also would be better to name this var `signing_data` or at least something better than `m`
-    pub fn process_message_from(&mut self, id: AccountId, m: SigningData) {
+    // rename to: process_message_from()
+    pub fn process_message(&mut self, id: AccountId, m: SigningData) {
         match &mut self.inner {
             None => {
                 self.add_delayed(id, m);
@@ -226,7 +227,7 @@ impl SigningState {
                     "The value is only None for a brief period of time, when we swap states, below",
                 );
 
-                // this is already done in (what I've called) `start_signing_data`
+                // this is already done in (what I've called) `start_signing_data` (on_request_to_sign)
                 // TODO: check that the party is a signer for this ceremony
 
                 // delay the data if we are not ready for it
@@ -269,9 +270,8 @@ impl SigningState {
                                 self.should_expire_at += STAGE_DURATION;
 
                                 self.process_delayed();
-
-                                // TODO: Should delete this state
                             }
+                            // TODO: Should delete this state
                             StageResult::Error(bad_validators) => {
                                 let blamed_parties = bad_validators
                                     .iter()

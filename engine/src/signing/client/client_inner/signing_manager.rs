@@ -147,7 +147,7 @@ impl SigningManager {
             .entry(ceremony_id)
             .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
-        signing_state.on_request_to_sign_with_state(
+        signing_state.start_signing_data_with_state(
             ceremony_id,
             our_idx,
             signer_idxs,
@@ -156,8 +156,6 @@ impl SigningManager {
             self.event_sender.clone(),
             &self.logger,
         );
-
-        signing_state.process_delayed();
     }
 
     /// Check if we have state for this data and delegate message to that state

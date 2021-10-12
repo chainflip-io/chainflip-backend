@@ -83,6 +83,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 // ************
 
 /// Stage 2: Verifying data broadcast during stage 1
+///
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: SigningCeremonyCommon,
