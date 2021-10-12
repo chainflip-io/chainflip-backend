@@ -180,7 +180,7 @@ pub mod pallet {
 		}
 	}
 
-	/// On genesis, we expect a set of validators to expect heartbeats from.
+	/// At genesis we need to set the inflation rates for active and passive validators.
 	///
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
