@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![feature(assert_matches)]
 
 #[doc = include_str!("../README.md")]
 #[cfg(feature = "runtime-benchmarks")]
@@ -423,11 +424,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 							AuctionPhase::ConfirmedValidators(winners.clone(), minimum_active_bid);
 						// Set phase
 						CurrentPhase::<T>::put(phase.clone());
-						// Store the result
-						LastAuctionResult::<T>::put(AuctionResult {
-							winners,
-							minimum_active_bid,
-						});
 
 						Self::deposit_event(Event::AuctionConfirmed(
 							CurrentAuctionIndex::<T>::get(),
@@ -438,7 +434,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
 			}
-			AuctionPhase::ConfirmedValidators(..) => {
+			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
+				// Store the result
+				LastAuctionResult::<T>::put(AuctionResult {
+					winners,
+					minimum_active_bid,
+				});
 				Self::deposit_event(Event::AwaitingBidders);
 				CurrentPhase::<T>::put(AuctionPhase::default());
 				Ok(AuctionPhase::default())

@@ -163,7 +163,11 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
 
-		fn on_new_epoch(new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {
+		fn on_new_epoch(
+			_old_validators: &[Self::ValidatorId],
+			new_validators: &[Self::ValidatorId],
+			_new_bond: Self::Amount,
+		) {
 			// Clear our expectations
 			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from

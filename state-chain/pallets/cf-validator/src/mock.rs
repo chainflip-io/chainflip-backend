@@ -168,7 +168,11 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	) {
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}

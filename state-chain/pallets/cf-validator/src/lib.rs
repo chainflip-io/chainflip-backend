@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![feature(assert_matches)]
 
 #[doc = include_str!("../README.md")]
 #[cfg(test)]
@@ -201,6 +202,7 @@ pub mod pallet {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			if let Some(auction_result) = T::Auctioneer::auction_result() {
 				T::EpochTransitionHandler::on_new_epoch(
+					&[],
 					&auction_result.winners,
 					auction_result.minimum_active_bid,
 				);
@@ -349,8 +351,15 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					Self::deposit_event(Event::NewEpoch(new_epoch));
 					// Generate our lookup list of validators
 					Self::generate_lookup();
+					let old_validators = T::Auctioneer::auction_result()
+						.expect("from genesis we would expect a previous auction")
+						.winners;
 					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(&winners, minimum_active_bid);
+					T::EpochTransitionHandler::on_new_epoch(
+						&old_validators,
+						&winners,
+						minimum_active_bid,
+					);
 				}
 
 				let _ = T::Auctioneer::process();
