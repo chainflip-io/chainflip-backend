@@ -99,6 +99,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_validator_emission_inflation)]
+	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths of a percent.
 	pub(super) type BackupValidatorEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
