@@ -258,7 +258,7 @@ pub mod pallet {
 		///
 		/// ## Dependencies
 		///
-		/// - [StakeTransfer]: The amount requested exceeds available funds.
+		/// - [StakeTransfer]
 		#[pallet::weight(10_000)]
 		pub fn claim(
 			origin: OriginFor<T>,

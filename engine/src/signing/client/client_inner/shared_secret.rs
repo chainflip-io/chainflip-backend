@@ -144,12 +144,12 @@ impl SharedSecretState {
             if *idx == self.signer_idx {
                 // Save our own value
                 self.vss_vec.push(vss_scheme.clone());
-                self.ss_vec.push(ss.clone());
+                self.ss_vec.push(ss);
                 self.phase2_order.push(self.signer_idx);
             } else {
                 let secret2 = Secret2 {
                     vss: vss_scheme.clone(),
-                    secret_share: ss.clone(),
+                    secret_share: ss,
                 };
 
                 messages.push((*idx, secret2));

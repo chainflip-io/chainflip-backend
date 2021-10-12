@@ -74,7 +74,7 @@ pub async fn new_eth_event_stream<
     slog::info!(logger, "Future logs fetched");
     let logger = logger.clone();
     Ok(tokio_stream::iter(past_logs)
-        .map(|log| Ok(log))
+        .map(Ok)
         .chain(future_logs)
         .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
             let result_event = result_unparsed_log.and_then(|log| {

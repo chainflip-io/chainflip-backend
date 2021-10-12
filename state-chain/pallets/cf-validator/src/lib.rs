@@ -1,44 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # Chainflip Validator Module
-//!
-//! A module to manage the validator set for the Chainflip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//!
-//! The module contains functionality to manage the validator set used to ensure the Chainflip
-//! State Chain network.  It extends on the functionality offered by the `session` pallet provided by
-//! Parity.  At every epoch block length, or if forced, the `Auction` pallet proposes a set of new
-//! validators.  The process of auction runs over 2 blocks to achieve a finalised candidate set and
-//! anytime after this, based on confirmation of the auction(see `AuctionConfirmation`) the new set
-//! will become the validating set.
-//!
-//! ## Terminology
-//!
-//! - **Validator:** A node that has staked an amount of `FLIP` ERC20 token.
-//!
-//! - **Validator ID:** Equivalent to an Account ID
-//!
-//! - **Epoch:** A period in blocks in which a constant set of validators ensure the network.
-//!
-//! - **Auction** A non defined period of blocks in which we continue with the existing validators
-//!   and assess the new candidate set of their validity as validators.  This functionality is provided
-//!   by the `Auction` pallet.  We rotate the set of validators on each `AuctionPhase::Completed` phase
-//!   completed by the `Auction` pallet.
-//!
-//! - **Session:** A session as defined by the `session` pallet.
-//!
-//! - **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
-//!
-//! ### Dispatchable Functions
-//!
-//! - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
-//! - `force_rotation` - Force a rotation of validators to start on the next block.
-//!
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod mock;
@@ -148,6 +110,18 @@ pub mod pallet {
 		/// Sets the number of blocks an epoch should run for
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [EpochDurationChanged](Event::EpochDurationChanged): We successfully changed the number
+		///   of blocks in an Epoch.
+		///
+		/// ## Errors
+		///
+		/// - [AuctionInProgress](Error::AuctionInProgress): Can't change the Epoch length during an
+		///   Auction.
+		/// - [InvalidEpoch](Error::InvalidEpoch): Can't set the Epoch length to less than the minimum
+		///   Epoch length (default 1), or the same as our current Epoch length.
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -170,6 +144,16 @@ pub mod pallet {
 		/// our validators.
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [ForceRotationRequested](Event::ForceRotationRequested): We successfully requested a
+		///   Validator Rotation.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): This was not called by Governance Origin.
+		/// - [AuctionInProgress](Error::AuctionInProgress): There is already an Auction occurring.
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -181,6 +165,18 @@ pub mod pallet {
 		/// Allow a validator to set their keys for upcoming sessions
 		///
 		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		///
+		/// ## Dependencies
+		///
+		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
 		pub(super) fn set_keys(
 			origin: OriginFor<T>,

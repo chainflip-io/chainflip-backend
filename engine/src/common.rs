@@ -43,7 +43,7 @@ impl<T> Mutex<T> {
             }),
         }
     }
-    pub async fn lock<'a>(&'a self) -> MutexGuard<'a, T> {
+    pub async fn lock(&self) -> MutexGuard<'_, T> {
         let guard = self.mutex.lock().await;
 
         if guard.deref().poisoned {
@@ -169,19 +169,17 @@ pub mod alt_jsonrpc_connect {
         }
 
         fn poll_complete(&mut self) -> Result<Async<()>, Self::SinkError> {
-            loop {
-                match self.queue.pop_front() {
-                    Some(request) => match self.sink.start_send(request) {
-                        Ok(AsyncSink::Ready) => continue,
-                        Ok(AsyncSink::NotReady(request)) => {
-                            self.queue.push_front(request);
-                            break;
-                        }
-                        Err(error) => return Err(RpcError::Other(error.into())),
-                    },
-                    None => break,
-                }
+            while let Some(request) = self.queue.pop_front() {
+                match self.sink.start_send(request) {
+                    Ok(AsyncSink::Ready) => continue,
+                    Ok(AsyncSink::NotReady(request)) => {
+                        self.queue.push_front(request);
+                        break;
+                    }
+                    Err(error) => return Err(RpcError::Other(error.into())),
+                };
             }
+
             self.sink
                 .poll_complete()
                 .map_err(|error| RpcError::Other(error.into()))
