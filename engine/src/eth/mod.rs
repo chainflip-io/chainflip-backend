@@ -57,7 +57,7 @@ pub async fn new_synced_web3_client(
         ))
     })
     // Flatten the Result<Result<>> returned by timeout()
-    .map_err(|error| anyhow::Error::new(error))
+    .map_err(anyhow::Error::new)
     .and_then(|x| async { x })
     // Make sure the eth node is fully synced
     .and_then(|web3| async {
@@ -86,10 +86,13 @@ impl EthBroadcaster {
         let key = read_to_string(settings.eth.private_key_file.as_path())?;
         Ok(Self {
             web3,
-            secret_key: SecretKey::from_str(&key[..]).expect(&format!(
-                "Should read in secret key from: {}",
-                settings.eth.private_key_file.display(),
-            )),
+            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
+                panic!(
+                    "Should read in secret key from: {}: {}",
+                    settings.eth.private_key_file.display(),
+                    e,
+                )
+            }),
         })
     }
 

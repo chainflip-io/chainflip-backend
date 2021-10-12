@@ -1,5 +1,6 @@
 #[macro_use]
 mod utils;
+#[allow(clippy::module_inception)]
 mod client_inner;
 mod common;
 mod frost;
