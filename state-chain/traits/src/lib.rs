@@ -330,8 +330,12 @@ pub trait IsOnline {
 /// A representation of the current network state
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId> {
+	/// We are missing the last heartbeat from this node and yet cannot determine if they
+	/// are offline or online.
 	pub missing: Vec<ValidatorId>,
+	/// The node is online
 	pub online: Vec<ValidatorId>,
+	/// The node has been determined as being offline
 	pub offline: Vec<ValidatorId>,
 }
 
