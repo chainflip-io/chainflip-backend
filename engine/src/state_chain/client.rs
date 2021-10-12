@@ -295,7 +295,12 @@ pub async fn connect_to_state_chain(
                         .compat()
                         .await
                         .map_err(anyhow::Error::msg)?
-                        .ok_or_else(|| anyhow::Error::msg("Account doesn't exist"))?
+                        .ok_or_else(|| {
+                            anyhow::Error::msg(
+                                "Account Id {:?} doesn't exist on the state chain.",
+                                signer.account_id(),
+                            )
+                        })?
                         .0[..],
                 )?;
                 account_info.nonce
