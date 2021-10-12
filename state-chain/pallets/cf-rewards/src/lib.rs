@@ -169,7 +169,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// The total rewards due to each beneficiary.
-	fn rewards_due_each() -> T::Balance {
+	pub fn rewards_due_each() -> T::Balance {
 		let num_beneficiaries = Beneficiaries::<T>::get(VALIDATOR_REWARDS);
 		if num_beneficiaries == 0 {
 			return Zero::zero();

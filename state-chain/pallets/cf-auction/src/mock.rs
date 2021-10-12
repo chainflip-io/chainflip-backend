@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
-use cf_traits::{Bid, ChainflipAccountData};
+use cf_traits::{Bid, ChainflipAccountData, EmergencyRotation};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -131,8 +131,9 @@ parameter_types! {
 pub struct MockEmergencyRotation;
 
 impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() {
+	fn request_emergency_rotation() -> Weight {
 		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
+		0
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
@@ -176,7 +177,7 @@ impl ChainflipAccount for MockChainflipAccount {
 }
 
 pub struct MockOnline;
-impl Online for MockOnline {
+impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
 
 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {

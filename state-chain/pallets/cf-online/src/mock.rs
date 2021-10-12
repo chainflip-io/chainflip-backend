@@ -1,5 +1,5 @@
 use super::*;
-use crate as pallet_cf_reputation;
+use crate as pallet_cf_online;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
@@ -7,17 +7,26 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Chainflip, Slashing};
+use cf_traits::{Chainflip, Heartbeat, NetworkState};
+use sp_std::cell::RefCell;
+
+type ValidatorId = u64;
 
 thread_local! {
-	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
+	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
+		NetworkState {
+			missing: vec![],
+			online: vec![],
+			offline: vec![],
+		}
+	);
 }
 
 construct_runtime!(
@@ -27,7 +36,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ReputationPallet: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -62,34 +71,22 @@ impl frame_system::Config for Test {
 
 // A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
-// Number of blocks being offline before you lose one point
-pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> = ReputationPenalty {
-	points: 1,
-	blocks: 10,
-};
-// Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS: u64 = 2500;
-// Number of accrual points
-pub const ACCRUAL_POINTS: i32 = 1;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
-	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
-	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
-// Mocking the `Slasher` trait
-pub struct MockSlasher;
-impl Slashing for MockSlasher {
-	type AccountId = u64;
-	type BlockNumber = u64;
+pub struct MockHeartbeat;
+impl Heartbeat for MockHeartbeat {
+	type ValidatorId = ValidatorId;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
-		// Count those slashes
-		SLASH_COUNT.with(|count| {
-			let mut c = count.borrow_mut();
-			*c = *c + 1
-		});
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
+		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
+		0
+	}
+
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+		NETWORK_STATE.with(|cell| *cell.borrow_mut() = network_state);
 		0
 	}
 }
@@ -98,25 +95,21 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 impl Chainflip for Test {
-	type Amount = u128;
 	type ValidatorId = u64;
+	type Amount = u128;
 }
 
 impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPointPenalty = ReputationPointPenalty;
-	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
+	type Heartbeat = MockHeartbeat;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_reputation: Some(ReputationPalletConfig {
-			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-		}),
+		pallet_cf_online: Some(OnlinePalletConfig {}),
 	};
 
 	// We only expect Alice to be a validator at the moment
@@ -128,4 +121,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		OnlinePallet::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		OnlinePallet::on_initialize(System::block_number());
+	}
 }

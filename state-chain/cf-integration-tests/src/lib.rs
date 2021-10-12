@@ -127,12 +127,12 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			pallet_cf_emissions::GenesisConfig::<Runtime> {
-				emission_per_block: BLOCK_EMISSIONS,
-				..Default::default()
-			}
-			.assimilate_storage(storage)
-			.unwrap();
+			// pallet_cf_emissions::GenesisConfig::<Runtime> {
+			// 	emission_per_block: BLOCK_EMISSIONS,
+			// 	..Default::default()
+			// }
+			// .assimilate_storage(storage)
+			// .unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
 				members: vec![self.root.clone()],
@@ -270,13 +270,13 @@ mod tests {
 					);
 				}
 
-				for account in accounts.iter() {
-					assert_eq!(
-						Reputation::validator_liveness(account),
-						Some(0),
-						"validator has yet to send its heartbeats"
-					);
-				}
+				// for account in accounts.iter() {
+				// 	assert_eq!(
+				// 		Reputation::validator_liveness(account),
+				// 		Some(0),
+				// 		"validator has yet to send its heartbeats"
+				// 	);
+				// }
 
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
 

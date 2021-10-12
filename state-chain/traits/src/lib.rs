@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod mocks;
+
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
@@ -13,8 +15,6 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
-pub mod mocks;
-
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
@@ -23,11 +23,11 @@ pub type EpochIndex = u32;
 pub type AuctionIndex = u64;
 
 /// and Chainflip was born...some base types
-pub trait Chainflip {
+pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -204,8 +204,13 @@ pub trait EpochTransitionHandler {
 	type Amount: Copy;
 	/// A new epoch has started
 	///
-	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &[Self::ValidatorId], _new_bond: Self::Amount) {}
+	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with a
+	/// `_new_bond`
+	fn on_new_epoch(
+		old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	);
 }
 
 /// Providing bidders for an auction
@@ -300,7 +305,7 @@ pub trait RewardRollover {
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
-	fn trigger_emissions();
+	fn trigger_emissions() -> Weight;
 }
 
 /// A nonce
@@ -320,7 +325,7 @@ pub trait NonceProvider {
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
 }
 
-pub trait Online {
+pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;
 	/// The online status of the validator
@@ -328,18 +333,26 @@ pub trait Online {
 }
 
 /// A representation of the current network state
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
-pub struct NetworkState {
-	pub online: u32,
-	pub offline: u32,
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct NetworkState<ValidatorId> {
+	/// We are missing the last heartbeat from this node and yet cannot determine if they
+	/// are offline or online.
+	pub missing: Vec<ValidatorId>,
+	/// The node is online
+	pub online: Vec<ValidatorId>,
+	/// The node has been determined as being offline
+	pub offline: Vec<ValidatorId>,
 }
 
-impl NetworkState {
+impl<ValidatorId> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
-		self.online
+		let number_online = self.online.len() as u32;
+		let number_offline = self.offline.len() as u32;
+
+		number_online
 			.saturating_mul(100)
-			.checked_div(self.online + self.offline)
+			.checked_div(number_online + number_offline)
 			.unwrap_or(0)
 	}
 }
@@ -347,7 +360,7 @@ impl NetworkState {
 /// To handle those emergency rotations
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
-	fn request_emergency_rotation();
+	fn request_emergency_rotation() -> Weight;
 	/// Is there an emergency rotation in progress
 	fn emergency_rotation_in_progress() -> bool;
 	/// Signal that the emergency rotation has completed
@@ -408,4 +421,24 @@ pub trait Slashing {
 	type BlockNumber;
 	/// Function which implements the slashing logic
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
+}
+
+/// The heartbeat of the network
+pub trait Heartbeat {
+	type ValidatorId;
+	/// A heartbeat has been submitted
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	/// Called on every heartbeat interval with the current network state
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
+}
+
+/// Updating and calculating emissions per block for validators and backup validators
+pub trait BlockEmissions {
+	type Balance;
+	/// Update the emissions per block for a validator
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Update the emissions per block for a backup validator
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Calculate the emissions per block
+	fn calculate_block_emissions() -> Weight;
 }

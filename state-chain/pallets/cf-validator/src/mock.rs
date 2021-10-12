@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, Online};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -126,13 +126,13 @@ impl pallet_cf_auction::Config for Test {
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotation = ValidatorPallet;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockOnline;
-impl Online for MockOnline {
+impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
 
 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
@@ -168,7 +168,11 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &[Self::ValidatorId], new_bond: Self::Amount) {
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	) {
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}
@@ -177,6 +181,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 pub(super) type EpochIndex = u32;
@@ -190,6 +195,7 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

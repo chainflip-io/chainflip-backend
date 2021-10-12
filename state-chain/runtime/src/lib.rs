@@ -3,7 +3,7 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
-
+// A few exports that help ease life for downstream crates.
 use core::time::Duration;
 
 pub use frame_support::{
@@ -41,7 +41,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
-	ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
+	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
+	ChainflipVaultRotationHandler,
 };
 pub use cf_traits::FlipBalance;
 use cf_traits::{BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
@@ -134,16 +135,17 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinValidators = MinValidators;
 	type Handler = Vaults;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type Online = Reputation;
+	type Online = Online;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -154,6 +156,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -380,6 +383,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
 }
 
@@ -412,20 +416,22 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type Amount = FlipBalance;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+}
+
+impl pallet_cf_online::Config for Runtime {
+	type Event = Event;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type Heartbeat = ChainflipHeartbeat;
 }
 
 construct_runtime!(
@@ -438,7 +444,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
@@ -454,6 +460,7 @@ construct_runtime!(
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );

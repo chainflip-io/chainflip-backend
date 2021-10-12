@@ -356,10 +356,6 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: BLOCK_EMISSIONS,
-			..Default::default()
-		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
@@ -372,6 +368,10 @@ fn testnet_genesis(
 				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
 			]
 			.to_vec(),
+		}),
+		pallet_cf_emissions: Some(EmissionsConfig {
+			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
+			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 		}),
 	}
 }

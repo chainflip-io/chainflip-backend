@@ -9,14 +9,6 @@ pub mod common {
 	};
 
 	pub const MAX_VALIDATORS: u32 = 150;
-
-	pub const BLOCK_EMISSIONS: FlipBalance = {
-		const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
-		const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-		// Note: DAYS is the number of blocks in a day.
-		ANNUAL_INFLATION / 365 / DAYS as u128
-	};
-
 	// Number of blocks to be online to accrue a point
 	pub const ACCRUAL_BLOCKS: u32 = 2500;
 	// Number of accrual points
@@ -41,4 +33,7 @@ pub mod common {
 	pub const DAYS: BlockNumber = HOURS * 24;
 
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
+
+	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
+	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
 }

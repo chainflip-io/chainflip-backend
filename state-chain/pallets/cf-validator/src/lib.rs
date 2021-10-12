@@ -63,6 +63,10 @@ pub mod pallet {
 
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
 	}
 
 	#[pallet::event]
@@ -74,6 +78,8 @@ pub mod pallet {
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// A new epoch has been forced
 		ForceRotationRequested(),
+		/// An emergency rotation has been requested
+		EmergencyRotationRequested(),
 	}
 
 	#[pallet::error]
@@ -195,6 +201,7 @@ pub mod pallet {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			if let Some(auction_result) = T::Auctioneer::auction_result() {
 				T::EpochTransitionHandler::on_new_epoch(
+					&[],
 					&auction_result.winners,
 					auction_result.minimum_active_bid,
 				);
@@ -274,7 +281,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			}
 			_ => {
 				// If we were in one, mark as completed
-				EmergencyRotationOf::<T>::emergency_rotation_completed();
+				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
 			}
@@ -314,9 +321,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn force_validator_rotation() {
+	fn force_validator_rotation() -> Weight {
 		Force::<T>::set(true);
 		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
+
+		T::DbWeight::get().reads_writes(0, 1)
 	}
 }
 
@@ -341,8 +350,15 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					Self::deposit_event(Event::NewEpoch(new_epoch));
 					// Generate our lookup list of validators
 					Self::generate_lookup();
+					let old_validators = T::Auctioneer::auction_result()
+						.expect("from genesis we would expect a previous auction")
+						.winners;
 					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(&winners, minimum_active_bid);
+					T::EpochTransitionHandler::on_new_epoch(
+						&old_validators,
+						&winners,
+						minimum_active_bid,
+					);
 				}
 
 				let _ = T::Auctioneer::process();
@@ -379,14 +395,15 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-pub struct EmergencyRotationOf<T>(PhantomData<T>);
-
-impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
-	fn request_emergency_rotation() {
-		if !Self::emergency_rotation_in_progress() {
+impl<T: Config> EmergencyRotation for Pallet<T> {
+	fn request_emergency_rotation() -> Weight {
+		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
-			Pallet::<T>::force_validator_rotation();
+			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
+			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation();
 		}
+
+		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
