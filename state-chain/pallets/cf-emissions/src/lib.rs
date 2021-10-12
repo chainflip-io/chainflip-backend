@@ -140,7 +140,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(10_000)]
-		pub(super) fn update_validator_emission_per_block(
+		pub(super) fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
