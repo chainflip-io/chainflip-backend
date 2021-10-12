@@ -31,6 +31,7 @@ pub mod pallet {
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
+	/// Metadata for a pending threshold signature request.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		pub attempt: u8,
@@ -121,7 +122,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Reply.
+		/// A threshold signature ceremony has succeeded. 
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -146,7 +147,7 @@ pub mod pallet {
 				.dispatch_callback(origin, signature)
 		}
 
-		/// Reply.
+		/// A threshold signature ceremony has failed.
 		#[pallet::weight(10_000)]
 		pub fn signature_failed(
 			origin: OriginFor<T>,
