@@ -79,7 +79,7 @@ pub async fn test_all_key_manager_events() {
                 assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
                 true
             },
-            
+
             KeyManagerEvent::Refunded { .. } => {
                 true
             },
