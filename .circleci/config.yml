@@ -391,6 +391,7 @@ jobs:
           name: Start Node
           background: true
           command: ./target/release/state-chain-node --chain cf-dev > node-$CIRCLE_SHA1.log
+      - run: sleep 5
       - run:
           name: Start Engine
           background: true
