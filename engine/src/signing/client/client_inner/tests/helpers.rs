@@ -92,23 +92,36 @@ pub(super) type InnerEventReceiver = Pin<
 >;
 
 /// Clients generated comm1, but haven't sent them
-pub struct KeygenPhase1Data {
+pub struct CommStage1Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub comm1_vec: Vec<keygen_data::Comm1>,
 }
 
 /// Clients generated ver2, but haven't sent them
-pub struct KeygenPhase2Data {
+pub struct CommVerStage2Data {
     pub clients: Vec<MultisigClientNoDB>,
     /// The key in the map is the index of the desitnation node
     pub ver2_vec: Vec<keygen_data::VerifyComm2>,
 }
 
 /// Clients generated sec3, but haven't sent them
-pub struct KeygenPhase3Data {
+pub struct SecStage3Data {
     pub clients: Vec<MultisigClientNoDB>,
     /// The key in the map is the index of the desitnation node
     pub sec3: Vec<HashMap<AccountId, keygen_data::SecretShare3>>,
+}
+
+/// Clients generated copmlaints, but haven't sent them
+pub struct CompStage4Data {
+    pub clients: Vec<MultisigClientNoDB>,
+    /// The key in the map is the index of the desitnation node
+    pub comp4s: Vec<keygen_data::Complaints4>,
+}
+
+pub struct VerCompStage5Data {
+    pub clients: Vec<MultisigClientNoDB>,
+    /// The key in the map is the index of the desitnation node
+    pub ver5: Vec<keygen_data::VerifyComplaints5>,
 }
 
 pub struct KeyReadyData {
@@ -152,10 +165,11 @@ pub struct SigningPhase4Data {
 }
 
 pub struct ValidKeygenStates {
-    pub keygen_phase1: KeygenPhase1Data,
-    pub keygen_phase2: KeygenPhase2Data,
-    pub keygen_phase3: KeygenPhase3Data,
-    // pub keygen_phase4: KeygenPhase4Data,
+    pub com_stage1: CommStage1Data,
+    pub ver_com_stage2: CommVerStage2Data,
+    pub sec_stage3: SecStage3Data,
+    pub comp_stage4: CompStage4Data,
+    pub ver_comp_stage5: VerCompStage5Data,
     pub key_ready: KeyReadyData,
 }
 
@@ -487,7 +501,7 @@ impl KeygenContext {
 
         println!("Received all comm1");
 
-        let keygen_phase1 = KeygenPhase1Data {
+        let com_stage1 = CommStage1Data {
             clients: clients.clone(),
             comm1_vec: comm1_vec.clone(),
         };
@@ -507,7 +521,7 @@ impl KeygenContext {
 
         let ver2_vec = recv_all_data_keygen!(rxs, KeygenData::Verify2);
 
-        let keygen_phase2 = KeygenPhase2Data {
+        let ver_com_stage2 = CommVerStage2Data {
             clients: clients.clone(),
             ver2_vec: ver2_vec.clone(),
         };
@@ -533,7 +547,7 @@ impl KeygenContext {
 
         println!("Received all sec3");
 
-        let keygen_phase3 = KeygenPhase3Data {
+        let sec_stage3 = SecStage3Data {
             clients: clients.clone(),
             sec3: sec3_vec.clone(),
         };
@@ -560,6 +574,11 @@ impl KeygenContext {
 
         let complaints = recv_all_data_keygen!(rxs, KeygenData::Complaints4);
 
+        let comp_stage4 = CompStage4Data {
+            clients: clients.clone(),
+            comp4s: complaints.clone(),
+        };
+
         println!("Collected all complaints");
 
         distribute_data_keygen!(clients, self.account_ids, complaints);
@@ -567,6 +586,11 @@ impl KeygenContext {
         println!("Distributed all complaints");
 
         let ver_complaints = recv_all_data_keygen!(rxs, KeygenData::VerifyComplaints5);
+
+        let ver_comp_stage5 = VerCompStage5Data {
+            clients: clients.clone(),
+            ver5: ver_complaints.clone(),
+        };
 
         println!("Collected all verify complaints");
 
@@ -612,9 +636,11 @@ impl KeygenContext {
         }
 
         ValidKeygenStates {
-            keygen_phase1,
-            keygen_phase2,
-            keygen_phase3,
+            com_stage1,
+            ver_com_stage2,
+            sec_stage3,
+            comp_stage4,
+            ver_comp_stage5,
             key_ready,
         }
     }

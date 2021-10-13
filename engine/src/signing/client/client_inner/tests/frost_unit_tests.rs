@@ -550,32 +550,30 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     // assert_no_stage!(c1);
 }
 
-// #[tokio::test]
-// async fn pending_rts_should_expire() {
-//     let mut ctx = helpers::KeygenContext::new();
-//     let keygen_states = ctx.generate().await;
+#[tokio::test]
+async fn pending_rts_should_expire() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
 
-//     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
-//     assert_no_stage!(c1);
+    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
+    assert_no_stage!(c1);
 
-//     // Send the rts with the wrong key id
-//     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    // Send the rts with the key id currently unknown to the client
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
-//     // Timeout all the requests
-//     c1.expire_all();
-//     c1.cleanup();
+    // Timeout all the requests
+    c1.expire_all();
+    c1.cleanup();
 
-//     // Complete the keygen by sending the sec2 from each other client to client 0
-//     for sender_idx in 1..=3 {
-//         let s_id = keygen_states.keygen_phase2.clients[sender_idx].get_my_account_id();
-//         let sec2 = keygen_states.keygen_phase2.sec2_vec[sender_idx]
-//             .get(&c1.get_my_account_id())
-//             .unwrap();
+    // Complete the keygen by sending the ver5 from each other client to client 0
+    for sender_idx in 1..=3 {
+        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
 
-//         let m = helpers::keygen_data_to_p2p(sec2.clone(), &s_id, KEYGEN_CEREMONY_ID);
-//         c1.process_p2p_message(m);
-//     }
+        let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        c1.process_p2p_message(m);
+    }
 
-//     // Should be no pending rts, so no stage advancement once the keygen completed.
-//     assert_no_stage!(c1);
-// }
+    // Should be no pending rts, so no stage advancement once the keygen completed.
+    assert_no_stage!(c1);
+}
