@@ -381,24 +381,37 @@ jobs:
       - attach_workspace:
           at: ./
       - run:
+          name: Setup config
           command: |
-            mkdir -p target/release/config
-            sops -d Default.enc.toml > target/release/config/Default.toml
+            mkdir config
+            sops -d Default.enc.toml > config/Default.toml
             echo $BASHFUL_SIGNING_KEY > signing_key_file
             echo $ETH_PRIVATE_KEY > private_key_file
       - run:
+          name: Start Node
           background: true
           command: ./target/release/state-chain-node --chain cf-dev > node-$CIRCLE_SHA1.log
       - run:
+          name: Start Engine
           background: true
           command: ./target/release/chainflip-engine > engine-$CIRCLE_SHA1.log
       - run: sleep 5
-      - run: >
-          curl --request POST -sL
-          -H "Content-Type:application/json;charset=utf-8"
-          --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
-          --url 'http://localhost:9933'
-          -vv
+      - run:
+          name: Check Node Health
+          command: >
+            curl --request POST -sL
+            -H "Content-Type:application/json;charset=utf-8"
+            --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
+            --url 'http://localhost:9933'
+            -vv
+      - run:
+          name: Check Engine Health
+          command: >
+            curl --request POST -sL
+            -H "Content-Type:application/json;charset=utf-8"
+            --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
+            --url 'http://localhost:5555'
+            -vv
       - run:
           name: Move artifacts to folder
           command:
