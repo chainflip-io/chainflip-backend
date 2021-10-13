@@ -650,16 +650,18 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn repeat_self_identify_fails() {
+	async fn repeat_self_identify_doesnt_fail_unless_id_different() {
 		let network = TestNetwork::new();
 		let node_0 = new_node(PeerId::random(), network.clone());
 
 		let try_self_identify =
-			|| async { node_0.self_identify(AccountIdBs58([0; 32])).compat().await };
+			|account_id: [u8; 32]| node_0.self_identify(AccountIdBs58(account_id)).compat();
 
-		assert!(matches!(try_self_identify().await, Ok(200u64)));
+		let matching_id = [1; 32];
+		assert!(matches!(try_self_identify(matching_id).await, Ok(200u64)));
+		assert!(matches!(try_self_identify(matching_id).await, Ok(200u64)));
 		assert!(matches!(
-			try_self_identify().await,
+			try_self_identify([2; 32]).await,
 			Err(RpcError::JsonRpcError(_))
 		));
 	}
