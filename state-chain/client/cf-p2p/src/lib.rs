@@ -286,6 +286,7 @@ pub fn new_p2p_validator_network_node<
 								format!("Have already self identified with a different AccountId. New Id: {:?}, Old Id: {:?}", validator_id, existing_id),
 							))
 						} else {
+							log::warn!("Repeat call to self_identify");
 							Ok(200)
 						}
 					} else {
