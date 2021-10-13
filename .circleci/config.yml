@@ -409,6 +409,6 @@ jobs:
           name: Check Engine Health
           command: >
             curl
-            --url 'http://localhost:5555'
+            --url 'http://localhost:5555/health'
             -vv
 ######################## /Jobs ########################
