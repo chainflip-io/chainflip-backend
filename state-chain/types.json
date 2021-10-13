@@ -43,7 +43,7 @@
     }
   },
   "ClaimDetailsFor": {
-    "msg_hash": "Option<U256>",
+    "msg_hash": "Option<AggKeySignature>",
     "amount": "FlipBalance",
     "nonce": "Nonce",
     "address": "EthereumAddress",
