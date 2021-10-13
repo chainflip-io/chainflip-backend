@@ -390,12 +390,12 @@ jobs:
       - run:
           name: Start Node
           background: true
-          command: ./target/release/state-chain-node --chain cf-dev > node-$CIRCLE_SHA1.log
+          command: ./target/release/state-chain-node --chain cf-dev
       - run: sleep 5
       - run:
           name: Start Engine
           background: true
-          command: ./target/release/chainflip-engine > engine-$CIRCLE_SHA1.log
+          command: ./target/release/chainflip-engine
       - run: sleep 5
       - run:
           name: Check Node Health
@@ -411,12 +411,4 @@ jobs:
             curl
             --url 'http://localhost:5555'
             -vv
-      - run:
-          name: Move artifacts to folder
-          command:
-            |
-            mkdir artifacts
-            mv *.log artifacts
-      - store_artifacts:
-          path: artifacts
 ######################## /Jobs ########################
