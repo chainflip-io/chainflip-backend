@@ -1,19 +1,15 @@
-use std::sync::{Arc, Mutex};
-
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
-    heartbeat,
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::Settings,
-    signing,
-    signing::{db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
-    state_chain::{self, runtime::StateChainRuntime},
+    signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
+    state_chain,
 };
 use slog::{o, Drain};
-use sp_core::Pair;
-use substrate_subxt::ClientBuilder;
+use substrate_subxt::Signer;
 
+#[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
     let drain = slog_json::Json::new(std::io::stdout())
@@ -30,41 +26,11 @@ async fn main() {
         .run()
         .await;
 
-    let subxt_client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(&settings.state_chain.ws_endpoint)
-        .build()
-        .await
-        .expect("Should create subxt client");
-
-    let key_pair = sp_core::sr25519::Pair::from_seed(&{
-        // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
-        // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
-        use std::{convert::TryInto, fs};
-        let seed: [u8; 32] = hex::decode(
-            &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
-                .expect("Cannot read private key file")
-                .replace("\"", ""),
-        )
-        .expect("Failed to decode seed")
-        .try_into()
-        .expect("Seed has wrong length");
-        seed
-    });
-
-    let pair_signer = {
-        use substrate_subxt::{system::AccountStoreExt, Signer};
-        let mut pair_signer = substrate_subxt::PairSigner::new(key_pair.clone());
-        let account_id = pair_signer.account_id();
-        let nonce = subxt_client
-            .account(&account_id, None)
+    let (state_chain_client, state_chain_block_stream) =
+        state_chain::client::connect_to_state_chain(&settings)
             .await
-            .expect("Should be able to fetch account info")
-            .nonce;
-        slog::info!(root_logger, "Initial state chain nonce is: {}", nonce);
-        pair_signer.set_nonce(nonce);
-        // Allow in the future many witnessers to increment the nonce of this signer
-        Arc::new(Mutex::new(pair_signer))
-    };
+            .unwrap();
+    let account_id = AccountId(*state_chain_client.signer.account_id().as_ref()); /*TODO: Use the correct sc types*/
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
@@ -84,14 +50,15 @@ async fn main() {
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
-        .unwrap();
+        .expect("Failed to create Web3 WebSocket");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
 
     tokio::join!(
         // Start signing components
         signing::start(
-            AccountId(key_pair.public().0),
+            account_id.clone(),
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
@@ -102,25 +69,26 @@ async fn main() {
         ),
         p2p::conductor::start(
             p2p_rpc::connect(
-                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
-                    "Should be valid ws endpoint: {}",
-                    settings.state_chain.ws_endpoint
-                )),
-                AccountId(pair_signer.lock().unwrap().signer().public().0)
+                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).unwrap_or_else(
+                    |e| panic!(
+                        "Should be valid ws endpoint: {}: {}",
+                        settings.state_chain.ws_endpoint, e
+                    )
+                ),
+                account_id
             )
             .await
             .expect("unable to connect p2p rpc client"),
             p2p_message_sender,
             p2p_message_command_receiver,
             p2p_shutdown_rx,
-            &root_logger.clone()
+            &root_logger
         ),
-        heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
             &settings,
-            subxt_client.clone(),
-            pair_signer.clone(),
+            state_chain_client.clone(),
+            state_chain_block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
@@ -130,20 +98,18 @@ async fn main() {
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,
-            pair_signer.clone(),
-            subxt_client.clone(),
+            state_chain_client.clone(),
             &root_logger
         )
         .await
-        .unwrap(),
+        .expect("Could not start StakeManager witness"),
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
-            pair_signer.clone(),
-            subxt_client,
+            state_chain_client.clone(),
             &root_logger
         )
         .await
-        .unwrap(),
+        .expect("Could not start KeyManager witness"),
     );
 }

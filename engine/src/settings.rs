@@ -8,8 +8,6 @@ use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use web3::types::H160;
 
-use crate::p2p::AccountId;
-
 pub use anyhow::Result;
 use url::Url;
 
@@ -17,7 +15,6 @@ use url::Url;
 pub struct StateChain {
     pub ws_endpoint: String,
     pub signing_key_file: String,
-    pub p2p_private_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -38,8 +35,6 @@ pub struct HealthCheck {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
-    /// This includes my_id if I'm part of genesis validator set
-    pub genesis_validator_ids: Vec<AccountId>,
     #[serde(deserialize_with = "deser_path")]
     pub db_file: PathBuf,
 }
@@ -152,31 +147,37 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
 
+    use crate::testing::assert_ok;
+
     use super::*;
 
     #[test]
     fn init_default_config() {
-        let settings = Settings::new();
-        let settings = settings.unwrap();
+        let settings = Settings::new().unwrap();
 
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]
     fn test_init_config_with_testing_config() {
-        let test_settings = test_utils::new_test_settings();
+        let test_settings = test_utils::new_test_settings().unwrap();
 
-        let test_settings = test_settings.unwrap();
         assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]
     fn test_websocket_url_parsing() {
-        assert!(parse_websocket_url("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e").is_ok());
-        assert!(parse_websocket_url("wss://network.my_eth_node:80/<secret_key>").is_ok());
-        assert!(parse_websocket_url("wss://network.my_eth_node/<secret_key>").is_ok());
-        assert!(parse_websocket_url("ws://network.my_eth_node/<secret_key>").is_ok());
-        assert!(parse_websocket_url("wss://network.my_eth_node").is_ok());
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+        ));
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node:80/<secret_key>"
+        ));
+        assert_ok!(parse_websocket_url(
+            "wss://network.my_eth_node/<secret_key>"
+        ));
+        assert_ok!(parse_websocket_url("ws://network.my_eth_node/<secret_key>"));
+        assert_ok!(parse_websocket_url("wss://network.my_eth_node"));
         assert!(parse_websocket_url(
             "https://mainnet.infura.io/v3/3afd67225fe34be7b185442fab14a4ba"
         )
@@ -186,8 +187,8 @@ mod tests {
 
     #[test]
     fn test_db_file_path_parsing() {
-        assert!(is_valid_db_path(Path::new("data.db")).is_ok());
-        assert!(is_valid_db_path(Path::new("/my/user/data/data.db")).is_ok());
+        assert_ok!(is_valid_db_path(Path::new("data.db")));
+        assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
         assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
         assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
     }

@@ -1,4 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
+#[rustfmt::skip]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +12,6 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
-use cf_p2p_rpc::RpcCore;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -137,29 +137,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let subscription_task_executor =
-		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
-	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
-	let rpc_params = Arc::new(rpc_params);
-	let (p2p, comms) = cf_p2p::substrate_network_bridge(
-		rpc_params.clone(),
-		network.clone());
-
-	let rpc_extensions_builder = {
-		let client = client.clone();
-		let pool = transaction_pool.clone();
-
-		Box::new(move |deny_unsafe, _| {
-			let deps = crate::rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				deny_unsafe,
-				comms: comms.clone(),
-			};
-
-			crate::rpc::create_full(deps, rpc_params.clone())
-		})
-	};
+	let (rpc_request_handler, p2p_message_handler_future) = cf_p2p::new_p2p_validator_network_node(
+		network.clone(),
+		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle())
+	);
 
 	let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(
 		sc_service::SpawnTasksParams {
@@ -168,7 +149,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			keystore: keystore_container.sync_keystore(),
 			task_manager: &mut task_manager,
 			transaction_pool: transaction_pool.clone(),
-			rpc_extensions_builder,
+			rpc_extensions_builder: Box::new(move |_, _| rpc_request_handler.clone()),
 			on_demand: None,
 			remote_blockchain: None,
 			backend,
@@ -228,7 +209,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 	task_manager.spawn_essential_handle().spawn_blocking(
 		"cf-p2p",
-		p2p
+		p2p_message_handler_future
 	);
 
 	if enable_grandpa {

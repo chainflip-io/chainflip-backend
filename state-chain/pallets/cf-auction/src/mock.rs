@@ -39,7 +39,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -84,6 +84,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
+	type WeightInfo = ();
 	type Handler = MockVaultRotation;
 	type Online = MockOnline;
 }
@@ -119,6 +120,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			winners: vec![JOE_BID.0],
+			minimum_active_bid: JOE_BID.1,
 		}),
 	};
 

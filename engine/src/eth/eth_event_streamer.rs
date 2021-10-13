@@ -1,5 +1,8 @@
 use anyhow::Result;
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::TryStreamExt;
+
+use tokio_stream::{Stream, StreamExt};
+
 use std::fmt::Debug;
 use web3::{
     ethabi::RawLog,
@@ -24,12 +27,11 @@ pub async fn new_eth_event_stream<
         .eth_subscribe()
         .subscribe_logs(
             FilterBuilder::default()
-                .from_block(BlockNumber::Pending)
+                .from_block(BlockNumber::Latest)
                 .address(vec![deployed_address])
                 .build(),
         )
         .await?;
-
     let from_block = U64::from(from_block);
     let current_block = web3.eth().block_number().await?;
 
@@ -57,7 +59,7 @@ pub async fn new_eth_event_stream<
             .map_err(anyhow::Error::new)
             .filter_map(move |result_unparsed_log| {
                 // Need to remove logs that have already been included in past_logs or are before from_block
-                std::future::ready(match result_unparsed_log {
+                match result_unparsed_log {
                     Ok(Log {
                         block_number: None, ..
                     }) => Some(Err(anyhow::Error::msg("Found log without block number"))),
@@ -66,12 +68,13 @@ pub async fn new_eth_event_stream<
                         ..
                     }) if block_number < exclude_future_logs_before => None,
                     _ => Some(result_unparsed_log),
-                })
+                }
             });
 
+    slog::info!(logger, "Future logs fetched");
     let logger = logger.clone();
-    Ok(stream::iter(past_logs)
-        .map(|log| Ok(log))
+    Ok(tokio_stream::iter(past_logs)
+        .map(Ok)
         .chain(future_logs)
         .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
             let result_event = result_unparsed_log.and_then(|log| {

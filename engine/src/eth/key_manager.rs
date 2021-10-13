@@ -1,14 +1,13 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
+use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::runtime::StateChainRuntime,
 };
-use std::sync::{Arc, Mutex};
-use substrate_subxt::{Client, PairSigner};
+use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
@@ -27,8 +26,7 @@ use slog::o;
 pub async fn start_key_manager_witness(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    _signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
-    _subxt_client: Client<StateChainRuntime>,
+    _state_chain_client: Arc<StateChainClient>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
@@ -37,19 +35,20 @@ pub async fn start_key_manager_witness(
     slog::info!(logger, "Load Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Event Stream");
     let mut event_stream = key_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
+            // TODO: Handle unwraps
             match result_event.unwrap() {
-                // TODO: Handle unwraps
-                KeyManagerEvent::KeyChange { .. } => {
-                    todo!();
+                KeyManagerEvent::KeyChange { tx_hash, .. } => {
+                    slog::info!(logger, "Keychain event found: {}", hex::encode(tx_hash));
                 }
-                KeyManagerEvent::Refunded { amount } => todo!("Refunded({})", amount),
+                KeyManagerEvent::Refunded { tx_hash, .. } => {
+                    slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
+                }
             }
         }
     })
@@ -124,7 +123,7 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
-        /// Transaction hash that created the event
+        /// Tx hash of the tx that created the event
         tx_hash: [u8; 32],
     },
 
@@ -132,6 +131,8 @@ pub enum KeyManagerEvent {
     Refunded {
         /// The amount of ETH refunded
         amount: u128,
+        /// Tx hash of the tx that created the event
+        tx_hash: [u8; 32],
     },
 }
 
@@ -151,6 +152,7 @@ impl KeyManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
+        slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
@@ -183,6 +185,7 @@ impl KeyManager {
                     let log = refunded.event.parse_log(raw_log)?;
                     let event = KeyManagerEvent::Refunded {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                        tx_hash,
                     };
                     Ok(event)
                 } else {
@@ -340,6 +343,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
+        let tx_hash_str = "0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492";
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let key_manager = KeyManager::new(&settings).unwrap();
@@ -348,9 +352,7 @@ mod tests {
         let refunded_event_signature =
             H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
-                .unwrap();
+        let transaction_hash = H256::from_str(tx_hash_str).unwrap();
 
         match decode_log(
             refunded_event_signature,
@@ -365,8 +367,10 @@ mod tests {
         )
         .unwrap()
         {
-            KeyManagerEvent::Refunded { amount } => {
+            KeyManagerEvent::Refunded { amount, tx_hash } => {
                 assert_eq!(11126819398980, amount);
+                // no 0x
+                assert_eq!(tx_hash_str[2..], hex::encode(tx_hash));
             }
             _ => panic!("Expected KeyManager::Refunded, got a different variant"),
         }

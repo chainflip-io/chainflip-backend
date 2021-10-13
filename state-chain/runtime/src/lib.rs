@@ -2,7 +2,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod chainflip;
-mod weights;
 // A few exports that help ease life for downstream crates.
 use cf_traits::Chainflip;
 use core::time::Duration;
@@ -147,6 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Reputation;
 }
 
@@ -159,10 +159,14 @@ impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
-	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
+}
+
+impl pallet_cf_environment::Config for Runtime {
+	type Event = Event;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -458,15 +462,16 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
 	}
 );
 
@@ -654,6 +659,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
+			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

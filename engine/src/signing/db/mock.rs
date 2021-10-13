@@ -19,16 +19,22 @@ impl KeyDBMock {
 }
 
 impl KeyDB for KeyDBMock {
-    fn update_key(&mut self, key_id: KeyId, key: &KeygenResultInfo) {
-        let val = bincode::serialize(key).unwrap();
+    fn update_key(&mut self, key_id: &KeyId, key: &KeygenResultInfo) {
+        let val = bincode::serialize(key).expect("Should be serializable key");
 
-        self.kv_db.insert(key_id, val);
+        self.kv_db.insert(key_id.to_owned(), val);
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.kv_db
             .iter()
-            .map(|(k, v)| (k.clone(), bincode::deserialize(v).unwrap()))
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    bincode::deserialize::<KeygenResultInfo>(v)
+                        .expect("Invalid data for KeygenResultInfo"),
+                )
+            })
             .collect()
     }
 }

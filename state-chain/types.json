@@ -28,18 +28,19 @@
     }
   },
   "Bid": "(ValidatorId, Amount)",
+  "BlockNumber": "u32",
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
+  "Chain": {
+    "_enum": [
+      "Ethereum"
+    ]
+  },
   "ChainParams": {
     "_enum": {
       "Ethereum": "(Vec<u8>)",
       "Other": "(Vec<u8>)"
     }
-  },
-  "ChainType": {
-    "_enum": [
-      "Ethereum"
-    ]
   },
   "ClaimDetailsFor": {
     "msg_hash": "Option<U256>",
@@ -66,7 +67,7 @@
     ]
   },
   "KeygenRequest": {
-    "chain_type": "ChainType",
+    "chain": "Chain",
     "validator_candidates": "Vec<ValidatorId>"
   },
   "KeygenResponse": {
@@ -77,6 +78,10 @@
   },
   "Liveness": "u8",
   "LookupSource": "MultiAddress",
+  "NetworkState": {
+    "online": "u32",
+    "offline": "u32"
+  },
   "Nonce": "u64",
   "NonceIdentifier": {
     "_enum": [
@@ -96,14 +101,18 @@
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
+  "SchnorrSigTruncPubkey": {
+    "s": "[u8;32]",
+    "k_times_g_address": "[u8; 20]"
+  },
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
   "ValidatorId": "AccountId",
-  "Transaction": "Vec<u8>",
+  "TransactionHash": "Vec<u8>",
   "Vault": {
     "previous_key": "PublicKey",
     "current_key": "PublicKey",
-    "tx_hash": "Transaction"
+    "tx_hash": "TransactionHash"
   },
   "VaultRotation": {
     "new_public_key": "PublicKey",
@@ -112,7 +121,7 @@
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-       "tx_hash": "Transaction"
+        "tx_hash": "TransactionHash"
       },
       "Error": ""
     }

@@ -7,6 +7,7 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnFinalize, OnInitialize},
 };
+use pallet_cf_auction::WeightInfo as AuctionWeightTrait;
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -23,19 +24,16 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
-impl WeightInfo for () {
-	fn set_blocks_for_epoch() -> u64 {
-		0 as Weight
-	}
+pub struct AuctionWeight;
 
-	fn force_rotation() -> u64 {
+impl AuctionWeightTrait for AuctionWeight {
+	fn set_auction_size_range() -> u64 {
 		0 as Weight
 	}
 }
 
 pub const MIN_AUCTION_SIZE: u32 = 2;
 pub const MAX_AUCTION_SIZE: u32 = 150;
-pub const EPOCH_BLOCKS: u64 = 100;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
@@ -55,8 +53,8 @@ construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -123,6 +121,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
+	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type Online = MockOnline;
 }
@@ -192,11 +191,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_session: None,
-		pallet_cf_validator: Some(ValidatorPalletConfig {
-			epoch_number_of_blocks: EPOCH_BLOCKS,
-		}),
+		pallet_cf_validator: Some(ValidatorPalletConfig {}),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			winners: vec![],
+			minimum_active_bid: 0,
 		}),
 	};
 

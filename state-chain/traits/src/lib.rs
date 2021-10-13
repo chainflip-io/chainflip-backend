@@ -133,16 +133,16 @@ pub enum RotationError<ValidatorId> {
 	EmptyValidatorSet,
 	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
-	/// The key generation response failed
-	KeyResponseFailed,
+	/// The keygen response says the newly generated key is the same as the old key
+	KeyUnchanged,
 	/// Failed to construct a valid chain specific payload for rotation
 	FailedToConstructPayload,
-	/// Vault rotation completion failed
-	VaultRotationCompletionFailed,
 	/// The vault rotation is not confirmed
 	NotConfirmed,
 	/// Failed to make keygen request
 	FailedToMakeKeygenRequest,
+	/// New public key has not been set by a keygen_response
+	NewPublicKeyNotSet,
 }
 
 /// Rotating vaults
@@ -173,6 +173,16 @@ pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+}
+
+/// Trait for rotate bond after epoch.
+pub trait BondRotation {
+	type AccountId;
+	type Balance;
+
+	/// Sets the validator bond for all new_validator to the new_bond and
+	/// the bond for all old validators to zero.
+	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
 }
 
 pub trait StakeTransfer {

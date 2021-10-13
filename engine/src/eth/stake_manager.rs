@@ -1,21 +1,16 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use std::{
-    convert::TryInto,
-    sync::{Arc, Mutex},
-};
+use crate::state_chain::client::StateChainClient;
+use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::pallets::witness_api::*,
-    state_chain::runtime::StateChainRuntime,
 };
 
 use sp_runtime::AccountId32;
-use substrate_subxt::{Client, PairSigner};
 
 use web3::{
     ethabi::{self, RawLog},
@@ -33,8 +28,7 @@ use slog::o;
 pub async fn start_stake_manager_witness(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
-    subxt_client: Client<StateChainRuntime>,
+    state_chain_client: Arc<StateChainClient>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
@@ -43,66 +37,55 @@ pub async fn start_stake_manager_witness(
     slog::info!(logger, "Load Contract ABI");
     let stake_manager = StakeManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Event Stream");
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
-            async {
-                match result_event.unwrap() {
-                    // TODO: Handle unwraps
-                    StakeManagerEvent::Staked {
-                        account_id,
-                        amount,
-                        return_addr,
-                        tx_hash,
-                    } => {
-                        slog::trace!(
-                            logger,
-                            "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
-                            account_id,
-                            amount,
-                            return_addr,
-                            tx_hash
-                        );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
-                        subxt_client
-                            .witness_staked(&*signer, account_id, amount, tx_hash)
-                            .await?;
-                        signer.increment_nonce();
-                    }
-                    StakeManagerEvent::ClaimExecuted {
-                        account_id,
-                        amount,
-                        tx_hash,
-                    } => {
-                        slog::trace!(
-                            logger,
-                            "Sending claim_executed({:?}, {}, {:?}) to the state chain",
-                            account_id,
-                            amount,
-                            tx_hash
-                        );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
-                        subxt_client
-                            .witness_claimed(&*signer, account_id, amount, tx_hash)
-                            .await?;
-                        signer.increment_nonce();
-                    }
-                    event => {
-                        slog::warn!(
-                            logger,
-                            "{:?} is not to be submitted to the State Chain",
-                            event
-                        );
-                    }
+            // TODO: Handle unwraps
+            match result_event.unwrap() {
+                StakeManagerEvent::Staked {
+                    account_id,
+                    amount,
+                    staker: _,
+                    return_addr,
+                    tx_hash,
+                } => {
+                    state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_staked(
+                                account_id,
+                                amount,
+                                return_addr.0,
+                                tx_hash,
+                            ),
+                        )
+                        .await;
                 }
-                Result::<(), anyhow::Error>::Ok(())
+                StakeManagerEvent::ClaimExecuted {
+                    account_id,
+                    amount,
+                    tx_hash,
+                } => {
+                    state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_claimed(
+                                account_id, amount, tx_hash,
+                            ),
+                        )
+                        .await;
+                }
+                event => {
+                    slog::warn!(
+                        logger,
+                        "{:?} is not to be submitted to the State Chain",
+                        event
+                    );
+                }
             }
-            .await
-            .unwrap(); // TODO: How to handle call errors
         }
     })
 }
@@ -124,6 +107,8 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was staked.
         amount: u128,
+        /// The address which made the `Stake` transaction
+        staker: ethabi::Address,
         /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
         return_addr: ethabi::Address,
         /// Transaction hash that created the event
@@ -196,13 +181,14 @@ impl StakeManager {
         })
     }
 
-    // TODO: Maybe try to factor this out (See KeManager)
+    // TODO: Maybe try to factor this out (See KeyManager)
     pub async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
+        slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
@@ -243,6 +229,7 @@ impl StakeManager {
                     let event = StakeManagerEvent::Staked {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                        staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
                         tx_hash,
                     };
@@ -312,7 +299,7 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(StakeManager::new(&settings).is_ok());
+        assert_ok!(StakeManager::new(&settings));
     }
 
     #[test]
@@ -323,7 +310,7 @@ mod tests {
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
-            H256::from_str("0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52")
+            H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
                 .unwrap();
         let transaction_hash =
             H256::from_str("0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa")
@@ -336,12 +323,13 @@ mod tests {
                     staked_event_signature,
                     H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
                 ],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000001").unwrap()
             }
         ).unwrap() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                staker,
                 return_addr,
                 tx_hash,
             } => {
@@ -350,6 +338,10 @@ mod tests {
                         .unwrap();
                 assert_eq!(account_id, expected_account_id);
                 assert_eq!(amount, 40000000000000000000000u128);
+                assert_eq!(staker,
+                    web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
+                    .unwrap()
+                );
                 assert_eq!(
                     return_addr,
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")

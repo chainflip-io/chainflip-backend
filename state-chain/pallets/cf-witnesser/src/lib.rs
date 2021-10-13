@@ -149,7 +149,7 @@ pub mod pallet {
 		ValidatorIndexOutOfBounds,
 
 		/// Witness is not a validator.
-		UnauthorizedWitness,
+		UnauthorisedWitness,
 
 		/// A witness vote was cast twice by the same validator.
 		DuplicateWitness,
@@ -160,7 +160,7 @@ pub mod pallet {
 		/// Called as a witness of some external event.
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
-		/// identical transaction. This can be thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
+		/// identical transaction. This can be thought of as a vote for the encoded [Call](Config::Call) value.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
@@ -208,7 +208,7 @@ impl<T: Config> Pallet<T> {
 
 		// Look up the signer in the list of validators
 		let index =
-			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorizedWitness)? as usize;
+			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);

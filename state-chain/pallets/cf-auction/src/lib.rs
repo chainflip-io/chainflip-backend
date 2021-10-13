@@ -1,40 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
-//! # Chainflip Auction Module
-//!
-//! A module to manage auctions for the Chainflip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//! The module contains functionality to run a contest or auction in which a set of bidders are
-//! provided via the `BidderProvider` trait.  Calling `Auction::process()` we push forward the state
-//! of our auction.
-//!
-//! First we are looking for bidders in the `AuctionPhase::WaitingForBids` phase in which we
-//! validate their suitability for the next phase `AuctionPhase::BidsTaken`.
-//! During the `AuctionPhase::BidsTaken` phase we run an auction which selects a list of winners and
-//! sets the state to `WinnersSelected` and giving us our winners and the minimum bid.
-//! The caller would then finally call `Auction::process()` to finalise the auction, this can only
-//! happen on confirmation via the `AuctionConfirmation` trait. From which it would move to
-//! `WaitingForBids` for the next auction to be started.
-//!
-//! At any point in time the auction can be aborted using `Auction::abort()` returning state to
-//! `WaitingForBids`.
-//!
-//! ## Terminology
-//! - **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
-//! - **Winners:** Those bidders that have been evaluated and have been included in the the winning set
-//! - **Minimum Bid:** The minimum bid required to be included in the Winners set
-//! - **Auction Range:** A range specifying the minimum number of bidders we require and an upper range
-//!	  specifying the maximum size for the winning set
-
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 #[macro_use]
@@ -45,7 +21,6 @@ use cf_traits::{
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
-use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
 use frame_system::pallet_prelude::*;
@@ -69,9 +44,16 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// An amount for a bid
-		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+		type Amount: Member
+			+ Parameter
+			+ Default
+			+ Eq
+			+ Ord
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ MaybeSerializeDeserialize;
 		/// An identity for a validator
-		type ValidatorId: Member + Parameter;
+		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
 		/// Providing bidders
 		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
@@ -81,13 +63,15 @@ pub mod pallet {
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 		/// The lifecycle of our auction
 		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// An online validator
 		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}
 
-	/// Pallet implements [`Hooks`] trait
+	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
@@ -141,7 +125,7 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_auction_size_range())]
 		pub(super) fn set_auction_size_range(
 			origin: OriginFor<T>,
 			range: AuctionRange,
@@ -159,35 +143,32 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub auction_size_range: AuctionRange,
+		pub winners: Vec<T::ValidatorId>,
+		pub minimum_active_bid: T::Amount,
 	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
 				auction_size_range: (Zero::zero(), Zero::zero()),
+				winners: vec![],
+				minimum_active_bid: Zero::zero(),
 			}
 		}
 	}
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
-			// Run through an auction
-			match Pallet::<T>::process().and(Pallet::<T>::process()) {
-				Ok(_) => {
-					if let Err(err) = Pallet::<T>::process() {
-						panic!("Failed to confirm auction: {:?}", err);
-					}
-				}
-				Err(err) => {
-					panic!("Failed selecting winners in auction: {:?}", err);
-				}
-			}
+			CurrentPhase::<T>::set(AuctionPhase::WaitingForBids(
+				self.winners.clone(),
+				self.minimum_active_bid,
+			));
 		}
 	}
 }
@@ -298,14 +279,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::WinnersSelected(winners, min_bid) => {
-				// If this is genesis we auto confirm
-				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
-					Ok(())
-				} else {
-					T::Handler::finalize_rotation()
-				};
-
-				match result {
+				match T::Handler::finalize_rotation() {
 					Ok(_) => {
 						let phase = AuctionPhase::WaitingForBids(winners, min_bid);
 						<CurrentPhase<T>>::put(phase.clone());

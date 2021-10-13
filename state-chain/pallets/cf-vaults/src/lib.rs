@@ -57,6 +57,7 @@ use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use sp_runtime::traits::One;
 
+pub mod crypto;
 mod ethereum;
 pub mod rotation;
 
@@ -112,8 +113,8 @@ pub mod pallet {
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
-	#[pallet::getter(fn vault_rotations)]
-	pub(super) type VaultRotations<T: Config> =
+	#[pallet::getter(fn active_chain_vault_rotations)]
+	pub(super) type ActiveChainVaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, CeremonyId, VaultRotation<T::ValidatorId, T::PublicKey>>;
 
 	/// A map of Nonces for chains supported
@@ -148,8 +149,8 @@ pub mod pallet {
 		InvalidCeremonyId,
 		/// We have an empty validator set
 		EmptyValidatorSet,
-		/// The key generation response failed
-		KeyResponseFailed,
+		/// The key in the response is not different to the current key
+		KeyUnchanged,
 		/// A vault rotation has failed
 		VaultRotationCompletionFailed,
 		/// A key generation response has failed
@@ -160,12 +161,12 @@ pub mod pallet {
 		BadValidators,
 		/// Failed to construct a valid chain specific payload for rotation
 		FailedToConstructPayload,
-		/// Failed to sign the tx for the ethereum chain
-		SignatureResponseFailed,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// Failed to make a key generation request
 		FailedToMakeKeygenRequest,
+		/// New public key not set by keygen_response
+		NewPublicKeyNotSet,
 	}
 
 	#[pallet::call]
@@ -197,7 +198,7 @@ pub mod pallet {
 			// We just have the Ethereum chain to handle this Schnorr signature
 			match EthereumChain::<T>::handle_response(ceremony_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(_) => Err(Error::<T>::SignatureResponseFailed.into()),
+				Err(e) => Err(Error::<T>::from(e).into()),
 			}
 		}
 
@@ -250,13 +251,11 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
 			RotationError::BadValidators(_) => Error::<T>::BadValidators,
 			RotationError::FailedToConstructPayload => Error::<T>::FailedToConstructPayload,
-			RotationError::VaultRotationCompletionFailed => {
-				Error::<T>::VaultRotationCompletionFailed
-			}
-			RotationError::KeyResponseFailed => Error::<T>::KeyResponseFailed,
+			RotationError::KeyUnchanged => Error::<T>::KeyUnchanged,
 			RotationError::InvalidCeremonyId => Error::<T>::InvalidCeremonyId,
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
+			RotationError::NewPublicKeyNotSet => Error::<T>::NewPublicKeyNotSet,
 		}
 	}
 }
@@ -275,9 +274,11 @@ impl<T: Config> Pallet<T> {
 	/// Abort all rotations registered and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(
-			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
+			ActiveChainVaultRotations::<T>::iter()
+				.map(|(k, _)| k)
+				.collect(),
 		));
-		VaultRotations::<T>::remove_all();
+		ActiveChainVaultRotations::<T>::remove_all();
 		T::RotationHandler::abort();
 	}
 
@@ -289,8 +290,8 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn rotations_complete() -> bool {
-		VaultRotations::<T>::iter().count() == 0
+	fn no_active_chain_vault_rotations() -> bool {
+		ActiveChainVaultRotations::<T>::iter().count() == 0
 	}
 }
 
@@ -303,7 +304,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
-			chain_type: ChainType::Ethereum,
+			chain: Chain::Ethereum,
 			validator_candidates: candidates.clone(),
 		};
 
@@ -313,7 +314,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 
 	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
 		// The 'exit' point for the pallet, no rotations left to process
-		if Pallet::<T>::rotations_complete() {
+		if Pallet::<T>::no_active_chain_vault_rotations() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -342,10 +343,10 @@ impl<T: Config>
 		ceremony_id: CeremonyId,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		VaultRotations::<T>::insert(
+		ActiveChainVaultRotations::<T>::insert(
 			ceremony_id,
 			VaultRotation {
-				new_public_key: Default::default(),
+				new_public_key: None,
 				keygen_request: request.clone(),
 			},
 		);
@@ -364,9 +365,9 @@ impl<T: Config>
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				if EthereumVault::<T>::get().current_key != new_public_key {
-					VaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
+					ActiveChainVaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
 						if let Some(vault_rotation) = maybe_vault_rotation {
-							(*vault_rotation).new_public_key = new_public_key.clone();
+							(*vault_rotation).new_public_key = Some(new_public_key.clone());
 							EthereumChain::<T>::rotate_vault(
 								ceremony_id,
 								new_public_key,
@@ -377,9 +378,8 @@ impl<T: Config>
 						}
 					})
 				} else {
-					// Abort this key generation request
 					Pallet::<T>::abort_rotation();
-					Err(RotationError::KeyResponseFailed)
+					Err(RotationError::KeyUnchanged)
 				}
 			}
 			KeygenResponse::Error(bad_validators) => {
@@ -389,35 +389,6 @@ impl<T: Config>
 				T::RotationHandler::penalise(bad_validators);
 				// Report back we have processed the failure
 				Ok(().into())
-			}
-		}
-	}
-}
-
-// We have now had feedback from the vault/chain that we can proceed with the final request for the
-// vault rotation
-impl<T: Config> ChainHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
-
-	/// Try to complete the final vault rotation with feedback from the chain implementation over
-	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
-	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
-	fn request_vault_rotation(
-		ceremony_id: CeremonyId,
-		result: Result<VaultRotationRequest, RotationError<T::ValidatorId>>,
-	) -> Result<(), Self::Error> {
-		ensure_index!(ceremony_id);
-		match result {
-			// All good, forward on the request
-			Ok(request) => VaultRotationRequestResponse::<T>::make_request(ceremony_id, request),
-			// Penalise if we have a set of bad validators and abort the rotation
-			Err(err) => {
-				if let RotationError::BadValidators(bad) = err {
-					T::RotationHandler::penalise(bad);
-				}
-				Self::abort_rotation();
-				Err(RotationError::VaultRotationCompletionFailed)
 			}
 		}
 	}
@@ -456,11 +427,13 @@ impl<T: Config>
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
 			VaultRotationResponse::Success { tx_hash } => {
-				if let Some(vault_rotation) = VaultRotations::<T>::take(ceremony_id) {
+				if let Some(vault_rotation) = ActiveChainVaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
-					match vault_rotation.keygen_request.chain_type {
-						ChainType::Ethereum => EthereumChain::<T>::vault_rotated(
-							vault_rotation.new_public_key,
+					match vault_rotation.keygen_request.chain {
+						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
+							vault_rotation
+								.new_public_key
+								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 							tx_hash,
 						),
 					}
