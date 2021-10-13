@@ -401,6 +401,7 @@ jobs:
             --set global.testnet_id="$CIRCLE_BUILD_NUM"
             --set chainflip-engine.engine.backtrace=full
             --set global.chain=cf-dev
+            --set ingress.enabled=true
             --wait
             --wait-for-jobs
       - run:
