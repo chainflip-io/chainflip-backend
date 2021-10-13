@@ -110,12 +110,18 @@ pub struct AggKey {
 impl AggKey {
 	pub fn from_x_y_bytes(bytes: [u8; 33]) -> Self {
 		let [pub_key_x @ .., pub_key_y_parity] = bytes;
-		Self { pub_key_x, pub_key_y_parity }
+		Self {
+			pub_key_x,
+			pub_key_y_parity,
+		}
 	}
 
 	pub fn from_y_x_bytes(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
-		Self { pub_key_x, pub_key_y_parity }
+		Self {
+			pub_key_x,
+			pub_key_y_parity,
+		}
 	}
 }
 
@@ -191,12 +197,9 @@ pub trait ChainflipContractCall {
 	/// Whether or not the call has been signed.
 	fn has_signature(&self) -> bool;
 
-	/// Ethereum abi-encoded calldata for the contract call.
-	fn abi_encoded(&self) -> Vec<u8>;
-
 	/// The payload data over which the threshold signature should be made.
 	fn signing_payload(&self) -> H256;
 
-	/// Add the threshold signature to the contract call.
-	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents);
+	/// Abi-ecncode the call with a provided signature.
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents);
 }

@@ -68,11 +68,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A public key
-		type PublicKey: Member
-			+ Parameter
-			+ Into<AggKey>
-			+ Default
-			+ MaybeSerializeDeserialize;
+		type PublicKey: Member + Parameter + Into<AggKey> + Default + MaybeSerializeDeserialize;
 
 		/// A transaction
 		type TransactionHash: Member + Parameter + Into<eth::TxHash> + Default;

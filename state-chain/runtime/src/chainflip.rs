@@ -1,9 +1,12 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser,
+	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser, 
 };
 use cf_chains::{
-	eth::{self, register_claim::RegisterClaim, ChainflipContractCall},
+	eth::{
+		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
+		ChainflipContractCall,
+	},
 	Ethereum,
 };
 use cf_traits::{BondRotation, Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
@@ -87,12 +90,18 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
-	Broadcast(RegisterClaim),
+	AggKeyBroadcast(SetAggKeyWithAggKey),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
-	fn from(rc: RegisterClaim) -> Self {
-		EthereumSigningContext::PostClaimSignature(rc)
+	fn from(call: RegisterClaim) -> Self {
+		EthereumSigningContext::PostClaimSignature(call)
+	}
+}
+
+impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
+	fn from(call: SetAggKeyWithAggKey) -> Self {
+		EthereumSigningContext::AggKeyBroadcast(call)
 	}
 }
 
@@ -105,7 +114,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 	fn get_payload(&self) -> Self::Payload {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
-			Self::Broadcast(ref call) => call.signing_payload(),
+			Self::AggKeyBroadcast(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -118,10 +127,9 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				)
 				.into()
 			}
-			Self::Broadcast(contract_call) => {
-				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
+			Self::AggKeyBroadcast(call) => {
 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					unsigned_tx,
+					contract_call_to_unsigned_tx(call.clone(), signature),
 				))
 			}
 		}
@@ -130,14 +138,13 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	mut call: C,
-	signature: eth::SchnorrVerificationComponents,
+	signature: &eth::SchnorrVerificationComponents,
 ) -> eth::UnsignedTransaction {
-	call.insert_signature(&signature);
 	eth::UnsignedTransaction {
 		// TODO: get chain_id and contract from on-chain.
 		chain_id: eth::CHAIN_ID_RINKEBY,
 		contract: eth::stake_manager_contract_address().into(),
-		data: call.abi_encoded(),
+		data: call.encode_with_signature(signature),
 		..Default::default()
 	}
 }

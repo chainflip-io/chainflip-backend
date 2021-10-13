@@ -1,6 +1,6 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable, AggKey};
+use super::{AggKey, ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
 
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Uint};
@@ -21,24 +21,19 @@ impl ChainflipContractCall for SetAggKeyWithAggKey {
 		!self.sig_data.sig.is_zero()
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
 	fn signing_payload(&self) -> H256 {
 		self.sig_data.msg_hash
 	}
 
-	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents) {
-		self.sig_data.insert_signature(signature)
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
+		let mut call = self.clone();
+		call.sig_data.insert_signature(signature);
+		call.abi_encoded()
 	}
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(
-		nonce: Nonce,
-		new_key: Key,
-	) -> Self {
+	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(nonce: Nonce, new_key: Key) -> Self {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(nonce.into()),
 			new_key: new_key.into(),
@@ -52,10 +47,7 @@ impl SetAggKeyWithAggKey {
 
 	fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
-			.encode_input(&[
-				self.sig_data.tokenize(),
-				self.new_key.tokenize(),
-			])
+			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
 			.expect(
 				r#"
 					This can only fail if the parameter types don't match the function signature encoded below.
@@ -80,10 +72,10 @@ impl SetAggKeyWithAggKey {
 						ParamType::Address,
 					]),
 				),
-				Param::new("newKey", ParamType::Tuple(vec![
-					ParamType::Uint(256),
-					ParamType::Uint(8),
-				])),
+				Param::new(
+					"newKey",
+					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
+				),
 			],
 			vec![],
 			false,
@@ -140,9 +132,7 @@ mod test_set_agg_key_with_agg_key {
 			ChainflipContractCall::signing_payload(&set_agg_key_runtime),
 			FAKE_HASH.into()
 		);
-		assert!(ChainflipContractCall::has_signature(
-			&set_agg_key_runtime
-		));
+		assert!(ChainflipContractCall::has_signature(&set_agg_key_runtime));
 		let runtime_payload = ChainflipContractCall::abi_encoded(&set_agg_key_runtime);
 
 		assert_eq!(

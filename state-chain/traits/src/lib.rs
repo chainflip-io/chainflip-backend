@@ -142,9 +142,7 @@ pub trait VaultRotator {
 	type RotationError;
 
 	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::RotationError>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.

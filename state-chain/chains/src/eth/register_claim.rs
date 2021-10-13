@@ -27,16 +27,14 @@ impl ChainflipContractCall for RegisterClaim {
 		!self.sig_data.sig.is_zero()
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
 	fn signing_payload(&self) -> H256 {
 		self.sig_data.msg_hash
 	}
 
-	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents) {
-		self.sig_data.insert_signature(signature)
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
+		let mut call = self.clone();
+		call.sig_data.insert_signature(signature);
+		call.abi_encoded()
 	}
 }
 
