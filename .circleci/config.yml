@@ -54,7 +54,7 @@ version: 2.1
 executors:
   chainflip-master:
     docker:
-      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+      - image: ghcr.io/chainflip-io/chainflip-infrastructure/chainflip-master:latest
         auth: *dockerconfig
   rust-base:
     docker:
