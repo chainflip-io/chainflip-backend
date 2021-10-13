@@ -45,41 +45,42 @@ pub async fn test_all_key_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match &event.event_enum {
-            KeyManagerEvent::KeyChange {
-                signed,
+        .find(|event| match event {
+            // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
+            // All the key strings in this test are decimal pub keys from the priv keys in the consts.py script
+            // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+
+            KeyManagerEvent::AggKeySetByAggKey {
                 old_key,
                 new_key,
                 ..
             } => {
-                // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
-                // All the key strings in this test are decimal versions of the hex strings in the consts.py script
-                // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-                // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                true
+            },
 
-                if new_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap(){
+            KeyManagerEvent::AggKeySetByGovKey {
+                old_key,
+                new_key,
+                ..
+            } => {
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                true
+            },
 
-                    assert_eq!(signed,&true);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    true
-
-                } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
-
-                    assert_eq!(signed,&false);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                    true
-
-                 } else if new_key == &ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap(){
-
-                    assert_eq!(signed,&false);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                    true
-
-                } else {
-                    panic!("KeyChange event with unexpected key: {:?}", new_key);
-                }
-            }
-            KeyManagerEvent::Shared(_) => {
+            KeyManagerEvent::GovKeySetByGovKey {
+                old_key,
+                new_key,
+                ..
+            } => {
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",true).unwrap());
+                assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
+                true
+            },
+            
+            KeyManagerEvent::Refunded { .. } => {
                 true
             },
         }).unwrap();
