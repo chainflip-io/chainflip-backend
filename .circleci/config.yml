@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - feature/ch332-rust-doc
+        - update/epic-ci-1
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,7 +17,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - fix/eth-subscribe
+        - update/epic-ci-1
 
 only_epic_branches: &only_epic_branches
   filters:
@@ -26,6 +26,7 @@ only_epic_branches: &only_epic_branches
         # Uncomment and add your current branch when testing
         - /epic\/.*/
         - /release\/.*/
+        - update/epic-ci-1
 
 nightly: &nightly
   triggers:
@@ -175,13 +176,13 @@ workflows:
           <<: *only_main_branches
       - test-single-node:
           requires:
-            - build-chainflip-engine
-            - build-state-chain-node
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
-          <<: *only_epic_branches
+            - aws-credentials
+          <<: *only_main_branches
 
   chainflip-integration-tests:
     <<: *nightly
@@ -374,52 +375,36 @@ jobs:
         description: Name of the cluster to authenticate to
         type: string
         default: cluster-staging
-    resource_class: small
     executor: chainflip-master
     steps:
-      - doctl/initialize
-      - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
+      - checkout
+      - attach_workspace:
+          at: ./
       - run:
-          name: Port-forward into cluster
+          command: |
+            mkdir -p target/release/config
+            sops -d Default.enc.toml > target/release/config/Default.toml
+            echo $BASHFUL_SIGNING_KEY > signing_key_file
+            echo $ETH_PRIVATE_KEY > private_key_file
+      - run:
           background: true
-          command: kubectl port-forward -n chartmuseum service/chartmuseum 8080
+          command: ./target/release/state-chain-node --chain cf-dev > node-$CIRCLE_SHA1.log
+      - run:
+          background: true
+          command: ./target/release/chainflip-engine > engine-$CIRCLE_SHA1.log
       - run: sleep 5
-      - run: helm repo add chainflip http://localhost:8080
+      - run: >
+          curl --request POST -sL
+          -H "Content-Type:application/json;charset=utf-8"
+          --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
+          --url 'http://localhost:9933'
+          -vv
       - run:
-          name: Install bashful single node
-          command: >
-            helm install bashful chainflip/chainflip-validator
-            --namespace default
-            --set state-chain-node.nodeType=validator
-            --set state-chain-node.image.tag="<<pipeline.git.revision>>"
-            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--ws-external}"
-            --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
-            --set chainflip-engine.config.eth.node_endpoint=$RINKEBY
-            --set global.nameSuffix="default"
-            --set global.testnet_id="$CIRCLE_BUILD_NUM"
-            --set chainflip-engine.engine.backtrace=full
-            --set global.chain=dev
-            --wait
-            --wait-for-jobs
-      - run:
-          name: Test single node
-          command: helm test bashful -n default
-      - run:
-          name: Dump logs (state-chain-node)
-          when: always
-          command: kubectl logs -l app.kubernetes.io/name=state-chain-node --tail -1 > node.log
-      - run:
-          name: Dump logs (chainflip-engine)
-          when: always
-          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine --tail -1 > engine.log
-      - run: |
-          mkdir artifacts
-          mv *.log artifacts
+          name: Move artifacts to folder
+          command:
+            |
+            mkdir artifacts
+            mv *.log artifacts
       - store_artifacts:
           path: artifacts
-      - run:
-          name: Destroy single node
-          when: always
-          command: helm uninstall bashful -n default
-      - run: echo $TEST_NODE_LOG_URL
 ######################## /Jobs ########################
