@@ -43,11 +43,48 @@
     "anonymous": false,
     "inputs": [
       {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
         "indexed": false,
-        "internalType": "bool",
-        "name": "signedByAggKey",
-        "type": "bool"
+        "internalType": "struct IShared.Key",
+        "name": "oldKey",
+        "type": "tuple"
       },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "AggKeySetByAggKey",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
       {
         "components": [
           {
@@ -85,7 +122,50 @@
         "type": "tuple"
       }
     ],
-    "name": "KeyChange",
+    "name": "AggKeySetByGovKey",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.Key",
+        "name": "oldKey",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "GovKeySetByGovKey",
     "type": "event"
   },
   {
