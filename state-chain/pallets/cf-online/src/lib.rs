@@ -40,7 +40,7 @@ use sp_std::vec::Vec;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState};
+	use cf_traits::{Chainflip, Heartbeat, IsOnline, NetworkState, StakeHandler, StakerProvider};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -56,11 +56,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-
 		/// A Heartbeat
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId>;
+
+		/// Provide a list of stakers in the network
+		type StakerProvider: StakerProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -84,47 +84,49 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			ValidatorsLiveness::<T>::get(validator_id)
+			Nodes::<T>::get(validator_id)
 				.unwrap_or_default()
 				.is_online()
 		}
 	}
 
-	/// The liveness of our validators
+	/// The liveness of nodes in the network.  We are assuming here that an account staked with FLIP
+	/// is equivalent to an operational node.  The definition of operational is that they have the
+	/// software package installed, running and that they are submitting heartbeats
 	///
 	#[pallet::storage]
-	pub(super) type ValidatorsLiveness<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness, OptionQuery>;
+	#[pallet::getter(fn liveness)]
+	pub(super) type Nodes<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node, OptionQuery>;
 
 	#[pallet::event]
 	pub enum Event<T: Config> {}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// A heartbeat has already been submitted for this validator
+		/// A heartbeat has already been submitted for this node
 		AlreadySubmittedHeartbeat,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A heartbeat that is used to measure the liveness of a validator
-		/// Every interval we have a set of validators we expect a heartbeat from with which we
+		/// A heartbeat that is used to measure the liveness of a node
+		/// For every interval there are a set of nodes we expect a heartbeat from with which we
 		/// mark off when we have received a heartbeat.
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
-			// Ensure we haven't had a heartbeat for this interval yet for this validator
+			// Ensure we haven't had a heartbeat during this interval for this node
 			ensure!(
-				!ValidatorsLiveness::<T>::get(&validator_id)
-					.unwrap_or(SUBMITTED)
+				!Nodes::<T>::get(&validator_id)
+					.unwrap_or_default()
 					.has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
-			// Update this validator
-			ValidatorsLiveness::<T>::mutate(&validator_id, |maybe_liveness| {
-				if let Some(mut liveness) = *maybe_liveness {
-					*maybe_liveness = Some(liveness.update_current_interval(true));
+			// Update this node
+			Nodes::<T>::mutate(&validator_id, |maybe_node| {
+				if let Some(mut node) = maybe_node {
+					node.update_current_interval(true);
 				}
 			});
 
@@ -134,31 +136,8 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {}
-		}
-	}
-
-	/// On genesis, we expect a set of validators to expect heartbeats from.
-	///
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {
-			// A list of those we expect to be online, which are our set of validators
-			for validator_id in T::EpochInfo::current_validators().iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, 1);
-			}
-		}
-	}
-
-	/// Implementation of the `EpochTransitionHandler` trait with which we populate are
-	/// expected list of validators.
-	///
+	/// Implementation of the `EpochTransitionHandler` trait with which we clear stale stakers
+	/// that may have dropped off during the last epoch.
 	impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
@@ -168,11 +147,35 @@ pub mod pallet {
 			new_validators: &[Self::ValidatorId],
 			_new_bond: Self::Amount,
 		) {
-			// Clear our expectations
-			ValidatorsLiveness::<T>::remove_all();
-			// Set the new list of validators we expect a heartbeat from
-			for validator_id in new_validators.iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, 0);
+			Nodes::<T>::remove_all();
+			for (validator_id, _) in T::StakerProvider::get_stakers().iter() {
+				let is_validator = new_validators.contains(validator_id);
+				Nodes::<T>::insert(
+					validator_id,
+					Node {
+						is_validator,
+						..Default::default()
+					},
+				);
+			}
+		}
+	}
+
+	/// Implementation of the `StakeHandler` trait with which we add any new stakers as live
+	///
+	impl<T: Config> StakeHandler for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+		type Amount = T::Amount;
+
+		fn stake_updated(validator_id: &Self::ValidatorId, _new_total: Self::Amount) {
+			if !Nodes::<T>::contains_key(validator_id) {
+				Nodes::<T>::insert(
+					validator_id,
+					Node {
+						is_validator: false,
+						..Default::default()
+					},
+				);
 			}
 		}
 	}
@@ -182,32 +185,24 @@ pub mod pallet {
 		/// create a map of the state of the network
 		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
 			let mut weight = 0;
-			let mut online: Vec<T::ValidatorId> = Vec::new();
-			let mut offline: Vec<T::ValidatorId> = Vec::new();
-			let mut missing: Vec<T::ValidatorId> = Vec::new();
+			let mut network_state = NetworkState::default();
 
-			ValidatorsLiveness::<T>::translate(|validator_id, mut liveness: Liveness| {
+			Nodes::<T>::translate(|validator_id, mut node: Node| {
 				weight += T::DbWeight::get().reads_writes(1, 1);
-				if liveness.is_online() {
-					if !liveness.has_submitted() {
-						missing.push(validator_id.clone());
-					}
-					online.push(validator_id);
-				} else {
-					offline.push(validator_id);
-				};
-
-				Some(liveness.update_current_interval(false))
+				if node.is_validator {
+					if node.is_online() {
+						if !node.has_submitted() {
+							network_state.missing.push(validator_id.clone());
+						}
+						network_state.online.push(validator_id);
+					} else {
+						network_state.offline.push(validator_id);
+					};
+				}
+				Some(node.update_current_interval(false))
 			});
 
-			(
-				weight,
-				NetworkState {
-					missing,
-					online,
-					offline,
-				},
-			)
+			(weight, network_state)
 		}
 	}
 }

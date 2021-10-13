@@ -11,12 +11,13 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
-use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Chainflip, Heartbeat, NetworkState};
+use cf_traits::impl_mock_stake_transfer;
+use cf_traits::{Bid, Chainflip, Heartbeat, NetworkState};
 use sp_std::cell::RefCell;
 
 type ValidatorId = u64;
+
+impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {
 	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
@@ -36,7 +37,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>, Config},
+		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -102,18 +103,15 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type EpochInfo = epoch_info::Mock;
 	type Heartbeat = MockHeartbeat;
+	type StakerProvider = MockStakerProvider;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_online: Some(OnlinePalletConfig {}),
 	};
 
-	// We only expect Alice to be a validator at the moment
-	Mock::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {

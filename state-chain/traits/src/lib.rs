@@ -27,7 +27,7 @@ pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
+	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId> + Default;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -217,8 +217,17 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders
+	/// Provide a list of bidders, those stakers that are not retired
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+}
+
+/// Providing a list of stakers
+pub trait StakerProvider {
+	type ValidatorId;
+	type Amount;
+
+	/// Provide a list of stakers
+	fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 /// Trait for rotate bond after epoch.
@@ -334,7 +343,7 @@ pub trait IsOnline {
 
 /// A representation of the current network state
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId> {
+pub struct NetworkState<ValidatorId: Default> {
 	/// We are missing the last heartbeat from this node and yet cannot determine if they
 	/// are offline or online.
 	pub missing: Vec<ValidatorId>,
@@ -344,7 +353,7 @@ pub struct NetworkState<ValidatorId> {
 	pub offline: Vec<ValidatorId>,
 }
 
-impl<ValidatorId> NetworkState<ValidatorId> {
+impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
@@ -425,7 +434,7 @@ pub trait Slashing {
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId;
+	type ValidatorId: Default;
 	/// A heartbeat has been submitted
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
 	/// Called on every heartbeat interval with the current network state
