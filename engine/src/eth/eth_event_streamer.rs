@@ -22,6 +22,11 @@ pub async fn new_eth_event_stream<
     from_block: u64,
     logger: &slog::Logger,
 ) -> Result<impl Stream<Item = Result<Event>>, anyhow::Error> {
+    slog::info!(
+        logger,
+        "Substribing to Ethereum events from contract at address: {:?}",
+        hex::encode(deployed_address)
+    );
     // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
     let future_logs = web3
         .eth_subscribe()
