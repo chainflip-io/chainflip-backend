@@ -388,14 +388,15 @@ pub mod pallet {
 				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
-			// Insert the signature and notify the CFE.
-			claim_details.insert_signature(&signature);
-			PendingClaims::<T>::insert(&account_id, &claim_details);
-
+			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id,
-				claim_details.abi_encoded(),
+				account_id.clone(),
+				claim_details.abi_encode_with_signature(&signature),
 			));
+
+			// Store the signature.
+			claim_details.sig_data.insert_signature(&signature);
+			PendingClaims::<T>::insert(&account_id, &claim_details);
 
 			Ok(().into())
 		}

@@ -141,24 +141,24 @@ mod test_register_claim {
 
 		let mut register_claim_runtime =
 			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
+		
+		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
 
-		// Replace the msg_hash.
-		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::insert_signature(
-			&mut register_claim_runtime,
+		assert_eq!(
+			register_claim_runtime.signing_payload(),
+			expected_msg_hash
+		);
+		let runtime_payload = register_claim_runtime.abi_encode_with_signature(
 			&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
 			},
 		);
+		// Ensure signing payload isn't modified by signature.
 		assert_eq!(
-			ChainflipContractCall::signing_payload(&register_claim_runtime),
-			FAKE_HASH.into()
+			register_claim_runtime.signing_payload(),
+			expected_msg_hash
 		);
-		assert!(ChainflipContractCall::has_signature(
-			&register_claim_runtime
-		));
-		let runtime_payload = ChainflipContractCall::abi_encoded(&register_claim_runtime);
 
 		assert_eq!(
 			// Our encoding:
@@ -168,7 +168,7 @@ mod test_register_claim {
 				.encode_input(&vec![
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_HASH.into()),
+						Token::Uint(expected_msg_hash),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

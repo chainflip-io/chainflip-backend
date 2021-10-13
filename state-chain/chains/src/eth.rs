@@ -200,6 +200,6 @@ pub trait ChainflipContractCall {
 	/// The payload data over which the threshold signature should be made.
 	fn signing_payload(&self) -> H256;
 
-	/// Abi-ecncode the call with a provided signature.
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents);
+	/// Abi-encode the call with a provided signature.
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
 }
