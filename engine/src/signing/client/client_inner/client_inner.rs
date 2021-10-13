@@ -220,13 +220,13 @@ where
         self.signing_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
-        let logger_c = self.logger.clone();
+        let logger = &self.logger;
         self.pending_requests_to_sign
             .retain(|key_id, pending_signing_infos| {
                 pending_signing_infos.retain(|pending| {
                     if pending.should_expire_at < Instant::now() {
                         slog::warn!(
-                            logger_c,
+                            logger,
                             "Request to sign expired waiting for key id: {:?}, ceremony id: {:?}",
                             key_id,
                             pending.signing_info.ceremony_id,
