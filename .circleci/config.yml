@@ -385,8 +385,8 @@ jobs:
           command: |
             mkdir config
             sops -d Default.enc.toml > config/Default.toml
-            echo $BASHFUL_SIGNING_KEY > signing_key_file
-            echo $ETH_PRIVATE_KEY > private_key_file
+            echo -n $BASHFUL_SIGNING_KEY > signing_key_file
+            echo -n $ETH_PRIVATE_KEY > private_key_file
       - run:
           name: Start Node
           background: true
@@ -399,7 +399,7 @@ jobs:
       - run:
           name: Check Node Health
           command: >
-            curl --request POST -sL
+            curl --request POST -L
             -H "Content-Type:application/json;charset=utf-8"
             --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:9933'
@@ -407,7 +407,7 @@ jobs:
       - run:
           name: Check Engine Health
           command: >
-            curl --request POST -sL
+            curl
             --url 'http://localhost:5555'
             -vv
       - run:
