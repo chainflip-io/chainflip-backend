@@ -408,8 +408,6 @@ jobs:
           name: Check Engine Health
           command: >
             curl --request POST -sL
-            -H "Content-Type:application/json;charset=utf-8"
-            --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:5555'
             -vv
       - run:
