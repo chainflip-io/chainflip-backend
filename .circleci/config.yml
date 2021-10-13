@@ -293,7 +293,7 @@ jobs:
       - checkout
       - run: sccache --show-stats
       - run: |
-          cargo check --locked --release
+          cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
