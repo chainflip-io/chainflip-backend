@@ -10,7 +10,7 @@ use crate::signing::client::client_inner::common::{
     CeremonyCommon, ProcessMessageResult, StageResult,
 };
 use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
-use crate::signing::client::client_inner::utils::{get_index_mapping, threshold_from_share_count};
+use crate::signing::client::client_inner::utils::threshold_from_share_count;
 
 use super::client_inner::{
     CeremonyOutcomeResult, EventSender, KeyGenMessageWrapped, MultisigMessage,
@@ -244,6 +244,49 @@ impl KeygenState {
 
         self.delayed_messages.push((id, m));
     }
+
+    /// Check expiration time, and report responsible nodes if expired
+    pub fn try_expiring(&self) -> Option<Vec<AccountId>> {
+        if self.should_expire_at < std::time::Instant::now() {
+            match &self.inner {
+                None => {
+                    // blame the parties that tried to initiate the ceremony
+                    let blamed_ids = self
+                        .delayed_messages
+                        .iter()
+                        .map(|(id, _)| id.clone())
+                        .collect();
+
+                    slog::warn!(
+                        self.logger,
+                        "Keygen ceremony expired before a request to sign, blaming parties: {:?}",
+                        blamed_ids
+                    );
+
+                    Some(blamed_ids)
+                }
+                Some(authorised_state) => {
+                    // blame slow parties
+                    let bladed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
+
+                    let blamed_ids = bladed_idx
+                        .iter()
+                        .map(|idx| authorised_state.validator_map.get_id(*idx).unwrap().clone())
+                        .collect();
+
+                    slog::warn!(
+                        self.logger,
+                        "Keygen ceremony expired, blaming parties: {:?}",
+                        blamed_ids,
+                    );
+
+                    Some(blamed_ids)
+                }
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -251,6 +294,11 @@ impl KeygenState {
     pub fn get_stage(&self) -> Option<String> {
         // TODO
         None
+    }
+
+    #[cfg(test)]
+    pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
+        self.should_expire_at = expiry_time;
     }
 }
 

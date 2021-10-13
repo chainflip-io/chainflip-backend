@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use crate::signing::client::client_inner::tests::helpers::check_blamed_paries;
 
 use super::*;
 
@@ -275,24 +275,6 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![AccountId([bad_idx as u8 + 1; 32])]);
-}
-
-async fn check_blamed_paries(mut rx: &mut helpers::InnerEventReceiver, expected: &[usize]) {
-    let (_, blamed_parties) = helpers::check_outcome(&mut rx)
-        .await
-        .expect("should procude outcome")
-        .result
-        .clone()
-        .unwrap_err();
-
-    assert_eq!(
-        blamed_parties,
-        expected
-            .iter()
-            // Needs +1 to map from array idx to signer idx
-            .map(|idx| AccountId([*idx as u8 + 1; 32]))
-            .collect_vec()
-    );
 }
 
 #[tokio::test]

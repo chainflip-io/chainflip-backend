@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
+use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -91,6 +92,10 @@ pub(super) type InnerEventReceiver = Pin<
     Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<InnerEvent>>>,
 >;
 
+pub struct Stage0Data {
+    pub clients: Vec<MultisigClientNoDB>,
+}
+
 /// Clients generated comm1, but haven't sent them
 pub struct CommStage1Data {
     pub clients: Vec<MultisigClientNoDB>,
@@ -165,7 +170,8 @@ pub struct SigningPhase4Data {
 }
 
 pub struct ValidKeygenStates {
-    pub com_stage1: CommStage1Data,
+    pub stage0: Stage0Data,
+    pub comm_stage1: CommStage1Data,
     pub ver_com_stage2: CommVerStage2Data,
     pub sec_stage3: SecStage3Data,
     pub comp_stage4: CompStage4Data,
@@ -486,6 +492,10 @@ impl KeygenContext {
         let account_ids = &self.account_ids;
         let rxs = &mut self.rxs;
 
+        let stage0 = Stage0Data {
+            clients: clients.clone(),
+        };
+
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
@@ -636,7 +646,8 @@ impl KeygenContext {
         }
 
         ValidKeygenStates {
-            com_stage1,
+            stage0,
+            comm_stage1: com_stage1,
             ver_com_stage2,
             sec_stage3,
             comp_stage4,
@@ -712,7 +723,7 @@ impl KeygenContext {
         broadcast_all_ver2(&mut clients, &ver2_vec).await;
 
         // Check if the ceremony was aborted at this stage
-        if let Some(outcome) = check_outcome(&mut rxs[0]).await {
+        if let Some(outcome) = check_sig_outcome(&mut rxs[0]).await {
             // TODO: check that the outcome is the same for all parties
             return ValidSigningStates {
                 sign_phase1,
@@ -777,7 +788,7 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
 // If we timeout, the channel is empty at the time of retrieval
 pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
-    match check_for_inner_event(rx).await {
+    match recv_next_inner_event_opt(rx).await {
         None => {}
         Some(event) => {
             panic!("Channel is not empty: {:?}", event);
@@ -790,7 +801,7 @@ pub async fn recv_next_signal_message_skipping(
     rx: &mut InnerEventReceiver,
 ) -> Option<SigningOutcome> {
     loop {
-        let res = check_for_inner_event(rx).await?;
+        let res = recv_next_inner_event_opt(rx).await?;
 
         if let InnerEvent::SigningResult(s) = res {
             return Some(s);
@@ -799,10 +810,8 @@ pub async fn recv_next_signal_message_skipping(
 }
 
 /// Check if the next event produced by the receiver is SigningOutcome
-pub async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
-    let event: &InnerEvent = tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
-        .await
-        .ok()??;
+pub async fn check_sig_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
+    let event: &InnerEvent = check_inner_event(rx).await?;
 
     if let InnerEvent::SigningResult(outcome) = event {
         Some(outcome)
@@ -811,9 +820,27 @@ pub async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcom
     }
 }
 
+/// Check if the next event produced by the receiver is SigningOutcome
+pub async fn check_keygen_outcome(rx: &mut InnerEventReceiver) -> Option<&KeygenOutcome> {
+    let event: &InnerEvent = check_inner_event(rx).await?;
+
+    if let InnerEvent::KeygenResult(outcome) = event {
+        Some(outcome)
+    } else {
+        None
+    }
+}
+
+/// Check the next inner event without consuming
+pub async fn check_inner_event(rx: &mut InnerEventReceiver) -> Option<&InnerEvent> {
+    tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
+        .await
+        .ok()?
+}
+
 /// Asserts that InnerEvent is in the queue and returns it
 pub async fn recv_next_inner_event(rx: &mut InnerEventReceiver) -> InnerEvent {
-    let res = check_for_inner_event(rx).await;
+    let res = recv_next_inner_event_opt(rx).await;
 
     if let Some(event) = res {
         return event;
@@ -822,7 +849,7 @@ pub async fn recv_next_inner_event(rx: &mut InnerEventReceiver) -> InnerEvent {
 }
 
 /// checks for an InnerEvent in the queue with a short timeout, returns the InnerEvent if there is one.
-pub async fn check_for_inner_event(rx: &mut InnerEventReceiver) -> Option<InnerEvent> {
+pub async fn recv_next_inner_event_opt(rx: &mut InnerEventReceiver) -> Option<InnerEvent> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()?
@@ -987,4 +1014,27 @@ impl MultisigClientNoDB {
         let sign_info = SigningInfo::new(SIGN_CEREMONY_ID, key_id, MESSAGE_HASH.clone(), signers);
         self.process_multisig_instruction(MultisigInstruction::Sign(sign_info));
     }
+}
+
+pub async fn check_blamed_paries(rx: &mut InnerEventReceiver, expected: &[usize]) {
+    let blamed_parties = match check_inner_event(rx)
+        .await
+        .as_ref()
+        .expect("expected inner_event")
+    {
+        InnerEvent::SigningResult(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        InnerEvent::KeygenResult(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        _ => {
+            panic!("expected ceremony outcome");
+        }
+    };
+
+    assert_eq!(
+        blamed_parties,
+        &expected
+            .iter()
+            // Needs +1 to map from array idx to signer idx
+            .map(|idx| AccountId([*idx as u8 + 1; 32]))
+            .collect_vec()
+    );
 }

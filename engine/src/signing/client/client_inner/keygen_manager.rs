@@ -3,7 +3,10 @@ use std::{collections::HashMap, sync::Arc};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
-use crate::{p2p::AccountId, signing::KeygenInfo};
+use crate::{
+    p2p::AccountId,
+    signing::{KeygenInfo, KeygenOutcome},
+};
 
 use super::{
     client_inner::KeyGenMessageWrapped,
@@ -38,7 +41,28 @@ impl KeygenManager {
     }
 
     pub fn cleanup(&mut self) {
-        // todo!();
+        let mut events_to_send = vec![];
+
+        // Have to clone so it can be used inside the closure
+        let logger = &self.logger;
+        self.keygen_states.retain(|ceremony_id, state| {
+            if let Some(bad_nodes) = state.try_expiring() {
+                slog::warn!(logger, "Keygen state expired and will be abandoned");
+                let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
+
+                events_to_send.push(InnerEvent::KeygenResult(outcome));
+
+                false
+            } else {
+                true
+            }
+        });
+
+        for event in events_to_send {
+            if let Err(err) = self.event_sender.send(event) {
+                slog::error!(self.logger, "Unable to send event, error: {}", err);
+            }
+        }
     }
 
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
@@ -124,7 +148,10 @@ impl KeygenManager {
 #[cfg(test)]
 impl KeygenManager {
     pub fn expire_all(&mut self) {
-        // TODO
+        // TODO !!!
+        for (_, state) in &mut self.keygen_states {
+            state.set_expiry_time(std::time::Instant::now());
+        }
     }
 
     pub fn get_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
