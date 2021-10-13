@@ -84,9 +84,10 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			Nodes::<T>::get(validator_id)
-				.unwrap_or_default()
-				.is_online()
+			match Nodes::<T>::get(validator_id) {
+				None => false,
+				Some(node) => node.is_online(),
+			}
 		}
 	}
 
@@ -169,13 +170,7 @@ pub mod pallet {
 
 		fn stake_updated(validator_id: &Self::ValidatorId, _new_total: Self::Amount) {
 			if !Nodes::<T>::contains_key(validator_id) {
-				Nodes::<T>::insert(
-					validator_id,
-					Node {
-						is_validator: false,
-						..Default::default()
-					},
-				);
+				Nodes::<T>::insert(validator_id, Node::default());
 			}
 		}
 	}

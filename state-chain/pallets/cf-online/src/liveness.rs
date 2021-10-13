@@ -37,6 +37,7 @@ pub struct Node {
 	pub is_validator: bool,
 }
 
+/// The default node has submitted a heartbeat and is not a validator
 impl Default for Node {
 	fn default() -> Self {
 		Node {
