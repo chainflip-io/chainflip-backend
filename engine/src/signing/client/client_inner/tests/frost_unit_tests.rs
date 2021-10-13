@@ -89,7 +89,7 @@ async fn should_await_comm1_after_rts() {
 
     let key = keygen_states.key_ready.sec_keys[0].clone();
 
-    c1.signing_manager.on_request_to_sign(
+    c1.signing_manager.start_signing_data(
         MESSAGE_HASH.clone(),
         key,
         SIGNER_IDS.clone(),
@@ -118,7 +118,7 @@ async fn should_delay_comm1_before_rts() {
     let key = keygen_states.key_ready.sec_keys[0].clone();
 
     // when c1 receives a request to sign, it processes the delayed message
-    c1.signing_manager.on_request_to_sign(
+    c1.signing_manager.start_signing_data(
         MESSAGE_HASH.clone(),
         key,
         SIGNER_IDS.clone(),

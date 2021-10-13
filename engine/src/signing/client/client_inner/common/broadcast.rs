@@ -9,8 +9,6 @@ use super::{
     P2PSender,
 };
 
-// BroadcastStageProcessor is a bit weird a name I think
-
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
 pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
@@ -18,7 +16,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     /// during this stage
     type Message: Clone + Into<D> + TryFrom<D>;
 
-    /// Init the stage, returning the data to broadcast to??
+    /// Init the stage, returning the data to broadcast
     fn init(&self) -> Self::Message;
 
     /// For a given message, signal if it needs to be delayed
@@ -38,9 +36,12 @@ where
     P: BroadcastStageProcessor<D, Result>,
     Sender: P2PSender<Data = D>,
 {
+    // It looks like processor already contains `common` in each of the implementations, could probably
+    // be deduplicated
     common: CeremonyCommon<D, Sender>,
     /// Messages collected so far
     /// Map<destination node idx, message>
+    /// this is clear with a type alias instead `type SignerIdx = usize`
     messages: HashMap<usize, P::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
@@ -73,8 +74,7 @@ where
                 continue;
             }
 
-            // Could `send()` be inlined here? we have this trait abstraction
-            // and implementation abstraction, but it's only used once?
+            // Could `send()` be inlined here? we have this abstraction, but it's only used once?
             self.common.p2p_sender.send(*idx, data.clone());
         }
     }
@@ -104,7 +104,7 @@ where
     fn init(&mut self) {
         let message = self.processor.init();
 
-        // Save our own share
+        // what is happening here? save our own share of what?
         self.messages.insert(self.common.own_idx, message.clone());
 
         self.broadcast(message.into());
@@ -157,6 +157,7 @@ where
         self.processor.should_delay(m)
     }
 
+    /// Do the processing for this broadcast stage and return the result
     fn finalize(self: Box<Self>) -> StageResult<D, Result> {
         self.processor.process(self.messages)
     }

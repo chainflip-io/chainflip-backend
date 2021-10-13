@@ -119,6 +119,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     should_delay!(SigningData::LocalSigStage3);
 
+    // comments about "correctness" are a little misleading imo, it's only about consensus, not correctness, right?
+    // I'd also argue for this reason, we're not so much "verifying" broadcasts as we are "confirming"
     /// Verify that all values have been broadcast correctly during stage 1
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
         let verified_commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
@@ -176,6 +178,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             &self.common.all_idxs,
         )
 
+        // looks like you can use the zeroize lib to zeroize on drop. Might be a good thing
+        // to do for all secrets used throughout: https://docs.rs/zeroize/1.4.2/zeroize/#custom-derive-support
         // TODO: make sure secret nonces are deleted here (according to
         // step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
         // Zeroize memory if needed.
@@ -276,9 +280,9 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     }
 }
 
-// This might result in an error in case we don't get 2/3 of parties agreeing on the same value.
-// If we don't, this means that either the broadcaster did an inconsitent broadcast or that
-// 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
+// This might result in an error if we don't get 2/3 of parties agreeing on the same value.
+// If we don't, this means that either the broadcaster created an inconsitent broadcast or that
+// at least 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
 // for symmetry?)
 fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
     signer_idxs: &[usize],

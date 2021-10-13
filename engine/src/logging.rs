@@ -1,5 +1,6 @@
 // ==== Logging key constants ====
 pub const COMPONENT_KEY: &str = "component";
+pub const CEREMONY_ID_KEY: &str = "ceremony_id";
 
 pub mod utils {
     use slog::{o, Drain, Fuse, Level, OwnedKVList, Record};

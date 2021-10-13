@@ -22,6 +22,8 @@ use sha2::{Digest, Sha256};
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Secion 5.3 (page 13)
+// Related to my comment on zeroize, I guess if we have Zeroize implemented on drop
+// then this would matter less?
 // TODO: Not sure if it is a good idea to to make
 // the secret values clonable
 #[derive(Clone)]
@@ -34,7 +36,6 @@ pub struct SecretNoncePair {
     pub e_pub: Point,
 }
 
-// could inline this
 impl SecretNoncePair {
     pub fn generate_random_pair() -> Self {
         let d = Scalar::new_random();

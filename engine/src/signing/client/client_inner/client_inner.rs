@@ -171,6 +171,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
+    // -> keygen_manager
     keygen: KeygenManager,
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
@@ -283,7 +284,7 @@ where
             for signing_info in reqs {
                 slog::debug!(
                     self.logger,
-                    "Processing a pending requests to sign [ceremony_id: {}]",
+                    "Processing pending request to sign [ceremony_id: {}]",
                     signing_info.ceremony_id
                 );
 
@@ -321,8 +322,7 @@ where
         }
     }
 
-    /// Process message from another validator
-    /// all messages
+    /// Process a message from another validator
     pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
         let P2PMessage { sender_id, data } = p2p_message;
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
@@ -336,14 +336,16 @@ where
                     .process_keygen_message(sender_id, multisig_message)
                 {
                     self.on_key_generated(ceremony_id, key);
+                    // even with this being true, why not just delete the state here if we can?
+                    // letting it fall through is a bit harder to follow
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
             Ok(MultisigMessage::SigningMessage(multisig_message)) => {
                 // should this be "process signing request"
-                // and the other one be "process signing data"?
-                // the request happens
+                // and the other one be "process signing data"? - seems like these method names
+                // are the wrong way around
                 self.signing_manager
                     .process_signing_data(sender_id, multisig_message);
             }

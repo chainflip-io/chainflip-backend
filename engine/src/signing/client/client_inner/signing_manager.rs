@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
 use pallet_cf_vaults::CeremonyId;
+use slog::o;
 use tokio::sync::mpsc;
 
 use super::common::KeygenResultInfo;
 use super::frost::SigningDataWrapped;
 use super::InnerEvent;
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
 use crate::signing::{MessageHash, SigningOutcome};
@@ -58,12 +60,11 @@ impl SigningManager {
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(event) {
-                slog::error!(self.logger, "Unable to send event, error: {}", err);
-            }
+            self.event_sender.send(event).unwrap()
         }
     }
 
+    /// Doc comments
     pub fn start_signing_data(
         &mut self,
         data: MessageHash,
@@ -84,6 +85,7 @@ impl SigningManager {
                 "Request to sign contains more signers than necessary, truncating the list [ceremony_id: {}]",
                 ceremony_id
             );
+            // instead of having + 1s everywhere we could have a named, commented getter that does this
             signers.truncate(key_info.params.threshold + 1);
         }
         // ======= END HACK ======
@@ -97,10 +99,6 @@ impl SigningManager {
             return;
         }
 
-        // try combine
-        // y warn
-
-        // thhis is saying "We are not in the set of signers nominated"
         if !signers.contains(&self.id) {
             // TODO: alert
             slog::warn!(
@@ -111,7 +109,6 @@ impl SigningManager {
             return;
         }
 
-        // this is saying our account id is not existent for this key
         let our_idx = match key_info.get_idx(&self.id) {
             Some(idx) => idx,
             None => {
@@ -132,10 +129,11 @@ impl SigningManager {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
                 // TODO: alert
+                // all these logs need changing. Having the ceremony id like this means we can more easily search
+                // the logs for ceremony_id = N (in the log aggregator)
                 slog::warn!(
-                    self.logger,
-                    "Request to sign ignored: invalid signers [ceremony_id: {}]",
-                    ceremony_id
+                    self.logger.new(o!(CEREMONY_ID_KEY => ceremony_id)),
+                    "Request to sign ignored: invalid signers",
                 );
                 return;
             }
@@ -164,10 +162,9 @@ impl SigningManager {
         let SigningDataWrapped { data, ceremony_id } = wdata;
 
         slog::trace!(
-            self.logger,
-            "Received signing data {}: [ceremony_id: {}]",
+            self.logger.new(o!(CEREMONY_ID_KEY => ceremony_id)),
+            "Received signing data {}",
             &data,
-            ceremony_id
         );
 
         let state = self

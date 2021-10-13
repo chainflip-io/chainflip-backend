@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
 use crate::signing::{MessageHash, SigningOutcome};
@@ -81,6 +82,10 @@ impl AuthorisedSigningState {
     }
 }
 
+// The way we handle authorised and unauthorised seems a bit weird to me here...
+// Instead of having this implicit Option acting as what is practically a bool, could we instead
+// have a named enum that wraps SigningState, signalling if it has been authorised by our node or not?
+// or maybe just a struct that wraps it with a bool flag
 /// State for a signing ceremony (potentially unauthorised, i.e. without a corresponding request to sign)
 #[derive(Clone)]
 pub struct SigningState {
@@ -97,8 +102,7 @@ pub struct SigningState {
 const STAGE_DURATION: Duration = Duration::from_secs(15);
 
 impl SigningState {
-    // This could be inlined?
-    // or at least, it could be renamed to what it does, not when it's called
+    // could be renamed to what it does, not when it's called
     // e.g. `authorise_and_trigger_delayed_processing`
     /// Upgrade existing state to authorised (with a key) if it isn't already,
     /// and process any delayed messages
@@ -115,10 +119,9 @@ impl SigningState {
         event_sender: EventSender,
         logger: &slog::Logger,
     ) {
-        self.logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
+        // remove magic string
+        self.logger = logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-        // why would this be a sign of duplicate ceremony id?
-        // it's not exactly clear - I guess this would be resolved by the above TODO
         if self.inner.is_some() {
             slog::warn!(
                 self.logger,
@@ -227,7 +230,7 @@ impl SigningState {
                     "The value is only None for a brief period of time, when we swap states, below",
                 );
 
-                // this is already done in (what I've called) `start_signing_data` (on_request_to_sign)
+                // this is already done right? (in what I've called `start_signing_data` (on_request_to_sign))
                 // TODO: check that the party is a signer for this ceremony
 
                 // delay the data if we are not ready for it
@@ -251,17 +254,17 @@ impl SigningState {
 
                         // This is the only point at which we can get the result (apart from the timeout)
                         match state.finalize() {
-                            StageResult::NextStage(mut stage) => {
+                            StageResult::NextStage(mut next_stage) => {
                                 slog::debug!(
                                     self.logger,
                                     "Ceremony `{}` transitions to {}",
                                     authorised_state.ceremony_id,
-                                    &stage
+                                    &next_stage
                                 );
 
-                                stage.init();
+                                next_stage.init();
 
-                                authorised_state.stage = Some(stage);
+                                authorised_state.stage = Some(next_stage);
 
                                 // NOTE: we don't care when the state transition
                                 // actually happened as we don't want other parties
@@ -325,7 +328,7 @@ impl SigningState {
 
                     slog::warn!(
                         self.logger,
-                        "Signing ceremony expired before a request to sign, blaming parties: {:?}",
+                        "Signing ceremony expired before receiving a request to sign from our node, blaming parties: {:?}",
                         blamed_ids
                     );
 
@@ -333,7 +336,11 @@ impl SigningState {
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let bladed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
+                    let bladed_idx = authorised_state
+                        .stage
+                        .as_ref()
+                        .expect("stage should exist")
+                        .awaited_parties();
 
                     let blamed_ids = bladed_idx
                         .iter()
