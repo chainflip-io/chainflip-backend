@@ -399,8 +399,6 @@ jobs:
             --set global.testnet_id="$CIRCLE_BUILD_NUM"
             --set chainflip-engine.engine.backtrace=full
             --set global.chain=cf-dev
-            --set config.eth.stake_manager_eth_address="0x12B162Cbb0E1FbE6D3b5ce29C58a7D5c3BC54912"
-            --set config.eth.key_manager_eth_address="0x0fa750AFBe34619418fcb574910cf13737eaF49f"
             --wait
             --wait-for-jobs
       - run:
