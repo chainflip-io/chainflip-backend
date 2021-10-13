@@ -279,12 +279,16 @@ pub fn new_p2p_validator_network_node<
 				/// Identify ourselves to the network
 				fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
 					let mut state = self.state.lock().unwrap();
-					if let Some(_existing_id) = state.local_validator_id {
-						Err(jsonrpc_core::Error::invalid_params(
-							"Have already self identified",
-						))
+					let validator_id: AccountId = validator_id.into();
+					if let Some(existing_id) = state.local_validator_id {
+						if existing_id != validator_id {
+							Err(jsonrpc_core::Error::invalid_params(
+								format!("Have already self identified with a different AccountId. New Id: {:?}, Old Id: {:?}", validator_id, existing_id),
+							))
+						} else {
+							Ok(200)
+						}
 					} else {
-						let validator_id: AccountId = validator_id.into();
 						state.local_validator_id = Some(validator_id.clone());
 						encode_and_send(
 							&self.p2p_network_service,
