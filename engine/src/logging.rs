@@ -3,6 +3,8 @@ pub const COMPONENT_KEY: &str = "component";
 
 pub mod utils {
     use super::COMPONENT_KEY;
+    const KV_LIST_INDENT: &str = "    ";
+
     use slog::{o, Drain, Fuse, Key, Level, OwnedKVList, Record, Serializer, KV};
     use std::{fmt, result};
 
@@ -40,7 +42,7 @@ pub mod utils {
     impl Serializer for PrintlnSerializer {
         fn emit_arguments(&mut self, key: Key, val: &fmt::Arguments) -> Result<(), slog::Error> {
             if key != COMPONENT_KEY {
-                println!("  {} = {}", key, val);
+                println!("{}{} = {}", KV_LIST_INDENT, key, val);
             }
             Ok(())
         }
