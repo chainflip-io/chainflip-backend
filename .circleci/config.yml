@@ -76,7 +76,6 @@ workflows:
       - clone-contracts-repo:
           context:
             - github-credentials
-          <<: *only_main_branches
       - fmt-validator-package:
           context:
             - ghcr-credentials
@@ -105,14 +104,13 @@ workflows:
             - cargo-test-validator-package
       - cargo-build-and-test-validator-package:
           requires:
-            - fmt-validator-package
-            - clone-contracts-repo
+            - hold
           context:
             - ghcr-credentials
             - discord-webhooks
       - cargo-doc-validator-package:
           requires:
-            - fmt-validator-package
+            - hold
           context:
             - ghcr-credentials
       - test-single-node:
