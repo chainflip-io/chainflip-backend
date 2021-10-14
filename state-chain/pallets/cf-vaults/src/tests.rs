@@ -179,14 +179,14 @@ mod tests {
 			assert_eq!(VaultsPallet::eth_vault().current_key, new_public_key);
 
 			let outgoing = VaultsPallet::active_windows(
-				Chain::Ethereum,
 				cf_traits::mocks::epoch_info::Mock::epoch_index(),
+				Chain::Ethereum,
 			);
 
 			// Confirm we have the new set of active windows for Ethereum
 			let incoming = VaultsPallet::active_windows(
-				Chain::Ethereum,
 				cf_traits::mocks::epoch_info::Mock::epoch_index() + 1,
+				Chain::Ethereum,
 			);
 
 			assert!(outgoing.from == 0 && outgoing.to.is_some());

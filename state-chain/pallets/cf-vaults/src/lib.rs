@@ -134,9 +134,9 @@ pub mod pallet {
 	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		Chain,
-		Blake2_128Concat,
 		<T::EpochInfo as EpochInfo>::EpochIndex,
+		Blake2_128Concat,
+		Chain,
 		BlockHeightWindow,
 		ValueQuery,
 	>;
@@ -457,8 +457,8 @@ impl<T: Config>
 
 							// Set the leaving block number for the outgoing set for this epoch
 							ActiveWindows::<T>::mutate(
-								Chain::Ethereum,
 								T::EpochInfo::epoch_index(),
+								Chain::Ethereum,
 								|outgoing_set| {
 									(*outgoing_set).to =
 										Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
@@ -467,8 +467,8 @@ impl<T: Config>
 
 							// Record this new incoming set for the next epoch
 							ActiveWindows::<T>::insert(
-								Chain::Ethereum,
 								T::EpochInfo::epoch_index().saturating_add(1u32.into()),
+								Chain::Ethereum,
 								BlockHeightWindow {
 									from: block_number,
 									to: None,
