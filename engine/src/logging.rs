@@ -79,8 +79,8 @@ pub mod utils {
     /// Prints an easy to read log and the list of key/values. eg:
     /// ```sh
     /// [level] <module::module> - <msg>
-    ///     <Key> - <value>
-    ///     <Key> - <value>
+    ///     <Key> = <value>
+    ///     <Key> = <value>
     /// ```
     pub fn create_cli_logger_verbose() -> slog::Logger {
         slog::Logger::root(Fuse(PrintlnDrainVerbose), o!())
