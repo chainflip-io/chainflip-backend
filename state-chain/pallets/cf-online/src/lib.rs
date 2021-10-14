@@ -107,6 +107,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// A heartbeat has already been submitted for this node
 		AlreadySubmittedHeartbeat,
+		/// Not a valid node
+		UnknownNode,
 	}
 
 	#[pallet::call]
@@ -117,16 +119,16 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			let node = Nodes::<T>::get(&validator_id);
+			ensure!(node.is_some(), Error::<T>::UnknownNode);
 			// Ensure we haven't had a heartbeat during this interval for this node
 			ensure!(
-				!Nodes::<T>::get(&validator_id)
-					.unwrap_or_default()
-					.has_submitted(),
+				!node.expect("node available").has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
 			// Update this node
 			Nodes::<T>::mutate(&validator_id, |maybe_node| {
-				if let Some(mut node) = maybe_node {
+				if let Some(node) = maybe_node.as_mut() {
 					node.update_current_interval(true);
 				}
 			});
