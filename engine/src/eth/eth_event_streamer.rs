@@ -16,6 +16,27 @@ pub struct Event<EventEnum: Debug> {
     pub tx_hash: [u8; 32],
     pub event_enum: EventEnum,
 }
+impl<EventEnum: Debug> Event<EventEnum> {
+    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(decode_log: &LogDecoder, log: Log) -> Result<Self> {
+        Ok(Event {
+            tx_hash: log
+                .transaction_hash
+                .ok_or_else(|| {
+                    anyhow::Error::msg("Could not get transaction hash from ETH log")
+                })?
+                .to_fixed_bytes(),
+            event_enum: decode_log(
+                *log.topics.first().ok_or_else(|| {
+                    anyhow::Error::msg("Could not get event signature from ETH log")
+                })?,
+                RawLog {
+                    topics: log.topics,
+                    data: log.data.0,
+                },
+            )?,
+        })
+    }
+}
 
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
@@ -85,23 +106,7 @@ pub async fn new_eth_event_stream<
         .map(
             move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
                 let result_event = result_unparsed_log.and_then(|log| {
-                    Ok(Event {
-                        tx_hash: log
-                            .transaction_hash
-                            .ok_or_else(|| {
-                                anyhow::Error::msg("Could not get transaction hash from ETH log")
-                            })?
-                            .to_fixed_bytes(),
-                        event_enum: decode_log(
-                            *log.topics.first().ok_or_else(|| {
-                                anyhow::Error::msg("Could not get event signature from ETH log")
-                            })?,
-                            RawLog {
-                                topics: log.topics,
-                                data: log.data.0,
-                            },
-                        )?,
-                    })
+                    Event::decode(&decode_log, log)
                 });
 
                 slog::debug!(
