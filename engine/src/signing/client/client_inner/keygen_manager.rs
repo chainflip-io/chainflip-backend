@@ -4,6 +4,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
 use crate::{
+    logging::CEREMONY_ID_KEY,
     p2p::AccountId,
     signing::{KeygenInfo, KeygenOutcome},
 };
@@ -71,14 +72,15 @@ impl KeygenManager {
             signers,
         } = keygen_info;
 
+        let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
         // TODO: check the number of participants?
 
         if !signers.contains(&self.id) {
             // TODO: alert
             slog::warn!(
-                self.logger,
-                "Keygen request ignored: we are not among participants: [ceremony_id: {}]",
-                ceremony_id
+                logger,
+                "Keygen request ignored: we are not among participants",
             );
 
             return;
@@ -92,11 +94,7 @@ impl KeygenManager {
                 // This should be impossible because of the check above,
                 // but I don't like unwrapping (would be better if we
                 // could combine this with the check above)
-                slog::warn!(
-                    self.logger,
-                    "Request to sign ignored: could not derive our idx [ceremony_id: {}]",
-                    ceremony_id
-                );
+                slog::warn!(logger, "Request to sign ignored: could not derive our idx");
                 return;
             }
         };
@@ -106,11 +104,7 @@ impl KeygenManager {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
                 // TODO: alert
-                slog::warn!(
-                    self.logger,
-                    "Request to sign ignored: invalid signers [ceremony_id: {}]",
-                    ceremony_id
-                );
+                slog::warn!(logger, "Request to sign ignored: invalid signers");
                 return;
             }
         };
@@ -141,7 +135,16 @@ impl KeygenManager {
             .entry(ceremony_id)
             .or_insert(KeygenState::new_unauthorised(self.logger.clone()));
 
-        state.process_message(sender_id, data)
+        let res = state.process_message(sender_id, data);
+
+        // TODO: this is not a complete solution, we need to clean up the state
+        // when it is failed too
+        if res.is_some() {
+            debug_assert!(self.keygen_states.remove(&ceremony_id).is_some());
+            slog::debug!(self.logger, "Removed a successfully finished keygen ceremony"; "ceremony_id" => ceremony_id);
+        }
+
+        res
     }
 }
 

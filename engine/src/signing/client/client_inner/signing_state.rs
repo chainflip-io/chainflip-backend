@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
 use crate::signing::{MessageHash, SigningOutcome};
@@ -117,7 +118,7 @@ impl SigningState {
         }
 
         // Use the updated logger once we know the ceremony id
-        self.logger = self.logger.new(slog::o!("ceremony_id" => ceremony_id));
+        self.logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         let common = CeremonyCommon {
             ceremony_id,

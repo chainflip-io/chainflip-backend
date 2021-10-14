@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 use crate::signing::client::client_inner::common::broadcast::BroadcastStage;
 use crate::signing::client::client_inner::common::{
@@ -76,7 +77,7 @@ impl KeygenState {
         own_idx: usize,
         all_idxs: Vec<usize>,
     ) {
-        self.logger = self.logger.new(slog::o!("ceremony_id" => ceremony_id));
+        self.logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         let common = CeremonyCommon {
             ceremony_id,
@@ -171,10 +172,10 @@ impl KeygenState {
                                 self.should_expire_at += STAGE_DURATION;
 
                                 self.process_delayed();
-
-                                // TODO: Should delete this state
                             }
-                            StageResult::Error(_) => todo!(),
+                            StageResult::Error(_) => {
+                                // TODO: should delete this state
+                            }
                             StageResult::Done(keygen_result) => {
                                 slog::debug!(
                                     self.logger,

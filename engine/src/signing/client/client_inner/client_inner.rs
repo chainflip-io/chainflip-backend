@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
+    logging::CEREMONY_ID_KEY,
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, PendingSigningInfo},
@@ -245,9 +246,9 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a keygen request, ceremony_id: {}, participants: {:?}",
-                    keygen_info.ceremony_id,
-                    keygen_info.signers
+                    "Received a keygen request, participants: {:?}",
+                    keygen_info.signers;
+                    CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
                 self.keygen.on_keygen_request(keygen_info);
@@ -257,10 +258,9 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a request to sign, ceremony_id: {}, message_hash: {}, signers: {:?}",
-                    sign_info.ceremony_id,
-                    sign_info.data,
-                    sign_info.signers
+                    "Received a request to sign, message_hash: {}, signers: {:?}",
+                    sign_info.data, sign_info.signers;
+                    CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
                 match self.key_store.get_key(&key_id) {
                     Some(key) => {
@@ -276,9 +276,9 @@ where
 
                         slog::debug!(
                             self.logger,
-                            "Delaying a request to sign for unknown key: {:?} [ceremony_id: {}]",
-                            sign_info.key_id,
-                            sign_info.ceremony_id
+                            "Delaying a request to sign for unknown key: {:?}",
+                            sign_info.key_id;
+                            CEREMONY_ID_KEY => sign_info.ceremony_id
                         );
 
                         self.pending_requests_to_sign
@@ -301,8 +301,8 @@ where
                 let signing_info = pending.signing_info;
                 slog::debug!(
                     self.logger,
-                    "Processing a pending requests to sign [ceremony_id: {}]",
-                    signing_info.ceremony_id
+                    "Processing a pending requests to sign";
+                    CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
                 self.signing_manager.on_request_to_sign(

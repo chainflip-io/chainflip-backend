@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use super::common::KeygenResultInfo;
 use super::frost::SigningDataWrapped;
 use super::InnerEvent;
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
 use crate::signing::client::client_inner::utils::project_signers;
@@ -72,38 +73,30 @@ impl SigningManager {
         mut signers: Vec<AccountId>,
         ceremony_id: CeremonyId,
     ) {
-        slog::debug!(
-            self.logger,
-            "Processing a request to sign [ceremony_id: {}]",
-            ceremony_id
-        );
+        let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
+        slog::debug!(logger, "Processing a request to sign");
 
         // Hack to truncate the signers
         if signers.len() > (key_info.params.threshold + 1) {
             slog::warn!(
-                self.logger,
-                "Request to sign contains more signers than necessary, truncating the list [ceremony_id: {}]",
-                ceremony_id
+                logger,
+                "Request to sign contains more signers than necessary, truncating the list",
             );
             signers.truncate(key_info.params.threshold + 1);
         }
 
         if signers.len() != key_info.params.threshold + 1 {
             slog::warn!(
-                self.logger,
-                "Request to sign ignored: incorrect number of signers [ceremony_id: {}]",
-                ceremony_id
+                logger,
+                "Request to sign ignored: incorrect number of signers"
             );
             return;
         }
 
         if !signers.contains(&self.id) {
             // TODO: alert
-            slog::warn!(
-                self.logger,
-                "Request to sign ignored: we are not among signers [ceremony_id: {}]",
-                ceremony_id
-            );
+            slog::warn!(logger, "Request to sign ignored: we are not among signers");
             return;
         }
 
@@ -113,11 +106,7 @@ impl SigningManager {
                 // This should be impossible because of the check above,
                 // but I don't like unwrapping (would be better if we
                 // could combine this with the check above)
-                slog::warn!(
-                    self.logger,
-                    "Request to sign ignored: could not derive our idx [ceremony_id: {}]",
-                    ceremony_id
-                );
+                slog::warn!(logger, "Request to sign ignored: could not derive our idx");
                 return;
             }
         };
@@ -127,11 +116,7 @@ impl SigningManager {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
                 // TODO: alert
-                slog::warn!(
-                    self.logger,
-                    "Request to sign ignored: invalid signers [ceremony_id: {}]",
-                    ceremony_id
-                );
+                slog::warn!(logger, "Request to sign ignored: invalid signers");
                 return;
             }
         };
@@ -159,12 +144,7 @@ impl SigningManager {
 
         let SigningDataWrapped { data, ceremony_id } = wdata;
 
-        slog::trace!(
-            self.logger,
-            "Received signing data {}: [ceremony_id: {}]",
-            &data,
-            ceremony_id
-        );
+        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = self.logger.clone();
         let state = self

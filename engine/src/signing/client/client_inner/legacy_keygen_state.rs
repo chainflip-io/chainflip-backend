@@ -79,7 +79,7 @@ impl LegacyKeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(slog::o!("ceremony_id" => ceremony_id)),
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         };
 
         state.initiate_keygen_inner();
