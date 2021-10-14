@@ -24,7 +24,7 @@ use anyhow::Result;
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 
-use super::{SharedEvent, decode_shared_event_closure, eth_event_streamer::Event};
+use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(
@@ -66,15 +66,14 @@ pub async fn start_stake_manager_witness(
                         )
                         .await;
                 }
-                StakeManagerEvent::ClaimExecuted {
-                    account_id,
-                    amount,
-                } => {
+                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                     state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id, amount, event.tx_hash,
+                                account_id,
+                                amount,
+                                event.tx_hash,
                             ),
                         )
                         .await;
@@ -257,8 +256,7 @@ impl StakeManager {
                     Ok(event)
                 } else {
                     Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
-                        signature,
-                        raw_log,
+                        signature, raw_log,
                     )?))
                 }
             },

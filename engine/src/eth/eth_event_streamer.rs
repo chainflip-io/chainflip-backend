@@ -82,32 +82,37 @@ pub async fn new_eth_event_stream<
     Ok(tokio_stream::iter(past_logs)
         .map(Ok)
         .chain(future_logs)
-        .map(move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
-            let result_event = result_unparsed_log.and_then(|log| {
-                Ok(Event {
-                    tx_hash : log.transaction_hash.ok_or_else(|| {
-                        anyhow::Error::msg("Could not get transaction hash from ETH log")
-                    })?.to_fixed_bytes(),
-                    event_enum: decode_log(
-                        *log.topics.first().ok_or_else(|| {
-                            anyhow::Error::msg("Could not get event signature from ETH log")
-                        })?,
-                        RawLog {
-                            topics: log.topics,
-                            data: log.data.0,
-                        },
-                    )?
-                })
-            });
+        .map(
+            move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
+                let result_event = result_unparsed_log.and_then(|log| {
+                    Ok(Event {
+                        tx_hash: log
+                            .transaction_hash
+                            .ok_or_else(|| {
+                                anyhow::Error::msg("Could not get transaction hash from ETH log")
+                            })?
+                            .to_fixed_bytes(),
+                        event_enum: decode_log(
+                            *log.topics.first().ok_or_else(|| {
+                                anyhow::Error::msg("Could not get event signature from ETH log")
+                            })?,
+                            RawLog {
+                                topics: log.topics,
+                                data: log.data.0,
+                            },
+                        )?,
+                    })
+                });
 
-            slog::debug!(
-                logger,
-                "Received ETH log, parsing result: {:?}",
+                slog::debug!(
+                    logger,
+                    "Received ETH log, parsing result: {:?}",
+                    result_event
+                );
+
                 result_event
-            );
-
-            result_event
-        }))
+            },
+        ))
 }
 
 #[cfg(test)]

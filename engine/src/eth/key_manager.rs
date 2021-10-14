@@ -49,11 +49,19 @@ pub async fn start_key_manager_witness(
             let event = result_event.unwrap();
             match event.event_enum {
                 KeyManagerEvent::KeyChange { .. } => {
-                    slog::info!(logger, "Keychain event found: {}", hex::encode(event.tx_hash));
+                    slog::info!(
+                        logger,
+                        "Keychain event found: {}",
+                        hex::encode(event.tx_hash)
+                    );
                 }
                 KeyManagerEvent::Shared(shared_event) => match shared_event {
                     SharedEvent::Refunded { .. } => {
-                        slog::info!(logger, "Refunded event found: {}", hex::encode(event.tx_hash));
+                        slog::info!(
+                            logger,
+                            "Refunded event found: {}",
+                            hex::encode(event.tx_hash)
+                        );
                     }
                     SharedEvent::RefundFailed { .. } => {
                         slog::info!(
@@ -170,9 +178,7 @@ impl KeyManager {
         .await
     }
 
-    pub fn decode_log_closure(
-        &self,
-    ) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
+    pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
@@ -188,8 +194,7 @@ impl KeyManager {
                     })
                 } else {
                     Ok(KeyManagerEvent::Shared(decode_shared_event_closure(
-                        signature,
-                        raw_log,
+                        signature, raw_log,
                     )?))
                 }
             },
