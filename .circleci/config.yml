@@ -85,6 +85,24 @@ workflows:
             - fmt-validator-package
           context:
             - ghcr-credentials
+      - cargo-check-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+      - cargo-test-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+      - hold:
+          type: approval
+          requires:
+            - clone-contracts-repo
+            - fmt-validator-package
+            - cargo-check-validator-package
+            - cargo-clippy-validator-package
+            - cargo-test-validator-package
       - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
