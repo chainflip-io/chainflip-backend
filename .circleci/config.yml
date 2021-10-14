@@ -52,7 +52,7 @@ commands:
 
   merge_branch:
     steps:
-      - run: apt-get install jq
+      - run: apt-get install -y jq
       - run: |
           # setup the github user
           git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
