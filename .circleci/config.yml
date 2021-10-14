@@ -56,11 +56,13 @@ commands:
         default: develop
     steps:
       - run: apt-get install -y jq
-      - run: |
-          # setup the github user
-          git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
-          git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
-          git fetch && git merge origin/<<parameters.target>> --no-edit
+      - run:
+          name: Merge "<<parameters.target>>" in your branch
+          command: |
+            # setup the github user
+            git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
+            git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
+            git fetch && git merge origin/<<parameters.target>> --no-edit
 ######################## /Commands ########################
 
 ######################## Workflows ########################
