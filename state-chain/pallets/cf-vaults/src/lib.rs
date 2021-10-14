@@ -55,7 +55,7 @@ pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
-use sp_runtime::traits::{One, Saturating};
+use sp_runtime::traits::One;
 
 pub mod crypto;
 mod ethereum;
@@ -71,7 +71,7 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSigTruncPubkey;
-	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
+	use cf_traits::{Chainflip, EpochIndex, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -136,7 +136,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		Chain,
 		Blake2_128Concat,
-		<T::EpochInfo as EpochInfo>::EpochIndex,
+		EpochIndex,
 		BlockHeightWindow,
 		ValueQuery,
 	>;
