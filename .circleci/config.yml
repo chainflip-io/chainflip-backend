@@ -49,7 +49,7 @@ parameters:
 ######################## /Config ########################
 ######################## Commands ########################
 commands:
-  merge_branch:
+  merge_target:
     parameters:
       target:
         type: string
