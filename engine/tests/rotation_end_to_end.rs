@@ -76,6 +76,7 @@ pub async fn vault_rotation_end_to_end() {
                             assert_eq!(order_counter, 1);
                             assert_eq!(ceremony_id, 1);
                             order_counter += 1;
+                            block_counter = 0;
                         }
                         state_chain_runtime::Event::pallet_cf_vaults(
                             pallet_cf_vaults::Event::ThresholdSignatureRequest(
@@ -91,6 +92,7 @@ pub async fn vault_rotation_end_to_end() {
                             assert_eq!(order_counter, 2);
                             assert_eq!(ceremony_id, 1);
                             order_counter += 1;
+                            block_counter = 0;
                         }
                         state_chain_runtime::Event::pallet_cf_validator(
                             pallet_cf_validator::Event::NewEpoch(epoch_index),
