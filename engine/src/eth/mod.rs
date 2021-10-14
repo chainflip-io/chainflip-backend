@@ -151,13 +151,12 @@ fn decode_shared_event_closure(
         move |signature: H256, raw_log: ethabi::RawLog| -> Result<SharedEvent> {
             if signature == refunded.signature {
                 let log = refunded.event.parse_log(raw_log)?;
-                let event = SharedEvent::Refunded {
+                Ok(SharedEvent::Refunded {
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                };
-                Ok(event)
+                })
             } else if signature == refund_failed.signature {
                 let log = refund_failed.event.parse_log(raw_log)?;
-                let event = SharedEvent::RefundFailed {
+                Ok(SharedEvent::RefundFailed {
                     to: utils::decode_log_param::<ethabi::Address>(&log, "to")?,
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     current_balance: utils::decode_log_param::<ethabi::Uint>(
@@ -165,8 +164,7 @@ fn decode_shared_event_closure(
                         "currentBalance",
                     )?
                     .as_u128(),
-                };
-                Ok(event)
+                })
             } else {
                 Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
                     signature,

@@ -358,9 +358,6 @@ mod tests {
 
         let key_manager = KeyManager::new(&settings).unwrap();
 
-        let key_change_event_signature =
-            H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
-                .unwrap();
         let transaction_hash =
             H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52")
                 .unwrap();
@@ -369,7 +366,8 @@ mod tests {
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
-                topics: vec![key_change_event_signature],
+                topics: vec![H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
+                .unwrap()],
                 data: web3::types::Bytes(hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
                 block_hash: None,
                 block_number: None,

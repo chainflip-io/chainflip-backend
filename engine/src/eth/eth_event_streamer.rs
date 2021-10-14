@@ -11,6 +11,7 @@ use web3::{
     Web3,
 };
 
+/// Type for storing event information that all events have (i.e. tx_hash)
 #[derive(Debug)]
 pub struct Event<EventEnum: Debug> {
     pub tx_hash: [u8; 32],
