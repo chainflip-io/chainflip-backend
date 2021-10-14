@@ -89,61 +89,49 @@ workflows:
           dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
-  chainflip-backend-checks:
-    jobs:
-      - fmt-validator-package:
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-check-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-test-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-clippy-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-doc-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
 
-  chainflip-backend-release:
+  chainflip-backend-workflow:
     jobs:
       - fmt-validator-package:
           context:
             - ghcr-credentials
-          <<: *only_main_branches
       - cargo-clippy-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
-          <<: *only_main_branches
       - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
             - discord-webhooks
-          <<: *only_main_branches
       - cargo-doc-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+      - test-single-node:
+          requires:
+            - cargo-build-and-test-validator-package
+          context:
+            - ghcr-credentials
+            - do-credentials
+            - infura-endpoints
+            - aws-credentials
+      - clone-contracts-repo:
+          requires:
+            - fmt-validator-package
+          context:
+            - github-credentials
+          <<: *only_main_branches
+      - run-integration-tests:
+          requires:
+            - clone-contracts-repo
+            - cargo-build-and-test-validator-package
+          context:
+            - ghcr-credentials
+            - discord-webhooks
           <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
@@ -165,28 +153,8 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - test-single-node:
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-            - do-credentials
-            - infura-endpoints
-            - aws-credentials
-          <<: *only_main_branches
 
-  chainflip-integration-tests:
-    <<: *nightly
-    jobs:
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-      - run-integration-tests:
-          requires:
-            - clone-contracts-repo
-          context:
-            - ghcr-credentials
-            - discord-webhooks
+
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
