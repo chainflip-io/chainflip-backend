@@ -216,6 +216,7 @@ jobs:
     executor: rust-poetry
     steps:
       - checkout
+      - run: git merge develop
       - attach_workspace:
           at: ./
       - run: sccache --show-stats
@@ -255,6 +256,7 @@ jobs:
     executor: rust-poetry
     steps:
       - checkout
+      - run: git merge develop
       - run: sccache --show-stats
       - run: |
           cargo build --locked --release
