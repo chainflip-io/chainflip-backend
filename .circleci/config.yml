@@ -377,4 +377,6 @@ jobs:
             curl
             --url 'http://localhost:5555/health'
             -vv
+      - store_artifacts:
+          path: target/release
 ######################## /Jobs ########################
