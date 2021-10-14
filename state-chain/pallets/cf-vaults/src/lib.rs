@@ -452,23 +452,23 @@ impl<T: Config>
 							// This is roughly the number of blocks for 14 days in Ethereum
 							const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
 
-							// Record this new incoming set for the current epoch
-							ActiveWindows::<T>::insert(
-								Chain::Ethereum,
-								T::EpochInfo::epoch_index(),
-								BlockHeightWindow {
-									from: block_number,
-									to: None,
-								},
-							);
-
-							// Set the leaving block number for the outgoing set
+							// Set the leaving block number for the outgoing set for this epoch
 							ActiveWindows::<T>::mutate(
 								Chain::Ethereum,
-								T::EpochInfo::epoch_index().saturating_sub(1u32.into()),
+								T::EpochInfo::epoch_index(),
 								|outgoing_set| {
 									(*outgoing_set).to =
 										Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+								},
+							);
+
+							// Record this new incoming set for the next epoch
+							ActiveWindows::<T>::insert(
+								Chain::Ethereum,
+								T::EpochInfo::epoch_index().saturating_add(1u32.into()),
+								BlockHeightWindow {
+									from: block_number,
+									to: None,
 								},
 							);
 
