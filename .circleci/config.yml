@@ -218,12 +218,6 @@ jobs:
       - run: |
           cargo build --locked --release
           sccache --show-stats
-      - run:
-          name: Wait for port 8545 to be open. (Hardhat)
-          command: |
-            while ! nc -z localhost 8545; do
-              sleep 0.1
-            done
       - run: |
           cargo test --locked --release
           sccache --show-stats
