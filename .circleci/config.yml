@@ -73,6 +73,10 @@ workflows:
 
   chainflip-backend-workflow:
     jobs:
+      - clone-contracts-repo:
+          context:
+            - github-credentials
+          <<: *only_main_branches
       - fmt-validator-package:
           context:
             - ghcr-credentials
@@ -100,12 +104,6 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
-      - clone-contracts-repo:
-          requires:
-            - fmt-validator-package
-          context:
-            - github-credentials
-          <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine

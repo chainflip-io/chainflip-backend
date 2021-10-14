@@ -13,6 +13,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         lld \
         python3-dev
 
+# Set environment
+ENV PATH="/root/.cargo/bin:${PATH}"
+ENV RUSTC_WRAPPER=sccache
+
 # Download and install sccache https://github.com/mozilla/sccache
 ARG SCCACHE_VER="0.2.15"
 RUN curl -fsSLo /tmp/sccache.tgz \
@@ -21,12 +25,14 @@ RUN curl -fsSLo /tmp/sccache.tgz \
  && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
  && rm -rf /tmp/*
 
-# Set sccache as the default compiler cache
-ENV RUSTC_WRAPPER=sccache
-
 ARG NIGHTLY=nightly-2021-03-24
 # Download and set nightly as the default Rust compiler
 RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
     && rustup component add rustfmt \
     && rustup component add clippy
+
+ARG DOCKERIZE_VERSION="v0.3.0"
+RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+     && sudo tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz

@@ -27,18 +27,20 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 ENV RUSTC_WRAPPER=sccache
 
-# Download and set nightly as the default Rust compiler
-RUN rustup default nightly-2021-03-24 \
-    && rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24 \
-    && rustup component add rustfmt
-
 # Download and install sccache https://github.com/mozilla/sccache
 ARG SCCACHE_VER="0.2.15"
 RUN curl -fsSLo /tmp/sccache.tgz \
-    https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VER}/sccache-v${SCCACHE_VER}-x86_64-unknown-linux-musl.tar.gz \
-    && tar -xzf /tmp/sccache.tgz -C /tmp --strip-components=1 \
-    && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
-    && rm -rf /tmp/*
+ https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VER}/sccache-v${SCCACHE_VER}-x86_64-unknown-linux-musl.tar.gz \
+ && tar -xzf /tmp/sccache.tgz -C /tmp --strip-components=1 \
+ && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
+ && rm -rf /tmp/*
+
+ARG NIGHTLY=nightly-2021-03-24
+# Download and set nightly as the default Rust compiler
+RUN rustup default ${NIGHTLY} \
+    && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
+    && rustup component add rustfmt \
+    && rustup component add clippy
 
 ARG DOCKERIZE_VERSION="v0.3.0"
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
