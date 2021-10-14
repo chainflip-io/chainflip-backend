@@ -136,7 +136,7 @@ pub enum SharedEvent {
         to: ethabi::Address,
         /// The amount of ETH to refund
         amount: u128,
-        /// The contract' current balance
+        /// The contract's current balance
         current_balance: u128,
     },
 }

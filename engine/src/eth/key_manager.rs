@@ -51,7 +51,7 @@ pub async fn start_key_manager_witness(
                 KeyManagerEvent::KeyChange { .. } => {
                     slog::info!(
                         logger,
-                        "Keychain event found: {}",
+                        "KeyChange event found: {}",
                         hex::encode(event.tx_hash)
                     );
                 }
@@ -66,7 +66,7 @@ pub async fn start_key_manager_witness(
                     SharedEvent::RefundFailed { .. } => {
                         slog::info!(
                             logger,
-                            "Refund Failed event found: {}",
+                            "RefundFailed event found: {}",
                             hex::encode(event.tx_hash)
                         );
                     }
