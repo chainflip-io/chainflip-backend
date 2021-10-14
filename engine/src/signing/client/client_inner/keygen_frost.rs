@@ -87,6 +87,8 @@ pub fn generate_dkg_challenge(
     ECScalar::from(&BigInt::from_bytes(&x))
 }
 
+/// `context` should be a deterministic random string for better security
+// TODO: hash the ceremony id + the list of signers?
 pub fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
     let nonce = Scalar::new_random();
     let nonce_commitment = Point::generator() * nonce;
@@ -103,7 +105,7 @@ pub fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZK
     }
 }
 
-// MAXIM: shares should be sent after participants have exchanged commitments
+// NOTE: shares should be sent after participants have exchanged commitments
 pub fn generate_secret_and_shares(
     n: usize,
     t: usize,
@@ -202,7 +204,6 @@ fn basic_sharing() {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoefficientCommitments(pub Vec<Point>);
 
-// MAXIM: use existing Signature type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZKPSignature {
     pub r: Point,
@@ -229,7 +230,6 @@ fn keygen_sequential() {
 
     let ceremony_id = 2;
 
-    // MAXIM: this should be a deterministic random string
     let context = ceremony_id.to_string();
 
     let (commitments, outgoing_shares): (Vec<_>, Vec<_>) = (1..=n)
@@ -282,7 +282,7 @@ fn keygen_sequential() {
             .reduce(|acc, share| acc + share)
             .unwrap();
 
-        // MAXIM: delete all received_shares
+        // TODO: delete all received_shares
 
         secret_shares.push(secret_share);
     }

@@ -42,7 +42,8 @@ impl AwaitCommitments1 {
 
         let (secret, commitments, shares) = generate_secret_and_shares(n, t);
 
-        // MAXIM: this should be a deterministic random string
+        // TODO: use a deterministic random string here for more security
+        // (hash ceremony_id + the list of signers?)
         let context = ceremony_id.to_string();
 
         // Zero-knowledge proof of `secret`
@@ -139,7 +140,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             }
         };
 
-        // MAXIM: context should be a deterministic random string
         let context = self.common.ceremony_id.to_string();
 
         let failed_parties: Vec<_> = verified_commitments
