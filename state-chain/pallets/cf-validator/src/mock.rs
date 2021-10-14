@@ -184,14 +184,11 @@ parameter_types! {
 	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
-pub(super) type EpochIndex = u32;
-
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
-	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
