@@ -167,7 +167,15 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-
+      - test-single-node:
+          requires:
+            - build-chainflip-engine
+            - build-state-chain-node
+          context:
+            - ghcr-credentials
+            - do-credentials
+            - infura-endpoints
+          <<: *only_epic_branches
 
 ######################## /Workflows ########################
 
@@ -303,7 +311,7 @@ jobs:
       - checkout
       - run: sccache --show-stats
       - run: |
-          cargo check --locked --release
+          cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
