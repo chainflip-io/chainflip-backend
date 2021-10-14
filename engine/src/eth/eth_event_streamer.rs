@@ -11,10 +11,12 @@ use web3::{
     Web3,
 };
 
-/// Type for storing event information that all events have (i.e. tx_hash)
+/// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug)]
 pub struct Event<EventEnum: Debug> {
+    /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
+    /// The event specific parameters
     pub event_enum: EventEnum,
 }
 impl<EventEnum: Debug> Event<EventEnum> {
