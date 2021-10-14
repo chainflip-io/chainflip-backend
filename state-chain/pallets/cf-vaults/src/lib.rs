@@ -444,7 +444,10 @@ impl<T: Config>
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
-			VaultRotationResponse::Success { tx_hash, block_number } => {
+			VaultRotationResponse::Success {
+				tx_hash,
+				block_number,
+			} => {
 				if let Some(vault_rotation) = ActiveChainVaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
 					match vault_rotation.keygen_request.chain {
@@ -478,7 +481,7 @@ impl<T: Config>
 									.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
 								tx_hash,
 							)
-						},
+						}
 					}
 				}
 				// This request is complete
