@@ -243,7 +243,7 @@ pub async fn start<BlockStream>(
                                                     VaultRotationResponse::Success {
                                                         tx_hash: tx_hash.as_bytes().to_vec(),
                                                         // TODO: get this from the key change event
-                                                        block_number: 0, 
+                                                        block_number: 0,
                                                     }
                                                 }
                                                 Err(e) => {
