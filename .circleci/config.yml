@@ -187,8 +187,7 @@ jobs:
     steps:
       - checkout
       - run: >
-          ls
-          # cargo fmt --all -- --check
+          cargo fmt --all -- --check
 
   # Compile and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
