@@ -270,7 +270,7 @@ mod tests {
         // All log data for these tests was obtained from the events in the `deploy_and` script:
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
 
-        // All the key strings in this test are decimal pub keys from the priv keys in the consts.py script
+        // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
         let settings = settings::test_utils::new_test_settings().unwrap();

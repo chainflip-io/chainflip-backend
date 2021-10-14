@@ -43,45 +43,46 @@ pub async fn test_all_key_manager_events() {
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
+    // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
+    // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+
+    km_events
+            .iter()
+            .find(|event| match event {
+            KeyManagerEvent::AggKeySetByAggKey {
+                old_key, new_key, ..
+            } => {
+                assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                true
+            },
+            _ => false,
+        }).expect("Didn't find AggKeySetByAggKey event");
+
     km_events
         .iter()
         .find(|event| match event {
-            // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
-            // All the key strings in this test are decimal pub keys from the priv keys in the consts.py script
-            // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-
-            KeyManagerEvent::AggKeySetByAggKey {
-                old_key,
-                new_key,
-                ..
-            } => {
-                assert_eq!(new_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                true
-            },
-
             KeyManagerEvent::AggKeySetByGovKey {
-                old_key,
-                new_key,
-                ..
+                old_key, new_key, ..
             } => {
-                assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 true
             },
+            _ => false,
+        }).expect("Didn't find AggKeySetByAggKey event");
 
+    km_events
+        .iter()
+        .find(|event| match event {
             KeyManagerEvent::GovKeySetByGovKey {
-                old_key,
-                new_key,
-                ..
+                old_key, new_key, ..
             } => {
-                assert_eq!(new_key,&ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",true).unwrap());
                 assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
                 true
             },
-
-            KeyManagerEvent::Refunded { .. } => {
-                true
-            },
-        }).unwrap();
+            _ => false,
+        }).expect("Didn't find AggKeySetByAggKey event");
 }
