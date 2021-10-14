@@ -24,6 +24,7 @@ use futures::{Future, Stream, StreamExt};
 use slog::o;
 
 use super::decode_shared_event_closure;
+use super::eth_event_streamer::Event;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness(
@@ -45,19 +46,20 @@ pub async fn start_key_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
-            match result_event.unwrap() {
-                KeyManagerEvent::KeyChange { tx_hash, .. } => {
-                    slog::info!(logger, "Keychain event found: {}", hex::encode(tx_hash));
+            let event = result_event.unwrap();
+            match event.event_enum {
+                KeyManagerEvent::KeyChange { .. } => {
+                    slog::info!(logger, "Keychain event found: {}", hex::encode(event.tx_hash));
                 }
-                KeyManagerEvent::Shared(event) => match event {
-                    SharedEvent::Refunded { tx_hash, .. } => {
-                        slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
+                KeyManagerEvent::Shared(shared_event) => match shared_event {
+                    SharedEvent::Refunded { .. } => {
+                        slog::info!(logger, "Refunded event found: {}", hex::encode(event.tx_hash));
                     }
-                    SharedEvent::RefundFailed { tx_hash, .. } => {
+                    SharedEvent::RefundFailed { .. } => {
                         slog::info!(
                             logger,
                             "Refund Failed event found: {}",
-                            hex::encode(tx_hash)
+                            hex::encode(event.tx_hash)
                         );
                     }
                 },
@@ -135,8 +137,6 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
     },
 
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
@@ -158,7 +158,7 @@ impl KeyManager {
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
+    ) -> Result<impl Stream<Item = Result<Event<KeyManagerEvent>>>> {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
@@ -172,27 +172,23 @@ impl KeyManager {
 
     pub fn decode_log_closure(
         &self,
-    ) -> Result<impl Fn(H256, H256, RawLog) -> Result<KeyManagerEvent>> {
+    ) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
-            move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                let tx_hash = tx_hash.to_fixed_bytes();
+            move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
                 if signature == key_change.signature {
                     let log = key_change.event.parse_log(raw_log)?;
-                    let event = KeyManagerEvent::KeyChange {
+                    Ok(KeyManagerEvent::KeyChange {
                         signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                        tx_hash,
-                    };
-                    Ok(event)
+                    })
                 } else {
                     Ok(KeyManagerEvent::Shared(decode_shared_event_closure(
                         signature,
-                        H256(tx_hash),
                         raw_log,
                     )?))
                 }

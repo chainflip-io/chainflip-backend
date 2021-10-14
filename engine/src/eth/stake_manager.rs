@@ -24,7 +24,7 @@ use anyhow::Result;
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 
-use super::{decode_shared_event_closure, SharedEvent};
+use super::{SharedEvent, decode_shared_event_closure, eth_event_streamer::Event};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(
@@ -46,13 +46,13 @@ pub async fn start_stake_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
-            match result_event.unwrap() {
+            let event = result_event.unwrap();
+            match event.event_enum {
                 StakeManagerEvent::Staked {
                     account_id,
                     amount,
                     staker: _,
                     return_addr,
-                    tx_hash,
                 } => {
                     state_chain_client
                         .submit_extrinsic(
@@ -61,7 +61,7 @@ pub async fn start_stake_manager_witness(
                                 account_id,
                                 amount,
                                 return_addr.0,
-                                tx_hash,
+                                event.tx_hash,
                             ),
                         )
                         .await;
@@ -69,13 +69,12 @@ pub async fn start_stake_manager_witness(
                 StakeManagerEvent::ClaimExecuted {
                     account_id,
                     amount,
-                    tx_hash,
                 } => {
                     state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id, amount, tx_hash,
+                                account_id, amount, event.tx_hash,
                             ),
                         )
                         .await;
@@ -113,8 +112,6 @@ pub enum StakeManagerEvent {
         staker: ethabi::Address,
         /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
         return_addr: ethabi::Address,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
@@ -129,8 +126,6 @@ pub enum StakeManagerEvent {
         start_time: ethabi::Uint,
         /// The expiry time of the claim
         expiry_time: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `ClaimExecuted(nodeId, amount)` event
@@ -139,8 +134,6 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was claimed
         amount: u128,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `FlipSupplyUpdated(oldSupply, newTotalSupply, stateChainBlockNumber)` event
@@ -151,8 +144,6 @@ pub enum StakeManagerEvent {
         new_supply: ethabi::Uint,
         /// State Chain block number for the new total supply
         block_number: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `MinStakeChanged(oldMinStake, newMinStake)`
@@ -161,8 +152,6 @@ pub enum StakeManagerEvent {
         old_min_stake: ethabi::Uint,
         /// New minimum stake
         new_min_stake: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
@@ -186,7 +175,7 @@ impl StakeManager {
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
+    ) -> Result<impl Stream<Item = Result<Event<StakeManagerEvent>>>> {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
@@ -200,7 +189,7 @@ impl StakeManager {
 
     pub fn decode_log_closure(
         &self,
-    ) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
+    ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
@@ -210,7 +199,7 @@ impl StakeManager {
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
-            move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
+            move |signature: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -222,7 +211,6 @@ impl StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                let tx_hash = tx_hash.to_fixed_bytes();
                 if signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
@@ -231,7 +219,6 @@ impl StakeManager {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                         staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == claim_registered.signature {
@@ -243,7 +230,6 @@ impl StakeManager {
                         staker: utils::decode_log_param(&log, "staker")?,
                         start_time: utils::decode_log_param(&log, "startTime")?,
                         expiry_time: utils::decode_log_param(&log, "expiryTime")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == claim_executed.signature {
@@ -252,7 +238,6 @@ impl StakeManager {
                     let event = StakeManagerEvent::ClaimExecuted {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == flip_supply_updated.signature {
@@ -261,7 +246,6 @@ impl StakeManager {
                         old_supply: utils::decode_log_param(&log, "oldSupply")?,
                         new_supply: utils::decode_log_param(&log, "newSupply")?,
                         block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == min_stake_changed.signature {
@@ -269,13 +253,11 @@ impl StakeManager {
                     let event = StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else {
                     Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
                         signature,
-                        H256(tx_hash),
                         raw_log,
                     )?))
                 }

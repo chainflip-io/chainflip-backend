@@ -128,8 +128,6 @@ pub enum SharedEvent {
     Refunded {
         /// The amount of ETH refunded
         amount: u128,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `RefundFailed(to, amount, currentBalance)`
@@ -140,25 +138,21 @@ pub enum SharedEvent {
         amount: u128,
         /// The contract' current balance
         current_balance: u128,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
     },
 }
 
 fn decode_shared_event_closure(
     contract: &Contract,
-) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<SharedEvent>> {
+) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<SharedEvent>> {
     let refunded = SignatureAndEvent::new(contract, "Refunded")?;
     let refund_failed = SignatureAndEvent::new(contract, "RefundFailed")?;
 
     Ok(
-        move |signature: H256, tx_hash: H256, raw_log: ethabi::RawLog| -> Result<SharedEvent> {
-            let tx_hash = tx_hash.to_fixed_bytes();
+        move |signature: H256, raw_log: ethabi::RawLog| -> Result<SharedEvent> {
             if signature == refunded.signature {
                 let log = refunded.event.parse_log(raw_log)?;
                 let event = SharedEvent::Refunded {
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    tx_hash,
                 };
                 Ok(event)
             } else if signature == refund_failed.signature {
@@ -171,7 +165,6 @@ fn decode_shared_event_closure(
                         "currentBalance",
                     )?
                     .as_u128(),
-                    tx_hash,
                 };
                 Ok(event)
             } else {

@@ -11,17 +11,23 @@ use web3::{
     Web3,
 };
 
+#[derive(Debug)]
+pub struct Event<EventEnum: Debug> {
+    pub tx_hash: [u8; 32],
+    pub event_enum: EventEnum,
+}
+
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
-    Event: Debug,
-    LogDecoder: Fn(H256, H256, RawLog) -> Result<Event>,
+    EventEnum: Debug,
+    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>,
 >(
     web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
     logger: &slog::Logger,
-) -> Result<impl Stream<Item = Result<Event>>, anyhow::Error> {
+) -> Result<impl Stream<Item = Result<Event<EventEnum>>>, anyhow::Error> {
     // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
     let future_logs = web3
         .eth_subscribe()
@@ -76,20 +82,22 @@ pub async fn new_eth_event_stream<
     Ok(tokio_stream::iter(past_logs)
         .map(Ok)
         .chain(future_logs)
-        .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
+        .map(move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
             let result_event = result_unparsed_log.and_then(|log| {
-                decode_log(
-                    *log.topics.first().ok_or_else(|| {
-                        anyhow::Error::msg("Could not get event signature from ETH log")
-                    })?,
-                    log.transaction_hash.ok_or_else(|| {
+                Ok(Event {
+                    tx_hash : log.transaction_hash.ok_or_else(|| {
                         anyhow::Error::msg("Could not get transaction hash from ETH log")
-                    })?,
-                    RawLog {
-                        topics: log.topics,
-                        data: log.data.0,
-                    },
-                )
+                    })?.to_fixed_bytes(),
+                    event_enum: decode_log(
+                        *log.topics.first().ok_or_else(|| {
+                            anyhow::Error::msg("Could not get event signature from ETH log")
+                        })?,
+                        RawLog {
+                            topics: log.topics,
+                            data: log.data.0,
+                        },
+                    )?
+                })
             });
 
             slog::debug!(
