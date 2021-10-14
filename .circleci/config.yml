@@ -55,7 +55,6 @@ commands:
         type: string
         default: develop
     steps:
-      - run: apt-get install -y jq
       - run:
           name: Merge "<<parameters.target>>" in your branch
           command: |
@@ -67,14 +66,6 @@ commands:
 
 ######################## Workflows ########################
 workflows:
-  test:
-    jobs:
-      - cargo-build-and-test-validator-package:
-          context:
-            - ghcr-credentials
-            - github-credentials
-            - discord-webhooks
-
   create-rust-base:
     when: <<pipeline.parameters.rust-base>>
     jobs:
@@ -239,7 +230,7 @@ jobs:
     executor: rust-poetry
     steps:
       - checkout
-      - run: git merge develop
+      - merge_target
       - attach_workspace:
           at: ./
       - run: sccache --show-stats
@@ -278,7 +269,7 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
-      - merge_branch
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo build --locked --release
