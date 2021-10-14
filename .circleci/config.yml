@@ -49,27 +49,18 @@ parameters:
 ######################## /Config ########################
 ######################## Commands ########################
 commands:
-
   merge_branch:
+    parameters:
+      target:
+        type: string
+        default: develop
     steps:
       - run: apt-get install -y jq
       - run: |
           # setup the github user
           git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
           git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
-
-          # if this is a PR, we extract the API URL to grab the PR as JSON from the Github API
-          if [[ -n "$CIRCLE_PULL_REQUEST" ]]; then
-            url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/https:\/\/github.com\//https:\/\/api.github.com\/repos\//' | sed 's/\/pull\//\/pulls\//')?access_token=$GITHUB_TOKEN"
-            target_branch=$(
-              curl "$url" | jq '.base.ref' | tr -d '"'
-            )
-            echo "$target_branch"
-
-            # this will fail if $target_branch is null
-            # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
-            git fetch && git merge origin/$target_branch --no-edit
-          fi
+          git fetch && git merge origin/<<parameters.target>> --no-edit
 ######################## /Commands ########################
 
 ######################## Workflows ########################
