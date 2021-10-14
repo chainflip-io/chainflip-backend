@@ -288,12 +288,8 @@ mod tests {
         let staked_event_signature =
             H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa")
-                .unwrap();
         match decode_log(
             staked_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![
                     staked_event_signature,
@@ -307,7 +303,6 @@ mod tests {
                 amount,
                 staker,
                 return_addr,
-                tx_hash,
             } => {
                 let expected_account_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
@@ -323,7 +318,6 @@ mod tests {
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
                         .unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
@@ -339,12 +333,8 @@ mod tests {
         let claimed_register_event_signature =
             H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185")
-                .unwrap();
         match decode_log(
             claimed_register_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![
                     claimed_register_event_signature,
@@ -359,7 +349,6 @@ mod tests {
                 staker,
                 start_time,
                 expiry_time,
-                tx_hash,
             } => {
                 assert_eq!(
                     account_id,
@@ -383,7 +372,6 @@ mod tests {
                     expiry_time,
                     web3::types::U256::from_dec_str("1624716290").unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes())
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
         }
@@ -399,12 +387,8 @@ mod tests {
         let claimed_executed_event_signature =
             H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605")
-                .unwrap();
         match decode_log(
             claimed_executed_event_signature,
-            transaction_hash,
             RawLog {
                 topics: vec![
                     claimed_executed_event_signature,
@@ -424,14 +408,12 @@ mod tests {
             StakeManagerEvent::ClaimExecuted {
                 account_id,
                 amount,
-                tx_hash,
             } => {
                 let expected_node_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap();
                 assert_eq!(account_id, expected_node_id);
                 assert_eq!(amount, 13333333333333334032384);
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
@@ -447,12 +429,8 @@ mod tests {
         let flip_supply_updated_event_signature =
             H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f")
-                .unwrap();
         match decode_log(
             flip_supply_updated_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![flip_supply_updated_event_signature],
                 data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
@@ -462,7 +440,6 @@ mod tests {
                 old_supply,
                 new_supply,
                 block_number,
-                tx_hash,
             } => {
                 assert_eq!(
                     old_supply,
@@ -473,7 +450,6 @@ mod tests {
                     U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
                 assert_eq!(block_number, U256::from_dec_str("100").unwrap());
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
         }
@@ -489,12 +465,8 @@ mod tests {
         let min_stake_changed_event_signature =
             H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x7224ca5aae97dc9f9b25fd0ba337fd936709d277cf8600786c4168e1d86d7c1f")
-                .unwrap();
         match decode_log(
             min_stake_changed_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![min_stake_changed_event_signature],
                 data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
@@ -503,7 +475,6 @@ mod tests {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
-                tx_hash,
             } => {
                 assert_eq!(
                     old_min_stake,
@@ -513,7 +484,6 @@ mod tests {
                     new_min_stake,
                     U256::from_dec_str("13333333333333334032384").unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
         }
@@ -529,13 +499,9 @@ mod tests {
         let refunded_event_signature =
             H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
-                .unwrap();
 
         match decode_log(
             refunded_event_signature,
-            transaction_hash,
             RawLog {
                 topics: vec![refunded_event_signature],
                 data: hex::decode(
@@ -546,7 +512,7 @@ mod tests {
         )
         .unwrap()
         {
-            StakeManagerEvent::Refunded { amount } => {
+            StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
                 assert_eq!(11126819398980, amount);
             }
             _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
