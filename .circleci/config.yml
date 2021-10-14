@@ -47,9 +47,41 @@ parameters:
     type: boolean
     default: false
 ######################## /Config ########################
+######################## Commands ########################
+commands:
+
+  merge_branch:
+    steps:
+      - run: apt-get install jq
+      - run: |
+          # setup the github user
+          git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
+          git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
+
+          # if this is a PR, we extract the API URL to grab the PR as JSON from the Github API
+          if [[ -n "$CIRCLE_PULL_REQUEST" ]]; then
+            url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/https:\/\/github.com\//https:\/\/api.github.com\/repos\//' | sed 's/\/pull\//\/pulls\//')?access_token=$GITHUB_TOKEN"
+            target_branch=$(
+              curl "$url" | jq '.base.ref' | tr -d '"'
+            )
+            echo "$target_branch"
+
+            # this will fail if $target_branch is null
+            # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
+            git fetch && git merge origin/$target_branch --no-edit
+          fi
+######################## /Commands ########################
 
 ######################## Workflows ########################
 workflows:
+  test:
+    jobs:
+      - cargo-build-and-test-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
+            - discord-webhooks
+
   create-rust-base:
     when: <<pipeline.parameters.rust-base>>
     jobs:
@@ -107,6 +139,7 @@ workflows:
             - hold
           context:
             - ghcr-credentials
+            - github-credentials
             - discord-webhooks
       - cargo-doc-validator-package:
           requires:
@@ -251,10 +284,9 @@ jobs:
 
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
-    executor: rust-poetry
     steps:
       - checkout
-      - run: git merge develop
+      - merge_branch
       - run: sccache --show-stats
       - run: |
           cargo build --locked --release
