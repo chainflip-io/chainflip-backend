@@ -1,9 +1,10 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
+use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
-    eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
+    eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
 };
@@ -21,6 +22,8 @@ use anyhow::Result;
 use futures::{Future, Stream, StreamExt};
 
 use slog::o;
+
+use super::decode_shared_event_closure;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness(
@@ -46,9 +49,18 @@ pub async fn start_key_manager_witness(
                 KeyManagerEvent::KeyChange { tx_hash, .. } => {
                     slog::info!(logger, "Keychain event found: {}", hex::encode(tx_hash));
                 }
-                KeyManagerEvent::Refunded { tx_hash, .. } => {
-                    slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
-                }
+                KeyManagerEvent::Shared(event) => match event {
+                    SharedEvent::Refunded { tx_hash, .. } => {
+                        slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
+                    }
+                    SharedEvent::RefundFailed { tx_hash, .. } => {
+                        slog::info!(
+                            logger,
+                            "Refund Failed event found: {}",
+                            hex::encode(tx_hash)
+                        );
+                    }
+                },
             }
         }
     })
@@ -127,13 +139,8 @@ pub enum KeyManagerEvent {
         tx_hash: [u8; 32],
     },
 
-    /// `Refunded(amount)`
-    Refunded {
-        /// The amount of ETH refunded
-        amount: u128,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
-    },
+    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
+    Shared(SharedEvent),
 }
 
 impl KeyManager {
@@ -167,7 +174,8 @@ impl KeyManager {
         &self,
     ) -> Result<impl Fn(H256, H256, RawLog) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
-        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
+
+        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
             move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
@@ -181,17 +189,12 @@ impl KeyManager {
                         tx_hash,
                     };
                     Ok(event)
-                } else if signature == refunded.signature {
-                    let log = refunded.event.parse_log(raw_log)?;
-                    let event = KeyManagerEvent::Refunded {
-                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                        tx_hash,
-                    };
-                    Ok(event)
                 } else {
-                    Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
+                    Ok(KeyManagerEvent::Shared(decode_shared_event_closure(
                         signature,
-                    )))
+                        H256(tx_hash),
+                        raw_log,
+                    )?))
                 }
             },
         )

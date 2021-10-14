@@ -16,7 +16,7 @@ use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
 use web3::{
-    ethabi::{Contract, Event},
+    ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
     types::{SyncState, TransactionParameters, H160, H256},
     Web3,
@@ -119,4 +119,66 @@ impl EthBroadcaster {
 
         Ok(tx_hash)
     }
+}
+
+/// Events that both the Key and Stake Manager contracts can output (Shared.sol)
+#[derive(Debug)]
+pub enum SharedEvent {
+    /// `Refunded(amount)`
+    Refunded {
+        /// The amount of ETH refunded
+        amount: u128,
+        /// Tx hash of the tx that created the event
+        tx_hash: [u8; 32],
+    },
+
+    /// `RefundFailed(to, amount, currentBalance)`
+    RefundFailed {
+        /// The refund recipient
+        to: ethabi::Address,
+        /// The amount of ETH to refund
+        amount: u128,
+        /// The contract' current balance
+        current_balance: u128,
+        /// Tx hash of the tx that created the event
+        tx_hash: [u8; 32],
+    },
+}
+
+fn decode_shared_event_closure(
+    contract: &Contract,
+) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<SharedEvent>> {
+    let refunded = SignatureAndEvent::new(contract, "Refunded")?;
+    let refund_failed = SignatureAndEvent::new(contract, "RefundFailed")?;
+
+    Ok(
+        move |signature: H256, tx_hash: H256, raw_log: ethabi::RawLog| -> Result<SharedEvent> {
+            let tx_hash = tx_hash.to_fixed_bytes();
+            if signature == refunded.signature {
+                let log = refunded.event.parse_log(raw_log)?;
+                let event = SharedEvent::Refunded {
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    tx_hash,
+                };
+                Ok(event)
+            } else if signature == refund_failed.signature {
+                let log = refund_failed.event.parse_log(raw_log)?;
+                let event = SharedEvent::RefundFailed {
+                    to: utils::decode_log_param::<ethabi::Address>(&log, "to")?,
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    current_balance: utils::decode_log_param::<ethabi::Uint>(
+                        &log,
+                        "currentBalance",
+                    )?
+                    .as_u128(),
+                    tx_hash,
+                };
+                Ok(event)
+            } else {
+                Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
+                    signature,
+                )))
+            }
+        },
+    )
 }

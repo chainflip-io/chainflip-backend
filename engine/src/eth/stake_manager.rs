@@ -5,7 +5,7 @@ use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
-    eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
+    eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
 };
@@ -23,6 +23,8 @@ use anyhow::Result;
 
 use futures::{Future, Stream, StreamExt};
 use slog::o;
+
+use super::{decode_shared_event_closure, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(
@@ -163,11 +165,8 @@ pub enum StakeManagerEvent {
         tx_hash: [u8; 32],
     },
 
-    /// `Refunded(amount)`
-    Refunded {
-        /// The amount of ETH refunded
-        amount: u128,
-    },
+    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
+    Shared(SharedEvent),
 }
 
 impl StakeManager {
@@ -207,7 +206,8 @@ impl StakeManager {
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
-        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
+
+        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
             move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
@@ -272,16 +272,12 @@ impl StakeManager {
                         tx_hash,
                     };
                     Ok(event)
-                } else if signature == refunded.signature {
-                    let log = refunded.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::Refunded {
-                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    };
-                    Ok(event)
                 } else {
-                    Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
+                    Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
                         signature,
-                    )))
+                        H256(tx_hash),
+                        raw_log,
+                    )?))
                 }
             },
         )
