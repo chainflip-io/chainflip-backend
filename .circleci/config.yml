@@ -206,6 +206,7 @@ jobs:
           name: Install dependencies & run Hardhat network
           background: true
           command: |
+            cd eth-contracts
             npm install
             npx hardhat node
             poetry install --quiet
