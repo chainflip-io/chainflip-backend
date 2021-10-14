@@ -1,4 +1,4 @@
-# Chainflip Broadcast pallet
+# Chainflip Broadcast Pallet
 
 This is a pallet for broadcasting transactions to other chains.
 
