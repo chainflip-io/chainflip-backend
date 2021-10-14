@@ -405,10 +405,7 @@ mod tests {
         )
         .unwrap()
         {
-            StakeManagerEvent::ClaimExecuted {
-                account_id,
-                amount,
-            } => {
+            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let expected_node_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap();

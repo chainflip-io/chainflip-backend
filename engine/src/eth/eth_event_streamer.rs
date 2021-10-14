@@ -17,13 +17,14 @@ pub struct Event<EventEnum: Debug> {
     pub event_enum: EventEnum,
 }
 impl<EventEnum: Debug> Event<EventEnum> {
-    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(decode_log: &LogDecoder, log: Log) -> Result<Self> {
+    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(
+        decode_log: &LogDecoder,
+        log: Log,
+    ) -> Result<Self> {
         Ok(Event {
             tx_hash: log
                 .transaction_hash
-                .ok_or_else(|| {
-                    anyhow::Error::msg("Could not get transaction hash from ETH log")
-                })?
+                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?
                 .to_fixed_bytes(),
             event_enum: decode_log(
                 *log.topics.first().ok_or_else(|| {
@@ -105,9 +106,8 @@ pub async fn new_eth_event_stream<
         .chain(future_logs)
         .map(
             move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
-                let result_event = result_unparsed_log.and_then(|log| {
-                    Event::decode(&decode_log, log)
-                });
+                let result_event =
+                    result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
                 slog::debug!(
                     logger,
