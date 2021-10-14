@@ -5,14 +5,18 @@
     "providers": "RefCount",
     "data": "()"
   },
+  "ActiveProposal": "(ProposalId, Timestamp)",
+  "AggKeySignature": "U256",
   "Address": "MultiAddress",
-  "Amount": "TokenAmount",
+  "Amount": "u128",
   "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
-      "BondIsZero",
       "Empty",
-      "MinValidatorSize"
+      "MinValidatorSize",
+      "InvalidRange",
+      "Abort",
+      "NotConfirmed"
     ]
   },
   "AuctionIndex": "u64",
@@ -31,20 +35,23 @@
       "Transmission"
     ]
   },
+  "Bid": "(ValidatorId, Amount)",
+  "BlockNumber": "u32",
   "CallHash": "[u8;32]",
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
-  },
   "CeremonyId": "u64",
   "Chain": {
     "_enum": [
       "Ethereum"
     ]
   },
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
+  },
   "ClaimDetailsFor": {
+    "msg_hash": "Option<AggKeySignature>",
     "amount": "FlipBalance",
     "nonce": "Nonce",
     "address": "EthereumAddress",
@@ -56,8 +63,8 @@
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
-    "stake": "FlipBalance",
-    "validator_bond": "FlipBalance"
+    "stake": "Amount",
+    "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
   "ImbalanceSource": {
@@ -78,6 +85,7 @@
     }
   },
   "KeyId": "Vec<u8>",
+  "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
@@ -99,19 +107,25 @@
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
+  "ReputationOf": "BlockNumber",
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
+  "SchnorrSigTruncPubkey": {
+    "s": "[u8;32]",
+    "k_times_g_address": "[u8; 20]"
+  },
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
     "k_times_g_addr": "[u8; 20]"
   },
   "Signature": "H256",
   "SignedTransactionFor": "Vec<u8>",
-  "TokenAmount": "u128",
+  "StakeAttempt": "(EthereumAddress, Amount)",
+  "Timestamp": "u64",
+  "TransactionHash": "Vec<u8>",
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
-  "TransactionHash": "Vec<u8>",
   "Vault": {
     "previous_key": "PublicKey",
     "current_key": "PublicKey",
@@ -124,9 +138,9 @@
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-        "tx": "TransactionHash"
+        "tx_hash": "TransactionHash"
       },
-      "Failure": ""
+      "Error": ""
     }
   },
   "ValidatorSize": "u32",

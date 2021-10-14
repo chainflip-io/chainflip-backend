@@ -183,18 +183,6 @@ workflows:
             - infura-endpoints
           <<: *only_epic_branches
 
-  chainflip-integration-tests:
-    <<: *nightly
-    jobs:
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-      - run-integration-tests:
-          requires:
-            - clone-contracts-repo
-          context:
-            - ghcr-credentials
-            - discord-webhooks
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
@@ -293,7 +281,7 @@ jobs:
       - checkout
       - run: sccache --show-stats
       - run: |
-          cargo check --locked --release
+          cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job

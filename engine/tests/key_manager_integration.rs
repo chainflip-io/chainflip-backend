@@ -45,7 +45,7 @@ pub async fn test_all_key_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -79,9 +79,8 @@ pub async fn test_all_key_manager_events() {
                     panic!("KeyChange event with unexpected key: {:?}", new_key);
                 }
             }
-            KeyManagerEvent::Refunded { .. } => {
+            KeyManagerEvent::Shared(_) => {
                 true
             },
-        }
-        ).unwrap();
+        }).unwrap();
 }
