@@ -1,14 +1,4 @@
 ######################## Anchors ########################
-ignore_main_branches: &ignore_main_branches
-  filters:
-    branches:
-      ignore:
-        - main
-        - develop
-        - /epic\/.*/
-        - /release\/.*/
-        # Uncomment and add your current branch when testing
-#        - update/epic-ci-1
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,16 +7,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - update/epic-ci-1
-
-nightly: &nightly
-  triggers:
-    - schedule:
-        cron: "0 0 * * *"
-        filters:
-          branches:
-            only:
-              - develop
+        - update/epic-ci-1
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -34,7 +15,7 @@ auth: &dockerconfig
 
 cargo-base-job: &cargo-base-job
   executor: rust-base
-  environment: &sccache_environment
+  environment:
     SCCACHE_CACHE_SIZE: 14G
   resource_class: 2xlarge+
 ######################## /Anchors ########################
@@ -350,12 +331,6 @@ jobs:
           name: Start Node
           background: true
           command: ./target/release/state-chain-node --chain cf-dev
-      - run: sleep 5
-      - run:
-          name: Start Engine
-          background: true
-          command: ./target/release/chainflip-engine
-      - run: sleep 5
       - run:
           name: Check Node Health
           command: >
@@ -363,11 +338,23 @@ jobs:
             -H "Content-Type:application/json;charset=utf-8"
             --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:9933'
+            --connect-timeout 5
+            --max-time 5
+            --retry 5
+            --retry-delay 5
             -vv
+      - run:
+          name: Start Engine
+          background: true
+          command: ./target/release/chainflip-engine
       - run:
           name: Check Engine Health
           command: >
             curl
             --url 'http://localhost:5555/health'
+            --connect-timeout 5
+            --max-time 5
+            --retry 5
+            --retry-delay 5
             -vv
 ######################## /Jobs ########################
