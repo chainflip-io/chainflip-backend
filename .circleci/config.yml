@@ -193,7 +193,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-build-and-test-validator-package:
+  cargo-build-and-test-validator-package-integration:
     <<: *cargo-base-job
     executor: rust-poetry
     steps:
@@ -231,6 +231,24 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
+
+  cargo-build-and-test-validator-package:
+    <<: *cargo-base-job
+    executor: rust-poetry
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo build --locked --release
+          sccache --show-stats
+      - run: |
+          cargo test --lib --locked --release
+          sccache --show-stats
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/release/state-chain-node
+            - target/release/chainflip-engine
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
