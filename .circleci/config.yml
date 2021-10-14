@@ -167,15 +167,6 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - test-single-node:
-          requires:
-            - build-chainflip-engine
-            - build-state-chain-node
-          context:
-            - ghcr-credentials
-            - do-credentials
-            - infura-endpoints
-          <<: *only_epic_branches
 
 ######################## /Workflows ########################
 
