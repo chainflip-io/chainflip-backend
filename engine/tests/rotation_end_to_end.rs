@@ -101,6 +101,7 @@ pub async fn vault_rotation_end_to_end() {
                                 epoch_index
                             );
                             assert_eq!(order_counter, 3);
+                            assert_eq!(epoch_index, 1);
                             // if we passed this assert, then we can exit the loop
                             break 'block_loop;
                         }
@@ -114,6 +115,7 @@ pub async fn vault_rotation_end_to_end() {
                 panic!("Error getting events: {:?}", e);
             }
         }
+        assert_eq!(order_counter, 3);
         block_counter += 1;
         if block_counter > MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS {
             panic!(
