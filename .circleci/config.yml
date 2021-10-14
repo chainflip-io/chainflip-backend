@@ -106,14 +106,6 @@ workflows:
           context:
             - github-credentials
           <<: *only_main_branches
-      - run-integration-tests:
-          requires:
-            - clone-contracts-repo
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-            - discord-webhooks
-          <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
