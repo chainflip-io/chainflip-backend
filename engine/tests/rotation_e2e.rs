@@ -1,14 +1,14 @@
 use chainflip_engine::{logging::utils::create_cli_logger, settings::Settings, state_chain};
 use tokio_stream::StreamExt;
 
-const MAX_TIME_FOR_ROTATION_IN_BLOCKS: i32 = 30;
+/// Timeout the test if we don't get to the next step in this many blocks
+const MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS: i32 = 12;
 
 /// Force a vault rotation and then monitor for expected events
 /// on the State Chain and the ethereum contracts
+/// This test should be run on a fresh network
 #[tokio::test]
 pub async fn vault_rotation_end_to_end() {
-    // when this runs it will have started on a test network
-
     let root_logger = create_cli_logger();
 
     // ensure this is pointing to snow white's settings
@@ -21,8 +21,8 @@ pub async fn vault_rotation_end_to_end() {
             .expect("Could not connect to state chain");
 
     // ====== Kick off the rotation =======
-    // propose(sudo(vault_rotation))
 
+    // propose(sudo(force_rotation))
     // on a new chain, this will be governance call #1
     state_chain_client
         .submit_extrinsic(
@@ -70,7 +70,11 @@ pub async fn vault_rotation_end_to_end() {
                             // we don't realllly need to assert over who is in this batch. So leave it for now
                             pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _keygen_request),
                         ) => {
-                            println!("KeygenRequest emitted for ceremony_id: {:?}", 1);
+                            slog::info!(
+                                root_logger,
+                                "KeygenRequest emitted for ceremony_id: {:?}",
+                                1
+                            );
                             assert_eq!(order_counter, 1);
                             assert_eq!(ceremony_id, 1);
                             order_counter += 1;
@@ -81,7 +85,11 @@ pub async fn vault_rotation_end_to_end() {
                                 _signature_request,
                             ),
                         ) => {
-                            println!("Signing event received with ceremony_id: {:?}", ceremony_id);
+                            slog::info!(
+                                root_logger,
+                                "Signing event received with ceremony_id: {:?}",
+                                ceremony_id
+                            );
                             assert_eq!(order_counter, 2);
                             assert_eq!(ceremony_id, 1);
                             order_counter += 1;
@@ -89,7 +97,11 @@ pub async fn vault_rotation_end_to_end() {
                         state_chain_runtime::Event::pallet_cf_validator(
                             pallet_cf_validator::Event::NewEpoch(epoch_index),
                         ) => {
-                            println!("NewEpoch event received, epoch index: {:?}", epoch_index);
+                            slog::info!(
+                                root_logger,
+                                "NewEpoch event received, epoch index: {:?}",
+                                epoch_index
+                            );
                             assert_eq!(order_counter, 3);
                             // if we passed this assert, then we can exit the loop
                             break 'block_loop;
@@ -105,10 +117,10 @@ pub async fn vault_rotation_end_to_end() {
             }
         }
         block_counter += 1;
-        if block_counter > MAX_TIME_FOR_ROTATION_IN_BLOCKS {
+        if block_counter > MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS {
             panic!(
-                "More than {} blocks and there has not been a new epoch.",
-                MAX_TIME_FOR_ROTATION_IN_BLOCKS
+                "More than {} blocks and still waiting on event #{} there has not been a new epoch.",
+                MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS, order_counter
             );
         }
     }

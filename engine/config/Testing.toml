@@ -14,11 +14,9 @@ private_key_file = "/run/secrets/eth_private_key"
 key_manager_eth_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
 stake_manager_eth_address = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
 
-# unused by snow white
 [health_check]
 hostname = "127.0.0.1"
 port = 5555
 
-# Unused by Snowwhite
 [signing]
 db_file = "data.db"

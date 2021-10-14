@@ -13,12 +13,8 @@ node_endpoint = "ws://localhost:8545"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/Users/kaz/Documents/cf-dev-keys/eth_hh_acct_0_key"
 # Address used on the Ganache/Brownie tests
-# key_manager_eth_address = "0x0fa750AFBe34619418fcb574910cf13737eaF49f"
-# stake_manager_eth_address = "0x12B162Cbb0E1FbE6D3b5ce29C58a7D5c3BC54912"
-
-# These are incorrect, just so we don't submit to the correct contracts and rotate for now
-key_manager_eth_address = "0x0fa750AFBe34619418fcb574910cf13737eaF49d"
-stake_manager_eth_address = "0x12B162Cbb0E1FbE6D3b5ce29C58a7D5c3BC54913"
+key_manager_eth_address = "0x0fa750AFBe34619418fcb574910cf13737eaF49f"
+stake_manager_eth_address = "0x12B162Cbb0E1FbE6D3b5ce29C58a7D5c3BC54912"
 
 # not used by SnowWhite
 [health_check]
