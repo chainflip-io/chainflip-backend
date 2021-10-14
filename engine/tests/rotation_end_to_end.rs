@@ -59,7 +59,6 @@ pub async fn vault_rotation_end_to_end() {
     let mut block_counter = 0;
 
     // now monitor for the events we expect
-    // we can state machine through the events
     'block_loop: while let Some(result_block_header) = state_chain_block_stream.next().await {
         let block_header = result_block_header.expect("Should be valid block header");
         match state_chain_client.events(&block_header).await {
@@ -67,7 +66,6 @@ pub async fn vault_rotation_end_to_end() {
                 for (_phase, event, _topics) in events {
                     match event {
                         state_chain_runtime::Event::pallet_cf_vaults(
-                            // we don't realllly need to assert over who is in this batch. So leave it for now
                             pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _keygen_request),
                         ) => {
                             slog::info!(
