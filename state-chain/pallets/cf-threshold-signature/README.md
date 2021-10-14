@@ -34,11 +34,3 @@ Other notable required config traits:
 ### Genesis Configuration
 
 None required.
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open --document-private-items
-```
