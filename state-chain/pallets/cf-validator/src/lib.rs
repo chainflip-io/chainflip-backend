@@ -17,7 +17,9 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{AuctionPhase, Auctioneer, EmergencyRotation, EpochInfo, EpochTransitionHandler};
+use cf_traits::{
+	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -30,6 +32,7 @@ type SessionIndex = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::EpochIndex;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -55,9 +58,6 @@ pub mod pallet {
 		/// Benchmark stuff
 		type ValidatorWeightInfo: WeightInfo;
 
-		/// An index describing the epoch
-		type EpochIndex: Member + codec::FullCodec + Copy + AtLeast32BitUnsigned + Default;
-
 		/// An amount
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
@@ -73,7 +73,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new epoch has started \[epoch_index\]
-		NewEpoch(T::EpochIndex),
+		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// A new epoch has been forced
@@ -173,7 +173,7 @@ pub mod pallet {
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, T::EpochIndex, ValueQuery>;
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
 	/// Validator lookup
 	#[pallet::storage]
@@ -214,7 +214,6 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type EpochIndex = T::EpochIndex;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		<pallet_session::Module<T>>::validators()
@@ -238,7 +237,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 	}
 
-	fn epoch_index() -> Self::EpochIndex {
+	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
 
