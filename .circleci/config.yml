@@ -204,14 +204,24 @@ jobs:
   # cargo function to track the performance of the compilation.
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
+    executor: rust-poetry
     steps:
       - checkout
       - run: sccache --show-stats
+      - run:
+          name: Install dependencies & run Hardhat network
+          background: true
+          command: |
+            cd eth-contracts
+            npm install
+            npx hardhat node
+            poetry install --quiet
+            poetry run brownie run deploy_and all_events --network hardhat
       - run: |
           cargo build --locked --release
           sccache --show-stats
       - run: |
-          cargo test --lib --locked --release
+          cargo test --locked --release
           sccache --show-stats
       - persist_to_workspace:
           root: ./
@@ -331,6 +341,12 @@ jobs:
           name: Start Node
           background: true
           command: ./target/release/state-chain-node --chain cf-dev
+      - run: sleep 3
+      - run:
+          name: Start Engine
+          background: true
+          command: ./target/release/chainflip-engine
+      - run: sleep 3
       - run:
           name: Check Node Health
           command: >
@@ -338,23 +354,11 @@ jobs:
             -H "Content-Type:application/json;charset=utf-8"
             --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:9933'
-            --connect-timeout 5
-            --max-time 5
-            --retry 5
-            --retry-delay 5
             -vv
-      - run:
-          name: Start Engine
-          background: true
-          command: ./target/release/chainflip-engine
       - run:
           name: Check Engine Health
           command: >
             curl
             --url 'http://localhost:5555/health'
-            --connect-timeout 5
-            --max-time 5
-            --retry 5
-            --retry-delay 5
             -vv
 ######################## /Jobs ########################
