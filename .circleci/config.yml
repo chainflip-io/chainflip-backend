@@ -198,7 +198,7 @@ jobs:
     steps:
       - checkout
       - attach_workspace:
-          at: ./
+          at: ./eth-contracts
       - run: sccache --show-stats
       - run:
           name: Install dependencies & run Hardhat network
