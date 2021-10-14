@@ -88,6 +88,7 @@ workflows:
       - cargo-build-and-test-validator-package:
           requires:
             - fmt-validator-package
+            - clone-contracts-repo
           context:
             - ghcr-credentials
             - discord-webhooks
@@ -186,7 +187,8 @@ jobs:
     steps:
       - checkout
       - run: >
-          cargo fmt --all -- --check
+          ls
+          # cargo fmt --all -- --check
 
   # Compile and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
@@ -284,7 +286,7 @@ jobs:
       - persist_to_workspace:
           root: ./
           paths:
-            - eth-contracts
+            - eth-contracts/*
 
   run-integration-tests:
     resource_class: xlarge
