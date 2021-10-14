@@ -11,7 +11,7 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::impl_mock_stake_transfer;
+use cf_traits::{impl_mock_stake_transfer, StakeTransfer};
 use cf_traits::{Bid, Chainflip, Heartbeat, NetworkState};
 use sp_std::cell::RefCell;
 
@@ -92,6 +92,12 @@ impl Heartbeat for MockHeartbeat {
 	}
 }
 
+impl MockHeartbeat {
+	pub(crate) fn network_state() -> NetworkState<ValidatorId> {
+		NETWORK_STATE.with(|cell| (*cell.borrow()).clone())
+	}
+}
+
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
@@ -114,8 +120,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		MockStakeTransfer::credit_stake(&ALICE, 100);
+		<OnlinePallet as EpochTransitionHandler>::on_new_epoch(&[], &[ALICE], 0);
 	});
 
 	ext
