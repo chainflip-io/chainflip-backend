@@ -1,4 +1,4 @@
-# Chainflip Broadcast pallet
+# Chainflip Broadcast Pallet
 
 This is a pallet for broadcasting transactions to other chains.
 
@@ -45,10 +45,3 @@ Other notable required config traits:
 
 None required.
 
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open --document-private-items
-```

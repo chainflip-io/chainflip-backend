@@ -6,8 +6,8 @@
     "data": "()"
   },
   "ActiveProposal": "(ProposalId, Timestamp)",
-  "AggKeySignature": "U256",
   "Address": "MultiAddress",
+  "AggKeySignature": "U256",
   "Amount": "u128",
   "AttemptCount": "u32",
   "AuctionError": {
@@ -28,6 +28,8 @@
     }
   },
   "AuctionRange": "(u32,u32)",
+  "Bid": "(ValidatorId, Amount)",
+  "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
   "BroadcastStage": {
     "_enum": [
@@ -35,8 +37,6 @@
       "Transmission"
     ]
   },
-  "Bid": "(ValidatorId, Amount)",
-  "BlockNumber": "u32",
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "Chain": {
