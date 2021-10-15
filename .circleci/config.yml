@@ -58,6 +58,23 @@ parameters:
 ######################## /Config ########################
 ######################## Commands ########################
 commands:
+  send_notification:
+    parameters:
+      failure_message:
+        type: string
+        default: ":red_circle: Pipeline failed for branch `<<pipeline.git.revision>>`"
+      fail_only:
+        type: boolean
+        default: true
+      only_for_branches:
+        type: string
+        default: "develop,main"
+    steps:
+      - discord/status:
+          fail_only: <<parameters.fail_only>>
+          failure_message: <<parameters.failure_message>>
+          only_for_branches: <<parameters.only_for_branches>>
+          webhook: $DW_ALERTS_STAGING
   merge_target:
     steps:
       - run:
@@ -276,11 +293,8 @@ jobs:
           paths:
             - target/release/state-chain-node
             - target/release/chainflip-engine
-      - discord/status:
-          fail_only: true
+      - send_notification:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
-          only_for_branches: "develop,main"
-          webhook: $DW_ALERTS_STAGING
 
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
@@ -299,6 +313,8 @@ jobs:
           paths:
             - target/release/state-chain-node
             - target/release/chainflip-engine
+      - send_notification:
+          only_for_branches: ""
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
@@ -379,11 +395,7 @@ jobs:
             poetry run brownie run deploy_and all_events --network hardhat
       - run: sccache --show-stats
       - run: cargo test --locked --release
-      - discord/status:
-          fail_only: true
-          failure_message: ":red_circle: Integration tests have failed"
-          only_for_branches: "develop"
-          webhook: $DW_ALERTS_STAGING
+      - send_notification
 
   test-single-node:
     parameters:
