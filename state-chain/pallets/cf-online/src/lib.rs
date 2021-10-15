@@ -109,7 +109,19 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A heartbeat that is used to measure the liveness of a validator
 		/// Every interval we have a set of validators we expect a heartbeat from with which we
-		/// mark off when we have received a heartbeat.
+		/// mark off when we have received a heartbeat.  In doing so the validator is credited
+		/// the blocks for this heartbeat interval.  Once the block credits have surpassed the accrual
+		/// block number they will earn reputation points based on the accrual ratio.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): This is not a staked node.
+		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
+		///   submitted the heartbeat for this interval.
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator

@@ -1,4 +1,4 @@
-mod test {
+mod tests {
 	use crate::mock::*;
 	use crate::*;
 	use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
