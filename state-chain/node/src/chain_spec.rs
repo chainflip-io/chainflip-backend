@@ -5,9 +5,10 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, EnvironmentConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig,
+	WASM_BINARY,
 };
 use std::convert::TryInto;
 use std::env;

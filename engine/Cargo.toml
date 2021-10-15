@@ -78,6 +78,7 @@ cf-p2p = {path = "../state-chain/client/cf-p2p"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}

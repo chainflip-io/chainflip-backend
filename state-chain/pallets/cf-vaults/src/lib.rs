@@ -71,7 +71,7 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSigTruncPubkey;
-	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
+	use cf_traits::{Chainflip, EpochIndex, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -134,7 +134,7 @@ pub mod pallet {
 	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		<T::EpochInfo as EpochInfo>::EpochIndex,
+		EpochIndex,
 		Blake2_128Concat,
 		Chain,
 		BlockHeightWindow,

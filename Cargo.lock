@@ -955,6 +955,7 @@ dependencies = [
  "num",
  "pallet-cf-auction",
  "pallet-cf-flip",
+ "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-validator",
