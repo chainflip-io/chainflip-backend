@@ -19,13 +19,13 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::{Broadcast1, KeyGenMessageWrapped, MultisigMessage},
+                client_inner::{KeyGenMessageWrapped, MultisigMessage},
                 common::KeygenResultInfo,
                 InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
             },
             KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{Keys, Point},
+        crypto::Point,
         KeyDBMock, SigningInfo,
     },
 };
@@ -186,8 +186,6 @@ pub struct ValidSigningStates {
     pub sign_phase4: Option<SigningPhase4Data>,
     pub outcome: SigningOutcome,
 }
-
-const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
     client.get_keygen().get_stage_for(KEYGEN_CEREMONY_ID)
@@ -419,13 +417,7 @@ impl KeygenContext {
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-                let c = MultisigClient::new(
-                    id.clone(),
-                    KeyDBMock::new(),
-                    tx,
-                    TEST_PHASE_TIMEOUT,
-                    &logger,
-                );
+                let c = MultisigClient::new(id.clone(), KeyDBMock::new(), tx, &logger);
                 (c, Box::pin(UnboundedReceiverStream::new(rx).peekable()))
             })
             .unzip();
@@ -978,30 +970,6 @@ pub fn keygen_data_to_p2p(
 
 pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> {
     c.signing_manager.get_stage_for(SIGN_CEREMONY_ID)
-}
-
-pub fn create_bc1(signer_idx: usize) -> Broadcast1 {
-    let key = Keys::phase1_create(signer_idx);
-
-    let (bc1, blind) = key.phase1_broadcast();
-
-    let y_i = key.y_i;
-
-    Broadcast1 { bc1, blind, y_i }
-}
-
-pub fn create_invalid_bc1() -> Broadcast1 {
-    let key = Keys::phase1_create(0);
-
-    let key2 = Keys::phase1_create(0);
-
-    let (_, blind) = key.phase1_broadcast();
-
-    let (bc1, _) = key2.phase1_broadcast();
-
-    let y_i = key.y_i;
-
-    Broadcast1 { bc1, blind, y_i }
 }
 
 impl MultisigClientNoDB {

@@ -3,11 +3,7 @@
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
 
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-    fmt::Display,
-};
+use std::{collections::HashMap, convert::TryInto, fmt::Display};
 
 use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};

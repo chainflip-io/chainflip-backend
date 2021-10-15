@@ -333,7 +333,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroad
         DataToSend::Broadcast(VerifyComplaints5 { data })
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, _: &KeygenData) -> bool {
         // TODO: delay blaming stage messages once implemented
         false
     }

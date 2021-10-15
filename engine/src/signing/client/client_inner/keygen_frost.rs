@@ -40,19 +40,6 @@ pub struct ShamirShare {
 }
 
 #[cfg(test)]
-#[test]
-fn temp() {
-    let shares: Vec<_> = (1..4)
-        .map(|i| ShamirShare {
-            value: Scalar::from_usize(i * 2),
-            index: i,
-        })
-        .collect();
-
-    let coeff = super::frost::get_lagrange_coeff(1, &[1, 2, 3]);
-}
-
-#[cfg(test)]
 /// Test-only helper function used to sanity check our sharing polynomial
 fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     let all_idxs: Vec<usize> = shares.keys().into_iter().cloned().collect();

@@ -13,9 +13,6 @@ mod keygen_frost;
 mod keygen_manager;
 mod keygen_stages;
 mod keygen_state;
-// mod legacy_keygen_manager;
-// mod legacy_keygen_state;
-mod shared_secret;
 mod signing_manager;
 mod signing_state;
 

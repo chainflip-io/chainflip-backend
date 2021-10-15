@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;

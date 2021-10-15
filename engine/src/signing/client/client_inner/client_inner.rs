@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Instant};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
@@ -10,10 +6,11 @@ use crate::{
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, PendingSigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, Point, Scalar, VerifiableSS},
         KeyDB,
     },
 };
+
+use serde::{Deserialize, Serialize};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
@@ -46,25 +43,6 @@ pub enum MultisigMessage {
     SigningMessage(SigningDataWrapped),
 }
 
-use serde::{Deserialize, Serialize};
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Broadcast1 {
-    pub bc1: KeyGenBroadcastMessage1,
-    pub blind: BigInt,
-    pub y_i: Point,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Secret2 {
-    pub vss: VerifiableSS<Point>,
-    pub secret_share: Scalar,
-}
-
-impl From<Secret2> for LegacyKeygenData {
-    fn from(sec2: Secret2) -> Self {
-        LegacyKeygenData::Secret2(sec2)
-    }
-}
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub ceremony_id: CeremonyId,
@@ -86,27 +64,6 @@ impl KeyGenMessageWrapped {
 impl From<KeyGenMessageWrapped> for MultisigMessage {
     fn from(wrapped: KeyGenMessageWrapped) -> Self {
         MultisigMessage::KeyGenMessage(wrapped)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum LegacyKeygenData {
-    Broadcast1(Broadcast1),
-    Secret2(Secret2),
-}
-
-impl From<Broadcast1> for LegacyKeygenData {
-    fn from(bc1: Broadcast1) -> Self {
-        LegacyKeygenData::Broadcast1(bc1)
-    }
-}
-
-impl Display for LegacyKeygenData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            LegacyKeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
-            LegacyKeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
-        }
     }
 }
 
@@ -178,7 +135,6 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
-    // keygen: LegacyKeygenManager,
     keygen: KeygenManager,
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
@@ -195,7 +151,6 @@ where
         my_account_id: AccountId,
         db: S,
         inner_event_sender: UnboundedSender<InnerEvent>,
-        phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {

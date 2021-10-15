@@ -2,9 +2,9 @@
 // to make sure all of our dependencies on
 // this module are in one place
 mod error;
-mod schnorr;
+// mod schnorr;
 
-pub use schnorr::{KeyGenBroadcastMessage1, KeyShare, Keys, Parameters};
+// pub use schnorr::{KeyGenBroadcastMessage1, KeyShare, Keys, Parameters};
 
 pub use error::{InvalidKey, InvalidSS, InvalidSig};
 
@@ -17,6 +17,20 @@ pub use curv::{
     },
     BigInt,
 };
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Parameters {
+    pub threshold: usize,
+    pub share_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyShare {
+    pub y: Point,
+    pub x_i: Scalar,
+}
 
 pub trait ScalarExt {
     type Scalar;
