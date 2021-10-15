@@ -8,6 +8,15 @@ only_main_branches: &only_main_branches
         - /epic\/.*/
         - /release\/.*/
         - update/epic-ci-1
+ignore_main_branches: &ignore_main_branches
+  filters:
+    branches:
+      ignore:
+        - main
+        - develop
+        - /epic\/.*/
+        - /release\/.*/
+        - update/epic-ci-1
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -50,18 +59,26 @@ parameters:
 ######################## Commands ########################
 commands:
   merge_target:
-    parameters:
-      target:
-        type: string
-        default: develop
     steps:
       - run:
-          name: Merge "<<parameters.target>>" in your branch
+          name: Merge target into your branch
           command: |
             # setup the github user
             git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
             git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
-            git fetch && git merge origin/<<parameters.target>> --no-edit
+
+            # if this is a PR, we extract the API URL to grab the PR as JSON from the Github API
+            if [[ -n "$CIRCLE_PULL_REQUEST" ]]; then
+            url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/https:\/\/github.com\//https:\/\/api.github.com\/repos\//' | sed 's/\/pull\//\/pulls\//')"
+            target_branch=$(
+            curl -H "Authorization: token $GITHUB_TOKEN" "$url" | jq '.base.ref' | tr -d '"'
+            )
+            echo "$target_branch"
+
+            # this will fail if $target_branch is null
+            # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
+            git fetch && git merge origin/$target_branch --no-edit
+            fi
 ######################## /Commands ########################
 
 ######################## Workflows ########################
