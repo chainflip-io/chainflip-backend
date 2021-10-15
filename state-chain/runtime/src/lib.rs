@@ -430,8 +430,8 @@ impl pallet_cf_reputation::Config for Runtime {
 impl pallet_cf_online::Config for Runtime {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Heartbeat = ChainflipHeartbeat;
+	type StakerProvider = pallet_cf_staking::Pallet<Self>;
 }
 
 construct_runtime!(
