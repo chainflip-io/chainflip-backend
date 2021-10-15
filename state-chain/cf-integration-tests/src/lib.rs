@@ -13,8 +13,8 @@ mod tests {
 	use state_chain_runtime::opaque::SessionKeys;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Reputation, Rewards, Session, Staking, Timestamp,
-		Validator, Vaults,
+		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
+		Timestamp, Validator, Vaults,
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
@@ -127,12 +127,14 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			// pallet_cf_emissions::GenesisConfig::<Runtime> {
-			// 	emission_per_block: BLOCK_EMISSIONS,
-			// 	..Default::default()
-			// }
-			// .assimilate_storage(storage)
-			// .unwrap();
+			GenesisBuild::<Runtime>::assimilate_storage(
+				&pallet_cf_emissions::GenesisConfig {
+					validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
+					backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+				},
+				storage,
+			)
+			.unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
 				members: vec![self.root.clone()],
@@ -201,19 +203,21 @@ mod tests {
 
 		#[test]
 		// The following state is to be expected at genesis
-		// 1. Total issuance
-		// 2. The genesis validators are all staked equally
-		// 3. The minimum active bid is set at the stake for a genesis validator
-		// 3. The genesis validators are available via validator_lookup()
-		// 4. The genesis validators are in the session
-		// 5. No auction has been run yet
-		// 6. The genesis validators are considered offline for this heartbeat interval
-		// 7. No emissions have been made
-		// 8. No rewards have been distributed
-		// 9. No vault rotation has occurred
-		// 10. Relevant nonce are at 0
-		// 11. Governance has its member
-		// 12. There have been no proposals
+		// - Total issuance
+		// - The genesis validators are all staked equally
+		// - The minimum active bid is set at the stake for a genesis validator
+		// - The genesis validators are available via validator_lookup()
+		// - The genesis validators are in the session
+		// - No auction has been run yet
+		// - The genesis validators are considered offline for this heartbeat interval
+		// - No emissions have been made
+		// - No rewards have been distributed
+		// - No vault rotation has occurred
+		// - Relevant nonce are at 0
+		// - Governance has its member
+		// - There have been no proposals
+		// - Emission inflation for both validators and backup validators are set
+		// - No one has reputation
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
@@ -270,13 +274,13 @@ mod tests {
 					);
 				}
 
-				// for account in accounts.iter() {
-				// 	assert_eq!(
-				// 		Reputation::validator_liveness(account),
-				// 		Some(0),
-				// 		"validator has yet to send its heartbeats"
-				// 	);
-				// }
+				for account in accounts.iter() {
+					assert_eq!(
+						Online::validators_liveness(account),
+						Some(0),
+						"validator should have not sent a heartbeat"
+					);
+				}
 
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
 
@@ -302,106 +306,27 @@ mod tests {
 					0,
 					"no proposal for governance"
 				);
-			});
-		}
-	}
 
-	mod epoch {
-		use super::*;
-		use crate::tests::run_to_block;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer};
-		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-		use state_chain_runtime::{Auction, Flip, Origin, Reputation, Validator, WitnesserApi};
+				assert_eq!(
+					Emissions::validator_emission_inflation(),
+					VALIDATOR_EMISSION_INFLATION_BPS,
+					"invalid emission inflation for validators"
+				);
 
-		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-		const TX_HASH: EthTransactionHash = [211u8; 32];
+				assert_eq!(
+					Emissions::backup_validator_emission_inflation(),
+					BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+					"invalid emission inflation for backup validators"
+				);
 
-		#[test]
-		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
-		// 1.  When the epoch is reached an auction is started and completed
-		// 2.  Stakers that were above the genesis MAB are now validating the network
-		fn epoch_rotates() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.build()
-				.execute_with(|| {
-					// Move to block before epoch
-					run_to_block(EPOCH_BLOCKS - 1);
+				for account in accounts.iter() {
 					assert_eq!(
-						Auction::current_auction_index(),
-						0,
-						"we should have had no auction yet"
+						Reputation::reputation(account),
+						pallet_cf_reputation::Reputation::<BlockNumber>::default(),
+						"validator shouldn't have reputation points"
 					);
-					// TODO depends on fix for online nodes
-					// New users stake in the network
-					// const STAKER_1: [u8; 32] = [100u8; 32];
-					// const STAKER_2: [u8; 32] = [101u8; 32];
-					// const STAKER_3: [u8; 32] = [102u8; 32];
-					//
-					// let stakers = &[STAKER_1, STAKER_2, STAKER_3];
-					// let validators = Validator::current_validators();
-					//
-					// for staker in stakers.iter() {
-					// 	pallet_cf_staking::Call::<Runtime>::staked(
-					// 		AccountId::from(STAKER_1),
-					// 		10_000_000,
-					// 		ETH_ZERO_ADDRESS,
-					// 		TX_HASH,
-					// 	);
-					//
-					// 	for validator in validators.iter() {
-					// 		assert_ok!(WitnesserApi::witness_staked(
-					// 			Origin::signed(validator.clone()),
-					// 			AccountId::from(*staker),
-					// 			10_000_000,
-					// 			ETH_ZERO_ADDRESS,
-					// 			TX_HASH
-					// 		));
-					// 	}
-					//
-					// 	assert_eq!(
-					// 		Flip::stakeable_balance(&AccountId::from(*staker)),
-					// 		10_000_000,
-					// 		"Should have stakeable balance"
-					// 	);
-					//
-					// 	assert_ok!(Reputation::heartbeat(Origin::signed(AccountId::from(
-					// 		*staker
-					// 	))));
-					// }
-					//
-					// assert_eq!(
-					// 	Auction::current_auction_index(),
-					// 	0,
-					// 	"we should have had no auction yet"
-					// );
-					//
-					// run_to_block(EPOCH_BLOCKS);
-					//
-					// assert_eq!(
-					// 	Auction::current_auction_index(),
-					// 	1,
-					// 	"this should be the first auction"
-					// );
-					//
-					// if let Some(AuctionResult {
-					// 	winners,
-					// 	minimum_active_bid,
-					// }) = Auction::auction_result()
-					// {
-					// 	assert_eq!(
-					// 		winners,
-					// 		stakers
-					// 			.iter()
-					// 			.map(|account_id| AccountId::from(*account_id))
-					// 			.collect::<Vec<_>>(),
-					// 		"new stakers should be the winners of this auction"
-					// 	);
-					// } else {
-					// 	unreachable!("we should have an auction result")
-					// }
-				});
+				}
+			});
 		}
 	}
 }
