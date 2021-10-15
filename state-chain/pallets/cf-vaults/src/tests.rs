@@ -160,11 +160,13 @@ mod tests {
 			assert!(!VaultsPallet::no_active_chain_vault_rotations());
 
 			let tx_hash = "tx_hash".as_bytes().to_vec();
+			let block_number = 1000;
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
 				VaultRotationResponse::Success {
 					tx_hash: tx_hash.clone(),
+					block_number,
 				}
 			));
 
@@ -175,6 +177,27 @@ mod tests {
 				ethereum_public_key()
 			);
 			assert_eq!(VaultsPallet::eth_vault().current_key, new_public_key);
+
+			let outgoing = VaultsPallet::active_windows(
+				cf_traits::mocks::epoch_info::Mock::epoch_index(),
+				Chain::Ethereum,
+			);
+
+			// Confirm we have the new set of active windows for Ethereum
+			let incoming = VaultsPallet::active_windows(
+				cf_traits::mocks::epoch_info::Mock::epoch_index() + 1,
+				Chain::Ethereum,
+			);
+
+			assert!(outgoing.from == 0 && outgoing.to.is_some());
+
+			assert_eq!(
+				incoming,
+				BlockHeightWindow {
+					from: block_number,
+					to: None
+				}
+			);
 
 			// Check the event emitted
 			assert_eq!(
@@ -333,7 +356,8 @@ mod tests {
 					// we haven't started a new rotation, so ceremony 1 has not been initialised
 					1,
 					VaultRotationResponse::Success {
-						tx_hash: vec![0; 32].into()
+						tx_hash: vec![0; 32].into(),
+						block_number: 0,
 					}
 				),
 				Error::<MockRuntime>::InvalidCeremonyId,
