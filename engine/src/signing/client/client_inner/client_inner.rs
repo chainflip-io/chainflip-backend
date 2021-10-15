@@ -226,9 +226,9 @@ where
                     if pending.should_expire_at < Instant::now() {
                         slog::warn!(
                             logger,
-                            "Request to sign expired waiting for key id: {:?}, ceremony id: {:?}",
-                            key_id,
-                            pending.signing_info.ceremony_id,
+                            "Request to sign expired waiting for key id: {:?}",
+                            key_id;
+                            CEREMONY_ID_KEY => pending.signing_info.ceremony_id,
                         );
                         return false;
                     }

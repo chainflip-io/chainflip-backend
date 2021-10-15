@@ -4,8 +4,13 @@ use super::*;
 
 macro_rules! assert_stage {
     ($c1:expr, $stage:expr) => {
-        assert_eq!(helpers::get_stage_for_default_ceremony(&$c1), $stage);
+        assert_eq!(helpers::get_stage_for_signing_ceremony(&$c1), $stage);
     };
+}
+
+// TODO: use function as these instead of macros?
+fn assert_no_stage(c: &helpers::MultisigClientNoDB) {
+    assert_eq!(helpers::get_stage_for_signing_ceremony(&c), None);
 }
 
 macro_rules! assert_no_stage {
@@ -113,7 +118,7 @@ async fn should_delay_comm1_before_rts() {
     // "Slow" client c1 receives a message before a request to sign, it should be delayed
     receive_comm1!(c1, 1, sign_states);
 
-    assert_no_stage!(c1);
+    assert_no_stage(&c1);
 
     let key = keygen_states.key_ready.sec_keys[0].clone();
 

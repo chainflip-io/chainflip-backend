@@ -30,7 +30,7 @@ use crate::{
     },
 };
 
-type MultisigClientNoDB = MultisigClient<KeyDBMock>;
+pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID};
 
@@ -189,8 +189,8 @@ pub struct ValidSigningStates {
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub fn keygen_stage_for(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> Option<String> {
-    client.get_keygen().get_stage_for(ceremony_id)
+pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
+    client.get_keygen().get_stage_for(KEYGEN_CEREMONY_ID)
 }
 
 /// Contains the states at different points of key generation
@@ -693,7 +693,7 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
             assert_eq!(
-                get_stage_for_ceremony(&c, SIGN_CEREMONY_ID),
+                get_stage_for_signing_ceremony(&c),
                 Some("BroadcastStage<AwaitCommitments1>".to_string())
             );
         }
@@ -738,7 +738,7 @@ impl KeygenContext {
             let c = &mut clients[*idx];
 
             assert_eq!(
-                get_stage_for_ceremony(&c, SIGN_CEREMONY_ID),
+                get_stage_for_signing_ceremony(&c),
                 Some("BroadcastStage<LocalSigStage3>".to_string())
             );
         }
@@ -976,12 +976,8 @@ pub fn keygen_data_to_p2p(
     }
 }
 
-pub fn get_stage_for_ceremony(c: &MultisigClientNoDB, id: CeremonyId) -> Option<String> {
-    c.signing_manager.get_stage_for(id)
-}
-
-pub fn get_stage_for_default_ceremony(c: &MultisigClientNoDB) -> Option<String> {
-    get_stage_for_ceremony(c, SIGN_CEREMONY_ID)
+pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> {
+    c.signing_manager.get_stage_for(SIGN_CEREMONY_ID)
 }
 
 pub fn create_bc1(signer_idx: usize) -> Broadcast1 {

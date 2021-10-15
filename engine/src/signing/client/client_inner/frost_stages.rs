@@ -247,7 +247,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
         slog::debug!(
             self.common.logger,
-            "Local signatures have been correctly broadcast for ceremony: [todo]"
+            "Local signatures have been correctly broadcast"
         );
 
         let all_idxs = &self.common.all_idxs;

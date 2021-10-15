@@ -6,10 +6,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
-use crate::signing::client::client_inner::common::broadcast::BroadcastStage;
-use crate::signing::client::client_inner::common::{
-    CeremonyCommon, ProcessMessageResult, StageResult,
-};
+
 use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
 use crate::signing::client::client_inner::utils::threshold_from_share_count;
 
@@ -19,7 +16,10 @@ use super::client_inner::{
 use super::keygen_data::KeygenData;
 use super::{InnerEvent, KeygenOutcome, KeygenResultInfo};
 
-use super::common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender};
+use super::common::{
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
+    ProcessMessageResult, RawP2PSender, StageResult,
+};
 use super::utils::ValidatorMaps;
 
 #[derive(Clone)]
@@ -293,8 +293,9 @@ impl KeygenState {
 #[cfg(test)]
 impl KeygenState {
     pub fn get_stage(&self) -> Option<String> {
-        // TODO
-        None
+        self.inner
+            .as_ref()
+            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
     }
 
     #[cfg(test)]
