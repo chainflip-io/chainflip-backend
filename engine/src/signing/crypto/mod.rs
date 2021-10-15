@@ -1,13 +1,6 @@
 // We want to re-export certain types here
 // to make sure all of our dependencies on
 // this module are in one place
-mod error;
-// mod schnorr;
-
-// pub use schnorr::{KeyGenBroadcastMessage1, KeyShare, Keys, Parameters};
-
-pub use error::{InvalidKey, InvalidSS, InvalidSig};
-
 pub use curv::{
     arithmetic::traits::Converter as BigIntConverter,
     cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS,
