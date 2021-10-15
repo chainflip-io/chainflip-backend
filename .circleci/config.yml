@@ -126,24 +126,29 @@ workflows:
       - clone-contracts-repo:
           context:
             - github-credentials
+          <<: *ignore_main_branches
       - fmt-validator-package:
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - cargo-check-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - cargo-test-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - hold:
           type: approval
           requires:
@@ -152,6 +157,7 @@ workflows:
             - cargo-check-validator-package
             - cargo-clippy-validator-package
             - cargo-test-validator-package
+          <<: *ignore_main_branches
       - cargo-build-and-test-validator-package:
           requires:
             - hold
@@ -159,11 +165,13 @@ workflows:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
+          <<: *ignore_main_branches
       - cargo-doc-validator-package:
           requires:
             - hold
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - test-single-node:
           requires:
             - cargo-build-and-test-validator-package
@@ -172,6 +180,14 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
+          <<: *ignore_main_branches
+
+      - cargo-build-and-test-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
+            - discord-webhooks
+          <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
