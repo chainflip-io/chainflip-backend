@@ -1,10 +1,13 @@
 use std::{collections::HashMap, convert::TryInto};
 
+use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use crate::signing::crypto::{
     BigInt, BigIntConverter, ECPoint, ECScalar, Point, Scalar, ScalarExt,
 };
+
+use super::client_inner::Parameters;
 
 /// Ceremony peers are interested in evaluations of our secret polynomial
 /// at their index `signer_idx`
@@ -52,12 +55,7 @@ fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     )
 }
 
-pub fn generate_dkg_challenge(
-    index: usize,
-    context: &str,
-    public: Point,
-    commitment: Point,
-) -> Scalar {
+fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment: Point) -> Scalar {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
@@ -74,9 +72,7 @@ pub fn generate_dkg_challenge(
     ECScalar::from(&BigInt::from_bytes(&x))
 }
 
-/// `context` should be a deterministic random string for better security
-// TODO: hash the ceremony id + the list of signers?
-pub fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
+fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
     let nonce = Scalar::new_random();
     let nonce_commitment = Point::generator() * nonce;
 
@@ -92,8 +88,24 @@ pub fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZK
     }
 }
 
+pub fn generate_shares_and_commitment(
+    context: &str,
+    index: usize,
+    params: Parameters,
+) -> (HashMap<usize, ShamirShare>, DKGUnverifiedCommitment) {
+    let (secret, commitments, shares) =
+        generate_secret_and_shares(params.share_count, params.threshold);
+
+    // Zero-knowledge proof of `secret`
+    let zkp = generate_zkp_of_secret(secret, &context, index);
+
+    // TODO: zeroize secret here
+
+    (shares, DKGUnverifiedCommitment { commitments, zkp })
+}
+
 // NOTE: shares should be sent after participants have exchanged commitments
-pub fn generate_secret_and_shares(
+fn generate_secret_and_shares(
     n: usize,
     t: usize,
 ) -> (Scalar, CoefficientCommitments, HashMap<usize, ShamirShare>) {
@@ -129,15 +141,16 @@ pub fn generate_secret_and_shares(
     (secret, CoefficientCommitments(commitments), shares)
 }
 
-pub fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitments) -> bool {
+fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitments) -> bool {
     zkp.r + comm.0[0] * challenge == Point::generator() * zkp.z
 }
 
 // (Figure 1: Round 2, Step 2)
-pub fn verify_share(share: &ShamirShare, com: &CoefficientCommitments) -> bool {
+pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
     let index = Scalar::from_usize(share.index);
 
     let res = com
+        .commitments
         .0
         .iter()
         .cloned()
@@ -148,129 +161,186 @@ pub fn verify_share(share: &ShamirShare, com: &CoefficientCommitments) -> bool {
     Point::generator() * share.value == res
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CoefficientCommitments(Vec<Point>);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ZKPSignature {
+    r: Point,
+    z: Scalar,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DKGUnverifiedCommitment {
+    commitments: CoefficientCommitments,
+    zkp: ZKPSignature,
+}
+
+#[derive(Debug, Clone)]
+pub struct DKGCommitment {
+    commitments: CoefficientCommitments,
+}
+
+fn validate_commitment(
+    commitments: &CoefficientCommitments,
+    zkp: &ZKPSignature,
+    idx: usize,
+    context: &str,
+) -> bool {
+    let challenge = generate_dkg_challenge(idx, context, commitments.0[0], zkp.r);
+
+    is_valid_zkp(challenge, zkp, &commitments)
+}
+
 // (Figure 1: Round 1, Step 5)
-fn validate_commitments(
+pub fn validate_commitments(
     commitments: Vec<DKGUnverifiedCommitment>,
     context: &str,
 ) -> Result<Vec<DKGCommitment>, Vec<usize>> {
     let mut invalid_idxs = vec![];
 
-    for c in &commitments {
-        let challenge =
-            generate_dkg_challenge(c.index, context, c.shares_commitments.0[0], c.zkp.r);
-        if !is_valid_zkp(challenge, &c.zkp, &c.shares_commitments) {
-            invalid_idxs.push(c.index);
+    for (idx, c) in commitments.iter().enumerate() {
+        if !validate_commitment(&c.commitments, &c.zkp, idx + 1, context) {
+            invalid_idxs.push(idx + 1);
         }
     }
 
-    if invalid_idxs.len() > 0 {
-        eprintln!("invalid idxs: {:?}", invalid_idxs);
+    if !invalid_idxs.is_empty() {
         return Err(invalid_idxs);
     }
 
     Ok(commitments
         .into_iter()
         .map(|c| DKGCommitment {
-            index: c.index,
-            shares_commitments: c.shares_commitments,
+            commitments: c.commitments,
         })
         .collect())
 }
 
-#[cfg(test)]
-#[test]
-fn basic_sharing() {
-    let n = 7;
-    let threshold = 5;
-
-    let (secret, _commitments, shares) = generate_secret_and_shares(n, threshold);
-
-    assert_eq!(secret, reconstruct_secret(&shares));
+pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
+    // TODO: use a deterministic random string here for more security
+    // (hash ceremony_id + the list of signers?)
+    ceremony_id.to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CoefficientCommitments(pub Vec<Point>);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZKPSignature {
-    pub r: Point,
-    pub z: Scalar,
-}
-
-#[derive(Debug)]
-struct DKGUnverifiedCommitment {
-    index: usize,
-    shares_commitments: CoefficientCommitments,
-    zkp: ZKPSignature,
-}
-
-#[derive(Debug)]
-struct DKGCommitment {
-    index: usize,
-    shares_commitments: CoefficientCommitments,
-}
-
-#[test]
-fn keygen_sequential() {
-    let n = 4;
-    let t = 2;
-
-    let ceremony_id = 2;
-
-    let context = ceremony_id.to_string();
-
-    let (commitments, outgoing_shares): (Vec<_>, Vec<_>) = (1..=n)
-        .map(|index| {
-            let (secret, shares_commitments, shares) = generate_secret_and_shares(n, t);
-            // Zero-knowledge proof of `secret`
-            let zkp = generate_zkp_of_secret(secret, &context, index);
-
-            let dkg_commitment = DKGUnverifiedCommitment {
-                index,
-                shares_commitments,
-                zkp,
-            };
-
-            (dkg_commitment, shares)
-        })
-        .unzip();
-
-    let res = validate_commitments(commitments, &context);
-
-    assert!(res.is_ok());
-
-    let coeff_commitments = res.unwrap();
-
-    // Now it is okay to distribute the shares
-
-    let _agg_pubkey = coeff_commitments
+pub fn derive_aggregate_pubkey(commitments: &[DKGCommitment]) -> Point {
+    commitments
         .iter()
-        .map(|c| c.shares_commitments.0[0])
+        .map(|c| c.commitments.0[0])
         .reduce(|acc, x| acc + x)
-        .unwrap();
+        .unwrap()
+}
 
-    let mut secret_shares = vec![];
+pub fn derive_local_pubkeys_for_parties(
+    Parameters {
+        share_count: n,
+        threshold: t,
+    }: Parameters,
+    commitments: &[DKGCommitment],
+) -> Vec<Point> {
+    // Recall that each party i's secret key share `s` is the sum
+    // of secret shares they receive from all other parties, which
+    // are in turn calculated by evaluating each party's sharing
+    // polynomial `f(x)` at `x = i`. We can derive `G * s` (unlike
+    // `s` itself), because we know `G * f(x)` from coefficient
+    // commitments.
+    // I.e. y_i = G * f_1(i) + G * f_2(i) + ... G * f_n(i), where
+    // G * f_j(i) = G * s_j + G * c_j_1(i) + G * c_j_2(i) + ... + c_j_{t-1}(i)
 
-    for receiver_idx in 1..=n {
-        let received_shares: Vec<_> = outgoing_shares
+    (1..=n)
+        .map(|idx| {
+            let idx_scalar = Scalar::from_usize(idx);
+
+            (1..=n)
+                .map(|j| {
+                    (0..=t)
+                        .map(|k| commitments[j - 1].commitments.0[k])
+                        .rev()
+                        .reduce(|acc, x| acc * idx_scalar + x)
+                        .unwrap()
+                })
+                .reduce(|acc, x| acc + x)
+                .unwrap()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn basic_sharing() {
+        let n = 7;
+        let threshold = 5;
+
+        let (secret, _commitments, shares) = generate_secret_and_shares(n, threshold);
+
+        assert_eq!(secret, reconstruct_secret(&shares));
+    }
+
+    #[test]
+    fn keygen_sequential() {
+        let n = 4;
+        let t = 2;
+
+        let ceremony_id = 2;
+
+        let context = generate_keygen_context(ceremony_id);
+
+        let (commitments, outgoing_shares): (Vec<_>, Vec<_>) = (1..=n)
+            .map(|index| {
+                let (secret, shares_commitments, shares) = generate_secret_and_shares(n, t);
+                // Zero-knowledge proof of `secret`
+                let zkp = generate_zkp_of_secret(secret, &context, index);
+
+                let dkg_commitment = DKGUnverifiedCommitment {
+                    commitments: shares_commitments,
+                    zkp,
+                };
+
+                (dkg_commitment, shares)
+            })
+            .unzip();
+
+        let res = validate_commitments(commitments, &context);
+
+        assert!(res.is_ok());
+
+        let coeff_commitments = res.unwrap();
+
+        // Now it is okay to distribute the shares
+
+        let _agg_pubkey = coeff_commitments
             .iter()
-            .map(|shares| shares[&receiver_idx].clone())
-            .collect();
-
-        for (idx, share) in received_shares.iter().enumerate() {
-            let res = verify_share(share, &coeff_commitments[idx].shares_commitments);
-            assert!(res);
-        }
-
-        // (Roound 2, Step 3)
-        let secret_share = received_shares
-            .iter()
-            .map(|share| share.value)
-            .reduce(|acc, share| acc + share)
+            .map(|c| c.commitments.0[0])
+            .reduce(|acc, x| acc + x)
             .unwrap();
 
-        // TODO: delete all received_shares
+        let mut secret_shares = vec![];
 
-        secret_shares.push(secret_share);
+        for receiver_idx in 1..=n {
+            let received_shares: Vec<_> = outgoing_shares
+                .iter()
+                .map(|shares| shares[&receiver_idx].clone())
+                .collect();
+
+            for (idx, share) in received_shares.iter().enumerate() {
+                let res = verify_share(share, &coeff_commitments[idx]);
+                assert!(res);
+            }
+
+            // (Roound 2, Step 3)
+            let secret_share = received_shares
+                .iter()
+                .map(|share| share.value)
+                .reduce(|acc, share| acc + share)
+                .unwrap();
+
+            // TODO: delete all received_shares
+
+            secret_shares.push(secret_share);
+        }
     }
 }

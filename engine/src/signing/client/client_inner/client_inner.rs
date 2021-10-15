@@ -18,6 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::{
     common::KeygenResultInfo, frost::SigningDataWrapped, key_store::KeyStore,
     keygen_data::KeygenData, keygen_manager::KeygenManager, signing_manager::SigningManager,
+    utils::threshold_from_share_count,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -26,6 +27,21 @@ pub struct SchnorrSignature {
     pub s: [u8; 32],
     /// Point component (commitment)
     pub r: secp256k1::PublicKey,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Parameters {
+    pub threshold: usize,
+    pub share_count: usize,
+}
+
+impl Parameters {
+    pub fn from_share_count(share_count: usize) -> Self {
+        Parameters {
+            share_count,
+            threshold: threshold_from_share_count(share_count),
+        }
+    }
 }
 
 impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {

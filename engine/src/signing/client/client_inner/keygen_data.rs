@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{
-    common::BroadcastVerificationMessage,
-    keygen_frost::{CoefficientCommitments, ShamirShare, ZKPSignature},
-};
+use super::{common::BroadcastVerificationMessage, keygen_frost::ShamirShare};
 
 macro_rules! derive_impls_for_keygen_data {
     ($variant: ty, $variant_path: path) => {
@@ -33,11 +30,7 @@ impl std::fmt::Display for KeygenData {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Comm1 {
-    pub commitments: CoefficientCommitments,
-    pub zkp: ZKPSignature,
-}
+pub type Comm1 = super::keygen_frost::DKGUnverifiedCommitment;
 
 pub type VerifyComm2 = BroadcastVerificationMessage<Comm1>;
 

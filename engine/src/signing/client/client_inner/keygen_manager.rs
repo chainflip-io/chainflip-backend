@@ -109,10 +109,12 @@ impl KeygenManager {
             }
         };
 
+        let logger = self.logger.clone();
+
         let entry = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert(KeygenState::new_unauthorised(self.logger.clone()));
+            .or_insert_with(|| KeygenState::new_unauthorised(logger));
 
         entry.on_keygen_request(
             ceremony_id,
@@ -130,10 +132,13 @@ impl KeygenManager {
     ) -> Option<KeygenResultInfo> {
         let KeyGenMessageWrapped { ceremony_id, data } = msg;
 
+        // TODO: how can I avoid cloning the logger?
+        let logger = self.logger.clone();
+
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert(KeygenState::new_unauthorised(self.logger.clone()));
+            .or_insert_with(|| KeygenState::new_unauthorised(logger));
 
         let res = state.process_message(sender_id, data);
 
@@ -151,7 +156,6 @@ impl KeygenManager {
 #[cfg(test)]
 impl KeygenManager {
     pub fn expire_all(&mut self) {
-        // TODO !!!
         for (_, state) in &mut self.keygen_states {
             state.set_expiry_time(std::time::Instant::now());
         }

@@ -788,35 +788,11 @@ pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
     }
 }
 
-/// Skip all non-signal messages
-pub async fn recv_next_signal_message_skipping(
-    rx: &mut InnerEventReceiver,
-) -> Option<SigningOutcome> {
-    loop {
-        let res = recv_next_inner_event_opt(rx).await?;
-
-        if let InnerEvent::SigningResult(s) = res {
-            return Some(s);
-        }
-    }
-}
-
-/// Check if the next event produced by the receiver is SigningOutcome
+/// Check the next event produced by the receiver if it is SigningOutcome
 pub async fn check_sig_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
     let event: &InnerEvent = check_inner_event(rx).await?;
 
     if let InnerEvent::SigningResult(outcome) = event {
-        Some(outcome)
-    } else {
-        None
-    }
-}
-
-/// Check if the next event produced by the receiver is SigningOutcome
-pub async fn check_keygen_outcome(rx: &mut InnerEventReceiver) -> Option<&KeygenOutcome> {
-    let event: &InnerEvent = check_inner_event(rx).await?;
-
-    if let InnerEvent::KeygenResult(outcome) = event {
         Some(outcome)
     } else {
         None

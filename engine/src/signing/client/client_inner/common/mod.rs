@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     p2p::{AccountId, P2PMessageCommand},
-    signing::crypto::{KeyShare, Parameters, Point},
+    signing::crypto::{KeyShare, Point},
 };
 
-use super::{utils::ValidatorMaps, InnerEvent};
+use super::{client_inner::Parameters, utils::ValidatorMaps, InnerEvent};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {

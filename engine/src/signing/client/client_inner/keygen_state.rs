@@ -7,14 +7,12 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
+use crate::signing::client::client_inner::client_inner::Parameters;
 use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
-use crate::signing::client::client_inner::utils::threshold_from_share_count;
 
-use super::client_inner::{
-    CeremonyOutcomeResult, EventSender, KeyGenMessageWrapped, MultisigMessage,
-};
+use super::client_inner::{EventSender, KeyGenMessageWrapped, MultisigMessage};
 use super::keygen_data::KeygenData;
-use super::{InnerEvent, KeygenOutcome, KeygenResultInfo};
+use super::{InnerEvent, KeygenResultInfo};
 
 use super::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
@@ -31,19 +29,6 @@ struct KeygenStateAuthorised {
     // results only (no p2p stuff)
     result_sender: EventSender,
     validator_map: Arc<ValidatorMaps>,
-}
-
-impl KeygenStateAuthorised {
-    fn send_result(&self, result: CeremonyOutcomeResult<KeygenResult>) {
-        use crate::signing::crypto::ECPoint;
-
-        self.result_sender
-            .send(InnerEvent::KeygenResult(KeygenOutcome {
-                id: self.ceremony_id,
-                result: result.map(|res| res.key_share.y.get_element()),
-            }))
-            .unwrap();
-    }
 }
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
@@ -182,14 +167,9 @@ impl KeygenState {
                                     "Keygen ceremony reached the final stage!"
                                 );
 
-                                // TODO: make this nicer
-                                let n = keygen_result.party_public_keys.len();
-                                let t = threshold_from_share_count(n);
-
-                                let params = crate::signing::crypto::Parameters {
-                                    share_count: n,
-                                    threshold: t,
-                                };
+                                let params = Parameters::from_share_count(
+                                    keygen_result.party_public_keys.len(),
+                                );
 
                                 let keygen_result_info = KeygenResultInfo {
                                     key: Arc::new(keygen_result),

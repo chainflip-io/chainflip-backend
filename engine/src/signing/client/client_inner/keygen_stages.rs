@@ -2,13 +2,10 @@ use std::collections::HashMap;
 
 use pallet_cf_vaults::CeremonyId;
 
-use crate::signing::{
-    client::client_inner::keygen_frost::{generate_dkg_challenge, verify_share},
-    crypto::KeyShare,
-    crypto::Point,
-};
+use crate::signing::{client::client_inner::keygen_frost::verify_share, crypto::KeyShare};
 
 use super::{
+    client_inner::Parameters,
     common::{
         broadcast::{BroadcastStage, BroadcastStageProcessor, DataToSend},
         broadcast_verification::verify_broadcasts,
@@ -16,11 +13,11 @@ use super::{
     },
     keygen_data::{Comm1, Complaints4, KeygenData, SecretShare3, VerifyComm2, VerifyComplaints5},
     keygen_frost::{
-        generate_secret_and_shares, generate_zkp_of_secret, is_valid_zkp, CoefficientCommitments,
-        ShamirShare, ZKPSignature,
+        derive_aggregate_pubkey, derive_local_pubkeys_for_parties, generate_keygen_context,
+        generate_shares_and_commitment, validate_commitments, DKGCommitment,
+        DKGUnverifiedCommitment, ShamirShare,
     },
     keygen_state::KeygenP2PSender,
-    utils::threshold_from_share_count,
 };
 
 type KeygenCeremonyCommon = CeremonyCommon<KeygenData, KeygenP2PSender>;
@@ -30,29 +27,22 @@ type KeygenCeremonyCommon = CeremonyCommon<KeygenData, KeygenP2PSender>;
 #[derive(Clone)]
 pub struct AwaitCommitments1 {
     common: KeygenCeremonyCommon,
-    commitments: CoefficientCommitments,
-    zkp: ZKPSignature,
+    own_commitment: DKGUnverifiedCommitment,
     shares: HashMap<usize, ShamirShare>,
 }
 
 impl AwaitCommitments1 {
     pub fn new(ceremony_id: CeremonyId, common: KeygenCeremonyCommon) -> Self {
-        let n = common.all_idxs.len();
-        let t = threshold_from_share_count(n);
+        let params = Parameters::from_share_count(common.all_idxs.len());
 
-        let (secret, commitments, shares) = generate_secret_and_shares(n, t);
+        let context = generate_keygen_context(ceremony_id);
 
-        // TODO: use a deterministic random string here for more security
-        // (hash ceremony_id + the list of signers?)
-        let context = ceremony_id.to_string();
-
-        // Zero-knowledge proof of `secret`
-        let zkp = generate_zkp_of_secret(secret, &context, common.own_idx);
+        let (shares, own_commitment) =
+            generate_shares_and_commitment(&context, common.own_idx, params);
 
         AwaitCommitments1 {
             common,
-            commitments,
-            zkp,
+            own_commitment,
             shares,
         }
     }
@@ -64,10 +54,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
     type Message = Comm1;
 
     fn init(&self) -> DataToSend<Self::Message> {
-        DataToSend::Broadcast(Comm1 {
-            commitments: self.commitments.clone(),
-            zkp: self.zkp.clone(),
-        })
+        DataToSend::Broadcast(self.own_commitment.clone())
     }
 
     fn should_delay(&self, m: &KeygenData) -> bool {
@@ -102,12 +89,6 @@ struct VerifyCommitmentsBroadcast2 {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
 
-fn is_valid_commitment(context: &str, index: usize, c: &Comm1) -> bool {
-    let challenge = generate_dkg_challenge(index, context, c.commitments.0[0], c.zkp.r);
-
-    is_valid_zkp(challenge, &c.zkp, &c.commitments)
-}
-
 impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
 
@@ -133,46 +114,32 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
         self,
         messages: std::collections::HashMap<usize, Self::Message>,
     ) -> StageResult<KeygenData, KeygenResult> {
-        let verified_commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(blamed_parties);
-            }
+            Err(blamed_parties) => return StageResult::Error(blamed_parties),
         };
 
-        let context = self.common.ceremony_id.to_string();
+        let context = generate_keygen_context(self.common.ceremony_id);
 
-        let failed_parties: Vec<_> = verified_commitments
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, c)| {
-                let signer_idx = idx + 1;
-                if is_valid_commitment(&context, signer_idx, c) {
-                    None
-                } else {
-                    Some(signer_idx)
-                }
-            })
-            .collect();
+        let commitments = match validate_commitments(commitments, &context) {
+            Ok(comms) => comms,
+            Err(blamed_parties) => return StageResult::Error(blamed_parties),
+        };
 
-        if failed_parties.is_empty() {
-            slog::debug!(
-                self.common.logger,
-                "Initial commitments have been correctly broadcast"
-            );
+        slog::debug!(
+            self.common.logger,
+            "Initial commitments have been correctly broadcast"
+        );
 
-            let processor = SecretSharesStage3 {
-                common: self.common.clone(),
-                commitments: verified_commitments,
-                shares: self.shares_to_send,
-            };
+        let processor = SecretSharesStage3 {
+            common: self.common.clone(),
+            commitments,
+            shares: self.shares_to_send,
+        };
 
-            let stage = BroadcastStage::new(processor, self.common);
+        let stage = BroadcastStage::new(processor, self.common);
 
-            StageResult::NextStage(Box::new(stage))
-        } else {
-            StageResult::Error(failed_parties)
-        }
+        StageResult::NextStage(Box::new(stage))
     }
 }
 
@@ -180,41 +147,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
 struct SecretSharesStage3 {
     common: KeygenCeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: Vec<Comm1>,
+    commitments: Vec<DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
 }
 
 derive_display_as_type_name!(SecretSharesStage3);
-
-fn derive_local_pubkeys_for_parties(n: usize, t: usize, commitments: &Vec<Comm1>) -> Vec<Point> {
-    use crate::signing::crypto::{Scalar, ScalarExt};
-
-    // Recall that each party i's secret key share `s` is the sum
-    // of secret shares they receive from all other parties, which
-    // are in turn calculated by evaluating each party's sharing
-    // polynomial `f(x)` at `x = i`. We can derive `G * s` (unlike
-    // `s` itself), because we know `G * f(x)` from coefficient
-    // commitments.
-    // I.e. y_i = G * f_1(i) + G * f_2(i) + ... G * f_n(i), where
-    // G * f_j(i) = G * s_j + G * c_j_1(i) + G * c_j_2(i) + ... + c_j_{t-1}(i)
-
-    (1..=n)
-        .map(|idx| {
-            let idx_scalar = Scalar::from_usize(idx);
-
-            (1..=n)
-                .map(|j| {
-                    (0..=t)
-                        .map(|k| commitments[j - 1].commitments.0[k])
-                        .rev()
-                        .reduce(|acc, x| acc * idx_scalar + x)
-                        .unwrap()
-                })
-                .reduce(|acc, x| acc + x)
-                .unwrap()
-        })
-        .collect()
-}
 
 impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
     type Message = SecretShare3;
@@ -243,7 +180,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         let bad_parties: Vec<_> = shares
             .iter()
             .filter_map(|(sender_idx, share)| {
-                if verify_share(share, &self.commitments[sender_idx - 1].commitments) {
+                if verify_share(share, &self.commitments[sender_idx - 1]) {
                     None
                 } else {
                     Some(*sender_idx)
@@ -270,7 +207,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
 struct ComplaintsStage4 {
     common: KeygenCeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: Vec<Comm1>,
+    commitments: Vec<DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
     complaints: Vec<usize>,
 }
@@ -310,7 +247,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
 struct VerfiyComplaintsBroadcastStage5 {
     common: KeygenCeremonyCommon,
     received_complaints: HashMap<usize, Complaints4>,
-    commitments: Vec<Comm1>,
+    commitments: Vec<DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
 }
 
@@ -365,18 +302,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroad
 
             // TODO: delete all received shares (I think)
 
-            let agg_pubkey = self
-                .commitments
-                .iter()
-                .map(|c| c.commitments.0[0])
-                .reduce(|acc, x| acc + x)
-                .unwrap();
+            let agg_pubkey = derive_aggregate_pubkey(&self.commitments);
 
-            let n = self.common.all_idxs.len();
-            // TODO: should I put this into common?
-            let t = threshold_from_share_count(n);
+            let params = Parameters::from_share_count(self.common.all_idxs.len());
 
-            let party_public_keys = derive_local_pubkeys_for_parties(n, t, &self.commitments);
+            let party_public_keys = derive_local_pubkeys_for_parties(params, &self.commitments);
 
             // TODO: can we be certain that the sharing polynomial
             // is the right size (according to `t`)?

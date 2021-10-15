@@ -20,12 +20,6 @@ pub use curv::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Parameters {
-    pub threshold: usize,
-    pub share_count: usize,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyShare {
     pub y: Point,
