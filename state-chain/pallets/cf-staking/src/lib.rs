@@ -8,6 +8,9 @@ mod mock;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod tests;
 
@@ -19,7 +22,6 @@ use frame_support::{
 	ensure,
 	error::BadOrigin,
 	traits::{EnsureOrigin, Get, HandleLifetime, UnixTime},
-	weights,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -118,6 +120,9 @@ pub mod pallet {
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -147,7 +152,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			Self::expire_pending_claims()
+			Self::expire_pending_claims();
+			0
 		}
 	}
 
@@ -244,7 +250,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::staked())]
 		pub fn staked(
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
@@ -287,7 +293,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [StakeTransfer]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(
 			origin: OriginFor<T>,
 			amount: FlipBalance<T>,
@@ -309,7 +315,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - See [claim](Self::claim)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::claim_all())]
 		pub fn claim_all(
 			origin: OriginFor<T>,
 			address: EthereumAddress,
@@ -337,7 +343,7 @@ pub mod pallet {
 		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
 		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): Claimed amount is not the same as witnessed amount.
 		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::claimed())]
 		pub fn claimed(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -394,7 +400,7 @@ pub mod pallet {
 		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): The claim is not valid.
 		/// - [SignatureTooLate](Error::SignatureTooLate): We're calling this function after the expiration of
 		///   the claim.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::post_claim_signature())]
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -454,7 +460,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyRetired](Error::AlreadyRetired): The account is already retired.
 		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::retire_account())]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::retire(&who)?;
@@ -473,7 +479,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyActive](Error::AlreadyActive): The account is not in a retired state.
 		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::activate_account())]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::activate(&who)?;
@@ -764,29 +770,19 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Expires any pending claims that have passed their TTL.
-	pub fn expire_pending_claims() -> weights::Weight {
-		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
-
+	pub fn expire_pending_claims() {
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
 			// Nothing to expire, should be pretty cheap.
-			return weight;
+			return;
 		}
-
-		weight = weight.saturating_add(T::DbWeight::get().reads(2));
 
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
 		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
 
-		if expiry_cutoff == 0 {
-			return weight;
-		}
-
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 
 		ClaimExpiries::<T>::set(remaining.into());
-
-		weight = weight.saturating_add(T::DbWeight::get().writes(1));
 
 		for (_, account_id) in to_expire {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
@@ -799,15 +795,8 @@ impl<T: Config> Pallet<T> {
 
 				// Re-credit the account
 				T::Flip::revert_claim(&account_id, pending_claim.amount);
-
-				// Add weight: One read/write each for deleting the claim and updating the stake.
-				weight = weight
-					.saturating_add(T::DbWeight::get().reads(2))
-					.saturating_add(T::DbWeight::get().writes(2));
 			}
 		}
-
-		weight
 	}
 }
 

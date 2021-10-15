@@ -100,6 +100,7 @@ impl pallet_cf_staking::Config for Test {
 	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;

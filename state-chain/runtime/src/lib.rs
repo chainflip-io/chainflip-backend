@@ -376,6 +376,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
