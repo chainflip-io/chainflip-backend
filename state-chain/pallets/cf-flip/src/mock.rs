@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
-use cf_traits::StakeTransfer;
+use cf_traits::{Bid, StakeTransfer};
 use frame_support::{
 	parameter_types,
 	traits::{EnsureOrigin, HandleLifetime},
