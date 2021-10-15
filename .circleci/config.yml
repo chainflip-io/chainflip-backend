@@ -186,6 +186,8 @@ workflows:
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
       - cargo-build-and-test-validator-package:
+          requires:
+            - fmt-validator-package
           name: cargo-build-and-test-develop
           context:
             - ghcr-credentials
