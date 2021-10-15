@@ -15,7 +15,7 @@ use crate::{
     signing::crypto::{KeyShare, Point},
 };
 
-use super::{client_inner::Parameters, utils::ValidatorMaps, InnerEvent};
+use super::{client_inner::ThresholdParameters, utils::ValidatorMaps, InnerEvent};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {
@@ -39,7 +39,7 @@ impl KeygenResult {
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
     pub validator_map: Arc<ValidatorMaps>,
-    pub params: Parameters,
+    pub params: ThresholdParameters,
 }
 
 impl KeygenResultInfo {

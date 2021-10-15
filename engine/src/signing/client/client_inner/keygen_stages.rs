@@ -5,7 +5,7 @@ use pallet_cf_vaults::CeremonyId;
 use crate::signing::{client::client_inner::keygen_frost::verify_share, crypto::KeyShare};
 
 use super::{
-    client_inner::Parameters,
+    client_inner::ThresholdParameters,
     common::{
         broadcast::{BroadcastStage, BroadcastStageProcessor, DataToSend},
         broadcast_verification::verify_broadcasts,
@@ -33,7 +33,7 @@ pub struct AwaitCommitments1 {
 
 impl AwaitCommitments1 {
     pub fn new(ceremony_id: CeremonyId, common: KeygenCeremonyCommon) -> Self {
-        let params = Parameters::from_share_count(common.all_idxs.len());
+        let params = ThresholdParameters::from_share_count(common.all_idxs.len());
 
         let context = generate_keygen_context(ceremony_id);
 
@@ -80,6 +80,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
     }
 }
 
+/// Stage 2: verify broadcasts of Stage 1 data
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: KeygenCeremonyCommon,
@@ -143,6 +144,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
     }
 }
 
+/// Stage 3: distribute (distinct) secret shares of our secret to each party
 #[derive(Clone)]
 struct SecretSharesStage3 {
     common: KeygenCeremonyCommon,
@@ -160,7 +162,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         // With everyone commited to their secrets and sharing polynomial coefficients
         // we can now send the *distinct* secret shares to each party
 
-        // TODO: generate shares here instead of during stage 1 (and carry the secret over instead?)
         DataToSend::Private(self.shares.clone())
     }
 
@@ -203,6 +204,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
 }
 
 /// During this stage parties have a chance to complain about
+/// a party sending a secret share that isn't valid when checked
+/// against the commitments
 #[derive(Clone)]
 struct ComplaintsStage4 {
     common: KeygenCeremonyCommon,
@@ -218,7 +221,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
     type Message = Complaints4;
 
     fn init(&self) -> DataToSend<Self::Message> {
-        // TODO: generate complatins here instead of the previous stage?
         DataToSend::Broadcast(Complaints4(self.complaints.clone()))
     }
 
@@ -300,11 +302,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroad
                 .reduce(|acc, share| acc + share)
                 .unwrap();
 
-            // TODO: delete all received shares (I think)
+            // TODO: delete all received shares
 
             let agg_pubkey = derive_aggregate_pubkey(&self.commitments);
 
-            let params = Parameters::from_share_count(self.common.all_idxs.len());
+            let params = ThresholdParameters::from_share_count(self.common.all_idxs.len());
 
             let party_public_keys = derive_local_pubkeys_for_parties(params, &self.commitments);
 

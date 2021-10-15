@@ -9,8 +9,7 @@ use super::InnerEvent;
 use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
-use crate::signing::client::client_inner::utils::project_signers;
-use crate::signing::{MessageHash, SigningOutcome};
+use crate::signing::{client::client_inner::utils::project_signers, MessageHash, SigningOutcome};
 
 use super::signing_state::SigningState;
 

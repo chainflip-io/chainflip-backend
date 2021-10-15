@@ -416,34 +416,33 @@ async fn should_ignore_duplicate_rts() {
     assert_stage2!(c1);
 }
 
-// #[tokio::test]
-// async fn should_delay_rts_until_key_is_ready() {
-//     let mut ctx = helpers::KeygenContext::new();
-//     let keygen_states = ctx.generate().await;
+#[tokio::test]
+async fn should_delay_rts_until_key_is_ready() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
 
-//     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
-//     assert_no_stage!(c1);
+    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
+    assert_no_stage!(c1);
 
-//     // send the request to sign
-//     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    // send the request to sign
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
-//     // The request should have been delayed, so the stage is unaffected
-//     assert_no_stage!(c1);
+    // The request should have been delayed, so the stage is unaffected
+    assert_no_stage!(c1);
 
-//     // complete the keygen by sending the sec2 from each other client to client 0
-//     for sender_idx in 1..=3 {
-//         let s_id = keygen_states.keygen_phase3.clients[sender_idx].get_my_account_id();
-//         let sec2 = keygen_states.keygen_phase3.sec3_vec[sender_idx]
-//             .get(&c1.get_my_account_id())
-//             .unwrap();
+    // complete the keygen by sending the ver5 from each other client to client 0
+    for sender_idx in 1..=3 {
+        // send all but 1 ver2 data to the client
+        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
 
-//         let m = helpers::keygen_data_to_p2p(sec2.clone(), &s_id, KEYGEN_CEREMONY_ID);
-//         c1.process_p2p_message(m);
-//     }
+        let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        c1.process_p2p_message(m);
+    }
 
-//     // Now that the keygen completed, the rts should have started
-//     assert_stage1!(c1);
-// }
+    // Now that the keygen completed, the rts should have been processed
+    assert_stage1!(c1);
+}
 
 #[tokio::test]
 async fn should_ignore_signing_non_participant() {

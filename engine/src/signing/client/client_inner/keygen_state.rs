@@ -7,10 +7,11 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
-use crate::signing::client::client_inner::client_inner::Parameters;
 use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
 
-use super::client_inner::{EventSender, KeyGenMessageWrapped, MultisigMessage};
+use super::client_inner::{
+    EventSender, KeyGenMessageWrapped, MultisigMessage, ThresholdParameters,
+};
 use super::keygen_data::KeygenData;
 use super::{InnerEvent, KeygenResultInfo};
 
@@ -167,7 +168,7 @@ impl KeygenState {
                                     "Keygen ceremony reached the final stage!"
                                 );
 
-                                let params = Parameters::from_share_count(
+                                let params = ThresholdParameters::from_share_count(
                                     keygen_result.party_public_keys.len(),
                                 );
 
@@ -185,8 +186,6 @@ impl KeygenState {
                         // Nothing to do
                     }
                 }
-
-                // TODO: process delayed
             }
         }
 

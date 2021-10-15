@@ -8,6 +8,7 @@ macro_rules! derive_impls_for_keygen_data {
     };
 }
 
+/// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum KeygenData {
     Comm1(Comm1),

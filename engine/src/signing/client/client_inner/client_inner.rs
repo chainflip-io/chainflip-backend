@@ -30,14 +30,16 @@ pub struct SchnorrSignature {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Parameters {
-    pub threshold: usize,
+pub struct ThresholdParameters {
+    /// Total number of key shares (equals the total number of parties in keygen)
     pub share_count: usize,
+    /// Max number of parties that can *NOT* generate signature
+    pub threshold: usize,
 }
 
-impl Parameters {
+impl ThresholdParameters {
     pub fn from_share_count(share_count: usize) -> Self {
-        Parameters {
+        ThresholdParameters {
             share_count,
             threshold: threshold_from_share_count(share_count),
         }

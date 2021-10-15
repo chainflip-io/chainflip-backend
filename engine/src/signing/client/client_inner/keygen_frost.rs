@@ -7,7 +7,7 @@ use crate::signing::crypto::{
     BigInt, BigIntConverter, ECPoint, ECScalar, Point, Scalar, ScalarExt,
 };
 
-use super::client_inner::Parameters;
+use super::client_inner::ThresholdParameters;
 
 /// Ceremony peers are interested in evaluations of our secret polynomial
 /// at their index `signer_idx`
@@ -34,6 +34,8 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
+/// Evaluation of a sharing polynomial for a given party index
+/// as per Shamir Secret Sharing scheme
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ShamirShare {
     /// index at which sharing polynomial was evaluated
@@ -42,8 +44,8 @@ pub struct ShamirShare {
     pub value: Scalar,
 }
 
-#[cfg(test)]
 /// Test-only helper function used to sanity check our sharing polynomial
+#[cfg(test)]
 fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     let all_idxs: Vec<usize> = shares.keys().into_iter().cloned().collect();
 
@@ -55,6 +57,7 @@ fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     )
 }
 
+/// Generate challenge agains which a ZKP of our secret will be generated
 fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment: Point) -> Scalar {
     use sha2::{Digest, Sha256};
 
@@ -72,6 +75,7 @@ fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment
     ECScalar::from(&BigInt::from_bytes(&x))
 }
 
+/// Generate ZKP (zero-knowledge proof) of `secret`
 fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
     let nonce = Scalar::new_random();
     let nonce_commitment = Point::generator() * nonce;
@@ -88,10 +92,13 @@ fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSig
     }
 }
 
+/// Generate a secret and derive shares and commitments from it.
+/// (The secret will never be needed again, so it is not exposed
+/// to the caller.)
 pub fn generate_shares_and_commitment(
     context: &str,
     index: usize,
-    params: Parameters,
+    params: ThresholdParameters,
 ) -> (HashMap<usize, ShamirShare>, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
         generate_secret_and_shares(params.share_count, params.threshold);
@@ -161,35 +168,31 @@ pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
     Point::generator() * share.value == res
 }
 
+/// Commitments to the sharing polynomial coefficient
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CoefficientCommitments(Vec<Point>);
 
+/// Zero-knowledge proof of us knowing the secret
+/// (in a form of a Schnorr signature)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ZKPSignature {
     r: Point,
     z: Scalar,
 }
 
+/// Commitments along with the corresponding ZNP
+/// which should be sent to other parties at the
+/// beginning of the ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DKGUnverifiedCommitment {
     commitments: CoefficientCommitments,
     zkp: ZKPSignature,
 }
 
+/// Commitments that have already been checked against the ZNP
 #[derive(Debug, Clone)]
 pub struct DKGCommitment {
     commitments: CoefficientCommitments,
-}
-
-fn validate_commitment(
-    commitments: &CoefficientCommitments,
-    zkp: &ZKPSignature,
-    idx: usize,
-    context: &str,
-) -> bool {
-    let challenge = generate_dkg_challenge(idx, context, commitments.0[0], zkp.r);
-
-    is_valid_zkp(challenge, zkp, &commitments)
 }
 
 // (Figure 1: Round 1, Step 5)
@@ -200,7 +203,9 @@ pub fn validate_commitments(
     let mut invalid_idxs = vec![];
 
     for (idx, c) in commitments.iter().enumerate() {
-        if !validate_commitment(&c.commitments, &c.zkp, idx + 1, context) {
+        let challenge = generate_dkg_challenge(idx + 1, context, c.commitments.0[0], c.zkp.r);
+
+        if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
             invalid_idxs.push(idx + 1);
         }
     }
@@ -217,12 +222,14 @@ pub fn validate_commitments(
         .collect())
 }
 
+/// Unique context used for generating a ZNP
 pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
     // TODO: use a deterministic random string here for more security
     // (hash ceremony_id + the list of signers?)
     ceremony_id.to_string()
 }
 
+/// Derive aggragate pubkey from party commitments
 pub fn derive_aggregate_pubkey(commitments: &[DKGCommitment]) -> Point {
     commitments
         .iter()
@@ -231,11 +238,12 @@ pub fn derive_aggregate_pubkey(commitments: &[DKGCommitment]) -> Point {
         .unwrap()
 }
 
+/// Derive each party's "local" pubkey
 pub fn derive_local_pubkeys_for_parties(
-    Parameters {
+    ThresholdParameters {
         share_count: n,
         threshold: t,
-    }: Parameters,
+    }: ThresholdParameters,
     commitments: &[DKGCommitment],
 ) -> Vec<Point> {
     // Recall that each party i's secret key share `s` is the sum

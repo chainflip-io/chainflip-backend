@@ -144,7 +144,7 @@ where
                     inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
-                    slog::debug!(logger, "Cleaning up multisig states");
+                    slog::trace!(logger, "Cleaning up multisig states");
                     inner.cleanup();
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
