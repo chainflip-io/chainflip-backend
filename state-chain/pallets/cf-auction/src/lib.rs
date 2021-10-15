@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
-#[doc = include_str!("../README.md")]
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
@@ -87,7 +87,7 @@ pub mod pallet {
 		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
 	}
 
-	/// Pallet implements [`Hooks`] trait
+	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 

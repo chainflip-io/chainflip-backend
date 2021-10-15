@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
-#[doc = include_str!("../README.md")]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -100,6 +100,18 @@ pub mod pallet {
 		/// Sets the number of blocks an epoch should run for
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [EpochDurationChanged](Event::EpochDurationChanged): We successfully changed the number
+		///   of blocks in an Epoch.
+		///
+		/// ## Errors
+		///
+		/// - [AuctionInProgress](Error::AuctionInProgress): Can't change the Epoch length during an
+		///   Auction.
+		/// - [InvalidEpoch](Error::InvalidEpoch): Can't set the Epoch length to less than the minimum
+		///   Epoch length (default 1), or the same as our current Epoch length.
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -125,6 +137,16 @@ pub mod pallet {
 		/// our validators.
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [ForceRotationRequested](Event::ForceRotationRequested): We successfully requested a
+		///   Validator Rotation.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): This was not called by Governance Origin.
+		/// - [AuctionInProgress](Error::AuctionInProgress): There is already an Auction occurring.
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -139,6 +161,18 @@ pub mod pallet {
 		/// Allow a validator to set their keys for upcoming sessions
 		///
 		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		///
+		/// ## Dependencies
+		///
+		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
 		pub(super) fn set_keys(
 			origin: OriginFor<T>,

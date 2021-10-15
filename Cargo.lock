@@ -959,11 +959,13 @@ dependencies = [
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-vaults",
+ "pallet-cf-witnesser-api",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",
  "regex",
  "reqwest",
+ "sc-rpc-api",
  "secp256k1",
  "serde 1.0.126",
  "serde_json",
@@ -973,7 +975,9 @@ dependencies = [
  "slog-json",
  "sp-core",
  "sp-keyring",
+ "sp-rpc",
  "sp-runtime",
+ "sp-version",
  "state-chain-runtime",
  "substrate-subxt",
  "thiserror",
@@ -4838,6 +4842,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-environment"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
@@ -8639,6 +8654,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "futures 0.3.15",
+ "hex",
  "hex-literal",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -8688,6 +8704,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-auction",
  "pallet-cf-emissions",
+ "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-online",
@@ -8874,7 +8891,8 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feb057a856b185f95a2b4dff834604a05c224e44fefa2d98a0a51ce9b2d666d0"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -8906,7 +8924,8 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9995016a22428cb7ffd83193a03eea32f6158a516a0c130bb60c5e5f6c467c44"
 dependencies = [
  "heck",
  "proc-macro-crate 0.1.5",

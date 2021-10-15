@@ -38,6 +38,7 @@ pallet-cf-governance = { path = "../pallets/cf-governance", default-features = f
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
 pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
+pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -122,4 +123,6 @@ std = [
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
   'pallet-cf-reputation/std',
+  'pallet-cf-environment/std',
+  'pallet-cf-online/std',
 ]

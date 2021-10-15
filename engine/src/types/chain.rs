@@ -2,6 +2,7 @@ use codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str};
 
+#[allow(clippy::upper_case_acronyms)]
 /// Enum for supported chain types
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Encode, Decode, Serialize)]
 pub enum Chain {
