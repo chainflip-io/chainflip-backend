@@ -93,6 +93,7 @@ pub mod pallet {
 	/// The liveness of our validators
 	///
 	#[pallet::storage]
+	#[pallet::getter(fn validators_liveness)]
 	pub(super) type ValidatorsLiveness<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness, OptionQuery>;
 
