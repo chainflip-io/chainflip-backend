@@ -30,7 +30,7 @@ pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
         .try_into()
         .expect("Should be exactly 20 bytes long");
 
-    return addr;
+    addr
 }
 
 #[cfg(test)]

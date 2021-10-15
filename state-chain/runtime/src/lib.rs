@@ -44,8 +44,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
-pub use cf_traits::FlipBalance;
-use cf_traits::{BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
+pub use cf_traits::{BlockNumber, FlipBalance};
+use cf_traits::{Chainflip, ChainflipAccountData};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
@@ -153,10 +153,13 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+}
+
+impl pallet_cf_environment::Config for Runtime {
+	type Event = Event;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -340,7 +343,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
@@ -462,6 +464,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
 	}
 );
 

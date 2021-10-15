@@ -116,6 +116,17 @@ pub mod pallet {
 		/// A heartbeat that is used to measure the liveness of a node
 		/// For every interval there are a set of nodes we expect a heartbeat from with which we
 		/// mark off when we have received a heartbeat.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): This is not a staked node.
+		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
+		///   submitted the heartbeat for this interval.
+		/// - [UnknownNode](Error::UnknownNode): This node is not recognised
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();

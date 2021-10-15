@@ -1,4 +1,4 @@
-use crate::EpochInfo;
+use crate::{EpochIndex, EpochInfo};
 use std::cell::RefCell;
 
 type AccountId = u64;
@@ -8,7 +8,7 @@ thread_local! {
 	pub static CURRENT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
 	pub static NEXT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
 	pub static BOND: RefCell<u128> = RefCell::new(0);
-	pub static EPOCH: RefCell<u32> = RefCell::new(0);
+	pub static EPOCH: RefCell<EpochIndex> = RefCell::new(0);
 	pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
 }
 
@@ -57,7 +57,6 @@ impl Mock {
 impl EpochInfo for Mock {
 	type ValidatorId = AccountId;
 	type Amount = u128;
-	type EpochIndex = u32;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
@@ -75,7 +74,7 @@ impl EpochInfo for Mock {
 		NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
 	}
 
-	fn epoch_index() -> Self::EpochIndex {
+	fn epoch_index() -> EpochIndex {
 		EPOCH.with(|cell| *cell.borrow())
 	}
 

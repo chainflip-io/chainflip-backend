@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - bug/ch1978-fix-integration-tests
+#        - feature/ch332-rust-doc
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,7 +17,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - test/ci-with-machine
+#        - fix/eth-subscribe
 
 only_epic_branches: &only_epic_branches
   filters:
@@ -121,6 +121,12 @@ workflows:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
 
   chainflip-backend-release:
     jobs:
@@ -140,6 +146,12 @@ workflows:
           context:
             - ghcr-credentials
             - discord-webhooks
+          <<: *only_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
           <<: *only_main_branches
       - build-docker-image:
           name: build-chainflip-engine
@@ -171,18 +183,6 @@ workflows:
             - infura-endpoints
           <<: *only_epic_branches
 
-  chainflip-integration-tests:
-    <<: *nightly
-    jobs:
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-      - run-integration-tests:
-          requires:
-            - clone-contracts-repo
-          context:
-            - ghcr-credentials
-            - discord-webhooks
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
@@ -281,7 +281,7 @@ jobs:
       - checkout
       - run: sccache --show-stats
       - run: |
-          cargo check --locked --release
+          cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
@@ -299,6 +299,18 @@ jobs:
       - run: |
           cargo clippy
           sccache --show-stats
+
+  cargo-doc-validator-package:
+    <<: *cargo-base-job
+    shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
+    steps:
+      - checkout
+      - run: sccache --show-stats
+      - run: |
+          cargo doc --workspace --document-private-items --no-deps
+          sccache --show-stats
+      - store_artifacts:
+          path: target/doc/
 
   clone-contracts-repo:
     resource_class: small
@@ -383,13 +395,19 @@ jobs:
       - run:
           name: Dump logs (state-chain-node)
           when: always
-          command: kubectl logs -l app.kubernetes.io/name=state-chain-node
+          command: kubectl logs -l app.kubernetes.io/name=state-chain-node --tail -1 > node.log
       - run:
           name: Dump logs (chainflip-engine)
           when: always
-          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine
+          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine --tail -1 > engine.log
+      - run: |
+          mkdir artifacts
+          mv *.log artifacts
+      - store_artifacts:
+          path: artifacts
       - run:
           name: Destroy single node
           when: always
           command: helm uninstall bashful -n default
+      - run: echo $TEST_NODE_LOG_URL
 ######################## /Jobs ########################

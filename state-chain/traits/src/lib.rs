@@ -52,8 +52,6 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
-	/// The index of an epoch
-	type EpochIndex;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
@@ -70,7 +68,7 @@ pub trait EpochInfo {
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
-	fn epoch_index() -> Self::EpochIndex;
+	fn epoch_index() -> EpochIndex;
 
 	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
 	fn is_auction_phase() -> bool;

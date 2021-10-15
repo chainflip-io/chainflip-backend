@@ -18,6 +18,7 @@ members = [
   'state-chain/pallets/cf-governance',
   'state-chain/pallets/cf-online',
   'state-chain/cf-integration-tests',
+  'state-chain/pallets/cf-environment',
   'state-chain/runtime',
   'state-chain/traits',
   'engine',

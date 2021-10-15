@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
-#[doc = include_str!("../README.md")]
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -141,6 +141,15 @@ pub mod pallet {
 		/// The accrual ratio can be updated and would come into play in the current heartbeat interval
 		/// This is only available to sudo
 		///
+		/// ## Events
+		///
+		/// - [AccrualRatioUpdated](Event::AccrualRatioUpdated): The accrual ratio was successfully updated.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints): If points < zero.
+		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits): If online_credits < zero
+		///   or online_credits possible per interval is more than the blocks per interval.
 		#[pallet::weight(10_000)]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,

@@ -38,7 +38,7 @@ mod mock;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::{EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochIndex, EpochInfo, EpochTransitionHandler};
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
@@ -54,6 +54,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::EpochIndex;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -72,20 +73,15 @@ pub mod pallet {
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
 
-		type Epoch: Member + FullCodec + Copy + AtLeast32BitUnsigned + Default;
-
 		type ValidatorId: Member
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Into<<Self as frame_system::Config>::AccountId>;
 
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	}
-
-	/// Alias for the `Epoch` configuration type.
-	pub(super) type Epoch<T> = <T as Config>::Epoch;
 
 	/// A hash to index the call by.
 	pub(super) type CallHash = [u8; 32];
@@ -102,14 +98,14 @@ pub mod pallet {
 	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
+		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
 
 	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
-		Epoch<T>,
+		EpochIndex,
 		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId,
 		u16,
@@ -160,7 +156,7 @@ pub mod pallet {
 		/// Called as a witness of some external event.
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
-		/// identical transaction. This can be thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
+		/// identical transaction. This can be thought of as a vote for the encoded [Call](Config::Call) value.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
@@ -203,7 +199,7 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
-		let epoch: Epoch<T> = T::EpochInfo::epoch_index();
+		let epoch: EpochIndex = T::EpochInfo::epoch_index();
 		let num_validators = NumValidators::<T>::get() as usize;
 
 		// Look up the signer in the list of validators

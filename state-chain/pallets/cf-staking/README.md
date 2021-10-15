@@ -2,15 +2,15 @@
 
 This pallet implements Chainflip staking functionality.
 
-## Purpose
+## Overview
 
 This pallet manages staking and claiming of stakes, including:
 
 - Receiving witnesses of events occurring in Chainflip's `StakeManager` Ethereum contract and updating validator's stakes accordingly.
 - Processing claim requests.
 - Expiring claims.
-- Account creation when stakers stake for the first time. 
-- Account deletion when stakers claim all remaining funds. 
+- Account creation when stakers stake for the first time.
+- Account deletion when stakers claim all remaining funds.
 
 ### Staking
 
@@ -50,14 +50,6 @@ This pallet does not depend on any other FRAME pallet or externally developed mo
 
 Requires a list of genesis stakers as a vec of tuples (`Vec<(AccountId<T>, T::Balance)>`). Each account in the list is staked in to the network
 as if they had been staked through validator consensus.
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open
-```
 
 ## Improvements
 
