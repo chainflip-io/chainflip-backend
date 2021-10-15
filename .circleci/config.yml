@@ -183,6 +183,7 @@ workflows:
           <<: *ignore_main_branches
 
       - cargo-build-and-test-validator-package:
+          name: cargo-build-and-test-develop
           context:
             - ghcr-credentials
             - github-credentials
@@ -194,7 +195,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package
+            - cargo-build-and-test-develop
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -204,7 +205,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
           extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package
+            - cargo-build-and-test-develop
           context:
             - ghcr-credentials
           <<: *only_main_branches
