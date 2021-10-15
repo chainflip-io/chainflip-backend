@@ -1,4 +1,5 @@
 use codec::{Decode, Encode};
+use sp_runtime::RuntimeDebug;
 
 pub type Liveness = u8;
 pub const SUBMITTED: u8 = 1;
@@ -31,7 +32,7 @@ impl LivenessTracker for Node {
 }
 
 /// A representation of a node in the network
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Node {
 	pub liveness: Liveness,
 	pub is_validator: bool,

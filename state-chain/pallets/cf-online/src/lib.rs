@@ -28,7 +28,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod liveness;
+pub mod liveness;
 
 use cf_traits::EpochTransitionHandler;
 use frame_support::pallet_prelude::*;

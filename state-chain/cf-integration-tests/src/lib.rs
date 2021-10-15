@@ -276,9 +276,12 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert_eq!(
-						Online::validators_liveness(account),
-						Some(0),
-						"validator should have not sent a heartbeat"
+						Online::liveness(account),
+						Some(pallet_cf_online::liveness::Node {
+							is_validator: true,
+							liveness: 1,
+						}),
+						"node should have not sent a heartbeat"
 					);
 				}
 
