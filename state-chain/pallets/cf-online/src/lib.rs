@@ -119,13 +119,9 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
-			let node = Nodes::<T>::get(&validator_id);
-			ensure!(node.is_some(), Error::<T>::UnknownNode);
 			// Ensure we haven't had a heartbeat during this interval for this node
-			ensure!(
-				!node.expect("node available").has_submitted(),
-				Error::<T>::AlreadySubmittedHeartbeat
-			);
+			let node = Nodes::<T>::get(&validator_id).ok_or(Error::<T>::UnknownNode)?;
+			ensure!(!node.has_submitted(), Error::<T>::AlreadySubmittedHeartbeat);
 			// Update this node
 			Nodes::<T>::mutate(&validator_id, |maybe_node| {
 				if let Some(node) = maybe_node.as_mut() {
@@ -151,6 +147,8 @@ pub mod pallet {
 			_new_bond: Self::Amount,
 		) {
 			Nodes::<T>::remove_all();
+			// NB.  We should be centralising this, our network is a list of stakers and this should
+			// be managed in one spot and not with copies in separate pallets and/or storage items.
 			for (validator_id, _) in T::StakerProvider::get_stakers().iter() {
 				let is_validator = new_validators.contains(validator_id);
 				Nodes::<T>::insert(
@@ -179,7 +177,8 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Check liveness of our expected list of validators at the current block and
-		/// create a map of the state of the network
+		/// create a map of the state of the network before resetting all nodes status
+		/// for this interval
 		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
 			let mut weight = 0;
 			let mut network_state = NetworkState::default();
@@ -188,6 +187,7 @@ pub mod pallet {
 				weight += T::DbWeight::get().reads_writes(1, 1);
 				if node.is_validator {
 					if node.is_online() {
+						// We can be missing and also have been online
 						if !node.has_submitted() {
 							network_state.missing.push(validator_id.clone());
 						}
@@ -196,6 +196,7 @@ pub mod pallet {
 						network_state.offline.push(validator_id);
 					};
 				}
+				// Reset the states for all nodes at this interval
 				Some(node.update_current_interval(false))
 			});
 

@@ -25,7 +25,7 @@ mod tests {
 	}
 
 	// Move a heartbeat interval forward with no heartbeat sent
-	fn move_forward_by_heartbeat_intervals(heartbeats: u64) {
+	fn skip_heartbeats(heartbeats: u64) {
 		for _ in 0..heartbeats {
 			run_to_block(System::block_number() + HEARTBEAT_BLOCK_INTERVAL);
 		}
@@ -34,9 +34,9 @@ mod tests {
 	#[test]
 	fn should_have_a_list_of_nodes_at_genesis() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
-			assert_ok!(
-				OnlinePallet::heartbeat(Origin::signed(ALICE))
+			assert!(
+				<OnlinePallet as IsOnline>::is_online(&ALICE),
+				"Alice should be online"
 			);
 		});
 	}
@@ -44,7 +44,6 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_from_unknown_node_should_fail() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				OnlinePallet::heartbeat(Origin::signed(BOB)),
 				Error::<Test>::UnknownNode
@@ -53,9 +52,21 @@ mod tests {
 	}
 
 	#[test]
+	fn submitting_heartbeat_twice_in_an_interval_should_fail_on_the_second() {
+		new_test_ext().execute_with(|| {
+			skip_heartbeats(1);
+			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
+			assert_noop!(
+				OnlinePallet::heartbeat(Origin::signed(ALICE)),
+				Error::<Test>::AlreadySubmittedHeartbeat
+			);
+		});
+	}
+
+	#[test]
 	fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(2);
+			skip_heartbeats(2);
 			assert_eq!(
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
 				false,
@@ -71,7 +82,7 @@ mod tests {
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
 				"Alice is still online submitting another heartbeat"
 			);
-			move_forward_by_heartbeat_intervals(2);
+			skip_heartbeats(2);
 			assert_eq!(
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
 				false,
@@ -83,28 +94,41 @@ mod tests {
 	#[test]
 	fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
-			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
-			assert_eq!(MockHeartbeat::network_state().missing, vec![ALICE]);
-			// run_heartbeat_intervals(&[ALICE], 1);
-			// assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
-			// // Fail to submit for two heartbeats
-			// move_forward_by_heartbeat_intervals(2);
-			// assert_eq!(<OnlinePallet as IsOnline>::is_online(&ALICE), false);
+			skip_heartbeats(1);
+			assert!(
+				<OnlinePallet as IsOnline>::is_online(&ALICE),
+				"Alice should be online"
+			);
+			skip_heartbeats(1);
+			assert_eq!(
+				MockHeartbeat::network_state().missing,
+				vec![ALICE],
+				"Alice should be missing after missing one heartbeat"
+			);
 		});
 	}
 
 	#[test]
-	fn we_should_see_offline_nodes_when_not_having_submitted_one_interval() {
+	fn we_should_see_offline_nodes_when_not_having_submitted_for_two_intervals() {
 		new_test_ext().execute_with(|| {
-			move_forward_by_heartbeat_intervals(1);
-			run_heartbeat_intervals(&[ALICE], 1);
-			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
-			run_heartbeat_intervals(&[ALICE], 1);
-			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
 			// Fail to submit for two heartbeats
-			move_forward_by_heartbeat_intervals(2);
-			assert_eq!(<OnlinePallet as IsOnline>::is_online(&ALICE), false);
+			skip_heartbeats(2);
+			assert_eq!(
+				<OnlinePallet as IsOnline>::is_online(&ALICE),
+				false,
+				"Alice should be offline"
+			);
+			assert_eq!(
+				MockHeartbeat::network_state().missing,
+				vec![ALICE],
+				"Alice was missing last heartbeat interval"
+			);
+			skip_heartbeats(1);
+			assert_eq!(
+				MockHeartbeat::network_state().offline,
+				vec![ALICE],
+				"Alice was offline last heartbeat interval"
+			);
 		});
 	}
 }
