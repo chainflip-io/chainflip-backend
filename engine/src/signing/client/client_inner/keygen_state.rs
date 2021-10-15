@@ -247,9 +247,9 @@ impl KeygenState {
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let bladed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
+                    let blamed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
 
-                    let blamed_ids = bladed_idx
+                    let blamed_ids = blamed_idx
                         .iter()
                         .map(|idx| authorised_state.validator_map.get_id(*idx).unwrap().clone())
                         .collect();

@@ -145,7 +145,7 @@ impl KeygenManager {
         // TODO: this is not a complete solution, we need to clean up the state
         // when it is failed too
         if res.is_some() {
-            debug_assert!(self.keygen_states.remove(&ceremony_id).is_some());
+            self.keygen_states.remove(&ceremony_id);
             slog::debug!(self.logger, "Removed a successfully finished keygen ceremony"; "ceremony_id" => ceremony_id);
         }
 
