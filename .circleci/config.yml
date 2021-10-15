@@ -121,21 +121,28 @@ workflows:
           context:
             - ghcr-credentials
 
-  chainflip-backend-workflow:
+  chainflip-backend-pull-request:
     jobs:
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-          <<: *ignore_main_branches
+      # The follow jobs always run, regardless of PR or merge.
       - fmt-validator-package:
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+      - cargo-doc-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+
+      # The follow jobs run on all PRs to protected branches.
+      # Protected branches include main, develop, release/*, epic/*
+      - clone-contracts-repo:
+          context:
+            - github-credentials
           <<: *ignore_main_branches
       - cargo-check-validator-package:
           requires:
@@ -166,12 +173,6 @@ workflows:
             - github-credentials
             - discord-webhooks
           <<: *ignore_main_branches
-      - cargo-doc-validator-package:
-          requires:
-            - hold
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
       - test-single-node:
           requires:
             - cargo-build-and-test-validator-package
@@ -182,6 +183,8 @@ workflows:
             - aws-credentials
           <<: *ignore_main_branches
 
+      # The follow jobs run on all successful merges to protected branches.
+      # Protected branches include main, develop, release/*, epic/*
       - cargo-build-and-test-validator-package:
           name: cargo-build-and-test-develop
           context:
