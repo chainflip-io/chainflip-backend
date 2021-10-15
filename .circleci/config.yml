@@ -121,7 +121,7 @@ workflows:
           context:
             - ghcr-credentials
 
-  chainflip-backend-pull-request:
+  chainflip-backend-workflow:
     jobs:
       # The follow jobs always run, regardless of PR or merge.
       - fmt-validator-package:
