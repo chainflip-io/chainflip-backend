@@ -816,7 +816,8 @@ impl<T: Config> StakerProvider for Pallet<T> {
 	fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
-				Some((acct, T::Flip::stakeable_balance(&acct)))
+				let stake = T::Flip::stakeable_balance(&acct);
+				Some((acct, stake))
 			})
 			.collect()
 	}
