@@ -69,15 +69,15 @@ commands:
 
             # if this is a PR, we extract the API URL to grab the PR as JSON from the Github API
             if [[ -n "$CIRCLE_PULL_REQUEST" ]]; then
-            url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/https:\/\/github.com\//https:\/\/api.github.com\/repos\//' | sed 's/\/pull\//\/pulls\//')"
-            target_branch=$(
-            curl -H "Authorization: token $GITHUB_TOKEN" "$url" | jq '.base.ref' | tr -d '"'
-            )
-            echo "$target_branch"
+              url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/github.com/api.github.com\/repos/' | sed 's/pull/pulls/')"
+              target_branch=$(
+                curl -H "Authorization: token $GITHUB_TOKEN" "$url" | jq '.base.ref' | tr -d '"'
+              )
+              echo "$target_branch"
 
-            # this will fail if $target_branch is null
-            # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
-            git fetch && git merge origin/$target_branch --no-edit
+              # this will fail if $target_branch is null
+              # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
+              git fetch && git merge origin/$target_branch --no-edit
             fi
 ######################## /Commands ########################
 
