@@ -14,7 +14,7 @@ use cf_traits::{
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::One;
-use sp_std::prelude::*;
+use sp_std::{convert::TryFrom, prelude::*};
 
 #[cfg(test)]
 mod mock;
@@ -32,18 +32,18 @@ pub enum VaultRotationStatus<T: Config> {
 		candidates: Vec<T::ValidatorId>,
 	},
 	AwaitingRotation {
-		new_public_key: T::PublicKey,
+		new_public_key: Vec<u8>,
 	},
 	Complete {
-		tx_hash: T::TransactionHash,
+		tx_hash: Vec<u8>,
 	},
 }
 
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Vault<T: Config> {
+pub struct Vault {
 	/// The current key
-	pub current_key: T::PublicKey,
+	pub current_key: Vec<u8>,
 }
 
 #[frame_support::pallet]
@@ -66,12 +66,6 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// A public key
-		type PublicKey: Member + Parameter + Into<AggKey> + Default + MaybeSerializeDeserialize;
-
-		/// A transaction
-		type TransactionHash: Member + Parameter + Into<eth::TxHash> + Default;
 
 		/// Rotation handler
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
@@ -98,7 +92,7 @@ pub mod pallet {
 	/// The active vaults for the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
-	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault<T>>;
+	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -150,6 +144,8 @@ pub mod pallet {
 		UnsupportedChain,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
+		/// The generated key is not a valid public key.
+		InvalidPublicKey,
 	}
 
 	#[pallet::call]
@@ -161,7 +157,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			chain_id: ChainId,
-			new_public_key: T::PublicKey,
+			new_public_key: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -176,20 +172,29 @@ pub mod pallet {
 				pending_ceremony_id == ceremony_id,
 				Error::<T>::InvalidCeremonyId
 			);
+			let agg_key = AggKey::try_from(&new_public_key[..]).map_err(|e| {
+				frame_support::debug::error!(
+					"Unable to decode new public key {:?}: {:?}",
+					new_public_key,
+					e
+				);
+				Error::<T>::InvalidPublicKey
+			})?;
 
 			PendingVaultRotations::<T>::insert(
 				chain_id,
 				VaultRotationStatus::<T>::AwaitingRotation {
-					new_public_key: new_public_key.clone(),
+					new_public_key,
 				},
 			);
 
 			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded so we might need an
 			//          intermediate VaultRotationStatus::AwaitingOtherKeygens.
 			//       2. This is implicitly also broadcasts the transaction - could be made clearer.
+			//       3. This is eth-specific, should be chain-agnostic.
 			T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
 				<Self as NonceProvider<Ethereum>>::next_nonce(),
-				new_public_key,
+				agg_key,
 			));
 
 			Ok(().into())
@@ -247,8 +252,8 @@ pub mod pallet {
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,
-			new_public_key: T::PublicKey,
-			_tx_hash: T::TransactionHash,
+			new_public_key: Vec<u8>,
+			_tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -288,12 +293,16 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub ethereum_vault_key: T::PublicKey,
+	pub struct GenesisConfig {
+		/// The Vault key should be a 33-byte compressed key in `[y; x]` order, where is `2` (even) or `3` (odd).
+		///
+		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise we could use
+		/// that instead of `Vec`...
+		pub ethereum_vault_key: Vec<u8>,
 	}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
 				ethereum_vault_key: Default::default(),
@@ -302,8 +311,11 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
+			let _ = AggKey::try_from(&self.ethereum_vault_key[..])
+				.expect("Can't build genesis without a valid ethereum vault key.");
+
 			Vaults::<T>::insert(
 				ChainId::Ethereum,
 				Vault {
@@ -396,10 +408,10 @@ impl<T: Config> VaultRotator for Pallet<T> {
 macro_rules! ensure_variant {
 	( $variant:pat => $varexp:expr, $var:expr, $err:expr $(,)? ) => {
 		if let $variant = $var {
-					$varexp
-				} else {
-					frame_support::fail!($err)
-				}
+			$varexp
+		} else {
+			frame_support::fail!($err)
+		}
 	};
 	( $variant:pat, $var:expr, $err:expr $(,)? ) => {
 		ensure_variant!($variant => { $var }, $var, $err)

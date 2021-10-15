@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser,
+	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser, Vaults
 };
 use cf_chains::{
 	eth::{
@@ -129,7 +129,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 			}
 			Self::AggKeyBroadcast(call) => {
 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					contract_call_to_unsigned_tx(call.clone(), signature),
+					contract_call_to_unsigned_tx(call.clone(), &signature),
 				))
 			}
 		}
@@ -144,7 +144,7 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 		// TODO: get chain_id and contract from on-chain.
 		chain_id: eth::CHAIN_ID_RINKEBY,
 		contract: eth::stake_manager_contract_address().into(),
-		data: call.encode_with_signature(signature),
+		data: call.abi_encode_with_signature(signature),
 		..Default::default()
 	}
 }
@@ -173,12 +173,15 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	}
 }
 
-pub struct VaultKeyProvider<T>(PhantomData<T>);
+/// Simple Ethereum-specific key provider that reads from the vault.
+pub struct EthereumKeyProvider;
 
-impl<T: pallet_cf_vaults::Config> KeyProvider<Ethereum> for VaultKeyProvider<T> {
-	type KeyId = T::PublicKey;
+impl KeyProvider<Ethereum> for EthereumKeyProvider {
+	type KeyId = Vec<u8>;
 
 	fn current_key() -> Self::KeyId {
-		pallet_cf_vaults::Pallet::<T>::eth_vault().current_key
+		Vaults::vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
+			.expect("Ethereum is always supported.")
+			.current_key
 	}
 }

@@ -103,7 +103,6 @@ mod test_set_agg_key_with_agg_key {
 		// TODO: this test would be more robust with randomly generated parameters.
 		use ethabi::Token;
 		const NONCE: u64 = 6;
-		const FAKE_HASH: [u8; 32] = [0x21; 32];
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = [0x7f; 20];
 		const FAKE_SIG: [u8; 32] = [0xe1; 32];
 		const FAKE_NEW_KEY_X: [u8; 32] = [0xcf; 32];
@@ -116,24 +115,19 @@ mod test_set_agg_key_with_agg_key {
 
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
-		let mut set_agg_key_runtime =
+		let set_agg_key_runtime =
 			SetAggKeyWithAggKey::new_unsigned(NONCE, (FAKE_NEW_KEY_X, FAKE_NEW_KEY_Y));
 
-		// Replace the msg_hash.
-		set_agg_key_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::insert_signature(
-			&mut set_agg_key_runtime,
-			&SchnorrVerificationComponents {
+		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;
+
+		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
+		let runtime_payload =
+			set_agg_key_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			},
-		);
-		assert_eq!(
-			ChainflipContractCall::signing_payload(&set_agg_key_runtime),
-			FAKE_HASH.into()
-		);
-		assert!(ChainflipContractCall::has_signature(&set_agg_key_runtime));
-		let runtime_payload = ChainflipContractCall::abi_encoded(&set_agg_key_runtime);
+			});
+		// Ensure signing payload isn't modified by signature.
+		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
@@ -143,7 +137,7 @@ mod test_set_agg_key_with_agg_key {
 				.encode_input(&vec![
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_HASH.into()),
+						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

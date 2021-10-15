@@ -13,6 +13,7 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
+use sp_std::convert::TryFrom;
 use sp_std::prelude::*;
 
 //------------------------//
@@ -99,29 +100,60 @@ impl Tokenizable for SigData {
 }
 
 /// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct AggKey {
 	/// The public key as a 32-byte array.
 	pub_key_x: [u8; 32],
-	/// The parity bit can be odd or even.
+	/// The parity bit can be `1u8` (odd) or `0u8` (even).
 	pub_key_y_parity: u8,
 }
 
 impl AggKey {
-	pub fn from_x_y_bytes(bytes: [u8; 33]) -> Self {
-		let [pub_key_x @ .., pub_key_y_parity] = bytes;
+	/// Convert from compressed `[y, x]` coordinates.
+	/// 
+	/// Note that in this format, y = 2 means "even" and y = 3 means "odd". We can convert to the required
+	/// 0 / 1 representation by subtracting 2.
+	pub fn from_y_x_compressed(bytes: [u8; 33]) -> Self {
+		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
+		let pub_key_y_parity = pub_key_y_parity - 2;
 		Self {
 			pub_key_x,
 			pub_key_y_parity,
 		}
 	}
 
-	pub fn from_y_x_bytes(bytes: [u8; 33]) -> Self {
-		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
-		Self {
-			pub_key_x,
-			pub_key_y_parity,
+	/// Convert to compressed `[y, x]` coordinates.
+	/// 
+	/// We use the inverse conversion from the above, ie. we add two to the y parity byte to convert
+	/// 0 -> 2 and 1 -> 3.
+	pub fn to_y_x_compressed(&self) -> [u8; 33] {
+		let mut res = [0u8; 33];
+		res[0] = self.pub_key_y_parity + 2;
+		res[1..].copy_from_slice(&self.pub_key_x);
+		res
+	}
+}
+
+/// [TryFrom] implementation to convert some bytes to an [AggKey].
+/// 
+/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total 
+/// length of the slice is 33 bytes.
+impl TryFrom<&[u8]> for AggKey {
+	type Error = &'static str;
+
+	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
+			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
+				if pub_key_x.len() == 32 {
+					let mut x = [0u8; 32];
+					x.copy_from_slice(pub_key_x);
+					return Ok(AggKey::from((pub_key_y_parity - 2, x)))
+				}
+			}
 		}
+
+		Err("Invalid aggKey format. Should be 33 bytes total, first byte should be 2 or 3")
 	}
 }
 
@@ -202,4 +234,18 @@ pub trait ChainflipContractCall {
 
 	/// Abi-encode the call with a provided signature.
 	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_agg_key() {
+		let mut bytes = [0u8; 33];
+		bytes[0] = 1;
+		let key = AggKey::from_y_x_compressed(bytes);
+
+		assert_eq!(key.to_y_x_compressed(), bytes);
+	}
 }

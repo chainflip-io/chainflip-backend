@@ -447,10 +447,12 @@ fn testnet_genesis(
 		}),
 		pallet_cf_environment: Some(config_set),
 		pallet_cf_vaults: Some(VaultsConfig {
-			ethereum_vault_key: hex_literal::hex![
-				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
-			]
-			.to_vec(),
+			ethereum_vault_key: {
+				let key: [u8; 33] = hex_literal::hex![
+					"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+				];
+				key.to_vec()
+			},
 		}),
 	}
 }

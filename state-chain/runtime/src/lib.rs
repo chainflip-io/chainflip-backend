@@ -169,11 +169,10 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type PublicKey = Vec<u8>;
-	type TransactionHash = Vec<u8>;
 	type RotationHandler = Auction;
-	type NonceProvider = Vaults;
-	type EpochInfo = Validator;
+	type OfflineReporter = Reputation;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -445,7 +444,7 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type KeyProvider = chainflip::VaultKeyProvider<Self>;
+	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
 }
 
@@ -490,7 +489,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},

@@ -26,7 +26,7 @@ pub trait Chainflip: frame_system::Config {
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter;
+	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
