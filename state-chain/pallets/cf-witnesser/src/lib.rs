@@ -137,6 +137,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
+		/// - [WitnessReceived](Event::WitnessReceived): A witness vote has been counted.
 		/// - [ThresholdReached](Event::ThresholdReached): We have collected enough votes to execute the call.
 		/// - [WitnessExecuted](Event::WitnessExecuted): We have executed the call, successfully or not.
 		///
