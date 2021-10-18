@@ -4,7 +4,6 @@ mod tests {
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
 	use frame_support::traits::OnInitialize;
-	use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -24,7 +23,6 @@ mod tests {
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
 	pub const ERIN: [u8; 32] = [7u8; 32];
 
-	pub const INIT_TIMESTAMP: u64 = 30_000;
 	pub const BLOCK_TIME: u64 = 1000;
 
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -33,6 +31,7 @@ mod tests {
 			.public()
 	}
 	fn run_to_block(n: u32) {
+		pub const INIT_TIMESTAMP: u64 = 30_000;
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
