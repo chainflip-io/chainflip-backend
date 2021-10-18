@@ -52,11 +52,11 @@ pub struct Settings {
 #[derive(StructOpt, Debug, Clone)]
 pub struct CommandLineOptions {
     // Misc Options
-    #[structopt(short = "c", long)]
-    config: Option<String>,
+    #[structopt(short = "c", long = "config-path")]
+    config_path: Option<String>,
 
     // State Chain Settings
-    #[structopt(short = "s", long = "state_chain.ws_endpoint")]
+    #[structopt(long = "state_chain.ws_endpoint")]
     state_chain_ws_endpoint: Option<String>,
     #[structopt(long = "state_chain.signing_key_file")]
     state_chain_signing_key_file: Option<String>,
@@ -64,7 +64,7 @@ pub struct CommandLineOptions {
     // Eth Settings
     #[structopt(long = "eth.from_block")]
     eth_from_block: Option<u64>,
-    #[structopt(short = "e", long = "eth.node_endpoint")]
+    #[structopt(long = "eth.node_endpoint")]
     eth_node_endpoint: Option<String>,
     #[structopt(long = "eth.stake_manager_eth_address")]
     eth_stake_manager_eth_address: Option<H160>,
@@ -80,7 +80,7 @@ pub struct CommandLineOptions {
     health_check_port: Option<u16>,
 
     // Singing Settings
-    #[structopt(short = "d", long = "signing.db_file", parse(from_os_str))]
+    #[structopt(long = "signing.db_file", parse(from_os_str))]
     signing_db_file: Option<PathBuf>,
 }
 
@@ -88,7 +88,7 @@ impl CommandLineOptions {
     /// Creates an empty CommandLineOptions with `None` for all fields
     pub fn new() -> CommandLineOptions {
         CommandLineOptions {
-            config: None,
+            config_path: None,
             state_chain_ws_endpoint: None,
             state_chain_signing_key_file: None,
             eth_from_block: None,
@@ -139,7 +139,7 @@ impl Settings {
     /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
-        let mut settings = match opts.config {
+        let mut settings = match opts.config_path {
             Some(path) => Settings::from_file(&path)?,
             None => Settings::from_file("config/Default.toml")?,
         };
@@ -184,7 +184,6 @@ impl Settings {
         };
 
         // Run the validation again
-        println!("Settings: {:?}", settings);
         settings.validate_settings()?;
 
         Ok(settings)
@@ -308,12 +307,12 @@ mod tests {
     fn test_config_command_line_option() {
         // Load both the settings files using the --config command line option
         let mut opts = CommandLineOptions::new();
-        opts.config = Some("config/Testing.toml".to_owned());
+        opts.config_path = Some("config/Testing.toml".to_owned());
 
         let settings1 = Settings::new(opts).unwrap();
 
         let mut opts = CommandLineOptions::new();
-        opts.config = Some("config/Default.toml".to_owned());
+        opts.config_path = Some("config/Default.toml".to_owned());
 
         let settings2 = Settings::new(opts).unwrap();
 
@@ -331,9 +330,9 @@ mod tests {
 
         // Fill the options with junk values that will pass the parsing/validation.
         // The junk values need to be different from the values in `Default.toml` for the test to work.
-        // Leave the `config` option out, it is covered in a separate test.
+        // Leave the `config_path` option out, it is covered in a separate test.
         let opts = CommandLineOptions {
-            config: None,
+            config_path: None,
             state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
             state_chain_signing_key_file: Some("signing_key_file".to_owned()),
             eth_from_block: Some(1234),

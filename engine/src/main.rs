@@ -13,6 +13,9 @@ use substrate_subxt::Signer;
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
+    let settings =
+        Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
+
     let drain = slog_json::Json::new(std::io::stdout())
         .add_default_keys()
         .build()
@@ -20,9 +23,6 @@ async fn main() {
     let drain = slog_async::Async::new(drain).build().fuse();
     let root_logger = slog::Logger::root(drain, o!());
     slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
-
-    let settings =
-        Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
 
     HealthMonitor::new(&settings.health_check, &root_logger)
         .run()
