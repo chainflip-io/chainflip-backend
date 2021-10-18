@@ -123,56 +123,25 @@ workflows:
 
   chainflip-backend-checks:
     jobs:
-      # The follow jobs always run, regardless of PR or merge.
       - cargo-fmt-validator-package:
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - cargo-fmt-validator-package
           context:
             - ghcr-credentials
-      - cargo-doc-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
+          <<: *ignore_main_branches
 
-      # The follow jobs run on all PRs to protected branches.
-      # Protected branches include main, develop, release/*, epic/*
-      - git-clone-contracts-repo:
-          context:
-            - github-credentials
-          <<: *ignore_main_branches
-      - cargo-check-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-test-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - hold:
-          type: approval
-          requires:
-            - git-clone-contracts-repo
-            - cargo-fmt-validator-package
-            - cargo-check-validator-package
-            - cargo-clippy-validator-package
-            - cargo-test-validator-package
-          <<: *ignore_main_branches
+      # The follow jobs always run, regardless of PR or merge.
       - cargo-build-and-test-validator-package:
           requires:
-            - hold
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
-          <<: *ignore_main_branches
       - test-single-node:
           requires:
             - cargo-build-and-test-validator-package
@@ -181,26 +150,21 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
-          <<: *ignore_main_branches
+      - cargo-doc-validator-package:
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
 
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
-      - cargo-build-and-test-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          name: cargo-build-and-test-develop
-          context:
-            - ghcr-credentials
-            - github-credentials
-            - discord-webhooks
-          <<: *only_main_branches
       - docker-build:
           name: docker-build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-develop
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -210,10 +174,11 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
           extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-develop
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
+      # Deploy new testnet. Coming Soon™
 
 ######################## /Workflows ########################
 
@@ -273,6 +238,7 @@ jobs:
     executor: rust-base
     steps:
       - checkout
+      - merge_target
       - run: >
           cargo fmt --all -- --check
 
@@ -345,6 +311,7 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo check --all-targets --locked --release
@@ -353,6 +320,7 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo test --lib --locked --release
@@ -361,6 +329,7 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo clippy
@@ -371,6 +340,7 @@ jobs:
     shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo doc --workspace --document-private-items --no-deps
@@ -399,6 +369,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
+      - merge_target
       - attach_workspace:
           at: ./
       - run:
