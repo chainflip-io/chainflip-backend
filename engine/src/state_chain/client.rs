@@ -193,6 +193,7 @@ impl StateChainClient {
             .collect::<Result<Vec<_>>>()
     }
 
+    // If None is supplied, get the latest
     pub async fn nonce_at_block(&self, block_hash: Option<H256>) -> Result<u32> {
         let account_info: frame_system::AccountInfo<
             <RuntimeImplForSigningExtrinsics as System>::Index,

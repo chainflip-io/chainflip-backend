@@ -19,9 +19,12 @@ use crate::{
     },
 };
 
+use super::xt_submitter::AtomicNonce;
+
 pub async fn start<BlockStream>(
     settings: &settings::Settings,
     state_chain_client: Arc<super::client::StateChainClient>,
+    atomic_nonce: Arc<AtomicNonce>,
     xt_submitter: UnboundedSender<Call>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
@@ -55,6 +58,24 @@ pub async fn start<BlockStream>(
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
+                // every block, we want to update the nonce to the best one
+                match state_chain_client
+                    .nonce_at_block(block_header.hash().into())
+                    .await
+                {
+                    Ok(block_nonce) => {
+                        atomic_nonce.set_best_nonce(block_nonce);
+                    }
+                    Err(err) => {
+                        slog::error!(
+                            logger,
+                            "Error getting nonce at block {}, {}",
+                            block_header.number,
+                            err
+                        );
+                    }
+                };
+
                 // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
                 if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
                     == 0

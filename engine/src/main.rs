@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
-    state_chain,
+    state_chain::{self, xt_submitter::AtomicNonce},
 };
 use slog::{o, Drain};
 use structopt::StructOpt;
@@ -50,6 +52,12 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
+    let nonce = state_chain_client
+        .nonce_at_block(None)
+        .await
+        .expect("Could not get latest nonce from State Chain");
+    let atomic_nonce = Arc::new(AtomicNonce::new(nonce));
+
     let (xt_sender, xt_receiver) =
         tokio::sync::mpsc::unbounded_channel::<state_chain_runtime::Call>();
 
@@ -93,6 +101,7 @@ async fn main() {
         state_chain::sc_observer::start(
             &settings,
             state_chain_client.clone(),
+            atomic_nonce.clone(),
             xt_sender.clone(),
             state_chain_block_stream,
             eth_broadcaster,
@@ -100,7 +109,12 @@ async fn main() {
             multisig_event_receiver,
             &root_logger
         ),
-        state_chain::xt_submitter::start(state_chain_client.clone(), xt_receiver, &root_logger),
+        state_chain::xt_submitter::start(
+            state_chain_client.clone(),
+            atomic_nonce,
+            xt_receiver,
+            &root_logger
+        ),
         // Start eth components
         stake_manager::start_stake_manager_witness(&web3, &settings, xt_sender, &root_logger)
             .await
