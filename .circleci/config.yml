@@ -146,8 +146,6 @@ workflows:
 
       # The follow jobs always run, regardless of PR or merge.
       - cargo-build-and-test-validator-package:
-          requires:
-            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
             - github-credentials

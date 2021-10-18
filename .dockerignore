@@ -1,1 +1,10 @@
-!target/release
+target/release/
+!target/release/state-chain-node
+!target/release/chainflip-engine
+.github
+.devcontainer
+.circleci
+.vscode
+README.md
+rust-toolchain
+
