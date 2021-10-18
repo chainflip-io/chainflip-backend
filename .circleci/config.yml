@@ -81,6 +81,7 @@ commands:
           name: Merge target into your branch
           command: |
             # setup the github user
+            set -x
             git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
             git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
 
