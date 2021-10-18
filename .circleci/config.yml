@@ -81,7 +81,6 @@ commands:
           name: Merge target into your branch
           command: |
             # setup the github user
-            set -x
             git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
             git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
 
@@ -127,12 +126,14 @@ workflows:
       - cargo-fmt-validator-package:
           context:
             - ghcr-credentials
+            - github-credentials
           <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - cargo-fmt-validator-package
           context:
             - ghcr-credentials
+            - github-credentials
           <<: *ignore_main_branches
 
       # The follow jobs always run, regardless of PR or merge.
@@ -156,6 +157,7 @@ workflows:
             - test-single-node
           context:
             - ghcr-credentials
+            - github-credentials
 
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
