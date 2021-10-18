@@ -121,6 +121,14 @@ workflows:
           context:
             - ghcr-credentials
 
+  # We run docs separately to the main flow, so it doesn't slow the process down.
+  chainflip-backend-docs:
+    jobs:
+      - cargo-doc-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
+
   chainflip-backend-checks:
     jobs:
       - cargo-fmt-validator-package:
@@ -152,12 +160,6 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
-      - cargo-doc-validator-package:
-          requires:
-            - test-single-node
-          context:
-            - ghcr-credentials
-            - github-credentials
 
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
