@@ -386,7 +386,7 @@ jobs:
             --set global.nameSuffix="default"
             --set global.testnet_id="$CIRCLE_BUILD_NUM"
             --set chainflip-engine.engine.backtrace=full
-            --set global.chain=dev
+            --set global.chain=cf-dev
             --wait
             --wait-for-jobs
       - run:
