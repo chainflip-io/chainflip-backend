@@ -1,7 +1,6 @@
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use slog::o;
-use sp_core::H256;
 use state_chain_runtime::Call;
 use std::{
     collections::VecDeque,
@@ -15,8 +14,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use crate::logging::COMPONENT_KEY;
 
 use super::client::StateChainClient;
-
-use anyhow::Result;
 
 type RetryCount = u8;
 
