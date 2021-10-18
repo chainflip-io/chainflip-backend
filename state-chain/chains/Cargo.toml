@@ -1,0 +1,36 @@
+[package]
+name = "cf-chains"
+version = "0.1.0"
+authors = ['Chainflip <https://chainflip.io>']
+edition = "2018"
+description = "Shared Chain-specific functionality for use in the substrate runtime."
+
+[dependencies]
+# Substrate packages
+sp-std = { version = '3.0', default-features = false }
+frame-support = { default-features = false, version = '3.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+sp-runtime = { default-features = false, version = '3.0.0' }
+
+# Ethereum
+ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
+ethereum = {default-features = false, version = "0.9"}
+hex = {default-features = false, version = "0.4"}
+rlp = {default-features = false, version = "0.5"}
+serde = {optional = true, version = "1.0.126", features = ['derive']}
+
+[features]
+default = ['std']
+std = [
+    'codec/std',
+    'ethabi/std',
+    'ethereum/std',
+    'frame-support/std',
+    'frame-system/std',
+    'hex/std',
+    'rlp/std',
+    'serde',
+    'sp-runtime/std',
+    'sp-std/std',
+]

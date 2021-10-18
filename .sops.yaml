@@ -1,0 +1,4 @@
+creation_rules:
+  - path_regex: .*/staging/.*
+    kms: 'arn:aws:kms:eu-central-1:951386877486:key/095057cd-602d-4f58-874e-31acfdf8630d'
+  - kms: 'arn:aws:kms:eu-central-1:951386877486:key/095057cd-602d-4f58-874e-31acfdf8630d'
