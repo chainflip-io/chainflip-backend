@@ -26,7 +26,7 @@ cargo-base-job: &cargo-base-job
   executor: rust-base
   environment:
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
 
 
@@ -103,7 +103,7 @@ workflows:
   create-rust-base:
     when: <<pipeline.parameters.rust-base>>
     jobs:
-      - build-docker-image:
+      - docker-build:
           name: build-rust-base
           extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
           image: chainflip-io/chainflip-backend/rust-base
@@ -112,7 +112,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
-      - build-docker-image:
+      - docker-build:
           name: build-rust-poetry
           image: chainflip-io/chainflip-backend/rust-poetry
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -124,43 +124,43 @@ workflows:
   chainflip-backend-checks:
     jobs:
       # The follow jobs always run, regardless of PR or merge.
-      - fmt-validator-package:
+      - cargo-fmt-validator-package:
           context:
             - ghcr-credentials
       - cargo-clippy-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
       - cargo-doc-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
 
       # The follow jobs run on all PRs to protected branches.
       # Protected branches include main, develop, release/*, epic/*
-      - clone-contracts-repo:
+      - git-clone-contracts-repo:
           context:
             - github-credentials
           <<: *ignore_main_branches
       - cargo-check-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
       - cargo-test-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
       - hold:
           type: approval
           requires:
-            - clone-contracts-repo
-            - fmt-validator-package
+            - git-clone-contracts-repo
+            - cargo-fmt-validator-package
             - cargo-check-validator-package
             - cargo-clippy-validator-package
             - cargo-test-validator-package
@@ -187,15 +187,15 @@ workflows:
       # Protected branches include main, develop, release/*, epic/*
       - cargo-build-and-test-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           name: cargo-build-and-test-develop
           context:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
           <<: *only_main_branches
-      - build-docker-image:
-          name: build-chainflip-engine
+      - docker-build:
+          name: docker-build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
@@ -204,8 +204,8 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - build-docker-image:
-          name: build-state-chain-node
+      - docker-build:
+          name: docker-build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
           cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
           extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
@@ -219,7 +219,7 @@ workflows:
 
 ######################## Jobs ########################
 jobs:
-  build-docker-image:
+  docker-build:
     executor: docker/docker
     working_directory: /mnt/ramdisk
     parameters:
@@ -269,7 +269,7 @@ jobs:
           image: <<parameters.image>>
           tag: <<parameters.tag>>
 
-  fmt-validator-package:
+  cargo-fmt-validator-package:
     executor: rust-base
     steps:
       - checkout
@@ -378,7 +378,7 @@ jobs:
       - store_artifacts:
           path: target/doc/
 
-  clone-contracts-repo:
+  git-clone-contracts-repo:
     resource_class: small
     docker:
       - image: "cimg/base:stable"
