@@ -40,6 +40,11 @@ impl AtomicNonce {
     }
 }
 
+// 1. Remove the assumption that all failures are due to nonce failures
+
+// We are currently assuming that all failures are nonce failures
+// is this a safe assumption?
+
 /// Starts the extrinsic submitter, which accepts extriniscs through a channel
 /// tracks the nonce, and submits using the correct nonce
 pub async fn start(
@@ -54,31 +59,6 @@ pub async fn start(
     // TODO: Think about how we might be able to remove some duplication here
     // this is the loop that sends only the new xts
     while let Some(call) = xt_receiver.recv().await {
-        // first we retry the failed one with an updated nonce
-        while let Some((fail_count, failed_call)) = xts_to_retry.pop_front() {
-            if fail_count < MAX_XT_RETRIES {
-                match state_chain_client
-                    .submit_extrinsic_with_nonce(nonce.as_u32(), failed_call.clone())
-                    .await
-                {
-                    Ok(tx_hash) => {
-                        slog::trace!(
-                            logger,
-                            "Successfully submitted extrinsic with tx_hash: {}",
-                            tx_hash
-                        );
-                    }
-                    Err(err) => {
-                        slog::error!(logger, "Failed to submit extrinsic: {}", err);
-                        xts_to_retry.push_back((fail_count + 1, failed_call))
-                    }
-                }
-
-                // we need to handle the case of xts failing forever, therefore being pushed to the back MAX_XT_RETRIES times
-                // if we fail again push to back
-            }
-        }
-
         match state_chain_client
             .submit_extrinsic_with_nonce(nonce.as_u32(), call.clone())
             .await
@@ -95,7 +75,29 @@ pub async fn start(
                 xts_to_retry.push_back((0, call))
             }
         }
-        // if we fail, we consider it a nonce issue. We want to retry with a higher nonce
+
+        // retry failures right away
+        while let Some((fail_count, failed_call)) = xts_to_retry.pop_front() {
+            if fail_count >= MAX_XT_RETRIES {
+                continue;
+            }
+            match state_chain_client
+                .submit_extrinsic_with_nonce(nonce.as_u32(), failed_call.clone())
+                .await
+            {
+                Ok(tx_hash) => {
+                    slog::trace!(
+                        logger,
+                        "Successfully submitted extrinsic with tx_hash: {}",
+                        tx_hash
+                    );
+                }
+                Err(err) => {
+                    slog::error!(logger, "Failed to submit extrinsic: {}", err);
+                    xts_to_retry.push_back((fail_count + 1, failed_call))
+                }
+            }
+        }
     }
 }
 
