@@ -1,10 +1,10 @@
 #![feature(assert_matches)]
 #[cfg(test)]
 mod tests {
+	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
 	use frame_support::traits::OnInitialize;
-	use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -17,7 +17,7 @@ mod tests {
 		Timestamp, Validator, Vaults,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+	use cf_traits::{BlockNumber, FlipBalance};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -182,9 +182,8 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
-
-		const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
+		use cf_traits::{AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
+		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 		pub fn default() -> ExtBuilder {
 			ExtBuilder::default()
@@ -327,6 +326,128 @@ mod tests {
 					);
 				}
 			});
+		}
+	}
+
+	mod epoch {
+		use super::*;
+		use crate::tests::run_to_block;
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer};
+		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+		use state_chain_runtime::{Auction, Flip, Origin, Validator, WitnesserApi};
+		use frame_support::traits::HandleLifetime;
+
+		#[test]
+		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
+		// - When the epoch is reached an auction is started and completed
+		// - New stakers that were above the genesis MAB are now validating the network with the
+		//   genesis validators
+		// - A new auction index has been generated
+		fn epoch_rotates() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.build()
+				.execute_with(|| {
+					const STAKE_AMOUNT: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+					const TX_HASH: EthTransactionHash = [211u8; 32];
+
+					// New users stake in the network
+					const STAKER_1: [u8; 32] = [100u8; 32];
+					const STAKER_2: [u8; 32] = [101u8; 32];
+					const STAKER_3: [u8; 32] = [102u8; 32];
+					let stakers = &[STAKER_1, STAKER_2, STAKER_3];
+
+					// Create accounts and register session keys
+					for staker in stakers {
+						let staker = AccountId::from(*staker);
+						assert_ok!(frame_system::Provider::<Runtime>::created(&staker));
+						let seed = &staker.clone().to_string();
+						let key = SessionKeys {
+							aura: get_from_seed::<AuraId>(seed),
+							grandpa: get_from_seed::<GrandpaId>(seed),
+						};
+						assert_ok!(Session::set_keys(Origin::signed(staker), key, vec![]));
+					}
+
+					// Run to block before epoch
+					run_to_block(EPOCH_BLOCKS - 1);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						0,
+						"we should have had no auction yet"
+					);
+
+					// Stake and witness stakes
+					let validators = Validator::current_validators();
+					for staker in stakers.iter() {
+						assert_eq!(
+							Flip::stakeable_balance(&AccountId::from(*staker)),
+							0,
+							"Should have no stake"
+						);
+
+						pallet_cf_staking::Call::<Runtime>::staked(
+							AccountId::from(STAKER_1),
+							STAKE_AMOUNT,
+							ETH_ZERO_ADDRESS,
+							TX_HASH,
+						);
+
+						for validator in validators.iter() {
+							assert_ok!(WitnesserApi::witness_staked(
+								Origin::signed(validator.clone()),
+								AccountId::from(*staker),
+								STAKE_AMOUNT,
+								ETH_ZERO_ADDRESS,
+								TX_HASH
+							));
+						}
+
+						assert_eq!(
+							Flip::stakeable_balance(&AccountId::from(*staker)),
+							STAKE_AMOUNT,
+							"Should have stake"
+						);
+					}
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						0,
+						"we should have had no auction as of yet"
+					);
+
+					// Auction commences on epoch
+					run_to_block(EPOCH_BLOCKS);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// The following block should be confirmed
+					run_to_block(EPOCH_BLOCKS + 1);
+
+					if let Some(AuctionResult {
+						winners,
+						minimum_active_bid,
+					}) = Auction::auction_result()
+					{
+						assert_eq!(
+							winners,
+							stakers
+								.iter()
+								.map(|account_id| AccountId::from(*account_id))
+								.collect::<Vec<_>>(),
+							"new stakers should be the winners of this auction"
+						);
+					} else {
+						unreachable!("we should have an auction result")
+					}
+				});
 		}
 	}
 }
