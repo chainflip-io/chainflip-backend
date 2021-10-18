@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::super::utils::threshold_from_share_count;
 use super::BroadcastVerificationMessage;
 
-// This might result in an error in case we don't get 2/3 of parties agreeing on the same value.
+// This might result in an error if we don't get 2/3 of parties agreeing on the same value.
 // If we don't, this means that either the broadcaster did an inconsitent broadcast or that
 // 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
 // for symmetry?)
@@ -58,6 +58,7 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
     }
 }
 
+#[cfg(test)]
 #[test]
 fn check_correct_broadcast() {
     let mut verification_messages = HashMap::new();
@@ -82,6 +83,7 @@ fn check_correct_broadcast() {
     );
 }
 
+#[cfg(test)]
 #[test]
 fn check_incorrect_broadcast() {
     let mut verification_messages = HashMap::new();

@@ -57,30 +57,30 @@ impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MultisigMessage {
-    KeyGenMessage(KeyGenMessageWrapped),
+    KeyGenMessage(KeygenDataWrapped),
     SigningMessage(SigningDataWrapped),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeyGenMessageWrapped {
+pub struct KeygenDataWrapped {
     pub ceremony_id: CeremonyId,
     pub data: KeygenData,
 }
 
-impl KeyGenMessageWrapped {
+impl KeygenDataWrapped {
     pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
     where
         M: Into<KeygenData>,
     {
-        KeyGenMessageWrapped {
+        KeygenDataWrapped {
             ceremony_id,
             data: m.into(),
         }
     }
 }
 
-impl From<KeyGenMessageWrapped> for MultisigMessage {
-    fn from(wrapped: KeyGenMessageWrapped) -> Self {
+impl From<KeygenDataWrapped> for MultisigMessage {
+    fn from(wrapped: KeygenDataWrapped) -> Self {
         MultisigMessage::KeyGenMessage(wrapped)
     }
 }
@@ -153,7 +153,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
-    keygen: KeygenManager,
+    keygen_manager: KeygenManager,
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
@@ -174,7 +174,11 @@ where
         MultisigClient {
             my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
-            keygen: KeygenManager::new(my_account_id.clone(), inner_event_sender.clone(), &logger),
+            keygen_manager: KeygenManager::new(
+                my_account_id.clone(),
+                inner_event_sender.clone(),
+                &logger,
+            ),
             signing_manager: SigningManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
@@ -188,7 +192,7 @@ where
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
-        self.keygen.cleanup();
+        self.keygen_manager.cleanup();
         self.signing_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
@@ -224,7 +228,7 @@ where
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.keygen.on_keygen_request(keygen_info);
+                self.keygen_manager.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
@@ -326,7 +330,10 @@ where
 
                 let ceremony_id = keygen_message.ceremony_id;
 
-                if let Some(key) = self.keygen.process_keygen_data(sender_id, keygen_message) {
+                if let Some(key) = self
+                    .keygen_manager
+                    .process_keygen_data(sender_id, keygen_message)
+                {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
@@ -357,7 +364,7 @@ where
     S: KeyDB,
 {
     pub fn get_keygen(&self) -> &KeygenManager {
-        &self.keygen
+        &self.keygen_manager
     }
 
     pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
@@ -374,7 +381,7 @@ where
 
     /// Change the time we wait until deleting all unresolved states
     pub fn expire_all(&mut self) {
-        self.keygen.expire_all();
+        self.keygen_manager.expire_all();
         self.signing_manager.expire_all();
 
         self.pending_requests_to_sign.retain(|_, pending_infos| {

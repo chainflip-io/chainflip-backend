@@ -9,9 +9,7 @@ use crate::p2p::AccountId;
 
 use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
 
-use super::client_inner::{
-    EventSender, KeyGenMessageWrapped, MultisigMessage, ThresholdParameters,
-};
+use super::client_inner::{EventSender, KeygenDataWrapped, MultisigMessage, ThresholdParameters};
 use super::keygen_data::KeygenData;
 use super::{InnerEvent, KeygenResultInfo};
 
@@ -21,6 +19,8 @@ use super::common::{
 };
 use super::utils::ValidatorMaps;
 
+/// Ceremony is authorised once we receive a keygen request with a corresponding ceremony_id
+/// from our SC node, at which point the data in this struct also becomes available.
 #[derive(Clone)]
 struct KeygenStateAuthorised {
     ceremony_id: CeremonyId,
@@ -43,7 +43,7 @@ pub struct KeygenState {
     should_expire_at: std::time::Instant,
 }
 
-const STAGE_DURATION: Duration = Duration::from_secs(15);
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
 
 impl KeygenState {
     pub fn new_unauthorised(logger: slog::Logger) -> Self {
@@ -51,7 +51,7 @@ impl KeygenState {
             inner: None,
             logger,
             delayed_messages: Default::default(),
-            should_expire_at: Instant::now() + STAGE_DURATION,
+            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
         }
     }
 
@@ -95,7 +95,7 @@ impl KeygenState {
         // any time left in the prior stage when receiving a request
         // to sign (we don't want other parties to be able to
         // control when our stages time out)
-        self.should_expire_at = Instant::now() + STAGE_DURATION;
+        self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
         self.process_delayed();
     }
@@ -144,18 +144,23 @@ impl KeygenState {
                         let state = authorised_state.stage.take().unwrap();
 
                         match state.finalize() {
-                            StageResult::NextStage(mut stage) => {
-                                slog::debug!(self.logger, "Ceremony transitions to {}", &stage);
+                            StageResult::NextStage(mut next_stage) => {
+                                slog::debug!(
+                                    self.logger,
+                                    "Ceremony transitions to {}",
+                                    &next_stage
+                                );
 
-                                stage.init();
+                                next_stage.init();
 
-                                authorised_state.stage = Some(stage);
+                                authorised_state.stage = Some(next_stage);
 
-                                // NOTE: we don't care when the state transition
-                                // actually happened as we don't want other parties
-                                // to be able to influence when our stages time out
-                                // (any remaining time carries over to the next stage)
-                                self.should_expire_at += STAGE_DURATION;
+                                // Instead of resetting the expiration time, we simply extend
+                                // it (any remaining time carries over to the next stage).
+                                // Doing it otherwise would allow other parties to influence
+                                // when stages in individual nodes time out (by sending their
+                                // data at specific times) thus making some attacks possible.
+                                self.should_expire_at += MAX_STAGE_DURATION;
 
                                 self.process_delayed();
                             }
@@ -247,11 +252,21 @@ impl KeygenState {
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let blamed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
+                    let blamed_idx = authorised_state
+                        .stage
+                        .as_ref()
+                        .expect("stage in authorised state is always present")
+                        .awaited_parties();
 
                     let blamed_ids = blamed_idx
                         .iter()
-                        .map(|idx| authorised_state.validator_map.get_id(*idx).unwrap().clone())
+                        .map(|idx| {
+                            authorised_state
+                                .validator_map
+                                .get_id(*idx)
+                                .expect("id for a blamed party should always be known")
+                                .clone()
+                        })
                         .collect();
 
                     slog::warn!(
@@ -308,7 +323,7 @@ impl P2PSender for KeygenP2PSender {
     type Data = KeygenData;
 
     fn send(&self, reciever_idx: usize, data: Self::Data) {
-        let msg: MultisigMessage = KeyGenMessageWrapped::new(self.ceremony_id, data).into();
+        let msg: MultisigMessage = KeygenDataWrapped::new(self.ceremony_id, data).into();
         let data = bincode::serialize(&msg).unwrap();
         self.sender.send(reciever_idx, data);
     }

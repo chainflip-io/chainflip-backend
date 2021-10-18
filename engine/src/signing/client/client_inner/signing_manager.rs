@@ -43,7 +43,6 @@ impl SigningManager {
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // Have to clone so it can be used inside the closure
         let logger = &self.logger;
         self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {

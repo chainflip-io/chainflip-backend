@@ -99,8 +99,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             .all_idxs
             .iter()
             .map(|idx| {
-                // It is safe to unwrap as all indexes should be present at this point
-                self.commitments.get(&idx).cloned().unwrap()
+                self.commitments
+                    .get(&idx)
+                    .cloned()
+                    .expect("all indexes should be present at this point")
             })
             .collect();
 
@@ -264,8 +266,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroad
             .all_idxs
             .iter()
             .map(|idx| {
-                // It is safe to unwrap as all indexes should be present at this point
-                self.received_complaints.get(&idx).cloned().unwrap()
+                self.received_complaints
+                    .get(&idx)
+                    .cloned()
+                    .expect("all indexes should be present at this point")
             })
             .collect();
 
@@ -300,7 +304,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroad
                 .into_iter()
                 .map(|share| share.value)
                 .reduce(|acc, share| acc + share)
-                .unwrap();
+                .expect("shares should be non-empty");
 
             // TODO: delete all received shares
 

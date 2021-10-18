@@ -180,7 +180,7 @@ struct ZKPSignature {
     z: Scalar,
 }
 
-/// Commitments along with the corresponding ZNP
+/// Commitments along with the corresponding ZKP
 /// which should be sent to other parties at the
 /// beginning of the ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -189,7 +189,7 @@ pub struct DKGUnverifiedCommitment {
     zkp: ZKPSignature,
 }
 
-/// Commitments that have already been checked against the ZNP
+/// Commitments that have already been checked against the ZKP
 #[derive(Debug, Clone)]
 pub struct DKGCommitment {
     commitments: CoefficientCommitments,
@@ -222,14 +222,14 @@ pub fn validate_commitments(
         .collect())
 }
 
-/// Unique context used for generating a ZNP
+/// Unique context used for generating a ZKP
 pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
     // TODO: use a deterministic random string here for more security
     // (hash ceremony_id + the list of signers?)
     ceremony_id.to_string()
 }
 
-/// Derive aggragate pubkey from party commitments
+/// Derive aggregate pubkey from party commitments
 pub fn derive_aggregate_pubkey(commitments: &[DKGCommitment]) -> Point {
     commitments
         .iter()

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    client_inner::KeyGenMessageWrapped,
+    client_inner::KeygenDataWrapped,
     keygen_state::KeygenState,
     utils::{get_index_mapping, project_signers},
     InnerEvent, KeygenResultInfo,
@@ -21,22 +21,22 @@ pub struct KeygenManager {
     /// States for each ceremony_id
     keygen_states: HashMap<CeremonyId, KeygenState>,
     /// Used to propagate events upstream
-    event_sender: mpsc::UnboundedSender<InnerEvent>,
-    /// Validator id of our node
-    id: AccountId,
+    inner_event_sender: mpsc::UnboundedSender<InnerEvent>,
+    /// Account id of our node
+    my_account_id: AccountId,
     logger: slog::Logger,
 }
 
 impl KeygenManager {
     pub fn new(
         id: AccountId,
-        event_sender: mpsc::UnboundedSender<InnerEvent>,
+        inner_event_sender: mpsc::UnboundedSender<InnerEvent>,
         logger: &slog::Logger,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
-            event_sender,
-            id,
+            inner_event_sender,
+            my_account_id: id,
             logger: logger.clone(),
         }
     }
@@ -44,7 +44,6 @@ impl KeygenManager {
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // Have to clone so it can be used inside the closure
         let logger = &self.logger;
         self.keygen_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
@@ -60,7 +59,7 @@ impl KeygenManager {
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(event) {
+            if let Err(err) = self.inner_event_sender.send(event) {
                 slog::error!(self.logger, "Unable to send event, error: {}", err);
             }
         }
@@ -76,7 +75,7 @@ impl KeygenManager {
 
         // TODO: check the number of participants?
 
-        if !signers.contains(&self.id) {
+        if !signers.contains(&self.my_account_id) {
             // TODO: alert
             slog::warn!(
                 logger,
@@ -88,7 +87,7 @@ impl KeygenManager {
 
         let validator_map = Arc::new(get_index_mapping(&signers));
 
-        let our_idx = match validator_map.get_idx(&self.id) {
+        let our_idx = match validator_map.get_idx(&self.my_account_id) {
             Some(idx) => idx,
             None => {
                 // This should be impossible because of the check above,
@@ -118,7 +117,7 @@ impl KeygenManager {
 
         entry.on_keygen_request(
             ceremony_id,
-            self.event_sender.clone(),
+            self.inner_event_sender.clone(),
             validator_map,
             our_idx,
             signer_idxs,
@@ -128,9 +127,9 @@ impl KeygenManager {
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
-        msg: KeyGenMessageWrapped,
+        msg: KeygenDataWrapped,
     ) -> Option<KeygenResultInfo> {
-        let KeyGenMessageWrapped { ceremony_id, data } = msg;
+        let KeygenDataWrapped { ceremony_id, data } = msg;
 
         // TODO: how can I avoid cloning the logger?
         let logger = self.logger.clone();
@@ -146,7 +145,10 @@ impl KeygenManager {
         // when it is failed too
         if res.is_some() {
             self.keygen_states.remove(&ceremony_id);
-            slog::debug!(self.logger, "Removed a successfully finished keygen ceremony"; "ceremony_id" => ceremony_id);
+            slog::debug!(
+                self.logger, "Removed a successfully finished keygen ceremony";
+                CEREMONY_ID_KEY => ceremony_id
+            );
         }
 
         res

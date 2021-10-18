@@ -19,7 +19,7 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::{KeyGenMessageWrapped, MultisigMessage},
+                client_inner::{KeygenDataWrapped, MultisigMessage},
                 common::KeygenResultInfo,
                 InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
             },
@@ -39,13 +39,12 @@ macro_rules! recv_data_keygen {
         let (_, m) = recv_multisig_message($rx).await;
 
         match m {
-            MultisigMessage::KeyGenMessage(KeyGenMessageWrapped {
+            MultisigMessage::KeyGenMessage(KeygenDataWrapped {
                 data: $variant(data),
                 ..
             }) => data,
             _ => {
-                eprintln!("Received message is not {}", stringify!($variant));
-                panic!();
+                panic!("Received message is not {}", stringify!($variant));
             }
         }
     }};
@@ -512,14 +511,12 @@ impl KeygenContext {
 
         println!("Distributed all comm1");
 
-        // TODO: fix this:
-
-        // for c in clients.iter() {
-        //     assert_eq!(
-        //         keygen_stage_for(c, KEYGEN_CEREMONY_ID),
-        //         Some(KeygenStage::AwaitingSecret2)
-        //     );
-        // }
+        for c in clients.iter() {
+            assert_eq!(
+                get_stage_for_keygen_ceremony(&c).as_deref(),
+                Some("BroadcastStage<VerifyCommitmentsBroadcast2>")
+            );
+        }
 
         let ver2_vec = recv_all_data_keygen!(rxs, KeygenData::Verify2);
 
@@ -880,15 +877,14 @@ async fn recv_secret3_keygen(
     let (dest, m) = recv_multisig_message(rx).await;
 
     if let MultisigMessage::KeyGenMessage(wrapped) = m {
-        let KeyGenMessageWrapped { data: message, .. } = wrapped;
+        let KeygenDataWrapped { data: message, .. } = wrapped;
 
         if let KeygenData::SecretShares3(sec3) = message {
             return (dest, sec3);
         }
     }
 
-    eprintln!("Received message is not Secret3 (keygen)");
-    panic!();
+    panic!("Received message is not Secret3 (keygen)");
 }
 
 async fn recv_ver2_signing(rx: &mut InnerEventReceiver) -> frost::VerifyComm2 {
@@ -933,7 +929,7 @@ pub fn keygen_data_to_p2p(
     sender_id: &AccountId,
     ceremony_id: CeremonyId,
 ) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(ceremony_id, data);
+    let wrapped = KeygenDataWrapped::new(ceremony_id, data);
 
     let data = MultisigMessage::from(wrapped);
     let data = bincode::serialize(&data).unwrap();
