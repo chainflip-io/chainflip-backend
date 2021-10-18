@@ -5,6 +5,7 @@ use pallet_cf_vaults::{
 };
 use slog::o;
 use sp_runtime::AccountId32;
+use state_chain_runtime::Call;
 use std::{convert::TryInto, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -21,6 +22,7 @@ use crate::{
 pub async fn start<BlockStream>(
     settings: &settings::Settings,
     state_chain_client: Arc<super::client::StateChainClient>,
+    xt_submitter: UnboundedSender<Call>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -45,9 +47,9 @@ pub async fn start<BlockStream>(
         heartbeat_block_interval,
     );
 
-    state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
-        .await;
+    xt_submitter
+        .send(pallet_cf_reputation::Call::heartbeat().into())
+        .unwrap();
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -62,9 +64,9 @@ pub async fn start<BlockStream>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
-                        .await;
+                    xt_submitter
+                        .send(pallet_cf_reputation::Call::heartbeat().into())
+                        .unwrap();
                 }
 
                 // Process this block's events
@@ -129,15 +131,15 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
-                                        .submit_extrinsic(
-                                            &logger,
+                                    xt_submitter
+                                        .send(
                                             pallet_cf_witnesser_api::Call::witness_keygen_response(
                                                 ceremony_id,
                                                 response,
-                                            ),
+                                            )
+                                            .into(),
                                         )
-                                        .await;
+                                        .unwrap();
                                 }
                                 state_chain_runtime::Event::pallet_cf_vaults(
                                     pallet_cf_vaults::Event::ThresholdSignatureRequest(
@@ -204,15 +206,12 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
-                                        .submit_extrinsic(
-                                            &logger,
-                                            pallet_cf_witnesser_api::Call::witness_threshold_signature_response(
+                                    xt_submitter
+                                        .send(pallet_cf_witnesser_api::Call::witness_threshold_signature_response(
                                                 ceremony_id,
                                                 response,
-                                            ),
-                                        )
-                                        .await;
+                                            ).into())
+                                        .unwrap();
                                 }
                                 state_chain_runtime::Event::pallet_cf_vaults(
                                     pallet_cf_vaults::Event::VaultRotationRequest(
@@ -255,13 +254,10 @@ pub async fn start<BlockStream>(
                                                     VaultRotationResponse::Error
                                                 }
                                             };
-                                            state_chain_client.submit_extrinsic(
-                                                &logger,
-                                                pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
-                                                    ceremony_id,
-                                                    response,
-                                                ),
-                                            ).await;
+                                            xt_submitter.send(pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
+                                                ceremony_id,
+                                                response,
+                                            ).into()).unwrap();
                                         }
                                     }
                                 }
@@ -289,42 +285,42 @@ pub async fn start<BlockStream>(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{eth, logging, settings};
+// #[cfg(test)]
+// mod tests {
+//     use crate::{eth, logging, settings};
 
-    use super::*;
+//     use super::*;
 
-    #[tokio::test]
-    #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
-    async fn run_the_sc_observer() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let logger = logging::test_utils::create_test_logger();
+//     #[tokio::test]
+//     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
+//     async fn run_the_sc_observer() {
+//         let settings = settings::test_utils::new_test_settings().unwrap();
+//         let logger = logging::test_utils::create_test_logger();
 
-        let (state_chain_client, block_stream) =
-            crate::state_chain::client::connect_to_state_chain(&settings)
-                .await
-                .unwrap();
+//         let (state_chain_client, block_stream) =
+//             crate::state_chain::client::connect_to_state_chain(&settings)
+//                 .await
+//                 .unwrap();
 
-        let (multisig_instruction_sender, _multisig_instruction_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-        let (_multisig_event_sender, multisig_event_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+//         let (multisig_instruction_sender, _multisig_instruction_receiver) =
+//             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+//         let (_multisig_event_sender, multisig_event_receiver) =
+//             tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
-        let web3 = eth::new_synced_web3_client(&settings, &logger)
-            .await
-            .unwrap();
-        let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+//         let web3 = eth::new_synced_web3_client(&settings, &logger)
+//             .await
+//             .unwrap();
+//         let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
 
-        start(
-            &settings,
-            state_chain_client,
-            block_stream,
-            eth_broadcaster,
-            multisig_instruction_sender,
-            multisig_event_receiver,
-            &logger,
-        )
-        .await;
-    }
-}
+//         start(
+//             &settings,
+//             state_chain_client,
+//             block_stream,
+//             eth_broadcaster,
+//             multisig_instruction_sender,
+//             multisig_event_receiver,
+//             &logger,
+//         )
+//         .await;
+//     }
+// }

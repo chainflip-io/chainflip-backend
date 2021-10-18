@@ -93,6 +93,7 @@ async fn main() {
         state_chain::sc_observer::start(
             &settings,
             state_chain_client.clone(),
+            xt_sender.clone(),
             state_chain_block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
