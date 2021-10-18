@@ -7,6 +7,7 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::StreamExt;
 use futures::{Stream, TryFutureExt};
 use itertools::Itertools;
+use jsonrpc_core_client::RpcError;
 use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
@@ -143,7 +144,7 @@ impl StateChainClient {
         &self,
         nonce: u32,
         extrinsic: Extrinsic,
-    ) -> Result<sp_core::H256>
+    ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
@@ -157,11 +158,11 @@ impl StateChainClient {
                     substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic).encode()),
                     &self.signer,
                 )
-                .await?
+                .await
+                .expect("Should be able to sign")
                 .encode(),
             ))
             .compat()
-            .map_err(anyhow::Error::msg)
             .await
     }
 

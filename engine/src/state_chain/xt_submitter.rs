@@ -1,4 +1,7 @@
+use jsonrpc_core::{Error, ErrorCode};
+use jsonrpc_core_client::RpcError;
 use slog::o;
+use sp_core::H256;
 use state_chain_runtime::Call;
 use std::{
     collections::VecDeque,
@@ -12,6 +15,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use crate::logging::COMPONENT_KEY;
 
 use super::client::StateChainClient;
+
+use anyhow::Result;
 
 type RetryCount = u8;
 
@@ -40,64 +45,75 @@ impl AtomicNonce {
     }
 }
 
-// 1. Remove the assumption that all failures are due to nonce failures
-
-// We are currently assuming that all failures are nonce failures
-// is this a safe assumption?
-
-/// Starts the extrinsic submitter, which accepts extriniscs through a channel
-/// tracks the nonce, and submits using the correct nonce
-pub async fn start(
+/// Controls submission of extrinsics, so that we maintain a good nonce
+pub struct XtSubmitter {
+    to_retry: VecDeque<(RetryCount, Call)>,
     state_chain_client: Arc<StateChainClient>,
+    xt_receiver: UnboundedReceiver<Call>,
     nonce: Arc<AtomicNonce>,
-    mut xt_receiver: UnboundedReceiver<Call>,
-    logger: &slog::Logger,
-) {
-    let mut xts_to_retry: VecDeque<(RetryCount, Call)> = VecDeque::new();
-    let logger = logger.new(o!(COMPONENT_KEY => "XtSubmitter"));
+    logger: slog::Logger,
+}
 
-    // TODO: Think about how we might be able to remove some duplication here
-    // this is the loop that sends only the new xts
-    while let Some(call) = xt_receiver.recv().await {
-        match state_chain_client
-            .submit_extrinsic_with_nonce(nonce.as_u32(), call.clone())
+impl XtSubmitter {
+    pub fn new(
+        state_chain_client: Arc<StateChainClient>,
+        xt_receiver: UnboundedReceiver<Call>,
+        nonce: Arc<AtomicNonce>,
+        logger: &slog::Logger,
+    ) -> Self {
+        Self {
+            to_retry: VecDeque::new(),
+            state_chain_client,
+            xt_receiver,
+            nonce,
+            logger: logger.new(o!(COMPONENT_KEY => "XtSubmitter")),
+        }
+    }
+
+    /// Starts the extrinsic submitter, which accepts extriniscs through a channel
+    /// tracks the nonce, and submits using the correct nonce
+    pub async fn start(&mut self) {
+        while let Some(call) = self.xt_receiver.recv().await {
+            // drain the failed transactions first
+            while let Some((failed_count, failed_call)) = self.to_retry.pop_front() {
+                self.submit_helper(failed_call, failed_count).await;
+            }
+            self.submit_helper(call, 0).await;
+        }
+    }
+
+    async fn submit_helper(&mut self, call: Call, fail_count: u8) {
+        match self
+            .state_chain_client
+            .submit_extrinsic_with_nonce(self.nonce.as_u32(), call.clone())
             .await
         {
             Ok(tx_hash) => {
                 slog::trace!(
-                    logger,
+                    self.logger,
                     "Successfully submitted extrinsic with tx_hash: {}",
                     tx_hash
                 );
             }
-            Err(err) => {
-                slog::error!(logger, "Failed to submit extrinsic: {}", err);
-                xts_to_retry.push_back((0, call))
-            }
-        }
-
-        // retry failures right away
-        while let Some((fail_count, failed_call)) = xts_to_retry.pop_front() {
-            if fail_count >= MAX_XT_RETRIES {
-                continue;
-            }
-            match state_chain_client
-                .submit_extrinsic_with_nonce(nonce.as_u32(), failed_call.clone())
-                .await
-            {
-                Ok(tx_hash) => {
-                    slog::trace!(
-                        logger,
-                        "Successfully submitted extrinsic with tx_hash: {}",
-                        tx_hash
-                    );
+            Err(err) => match err {
+                RpcError::JsonRpcError(e) => match e {
+                    Error {
+                        code: ErrorCode::ServerError(1014),
+                        ..
+                    } => {
+                        slog::warn!(self.logger, "Extrinsic submission failed with nonce error");
+                        self.nonce.increment_nonce();
+                        self.to_retry.push_back((fail_count + 1, call))
+                    }
+                    err => {
+                        slog::error!(self.logger, "Failed to submit extrinsic: {}", err);
+                    }
+                },
+                err => {
+                    slog::error!(self.logger, "Failed to submit extrinsic: {}", err);
                 }
-                Err(err) => {
-                    slog::error!(logger, "Failed to submit extrinsic: {}", err);
-                    xts_to_retry.push_back((fail_count + 1, failed_call))
-                }
-            }
-        }
+            },
+        };
     }
 }
 
