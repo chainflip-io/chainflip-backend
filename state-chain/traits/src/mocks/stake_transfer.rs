@@ -27,7 +27,7 @@ macro_rules! impl_mock_stake_transfer {
 
 			fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 				STAKE_UPDATES.with(|cell| {
-					cell.borrow_mut().insert(*validator_id, amount)
+					cell.borrow_mut().insert(validator_id.clone(), amount)
 				});
 			}
 		}
@@ -51,14 +51,14 @@ macro_rules! impl_mock_stake_transfer {
 			type Handler = MockStakeHandler;
 
 			fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance {
-				Self::get_balance(*account_id)
+				Self::get_balance(account_id.clone())
 			}
 			fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance {
-				Self::get_balance(*account_id)
+				Self::get_balance(account_id.clone())
 			}
 			fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
-				BALANCES.with(|cell| *cell.borrow_mut().entry(*account_id).or_default() += amount);
-				Self::get_balance(*account_id)
+				BALANCES.with(|cell| *cell.borrow_mut().entry(account_id.clone()).or_default() += amount);
+				Self::get_balance(account_id.clone())
 			}
 			fn try_claim(
 				account_id: &Self::AccountId,
@@ -66,7 +66,7 @@ macro_rules! impl_mock_stake_transfer {
 			) -> Result<(), sp_runtime::DispatchError> {
 				BALANCES.with(|cell| {
 					cell.borrow_mut()
-						.entry(*account_id)
+						.entry(account_id.clone())
 						.or_default()
 						.checked_sub(amount)
 						.map(|_| ())

@@ -431,26 +431,6 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
 }
 
-/// The heartbeat of the network
-pub trait Heartbeat {
-	type ValidatorId;
-	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
-	/// Called on every heartbeat interval with the current network state
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
-}
-
-/// Updating and calculating emissions per block for validators and backup validators
-pub trait BlockEmissions {
-	type Balance;
-	/// Update the emissions per block for a validator
-	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
-	/// Update the emissions per block for a backup validator
-	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
-	/// Calculate the emissions per block
-	fn calculate_block_emissions() -> Weight;
-}
-
 /// Something that can nominate signers from the set of active validators.
 pub trait SignerNomination {
 	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
@@ -552,4 +532,24 @@ pub mod offline_conditions {
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError>;
 	}
+}
+
+/// The heartbeat of the network
+pub trait Heartbeat {
+	type ValidatorId;
+	/// A heartbeat has been submitted
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	/// Called on every heartbeat interval with the current network state
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
+}
+
+/// Updating and calculating emissions per block for validators and backup validators
+pub trait BlockEmissions {
+	type Balance;
+	/// Update the emissions per block for a validator
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Update the emissions per block for a backup validator
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Calculate the emissions per block
+	fn calculate_block_emissions() -> Weight;
 }

@@ -252,7 +252,7 @@ mod tests {
 					))
 				);
 			};
-			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE);
+			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
 			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE, 100);
 			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE, 100);
 			offline_test(

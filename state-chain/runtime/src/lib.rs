@@ -4,7 +4,6 @@
 mod chainflip;
 pub mod constants;
 use core::time::Duration;
-
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness},
@@ -43,8 +42,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
+use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
-use cf_traits::{Chainflip, ChainflipAccountData};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;

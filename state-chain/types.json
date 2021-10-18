@@ -115,7 +115,7 @@
       "Dot"
     ]
   },
-  "OnlineCreditsFor": "u64",
+  "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",

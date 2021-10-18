@@ -12,7 +12,7 @@ use cf_chains::eth::{
 	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
 };
 use cf_traits::{
-	BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
 };
 use core::time::Duration;
 use frame_support::{
@@ -485,7 +485,7 @@ impl<T: Config> Pallet<T> {
 			withdrawal_address,
 			amount,
 		));
-		Err(Error::<T>::WithdrawalAddressRestricted)
+		Err(Error::<T>::WithdrawalAddressRestricted)?
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
@@ -531,10 +531,10 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		let new_total = T::Flip::credit_stake(account_id, amount);
+		let new_total = T::Flip::credit_stake(&account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		let _ = AccountRetired::<T>::mutate(account_id, |retired| *retired = false);
+		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -599,13 +599,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if *retired {
-						return Err(Error::AlreadyRetired);
+						Err(Error::AlreadyRetired)?;
 					}
 					*retired = true;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount),
+				None => Err(Error::UnknownAccount)?,
 			}
 		})
 	}
@@ -619,13 +619,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if !*retired {
-						return Err(Error::AlreadyActive);
+						Err(Error::AlreadyActive)?;
 					}
 					*retired = false;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				}
-				None => Err(Error::UnknownAccount),
+				None => Err(Error::UnknownAccount)?,
 			}
 		})
 	}
