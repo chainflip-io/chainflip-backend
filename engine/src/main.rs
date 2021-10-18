@@ -50,6 +50,9 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
+    let (xt_sender, xt_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<state_chain_runtime::Call>();
+
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
         .expect("Failed to create Web3 WebSocket");
@@ -96,15 +99,11 @@ async fn main() {
             multisig_event_receiver,
             &root_logger
         ),
+        state_chain::xt_submitter::start(state_chain_client.clone(), xt_receiver, &root_logger),
         // Start eth components
-        stake_manager::start_stake_manager_witness(
-            &web3,
-            &settings,
-            state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start StakeManager witness"),
+        stake_manager::start_stake_manager_witness(&web3, &settings, xt_sender, &root_logger)
+            .await
+            .expect("Could not start StakeManager witness"),
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
