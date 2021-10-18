@@ -38,7 +38,7 @@ executors:
         auth: *dockerconfig
   rust-base:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:slim
         auth: *dockerconfig
   rust-poetry:
     docker:
