@@ -4,7 +4,7 @@ A pallet that abstracts the notion of witnessing an external event.
 
 Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/substrate/tree/master/frame/multisig).
 
-## Purpose
+## Overview
 
 Validators on the Chainflip network need to agree on external events such as blockchain transactions or staking events.
 
@@ -50,7 +50,7 @@ steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
         type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
         type Witnesser: cf_traits::Witnesser<
-            Call=<Self as Config>::Call, 
+            Call=<Self as Config>::Call,
             AccountId=<Self as frame_system::Config>::AccountId>;
     }
     ```
