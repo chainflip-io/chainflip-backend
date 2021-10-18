@@ -101,7 +101,6 @@ commands:
 ######################## Workflows ########################
 workflows:
   create-rust-base:
-    when: <<pipeline.parameters.rust-base>>
     jobs:
       - docker-build:
           name: build-rust-base
@@ -112,6 +111,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
+          <<: *only_main_branches
       - docker-build:
           name: build-rust-poetry
           image: chainflip-io/chainflip-backend/rust-poetry
@@ -120,6 +120,7 @@ workflows:
           dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
+          <<: *only_main_branches
 
   # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-docs:
