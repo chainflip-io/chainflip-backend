@@ -192,8 +192,8 @@ impl<T: Config> Pallet<T> {
 		let num_validators = NumValidators::<T>::get() as usize;
 
 		// Look up the signer in the list of validators
-		let index = ValidatorIndex::<T>::get(&epoch, &who)
-			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
+		let index =
+			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);
@@ -203,14 +203,13 @@ impl<T: Config> Pallet<T> {
 			|buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
-					let empty_mask =
-						BitVec::<Msb0, u8>::repeat(false, num_validators);
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
 					*buffer = Some(empty_mask.into_vec())
 				}
 
-				let bytes = buffer.as_mut().expect(
-					"Checked for none condition above, this will never panic;",
-				);
+				let bytes = buffer
+					.as_mut()
+					.expect("Checked for none condition above, this will never panic;");
 
 				// Convert to an addressable bitmask
 				let bits = VoteMask::from_slice_mut(bytes)
@@ -248,8 +247,7 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				num_votes as VoteCount,
 			));
-			let result =
-				call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
+			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
