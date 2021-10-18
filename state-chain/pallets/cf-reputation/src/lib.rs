@@ -14,42 +14,12 @@ use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
-/// Conditions as judged as offline
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum OfflineCondition {
-	/// A broadcast of an output has failed
-	BroadcastOutputFailed,
-	/// There was a failure in participation during a signing
-	ParticipateSigningFailed,
-	/// Not Enough Performance Credits
-	NotEnoughPerformanceCredits,
-	/// Contradicting Self During a Signing Ceremony
-	ContradictingSelfDuringSigningCeremony,
-}
-
-/// Error on reporting an offline condition
-#[derive(Debug, PartialEq)]
-pub enum ReportError {
-	// Validator doesn't exist
-	UnknownValidator,
-}
-
-/// Offline conditions are reported on
-pub trait OfflineConditions {
-	type ValidatorId;
-	/// Report the condition for validator
-	/// Returns `Ok(Weight)` else an error if the validator isn't valid
-	fn report(
-		condition: OfflineCondition,
-		penalty: ReputationPoints,
-		validator_id: &Self::ValidatorId,
-	) -> Result<Weight, ReportError>;
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online, Slashing};
+	use cf_traits::{
+		offline_conditions::*, EmergencyRotation, EpochInfo, NetworkState, Online, Slashing,
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -57,8 +27,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// Reputation points type as signed integer
-	pub type ReputationPoints = i32;
 	/// The credits one earns being online, equivalent to a blocktime online
 	pub type OnlineCreditsFor<T> = <T as frame_system::Config>::BlockNumber;
 	/// Reputation of a validator
@@ -386,9 +354,9 @@ pub mod pallet {
 		}
 	}
 
-	/// Implementation of `OfflineConditions` reporting on `OfflineCondition` with specified number
+	/// Implementation of `OfflineReporter` reporting on `OfflineCondition` with specified number
 	/// of reputation points
-	impl<T: Config> OfflineConditions for Pallet<T> {
+	impl<T: Config> OfflineReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
 		fn report(

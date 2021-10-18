@@ -92,7 +92,7 @@ pub mod pallet {
 	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
 	/// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
-	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
+	pub type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The number of active validators.
 	#[pallet::storage]

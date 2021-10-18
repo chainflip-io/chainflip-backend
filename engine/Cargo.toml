@@ -77,9 +77,12 @@ substrate-subxt = "0.15"
 # Local deps
 cf-p2p = {path = "../state-chain/client/cf-p2p"}
 cf-traits = {path = "../state-chain/traits"}
+cf-chains = {path = "../state-chain/chains"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
+pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
+pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}

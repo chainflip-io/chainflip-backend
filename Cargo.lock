@@ -800,6 +800,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "serde 1.0.126",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
@@ -827,6 +843,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -878,6 +895,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bs58",
+ "cf-chains",
  "cf-p2p",
  "cf-traits",
  "config",
@@ -904,9 +922,11 @@ dependencies = [
  "log 0.4.14",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-flip",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser-api",
@@ -1578,6 +1598,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
 name = "dyn-clonable"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1778,6 +1804,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.1.0"
+source = "git+https://github.com/chainflip-io/ethabi?rev=1279085#1279085d28798744d2107046a8f0c7221d7e76ce"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex",
+ "serde 1.0.126",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1785,9 +1826,28 @@ checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a67be3eaf296ef668733f54c637e84d0ca34eaf194f0077455135981ad464c3"
+dependencies = [
+ "bytes 1.0.1",
+ "ethereum-types 0.12.0",
+ "hash-db",
+ "hash256-std-hasher",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde 1.0.126",
+ "sha3 0.9.1",
+ "triehash",
 ]
 
 [[package]]
@@ -1798,6 +1858,7 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -1812,6 +1873,7 @@ checksum = "0dd6bde671199089e601e8d47e153368b893ef885f11f365a3261ec58153c211"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-rlp",
  "primitive-types 0.10.1",
  "uint",
 ]
@@ -4776,6 +4838,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-threshold-signature",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4873,12 +4953,14 @@ dependencies = [
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -4887,6 +4969,24 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-wasm-builder",
+]
+
+[[package]]
+name = "pallet-cf-threshold-signature"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "downcast-rs",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -4949,11 +5049,14 @@ dependencies = [
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
  "frame-system",
+ "pallet-cf-broadcast",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-vaults",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5615,6 +5718,7 @@ checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "impl-codec",
+ "impl-rlp",
  "uint",
 ]
 
@@ -6279,6 +6383,17 @@ checksum = "e54369147e3e7796c9b885c7304db87ca3d09a0a98f72843d532868675bbfba8"
 dependencies = [
  "bytes 1.0.1",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -8625,6 +8740,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8636,6 +8752,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -8643,6 +8760,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
@@ -9553,6 +9671,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
+dependencies = [
+ "hash-db",
+ "rlp",
 ]
 
 [[package]]
