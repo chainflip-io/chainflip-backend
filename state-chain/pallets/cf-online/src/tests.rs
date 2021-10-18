@@ -32,11 +32,20 @@ mod tests {
 	}
 
 	#[test]
-	fn should_have_a_list_of_nodes_at_genesis() {
+	fn should_have_a_list_of_nodes_at_genesis_who_are_validators() {
 		new_test_ext().execute_with(|| {
 			assert!(
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
 				"Alice should be online"
+			);
+
+			assert_eq!(
+				OnlinePallet::liveness(ALICE).expect("Alice's node"),
+				Node {
+					is_validator: true,
+					..Default::default()
+				},
+				"Alice should be a validator node"
 			);
 		});
 	}
@@ -52,7 +61,7 @@ mod tests {
 	}
 
 	#[test]
-	fn submitting_heartbeat_twice_in_an_interval_should_fail_on_the_second() {
+	fn submitting_heartbeat_more_than_once_in_an_interval_should_fail() {
 		new_test_ext().execute_with(|| {
 			skip_heartbeats(1);
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
@@ -60,6 +69,12 @@ mod tests {
 				OnlinePallet::heartbeat(Origin::signed(ALICE)),
 				Error::<Test>::AlreadySubmittedHeartbeat
 			);
+			assert_noop!(
+				OnlinePallet::heartbeat(Origin::signed(ALICE)),
+				Error::<Test>::AlreadySubmittedHeartbeat
+			);
+			skip_heartbeats(1);
+			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
 		});
 	}
 
