@@ -1,33 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! A pallet that abstracts the notion of witnessing an external event.
-//!
-//! Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/substrate/tree/master/frame/multisig).
-//!
-//! ## Usage
-//!
-//! ### Witnessing a an event.
-//!
-//! Witnessing can be thought of as voting on an action (represented by a `call`) triggered by some external event.
-//!
-//! Witnessing happens via the signed [`witness`](pallet::Pallet::witness) extrinsic including the encoded `call` to be
-//! dispatched.
-//!
-//! If the encoded call is not already stored, it is stored against its hash. A vote is then counted on behalf of the
-//! signing validator account. When a configured threshold is reached, the previously-stored `call` is dispatched.
-//!
-//! Note that calls *must* have a unique hash so that the votes don't clash.
-//!
-//! ### Restricting target calls
-//!
-//! This crate also provides [`EnsureWitnessed`](EnsureWitnessed), an implementation of [`EnsureOrigin`](EnsureOrigin)
-//! that can be used to restrict an extrinsic so that it can only be dispatched via witness consensus.
-//!
-//! Note again that each call that is voted on should have a unique hash, and therefore the call arguments should have
-//! some form of entropy to ensure that each the call is idempotent.
-//!
-//! See the README for instructions on how to integrate this pallet with the runtime.
-//!
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 pub use pallet::*;
 
@@ -119,7 +92,7 @@ pub mod pallet {
 	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
 	/// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
-	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
+	pub type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The number of active validators.
 	#[pallet::storage]
@@ -161,6 +134,19 @@ pub mod pallet {
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
 		/// identical transaction. This can be thought of as a vote for the encoded [Call](Config::Call) value.
+		///
+		/// ## Events
+		///
+		/// - [WitnessReceived](Event::WitnessReceived): A witness vote has been counted.
+		/// - [ThresholdReached](Event::ThresholdReached): We have collected enough votes to execute the call.
+		/// - [WitnessExecuted](Event::WitnessExecuted): We have executed the call, successfully or not.
+		///
+		/// ## Errors
+		///
+		/// - [UnauthorisedWitness](Error::UnauthorisedWitness): The Validator is not in the active set for this epoch.
+		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
+		///   outside of the range of our bitmask. Should be impossible?
+		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
@@ -198,7 +184,6 @@ impl<T: Config> Pallet<T> {
 	///
 	/// **Note:**
 	/// This implementation currently allows voting to continue even after the vote threshold is reached.
-	///
 	fn do_witness(
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,

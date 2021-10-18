@@ -1,10 +1,10 @@
 [package]
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet providing governance for the Chainflip statechain'
+description = 'FRAME pallet template for requesting threshold signatures.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-governance'
+name = 'pallet-cf-threshold-signature'
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
@@ -13,37 +13,39 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
+cf-chains = { path = '../../chains', default-features = false }
 
-# Substrate stuff
-serde = { optional = true, version = "1.0.119" }
 codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
 frame-support = { default-features = false, version = '3.0.0' }
 frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
-sp-std = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
-sp-core = { default-features = false, version = '3.0.0' }
+sp-std = { default-features = false, version = '3.0.0' }
+downcast-rs = { default-features = false, version = '1.2' }
 
 [dev-dependencies]
 serde = { version = "1.0.119" }
+sp-core = { default-features = false, version = '3.0.0' }
 sp-io = { default-features = false, version = '3.0.0' }
 
 [features]
 default = ['std']
 std = [
-    'cf-traits/std',
-    'codec/std',
-    'frame-support/std',
-    'frame-system/std',
-    'frame-benchmarking/std',
-    'serde',
-    'sp-core/std',
-    'sp-std/std',
-    'sp-runtime/std',
-    'frame-benchmarking/std',
+	'cf-chains/std',
+	'cf-traits/std',
+	'codec/std',
+	'downcast-rs/std',
+	'frame-support/std',
+	'frame-system/std',
+	'frame-benchmarking/std',
+	'sp-std/std',
+	'sp-runtime/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
+	'frame-benchmarking',
+	'frame-support/runtime-benchmarks',
+	'frame-system/runtime-benchmarks',
 ]
+# Note: frame-support `try-runtime` feature is released after v3.
+#   Uncomment the following line when `frame-support` version > `3.0.0`.
+# try-runtime = ['frame-support/try-runtime']
