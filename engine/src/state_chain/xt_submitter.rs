@@ -24,6 +24,9 @@ type RetryCount = u8;
 const MAX_XT_RETRIES: RetryCount = 3;
 
 /// Wraps the nonce, to provide a safe, atomic interface to the nonce
+/// The nonce *can* be updated in two places:
+/// 1. The XtSubmitter
+/// 2. The SCObserver on every block (if the nonce from the previous block is greater than that of the last block)
 #[derive(Debug)]
 pub struct AtomicNonce(AtomicU32);
 
@@ -76,12 +79,18 @@ impl XtSubmitter {
         while let Some(call) = self.xt_receiver.recv().await {
             // drain the failed transactions first
             while let Some((failed_count, failed_call)) = self.to_retry.pop_front() {
+                if failed_count > MAX_XT_RETRIES {
+                    continue;
+                }
                 self.submit_helper(failed_call, failed_count).await;
             }
             self.submit_helper(call, 0).await;
         }
     }
 
+    // We increment the nonce in 2 scenarios:
+    // 1. We successfully submit the transaction
+    // 2. We receive an error to say that our nonce was incorrect
     async fn submit_helper(&mut self, call: Call, fail_count: u8) {
         match self
             .state_chain_client
@@ -94,6 +103,7 @@ impl XtSubmitter {
                     "Successfully submitted extrinsic with tx_hash: {}",
                     tx_hash
                 );
+                self.nonce.increment_nonce();
             }
             Err(err) => match err {
                 RpcError::JsonRpcError(e) => match e {

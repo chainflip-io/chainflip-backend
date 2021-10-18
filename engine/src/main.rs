@@ -6,7 +6,10 @@ use chainflip_engine::{
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
-    state_chain::{self, xt_submitter::AtomicNonce},
+    state_chain::{
+        self,
+        xt_submitter::{AtomicNonce, XtSubmitter},
+    },
 };
 use slog::{o, Drain};
 use structopt::StructOpt;
@@ -52,6 +55,7 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
+    // XtSubmitter
     let nonce = state_chain_client
         .nonce_at_block(None)
         .await
@@ -60,6 +64,13 @@ async fn main() {
 
     let (xt_sender, xt_receiver) =
         tokio::sync::mpsc::unbounded_channel::<state_chain_runtime::Call>();
+
+    let mut xt_submitter = XtSubmitter::new(
+        state_chain_client.clone(),
+        xt_receiver,
+        atomic_nonce.clone(),
+        &root_logger,
+    );
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
@@ -109,12 +120,7 @@ async fn main() {
             multisig_event_receiver,
             &root_logger
         ),
-        state_chain::xt_submitter::start(
-            state_chain_client.clone(),
-            atomic_nonce,
-            xt_receiver,
-            &root_logger
-        ),
+        xt_submitter.start(),
         // Start eth components
         stake_manager::start_stake_manager_witness(&web3, &settings, xt_sender, &root_logger)
             .await

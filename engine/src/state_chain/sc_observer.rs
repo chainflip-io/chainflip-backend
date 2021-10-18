@@ -25,7 +25,7 @@ pub async fn start<BlockStream>(
     settings: &settings::Settings,
     state_chain_client: Arc<super::client::StateChainClient>,
     atomic_nonce: Arc<AtomicNonce>,
-    xt_submitter: UnboundedSender<Call>,
+    xt_sender: UnboundedSender<Call>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -50,7 +50,7 @@ pub async fn start<BlockStream>(
         heartbeat_block_interval,
     );
 
-    xt_submitter
+    xt_sender
         .send(pallet_cf_reputation::Call::heartbeat().into())
         .unwrap();
 
@@ -85,7 +85,7 @@ pub async fn start<BlockStream>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    xt_submitter
+                    xt_sender
                         .send(pallet_cf_reputation::Call::heartbeat().into())
                         .unwrap();
                 }
@@ -152,7 +152,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    xt_submitter
+                                    xt_sender
                                         .send(
                                             pallet_cf_witnesser_api::Call::witness_keygen_response(
                                                 ceremony_id,
@@ -227,7 +227,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    xt_submitter
+                                    xt_sender
                                         .send(pallet_cf_witnesser_api::Call::witness_threshold_signature_response(
                                                 ceremony_id,
                                                 response,
@@ -275,7 +275,7 @@ pub async fn start<BlockStream>(
                                                     VaultRotationResponse::Error
                                                 }
                                             };
-                                            xt_submitter.send(pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
+                                            xt_sender.send(pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
                                                 ceremony_id,
                                                 response,
                                             ).into()).unwrap();
