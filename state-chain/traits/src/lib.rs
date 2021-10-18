@@ -56,7 +56,7 @@ pub trait EpochInfo {
 	/// An amount
 	type Amount;
 	/// The index of an epoch
-	type EpochIndex;
+	type EpochIndex: Member + codec::FullCodec + Copy + AtLeast32BitUnsigned + Default;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
