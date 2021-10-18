@@ -18,7 +18,7 @@ macro_rules! impl_mock_stake_transfer {
 			fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 				BALANCES.with(|cell| {
 					cell.borrow().iter().map(|(account_id, balance)| {
-						(*account_id, *balance)
+						(account_id.clone(), *balance)
 					}).collect()
 				})
 			}

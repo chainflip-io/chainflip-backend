@@ -35,7 +35,6 @@ use frame_support::pallet_prelude::*;
 use liveness::*;
 pub use pallet::*;
 use sp_runtime::traits::Zero;
-use sp_std::vec::Vec;
 
 #[frame_support::pallet]
 pub mod pallet {

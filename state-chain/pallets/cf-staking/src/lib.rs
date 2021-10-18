@@ -12,7 +12,8 @@ use cf_chains::eth::{
 	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
 };
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakerProvider, StakeTransfer, ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, StakerProvider,
+	ThresholdSigner,
 };
 use core::time::Duration;
 use frame_support::{
@@ -718,12 +719,12 @@ impl<T: Config> BidderProvider for Pallet<T> {
 }
 
 impl<T: Config> StakerProvider for Pallet<T> {
-	type ValidatorId = T::AccountId;
+	type ValidatorId = <T as frame_system::Config>::AccountId;
 	type Amount = T::Balance;
 
 	fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
-			.filter_map(|(acct, retired)| {
+			.filter_map(|(acct, _)| {
 				let stake = T::Flip::stakeable_balance(&acct);
 				Some((acct, stake))
 			})

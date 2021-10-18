@@ -11,7 +11,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_traits::{mocks, Chainflip, Nonce, NonceIdentifier};
+use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;

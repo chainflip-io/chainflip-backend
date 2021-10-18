@@ -21,7 +21,7 @@ type AccountId = AccountId32;
 
 use cf_traits::{
 	mocks::{key_provider, time_source},
-	Chainflip, NonceProvider, SigningContext,
+	Bid, Chainflip, NonceProvider, SigningContext,
 };
 
 // Configure a mock runtime to test the pallet.
