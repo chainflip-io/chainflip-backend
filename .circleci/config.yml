@@ -29,7 +29,6 @@ cargo-base-job: &cargo-base-job
   resource_class: 2xlarge+
 ######################## /Anchors ########################
 
-
 ######################## Config ########################
 version: 2.1
 executors:
@@ -56,6 +55,7 @@ parameters:
     type: boolean
     default: false
 ######################## /Config ########################
+
 ######################## Commands ########################
 commands:
   send_notification:
@@ -184,7 +184,6 @@ workflows:
             - ghcr-credentials
           <<: *only_main_branches
       # Deploy new testnet. Coming Soon™
-
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
