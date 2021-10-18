@@ -51,7 +51,7 @@ pub async fn start<BlockStream>(
     );
 
     xt_sender
-        .send(pallet_cf_reputation::Call::heartbeat().into())
+        .send(pallet_cf_online::Call::heartbeat().into())
         .unwrap();
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
@@ -86,7 +86,7 @@ pub async fn start<BlockStream>(
                         block_header.number
                     );
                     xt_sender
-                        .send(pallet_cf_reputation::Call::heartbeat().into())
+                        .send(pallet_cf_online::Call::heartbeat().into())
                         .unwrap();
                 }
 
