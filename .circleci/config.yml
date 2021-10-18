@@ -271,7 +271,6 @@ jobs:
 
   fmt-validator-package:
     executor: rust-base
-    resource_class: small
     steps:
       - checkout
       - run: >
