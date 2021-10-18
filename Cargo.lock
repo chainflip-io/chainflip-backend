@@ -800,6 +800,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "serde 1.0.126",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -877,6 +893,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -928,6 +945,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bs58",
+ "cf-chains",
  "cf-p2p",
  "cf-traits",
  "config",
@@ -954,10 +972,12 @@ dependencies = [
  "log 0.4.14",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-flip",
  "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser-api",
@@ -980,6 +1000,7 @@ dependencies = [
  "sp-runtime",
  "sp-version",
  "state-chain-runtime",
+ "structopt",
  "substrate-subxt",
  "thiserror",
  "tokio 1.11.0",
@@ -1628,6 +1649,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
 name = "dyn-clonable"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1828,6 +1855,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.1.0"
+source = "git+https://github.com/chainflip-io/ethabi?rev=1279085#1279085d28798744d2107046a8f0c7221d7e76ce"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex",
+ "serde 1.0.126",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1835,9 +1877,28 @@ checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a67be3eaf296ef668733f54c637e84d0ca34eaf194f0077455135981ad464c3"
+dependencies = [
+ "bytes 1.0.1",
+ "ethereum-types 0.12.0",
+ "hash-db",
+ "hash256-std-hasher",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde 1.0.126",
+ "sha3 0.9.1",
+ "triehash",
 ]
 
 [[package]]
@@ -1848,6 +1909,7 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -1862,6 +1924,7 @@ checksum = "0dd6bde671199089e601e8d47e153368b893ef885f11f365a3261ec58153c211"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-rlp",
  "primitive-types 0.10.1",
  "uint",
 ]
@@ -4826,6 +4889,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-threshold-signature",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4941,12 +5022,14 @@ dependencies = [
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -4955,6 +5038,24 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-wasm-builder",
+]
+
+[[package]]
+name = "pallet-cf-threshold-signature"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "downcast-rs",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -5017,11 +5118,14 @@ dependencies = [
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
  "frame-system",
+ "pallet-cf-broadcast",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-vaults",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5683,6 +5787,7 @@ checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "impl-codec",
+ "impl-rlp",
  "uint",
 ]
 
@@ -5743,9 +5848,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.27"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d8caf72986c1a598726adc988bb5984792ef84f5ee5aa50209145ee8077038"
+checksum = "edc3358ebc67bc8b7fa0c007f945b0b18226f78437d61bec735a9eb96b61ee70"
 dependencies = [
  "unicode-xid",
 ]
@@ -6347,6 +6452,17 @@ checksum = "e54369147e3e7796c9b885c7304db87ca3d09a0a98f72843d532868675bbfba8"
 dependencies = [
  "bytes 1.0.1",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -8693,6 +8809,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8704,6 +8821,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -8712,6 +8830,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
@@ -8785,9 +8904,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "bf9d950ef167e25e0bdb073cf1d68e9ad2795ac826f2f3f59647817cf23c0bfa"
 dependencies = [
  "clap",
  "lazy_static",
@@ -8796,9 +8915,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "134d838a2c9943ac3125cf6df165eda53493451b719f3255b2a26b85f772d0ba"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -8967,9 +9086,9 @@ checksum = "1e81da0851ada1f3e9d4312c704aa4f8806f0f9d69faaf8df2f3464b4a9437c2"
 
 [[package]]
 name = "syn"
-version = "1.0.73"
+version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f71489ff30030d2ae598524f61326b902466f72a0fb1a8564c001cc63425bcc7"
+checksum = "d010a1623fbd906d51d650a9916aaefc05ffa0e4053ff7fe601167f3e715d194"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9622,6 +9741,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
+dependencies = [
+ "hash-db",
+ "rlp",
 ]
 
 [[package]]

@@ -2,15 +2,16 @@
 
 pub mod mocks;
 
+use cf_chains::Chain;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
-use frame_support::traits::StoredMap;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
-	traits::{Imbalance, SignedImbalance},
+	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
@@ -22,12 +23,21 @@ pub type FlipBalance = u128;
 pub type EpochIndex = u32;
 pub type AuctionIndex = u64;
 
-/// and Chainflip was born...some base types
+/// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
+	type ValidatorId: Member
+		+ Parameter
+		+ From<<Self as frame_system::Config>::AccountId>
+		+ Into<<Self as frame_system::Config>::AccountId>;
+	/// An id type for keys used in threshold signature ceremonies.
+	type KeyId: Member + Parameter;
+	/// The overarching call type.
+	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -439,4 +449,107 @@ pub trait BlockEmissions {
 	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
 	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
+}
+
+/// Something that can nominate signers from the set of active validators.
+pub trait SignerNomination {
+	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
+	type SignerId;
+
+	/// Returns a random live signer. The seed value is used as a source of randomness.
+	fn nomination_with_seed(seed: u64) -> Self::SignerId;
+
+	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
+	/// seed value is used as a source of randomness.
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+}
+
+/// Provides the currently valid key for multisig ceremonies.
+pub trait KeyProvider<C: Chain> {
+	/// The type of the provided key_id.
+	type KeyId;
+
+	/// Gets the key.
+	fn current_key() -> Self::KeyId;
+}
+
+/// Api trait for pallets that need to sign things.
+pub trait ThresholdSigner<T>
+where
+	T: Chainflip,
+{
+	type Context: SigningContext<T>;
+
+	/// Initiate a signing request and return the request id.
+	fn request_signature(context: Self::Context) -> u64;
+
+	/// Initiate a transaction signing request and return the request id.
+	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
+		Self::request_signature(transaction.into())
+	}
+}
+
+/// Types, methods and state for requesting and processing a threshold signature.
+pub trait SigningContext<T: Chainflip> {
+	/// The chain that this context applies to.
+	type Chain: Chain;
+	/// The payload type that will be signed over.
+	type Payload: Parameter;
+	/// The signature type that is returned by the threshold signature.
+	type Signature: Parameter;
+	/// The callback that will be dispatched when we receive the signature.
+	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
+
+	/// Returns the signing payload.
+	fn get_payload(&self) -> Self::Payload;
+
+	/// Returns the callback to be triggered on success.
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback;
+
+	/// Dispatches the success callback.
+	fn dispatch_callback(
+		&self,
+		origin: OriginFor<T>,
+		signature: Self::Signature,
+	) -> DispatchResultWithPostInfo {
+		self.resolve_callback(signature)
+			.dispatch_bypass_filter(origin)
+	}
+}
+
+pub mod offline_conditions {
+	use super::*;
+	pub type ReputationPoints = i32;
+
+	/// Conditions that cause a validator to be knocked offline.
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum OfflineCondition {
+		/// A broadcast of an output has failed
+		BroadcastOutputFailed,
+		/// There was a failure in participation during a signing
+		ParticipateSigningFailed,
+		/// Not Enough Performance Credits
+		NotEnoughPerformanceCredits,
+		/// Contradicting Self During a Signing Ceremony
+		ContradictingSelfDuringSigningCeremony,
+	}
+
+	/// Error on reporting an offline condition.
+	#[derive(Debug, PartialEq)]
+	pub enum ReportError {
+		/// Validator doesn't exist
+		UnknownValidator,
+	}
+
+	/// For reporting offline conditions.
+	pub trait OfflineReporter {
+		type ValidatorId;
+		/// Report the condition for validator
+		/// Returns `Ok(Weight)` else an error if the validator isn't valid
+		fn report(
+			condition: OfflineCondition,
+			penalty: ReputationPoints,
+			validator_id: &Self::ValidatorId,
+		) -> Result<Weight, ReportError>;
+	}
 }

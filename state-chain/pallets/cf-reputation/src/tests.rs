@@ -1,9 +1,8 @@
 mod tests {
 	use crate::mock::*;
-	use crate::OfflineCondition::*;
 	use crate::*;
 	use cf_traits::mocks::epoch_info::Mock;
-	use cf_traits::{EpochInfo, Heartbeat, NetworkState};
+	use cf_traits::{offline_conditions::*, EpochInfo, Heartbeat, NetworkState};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
@@ -254,10 +253,14 @@ mod tests {
 				);
 			};
 			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE);
-			offline_test(ParticipateSigningFailed, ALICE, 100);
-			offline_test(BroadcastOutputFailed, ALICE, 100);
-			offline_test(ContradictingSelfDuringSigningCeremony, ALICE, 100);
-			offline_test(NotEnoughPerformanceCredits, ALICE, 100);
+			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE, 100);
+			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE, 100);
+			offline_test(
+				OfflineCondition::ContradictingSelfDuringSigningCeremony,
+				ALICE,
+				100,
+			);
+			offline_test(OfflineCondition::NotEnoughPerformanceCredits, ALICE, 100);
 		});
 	}
 
@@ -268,7 +271,7 @@ mod tests {
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
 			assert_ok!(ReputationPallet::report(
-				ParticipateSigningFailed,
+				OfflineCondition::ParticipateSigningFailed,
 				penalty,
 				&ALICE
 			));
@@ -277,7 +280,7 @@ mod tests {
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
 					ALICE,
-					ParticipateSigningFailed,
+					OfflineCondition::ParticipateSigningFailed,
 					penalty
 				))
 			);
