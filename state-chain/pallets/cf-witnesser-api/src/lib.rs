@@ -194,10 +194,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			chain_id: ChainId,
 			new_public_key: Vec<u8>,
+			block_number: u64,
 			tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::vault_key_rotated(chain_id, new_public_key, tx_hash);
+			let call = VaultsCall::vault_key_rotated(chain_id, new_public_key, block_number, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

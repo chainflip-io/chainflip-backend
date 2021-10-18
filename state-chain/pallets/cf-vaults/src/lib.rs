@@ -3,17 +3,17 @@
 #![doc = include_str!("../README.md")]
 
 use cf_chains::{
-	eth::{self, set_agg_key_with_agg_key::SetAggKeyWithAggKey, AggKey},
+	eth::{set_agg_key_with_agg_key::SetAggKeyWithAggKey, AggKey},
 	ChainId, Ethereum,
 };
 use cf_traits::{
-	offline_conditions::{OfflineCondition, OfflineReporter},
+	offline_conditions::{OfflineCondition, OfflineReporter}, EpochInfo,
 	Chainflip, Nonce, NonceProvider, SigningContext, ThresholdSigner, VaultRotationHandler,
 	VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::One;
+use sp_runtime::traits::{One, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
 
 #[cfg(test)]
@@ -42,8 +42,8 @@ pub enum VaultRotationStatus<T: Config> {
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault {
-	/// The current key
-	pub current_key: Vec<u8>,
+	/// The vault's public key.
+	pub public_key: Vec<u8>,
 }
 
 #[frame_support::pallet]
@@ -64,11 +64,14 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type
+		/// The event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Rotation handler
+		/// Rotation handler.
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
+
+		/// Epoch info.
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
@@ -112,7 +115,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		<T::EpochInfo as EpochInfo>::EpochIndex,
 		Blake2_128Concat,
-		Chain,
+		ChainId,
 		BlockHeightWindow,
 		ValueQuery,
 	>;
@@ -253,6 +256,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			chain_id: ChainId,
 			new_public_key: Vec<u8>,
+			block_number: u64,
 			_tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -279,12 +283,35 @@ pub mod pallet {
 
 			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
 				if let Some(mut vault) = maybe_vault.as_mut() {
-					vault.current_key = new_public_key;
+					vault.public_key = new_public_key;
 					Ok(())
 				} else {
 					Err(Error::<T>::UnsupportedChain)
 				}
 			})?;
+
+			// This is roughly the number of blocks for 14 days in Ethereum
+			const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
+
+			// Record this new incoming set for the next epoch
+			ActiveWindows::<T>::insert(
+				T::EpochInfo::epoch_index().saturating_add(One::one()),
+				ChainId::Ethereum,
+				BlockHeightWindow {
+					from: block_number,
+					to: None,
+				},
+			);
+
+			// Set the leaving block number for the outgoing set
+			ActiveWindows::<T>::mutate(
+				T::EpochInfo::epoch_index(),
+				ChainId::Ethereum,
+				|block_height_window| {
+					block_height_window.to =
+						Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+				},
+			);
 
 			Pallet::<T>::deposit_event(Event::VaultRotationCompleted(chain_id));
 
@@ -319,7 +346,7 @@ pub mod pallet {
 			Vaults::<T>::insert(
 				ChainId::Ethereum,
 				Vault {
-					current_key: self.ethereum_vault_key.clone(),
+					public_key: self.ethereum_vault_key.clone(),
 				},
 			);
 		}
