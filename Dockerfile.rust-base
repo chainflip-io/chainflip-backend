@@ -14,9 +14,10 @@ RUN apt-get update \
     libssl-dev \
     cmake \
     clang \
+    curl \
     lld \
     jq \
-    curl
+    git
 
 # Set environment
 ENV PATH="/root/.cargo/bin:${PATH}"
