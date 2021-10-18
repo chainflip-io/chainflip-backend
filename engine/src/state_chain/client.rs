@@ -7,6 +7,7 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::StreamExt;
 use futures::{Stream, TryFutureExt};
 use itertools::Itertools;
+use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
@@ -15,6 +16,7 @@ use sp_runtime::generic::Era;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::{marker::PhantomData, sync::Arc};
+use substrate_subxt::Signer;
 use substrate_subxt::{
     extrinsic::{
         CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
@@ -23,7 +25,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::{common::Mutex, settings};
+use crate::settings;
 
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
@@ -130,14 +132,14 @@ pub struct StateChainClient {
     events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
-    nonce: Mutex<<RuntimeImplForSigningExtrinsics as System>::Index>,
+    account_info_storage_key: StorageKey,
     pub signer:
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
 }
 impl StateChainClient {
-    async fn inner_submit_extrinsic<Extrinsic>(
+    pub async fn submit_extrinsic_with_nonce<Extrinsic>(
         &self,
         nonce: u32,
         extrinsic: Extrinsic,
@@ -163,24 +165,6 @@ impl StateChainClient {
             .await
     }
 
-    pub async fn submit_extrinsic<Extrinsic>(&self, logger: &slog::Logger, extrinsic: Extrinsic)
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone,
-    {
-        slog::trace!(logger, "Submitting extrinsic: {:?}", extrinsic);
-        let mut nonce = self.nonce.lock().await;
-
-        match self.inner_submit_extrinsic(*nonce, extrinsic.clone()).await {
-            Ok(_) => *nonce += 1,
-            Err(error) => slog::error!(
-                logger,
-                "Could not submit extrinsic: {:?}, {}",
-                extrinsic,
-                error
-            ),
-        }
-    }
     pub async fn events(
         &self,
         block_header: &state_chain_runtime::Header,
@@ -208,6 +192,24 @@ impl StateChainClient {
             .flatten()
             .collect::<Result<Vec<_>>>()
     }
+
+    pub async fn nonce_at_block(&self, block_hash: Option<H256>) -> Result<u32> {
+        let account_info: frame_system::AccountInfo<
+            <RuntimeImplForSigningExtrinsics as System>::Index,
+            <RuntimeImplForSigningExtrinsics as System>::AccountData,
+        > = Decode::decode(
+            &mut &self
+                .state_rpc_client
+                .storage(self.account_info_storage_key.clone(), block_hash)
+                .compat()
+                .await
+                .map_err(anyhow::Error::msg)?
+                .ok_or_else(|| anyhow::Error::msg("Account doesn't exist"))?
+                .0[..],
+        )?;
+
+        Ok(account_info.nonce)
+    }
 }
 
 #[allow(clippy::eval_order_dependence)]
@@ -227,7 +229,6 @@ pub async fn connect_to_state_chain(
         }
     }
 
-    use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
@@ -282,6 +283,11 @@ pub async fn connect_to_state_chain(
 
     let system_pallet_metadata = metadata.module("System")?;
 
+    let account_info_storage_key = system_pallet_metadata
+        .storage("Account")?
+        .map()?
+        .key(&signer.account_id());
+
     Ok((
         Arc::new(StateChainClient {
             runtime_version: state_rpc_client
@@ -297,29 +303,9 @@ pub async fn connect_to_state_chain(
                     .map_err(anyhow::Error::msg)?,
                 anyhow::Error::msg("Genesis block doesn't exist?"),
             )?,
-            nonce: Mutex::new({
-                let account_info: frame_system::AccountInfo<
-                    <RuntimeImplForSigningExtrinsics as System>::Index,
-                    <RuntimeImplForSigningExtrinsics as System>::AccountData,
-                > = Decode::decode(
-                    &mut &state_rpc_client
-                        .storage(
-                            system_pallet_metadata
-                                .storage("Account")?
-                                .map()?
-                                .key(&signer.account_id()),
-                            latest_block_hash,
-                        )
-                        .compat()
-                        .await
-                        .map_err(anyhow::Error::msg)?
-                        .ok_or_else(|| anyhow::Error::msg("Account doesn't exist"))?
-                        .0[..],
-                )?;
-                account_info.nonce
-            }),
             author_rpc_client,
             state_rpc_client,
+            account_info_storage_key,
             events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
             metadata,
             signer,
