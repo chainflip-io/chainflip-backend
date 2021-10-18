@@ -30,6 +30,7 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
+structopt = "0.3.23"
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "15.1"}
