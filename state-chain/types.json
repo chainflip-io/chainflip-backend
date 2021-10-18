@@ -10,6 +10,7 @@
   "AggKeySignature": "U256",
   "Address": "MultiAddress",
   "Amount": "u128",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
       "Empty",
@@ -35,6 +36,13 @@
   },
   "Bid": "(ValidatorId, Amount)",
   "BlockNumber": "u32",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "Chain": {
@@ -92,6 +100,7 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
+  "KeyId": "Vec<u8>",
   "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
@@ -107,8 +116,9 @@
     ]
   },
   "OnlineCreditsFor": "BlockNumber",
-  "PublicKey": "Vec<u8>",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
+  "PublicKey": "Vec<u8>",
   "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
@@ -122,10 +132,17 @@
     "s": "[u8;32]",
     "k_times_g_address": "[u8; 20]"
   },
+  "SchnorrVerificationComponents": {
+    "s": "[u8; 32]",
+    "k_times_g_addr": "[u8; 20]"
+  },
+  "Signature": "H256",
+  "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
-  "ValidatorId": "AccountId",
   "TransactionHash": "Vec<u8>",
+  "UnsignedTransactionFor": "Vec<u8>",
+  "ValidatorId": "AccountId",
   "Vault": {
     "previous_key": "PublicKey",
     "current_key": "PublicKey",

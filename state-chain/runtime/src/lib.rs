@@ -5,7 +5,6 @@ mod chainflip;
 pub mod constants;
 // A few exports that help ease life for downstream crates.
 use core::time::Duration;
-
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness},
@@ -44,8 +43,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
+use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
-use cf_traits::{Chainflip, ChainflipAccountData};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
@@ -164,7 +163,6 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -358,10 +356,12 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
+	type AccountId = AccountId;
 	type Flip = Flip;
-	type Nonce = u64;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type NonceProvider = Vaults;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -409,11 +409,6 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl Chainflip for Runtime {
-	type Amount = FlipBalance;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
@@ -436,6 +431,32 @@ impl pallet_cf_online::Config for Runtime {
 	type Heartbeat = ChainflipHeartbeat;
 }
 
+use frame_support::instances::Instance0;
+
+impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
+	type Event = Event;
+	type SignerNomination = chainflip::BasicSignerNomination;
+	type TargetChain = cf_chains::Ethereum;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type KeyProvider = chainflip::VaultKeyProvider<Self>;
+	type OfflineReporter = Reputation;
+}
+
+parameter_types! {
+	pub const EthereumSigningTimeout: BlockNumber = 5;
+	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
+}
+
+impl pallet_cf_broadcast::Config<Instance0> for Runtime {
+	type Event = Event;
+	type TargetChain = cf_chains::Ethereum;
+	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type SignerNomination = chainflip::BasicSignerNomination;
+	type OfflineReporter = Reputation;
+	type SigningTimeout = EthereumSigningTimeout;
+	type TransmissionTimeout = EthereumTransmissionTimeout;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -445,6 +466,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Module, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
@@ -464,7 +486,8 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
