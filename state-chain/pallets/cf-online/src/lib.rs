@@ -124,7 +124,7 @@ pub mod pallet {
 		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
 		///   submitted the heartbeat for this interval.
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
