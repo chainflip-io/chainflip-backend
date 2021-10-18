@@ -97,9 +97,14 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+
 impl Chainflip for Test {
-	type Amount = u128;
+	type KeyId = u32;
 	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl Config for Test {
