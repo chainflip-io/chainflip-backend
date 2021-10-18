@@ -131,11 +131,6 @@ workflows:
 
   chainflip-backend-checks:
     jobs:
-      - cargo-fmt-validator-package:
-          context:
-            - ghcr-credentials
-            - github-credentials
-          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - cargo-fmt-validator-package
@@ -145,6 +140,10 @@ workflows:
           <<: *ignore_main_branches
 
       # The follow jobs always run, regardless of PR or merge.
+      - cargo-fmt-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
       - cargo-build-and-test-validator-package:
           requires:
             - cargo-fmt-validator-package
