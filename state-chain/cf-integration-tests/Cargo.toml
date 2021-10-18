@@ -3,15 +3,12 @@ authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'state-chain-runtime'
+name = 'cf-integration-tests'
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
-
-[build-dependencies]
-substrate-wasm-builder = '3.0.0'
 
 # alias "parity-scale-code" to "codec"
 [dependencies.codec]
@@ -20,13 +17,18 @@ features = ['derive']
 package = 'parity-scale-codec'
 version = '2.0'
 
+[dev-dependencies]
+hex-literal = "0.3.1"
+assert_matches = { version = "1.5.0" }
+sp-finality-grandpa = '3.0.0'
+
 [dependencies]
 hex-literal = {optional = true, version = '0.3.1'}
 serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
+state-chain-runtime = { path = "../runtime", default-features = false }
 cf-traits = { path = "../traits", default-features = false }
-cf-chains = { path = "../chains", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
@@ -38,10 +40,6 @@ pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-featur
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
-pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
-pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
-pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
-pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -73,64 +71,46 @@ sp-version = {default-features = false, version = '3.0.0'}
 
 [features]
 default = ['std']
-runtime-benchmarks = [
-  'hex-literal',
-  'frame-benchmarking',
-  'frame-support/runtime-benchmarks',
-  'frame-system-benchmarking',
-  'frame-system/runtime-benchmarks',
-  'pallet-timestamp/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
-  'pallet-cf-witnesser/runtime-benchmarks',
-  'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-validator/runtime-benchmarks',
-  'pallet-cf-auction/runtime-benchmarks',
-]
 std = [
-  'cf-traits/std',
-  'cf-chains/std',
-  'codec/std',
-  'serde',
-  'frame-executive/std',
-  'frame-support/std',
-  'frame-system/std',
-  'frame-system-rpc-runtime-api/std',
-  'pallet-aura/std',
-  'pallet-authorship/std',
-  'pallet-grandpa/std',
-  'pallet-offences/std',
-  'pallet-randomness-collective-flip/std',
-  'pallet-session/std',
-  'pallet-sudo/std',
-  'pallet-timestamp/std',
-  'pallet-transaction-payment/std',
-  'sp-api/std',
-  'sp-block-builder/std',
-  'sp-consensus-aura/std',
-  'sp-core/std',
-  'sp-inherents/std',
-  'sp-offchain/std',
-  'sp-runtime/std',
-  'sp-session/std',
-  'sp-std/std',
-  'sp-transaction-pool/std',
-  'sp-version/std',
-  'pallet-cf-validator/std',
-  'pallet-cf-staking/std',
-  'pallet-cf-witnesser/std',
-  'pallet-cf-flip/std',
-  'pallet-cf-auction/std',
-  'pallet-cf-emissions/std',
-  'pallet-cf-reputation/std',
-  'pallet-cf-rewards/std',
-  'pallet-cf-witnesser-api/std',
-  'pallet-cf-governance/std',
-  'pallet-cf-vaults/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std',
-  'pallet-cf-online/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std'
+    'cf-traits/std',
+    'codec/std',
+    'serde',
+    'frame-executive/std',
+    'frame-support/std',
+    'frame-system/std',
+    'frame-system-rpc-runtime-api/std',
+    'pallet-aura/std',
+    'pallet-authorship/std',
+    'pallet-grandpa/std',
+    'pallet-offences/std',
+    'pallet-randomness-collective-flip/std',
+    'pallet-session/std',
+    'pallet-sudo/std',
+    'pallet-timestamp/std',
+    'pallet-transaction-payment/std',
+    'sp-api/std',
+    'sp-block-builder/std',
+    'sp-consensus-aura/std',
+    'sp-core/std',
+    'sp-inherents/std',
+    'sp-offchain/std',
+    'sp-runtime/std',
+    'sp-session/std',
+    'sp-std/std',
+    'sp-transaction-pool/std',
+    'sp-version/std',
+    'pallet-cf-validator/std',
+    'pallet-cf-staking/std',
+    'pallet-cf-witnesser/std',
+    'pallet-cf-flip/std',
+    'pallet-cf-auction/std',
+    'pallet-cf-emissions/std',
+    'pallet-cf-reputation/std',
+    'pallet-cf-rewards/std',
+    'pallet-cf-witnesser-api/std',
+    'pallet-cf-governance/std',
+    'pallet-cf-vaults/std',
+    'pallet-cf-reputation/std',
+    'state-chain-runtime/std',
+    'sp-finality-grandpa/std',
 ]

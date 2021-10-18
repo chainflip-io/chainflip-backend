@@ -3,8 +3,9 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKeySignature": "U256",
@@ -22,12 +23,17 @@
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
   },
   "AuctionRange": "(u32,u32)",
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
+  },
   "Bid": "(ValidatorId, Amount)",
   "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
@@ -42,6 +48,16 @@
   "Chain": {
     "_enum": [
       "Ethereum"
+    ]
+  },
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
     ]
   },
   "ChainParams": {
@@ -99,10 +115,11 @@
       "Dot"
     ]
   },
-  "OnlineCreditsFor": "u64",
+  "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"

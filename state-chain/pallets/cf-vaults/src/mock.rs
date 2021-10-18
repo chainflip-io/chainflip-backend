@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 
-use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
-use frame_system::{ensure_root, RawOrigin};
+use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -17,7 +16,6 @@ use cf_traits::{mocks, Chainflip, Nonce, NonceIdentifier};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
-type Amount = u64;
 type ValidatorId = u64;
 
 thread_local! {
@@ -80,10 +78,10 @@ impl Chainflip for MockRuntime {
 
 impl VaultRotationHandler for MockRuntime {
 	type ValidatorId = u64;
-	fn abort() {}
+	fn vault_rotation_aborted() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators.to_vec());
 	}
 }
 

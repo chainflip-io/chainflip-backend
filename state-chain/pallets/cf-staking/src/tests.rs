@@ -4,7 +4,6 @@ use crate::{
 };
 use cf_chains::eth::{self, ChainflipContractCall};
 use cf_traits::mocks::{epoch_info, time_source};
-use codec::Encode;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use pallet_cf_threshold_signature::Instance0;

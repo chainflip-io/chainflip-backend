@@ -19,6 +19,8 @@ members = [
   'state-chain/pallets/cf-witnesser',
   'state-chain/pallets/cf-witnesser-api',
   'state-chain/pallets/cf-governance',
+  'state-chain/pallets/cf-online',
+  'state-chain/cf-integration-tests',
   'state-chain/pallets/cf-environment',
   'state-chain/runtime',
   'state-chain/traits',

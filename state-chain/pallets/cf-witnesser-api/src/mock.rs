@@ -212,8 +212,8 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
-	fn abort() {}
-	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
+	fn vault_rotation_aborted() {}
+	fn penalise(_bad_validators: &[Self::ValidatorId]) {}
 }
 
 impl pallet_cf_vaults::Config for Test {
