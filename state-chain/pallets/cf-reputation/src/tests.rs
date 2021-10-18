@@ -2,8 +2,8 @@ mod tests {
 	use crate::mock::*;
 	use crate::*;
 	use cf_traits::mocks::epoch_info::Mock;
-	use cf_traits::{EpochInfo, Heartbeat, IsOnline, NetworkState};
 	use cf_traits::offline_conditions::*;
+	use cf_traits::{EpochInfo, Heartbeat, NetworkState};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
@@ -253,7 +253,7 @@ mod tests {
 					))
 				);
 			};
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
 			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE, 100);
 			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE, 100);
 			offline_test(

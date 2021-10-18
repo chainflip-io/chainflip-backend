@@ -800,6 +800,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "serde 1.0.126",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -847,22 +863,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "state-chain-runtime",
-]
-
-[[package]]
-name = "cf-chains"
-version = "0.1.0"
-dependencies = [
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
- "ethereum",
- "frame-support",
- "frame-system",
- "hex",
- "parity-scale-codec",
- "rlp",
- "serde 1.0.126",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

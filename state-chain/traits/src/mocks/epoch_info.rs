@@ -1,9 +1,9 @@
 pub type Mock = MockEpochInfo;
-crate::impl_mock_epoch_info!(u64, u128);
+crate::impl_mock_epoch_info!(u64, u128, u32);
 
 #[macro_export]
 macro_rules! impl_mock_epoch_info {
-	($account_id:ty, $balance:ty) => {
+	($account_id:ty, $balance:ty, $epoch_index:ty) => {
 		use std::cell::RefCell;
 		use $crate::EpochInfo;
 
@@ -13,7 +13,7 @@ macro_rules! impl_mock_epoch_info {
 			pub static CURRENT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
 			pub static NEXT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
-			pub static EPOCH: RefCell<EpochIndex> = RefCell::new(0);
+			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
 		}
 
@@ -45,7 +45,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			/// Set the epoch.
-			pub fn set_epoch(epoch: EpochIndex) {
+			pub fn set_epoch(epoch: $epoch_index) {
 				EPOCH.with(|cell| *(cell.borrow_mut()) = epoch);
 			}
 
@@ -79,7 +79,7 @@ macro_rules! impl_mock_epoch_info {
 				NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
 			}
 
-			fn epoch_index() -> EpochIndex {
+			fn epoch_index() -> $epoch_index {
 				EPOCH.with(|cell| *cell.borrow())
 			}
 

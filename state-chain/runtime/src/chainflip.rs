@@ -1,31 +1,27 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
+	AccountId, Call, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
 	Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
 use cf_traits::{
-	BlockEmissions, BondRotation, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-	EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler, Heartbeat, Issuance,
-	NetworkState, RewardRollover, StakeHandler, StakeTransfer, VaultRotationHandler,
+	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
+	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
+	Heartbeat, IsOnline, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_std::cmp::min;
 use sp_std::vec::Vec;
-use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser,
-};
+
 use cf_chains::{
 	eth::{self, register_claim::RegisterClaim, ChainflipContractCall},
 	Ethereum,
 };
-use cf_traits::{BondRotation, Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
 use codec::{Decode, Encode};
-use frame_support::debug;
 use pallet_cf_broadcast::BroadcastConfig;
-use pallet_cf_validator::EpochTransitionHandler;
 use sp_core::H256;
 use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
@@ -217,7 +213,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 
 	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
 		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-			.skip_while(|(id, _)| !<Reputation as cf_traits::IsOnline>::is_online(id))
+			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
 			.take(1)
 			.collect::<Vec<_>>()
 			.first()
@@ -230,7 +226,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
 		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
 			.filter_map(|(id, _)| {
-				if <Reputation as cf_traits::IsOnline>::is_online(&id) {
+				if <Online as cf_traits::IsOnline>::is_online(&id) {
 					Some(id)
 				} else {
 					None

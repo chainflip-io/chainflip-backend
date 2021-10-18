@@ -16,7 +16,7 @@ use sp_runtime::traits::Zero;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::*, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, NetworkState, Online, Slashing,
+		offline_conditions::*, Chainflip, EpochInfo, Heartbeat, NetworkState, Slashing,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;

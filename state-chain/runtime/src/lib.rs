@@ -43,8 +43,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
+use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
-use cf_traits::{Chainflip, ChainflipAccountData};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
