@@ -1,27 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # ChainFlip Online Module
-//!
-//! A module to manage the liveness of our validators for the ChainFlip State Chain
-//!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Module`]
-//!
-//! ## Overview
-//! The module contains functionality to measure the liveness of our validators.  This is measured
-//! with a *heartbeat* which should be submitted via the extrinsic `heartbeat()` within the time
-//! period set by the *heartbeat interval*.
-//!
-//! ## Terminology
-//! - Validator: A node in our network that is producing blocks.
-//! - Heartbeat: A term used to measure the liveness of a validator.
-//! - Heartbeat interval: The duration in time, measured in blocks we would expect to receive a
-//!   heartbeat from a validator.
-//! - Online: A node that is online has successfully submitted a heartbeat during the current
-//!   heartbeat interval.
-//! - Offline: A node that is considered offline when they have *not* submitted a heartbeat during
-//!   the last heartbeat interval.
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod mock;
