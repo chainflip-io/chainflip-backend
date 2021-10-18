@@ -1,13 +1,14 @@
 # This Dockfile provides the base image to perform all tasks
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
-FROM rust:slim-bullseye as rust-substrate-base
+FROM debian:bullseye-slim as rust-substrate-base
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Substrate and rust compiler dependencies.
 RUN apt-get update \
     && apt-get -y install --no-install-recommends \
     build-essential \
+    ca-certificates \
     libclang-dev \
     python3-dev \
     pkg-config \
@@ -19,8 +20,10 @@ RUN apt-get update \
     jq \
     git
 
+# Download rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -y | sh
+
 # Set environment
-ENV PATH="/root/.cargo/bin:${PATH}"
 ENV RUSTC_WRAPPER=sccache
 
 # Download and install sccache https://github.com/mozilla/sccache
@@ -31,9 +34,10 @@ RUN curl -fsSLo /tmp/sccache.tgz \
  && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
  && rm -rf /tmp/*
 
-# Download and set nightly as the default Rust compiler
-ARG NIGHTLY=nightly-2021-03-24
-RUN rustup default ${NIGHTLY} \
-    && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
-    && rustup component add rustfmt \
-    && rustup component add clippy
+## Download and set nightly as the default Rust compiler
+#ENV PATH="${HOME}/.cargo/bin:${PATH}"
+#ARG NIGHTLY=nightly-2021-03-24
+#RUN rustup default ${NIGHTLY} \
+#    && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
+#    && rustup component add rustfmt \
+#    && rustup component add clippy
