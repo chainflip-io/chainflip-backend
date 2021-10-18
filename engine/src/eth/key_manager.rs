@@ -46,30 +46,28 @@ pub async fn start_key_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
-            match result_event.unwrap() {
-                KeyManagerEvent::AggKeySetByAggKey { tx_hash, .. } => {
+            let event = result_event.unwrap();
+            match event.event_enum {
+                KeyManagerEvent::AggKeySetByAggKey { .. } => {
                     slog::info!(
                         logger,
                         "AggKeySetByAggKey event found: {}",
-                        hex::encode(tx_hash)
+                        hex::encode(event.tx_hash)
                     );
                 }
-                KeyManagerEvent::AggKeySetByGovKey { tx_hash, .. } => {
+                KeyManagerEvent::AggKeySetByGovKey { .. } => {
                     slog::info!(
                         logger,
                         "AggKeySetByGovKey event found: {}",
-                        hex::encode(tx_hash)
+                        hex::encode(event.tx_hash)
                     );
                 }
-                KeyManagerEvent::GovKeySetByGovKey { tx_hash, .. } => {
+                KeyManagerEvent::GovKeySetByGovKey { .. } => {
                     slog::info!(
                         logger,
                         "GovKeySetByGovKey event found: {}",
-                        hex::encode(tx_hash)
+                        hex::encode(event.tx_hash)
                     );
-                }
-                KeyManagerEvent::Refunded { tx_hash, .. } => {
-                    slog::info!(logger, "Refunded event found: {}", hex::encode(tx_hash));
                 }
                 KeyManagerEvent::Shared(shared_event) => match shared_event {
                     SharedEvent::Refunded { .. } => {
@@ -159,8 +157,6 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `AggKeySetByGovKey(Key oldKey, Key newKey)`
@@ -169,8 +165,6 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
-        /// Tx hash of the tx that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `GovKeySetByGovKey(Key oldKey, Key newKey)`
@@ -212,36 +206,30 @@ impl KeyManager {
         .await
     }
 
-    pub fn decode_log_closure(
-        &self,
-    ) -> Result<impl Fn(H256, H256, RawLog) -> Result<KeyManagerEvent>> {
+    pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
         let ak_set_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
         let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
         let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
-        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
+
+        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
-            move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                let tx_hash = tx_hash.to_fixed_bytes();
+            move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
                 if signature == ak_set_ak.signature {
                     let log = ak_set_ak.event.parse_log(raw_log)?;
-                    let event = KeyManagerEvent::AggKeySetByAggKey {
+                    Ok(KeyManagerEvent::AggKeySetByAggKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                        tx_hash,
-                    };
-                    Ok(event)
+                    })
                 } else if signature == ak_set_gk.signature {
                     let log = ak_set_gk.event.parse_log(raw_log)?;
-                    let event = KeyManagerEvent::AggKeySetByGovKey {
+                    Ok(KeyManagerEvent::AggKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                        tx_hash,
-                    };
-                    Ok(event)
+                    })
                 } else if signature == gk_set_gk.signature {
                     let log = gk_set_gk.event.parse_log(raw_log)?;
-                    let event = KeyManagerEvent::GovKeySetByGovKey {
+                    Ok(KeyManagerEvent::GovKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
                     })
@@ -286,13 +274,8 @@ mod tests {
             )
             .unwrap();
 
-            let transaction_hash = H256::from_str(
-                "0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2",
-            )
-            .unwrap();
             match decode_log(
                 event_signature,
-                transaction_hash,
                 RawLog {
                     topics : vec![event_signature],
                     data : hex::decode("31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
@@ -316,13 +299,8 @@ mod tests {
             )
             .unwrap();
 
-            let transaction_hash = H256::from_str(
-                "0x76499f35052e9f09a5a12969abae380df638f809cc258869a29320197a6335b5",
-            )
-            .unwrap();
             match decode_log(
                 event_signature,
-                transaction_hash,
                 RawLog {
                     topics : vec![event_signature],
                     data : hex::decode("1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
@@ -347,13 +325,8 @@ mod tests {
             )
             .unwrap();
 
-            let transaction_hash = H256::from_str(
-                "0xd962552749780fe5e13b2b0aec12ab4d806a1f2d04432b5bad2715a800268421",
-            )
-            .unwrap();
             match decode_log(
                 event_signature,
-                transaction_hash,
                 RawLog {
                     topics : vec![event_signature],
                     data : hex::decode("423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
