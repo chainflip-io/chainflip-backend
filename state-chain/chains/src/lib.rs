@@ -7,7 +7,7 @@ pub trait Chain {
 }
 
 macro_rules! impl_chains {
-	( $( $chain:ident ),+ ) => {
+	( $( $chain:ident ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
@@ -29,7 +29,7 @@ macro_rules! impl_chains {
 }
 
 impl_chains! {
-	Ethereum
+	Ethereum,
 }
 
 impl<C: Chain> From<C> for ChainId {
