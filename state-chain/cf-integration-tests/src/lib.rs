@@ -13,8 +13,8 @@ mod tests {
 	use state_chain_runtime::opaque::SessionKeys;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
-		Timestamp, Validator, Vaults,
+		Auction, Emissions, Event, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
+		Timestamp, Validator, Vaults, Witnesser,
 	};
 
 	use cf_traits::{BlockNumber, FlipBalance};
@@ -32,6 +32,15 @@ mod tests {
 			.expect("static values are valid; qed")
 			.public()
 	}
+
+	fn reverse_events<T: frame_system::Config>() -> Vec<T::Event> {
+		frame_system::Pallet::<T>::events()
+			.into_iter()
+			.rev()
+			.map(|e| e.event)
+			.collect::<Vec<_>>()
+	}
+
 	fn run_to_block(n: u32) {
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
@@ -333,9 +342,9 @@ mod tests {
 		use super::*;
 		use crate::tests::run_to_block;
 		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer};
+		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::{Auction, Flip, Origin, Validator, WitnesserApi};
-		use frame_support::traits::HandleLifetime;
 
 		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
@@ -346,7 +355,7 @@ mod tests {
 		// - TODO Vaults rotated
 		// - TODO New epoch
 		fn epoch_rotates() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
+			const EPOCH_BLOCKS: BlockNumber = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.build()
@@ -373,8 +382,17 @@ mod tests {
 						assert_ok!(Session::set_keys(Origin::signed(staker), key, vec![]));
 					}
 
+					// Reset system events for this block
+					frame_system::Pallet::<Runtime>::reset_events();
+
 					// Run to block before epoch
 					run_to_block(EPOCH_BLOCKS - 1);
+
+					assert_eq!(
+						frame_system::Pallet::<Runtime>::events().len(),
+						0,
+						"no events should have been emitted"
+					);
 
 					assert_eq!(
 						Auction::current_auction_index(),
@@ -408,11 +426,74 @@ mod tests {
 							));
 						}
 
+						// Should expect the following events:
+						// 2 x Witness::WitnessReceived
+						// 1 x Witness::ThresholdReached
+						// 1 x Flip::BalanceSettled
+						// 1 x Staking::Staked
+						// 1 x Witness::WitnessExecuted
+						// 1 x Witness::WitnessReceived
+
+						let mut events = reverse_events::<Runtime>();
+
+						assert_matches!(
+							events.pop().expect("witness received event"),
+							Event::pallet_cf_witnesser(
+								pallet_cf_witnesser::Event::WitnessReceived(..)
+							)
+						);
+
+						assert_matches!(
+							events.pop().expect("witness received event"),
+							Event::pallet_cf_witnesser(
+								pallet_cf_witnesser::Event::WitnessReceived(..)
+							)
+						);
+
+						assert_matches!(
+							events.pop().expect("threshold reached event"),
+							Event::pallet_cf_witnesser(
+								pallet_cf_witnesser::Event::ThresholdReached(..)
+							)
+						);
+
+						assert_matches!(
+							events.pop().expect("balance settled event"),
+							Event::pallet_cf_flip(pallet_cf_flip::Event::BalanceSettled(..))
+						);
+
+						assert_matches!(
+							events.pop().expect("staked event"),
+							Event::pallet_cf_staking(pallet_cf_staking::Event::Staked(..))
+						);
+
+						assert_matches!(
+							events.pop().expect("witness executed event"),
+							Event::pallet_cf_witnesser(
+								pallet_cf_witnesser::Event::WitnessExecuted(..)
+							)
+						);
+
+						assert_matches!(
+							events.pop().expect("witness received event"),
+							Event::pallet_cf_witnesser(
+								pallet_cf_witnesser::Event::WitnessReceived(..)
+							)
+						);
+
 						assert_eq!(
 							Flip::stakeable_balance(&AccountId::from(*staker)),
 							STAKE_AMOUNT,
 							"Should have stake"
 						);
+
+						assert_eq!(
+							events.pop(),
+							None,
+							"we should have no more events for this iteration"
+						);
+						// Reset system events for this iteration
+						frame_system::Pallet::<Runtime>::reset_events();
 					}
 
 					assert_eq!(
@@ -424,6 +505,44 @@ mod tests {
 					// Auction commences on epoch
 					run_to_block(EPOCH_BLOCKS);
 
+					// We should expect the following events:
+					// Auction::AuctionStarted
+					// Auction::AuctionCompleted
+					// Vaults::KeygenRequest
+					// Session::NewSession
+
+					let mut events = reverse_events::<Runtime>();
+					assert_matches!(
+						events.pop().expect("auction started event"),
+						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionStarted(..))
+					);
+					assert_matches!(
+						events.pop().expect("auction completed event"),
+						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionCompleted(..))
+					);
+					assert_matches!(
+						events.pop().expect("keygen request event"),
+						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(..))
+					);
+					assert_matches!(
+						events.pop().expect("new session event"),
+						Event::pallet_session(pallet_session::Event::NewSession(..))
+					);
+					assert_matches!(
+						events.pop().expect("emissions distributed event"),
+						Event::pallet_cf_emissions(
+							pallet_cf_emissions::Event::EmissionsDistributed(..)
+						)
+					);
+					assert_eq!(
+						events.pop(),
+						None,
+						"we should have no more events until we have confirmation of auction"
+					);
+
+					// Reset system events for this iteration
+					frame_system::Pallet::<Runtime>::reset_events();
+
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
@@ -431,9 +550,22 @@ mod tests {
 					);
 
 					// TODO Mock CFE for vault rotation.  The below will fail until this.
-
 					// The following block should be confirmed
-					// run_to_block(EPOCH_BLOCKS + 1);
+					run_to_block(EPOCH_BLOCKS + 1);
+
+					assert_eq!(
+						System::events().len(),
+						0,
+						"we should have no more events until we have confirmation of auction"
+					);
+
+					let mut events = reverse_events::<Runtime>();
+
+					assert_eq!(
+						events.pop(),
+						None,
+						"we should have no more events after auction has completed"
+					);
 
 					// if let Some(AuctionResult {
 					// 	winners,
@@ -461,7 +593,6 @@ mod tests {
 					// Emissions
 					// Rewards
 					// Flip
-
 				});
 		}
 	}
@@ -469,8 +600,6 @@ mod tests {
 	mod witnessing {
 		#[test]
 		// Witness
-		fn witness() {
-
-		}
+		fn witness() {}
 	}
 }
