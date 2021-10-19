@@ -16,7 +16,6 @@ use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_core::H256;
 use sp_runtime::RuntimeDebug;
-use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
@@ -137,7 +136,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 }
 
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
-	mut call: C,
+	call: C,
 	signature: &eth::SchnorrVerificationComponents,
 ) -> eth::UnsignedTransaction {
 	eth::UnsignedTransaction {
@@ -182,6 +181,6 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	fn current_key() -> Self::KeyId {
 		Vaults::vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
-			.current_key
+			.public_key
 	}
 }
