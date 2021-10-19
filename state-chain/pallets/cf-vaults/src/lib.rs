@@ -11,7 +11,7 @@ use cf_traits::{
 	Chainflip, Nonce, NonceProvider, SigningContext, ThresholdSigner, VaultRotationHandler,
 	VaultRotator,
 };
-use frame_support::pallet_prelude::*;
+use frame_support::{dispatch::{DispatchError, DispatchResult}, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::traits::{One, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
@@ -87,10 +87,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	/// Current request index used in request/response
+	/// Counter for generating unique ceremony ids for the keygen ceremony.
 	#[pallet::storage]
-	#[pallet::getter(fn current_request)]
-	pub(super) type CurrentRequest<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
+	#[pallet::getter(fn keygen_ceremony_id_counter)]
+	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// The active vaults for the current epoch.
 	#[pallet::storage]
@@ -127,8 +127,8 @@ pub mod pallet {
 		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
 		/// The vault for the request has rotated \[chain_id\]
 		VaultRotationCompleted(ChainId),
-		/// A rotation of vaults has been aborted \[ceremony_ides\]
-		RotationAborted(Vec<ChainId>),
+		/// All KeyGen ceremonies have been aborted \[chain_ids\]
+		KeygenAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 	}
@@ -149,6 +149,8 @@ pub mod pallet {
 		InvalidRotationStatus,
 		/// The generated key is not a valid public key.
 		InvalidPublicKey,
+		/// A rotation for the requested ChainId is already underway.
+		DuplicateRotationRequest,
 	}
 
 	#[pallet::call]
@@ -203,7 +205,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Key generation failed. We report the guilty parties and abort.
+		/// Key generation failed. We report the guilty parties and abort all pending keygen ceremonies.
 		///
 		/// If key generation fails for *any* chain we need to abort *all* chains.
 		#[pallet::weight(10_000)]
@@ -364,9 +366,10 @@ impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Abort all rotations registered and notify the `VaultRotationHandler` trait of our decision to abort.
+	/// Abort all pending rotations and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
-		Self::deposit_event(Event::RotationAborted(
+		// TODO: Should also notify of the ceremony id for each aborted ceremony.
+		Self::deposit_event(Event::KeygenAborted(
 			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
 		));
 		PendingVaultRotations::<T>::remove_all();
@@ -376,35 +379,44 @@ impl<T: Config> Pallet<T> {
 	fn no_active_chain_vault_rotations() -> bool {
 		PendingVaultRotations::<T>::iter().count() == 0
 	}
-}
 
-impl<T: Config> VaultRotator for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type RotationError = Error<T>;
-
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
+	fn start_vault_rotation_for_chain(
+		candidates: Vec<T::ValidatorId>,
+		chain_id: ChainId,
+	) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T>::EmptyValidatorSet);
+		ensure!(!PendingVaultRotations::<T>::contains_key(chain_id), Error::<T>::DuplicateRotationRequest);
 
-		let ceremony_id = CurrentRequest::<T>::mutate(|id| {
+		let ceremony_id = KeygenCeremonyIdCounter::<T>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		Pallet::<T>::deposit_event(Event::KeygenRequest(
-			ceremony_id,
-			ChainId::Ethereum,
-			candidates.clone(),
-		));
 		PendingVaultRotations::<T>::insert(
-			ChainId::Ethereum,
+			chain_id,
 			VaultRotationStatus::<T>::AwaitingKeygen {
 				keygen_ceremony_id: ceremony_id,
-				candidates,
+				candidates: candidates.clone(),
 			},
 		);
+		Pallet::<T>::deposit_event(Event::KeygenRequest(
+			ceremony_id,
+			chain_id,
+			candidates,
+		));
 
 		Ok(())
+	}
+}
+
+impl<T: Config> VaultRotator for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type RotationError = DispatchError;
+
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
+		// We only support Ethereum for now.
+		Self::start_vault_rotation_for_chain(candidates, ChainId::Ethereum)
 	}
 	
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
@@ -415,7 +427,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 			Ok(())
 		} else {
 			// Wait on confirmation
-			Err(Error::<T>::NotConfirmed)
+			Err(Error::<T>::NotConfirmed.into())
 		}
 	}
 }

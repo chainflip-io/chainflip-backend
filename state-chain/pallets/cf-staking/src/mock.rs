@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type Call = Call;
@@ -122,8 +122,8 @@ cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
 
 pub const NONCE: u64 = 42;
 
-impl NonceProvider for Test {
-	fn next_nonce(_identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+impl NonceProvider<Ethereum> for Test {
+	fn next_nonce() -> cf_traits::Nonce {
 		NONCE
 	}
 }
