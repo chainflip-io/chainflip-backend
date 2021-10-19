@@ -1,4 +1,4 @@
-mod test {
+mod tests {
 	use crate::mock::*;
 	use crate::*;
 	use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
@@ -65,6 +65,8 @@ mod test {
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(validators, minimum_active_bid))
 				if (validators.clone(), minimum_active_bid) == (new_winners.clone(), new_minimum_active_bid)
 			);
+
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 
 			assert_eq!(
 				AuctionPallet::auction_result(),

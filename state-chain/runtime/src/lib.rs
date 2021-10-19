@@ -3,9 +3,7 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
-
 use core::time::Duration;
-
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness},
@@ -41,10 +39,11 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
-	ChainflipEpochTransitions, ChainflipStakeHandler, ChainflipVaultRotationHandler,
+	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
+	ChainflipVaultRotationHandler,
 };
-pub use cf_traits::FlipBalance;
-use cf_traits::{BlockNumber, Chainflip, ChainflipAccountData, EpochIndex};
+use cf_traits::ChainflipAccountData;
+pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
@@ -134,16 +133,17 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinValidators = MinValidators;
 	type Handler = Vaults;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type Online = Reputation;
+	type Online = Online;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 }
 
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -151,14 +151,17 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+}
+
+impl pallet_cf_environment::Config for Runtime {
+	type Event = Event;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -337,7 +340,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
@@ -353,10 +355,12 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
+	type AccountId = AccountId;
 	type Flip = Flip;
-	type Nonce = u64;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type NonceProvider = Vaults;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -380,6 +384,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
 }
 
@@ -403,29 +408,52 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl Chainflip for Runtime {
-	type Amount = FlipBalance;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type Amount = FlipBalance;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
-	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+}
+
+impl pallet_cf_online::Config for Runtime {
+	type Event = Event;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type Heartbeat = ChainflipHeartbeat;
+}
+
+use frame_support::instances::Instance0;
+
+impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
+	type Event = Event;
+	type SignerNomination = chainflip::BasicSignerNomination;
+	type TargetChain = cf_chains::Ethereum;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type KeyProvider = chainflip::VaultKeyProvider<Self>;
+	type OfflineReporter = Reputation;
+}
+
+parameter_types! {
+	pub const EthereumSigningTimeout: BlockNumber = 5;
+	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
+}
+
+impl pallet_cf_broadcast::Config<Instance0> for Runtime {
+	type Event = Event;
+	type TargetChain = cf_chains::Ethereum;
+	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type SignerNomination = chainflip::BasicSignerNomination;
+	type OfflineReporter = Reputation;
+	type SigningTimeout = EthereumSigningTimeout;
+	type TransmissionTimeout = EthereumTransmissionTimeout;
 }
 
 construct_runtime!(
@@ -437,8 +465,9 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Environment: pallet_cf_environment::{Module, Call, Event<T>, Config},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
@@ -454,7 +483,10 @@ construct_runtime!(
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 

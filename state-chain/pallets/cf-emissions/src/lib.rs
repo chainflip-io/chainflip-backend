@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! A pallet for managing the FLIP emissions schedule.
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -12,19 +12,24 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
+use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
+use sp_runtime::traits::CheckedDiv;
 use sp_runtime::{
 	offchain::storage_lock::BlockNumberProvider,
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
 };
 
+type BasisPoints = u32;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::ensure_root;
+	use frame_system::pallet_prelude::OriginFor;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -44,7 +49,7 @@ pub mod pallet {
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
 
-		/// An implmentation of the [Issuance] trait.
+		/// An implementation of the [Issuance] trait.
 		type Issuance: Issuance<
 			Balance = Self::FlipBalance,
 			AccountId = Self::AccountId,
@@ -60,6 +65,10 @@ pub mod pallet {
 		/// How frequently to mint.
 		#[pallet::constant]
 		type MintInterval: Get<Self::BlockNumber>;
+
+		/// Blocks per day.
+		#[pallet::constant]
+		type BlocksPerDay: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -67,14 +76,32 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	#[pallet::getter(fn emissions_per_block)]
-	/// The amount of Flip to mint per block.
-	pub type EmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn last_mint_block)]
 	/// The block number at which we last minted Flip.
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn validator_emission_per_block)]
+	/// The amount of Flip we mint to validators per block.
+	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validator_emission_per_block)]
+	/// The block number at which we last minted Flip.
+	pub type BackupValidatorEmissionPerBlock<T: Config> =
+		StorageValue<_, T::FlipBalance, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn validator_emission_inflation)]
+	/// Annual inflation set aside for *active* validators, expressed as basis points ie. hundredths of a percent.
+	pub(super) type ValidatorEmissionInflation<T: Config> =
+		StorageValue<_, BasisPoints, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validator_emission_inflation)]
+	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths of a percent.
+	pub(super) type BackupValidatorEmissionInflation<T: Config> =
+		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
@@ -82,6 +109,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Emissions have been distributed. [block_number, amount_minted]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
+		/// Validator inflation emission has been updated [new]
+		ValidatorInflationEmissionsUpdated(BasisPoints),
+		/// Backup Validator inflation emission has been updated [new]
+		BackupValidatorInflationEmissionsUpdated(BasisPoints),
 	}
 
 	// Errors inform users that something went wrong.
@@ -89,6 +120,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Emissions calculation resulted in overflow.
 		Overflow,
+		/// Invalid percentage
+		InvalidPercentage,
 	}
 
 	#[pallet::hooks]
@@ -105,27 +138,55 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(10_000)]
+		pub(super) fn update_validator_emission_inflation(
+			origin: OriginFor<T>,
+			inflation: BasisPoints,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			ValidatorEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::ValidatorInflationEmissionsUpdated(inflation));
+			Ok(().into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub(super) fn update_backup_validator_emission_inflation(
+			origin: OriginFor<T>,
+			inflation: BasisPoints,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			BackupValidatorEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(
+				inflation,
+			));
+			Ok(().into())
+		}
+	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		/// Emission rate at genesis.
-		pub emission_per_block: T::FlipBalance,
+	pub struct GenesisConfig {
+		pub validator_emission_inflation: BasisPoints,
+		pub backup_validator_emission_inflation: BasisPoints,
 	}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
-				emission_per_block: Zero::zero(),
+				validator_emission_inflation: 0,
+				backup_validator_emission_inflation: 0,
 			}
 		}
 	}
 
+	/// At genesis we need to set the inflation rates for active and passive validators.
+	///
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			EmissionPerBlock::<T>::set(self.emission_per_block);
+			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
+			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
 		}
 	}
 }
@@ -150,7 +211,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
-	/// minted and distributes this a as a reward via [RewardsDistribution].
+	/// minted and distributes this as a reward via [RewardsDistribution].
 	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
@@ -160,7 +221,7 @@ impl<T: Config> Pallet<T> {
 
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = EmissionPerBlock::<T>::get()
+		let reward_amount = ValidatorEmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
 			.ok_or_else(|| T::DbWeight::get().reads(2))?;
 
@@ -185,9 +246,57 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+impl<T: Config> BlockEmissions for Pallet<T> {
+	type Balance = T::FlipBalance;
+
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight {
+		ValidatorEmissionPerBlock::<T>::put(emission);
+		T::DbWeight::get().writes(1)
+	}
+
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight {
+		BackupValidatorEmissionPerBlock::<T>::put(emission);
+		T::DbWeight::get().writes(1)
+	}
+
+	fn calculate_block_emissions() -> Weight {
+		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
+			const DAYS_IN_YEAR: u32 = 365;
+
+			((T::Issuance::total_issuance() * inflation.into())
+				/ 10_000u32.into()
+				/ DAYS_IN_YEAR.into())
+			.checked_div(&T::FlipBalance::unique_saturated_from(
+				T::BlocksPerDay::get(),
+			))
+			.expect("blocks per day should be greater than zero")
+		}
+
+		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
+			ValidatorEmissionInflation::<T>::get(),
+		));
+
+		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
+			BackupValidatorEmissionInflation::<T>::get(),
+		));
+
+		0
+	}
+}
+
 impl<T: Config> EmissionsTrigger for Pallet<T> {
-	fn trigger_emissions() {
-		let block_number = frame_system::Pallet::<T>::current_block_number();
-		let _ = Self::mint_rewards_for_block(block_number);
+	fn trigger_emissions() -> Weight {
+		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		match Self::mint_rewards_for_block(current_block_number) {
+			Ok(weight) => weight,
+			Err(weight) => {
+				frame_support::debug::RuntimeLogger::init();
+				frame_support::debug::error!(
+					"Failed to mint rewards at block {:?}",
+					current_block_number
+				);
+				weight
+			}
+		}
 	}
 }

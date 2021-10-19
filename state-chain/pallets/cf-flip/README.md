@@ -6,7 +6,8 @@ It provides some low-level helpers for creating balance updates that maintain th
 exposes higher-level operations via selected traits.
 
 The implementation is loosely based on substrate's own Balances pallet.
-## Purpose
+
+## Overview
 
 Enable minting, burning, slashing, locking and other functions. Notably, for now, token transfers are not possible.
 
@@ -19,8 +20,8 @@ off-chain or in on-chain reserves.
 - Mint: The act of creating new funds out of thin air.
 - Burn: The act of destroying funds.
 - Account: On-chain funds that belong to some externally-owned account, identified by an `AccountId`.
-- Reserve: On-chain funds assigned to some internall-owned reserve, identified by a `ReserveId`. Reserves can be thought 
-  of as on-chain accounts, however unlike accounts they have no public key associated. Reserves can be used to allocate 
+- Reserve: On-chain funds assigned to some internall-owned reserve, identified by a `ReserveId`. Reserves can be thought
+  of as on-chain accounts, however unlike accounts they have no public key associated. Reserves can be used to allocate
   funds internally, for example to set aside funds to be distributed as rewards, or for use as a treasury.
 - On-Chain Funds: Funds that are known to be in on-chain accounts or reserves.
 - Off-Chain Funds: Funds that are assumed to be held in off-chain accounts.
@@ -69,11 +70,3 @@ Implementations for the following [chainflip traits](../traits) are provided:
 ### Genesis Configuration
 
 - Total issuance is the only required parameter. All tokens are initially assumed to be held off-chain.
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open --document-private-items
-```

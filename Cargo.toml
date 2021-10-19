@@ -3,6 +3,7 @@ panic = 'unwind'
 
 [workspace]
 members = [
+  'state-chain/chains',
   'state-chain/client/cf-p2p',
   'state-chain/node',
   'state-chain/pallets/cf-flip',
@@ -11,12 +12,16 @@ members = [
   'state-chain/pallets/cf-auction',
   'state-chain/pallets/cf-vaults',
   'state-chain/pallets/cf-emissions',
+  'state-chain/pallets/cf-threshold-signature',
   'state-chain/pallets/cf-rewards',
   'state-chain/pallets/cf-reputation',
+  'state-chain/pallets/cf-broadcast',
   'state-chain/pallets/cf-witnesser',
   'state-chain/pallets/cf-witnesser-api',
   'state-chain/pallets/cf-governance',
+  'state-chain/pallets/cf-online',
   'state-chain/cf-integration-tests',
+  'state-chain/pallets/cf-environment',
   'state-chain/runtime',
   'state-chain/traits',
   'engine',

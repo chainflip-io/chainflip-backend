@@ -5,10 +5,13 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, EnvironmentConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig,
+	WASM_BINARY,
 };
+use std::convert::TryInto;
+use std::env;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -35,6 +38,33 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
 }
 
+/// Get the values for the state-chain environment.
+pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
+	let stake_manager_address: [u8; 20] = hex::decode(
+		env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
+	let key_manager_address: [u8; 20] = hex::decode(
+		env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or(String::from("36fB9E46D6cBC14600D9089FD7Ce95bCf664179f")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
+	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
+		.unwrap_or(String::from("4"))
+		.parse::<u32>()
+		.expect("chain id is no unsigned int");
+	(
+		stake_manager_address,
+		key_manager_address,
+		ethereum_chain_id,
+	)
+}
+
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 	(
@@ -47,7 +77,7 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 /// Start a single node development chain
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
 		"dev",
@@ -67,6 +97,11 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
+				EnvironmentConfig {
+					stake_manager_address: stake_manager_address,
+					key_manager_address: key_manager_address,
+					ethereum_chain_id: ethereum_chain_id,
+				},
 			)
 		},
 		// Bootnodes
@@ -87,6 +122,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
@@ -112,6 +148,11 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
+				EnvironmentConfig {
+					stake_manager_address: stake_manager_address,
+					key_manager_address: key_manager_address,
+					ethereum_chain_id: ethereum_chain_id,
+				},
 			)
 		},
 		// Bootnodes
@@ -189,6 +230,15 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
+				EnvironmentConfig {
+					stake_manager_address: hex_literal::hex![
+						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+					],
+					key_manager_address: hex_literal::hex![
+						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+					],
+					ethereum_chain_id: 4,
+				},
 			)
 		},
 		// Bootnodes
@@ -288,6 +338,15 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
+				EnvironmentConfig {
+					stake_manager_address: hex_literal::hex![
+						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+					],
+					key_manager_address: hex_literal::hex![
+						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+					],
+					ethereum_chain_id: 4,
+				},
 			)
 		},
 		// Bootnodes
@@ -311,6 +370,7 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
+	config_set: EnvironmentConfig,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -356,9 +416,6 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: BLOCK_EMISSIONS,
-		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
@@ -366,11 +423,16 @@ fn testnet_genesis(
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
+		pallet_cf_environment: Some(config_set),
 		pallet_cf_vaults: Some(VaultsConfig {
 			ethereum_vault_key: hex_literal::hex![
 				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
 			]
 			.to_vec(),
+		}),
+		pallet_cf_emissions: Some(EmissionsConfig {
+			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
+			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 		}),
 	}
 }

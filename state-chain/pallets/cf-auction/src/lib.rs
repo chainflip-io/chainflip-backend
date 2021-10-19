@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
-#[doc = include_str!("../README.md")]
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
@@ -18,8 +18,8 @@ extern crate assert_matches;
 
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
-	ChainflipAccount, ChainflipAccountState, EmergencyRotation, Online, RemainingBid, StakeHandler,
-	VaultRotationHandler, VaultRotator,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid,
+	StakeHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
@@ -34,7 +34,8 @@ use sp_std::prelude::*;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		AuctionIndex, ChainflipAccount, EmergencyRotation, RemainingBid, VaultRotator,
+		AuctionIndex, AuctionResult, ChainflipAccount, EmergencyRotation, RemainingBid,
+		VaultRotator,
 	};
 	use frame_support::traits::ValidatorRegistration;
 
@@ -72,7 +73,7 @@ pub mod pallet {
 		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// An online validator
-		type Online: Online<ValidatorId = Self::ValidatorId>;
+		type Online: IsOnline<ValidatorId = Self::ValidatorId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
 		/// Minimum amount of validators
@@ -86,7 +87,7 @@ pub mod pallet {
 		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
 	}
 
-	/// Pallet implements [`Hooks`] trait
+	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
@@ -422,11 +423,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 							AuctionPhase::ConfirmedValidators(winners.clone(), minimum_active_bid);
 						// Set phase
 						CurrentPhase::<T>::put(phase.clone());
-						// Store the result
-						LastAuctionResult::<T>::put(AuctionResult {
-							winners,
-							minimum_active_bid,
-						});
 
 						Self::deposit_event(Event::AuctionConfirmed(
 							CurrentAuctionIndex::<T>::get(),
@@ -437,7 +433,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
 			}
-			AuctionPhase::ConfirmedValidators(..) => {
+			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
+				// Store the result
+				LastAuctionResult::<T>::put(AuctionResult {
+					winners,
+					minimum_active_bid,
+				});
 				Self::deposit_event(Event::AwaitingBidders);
 				CurrentPhase::<T>::put(AuctionPhase::default());
 				Ok(AuctionPhase::default())

@@ -30,6 +30,7 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
+structopt = "0.3.23"
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "15.1"}
@@ -68,17 +69,25 @@ frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
 sp-runtime = "3.0.0"
-substrate-subxt = {git = "https://github.com/chainflip-io/substrate-subxt", branch = "all-events"}
+sc-rpc-api = '0.9.0'
+sp-rpc = "3.0.0"
+sp-version = "3.0.0"
+substrate-subxt = "0.15"
 
 # Local deps
 cf-p2p = {path = "../state-chain/client/cf-p2p"}
 cf-traits = {path = "../state-chain/traits"}
+cf-chains = {path = "../state-chain/chains"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
+pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
+pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
+pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 
 [dependencies.curv]
