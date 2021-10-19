@@ -26,7 +26,7 @@ cargo-base-job: &cargo-base-job
   executor: rust-base
   environment:
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
 
 ######################## Config ########################
