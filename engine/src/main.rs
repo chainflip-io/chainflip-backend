@@ -1,4 +1,9 @@
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
 use chainflip_engine::{
+    common::Mutex,
+    duty_manager::DutyManager,
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
@@ -50,6 +55,10 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
+    let duty_manager = Arc::new(RwLock::new(DutyManager::new(AccountId(
+        key_pair.public().0,
+    ))));
+
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
         .expect("Failed to create Web3 WebSocket");
@@ -93,14 +102,16 @@ async fn main() {
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
-            &root_logger
+            &root_logger,
+            duty_manager.clone(),
         ),
         // Start eth components
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,
             state_chain_client.clone(),
-            &root_logger
+            &root_logger,
+            duty_manager.clone(),
         )
         .await
         .expect("Could not start StakeManager witness"),
@@ -108,7 +119,8 @@ async fn main() {
             &web3,
             &settings,
             state_chain_client.clone(),
-            &root_logger
+            &root_logger,
+            duty_manager.clone(),
         )
         .await
         .expect("Could not start KeyManager witness"),

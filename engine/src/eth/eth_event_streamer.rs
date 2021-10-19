@@ -102,6 +102,8 @@ pub async fn new_eth_event_stream<
         (vec![], from_block)
     };
 
+    slog::debug!(logger, "past_logs: {}", past_logs.len());
+
     let future_logs =
         future_logs
             .map_err(anyhow::Error::new)

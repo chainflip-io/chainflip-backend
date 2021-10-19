@@ -4,6 +4,7 @@
 use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
+    duty_manager::DutyManager,
     eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
@@ -19,10 +20,9 @@ use web3::{
 };
 
 use anyhow::Result;
-
 use futures::{Future, Stream, StreamExt};
-
 use slog::o;
+use tokio::sync::RwLock;
 
 use super::decode_shared_event_closure;
 use super::eth_event_streamer::Event;
@@ -33,6 +33,7 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
     settings: &settings::Settings,
     _state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
+    duty_manager: Arc<RwLock<DutyManager>>,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
     slog::info!(logger, "Starting KeyManager witness");

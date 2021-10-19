@@ -5,8 +5,10 @@ use slog::o;
 use sp_runtime::AccountId32;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::RwLock;
 
 use crate::{
+    duty_manager::DutyManager,
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     multisig::{
@@ -24,6 +26,7 @@ pub async fn start<BlockStream, RpcClient>(
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
     logger: &slog::Logger,
+    duty_manager: Arc<RwLock<DutyManager>>,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
@@ -357,6 +360,7 @@ mod tests {
             multisig_instruction_sender,
             multisig_event_receiver,
             &logger,
+            Arc::new(RwLock::new(DutyManager::new_test())),
         )
         .await;
     }

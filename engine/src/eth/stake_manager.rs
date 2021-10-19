@@ -3,8 +3,10 @@
 
 use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
+use tokio::sync::RwLock;
 
 use crate::{
+    duty_manager::DutyManager,
     eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
@@ -33,6 +35,7 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     settings: &settings::Settings,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
+    duty_manager: Arc<RwLock<DutyManager>>,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");

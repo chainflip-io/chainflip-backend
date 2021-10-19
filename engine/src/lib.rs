@@ -1,4 +1,5 @@
 pub mod common;
+pub mod duty_manager;
 pub mod health;
 pub mod multisig;
 pub mod p2p;
