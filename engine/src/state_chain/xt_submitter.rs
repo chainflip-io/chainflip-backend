@@ -46,17 +46,17 @@ impl AtomicNonce {
 }
 
 /// Controls submission of extrinsics, so that we maintain a good nonce
-pub struct XtSubmitter {
+pub struct XtSubmitter<SCClient: IStateChainClient> {
     to_retry: VecDeque<(RetryCount, Call)>,
-    state_chain_client: Arc<StateChainClient>,
+    state_chain_client: Arc<SCClient>,
     xt_receiver: UnboundedReceiver<Call>,
     nonce: Arc<AtomicNonce>,
     logger: slog::Logger,
 }
 
-impl XtSubmitter {
+impl<SCClient: IStateChainClient> XtSubmitter<SCClient> {
     pub fn new(
-        state_chain_client: Arc<StateChainClient>,
+        state_chain_client: Arc<SCClient>,
         xt_receiver: UnboundedReceiver<Call>,
         nonce: Arc<AtomicNonce>,
         logger: &slog::Logger,
@@ -127,11 +127,59 @@ impl XtSubmitter {
 #[cfg(test)]
 mod tests {
 
+    use std::{convert::TryInto, time::Duration};
+
+    use sp_core::H256;
+
+    use tokio::time::timeout;
+
     use super::*;
+    use crate::{
+        logging::test_utils::create_test_logger, state_chain::client::MockIStateChainClient,
+    };
 
     #[tokio::test]
-    #[ignore]
-    async fn test_xt_submitter() {
-        todo!()
+    async fn test_xt_submitter_all_xts_succeed() {
+        let mut mock_state_chain_client = MockIStateChainClient::new();
+        let logger = create_test_logger();
+        let bytes: [u8; 32] =
+            hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let tx_hash = H256::from(bytes);
+        let atomic_nonce = Arc::new(AtomicNonce::new(0));
+        let (xt_sender, xt_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        // create some mock expectations
+        mock_state_chain_client
+            .expect_submit_extrinsic_with_nonce()
+            .times(4)
+            // with verifies it's call with the correct argument
+            .returning(move |nonce: u32, call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+
+        let arc_client = Arc::new(mock_state_chain_client);
+
+        let mut xt_submitter = XtSubmitter::new(arc_client, xt_receiver, atomic_nonce, &logger);
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+        let fut1 = timeout(Duration::from_millis(10), xt_submitter.start());
+
+        let fut2 = async {
+            for _ in 0..4 {
+                xt_sender.send(force_rotation_call.clone()).unwrap();
+            }
+        };
+
+        // start runs forever, so we need to cancel it at some point
+        tokio::join!(fut1, fut2);
+
+        // let expected = AtomicNonce::new(10);
+        let value = xt_submitter.nonce.0.load(Ordering::Relaxed);
+        assert_eq!(value, 4);
     }
 }

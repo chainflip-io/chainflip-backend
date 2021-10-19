@@ -26,6 +26,9 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
+#[cfg(test)]
+use mockall::{automock, mock, predicate::*};
+
 use async_trait::async_trait;
 
 use crate::settings;
@@ -142,6 +145,7 @@ pub struct StateChainClient {
     state_rpc_client: StateRpcClient,
 }
 
+#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait IStateChainClient {
     async fn submit_extrinsic_with_nonce<Extrinsic>(
@@ -151,7 +155,7 @@ pub trait IStateChainClient {
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone + Send;
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
 
@@ -167,7 +171,8 @@ impl IStateChainClient for StateChainClient {
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone + Send,
+        // TODO: See if we can remove this static
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
         self.author_rpc_client
             .submit_extrinsic(Bytes::from(
