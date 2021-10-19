@@ -109,14 +109,11 @@ pub mod pallet {
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat during this interval for this node
-			let node = Nodes::<T>::get(&validator_id).ok_or(Error::<T>::UnknownNode)?;
+			let mut node = Nodes::<T>::get(&validator_id).ok_or(Error::<T>::UnknownNode)?;
 			ensure!(!node.has_submitted(), Error::<T>::AlreadySubmittedHeartbeat);
 			// Update this node
-			Nodes::<T>::mutate(&validator_id, |maybe_node| {
-				if let Some(node) = maybe_node.as_mut() {
-					node.update_current_interval(true);
-				}
-			});
+			node.update_current_interval(true);
+			Nodes::<T>::insert(&validator_id, node);
 
 			T::Heartbeat::heartbeat_submitted(&validator_id);
 
