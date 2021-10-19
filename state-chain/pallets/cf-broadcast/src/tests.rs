@@ -81,7 +81,7 @@ impl MockCfe {
 		assert_eq!(nominee, RANDOM_NOMINEE);
 		// Invalid signer refused.
 		assert_noop!(
-			DogeBroadcast::transaction_ready_for_transmission(
+			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
 				MockSignedTx::Valid,
@@ -89,7 +89,7 @@ impl MockCfe {
 			Error::<Test, Instance0>::InvalidSigner
 		);
 		// Only the nominee can return the signed tx.
-		assert_ok!(DogeBroadcast::transaction_ready_for_transmission(
+		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(nominee).into(),
 			attempt_id,
 			match scenario {
@@ -103,9 +103,9 @@ impl MockCfe {
 	fn handle_broadcast_request(attempt_id: BroadcastAttemptId, scenario: Scenario) {
 		assert_ok!(match scenario {
 			Scenario::HappyPath =>
-				DogeBroadcast::transmission_success(Origin::root(), attempt_id, [0xcf; 4]),
+				MockBroadcast::transmission_success(Origin::root(), attempt_id, [0xcf; 4]),
 			Scenario::TransmissionFailure(failure) => {
-				DogeBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
+				MockBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
 			}
 			_ => unimplemented!(),
 		});
@@ -119,7 +119,7 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -156,7 +156,7 @@ fn test_broadcast_rejected() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -187,7 +187,7 @@ fn test_broadcast_rejected() {
 		);
 
 		// The `on_initialize` hook is called and triggers a new broadcast attempt.
-		DogeBroadcast::on_initialize(0);
+		MockBroadcast::on_initialize(0);
 		assert_eq!(
 			BroadcastRetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
 			0
@@ -210,7 +210,7 @@ fn test_broadcast_failed() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -258,7 +258,7 @@ fn test_bad_signature() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -290,7 +290,7 @@ fn test_bad_signature() {
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			DogeBroadcast::transaction_ready_for_transmission(
+			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
 				0,
 				MockSignedTx::Valid
@@ -298,11 +298,11 @@ fn test_invalid_id_is_noop() {
 			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			DogeBroadcast::transmission_success(Origin::root(), 0, [0u8; 4]),
+			MockBroadcast::transmission_success(Origin::root(), 0, [0u8; 4]),
 			Error::<Test, Instance0>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			DogeBroadcast::transmission_failure(
+			MockBroadcast::transmission_failure(
 				Origin::root(),
 				0,
 				TransmissionFailure::TransactionFailed,
@@ -320,7 +320,7 @@ fn test_signature_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -332,7 +332,7 @@ fn test_signature_request_expiry() {
 
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
-		DogeBroadcast::on_initialize(current_block + 1);
+		MockBroadcast::on_initialize(current_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
@@ -344,7 +344,7 @@ fn test_signature_request_expiry() {
 
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
-		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockBroadcast::on_initialize(expected_expiry_block);
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
@@ -370,7 +370,7 @@ fn test_signature_request_expiry() {
 		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
-		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockBroadcast::on_initialize(expected_expiry_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();
@@ -384,7 +384,7 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast and pass the signing stage;
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(MockBroadcast::start_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));
@@ -392,7 +392,7 @@ fn test_transmission_request_expiry() {
 
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
-		DogeBroadcast::on_initialize(current_block + 1);
+		MockBroadcast::on_initialize(current_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
@@ -404,7 +404,7 @@ fn test_transmission_request_expiry() {
 
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + TRANSMISSION_EXPIRY_BLOCKS;
-		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockBroadcast::on_initialize(expected_expiry_block);
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
@@ -426,7 +426,7 @@ fn test_transmission_request_expiry() {
 		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
-		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockBroadcast::on_initialize(expected_expiry_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();
