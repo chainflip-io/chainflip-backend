@@ -55,7 +55,7 @@ pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
-use sp_runtime::traits::{One, Saturating};
+use sp_runtime::traits::One;
 
 pub mod crypto;
 mod ethereum;
@@ -71,7 +71,7 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSigTruncPubkey;
-	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
+	use cf_traits::{Chainflip, EpochIndex, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
@@ -88,8 +88,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// A public key
 		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default + MaybeSerializeDeserialize;
 		/// A transaction
@@ -134,7 +132,7 @@ pub mod pallet {
 	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		<T::EpochInfo as EpochInfo>::EpochIndex,
+		EpochIndex,
 		Blake2_128Concat,
 		Chain,
 		BlockHeightWindow,
@@ -297,7 +295,7 @@ impl<T: Config> Pallet<T> {
 				.collect(),
 		));
 		ActiveChainVaultRotations::<T>::remove_all();
-		T::RotationHandler::abort();
+		T::RotationHandler::vault_rotation_aborted();
 	}
 
 	/// Provide the next ceremony id
@@ -404,7 +402,7 @@ impl<T: Config>
 				// Abort this key generation request
 				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
-				T::RotationHandler::penalise(bad_validators);
+				T::RotationHandler::penalise(&bad_validators);
 				// Report back we have processed the failure
 				Ok(().into())
 			}
