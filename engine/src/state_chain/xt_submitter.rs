@@ -79,16 +79,16 @@ impl<SCClient: IStateChainClient> XtSubmitter<SCClient> {
                 if failed_count > MAX_XT_RETRIES {
                     continue;
                 }
-                self.submit_helper(failed_call, failed_count).await;
+                self.submit_inner(failed_call, failed_count).await;
             }
-            self.submit_helper(call, 0).await;
+            self.submit_inner(call, 0).await;
         }
     }
 
     // We increment the nonce in 2 scenarios:
     // 1. We successfully submit the transaction
     // 2. We receive an error to say that our nonce was incorrect
-    async fn submit_helper(&mut self, call: Call, fail_count: u8) {
+    async fn submit_inner(&mut self, call: Call, fail_count: u8) {
         match self
             .state_chain_client
             .submit_extrinsic_with_nonce(self.nonce.as_u32(), call.clone())
@@ -167,19 +167,66 @@ mod tests {
                 pallet_cf_validator::Call::force_rotation().into(),
             ))
             .into();
-        let fut1 = timeout(Duration::from_millis(10), xt_submitter.start());
 
-        let fut2 = async {
+        // start runs forever, so we need to cancel it at some point
+        let xt_submit_start_fut = timeout(Duration::from_millis(10), xt_submitter.start());
+
+        let send_calls_fut = async {
             for _ in 0..4 {
                 xt_sender.send(force_rotation_call.clone()).unwrap();
             }
         };
 
-        // start runs forever, so we need to cancel it at some point
-        tokio::join!(fut1, fut2);
+        let _ = tokio::join!(xt_submit_start_fut, send_calls_fut);
 
         // let expected = AtomicNonce::new(10);
         let value = xt_submitter.nonce.0.load(Ordering::Relaxed);
         assert_eq!(value, 4);
+    }
+
+    #[tokio::test]
+    async fn increment_on_failure() {
+        let mut mock_state_chain_client = MockIStateChainClient::new();
+        let logger = create_test_logger();
+        // let bytes: [u8; 32] =
+        //     hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")
+        //         .unwrap()
+        //         .try_into()
+        //         .unwrap();
+        // let tx_hash = H256::from(bytes);
+        let atomic_nonce = Arc::new(AtomicNonce::new(0));
+        let (xt_sender, xt_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        // create some mock expectations
+        mock_state_chain_client
+            .expect_submit_extrinsic_with_nonce()
+            .times(3)
+            // with verifies it's call with the correct argument
+            .returning(move |nonce: u32, call: state_chain_runtime::Call| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1014),
+                    message: "Priority too low".to_string(),
+                    data: None,
+                }))
+            });
+
+        let arc_client = Arc::new(mock_state_chain_client);
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+
+        let mut xt_submitter = XtSubmitter::new(arc_client, xt_receiver, atomic_nonce, &logger);
+
+        // start runs forever, so we need to cancel it at some point
+        let xt_submit_start_fut = timeout(Duration::from_millis(10), xt_submitter.start());
+
+        let send_calls_fut = async {
+            xt_sender.send(force_rotation_call.clone()).unwrap();
+        };
+
+        let _ = tokio::join!(xt_submit_start_fut, send_calls_fut);
     }
 }
