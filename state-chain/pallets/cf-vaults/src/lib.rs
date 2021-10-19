@@ -7,11 +7,14 @@ use cf_chains::{
 	ChainId, Ethereum,
 };
 use cf_traits::{
-	offline_conditions::{OfflineCondition, OfflineReporter}, EpochInfo,
-	Chainflip, Nonce, NonceProvider, SigningContext, ThresholdSigner, VaultRotationHandler,
-	VaultRotator,
+	offline_conditions::{OfflineCondition, OfflineReporter},
+	Chainflip, EpochInfo, Nonce, NonceProvider, SigningContext, ThresholdSigner,
+	VaultRotationHandler, VaultRotator,
 };
-use frame_support::{dispatch::{DispatchError, DispatchResult}, pallet_prelude::*};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	pallet_prelude::*,
+};
 pub use pallet::*;
 use sp_runtime::traits::{One, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
@@ -188,9 +191,7 @@ pub mod pallet {
 
 			PendingVaultRotations::<T>::insert(
 				chain_id,
-				VaultRotationStatus::<T>::AwaitingRotation {
-					new_public_key,
-				},
+				VaultRotationStatus::<T>::AwaitingRotation { new_public_key },
 			);
 
 			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded so we might need an
@@ -310,8 +311,7 @@ pub mod pallet {
 				T::EpochInfo::epoch_index(),
 				ChainId::Ethereum,
 				|block_height_window| {
-					block_height_window.to =
-						Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+					block_height_window.to = Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
 				},
 			);
 
@@ -386,7 +386,10 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T>::EmptyValidatorSet);
-		ensure!(!PendingVaultRotations::<T>::contains_key(chain_id), Error::<T>::DuplicateRotationRequest);
+		ensure!(
+			!PendingVaultRotations::<T>::contains_key(chain_id),
+			Error::<T>::DuplicateRotationRequest
+		);
 
 		let ceremony_id = KeygenCeremonyIdCounter::<T>::mutate(|id| {
 			*id += 1;
@@ -400,11 +403,7 @@ impl<T: Config> Pallet<T> {
 				candidates: candidates.clone(),
 			},
 		);
-		Pallet::<T>::deposit_event(Event::KeygenRequest(
-			ceremony_id,
-			chain_id,
-			candidates,
-		));
+		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, chain_id, candidates));
 
 		Ok(())
 	}
@@ -418,7 +417,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		// We only support Ethereum for now.
 		Self::start_vault_rotation_for_chain(candidates, ChainId::Ethereum)
 	}
-	
+
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
 		// The 'exit' point for the pallet, no rotations left to process
 		if Pallet::<T>::no_active_chain_vault_rotations() {

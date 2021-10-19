@@ -111,7 +111,7 @@ pub struct AggKey {
 
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates.
-	/// 
+	///
 	/// Note that in this format, y = 2 means "even" and y = 3 means "odd". We can convert to the required
 	/// 0 / 1 representation by subtracting 2.
 	pub fn from_y_x_compressed(bytes: [u8; 33]) -> Self {
@@ -124,7 +124,7 @@ impl AggKey {
 	}
 
 	/// Convert to compressed `[y, x]` coordinates.
-	/// 
+	///
 	/// We use the inverse conversion from the above, ie. we add two to the y parity byte to convert
 	/// 0 -> 2 and 1 -> 3.
 	pub fn to_y_x_compressed(&self) -> [u8; 33] {
@@ -136,8 +136,8 @@ impl AggKey {
 }
 
 /// [TryFrom] implementation to convert some bytes to an [AggKey].
-/// 
-/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total 
+///
+/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
 /// length of the slice is 33 bytes.
 impl TryFrom<&[u8]> for AggKey {
 	type Error = &'static str;
@@ -148,7 +148,7 @@ impl TryFrom<&[u8]> for AggKey {
 				if pub_key_x.len() == 32 {
 					let mut x = [0u8; 32];
 					x.copy_from_slice(pub_key_x);
-					return Ok(AggKey::from((pub_key_y_parity - 2, x)))
+					return Ok(AggKey::from((pub_key_y_parity - 2, x)));
 				}
 			}
 		}

@@ -2,7 +2,10 @@ use crate as pallet_cf_witness_api;
 use codec::{Decode, Encode};
 use std::time::Duration;
 
-use cf_chains::{Ethereum, eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey}};
+use cf_chains::{
+	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
+	Ethereum,
+};
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
 	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider,

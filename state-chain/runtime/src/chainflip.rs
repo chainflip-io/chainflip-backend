@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Witnesser, Vaults
+	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Vaults, Witnesser,
 };
 use cf_chains::{
 	eth::{

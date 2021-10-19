@@ -198,7 +198,8 @@ pub mod pallet {
 			tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::vault_key_rotated(chain_id, new_public_key, block_number, tx_hash);
+			let call =
+				VaultsCall::vault_key_rotated(chain_id, new_public_key, block_number, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

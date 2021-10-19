@@ -1,8 +1,8 @@
 mod tests {
 	use crate::{mock::*, Error, Event as PalletEvent};
-	use frame_support::{assert_noop, assert_ok};
 	use cf_chains::ChainId;
 	use cf_traits::{Chainflip, VaultRotator};
+	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -11,9 +11,7 @@ mod tests {
 			.event
 	}
 
-	const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[
-		ALICE, BOB, CHARLIE
-	];
+	const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
 
 	#[test]
 	fn no_candidates_is_noop_and_error() {
@@ -39,7 +37,8 @@ mod tests {
 					VaultsPallet::keygen_ceremony_id_counter(),
 					ChainId::Ethereum,
 					ALL_CANDIDATES.to_vec(),
-				).into()
+				)
+				.into()
 			);
 		});
 	}
@@ -58,7 +57,8 @@ mod tests {
 	#[test]
 	fn keygen_success() {
 		new_test_ext().execute_with(|| {
-			let new_public_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+			let new_public_key: Vec<u8> =
+				GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
 
 			assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 			let first_ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
@@ -76,7 +76,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			const BAD_CANDIDATES: &'static [<MockRuntime as Chainflip>::ValidatorId] =
 				&[BOB, CHARLIE];
-			
+
 			assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 
 			let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();

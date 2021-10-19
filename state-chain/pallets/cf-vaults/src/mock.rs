@@ -92,7 +92,10 @@ pub struct MockCallback;
 impl UnfilteredDispatchable for MockCallback {
 	type Origin = Origin;
 
-	fn dispatch_bypass_filter(self, _origin: Self::Origin) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	fn dispatch_bypass_filter(
+		self,
+		_origin: Self::Origin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
 }
