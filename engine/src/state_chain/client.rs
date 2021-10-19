@@ -7,6 +7,9 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::StreamExt;
 use futures::{Stream, TryFutureExt};
 use itertools::Itertools;
+use jsonrpc_core::{Error, ErrorCode};
+use jsonrpc_core_client::RpcError;
+use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
@@ -14,6 +17,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
 use substrate_subxt::{
     extrinsic::{
@@ -49,6 +53,9 @@ impl Runtime for RuntimeImplForSigningExtrinsics {
         unreachable!();
     }
 }
+
+/// Number of times to retry if the nonce is wrong
+const MAX_RETRY_ATTEMPTS: u8 = 10;
 
 /// Needed so we can use substrate_subxt's extrinsic signing code
 /// Defines extra parameters contained in an extrinsic
@@ -130,18 +137,24 @@ pub struct StateChainClient {
     events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
-    nonce: Mutex<<RuntimeImplForSigningExtrinsics as System>::Index>,
+    nonce: AtomicU32,
     pub signer:
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
 }
+
+pub enum ExtrinsicError {
+    NonceError,
+    Other(RpcError),
+}
+
 impl StateChainClient {
-    async fn inner_submit_extrinsic<Extrinsic>(
+    async fn inner_submit_extrinsic_rpc<Extrinsic>(
         &self,
         nonce: u32,
         extrinsic: Extrinsic,
-    ) -> Result<sp_core::H256>
+    ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
@@ -155,32 +168,85 @@ impl StateChainClient {
                     substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic).encode()),
                     &self.signer,
                 )
-                .await?
+                .await
+                .expect("Should be able to sign")
                 .encode(),
             ))
             .compat()
-            .map_err(anyhow::Error::msg)
             .await
     }
 
-    pub async fn submit_extrinsic<Extrinsic>(&self, logger: &slog::Logger, extrinsic: Extrinsic)
+    async fn inner_submit_extrinsic<Extrinsic>(
+        &self,
+        extrinsic: Extrinsic,
+        logger: &slog::Logger,
+    ) -> Result<H256, ExtrinsicError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
     {
-        slog::trace!(logger, "Submitting extrinsic: {:?}", extrinsic);
-        let mut nonce = self.nonce.lock().await;
-
-        match self.inner_submit_extrinsic(*nonce, extrinsic.clone()).await {
-            Ok(_) => *nonce += 1,
-            Err(error) => slog::error!(
-                logger,
-                "Could not submit extrinsic: {:?}, {}",
-                extrinsic,
-                error
-            ),
+        let nonce = self.nonce.load(Ordering::Relaxed);
+        match self.inner_submit_extrinsic_rpc(nonce, extrinsic).await {
+            Ok(tx_hash) => {
+                slog::trace!(
+                    logger,
+                    "Extrinsic submitted successfully with tx_hash: {}",
+                    tx_hash
+                );
+                self.nonce.fetch_add(1, Ordering::Relaxed);
+                Ok(tx_hash)
+            }
+            Err(rpc_err) => match rpc_err {
+                RpcError::JsonRpcError(e) => match e {
+                    Error {
+                        code: ErrorCode::ServerError(1014),
+                        ..
+                    } => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                        self.nonce.fetch_add(1, Ordering::Relaxed);
+                        Err(ExtrinsicError::NonceError)
+                    }
+                    err => {
+                        slog::error!(logger, "Error: {}", err);
+                        Err(ExtrinsicError::Other(RpcError::JsonRpcError(err)))
+                    }
+                },
+                err => {
+                    slog::error!(logger, "Error: {}", err);
+                    Err(ExtrinsicError::Other(err))
+                }
+            },
         }
     }
+
+    pub async fn submit_extrinsic<Extrinsic>(
+        &self,
+        logger: &slog::Logger,
+        extrinsic: Extrinsic,
+    ) -> Result<H256>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: std::fmt::Debug + Clone,
+    {
+        for i in 0..MAX_RETRY_ATTEMPTS {
+            println!("Attempt 0");
+            match self.inner_submit_extrinsic(extrinsic.clone(), logger).await {
+                Ok(tx_hash) => {
+                    return Ok(tx_hash);
+                }
+                Err(err) => match err {
+                    ExtrinsicError::NonceError => {
+                        continue;
+                    }
+                    ExtrinsicError::Other(err) => {
+                        return Err(anyhow::Error::msg(err));
+                    }
+                },
+            }
+        }
+        Err(anyhow::Error::msg("Exceeded maximum retry attempts"))
+    }
+
     pub async fn events(
         &self,
         block_header: &state_chain_runtime::Header,
@@ -297,7 +363,7 @@ pub async fn connect_to_state_chain(
                     .map_err(anyhow::Error::msg)?,
                 anyhow::Error::msg("Genesis block doesn't exist?"),
             )?,
-            nonce: Mutex::new({
+            nonce: AtomicU32::new({
                 let account_info: frame_system::AccountInfo<
                     <RuntimeImplForSigningExtrinsics as System>::Index,
                     <RuntimeImplForSigningExtrinsics as System>::AccountData,
