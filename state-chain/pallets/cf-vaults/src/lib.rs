@@ -465,7 +465,7 @@ impl<T: Config>
 
 							// Record this new incoming set for the next epoch
 							ActiveWindows::<T>::insert(
-								T::EpochInfo::epoch_index().saturating_add(1u32.into()),
+								T::EpochInfo::epoch_index().saturating_add(1u32),
 								Chain::Ethereum,
 								BlockHeightWindow {
 									from: block_number,
