@@ -54,7 +54,7 @@ pub async fn start_stake_manager_witness(
                     staker: _,
                     return_addr,
                 } => {
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_staked(
@@ -67,7 +67,7 @@ pub async fn start_stake_manager_witness(
                         .await;
                 }
                 StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_claimed(

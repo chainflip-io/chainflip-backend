@@ -4,8 +4,8 @@ use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
 use futures::compat::{Future01CompatExt, Stream01CompatExt};
+use futures::Stream;
 use futures::StreamExt;
-use futures::{Stream, TryFutureExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
@@ -27,7 +27,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::{common::Mutex, settings};
+use crate::settings;
 
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
@@ -228,8 +228,7 @@ impl StateChainClient {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
     {
-        for i in 0..MAX_RETRY_ATTEMPTS {
-            println!("Attempt 0");
+        for _ in 0..MAX_RETRY_ATTEMPTS {
             match self.inner_submit_extrinsic(extrinsic.clone(), logger).await {
                 Ok(tx_hash) => {
                     return Ok(tx_hash);
@@ -244,7 +243,9 @@ impl StateChainClient {
                 },
             }
         }
-        Err(anyhow::Error::msg("Exceeded maximum retry attempts"))
+        Err(anyhow::Error::msg(
+            "Exceeded maximum retry attempts for extrinsic",
+        ))
     }
 
     pub async fn events(

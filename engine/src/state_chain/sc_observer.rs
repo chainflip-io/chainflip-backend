@@ -47,7 +47,8 @@ pub async fn start<BlockStream>(
 
     state_chain_client
         .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-        .await;
+        .await
+        .expect("Should be able to submit first heartbeat");
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -62,7 +63,7 @@ pub async fn start<BlockStream>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
@@ -129,7 +130,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
                                             pallet_cf_witnesser_api::Call::witness_keygen_response(
@@ -204,7 +205,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
                                             pallet_cf_witnesser_api::Call::witness_threshold_signature_response(
@@ -255,7 +256,7 @@ pub async fn start<BlockStream>(
                                                     VaultRotationResponse::Error
                                                 }
                                             };
-                                            state_chain_client.submit_extrinsic(
+                                            let _ = state_chain_client.submit_extrinsic(
                                                 &logger,
                                                 pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
                                                     ceremony_id,
