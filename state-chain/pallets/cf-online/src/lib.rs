@@ -69,9 +69,9 @@ pub mod pallet {
 		}
 	}
 
-	/// The liveness of nodes in the network.  We are assuming here that an account staked with FLIP
-	/// is equivalent to an operational node.  The definition of operational is that they have the
-	/// software package installed, running and that they are submitting heartbeats
+	/// The nodes in the network.  We are assuming here that an account staked with FLIP
+	/// is equivalent to an operational node and would appear in this map.  When they submit a
+	/// heartbeat they are then considered to be a node that is online or live.
 	///
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
