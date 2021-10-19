@@ -104,9 +104,9 @@ impl Tokenizable for SigData {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct AggKey {
 	/// The public key as a 32-byte array.
-	pub_key_x: [u8; 32],
+	pub pub_key_x: [u8; 32],
 	/// The parity bit can be `1u8` (odd) or `0u8` (even).
-	pub_key_y_parity: u8,
+	pub pub_key_y_parity: u8,
 }
 
 impl AggKey {
@@ -243,9 +243,8 @@ mod tests {
 	#[test]
 	fn test_agg_key() {
 		let mut bytes = [0u8; 33];
-		bytes[0] = 1;
+		bytes[0] = 2;
 		let key = AggKey::from_y_x_compressed(bytes);
-
 		assert_eq!(key.to_y_x_compressed(), bytes);
 	}
 }

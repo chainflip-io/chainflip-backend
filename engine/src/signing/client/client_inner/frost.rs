@@ -13,7 +13,7 @@ use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use super::{client_inner::MultisigMessage, SchnorrSignature};
-use pallet_cf_vaults::crypto::destructure_pubkey;
+use cf_chains::eth::AggKey;
 
 use crate::signing::crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar};
 
@@ -443,18 +443,17 @@ fn build_challenge(
 
     let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
 
-    let (pubkey_x, pubkey_y_parity) =
-        destructure_pubkey(pubkey.serialize().to_vec()).expect("Should be valid pubkey");
+    let agg_key = AggKey::from_y_x_compressed(pubkey.serialize());
 
     // Assemble the challenge in correct order according to this contract:
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-    let e_bytes: Vec<_> = pubkey_x
-        .iter()
-        .chain([pubkey_y_parity].iter())
-        .chain(message)
-        .chain(eth_addr.iter())
-        .cloned()
-        .collect();
+    let e_bytes: Vec<_> = [
+        &agg_key.pub_key_x[..],
+        &[agg_key.pub_key_y_parity],
+        message,
+        &eth_addr[..],
+    ]
+    .concat();
 
     let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
     ECScalar::from(&e_bn)
