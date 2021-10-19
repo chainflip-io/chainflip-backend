@@ -82,8 +82,8 @@ impl VaultRotationHandler for MockRotationHandler {
 	type ValidatorId = u64;
 	fn abort() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {
+		unimplemented!("This should be handled by the offline reporter and will be removed.")
 	}
 }
 
@@ -115,7 +115,7 @@ impl SigningContext<MockRuntime> for MockEthSigningContext {
 		b"payloooooad".to_vec()
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
 		MockCallback
 	}
 }
@@ -125,7 +125,7 @@ pub struct MockThresholdSigner;
 impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
 	type Context = MockEthSigningContext;
 
-	fn request_signature(context: Self::Context) -> u64 {
+	fn request_signature(_context: Self::Context) -> u64 {
 		0
 	}
 }
@@ -137,10 +137,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-}
-
-pub fn bad_validators() -> Vec<ValidatorId> {
-	BAD_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
