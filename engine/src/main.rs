@@ -8,6 +8,7 @@ use chainflip_engine::{
     signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     state_chain::{
         self,
+        client::IStateChainClient,
         xt_submitter::{AtomicNonce, XtSubmitter},
     },
 };

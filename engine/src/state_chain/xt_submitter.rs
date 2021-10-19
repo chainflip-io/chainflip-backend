@@ -13,7 +13,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::logging::COMPONENT_KEY;
 
-use super::client::StateChainClient;
+use super::client::{IStateChainClient, StateChainClient};
 
 type RetryCount = u8;
 

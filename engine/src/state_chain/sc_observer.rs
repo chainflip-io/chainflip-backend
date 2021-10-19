@@ -19,11 +19,13 @@ use crate::{
     },
 };
 
+use super::client::{IStateChainClient, StateChainClient};
+
 use super::xt_submitter::AtomicNonce;
 
 pub async fn start<BlockStream>(
     settings: &settings::Settings,
-    state_chain_client: Arc<super::client::StateChainClient>,
+    state_chain_client: Arc<StateChainClient>,
     atomic_nonce: Arc<AtomicNonce>,
     xt_sender: UnboundedSender<Call>,
     sc_block_stream: BlockStream,

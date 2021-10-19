@@ -26,6 +26,8 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
+use async_trait::async_trait;
+
 use crate::settings;
 
 ////////////////////
@@ -139,15 +141,33 @@ pub struct StateChainClient {
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
 }
-impl StateChainClient {
-    pub async fn submit_extrinsic_with_nonce<Extrinsic>(
+
+#[async_trait]
+pub trait IStateChainClient {
+    async fn submit_extrinsic_with_nonce<Extrinsic>(
         &self,
         nonce: u32,
         extrinsic: Extrinsic,
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone,
+        Extrinsic: std::fmt::Debug + Clone + Send;
+
+    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
+
+    async fn nonce_at_block(&self, block_hash: Option<H256>) -> Result<u32>;
+}
+
+#[async_trait]
+impl IStateChainClient for StateChainClient {
+    async fn submit_extrinsic_with_nonce<Extrinsic>(
+        &self,
+        nonce: u32,
+        extrinsic: Extrinsic,
+    ) -> Result<sp_core::H256, RpcError>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: std::fmt::Debug + Clone + Send,
     {
         self.author_rpc_client
             .submit_extrinsic(Bytes::from(
@@ -166,10 +186,7 @@ impl StateChainClient {
             .await
     }
 
-    pub async fn events(
-        &self,
-        block_header: &state_chain_runtime::Header,
-    ) -> Result<Vec<EventInfo>> {
+    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
         self.state_rpc_client
             .query_storage_at(
                 vec![self.events_storage_key.clone()],
@@ -195,7 +212,7 @@ impl StateChainClient {
     }
 
     // If None is supplied, get the latest
-    pub async fn nonce_at_block(&self, block_hash: Option<H256>) -> Result<u32> {
+    async fn nonce_at_block(&self, block_hash: Option<H256>) -> Result<u32> {
         let account_info: frame_system::AccountInfo<
             <RuntimeImplForSigningExtrinsics as System>::Index,
             <RuntimeImplForSigningExtrinsics as System>::AccountData,
