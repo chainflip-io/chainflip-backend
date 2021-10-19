@@ -275,7 +275,7 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert_eq!(
-						Online::liveness(account),
+						Online::nodes(account),
 						Some(pallet_cf_online::liveness::Node {
 							is_validator: true,
 							liveness: 1,

@@ -74,7 +74,7 @@ pub mod pallet {
 	/// software package installed, running and that they are submitting heartbeats
 	///
 	#[pallet::storage]
-	#[pallet::getter(fn liveness)]
+	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node, OptionQuery>;
 

@@ -40,7 +40,7 @@ mod tests {
 			);
 
 			assert_eq!(
-				OnlinePallet::liveness(ALICE).expect("Alice's node"),
+				OnlinePallet::nodes(ALICE).expect("Alice's node"),
 				Node {
 					is_validator: true,
 					..Default::default()
