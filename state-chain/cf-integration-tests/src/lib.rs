@@ -343,6 +343,8 @@ mod tests {
 		// - New stakers that were above the genesis MAB are now validating the network with the
 		//   genesis validators
 		// - A new auction index has been generated
+		// - TODO Vaults rotated
+		// - TODO New epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -428,26 +430,47 @@ mod tests {
 						"this should be the first auction"
 					);
 
-					// The following block should be confirmed
-					run_to_block(EPOCH_BLOCKS + 1);
+					// TODO Mock CFE for vault rotation.  The below will fail until this.
 
-					if let Some(AuctionResult {
-						winners,
-						minimum_active_bid,
-					}) = Auction::auction_result()
-					{
-						assert_eq!(
-							winners,
-							stakers
-								.iter()
-								.map(|account_id| AccountId::from(*account_id))
-								.collect::<Vec<_>>(),
-							"new stakers should be the winners of this auction"
-						);
-					} else {
-						unreachable!("we should have an auction result")
-					}
+					// The following block should be confirmed
+					// run_to_block(EPOCH_BLOCKS + 1);
+
+					// if let Some(AuctionResult {
+					// 	winners,
+					// 	minimum_active_bid,
+					// }) = Auction::auction_result()
+					// {
+					// 	assert_eq!(
+					// 		winners,
+					// 		stakers
+					// 			.iter()
+					// 			.map(|account_id| AccountId::from(*account_id))
+					// 			.collect::<Vec<_>>(),
+					// 		"new stakers should be the winners of this auction"
+					// 	);
+					// } else {
+					// 	unreachable!("we should have an auction result")
+					// }
+
+					// TODO Confirm vault rotation
+					// What should we exactly expect here in terms of cf-vaults state?
+
+					// TODO Confirm new epoch has been shared to concerned pallets:
+					// Online
+					// Witnesser
+					// Emissions
+					// Rewards
+					// Flip
+
 				});
+		}
+	}
+
+	mod witnessing {
+		#[test]
+		// Witness
+		fn witness() {
+
 		}
 	}
 }
