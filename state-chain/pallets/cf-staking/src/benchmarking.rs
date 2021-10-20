@@ -115,7 +115,8 @@ benchmarks! {
 		Pallet::<T>::on_initialize((2 as u32).into());
 	}
 
-	// best case
+	// TODO: we need to manipulate the time to expire the claims
+	// otherwise we didn't include the iteration in out benchmark
 	on_initialize_worst_case {
 		let b in 0 .. 150 as u32;
 		let accounts = create_accounts::<T>(150);
