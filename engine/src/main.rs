@@ -4,7 +4,6 @@ use chainflip_engine::{
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
-    signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     state_chain,
 };
 use slog::{o, Drain};
