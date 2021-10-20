@@ -9,6 +9,7 @@ mod mock;
 mod benchmarking;
 
 pub mod weights;
+use core::convert::TryInto;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -27,7 +28,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::vec;
-use std::convert::TryInto;
 
 use codec::{Encode, FullCodec};
 use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
@@ -155,7 +155,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			Self::expire_pending_claims(T::TimeSource::now())
+			Self::expire_pending_claims()
 		}
 	}
 
@@ -772,7 +772,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Expires any pending claims that have passed their TTL.
-	pub fn expire_pending_claims(now: Duration) -> Weight {
+	pub fn expire_pending_claims() -> Weight {
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
 			// Nothing to expire, should be pretty cheap.
 			return T::WeightInfo::on_initialize_best_case();
@@ -780,7 +780,7 @@ impl<T: Config> Pallet<T> {
 
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < now);
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
 
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 

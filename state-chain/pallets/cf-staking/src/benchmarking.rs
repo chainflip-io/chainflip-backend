@@ -117,12 +117,11 @@ benchmarks! {
 
 	// best case
 	on_initialize_worst_case {
-		let b in 0 .. 1000 as u32;
-		let accounts = create_accounts::<T>(1000);
+		let b in 0 .. 150 as u32;
+		let accounts = create_accounts::<T>(150);
 		// let caller: T::AccountId = whitelisted_caller();
 		let eth_addr: EthereumAddress = [42u8; 20];
-		let now = Duration::from_millis(1);
-		let later = Duration::from_millis(1000);
+		let now = Duration::from_millis(100);
 		// Push a claim
 		for i in 0 .. b {
 			let caller: T::AccountId = accounts[i as usize].clone();
@@ -131,7 +130,7 @@ benchmarks! {
 			Pallet::<T>::register_claim_expiry(caller.clone(), now);
 		}
 	}: {
-		Pallet::<T>::expire_pending_claims(later);
+		Pallet::<T>::expire_pending_claims();
 	}
 }
 
