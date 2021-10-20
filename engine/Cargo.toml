@@ -40,8 +40,10 @@ jsonrpc-ws-server = "15.1"
 websocket = "0.24"
 
 # kvdb-rocksdb is tied to substrate deps
+dyn-clone = "1.0.4"
 kvdb-rocksdb = "0.11.1"
 lazy_static = "1.4"
+mockall = "0.10.2"
 num = "0.4.0"
 parking_lot = "0.11"
 rand = "0.7.3"
@@ -50,6 +52,7 @@ reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
 serde = {version = "1.0", features = ["derive", "rc"]}
 serde_json = "1.0"
+sha2 = "0.9.5"
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
@@ -59,32 +62,30 @@ tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = "0.17.0"
-dyn-clone = "1.0.4"
-sha2 = "0.9.5"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
 frame-support = "3.0.0"
 frame-system = "3.0.0"
+sc-rpc-api = '0.9.0'
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
-sp-runtime = "3.0.0"
-sc-rpc-api = '0.9.0'
 sp-rpc = "3.0.0"
+sp-runtime = "3.0.0"
 sp-version = "3.0.0"
 substrate-subxt = "0.15"
 
 # Local deps
+cf-chains = {path = "../state-chain/chains"}
 cf-p2p = {path = "../state-chain/client/cf-p2p"}
 cf-traits = {path = "../state-chain/traits"}
-cf-chains = {path = "../state-chain/chains"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
-pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
+pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}

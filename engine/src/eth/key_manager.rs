@@ -7,6 +7,7 @@ use crate::{
     eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
+    state_chain::client::IStateChainRpcClient,
 };
 use std::sync::Arc;
 use web3::{
@@ -27,10 +28,10 @@ use super::decode_shared_event_closure;
 use super::eth_event_streamer::Event;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
-pub async fn start_key_manager_witness(
+pub async fn start_key_manager_witness<RPCCLient: IStateChainRpcClient>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    _state_chain_client: Arc<StateChainClient>,
+    _state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));

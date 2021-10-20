@@ -7,7 +7,7 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::Stream;
 use futures::StreamExt;
 use itertools::Itertools;
-use jsonrpc_core::{Error, ErrorCode};
+use jsonrpc_core::{Error, ErrorCode, Metadata};
 use jsonrpc_core_client::RpcError;
 use sp_core::H256;
 use sp_core::{
@@ -15,6 +15,7 @@ use sp_core::{
     Bytes, Pair,
 };
 use sp_runtime::generic::Era;
+use sp_runtime::AccountId32;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -28,6 +29,10 @@ use substrate_subxt::{
 };
 
 use crate::settings;
+
+use mockall::automock;
+
+use async_trait::async_trait;
 
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
@@ -132,32 +137,50 @@ pub type EventInfo = (
 
 ////////////////////
 
-pub struct StateChainClient {
+pub enum ExtrinsicError {
+    NonceError,
+    Other(RpcError),
+}
+
+pub struct StateChainRpcClient {
     pub metadata: substrate_subxt::Metadata,
     events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
-    nonce: AtomicU32,
     pub signer:
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
 }
 
-pub enum ExtrinsicError {
-    NonceError,
-    Other(RpcError),
-}
-
-impl StateChainClient {
-    async fn inner_submit_extrinsic_rpc<Extrinsic>(
+/// Contains the direct to chain calls, using the library methods to make the calls
+#[automock]
+#[async_trait]
+pub trait IStateChainRpcClient {
+    async fn submit_extrinsic_rpc<Extrinsic>(
         &self,
         nonce: u32,
         extrinsic: Extrinsic,
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send;
+
+    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
+
+    fn get_metadata(&self) -> substrate_subxt::Metadata;
+}
+
+#[async_trait]
+impl IStateChainRpcClient for StateChainRpcClient {
+    async fn submit_extrinsic_rpc<Extrinsic>(
+        &self,
+        nonce: u32,
+        extrinsic: Extrinsic,
+    ) -> Result<sp_core::H256, RpcError>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
         self.author_rpc_client
             .submit_extrinsic(Bytes::from(
@@ -176,82 +199,7 @@ impl StateChainClient {
             .await
     }
 
-    async fn inner_submit_extrinsic<Extrinsic>(
-        &self,
-        extrinsic: Extrinsic,
-        logger: &slog::Logger,
-    ) -> Result<H256, ExtrinsicError>
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone,
-    {
-        let nonce = self.nonce.load(Ordering::Relaxed);
-        match self.inner_submit_extrinsic_rpc(nonce, extrinsic).await {
-            Ok(tx_hash) => {
-                slog::trace!(
-                    logger,
-                    "Extrinsic submitted successfully with tx_hash: {}",
-                    tx_hash
-                );
-                self.nonce.fetch_add(1, Ordering::Relaxed);
-                Ok(tx_hash)
-            }
-            Err(rpc_err) => match rpc_err {
-                RpcError::JsonRpcError(e) => match e {
-                    Error {
-                        code: ErrorCode::ServerError(1014),
-                        ..
-                    } => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
-                        self.nonce.fetch_add(1, Ordering::Relaxed);
-                        Err(ExtrinsicError::NonceError)
-                    }
-                    err => {
-                        slog::error!(logger, "Error: {}", err);
-                        Err(ExtrinsicError::Other(RpcError::JsonRpcError(err)))
-                    }
-                },
-                err => {
-                    slog::error!(logger, "Error: {}", err);
-                    Err(ExtrinsicError::Other(err))
-                }
-            },
-        }
-    }
-
-    pub async fn submit_extrinsic<Extrinsic>(
-        &self,
-        logger: &slog::Logger,
-        extrinsic: Extrinsic,
-    ) -> Result<H256>
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: std::fmt::Debug + Clone,
-    {
-        for _ in 0..MAX_RETRY_ATTEMPTS {
-            match self.inner_submit_extrinsic(extrinsic.clone(), logger).await {
-                Ok(tx_hash) => {
-                    return Ok(tx_hash);
-                }
-                Err(err) => match err {
-                    ExtrinsicError::NonceError => {
-                        continue;
-                    }
-                    ExtrinsicError::Other(err) => {
-                        return Err(anyhow::Error::msg(err));
-                    }
-                },
-            }
-        }
-        Err(anyhow::Error::msg(
-            "Exceeded maximum retry attempts for extrinsic",
-        ))
-    }
-
-    pub async fn events(
-        &self,
-        block_header: &state_chain_runtime::Header,
-    ) -> Result<Vec<EventInfo>> {
+    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
         self.state_rpc_client
             .query_storage_at(
                 vec![self.events_storage_key.clone()],
@@ -275,13 +223,109 @@ impl StateChainClient {
             .flatten()
             .collect::<Result<Vec<_>>>()
     }
+
+    fn get_metadata(&self) -> substrate_subxt::Metadata {
+        self.metadata.clone()
+    }
+}
+
+pub struct StateChainClient<RPCClient: IStateChainRpcClient> {
+    nonce: AtomicU32,
+
+    /// Our Node's AcccountId
+    pub our_account_id: AccountId32,
+
+    // TODO: Look into making this interface tighter
+    pub state_chain_rpc_client: RPCClient,
+}
+
+impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
+    /// Submit an extrinsic and retry if it fails on an invalid nonce
+    pub async fn submit_extrinsic<Extrinsic>(
+        &self,
+        logger: &slog::Logger,
+        extrinsic: Extrinsic,
+    ) -> Result<H256>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+    {
+        for _ in 0..MAX_RETRY_ATTEMPTS {
+            match self.inner_submit_extrinsic(extrinsic.clone(), logger).await {
+                Ok(tx_hash) => {
+                    slog::trace!(
+                        logger,
+                        "Extrinsic submitted successfully with tx_hash: {}",
+                        tx_hash
+                    );
+                    return Ok(tx_hash);
+                }
+                Err(err) => match err {
+                    ExtrinsicError::NonceError => {
+                        continue;
+                    }
+                    ExtrinsicError::Other(err) => {
+                        slog::error!(logger, "Error: {}", err);
+                        return Err(anyhow::Error::msg(err));
+                    }
+                },
+            }
+        }
+        Err(anyhow::Error::msg(
+            "Exceeded maximum retry attempts for extrinsic",
+        ))
+    }
+
+    /// Increment the nonce only on success and failure
+    async fn inner_submit_extrinsic<Extrinsic>(
+        &self,
+        extrinsic: Extrinsic,
+        logger: &slog::Logger,
+    ) -> Result<H256, ExtrinsicError>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+    {
+        let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
+        match self
+            .state_chain_rpc_client
+            .submit_extrinsic_rpc(nonce, extrinsic)
+            .await
+        {
+            Ok(tx_hash) => Ok(tx_hash),
+            Err(rpc_err) => match rpc_err {
+                RpcError::JsonRpcError(e) => match e {
+                    Error {
+                        code: ErrorCode::ServerError(1014),
+                        ..
+                    } => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                        Err(ExtrinsicError::NonceError)
+                    }
+                    err => Err(ExtrinsicError::Other(RpcError::JsonRpcError(err))),
+                },
+                err => Err(ExtrinsicError::Other(err)),
+            },
+        }
+    }
+
+    pub async fn events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<Vec<EventInfo>> {
+        self.state_chain_rpc_client.events(block_header).await
+    }
+
+    pub fn get_metadata(&self) -> substrate_subxt::Metadata {
+        self.state_chain_rpc_client.get_metadata()
+    }
 }
 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     settings: &settings::Settings,
 ) -> Result<(
-    Arc<StateChainClient>,
+    Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
 )> {
     fn try_unwrap_value<T, E>(
@@ -346,35 +390,46 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(anyhow::Error::msg)?[..],
     )?)?;
+    let metadata_c = metadata.clone();
+    let system_pallet_metadata = metadata_c.module("System")?;
 
-    let system_pallet_metadata = metadata.module("System")?;
-
-    Ok((
-        Arc::new(StateChainClient {
-            runtime_version: state_rpc_client
-                .runtime_version(latest_block_hash)
+    let state_chain_rpc_client = StateChainRpcClient {
+        metadata,
+        events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
+        runtime_version: state_rpc_client
+            .runtime_version(latest_block_hash)
+            .compat()
+            .await
+            .map_err(anyhow::Error::msg)?,
+        genesis_hash: try_unwrap_value(
+            chain_rpc_client
+                .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
                 .compat()
                 .await
                 .map_err(anyhow::Error::msg)?,
-            genesis_hash: try_unwrap_value(
-                chain_rpc_client
-                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                    .compat()
-                    .await
-                    .map_err(anyhow::Error::msg)?,
-                anyhow::Error::msg("Genesis block doesn't exist?"),
-            )?,
+            anyhow::Error::msg("Genesis block doesn't exist?"),
+        )?,
+        signer: signer.clone(),
+        author_rpc_client,
+        state_rpc_client,
+    };
+
+    let our_account_id = signer.account_id().to_owned();
+
+    Ok((
+        Arc::new(StateChainClient {
             nonce: AtomicU32::new({
                 let account_info: frame_system::AccountInfo<
                     <RuntimeImplForSigningExtrinsics as System>::Index,
                     <RuntimeImplForSigningExtrinsics as System>::AccountData,
                 > = Decode::decode(
-                    &mut &state_rpc_client
+                    &mut &state_chain_rpc_client
+                        .state_rpc_client
                         .storage(
                             system_pallet_metadata
                                 .storage("Account")?
                                 .map()?
-                                .key(&signer.account_id()),
+                                .key(&our_account_id),
                             latest_block_hash,
                         )
                         .compat()
@@ -382,19 +437,16 @@ pub async fn connect_to_state_chain(
                         .map_err(anyhow::Error::msg)?
                         .ok_or_else(|| {
                             anyhow::format_err!(
-                                "Account Id {:?} doesn't exist on the state chain.",
-                                signer.account_id(),
+                                "AccountId {:?} doesn't exist on the state chain.",
+                                our_account_id,
                             )
                         })?
                         .0[..],
                 )?;
                 account_info.nonce
             }),
-            author_rpc_client,
-            state_rpc_client,
-            events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
-            metadata,
-            signer,
+            state_chain_rpc_client,
+            our_account_id,
         }),
         chain_rpc_client
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
@@ -404,4 +456,37 @@ pub async fn connect_to_state_chain(
             .compat()
             .map(|result_header| result_header.map_err(anyhow::Error::msg)),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::convert::TryInto;
+
+    use jsonrpc_core::Metadata;
+    use mockall::predicate::*;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_nonce_increments_on_success() {
+        let bytes: [u8; 32] =
+            hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let tx_hash = H256::from(bytes);
+
+        let mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+
+        // do stuff to the mock yo
+
+        let state_chain_client = StateChainClient {
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: mock_state_chain_rpc_client,
+        };
+
+        println!("Hello");
+    }
 }

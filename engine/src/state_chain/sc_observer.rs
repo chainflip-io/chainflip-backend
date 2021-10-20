@@ -16,11 +16,12 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
         SigningInfo, SigningOutcome,
     },
+    state_chain::client::IStateChainRpcClient,
 };
 
-pub async fn start<BlockStream>(
+pub async fn start<BlockStream, RPCClient>(
     settings: &settings::Settings,
-    state_chain_client: Arc<super::client::StateChainClient>,
+    state_chain_client: Arc<super::client::StateChainClient<RPCClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -28,11 +29,12 @@ pub async fn start<BlockStream>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
+    RPCClient: IStateChainRpcClient,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
     let heartbeat_block_interval = state_chain_client
-        .metadata
+        .get_metadata()
         .module("Reputation")
         .expect("No module 'Reputation' in chain metadata")
         .constant("HeartbeatBlockInterval")
