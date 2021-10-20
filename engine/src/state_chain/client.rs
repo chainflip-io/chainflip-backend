@@ -292,6 +292,19 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
         self.state_chain_rpc_client.get_metadata()
     }
+
+    pub fn get_heartbeat_block_interval(&self) -> u32 {
+        self.state_chain_rpc_client
+            .get_metadata()
+            .module("Reputation")
+            .expect("No module 'Reputation' in chain metadata")
+            .constant("HeartbeatBlockInterval")
+            .expect(
+                "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
+            )
+            .value::<u32>()
+            .expect("Could not decode HeartbeatBlockInterval to u32")
+    }
 }
 
 #[allow(clippy::eval_order_dependence)]

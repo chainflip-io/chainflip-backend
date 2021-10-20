@@ -33,14 +33,8 @@ pub async fn start<BlockStream, RPCClient>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client
-        .get_metadata()
-        .module("Reputation")
-        .expect("No module 'Reputation' in chain metadata")
-        .constant("HeartbeatBlockInterval")
-        .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
-        .value::<u32>()
-        .expect("Could not decode HeartbeatBlockInterval to u32");
+    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
+
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
