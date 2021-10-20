@@ -6,4 +6,4 @@
 cargo build --release --features runtime-benchmarks
 
 # execute the benchmark for pallet auction
-./target/release/state-chain-node benchmark --extrinsic '*' --pallet pallet_cf_$1 --output state-chain/pallets/cf-$1/src/weights.rs --execution=wasm --steps=50 --repeat=20 --template=state-chain/chainflip-weight-template.hbs
+./target/release/state-chain-node benchmark --extrinsic '*' --pallet pallet_cf_$1 --output state-chain/pallets/cf-$1/src/weights.rs --execution=wasm --steps=2 --repeat=2 --template=state-chain/chainflip-weight-template.hbs

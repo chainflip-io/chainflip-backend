@@ -27,6 +27,7 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::vec;
+use std::convert::TryInto;
 
 use codec::{Encode, FullCodec};
 use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
@@ -35,6 +36,8 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
+
+use frame_support::pallet_prelude::Weight;
 
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
@@ -152,8 +155,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			Self::expire_pending_claims();
-			0
+			Self::expire_pending_claims(T::TimeSource::now())
 		}
 	}
 
@@ -770,15 +772,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Expires any pending claims that have passed their TTL.
-	pub fn expire_pending_claims() {
+	pub fn expire_pending_claims(now: Duration) -> Weight {
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
 			// Nothing to expire, should be pretty cheap.
-			return;
+			return T::WeightInfo::on_initialize_best_case();
 		}
 
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < now);
 
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 
@@ -797,6 +799,9 @@ impl<T: Config> Pallet<T> {
 				T::Flip::revert_claim(&account_id, pending_claim.amount);
 			}
 		}
+
+		let expired_claims = (to_expire.len() as usize).try_into().unwrap();
+		return T::WeightInfo::on_initialize_worst_case(expired_claims);
 	}
 }
 

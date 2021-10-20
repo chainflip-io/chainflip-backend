@@ -3,11 +3,19 @@
 
 use super::*;
 
+use frame_benchmarking::account;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::traits::OnInitialize;
 use frame_system::Origin;
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec, vec::Vec};
+
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+
+fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
+	(0..=count).map(|i| account("doogle", i, 0)).collect()
+}
 
 #[allow(unused)]
 use crate::Pallet;
@@ -100,6 +108,31 @@ benchmarks! {
 		AccountRetired::<T>::insert(caller.clone(), true);
 
 	}:_(RawOrigin::Signed(caller))
+
+	// worst case
+	on_initialize_best_case {
+	}: {
+		Pallet::<T>::on_initialize((2 as u32).into());
+	}
+
+	// best case
+	on_initialize_worst_case {
+		let b in 0 .. 1000 as u32;
+		let accounts = create_accounts::<T>(1000);
+		// let caller: T::AccountId = whitelisted_caller();
+		let eth_addr: EthereumAddress = [42u8; 20];
+		let now = Duration::from_millis(1);
+		let later = Duration::from_millis(1000);
+		// Push a claim
+		for i in 0 .. b {
+			let caller: T::AccountId = accounts[i as usize].clone();
+			let claimable = T::Flip::claimable_balance(&caller);
+			Pallet::<T>::do_claim(&caller, claimable, eth_addr)?;
+			Pallet::<T>::register_claim_expiry(caller.clone(), now);
+		}
+	}: {
+		Pallet::<T>::expire_pending_claims(later);
+	}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
