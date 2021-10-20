@@ -18,7 +18,7 @@ use std::time::Duration;
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
-    types::{Bytes, SyncState, TransactionParameters, H160, H256},
+    types::{Bytes, SyncState, TransactionParameters, H256},
     Web3,
 };
 
