@@ -24,8 +24,8 @@ use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::H256;
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
 use sp_std::cmp::min;
+use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
 	type Call = Call;

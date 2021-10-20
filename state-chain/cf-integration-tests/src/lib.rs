@@ -17,8 +17,8 @@ mod tests {
 		Timestamp, Validator, Vaults,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
 	use cf_chains::ChainId;
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -295,7 +295,11 @@ mod tests {
 					"no rewards"
 				);
 
-				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
+				assert_eq!(
+					Vaults::keygen_ceremony_id_counter(),
+					0,
+					"no key generation requests"
+				);
 				assert_eq!(
 					Vaults::chain_nonces(ChainId::Ethereum),
 					0,
