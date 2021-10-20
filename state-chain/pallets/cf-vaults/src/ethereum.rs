@@ -121,7 +121,7 @@ impl<T: Config>
 				}
 			}
 			ThresholdSignatureResponse::Error(bad_validators) => {
-				T::RotationHandler::penalise(bad_validators.clone());
+				T::RotationHandler::penalise(&bad_validators);
 				Pallet::<T>::abort_rotation();
 				Err(RotationError::BadValidators(bad_validators))
 			}

@@ -217,6 +217,16 @@ pub async fn connect_to_state_chain(
     Arc<StateChainClient>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
 )> {
+    fn try_unwrap_value<T, E>(
+        lorv: sp_rpc::list::ListOrValue<Option<T>>,
+        error: E,
+    ) -> Result<T, E> {
+        match lorv {
+            sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
+            _ => Err(error),
+        }
+    }
+
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
@@ -253,9 +263,18 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(anyhow::Error::msg)?;
 
+    let latest_block_hash = Some(try_unwrap_value(
+        chain_rpc_client
+            .block_hash(None)
+            .compat()
+            .await
+            .map_err(anyhow::Error::msg)?,
+        anyhow::Error::msg("Failed to get latest block hash"),
+    )?);
+
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_rpc_client
-            .metadata(None)
+            .metadata(latest_block_hash)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?[..],
@@ -266,19 +285,18 @@ pub async fn connect_to_state_chain(
     Ok((
         Arc::new(StateChainClient {
             runtime_version: state_rpc_client
-                .runtime_version(None)
+                .runtime_version(latest_block_hash)
                 .compat()
                 .await
                 .map_err(anyhow::Error::msg)?,
-            genesis_hash: match chain_rpc_client
-                .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                .compat()
-                .await
-                .map_err(anyhow::Error::msg)?
-            {
-                sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
-                _ => Err(anyhow::Error::msg("Genesis block doesn't exist?")),
-            }?,
+            genesis_hash: try_unwrap_value(
+                chain_rpc_client
+                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+                    .compat()
+                    .await
+                    .map_err(anyhow::Error::msg)?,
+                anyhow::Error::msg("Genesis block doesn't exist?"),
+            )?,
             nonce: Mutex::new({
                 let account_info: frame_system::AccountInfo<
                     <RuntimeImplForSigningExtrinsics as System>::Index,
@@ -290,12 +308,17 @@ pub async fn connect_to_state_chain(
                                 .storage("Account")?
                                 .map()?
                                 .key(&signer.account_id()),
-                            None,
+                            latest_block_hash,
                         )
                         .compat()
                         .await
                         .map_err(anyhow::Error::msg)?
-                        .ok_or_else(|| anyhow::Error::msg("Account doesn't exist"))?
+                        .ok_or_else(|| {
+                            anyhow::format_err!(
+                                "Account Id {:?} doesn't exist on the state chain.",
+                                signer.account_id(),
+                            )
+                        })?
                         .0[..],
                 )?;
                 account_info.nonce
@@ -307,7 +330,7 @@ pub async fn connect_to_state_chain(
             signer,
         }),
         chain_rpc_client
-            .subscribe_finalized_heads()
+            .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
             .compat()
             .await
             .map_err(anyhow::Error::msg)?

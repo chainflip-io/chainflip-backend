@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 
-use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
-use frame_system::{ensure_root, RawOrigin};
+use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -12,12 +11,11 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_traits::{Chainflip, Nonce, NonceIdentifier};
+use cf_traits::{mocks, Chainflip, Nonce, NonceIdentifier};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
-type Amount = u64;
 type ValidatorId = u64;
 
 thread_local! {
@@ -68,39 +66,22 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		ensure_root(o).or(Err(RawOrigin::None.into()))
-	}
-}
-
-pub struct MockWitnesser;
-
-impl cf_traits::Witnesser for MockWitnesser {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-		Ok(result.unwrap_or_else(|err| err.post_info))
-	}
-}
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for MockRuntime {
-	type Amount = Amount;
-	type ValidatorId = ValidatorId;
+	type KeyId = u32;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl VaultRotationHandler for MockRuntime {
 	type ValidatorId = u64;
-	fn abort() {}
+	fn vault_rotation_aborted() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+	fn penalise(bad_validators: &[Self::ValidatorId]) {
+		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators.to_vec());
 	}
 }
 
@@ -112,7 +93,6 @@ impl NonceProvider for MockRuntime {
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;

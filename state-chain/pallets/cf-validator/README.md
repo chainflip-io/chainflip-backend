@@ -24,9 +24,11 @@ Epoch session.
   undetermined number of blocks.
 - Sudo: A single account that is also called the "sudo key" which allows "privileged functions"
 
+- Emergency Rotation: An emergency rotation can be requested which initiates a new auction and on success of this 
+  auction a new validating set will secure the network.
+
 ### Dispatchable Functions
 
 - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
-- `set_validator_target_size` - Set the target size for a validator set.
-- `force_auction` - Force an auction to start on the next block.
-- `confirm_auction` - Confirm that any dependencies for the auction have been confirmed.
+- `force_rotation` - Force a rotation of validators to start on the next block.
+

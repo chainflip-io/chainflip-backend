@@ -3,13 +3,14 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
-  "AggKeySignature": "U256",
-  "AuctionRange": "(u32,u32)",
   "Address": "MultiAddress",
+  "AggKeySignature": "U256",
   "Amount": "u128",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
       "Empty",
@@ -22,18 +23,41 @@
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
+  },
+  "AuctionRange": "(u32,u32)",
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
   },
   "Bid": "(ValidatorId, Amount)",
   "BlockNumber": "u32",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "Chain": {
     "_enum": [
       "Ethereum"
+    ]
+  },
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
     ]
   },
   "ChainParams": {
@@ -76,6 +100,7 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
+  "KeyId": "Vec<u8>",
   "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
@@ -91,8 +116,10 @@
     ]
   },
   "OnlineCreditsFor": "BlockNumber",
-  "PublicKey": "Vec<u8>",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
+  "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
@@ -105,10 +132,17 @@
     "s": "[u8;32]",
     "k_times_g_address": "[u8; 20]"
   },
+  "SchnorrVerificationComponents": {
+    "s": "[u8; 32]",
+    "k_times_g_addr": "[u8; 20]"
+  },
+  "Signature": "H256",
+  "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
-  "ValidatorId": "AccountId",
   "TransactionHash": "Vec<u8>",
+  "UnsignedTransactionFor": "Vec<u8>",
+  "ValidatorId": "AccountId",
   "Vault": {
     "previous_key": "PublicKey",
     "current_key": "PublicKey",
