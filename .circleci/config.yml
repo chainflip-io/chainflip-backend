@@ -189,10 +189,10 @@ workflows:
   chainflip-testnet:
     jobs:
       - cargo-build-and-test-validator-package:
-          context:
-            - ghcr-credentials
-            - discord-webhooks
-            <<: *only_main_branches
+         context:
+           - ghcr-credentials
+           - discord-webhooks
+         <<: *only_main_branches
       - docker-build:
           name: docker-build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
