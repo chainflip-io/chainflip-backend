@@ -163,7 +163,7 @@ impl pallet_cf_environment::Config for Runtime {
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type EpochInfo = Validator;
-	type RotationHandler = Auction;
+	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;

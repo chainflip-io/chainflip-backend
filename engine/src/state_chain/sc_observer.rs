@@ -101,10 +101,10 @@ pub async fn start<BlockStream>(
                                             result,
                                         }) => match result {
                                             Ok(pubkey) => {
-                                                pallet_cf_vaults::Call::keygen_success(
+                                                pallet_cf_witnesser_api::Call::witness_keygen_success(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pubkey.into(),
+                                                    pubkey.serialize().to_vec(),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -117,7 +117,7 @@ pub async fn start<BlockStream>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                pallet_cf_vaults::Call::keygen_failure(
+                                                pallet_cf_witnesser_api::Call::witness_keygen_failure(
                                                     ceremony_id,
                                                     chain_id,
                                                     bad_account_ids,

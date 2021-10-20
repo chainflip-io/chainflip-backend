@@ -70,7 +70,7 @@ cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for MockRuntime {
 	type KeyId = Vec<u8>;
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
@@ -79,7 +79,7 @@ impl Chainflip for MockRuntime {
 pub struct MockRotationHandler;
 
 impl VaultRotationHandler for MockRotationHandler {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	fn vault_rotation_aborted() {}
 
 	fn penalise(_bad_validators: &[Self::ValidatorId]) {

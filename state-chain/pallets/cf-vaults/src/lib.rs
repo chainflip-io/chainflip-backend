@@ -16,7 +16,6 @@ use frame_support::{
 	pallet_prelude::*,
 };
 pub use pallet::*;
-use sp_runtime::traits::{One, Saturating};
 use sp_std::{convert::TryFrom, prelude::*};
 
 #[cfg(test)]
@@ -54,6 +53,7 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The bounds within which a public key for a vault should be used for witnessing.
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 	pub struct BlockHeightWindow {
 		pub from: u64,
@@ -109,8 +109,10 @@ pub mod pallet {
 	/// Threshold key nonces for each chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonces)]
-	pub(super) type ChainNonces<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Nonce>;
+	pub(super) type ChainNonces<T: Config> =
+		StorageMap<_, Blake2_128Concat, ChainId, Nonce, ValueQuery>;
 
+	/// Active block height windows for each chain.
 	#[pallet::storage]
 	#[pallet::getter(fn active_windows)]
 	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
@@ -296,9 +298,9 @@ pub mod pallet {
 			// This is roughly the number of blocks for 14 days in Ethereum
 			const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
 
-			// Record this new incoming set for the next epoch
+			// Record this new incoming set for the next epoch.
 			ActiveWindows::<T>::insert(
-				T::EpochInfo::epoch_index().saturating_add(One::one()),
+				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
 				BlockHeightWindow {
 					from: block_number,
@@ -306,7 +308,7 @@ pub mod pallet {
 				},
 			);
 
-			// Set the leaving block number for the outgoing set
+			// Set the leaving block number for the outgoing set of the current epoch.
 			ActiveWindows::<T>::mutate(
 				T::EpochInfo::epoch_index(),
 				ChainId::Ethereum,
@@ -358,8 +360,8 @@ pub mod pallet {
 impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
 	fn next_nonce() -> Nonce {
 		ChainNonces::<T>::mutate(ChainId::Ethereum, |nonce| {
-			let new_nonce = nonce.unwrap_or_default().saturating_add(One::one());
-			*nonce = Some(new_nonce);
+			let new_nonce = nonce.saturating_add(1);
+			*nonce = new_nonce;
 			new_nonce
 		})
 	}

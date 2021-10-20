@@ -25,7 +25,7 @@ use sp_core::H256;
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-use sp_std::vec::Vec;
+use sp_std::cmp::min;
 
 impl Chainflip for Runtime {
 	type Call = Call;

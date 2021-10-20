@@ -157,6 +157,7 @@ impl TryFrom<&[u8]> for AggKey {
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<secp256k1::PublicKey> for AggKey {
 	fn from(key: secp256k1::PublicKey) -> Self {
 		AggKey::from_y_x_compressed(key.serialize())
