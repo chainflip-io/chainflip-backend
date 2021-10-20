@@ -540,7 +540,7 @@ mod tests {
 						"we should have no more events until we have confirmation of auction"
 					);
 
-					// Reset system events for this iteration
+					// Reset system events
 					frame_system::Pallet::<Runtime>::reset_events();
 
 					assert_eq!(
