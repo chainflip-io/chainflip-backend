@@ -370,6 +370,7 @@ impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Abort all pending rotations and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
+		// TODO: Should disallow aborting if we have passed the keygen stage.
 		// TODO: Should also notify of the ceremony id for each aborted ceremony.
 		Self::deposit_event(Event::KeygenAborted(
 			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
