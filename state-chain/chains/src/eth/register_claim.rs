@@ -148,8 +148,8 @@ mod test_register_claim {
 			register_claim_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			});// Ensure signing payload isn't modified by signature.
-		
+			}); // Ensure signing payload isn't modified by signature.
+
 		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(
