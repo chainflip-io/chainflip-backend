@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
-    p2p, settings,
+    p2p,
     signing::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
         SigningInfo, SigningOutcome,
@@ -18,7 +18,6 @@ use crate::{
 };
 
 pub async fn start<BlockStream>(
-    settings: &settings::Settings,
     state_chain_client: Arc<super::client::StateChainClient>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
@@ -274,7 +273,8 @@ pub async fn start<BlockStream>(
                                                 pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
                                                     attempt_id, tx_hash.into()
                                                 ),
-                                                // TODO: This should be triggered from the eth event. 
+                                                // TODO: This should be triggered from the eth event.
+                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
                                                 pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
                                                     ChainId::Ethereum, vec![], 0, tx_hash.as_bytes().to_vec()
                                                 ),
@@ -288,7 +288,8 @@ pub async fn start<BlockStream>(
                                                 e
                                             );
                                             [
-                                                // TODO: Fill in the transaction hash with the real one.
+                                                // TODO: Fill in the transaction hash with the real one
+                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
                                                 pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
                                                     attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
                                                 ),
@@ -354,7 +355,6 @@ mod tests {
         let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
 
         start(
-            &settings,
             state_chain_client,
             block_stream,
             eth_broadcaster,
