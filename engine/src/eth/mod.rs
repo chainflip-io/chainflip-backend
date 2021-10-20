@@ -96,7 +96,8 @@ impl EthBroadcaster {
         })
     }
 
-    pub async fn sign_tx(&self, unsigned_tx: cf_chains::eth::UnsignedTransaction) -> Result<Bytes> {
+    /// Encode and sign a transaction.
+    pub async fn encode_and_sign_tx(&self, unsigned_tx: cf_chains::eth::UnsignedTransaction) -> Result<Bytes> {
         let tx_params = TransactionParameters {
             to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),

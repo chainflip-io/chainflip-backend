@@ -221,7 +221,7 @@ pub async fn start<BlockStream>(
                                         attempt_id,
                                         unsigned_tx,
                                     );
-                                    match eth_broadcaster.sign_tx(unsigned_tx).await {
+                                    match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                         Ok(raw_signed_tx) => {
                                             state_chain_client.submit_extrinsic(
                                                 &logger,
