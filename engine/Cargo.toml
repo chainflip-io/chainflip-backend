@@ -101,3 +101,5 @@ env_logger = "0.9.0"
 frame-support = "3.0.0"
 jsonrpc-pubsub = "15.1"
 log = "0.4.14"
+# only used for tests - because they are easy calls to make - no real side effects
+pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
