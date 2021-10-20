@@ -5,7 +5,7 @@ use std::time::Duration;
 use cf_chains::{eth::register_claim::RegisterClaim, Ethereum};
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider, Bid,
+	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider,
 	Chainflip, NonceProvider, VaultRotationHandler,
 };
 use frame_support::{instances::Instance0, parameter_types, traits::IsType};

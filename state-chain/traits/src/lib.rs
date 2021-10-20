@@ -230,15 +230,6 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-/// Providing a list of stakers
-pub trait StakerProvider {
-	type ValidatorId;
-	type Amount;
-
-	/// Provide a list of stakers
-	fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
-}
-
 /// Trait for rotate bond after epoch.
 pub trait BondRotation {
 	type AccountId;
@@ -350,15 +341,18 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A representation of the current network state
+/// A representation of the current network state for this heartbeat interval.
+/// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
+/// intervals else they are offline.  Those that are online but yet to submit a heartbeat in the
+/// current heartbeat interval are marked as awaiting.
+///
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
-	/// We are missing the last heartbeat from this node and yet cannot determine if they
-	/// are offline or online.
-	pub missing: Vec<ValidatorId>,
-	/// The node is online
+	/// Those nodes that we are awaiting a heartbeat from
+	pub awaiting: Vec<ValidatorId>,
+	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// The node has been determined as being offline
+	/// Offline nodes
 	pub offline: Vec<ValidatorId>,
 }
 

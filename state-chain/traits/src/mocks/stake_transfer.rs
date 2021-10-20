@@ -10,20 +10,6 @@ macro_rules! impl_mock_stake_transfer {
 			pub static STAKE_UPDATES: std::cell::RefCell<StakeUpdates> = std::cell::RefCell::new(StakeUpdates::default());
 		}
 
-		pub struct MockStakerProvider;
-		impl cf_traits::StakerProvider for MockStakerProvider {
-			type ValidatorId = $account_id;
-			type Amount = $balance;
-
-			fn get_stakers() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-				BALANCES.with(|cell| {
-					cell.borrow().iter().map(|(account_id, balance)| {
-						(account_id.clone(), *balance)
-					}).collect()
-				})
-			}
-		}
-
 		pub struct MockStakeHandler;
 		impl MockStakeHandler {
 			// Check if updated and reset

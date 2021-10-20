@@ -11,19 +11,19 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{impl_mock_stake_transfer, StakeTransfer};
-use cf_traits::{Bid, Chainflip, Heartbeat, NetworkState};
-use sp_std::cell::RefCell;
+use cf_traits::impl_mock_stake_transfer;
+use cf_traits::{Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
 
+cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32);
 impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {
 	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
-			missing: vec![],
+			awaiting: vec![],
 			online: vec![],
 			offline: vec![],
 		}
@@ -115,7 +115,7 @@ impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = MockHeartbeat;
-	type StakerProvider = MockStakerProvider;
+	type EpochInfo = MockEpochInfo;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -125,10 +125,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
+	MockEpochInfo::add_validator(ALICE);
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockStakeTransfer::credit_stake(&ALICE, 100);
-		<OnlinePallet as EpochTransitionHandler>::on_new_epoch(&[], &[ALICE], 0);
 	});
 
 	ext

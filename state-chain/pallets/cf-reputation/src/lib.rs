@@ -256,7 +256,7 @@ pub mod pallet {
 		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
 			// Penalise those that are missing this heartbeat
 			let mut weight = 0;
-			for validator_id in network_state.missing {
+			for validator_id in network_state.awaiting {
 				let reputation_points = Reputations::<T>::mutate(
 					&validator_id,
 					|Reputation {

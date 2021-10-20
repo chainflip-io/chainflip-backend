@@ -427,7 +427,7 @@ impl pallet_cf_online::Config for Runtime {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
-	type StakerProvider = pallet_cf_staking::Pallet<Self>;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
 use frame_support::instances::Instance0;
