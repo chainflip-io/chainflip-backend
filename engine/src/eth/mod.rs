@@ -105,7 +105,8 @@ impl EthBroadcaster {
             ..Default::default()
         };
 
-        Ok(self.web3
+        Ok(self
+            .web3
             .accounts()
             .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
             .await?
@@ -114,7 +115,11 @@ impl EthBroadcaster {
 
     /// Sign and broadcast a transaction to a particular contract
     pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
-        let tx_hash = self.web3.eth().send_raw_transaction(raw_signed_tx.into()).await?;
+        let tx_hash = self
+            .web3
+            .eth()
+            .send_raw_transaction(raw_signed_tx.into())
+            .await?;
 
         Ok(tx_hash)
     }
