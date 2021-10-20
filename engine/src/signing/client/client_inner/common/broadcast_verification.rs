@@ -31,24 +31,23 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
 
     let mut blamed_parties = vec![];
 
-    'outer: for i in 0..num_parties {
-        let mut value_counts = HashMap::<Vec<u8>, usize>::new();
-        for m in verification_messages.values() {
-            let data = bincode::serialize(&m.data[i]).unwrap();
-            *value_counts.entry(data).or_default() += 1;
-        }
+    for i in 0..num_parties {
+        use itertools::Itertools;
 
-        for (data, count) in value_counts {
-            if count > threshold {
-                let data = bincode::deserialize(&data).unwrap();
-                agreed_on_values.push(data);
-                continue 'outer;
-            }
+        if let Some((data, _)) = verification_messages
+            .values()
+            .map(|m| bincode::serialize(&m.data[i]).unwrap())
+            .sorted()
+            .group_by(|x| x.clone())
+            .into_iter()
+            .map(|(data, group)| (data, group.count()))
+            .find(|(_, count)| *count > threshold)
+        {
+            let data = bincode::deserialize(&data).unwrap();
+            agreed_on_values.push(data);
+        } else {
+            blamed_parties.push(i + 1);
         }
-
-        // If we reach here, we couldn't reach consensus on
-        // values sent from party `idx = i + 1` and we are going to report them
-        blamed_parties.push(i + 1);
     }
 
     if blamed_parties.is_empty() {

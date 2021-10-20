@@ -99,12 +99,11 @@ where
                     if *destination_idx == self.common.own_idx {
                         // Save our own share
                         self.messages.insert(self.common.own_idx, data.clone());
-                        continue;
+                    } else {
+                        self.common
+                            .p2p_sender
+                            .send(*destination_idx, data.clone().into());
                     }
-
-                    self.common
-                        .p2p_sender
-                        .send(*destination_idx, data.clone().into());
                 }
             }
             DataToSend::Private(messages) => {
@@ -112,9 +111,9 @@ where
                     if destination_idx == self.common.own_idx {
                         self.messages.insert(self.common.own_idx, data);
                         continue;
+                    } else {
+                        self.common.p2p_sender.send(destination_idx, data.into());
                     }
-
-                    self.common.p2p_sender.send(destination_idx, data.into());
                 }
             }
         }

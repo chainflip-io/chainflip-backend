@@ -160,7 +160,7 @@ pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
         .commitments
         .0
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * index + coefficient)
         .expect("can't be empty");
@@ -200,26 +200,30 @@ pub fn validate_commitments(
     commitments: Vec<DKGUnverifiedCommitment>,
     context: &str,
 ) -> Result<Vec<DKGCommitment>, Vec<usize>> {
-    let mut invalid_idxs = vec![];
+    let invalid_idxs: Vec<_> = commitments
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, c)| {
+            let challenge = generate_dkg_challenge(idx + 1, context, c.commitments.0[0], c.zkp.r);
 
-    for (idx, c) in commitments.iter().enumerate() {
-        let challenge = generate_dkg_challenge(idx + 1, context, c.commitments.0[0], c.zkp.r);
-
-        if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
-            invalid_idxs.push(idx + 1);
-        }
-    }
-
-    if !invalid_idxs.is_empty() {
-        return Err(invalid_idxs);
-    }
-
-    Ok(commitments
-        .into_iter()
-        .map(|c| DKGCommitment {
-            commitments: c.commitments,
+            if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
+                Some(idx + 1)
+            } else {
+                None
+            }
         })
-        .collect())
+        .collect();
+
+    if invalid_idxs.is_empty() {
+        Ok(commitments
+            .into_iter()
+            .map(|c| DKGCommitment {
+                commitments: c.commitments,
+            })
+            .collect())
+    } else {
+        Err(invalid_idxs)
+    }
 }
 
 /// Unique context used for generating a ZKP
@@ -276,6 +280,8 @@ pub fn derive_local_pubkeys_for_parties(
 #[cfg(test)]
 mod tests {
 
+    use crate::testing::assert_ok;
+
     use super::*;
 
     #[test]
@@ -312,11 +318,7 @@ mod tests {
             })
             .unzip();
 
-        let res = validate_commitments(commitments, &context);
-
-        assert!(res.is_ok());
-
-        let coeff_commitments = res.unwrap();
+        let coeff_commitments = assert_ok!(validate_commitments(commitments, &context));
 
         // Now it is okay to distribute the shares
 
@@ -335,8 +337,7 @@ mod tests {
                 .collect();
 
             for (idx, share) in received_shares.iter().enumerate() {
-                let res = verify_share(share, &coeff_commitments[idx]);
-                assert!(res);
+                assert!(verify_share(share, &coeff_commitments[idx]));
             }
 
             // (Roound 2, Step 3)

@@ -74,16 +74,10 @@ pub fn project_signers(
     signer_ids: &[AccountId],
     validator_maps: &ValidatorMaps,
 ) -> Result<Vec<usize>, ()> {
-    // There is probably a more efficient way of doing this
-    // for for now this should be good enough
-
-    let mut results = Vec::with_capacity(signer_ids.len());
-    for id in signer_ids {
-        let idx = validator_maps.get_idx(id).ok_or(())?;
-        results.push(idx);
-    }
-
-    Ok(results)
+    signer_ids
+        .iter()
+        .map(|id| validator_maps.get_idx(id).ok_or(()))
+        .collect()
 }
 
 /// Derive display to match the type's name
