@@ -112,7 +112,7 @@ impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
 }
 
 // Mock KeyProvider
-pub const DOGE_KEY_ID: &'static [u8] = b"d06e";
+pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
 
 pub struct MockKeyProvider;
 
@@ -120,7 +120,7 @@ impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key() -> Self::KeyId {
-		DOGE_KEY_ID.to_vec()
+		MOCK_KEY_ID.to_vec()
 	}
 }
 

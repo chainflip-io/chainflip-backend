@@ -99,7 +99,7 @@ mod test_set_agg_key_with_agg_key {
 	}
 
 	#[test]
-	fn test_claim_payload() {
+	fn test_set_agg_key_with_agg_key_payload() {
 		// TODO: this test would be more robust with randomly generated parameters.
 		use ethabi::Token;
 		const NONCE: u64 = 6;
