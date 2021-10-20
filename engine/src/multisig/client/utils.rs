@@ -24,26 +24,37 @@ fn check_threshold_calculation() {
 }
 
 /// Mappings from signer_idx to Validator Id and back
+/// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ValidatorMaps {
+pub struct PartyIdxMapping {
     id_to_idx: HashMap<AccountId, usize>,
     // TODO: create SortedVec and use it here:
-    // Sorted Validator Ids
-    validator_ids: Vec<AccountId>,
+    // Sorted Account Ids
+    account_ids: Vec<AccountId>,
 }
 
-impl ValidatorMaps {
+impl PartyIdxMapping {
+    /// Get party index based on their account id
     pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
         self.id_to_idx.get(id).copied()
     }
 
+    /// Get party account id based on their index
     pub fn get_id(&self, idx: usize) -> Option<&AccountId> {
         let idx = idx.checked_sub(1)?;
-        self.validator_ids.get(idx)
+        self.account_ids.get(idx)
+    }
+
+    /// Map all signer ids to their corresponding signer idx
+    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<Vec<usize>, ()> {
+        signer_ids
+            .iter()
+            .map(|id| self.get_idx(id).ok_or(()))
+            .collect()
     }
 }
 
-pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
+pub fn get_index_mapping(signers: &[AccountId]) -> PartyIdxMapping {
     let idxs: Vec<_> = (1..=signers.len()).collect();
 
     debug_assert_eq!(idxs.len(), signers.len());
@@ -57,27 +68,15 @@ pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
     let mut sorted_validator_ids = Vec::with_capacity(signers.len());
 
     for (i, (vid, _)) in combined.into_iter().enumerate() {
-        // indexes start with 1 for siging
+        // indexes start with 1 for signing
         id_to_idx.insert(vid.clone(), i + 1);
         sorted_validator_ids.push(vid.clone());
     }
 
-    ValidatorMaps {
+    PartyIdxMapping {
         id_to_idx,
-        validator_ids: sorted_validator_ids,
+        account_ids: sorted_validator_ids,
     }
-}
-
-// TODO: should this be a part of ValidatorMaps?
-/// Map all signer ids to their corresponding signer idx
-pub fn project_signers(
-    signer_ids: &[AccountId],
-    validator_maps: &ValidatorMaps,
-) -> Result<Vec<usize>, ()> {
-    signer_ids
-        .iter()
-        .map(|id| validator_maps.get_idx(id).ok_or(()))
-        .collect()
 }
 
 macro_rules! derive_from_enum {

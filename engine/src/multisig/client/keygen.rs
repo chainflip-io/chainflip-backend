@@ -1,6 +1,5 @@
 mod keygen_data;
 mod keygen_frost;
-mod keygen_manager;
 mod keygen_stages;
 mod keygen_state;
 
@@ -10,7 +9,8 @@ use serde::{Deserialize, Serialize};
 pub use keygen_data::{
     Comm1, Complaints4, KeygenData, SecretShare3, VerifyComm2, VerifyComplaints5,
 };
-pub use keygen_manager::KeygenManager;
+
+pub use keygen_state::KeygenState;
 
 use crate::p2p::AccountId;
 

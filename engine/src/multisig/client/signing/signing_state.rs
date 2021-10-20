@@ -22,7 +22,7 @@ use client::common::{
 };
 
 use super::frost::{SigningData, SigningDataWrapped};
-use client::utils::ValidatorMaps;
+use client::utils::PartyIdxMapping;
 
 use super::frost_stages::AwaitCommitments1;
 
@@ -38,7 +38,7 @@ pub struct SigningP2PSender {
 
 impl SigningP2PSender {
     fn new(
-        validator_map: Arc<ValidatorMaps>,
+        validator_map: Arc<PartyIdxMapping>,
         sender: UnboundedSender<InnerEvent>,
         ceremony_id: CeremonyId,
     ) -> Self {
@@ -52,11 +52,11 @@ impl SigningP2PSender {
 impl P2PSender for SigningP2PSender {
     type Data = SigningData;
 
-    fn send(&self, reciever_idx: usize, data: Self::Data) {
+    fn send(&self, receiver_idx: usize, data: Self::Data) {
         let msg: MultisigMessage = SigningDataWrapped::new(data, self.ceremony_id).into();
         let data = bincode::serialize(&msg)
             .unwrap_or_else(|e| panic!("Could not serialise MultisigMessage: {:?}: {}", msg, e));
-        self.sender.send(reciever_idx, data);
+        self.sender.send(receiver_idx, data);
     }
 }
 
@@ -70,7 +70,7 @@ struct AuthorisedSigningState {
     // TODO: this should be specialized to sending
     // results only (no p2p stuff)
     result_sender: EventSender,
-    validator_map: Arc<ValidatorMaps>,
+    validator_map: Arc<PartyIdxMapping>,
 }
 
 impl AuthorisedSigningState {

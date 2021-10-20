@@ -4,9 +4,12 @@ mod common;
 mod key_store;
 pub mod keygen;
 pub mod signing;
+// mod state_runner;
 
 #[cfg(test)]
 mod tests;
+
+mod ceremony_manager;
 
 #[cfg(test)]
 mod genesis;
@@ -26,15 +29,15 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use key_store::KeyStore;
-use signing::{SigningDataWrapped, SigningManager};
+use signing::SigningDataWrapped;
 
 use utils::threshold_from_share_count;
 
-use keygen::{KeygenData, KeygenManager};
+use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
 
-use self::signing::PendingSigningInfo;
+use self::{ceremony_manager::CeremonyManager, signing::PendingSigningInfo};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -170,8 +173,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
-    keygen_manager: KeygenManager,
-    pub signing_manager: SigningManager,
+    pub ceremony_manager: CeremonyManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
@@ -191,12 +193,7 @@ where
         MultisigClient {
             my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
-            keygen_manager: KeygenManager::new(
-                my_account_id.clone(),
-                inner_event_sender.clone(),
-                &logger,
-            ),
-            signing_manager: SigningManager::new(
+            ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
                 &logger,
@@ -209,8 +206,7 @@ where
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
-        self.keygen_manager.cleanup();
-        self.signing_manager.cleanup();
+        self.ceremony_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
         let logger = &self.logger;
@@ -245,7 +241,7 @@ where
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.keygen_manager.on_keygen_request(keygen_info);
+                self.ceremony_manager.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
@@ -258,7 +254,7 @@ where
                 );
                 match self.key_store.get_key(&key_id) {
                     Some(key) => {
-                        self.signing_manager.on_request_to_sign(
+                        self.ceremony_manager.on_request_to_sign(
                             sign_info.data,
                             key.clone(),
                             sign_info.signers,
@@ -299,7 +295,7 @@ where
                     CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
-                self.signing_manager.on_request_to_sign(
+                self.ceremony_manager.on_request_to_sign(
                     signing_info.data,
                     key_info.clone(),
                     signing_info.signers,
@@ -348,7 +344,7 @@ where
                 let ceremony_id = keygen_message.ceremony_id;
 
                 if let Some(key) = self
-                    .keygen_manager
+                    .ceremony_manager
                     .process_keygen_data(sender_id, keygen_message)
                 {
                     self.on_key_generated(ceremony_id, key);
@@ -361,7 +357,7 @@ where
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
-                self.signing_manager
+                self.ceremony_manager
                     .process_signing_data(sender_id, signing_message);
             }
             Err(_) => {
@@ -380,10 +376,6 @@ impl<S> MultisigClient<S>
 where
     S: KeyDB,
 {
-    pub fn get_keygen(&self) -> &KeygenManager {
-        &self.keygen_manager
-    }
-
     pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
         self.key_store.get_key(key_id)
     }
@@ -398,8 +390,7 @@ where
 
     /// Change the time we wait until deleting all unresolved states
     pub fn expire_all(&mut self) {
-        self.keygen_manager.expire_all();
-        self.signing_manager.expire_all();
+        self.ceremony_manager.expire_all();
 
         self.pending_requests_to_sign.retain(|_, pending_infos| {
             for pending in pending_infos {

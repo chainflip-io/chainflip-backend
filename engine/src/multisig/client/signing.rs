@@ -2,14 +2,13 @@
 #[macro_use]
 pub mod frost;
 mod frost_stages;
-mod signing_manager;
 mod signing_state;
 
 use std::time::{Duration, Instant};
 
 pub use frost::SigningDataWrapped;
 use pallet_cf_vaults::CeremonyId;
-pub use signing_manager::SigningManager;
+pub use signing_state::SigningState;
 
 use serde::{Deserialize, Serialize};
 

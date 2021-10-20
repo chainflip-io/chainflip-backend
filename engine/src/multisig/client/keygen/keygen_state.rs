@@ -22,7 +22,7 @@ use client::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
     ProcessMessageResult, RawP2PSender, StageResult,
 };
-use client::utils::ValidatorMaps;
+use client::utils::PartyIdxMapping;
 
 /// Ceremony is authorised once we receive a keygen request with a corresponding ceremony_id
 /// from our SC node, at which point the data in this struct also becomes available.
@@ -34,7 +34,7 @@ struct KeygenStateAuthorised {
     // TODO: this should be specialized to sending
     // results only (no p2p stuff)
     result_sender: EventSender,
-    validator_map: Arc<ValidatorMaps>,
+    validator_map: Arc<PartyIdxMapping>,
 }
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
@@ -64,7 +64,7 @@ impl KeygenState {
         &mut self,
         ceremony_id: CeremonyId,
         event_sender: EventSender,
-        validator_map: Arc<ValidatorMaps>,
+        validator_map: Arc<PartyIdxMapping>,
         own_idx: usize,
         all_idxs: Vec<usize>,
     ) {
@@ -313,7 +313,7 @@ pub struct KeygenP2PSender {
 
 impl KeygenP2PSender {
     fn new(
-        validator_map: Arc<ValidatorMaps>,
+        validator_map: Arc<PartyIdxMapping>,
         sender: UnboundedSender<InnerEvent>,
         ceremony_id: CeremonyId,
     ) -> Self {
