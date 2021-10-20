@@ -137,11 +137,6 @@ pub type EventInfo = (
 /// Number of times to retry if the nonce is wrong
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
-pub enum ExtrinsicError {
-    NonceError,
-    Other(RpcError),
-}
-
 pub struct StateChainRpcClient {
     pub metadata: substrate_subxt::Metadata,
     events_storage_key: StorageKey,
@@ -251,9 +246,11 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
     {
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
+
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             match self
-                .inner_submit_extrinsic_with_nonce(extrinsic.clone(), nonce)
+                .state_chain_rpc_client
+                .submit_extrinsic_rpc(nonce, extrinsic.clone())
                 .await
             {
                 Ok(tx_hash) => {
@@ -264,53 +261,29 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                     );
                     return Ok(tx_hash);
                 }
-                Err(err) => match err {
-                    ExtrinsicError::NonceError => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
-                        continue;
-                    }
-                    ExtrinsicError::Other(err) => {
-                        slog::error!(logger, "Error: {}", err);
-                        self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(anyhow::Error::msg(err));
-                    }
-                },
+                Err(rpc_err) => match rpc_err {
+                    RpcError::JsonRpcError(Error {
+                            code: ErrorCode::ServerError(1014),
+                            ..
+                        }) => {
+                            slog::error!(
+                                logger,
+                                "Extrinsic submission failed with nonce: {}",
+                                nonce
+                            );
+                        }
+                        err => {
+                            slog::error!(logger, "Error: {}", err);
+                            self.nonce.fetch_sub(1, Ordering::Relaxed);
+                            return Err(anyhow::Error::msg(err));
+                        }
+                    },
+                }
             }
         }
-        Err(anyhow::Error::msg(
-            "Exceeded maximum retry attempts for extrinsic",
-        ))
     }
 
-    /// Increment the nonce only on success and failure
-    async fn inner_submit_extrinsic_with_nonce<Extrinsic>(
-        &self,
-        extrinsic: Extrinsic,
-        nonce: u32,
-    ) -> Result<H256, ExtrinsicError>
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
-    {
-        match self
-            .state_chain_rpc_client
-            .submit_extrinsic_rpc(nonce, extrinsic)
-            .await
-        {
-            Ok(tx_hash) => Ok(tx_hash),
-            Err(rpc_err) => match rpc_err {
-                RpcError::JsonRpcError(e) => match e {
-                    Error {
-                        code: ErrorCode::ServerError(1014),
-                        ..
-                    } => Err(ExtrinsicError::NonceError),
-                    err => Err(ExtrinsicError::Other(RpcError::JsonRpcError(err))),
-                },
-                err => Err(ExtrinsicError::Other(err)),
-            },
-        }
-    }
-
+    /// Get all the events from a particular block
     pub async fn events(
         &self,
         block_header: &state_chain_runtime::Header,
