@@ -494,4 +494,22 @@ jobs:
       - store_artifacts:
           path: target/release
 #/
+  create-testnet:
+    parameters:
+      cluster_name:
+        description: Name of the cluster to authenticate to
+        type: string
+        default: cluster-staging
+    resource_class: small
+    executor: chainflip-master
+    steps:
+      - doctl/initialize
+      - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Install cluster
+          command: |
+            cd cluster
+            ./build.sh -b="$CIRCLE_BRANCH" -t="latest" --local --reset
 ######################## /Jobs ########################
