@@ -11,11 +11,11 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
-    p2p, settings,
-    signing::{
+    multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
         SigningInfo, SigningOutcome,
     },
+    p2p, settings,
 };
 
 pub async fn start<BlockStream>(
