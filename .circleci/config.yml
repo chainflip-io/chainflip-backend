@@ -192,7 +192,7 @@ workflows:
           context:
             - ghcr-credentials
             - discord-webhooks
-         <<: *only_main_branches
+          <<: *only_main_branches
       - docker-build:
           name: docker-build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
@@ -225,7 +225,7 @@ workflows:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
-            <<: *only_main_branches
+          <<: *only_main_branches
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
