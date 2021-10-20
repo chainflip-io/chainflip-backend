@@ -443,7 +443,7 @@ fn build_challenge(
 
     let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
 
-    let agg_key = AggKey::from_y_x_compressed(pubkey.serialize());
+    let agg_key = AggKey::from(pubkey);
 
     // Assemble the challenge in correct order according to this contract:
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol

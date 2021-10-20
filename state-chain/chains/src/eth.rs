@@ -110,11 +110,12 @@ pub struct AggKey {
 }
 
 impl AggKey {
-	/// Convert from compressed `[y, x]` coordinates.
+	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
 	///
-	/// Note that in the source format, y = 2 means "even" and y = 3 means "odd". We can convert to the required
-	/// 0 / 1 representation by subtracting 2.
-	pub fn from_y_x_compressed(bytes: [u8; 33]) -> Self {
+	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to the required
+	/// 0 / 1 representation by subtracting 2 from the supplied values, so if the source format doesn't conform
+	/// to the expected 2/3 even/odd convention, bad things will happen.
+	fn from_y_x_compressed(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
 		let pub_key_y_parity = pub_key_y_parity - 2;
 		Self {
@@ -127,7 +128,8 @@ impl AggKey {
 	///
 	/// We use the inverse conversion from the above, ie. we add two to the y parity byte to convert
 	/// 0 -> 2 and 1 -> 3.
-	pub fn to_y_x_compressed(&self) -> [u8; 33] {
+	#[cfg(test)]
+	fn to_y_x_compressed(&self) -> [u8; 33] {
 		let mut res = [0u8; 33];
 		res[0] = self.pub_key_y_parity + 2;
 		res[1..].copy_from_slice(&self.pub_key_x);
@@ -249,18 +251,18 @@ mod tests {
 
 	#[test]
 	fn test_agg_key_conversion() {
-		// even
+		// 2 == even
 		let mut bytes = [0u8; 33];
 		bytes[0] = 2;
 		let key = AggKey::from_y_x_compressed(bytes);
 		assert_eq!(key.pub_key_y_parity, 0);
 		assert_eq!(key.to_y_x_compressed(), bytes);
 
-		// odd
+		// 3 == odd
 		let mut bytes = [0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::from_y_x_compressed(bytes);
-		assert_eq!(key.pub_key_y_parity, 0);
+		assert_eq!(key.pub_key_y_parity, 1);
 		assert_eq!(key.to_y_x_compressed(), bytes);
 	}
 }
