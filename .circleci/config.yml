@@ -220,7 +220,7 @@ workflows:
           requires:
             - clone-cluster-repo
             - docker-build-chainflip-engine
-            - build-state-chain-node
+            - docker-build-state-chain-node
           context:
             - ghcr-credentials
             - do-credentials
