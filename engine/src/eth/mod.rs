@@ -113,7 +113,7 @@ impl EthBroadcaster {
             .raw_transaction)
     }
 
-    /// Sign and broadcast a transaction to a particular contract
+    /// Broadcast a transaction to the network
     pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
         let tx_hash = self
             .web3
