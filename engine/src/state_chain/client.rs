@@ -263,24 +263,22 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                 }
                 Err(rpc_err) => match rpc_err {
                     RpcError::JsonRpcError(Error {
-                            code: ErrorCode::ServerError(1014),
-                            ..
-                        }) => {
-                            slog::error!(
-                                logger,
-                                "Extrinsic submission failed with nonce: {}",
-                                nonce
-                            );
-                        }
-                        err => {
-                            slog::error!(logger, "Error: {}", err);
-                            self.nonce.fetch_sub(1, Ordering::Relaxed);
-                            return Err(anyhow::Error::msg(err));
-                        }
-                    },
-                }
+                        code: ErrorCode::ServerError(1014),
+                        ..
+                    }) => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                    }
+                    err => {
+                        slog::error!(logger, "Error: {}", err);
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+                        return Err(anyhow::Error::msg(err));
+                    }
+                },
             }
         }
+        Err(anyhow::Error::msg(
+            "Exceeded maximum number of retry attempts",
+        ))
     }
 
     /// Get all the events from a particular block
