@@ -3,6 +3,7 @@ use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
 use sp_runtime::AccountId32;
+use substrate_subxt::Signer;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -208,6 +209,47 @@ pub async fn start<BlockStream>(
                                         .await;
                                 }
                                 state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+                                    pallet_cf_broadcast::Event::TransactionSigningRequest(
+                                        attempt_id,
+                                        validator_id,
+                                        unsigned_tx
+                                    ),
+                                ) if &validator_id == state_chain_client.signer.account_id() => {
+                                    slog::debug!(
+                                        logger,
+                                        "Received signing request {} for transaction: {:?}",
+                                        attempt_id,
+                                        unsigned_tx,
+                                    );
+                                    match eth_broadcaster.sign_tx(unsigned_tx).await {
+                                        Ok(raw_signed_tx) => {
+                                            state_chain_client.submit_extrinsic(
+                                                &logger,
+                                                state_chain_runtime::Call::EthereumBroadcaster(
+                                                    pallet_cf_broadcast::Call::transaction_ready_for_transmission(
+                                                        attempt_id,
+                                                        raw_signed_tx.0,
+                                                    ),
+                                                )
+                                            ).await;
+                                        },
+                                        Err(e) => {
+                                            // Note: this error case should only occur if there is a problem with the
+                                            // local ethereum node, which would mean the web3 lib is unable to fill in 
+                                            // the tranaction params, mainly the gas limit.
+                                            // In the long run all transaction parameters will be provided by the state
+                                            // chain and the above eth_broadcaster.sign_tx method can be made 
+                                            // infallible.
+                                            slog::error!(
+                                                logger,
+                                                "Transaction signing attempt {} failed: {:?}",
+                                                attempt_id,
+                                                e
+                                            );
+                                        },
+                                    }
+                                }
+                                state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
                                     pallet_cf_broadcast::Event::TransmissionRequest(
                                         attempt_id,
                                         signed_tx,
@@ -219,16 +261,12 @@ pub async fn start<BlockStream>(
                                         attempt_id,
                                         hex::encode(&signed_tx),
                                     );
-                                    // TODO: Contract address should come from the state chain
-                                    // https://github.com/chainflip-io/chainflip-backend/issues/459
-                                    let response_extrinsics = match eth_broadcaster
-                                        .send(signed_tx, settings.eth.key_manager_eth_address)
-                                        .await
+                                    let response_extrinsics = match eth_broadcaster.send(signed_tx).await
                                     {
                                         Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Succesful broadcast attempt {}, tx_hash: {}",
+                                                "Successful broadcast attempt {}, tx_hash: {}",
                                                 attempt_id,
                                                 tx_hash
                                             );

@@ -18,7 +18,7 @@ use std::time::Duration;
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
-    types::{SyncState, TransactionParameters, H160, H256},
+    types::{Bytes, SyncState, TransactionParameters, H160, H256},
     Web3,
 };
 
@@ -96,26 +96,25 @@ impl EthBroadcaster {
         })
     }
 
-    /// Sign and broadcast a transaction to a particular contract
-    pub async fn send(&self, tx_data: Vec<u8>, contract: H160) -> Result<H256> {
+    pub async fn sign_tx(&self, unsigned_tx: cf_chains::eth::UnsignedTransaction) -> Result<Bytes> {
         let tx_params = TransactionParameters {
-            to: Some(contract),
-            data: tx_data.into(),
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
             ..Default::default()
         };
 
-        let raw_transaction = self
-            .web3
+        Ok(self.web3
             .accounts()
             .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
             .await?
-            .raw_transaction;
+            .raw_transaction)
+    }
 
-        let tx_hash = self
-            .web3
-            .eth()
-            .send_raw_transaction(raw_transaction)
-            .await?;
+    /// Sign and broadcast a transaction to a particular contract
+    pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
+        let tx_hash = self.web3.eth().send_raw_transaction(raw_signed_tx.into()).await?;
 
         Ok(tx_hash)
     }
