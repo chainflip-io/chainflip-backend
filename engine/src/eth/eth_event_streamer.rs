@@ -11,17 +11,53 @@ use web3::{
     Web3,
 };
 
+/// Type for storing common (i.e. tx_hash) and specific event information
+#[derive(Debug)]
+pub struct Event<EventEnum: Debug> {
+    /// The transaction hash of the transaction that emitted this event
+    pub tx_hash: [u8; 32],
+    /// The event specific parameters
+    pub event_enum: EventEnum,
+}
+impl<EventEnum: Debug> Event<EventEnum> {
+    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(
+        decode_log: &LogDecoder,
+        log: Log,
+    ) -> Result<Self> {
+        Ok(Event {
+            tx_hash: log
+                .transaction_hash
+                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?
+                .to_fixed_bytes(),
+            event_enum: decode_log(
+                *log.topics.first().ok_or_else(|| {
+                    anyhow::Error::msg("Could not get event signature from ETH log")
+                })?,
+                RawLog {
+                    topics: log.topics,
+                    data: log.data.0,
+                },
+            )?,
+        })
+    }
+}
+
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
-    Event: Debug,
-    LogDecoder: Fn(H256, H256, RawLog) -> Result<Event>,
+    EventEnum: Debug,
+    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>,
 >(
     web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
     logger: &slog::Logger,
-) -> Result<impl Stream<Item = Result<Event>>, anyhow::Error> {
+) -> Result<impl Stream<Item = Result<Event<EventEnum>>>, anyhow::Error> {
+    slog::info!(
+        logger,
+        "Subscribing to Ethereum events from contract at address: {:?}",
+        hex::encode(deployed_address)
+    );
     // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
     let future_logs = web3
         .eth_subscribe()
@@ -76,30 +112,20 @@ pub async fn new_eth_event_stream<
     Ok(tokio_stream::iter(past_logs)
         .map(Ok)
         .chain(future_logs)
-        .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
-            let result_event = result_unparsed_log.and_then(|log| {
-                decode_log(
-                    *log.topics.first().ok_or_else(|| {
-                        anyhow::Error::msg("Could not get event signature from ETH log")
-                    })?,
-                    log.transaction_hash.ok_or_else(|| {
-                        anyhow::Error::msg("Could not get transaction hash from ETH log")
-                    })?,
-                    RawLog {
-                        topics: log.topics,
-                        data: log.data.0,
-                    },
-                )
-            });
+        .map(
+            move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
+                let result_event =
+                    result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
-            slog::debug!(
-                logger,
-                "Received ETH log, parsing result: {:?}",
+                slog::debug!(
+                    logger,
+                    "Received ETH log, parsing result: {:?}",
+                    result_event
+                );
+
                 result_event
-            );
-
-            result_event
-        }))
+            },
+        ))
 }
 
 #[cfg(test)]

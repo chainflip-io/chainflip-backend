@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_witness};
-use cf_traits::{mocks, EpochInfo};
+use cf_traits::mocks;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -61,7 +61,6 @@ impl pallet_cf_witness::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type Epoch = <mocks::epoch_info::Mock as EpochInfo>::EpochIndex;
 	type ValidatorId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;
 	type Amount = u64;

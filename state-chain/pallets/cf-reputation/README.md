@@ -15,8 +15,10 @@ Penalties in terms of reputation points are incurred when any one of the *offlin
 met.  Falling into negative reputation leads to the eventual slashing of FLIP.  As soon as reputation
 is positive slashing stops.
 
-## Terminology
+In the event that we found a percentage, `EmergencyRotationPercentageTrigger`, of the validating set are offline then
+an Emergency Rotation is requested via `EmergencyRotation::request_emergency_rotation()`
 
+## Terminology
 - Validator: A node in our network that is producing blocks.
 - Heartbeat: A term used to measure the liveness of a validator.
 - Heartbeat interval: The duration in time, measured in blocks we would expect to receive a
@@ -35,3 +37,6 @@ is positive slashing stops.
   reputation points.
 - Slashing: The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
   pallet when a validator's reputation points fall below zero *and* they are *offline*.
+- Accrual Ratio: A ratio of reputation points earned per number of offline credits
+- Emergency Rotation: When we find that a percentage of the validating set are offline we request for an
+  emergency rotation
