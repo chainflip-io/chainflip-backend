@@ -810,6 +810,7 @@ dependencies = [
  "hex",
  "parity-scale-codec",
  "rlp",
+ "secp256k1",
  "serde 1.0.126",
  "sp-runtime",
  "sp-std",

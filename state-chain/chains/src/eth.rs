@@ -112,7 +112,7 @@ pub struct AggKey {
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates.
 	///
-	/// Note that in this format, y = 2 means "even" and y = 3 means "odd". We can convert to the required
+	/// Note that in the source format, y = 2 means "even" and y = 3 means "odd". We can convert to the required
 	/// 0 / 1 representation by subtracting 2.
 	pub fn from_y_x_compressed(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
@@ -154,6 +154,12 @@ impl TryFrom<&[u8]> for AggKey {
 		}
 
 		Err("Invalid aggKey format. Should be 33 bytes total, first byte should be 2 or 3")
+	}
+}
+
+impl From<secp256k1::PublicKey> for AggKey {
+	fn from(key: secp256k1::PublicKey) -> Self {
+		AggKey::from_y_x_compressed(key.serialize())
 	}
 }
 
@@ -241,10 +247,19 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_agg_key() {
+	fn test_agg_key_conversion() {
+		// even
 		let mut bytes = [0u8; 33];
 		bytes[0] = 2;
 		let key = AggKey::from_y_x_compressed(bytes);
+		assert_eq!(key.pub_key_y_parity, 0);
+		assert_eq!(key.to_y_x_compressed(), bytes);
+
+		// odd
+		let mut bytes = [0u8; 33];
+		bytes[0] = 3;
+		let key = AggKey::from_y_x_compressed(bytes);
+		assert_eq!(key.pub_key_y_parity, 0);
 		assert_eq!(key.to_y_x_compressed(), bytes);
 	}
 }

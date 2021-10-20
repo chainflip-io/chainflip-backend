@@ -104,7 +104,7 @@ pub async fn start<BlockStream>(
                                                 pallet_cf_vaults::Call::keygen_success(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pubkey.serialize().into(),
+                                                    pubkey.into(),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -236,7 +236,7 @@ pub async fn start<BlockStream>(
                                                 pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
                                                     attempt_id, tx_hash.into()
                                                 ),
-                                                // TODO: This should be trigger from the eth event. 
+                                                // TODO: This should be triggered from the eth event. 
                                                 pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
                                                     ChainId::Ethereum, vec![], 0, tx_hash.as_bytes().to_vec()
                                                 ),
