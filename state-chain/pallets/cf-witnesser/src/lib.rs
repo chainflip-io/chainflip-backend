@@ -220,7 +220,7 @@ impl<T: Config> Pallet<T> {
 
 				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
 				if *vote {
-					Err(Error::<T>::DuplicateWitness)?
+					return Err(Error::<T>::DuplicateWitness);
 				}
 
 				vote_count += 1;
@@ -270,7 +270,7 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 ///
 /// ```ignore
 /// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
-/// 	log::debug!("This extrinsic was called as a result of witness threshold consensus.");
+///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
 /// ```
 pub struct EnsureWitnessed;

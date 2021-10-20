@@ -295,12 +295,12 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions() -> Weight;
 }
 
-/// A nonce
+/// A nonce.
 pub type Nonce = u64;
 
-/// Provide a nonce
+/// Provides a unqiue nonce for some [Chain].
 pub trait NonceProvider<C: Chain> {
-	/// Provide the next nonce for the chain identified
+	/// Get the next nonce.
 	fn next_nonce() -> Nonce;
 }
 

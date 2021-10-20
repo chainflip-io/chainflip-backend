@@ -24,7 +24,7 @@ pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 pub fn stake_manager_contract_address() -> [u8; 20] {
-	const ADDR: &'static str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+	const ADDR: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 	let mut buffer = [0u8; 20];
 	buffer.copy_from_slice(hex::decode(ADDR).unwrap().as_slice());
 	buffer

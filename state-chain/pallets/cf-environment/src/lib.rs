@@ -73,9 +73,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			StakeManagerAddress::<T>::set(Some(self.stake_manager_address.clone()));
-			KeyManagerAddress::<T>::set(Some(self.key_manager_address.clone()));
-			EthereumChainId::<T>::set(Some(self.ethereum_chain_id.clone()));
+			StakeManagerAddress::<T>::set(Some(self.stake_manager_address));
+			KeyManagerAddress::<T>::set(Some(self.key_manager_address));
+			EthereumChainId::<T>::set(Some(self.ethereum_chain_id));
 		}
 	}
 }

@@ -562,7 +562,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
 			// Check if the address is different from the stored address - if yes error out
 			if withdrawal_address != address {
-				Err(Error::<T>::WithdrawalAddressRestricted)?
+				return Err(Error::<T>::WithdrawalAddressRestricted.into());
 			}
 		}
 

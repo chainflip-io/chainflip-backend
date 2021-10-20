@@ -251,7 +251,7 @@ pub mod pallet {
 						*attempt_id,
 						*stage,
 					));
-					Self::retry_failed_broadcast(attempt.into());
+					Self::retry_failed_broadcast(attempt);
 				};
 
 				match stage {
