@@ -44,7 +44,7 @@ pub async fn start<BlockStream>(
     );
 
     state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
         .await;
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
@@ -61,7 +61,7 @@ pub async fn start<BlockStream>(
                         block_header.number
                     );
                     state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
 

@@ -8,7 +8,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, EpochInfo, Nonce, NonceProvider, SigningContext, ThresholdSigner,
+	Chainflip, EpochIndex, EpochInfo, Nonce, NonceProvider, SigningContext, ThresholdSigner,
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{
@@ -116,7 +116,7 @@ pub mod pallet {
 	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		<T::EpochInfo as EpochInfo>::EpochIndex,
+		EpochIndex,
 		Blake2_128Concat,
 		ChainId,
 		BlockHeightWindow,
@@ -373,7 +373,7 @@ impl<T: Config> Pallet<T> {
 			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
 		));
 		PendingVaultRotations::<T>::remove_all();
-		T::RotationHandler::abort();
+		T::RotationHandler::vault_rotation_aborted();
 	}
 
 	fn no_active_chain_vault_rotations() -> bool {

@@ -26,7 +26,7 @@ cargo-base-job: &cargo-base-job
   executor: rust-base
   environment:
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
 
 ######################## Config ########################
@@ -131,11 +131,6 @@ workflows:
 
   chainflip-backend-checks:
     jobs:
-      - cargo-fmt-validator-package:
-          context:
-            - ghcr-credentials
-            - github-credentials
-          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
             - cargo-fmt-validator-package
@@ -145,6 +140,10 @@ workflows:
           <<: *ignore_main_branches
 
       # The follow jobs always run, regardless of PR or merge.
+      - cargo-fmt-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
       - cargo-build-and-test-validator-package:
           requires:
             - cargo-fmt-validator-package
@@ -305,7 +304,7 @@ jobs:
             - target/release/state-chain-node
             - target/release/chainflip-engine
       - send_notification:
-          only_for_branches: ""
+          only_for_branches: "develop"
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;

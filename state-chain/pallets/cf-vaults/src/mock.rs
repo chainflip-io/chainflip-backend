@@ -80,9 +80,9 @@ pub struct MockRotationHandler;
 
 impl VaultRotationHandler for MockRotationHandler {
 	type ValidatorId = u64;
-	fn abort() {}
+	fn vault_rotation_aborted() {}
 
-	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {
+	fn penalise(_bad_validators: &[Self::ValidatorId]) {
 		unimplemented!("This should be handled by the offline reporter and will be removed.")
 	}
 }

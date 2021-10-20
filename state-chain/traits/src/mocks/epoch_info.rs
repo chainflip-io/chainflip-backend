@@ -62,7 +62,6 @@ macro_rules! impl_mock_epoch_info {
 		impl EpochInfo for MockEpochInfo {
 			type ValidatorId = $account_id;
 			type Amount = $balance;
-			type EpochIndex = $epoch_index;
 
 			fn current_validators() -> Vec<Self::ValidatorId> {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
@@ -80,7 +79,7 @@ macro_rules! impl_mock_epoch_info {
 				NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
 			}
 
-			fn epoch_index() -> Self::EpochIndex {
+			fn epoch_index() -> $epoch_index {
 				EPOCH.with(|cell| *cell.borrow())
 			}
 

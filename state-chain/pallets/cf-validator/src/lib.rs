@@ -17,7 +17,9 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo};
+use cf_traits::{
+	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -27,25 +29,10 @@ use sp_std::prelude::*;
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-/// Handler for Epoch life cycle events.
-pub trait EpochTransitionHandler {
-	/// The id type used for the validators.
-	type ValidatorId;
-	type Amount: Copy;
-	/// A new epoch has started
-	///
-	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
-}
-
-impl<T: Config> EpochTransitionHandler for PhantomData<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::EpochIndex;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -71,25 +58,28 @@ pub mod pallet {
 		/// Benchmark stuff
 		type ValidatorWeightInfo: WeightInfo;
 
-		/// An index describing the epoch
-		type EpochIndex: Member + codec::FullCodec + Copy + AtLeast32BitUnsigned + Default;
-
 		/// An amount
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// An auction type
-		type Auction: Auction<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new epoch has started \[epoch_index\]
-		NewEpoch(T::EpochIndex),
+		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// A new epoch has been forced
 		ForceRotationRequested(),
+		/// An emergency rotation has been requested
+		EmergencyRotationRequested(),
 	}
 
 	#[pallet::error]
@@ -128,7 +118,10 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(
+				T::Auctioneer::waiting_on_bids(),
+				Error::<T>::AuctionInProgress
+			);
 			ensure!(
 				number_of_blocks >= T::MinEpoch::get(),
 				Error::<T>::InvalidEpoch
@@ -157,7 +150,10 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(
+				T::Auctioneer::waiting_on_bids(),
+				Error::<T>::AuctionInProgress
+			);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -193,6 +189,11 @@ pub mod pallet {
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	/// An emergency rotation has been requested
+	#[pallet::storage]
+	#[pallet::getter(fn emergency_rotation_requested)]
+	pub(super) type EmergencyRotationRequested<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
@@ -206,27 +207,37 @@ pub mod pallet {
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, T::EpochIndex, ValueQuery>;
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
 	/// Validator lookup
 	#[pallet::storage]
+	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig<T: Config> {
+		pub blocks_per_epoch: T::BlockNumber,
+	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {}
+			Self {
+				blocks_per_epoch: Zero::zero(),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
-				T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
+			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			if let Some(auction_result) = T::Auctioneer::auction_result() {
+				T::EpochTransitionHandler::on_new_epoch(
+					&[],
+					&auction_result.winners,
+					auction_result.minimum_active_bid,
+				);
 			}
 			Pallet::<T>::generate_lookup();
 		}
@@ -236,7 +247,6 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type EpochIndex = T::EpochIndex;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		<pallet_session::Module<T>>::validators()
@@ -254,18 +264,18 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn bond() -> Self::Amount {
-		match T::Auction::phase() {
-			AuctionPhase::WinnersSelected(_, min_bid) => min_bid,
+		match T::Auctioneer::phase() {
+			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
 			_ => Zero::zero(),
 		}
 	}
 
-	fn epoch_index() -> Self::EpochIndex {
+	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
 
 	fn is_auction_phase() -> bool {
-		!T::Auction::waiting_on_bids()
+		!T::Auctioneer::waiting_on_bids()
 	}
 }
 
@@ -287,20 +297,27 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// If we are waiting on bids let's see if we want to start a new rotation
-		return match T::Auction::phase() {
-			AuctionPhase::WaitingForBids(..) => {
+		match T::Auctioneer::phase() {
+			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_rotate(now) && T::Auction::process().and(T::Auction::process()).is_ok()
+				Self::should_rotate(now)
+					&& T::Auctioneer::process()
+						.and(T::Auctioneer::process())
+						.is_ok()
 			}
-			AuctionPhase::WinnersSelected(..) => {
+			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
-				T::Auction::process().is_ok()
+				T::Auctioneer::process().is_ok()
 			}
-			// Failing that do nothing
-			_ => false,
-		};
+			_ => {
+				// If we were in one, mark as completed
+				Self::emergency_rotation_completed();
+				// Do nothing more
+				false
+			}
+		}
 	}
 }
 
@@ -324,7 +341,7 @@ impl<T: Config> Pallet<T> {
 			CurrentEpochStartedAt::<T>::set(now);
 		}
 
-		return end;
+		end
 	}
 
 	/// Generate our validator lookup list
@@ -336,9 +353,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn force_validator_rotation() {
+	fn force_validator_rotation() -> Weight {
 		Force::<T>::set(true);
 		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
+
+		T::DbWeight::get().reads_writes(0, 1)
 	}
 }
 
@@ -346,12 +365,12 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// Prepare candidates for a new session
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		return match T::Auction::phase() {
+		match T::Auctioneer::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
-			AuctionPhase::WinnersSelected(winners, _) => Some(winners),
+			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
-			AuctionPhase::WaitingForBids(winners, min_bid) => {
+			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
 					// Calculate our new epoch index
@@ -363,15 +382,23 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					Self::deposit_event(Event::NewEpoch(new_epoch));
 					// Generate our lookup list of validators
 					Self::generate_lookup();
+					let old_validators = T::Auctioneer::auction_result()
+						.expect("from genesis we would expect a previous auction")
+						.winners;
 					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
+					T::EpochTransitionHandler::on_new_epoch(
+						&old_validators,
+						&winners,
+						minimum_active_bid,
+					);
 				}
 
+				let _ = T::Auctioneer::process();
 				None
 			}
 			// Return
 			_ => None,
-		};
+		}
 	}
 
 	/// The current session is ending
@@ -400,10 +427,24 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-pub struct EmergencyRotationOf<T>(PhantomData<T>);
+impl<T: Config> EmergencyRotation for Pallet<T> {
+	fn request_emergency_rotation() -> Weight {
+		if !EmergencyRotationRequested::<T>::get() {
+			EmergencyRotationRequested::<T>::set(true);
+			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
+			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation();
+		}
 
-impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
-	fn request_emergency_rotation() {
-		Pallet::<T>::force_validator_rotation();
+		T::DbWeight::get().reads_writes(1, 0)
+	}
+
+	fn emergency_rotation_in_progress() -> bool {
+		EmergencyRotationRequested::<T>::get()
+	}
+
+	fn emergency_rotation_completed() {
+		if Self::emergency_rotation_in_progress() {
+			EmergencyRotationRequested::<T>::set(false);
+		}
 	}
 }
