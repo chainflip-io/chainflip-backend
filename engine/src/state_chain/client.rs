@@ -7,7 +7,7 @@ use futures::compat::{Future01CompatExt, Stream01CompatExt};
 use futures::Stream;
 use futures::StreamExt;
 use itertools::Itertools;
-use jsonrpc_core::{Error, ErrorCode, Metadata};
+use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use sp_core::H256;
 use sp_core::{
@@ -37,7 +37,6 @@ use async_trait::async_trait;
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
 
-// Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeImplForSigningExtrinsics {}
 impl System for RuntimeImplForSigningExtrinsics {
@@ -51,6 +50,7 @@ impl System for RuntimeImplForSigningExtrinsics {
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
     type AccountData = <state_chain_runtime::Runtime as frame_system::Config>::AccountData;
 }
+// Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 impl Runtime for RuntimeImplForSigningExtrinsics {
     type Signature = state_chain_runtime::Signature;
     type Extra = SCDefaultExtra<Self>;
@@ -58,9 +58,6 @@ impl Runtime for RuntimeImplForSigningExtrinsics {
         unreachable!();
     }
 }
-
-/// Number of times to retry if the nonce is wrong
-const MAX_RETRY_ATTEMPTS: usize = 10;
 
 /// Needed so we can use substrate_subxt's extrinsic signing code
 /// Defines extra parameters contained in an extrinsic
@@ -137,6 +134,9 @@ pub type EventInfo = (
 
 ////////////////////
 
+/// Number of times to retry if the nonce is wrong
+const MAX_RETRY_ATTEMPTS: usize = 10;
+
 pub enum ExtrinsicError {
     NonceError,
     Other(RpcError),
@@ -153,7 +153,7 @@ pub struct StateChainRpcClient {
     state_rpc_client: StateRpcClient,
 }
 
-/// Contains the direct to chain calls, using the library methods to make the calls
+/// Wraps the substrate client library methods
 #[automock]
 #[async_trait]
 pub trait IStateChainRpcClient {
@@ -235,8 +235,7 @@ pub struct StateChainClient<RPCClient: IStateChainRpcClient> {
     /// Our Node's AcccountId
     pub our_account_id: AccountId32,
 
-    // TODO: Look into making this interface tighter
-    pub state_chain_rpc_client: RPCClient,
+    state_chain_rpc_client: RPCClient,
 }
 
 impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
@@ -251,7 +250,12 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
         for _ in 0..MAX_RETRY_ATTEMPTS {
-            match self.inner_submit_extrinsic(extrinsic.clone(), logger).await {
+            // use the previous value but increment it for the next thread that loads/fetches it
+            let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
+            match self
+                .inner_submit_extrinsic_with_nonce(extrinsic.clone(), nonce)
+                .await
+            {
                 Ok(tx_hash) => {
                     slog::trace!(
                         logger,
@@ -262,10 +266,12 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                 }
                 Err(err) => match err {
                     ExtrinsicError::NonceError => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
                         continue;
                     }
                     ExtrinsicError::Other(err) => {
                         slog::error!(logger, "Error: {}", err);
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(anyhow::Error::msg(err));
                     }
                 },
@@ -277,17 +283,15 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
     }
 
     /// Increment the nonce only on success and failure
-    async fn inner_submit_extrinsic<Extrinsic>(
+    async fn inner_submit_extrinsic_with_nonce<Extrinsic>(
         &self,
         extrinsic: Extrinsic,
-        logger: &slog::Logger,
+        nonce: u32,
     ) -> Result<H256, ExtrinsicError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
-        // use the current/previous value and increment it for the next thread
-        let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
         match self
             .state_chain_rpc_client
             .submit_extrinsic_rpc(nonce, extrinsic)
@@ -299,19 +303,10 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                     Error {
                         code: ErrorCode::ServerError(1014),
                         ..
-                    } => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
-                        Err(ExtrinsicError::NonceError)
-                    }
-                    err => {
-                        self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        Err(ExtrinsicError::Other(RpcError::JsonRpcError(err)))
-                    }
+                    } => Err(ExtrinsicError::NonceError),
+                    err => Err(ExtrinsicError::Other(RpcError::JsonRpcError(err))),
                 },
-                err => {
-                    self.nonce.fetch_sub(1, Ordering::Relaxed);
-                    Err(ExtrinsicError::Other(err))
-                }
+                err => Err(ExtrinsicError::Other(err)),
             },
         }
     }
