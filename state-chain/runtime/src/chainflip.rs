@@ -241,7 +241,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
-	AggKeyBroadcast(SetAggKeyWithAggKey),
+	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
@@ -252,7 +252,7 @@ impl From<RegisterClaim> for EthereumSigningContext {
 
 impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
 	fn from(call: SetAggKeyWithAggKey) -> Self {
-		EthereumSigningContext::AggKeyBroadcast(call)
+		EthereumSigningContext::SetAggKeyWithAggKeyBroadcast(call)
 	}
 }
 
@@ -265,7 +265,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 	fn get_payload(&self) -> Self::Payload {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
-			Self::AggKeyBroadcast(ref call) => call.signing_payload(),
+			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -278,7 +278,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				)
 				.into()
 			}
-			Self::AggKeyBroadcast(call) => {
+			Self::SetAggKeyWithAggKeyBroadcast(call) => {
 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
 					contract_call_to_unsigned_tx(call.clone(), &signature),
 				))
