@@ -286,6 +286,7 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
+        // use the current/previous value and increment it for the next thread
         let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
         match self
             .state_chain_rpc_client
@@ -302,9 +303,15 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
                         Err(ExtrinsicError::NonceError)
                     }
-                    err => Err(ExtrinsicError::Other(RpcError::JsonRpcError(err))),
+                    err => {
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+                        Err(ExtrinsicError::Other(RpcError::JsonRpcError(err)))
+                    }
                 },
-                err => Err(ExtrinsicError::Other(err)),
+                err => {
+                    self.nonce.fetch_sub(1, Ordering::Relaxed);
+                    Err(ExtrinsicError::Other(err))
+                }
             },
         }
     }
@@ -463,9 +470,6 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use jsonrpc_core::Metadata;
-    use mockall::predicate::*;
-
     use crate::{logging::test_utils::create_test_logger, testing::assert_ok};
 
     use super::*;
@@ -543,5 +547,92 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 10);
+    }
+
+    #[tokio::test]
+    async fn tx_fails_for_reason_unrelated_to_nonce_does_not_retry_does_not_increment_nonce() {
+        let logger = create_test_logger();
+
+        // Return a non-nonce related error, we submit two extrinsics that fail in the same way
+        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            // with verifies it's call with the correct argument
+            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Err(RpcError::Timeout));
+
+        let state_chain_client = StateChainClient {
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: mock_state_chain_rpc_client,
+        };
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+
+        state_chain_client
+            .submit_extrinsic(&logger, force_rotation_call.clone())
+            .await
+            .unwrap_err();
+
+        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 0);
+    }
+
+    // 1. We submit a tx
+    // 2. Tx fails with a nonce error, so we leave the nonce incremented
+    // 3. We call again (incrementing the nonce for next time) nonce for this call is 1.
+    // 4. We succeed, therefore the nonce for the next call is 2.
+    #[tokio::test]
+    async fn tx_fails_due_to_nonce_increments_nonce_then_exits_when_successful() {
+        let logger = create_test_logger();
+
+        let bytes: [u8; 32] =
+            hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let tx_hash = H256::from(bytes);
+
+        // Return a non-nonce related error, we submit two extrinsics that fail in the same way
+        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            // with verifies it's call with the correct argument
+            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1014),
+                    message: "Priority too low".to_string(),
+                    data: None,
+                }))
+            });
+
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+
+        let state_chain_client = StateChainClient {
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: mock_state_chain_rpc_client,
+        };
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+
+        assert_ok!(
+            state_chain_client
+                .submit_extrinsic(&logger, force_rotation_call.clone())
+                .await
+        );
+
+        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
     }
 }
