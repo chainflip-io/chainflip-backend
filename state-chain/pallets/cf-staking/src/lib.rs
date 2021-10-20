@@ -44,7 +44,6 @@ pub mod pallet {
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	pub type EthereumAddress = [u8; 20];
-	pub type AggKeySignature = U256;
 
 	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
