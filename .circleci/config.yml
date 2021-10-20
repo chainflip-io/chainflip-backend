@@ -219,7 +219,7 @@ workflows:
       - create-testnet:
           requires:
             - clone-cluster-repo
-            - build-chainflip-engine
+            - docker-build-chainflip-engine
             - build-state-chain-node
           context:
             - ghcr-credentials
