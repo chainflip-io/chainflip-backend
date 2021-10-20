@@ -821,6 +821,7 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",

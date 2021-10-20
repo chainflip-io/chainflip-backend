@@ -18,6 +18,7 @@ mod tests {
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+	use cf_chains::ChainId;
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -149,13 +150,17 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			pallet_cf_vaults::GenesisConfig::<Runtime> {
-				ethereum_vault_key: hex_literal::hex![
-					"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"
-				]
-				.to_vec(),
-			}
-			.assimilate_storage(storage)
+			GenesisBuild::<Runtime>::assimilate_storage(
+				&pallet_cf_vaults::GenesisConfig {
+					ethereum_vault_key: {
+						let key: [u8; 33] = hex_literal::hex![
+							"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+						];
+						key.to_vec()
+					},
+				},
+				storage,
+			)
 			.unwrap();
 
 			pallet_cf_validator::GenesisConfig::<Runtime> {
@@ -182,7 +187,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, StakeTransfer};
 
 		const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -290,10 +295,10 @@ mod tests {
 					"no rewards"
 				);
 
-				assert_eq!(Vaults::current_request(), 0, "no key generation requests");
+				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
 				assert_eq!(
-					Vaults::chain_nonces(NonceIdentifier::Ethereum),
-					None,
+					Vaults::chain_nonces(ChainId::Ethereum),
+					0,
 					"nonce not incremented"
 				);
 

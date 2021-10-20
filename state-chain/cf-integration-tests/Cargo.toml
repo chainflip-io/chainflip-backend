@@ -28,6 +28,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
 state-chain-runtime = { path = "../runtime", default-features = false }
+cf-chains = { path = "../chains", default-features = false }
 cf-traits = { path = "../traits", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
@@ -73,6 +74,7 @@ sp-version = {default-features = false, version = '3.0.0'}
 default = ['std']
 std = [
     'cf-traits/std',
+    'cf-chains/std',
     'codec/std',
     'serde',
     'frame-executive/std',
