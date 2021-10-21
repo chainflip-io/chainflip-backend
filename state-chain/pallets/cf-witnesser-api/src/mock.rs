@@ -152,6 +152,7 @@ impl pallet_cf_staking::Config for Test {
 	type NonceProvider = Self;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = ();
 }
 
 type Amount = u64;
