@@ -23,36 +23,6 @@ fn check_threshold_calculation() {
     assert_eq!(threshold_from_share_count(4), 2);
 }
 
-pub fn reorg_vector<T: Clone>(v: &mut Vec<T>, order: &[usize]) {
-    assert_eq!(v.len(), order.len());
-
-    let owned_v = v.split_off(0);
-
-    let mut combined: Vec<_> = owned_v.into_iter().zip(order.iter()).collect();
-
-    combined.sort_by_key(|(_data, idx)| *idx);
-
-    *v = combined.into_iter().map(|(data, _idx)| data).collect();
-}
-
-#[cfg(test)]
-#[test]
-fn reorg_vector_works() {
-    {
-        let mut v = vec![1, 2, 3];
-        let order = [2, 1, 3];
-        reorg_vector(&mut v, &order);
-        assert_eq!(v, [2, 1, 3]);
-    }
-
-    {
-        let mut v = vec![2, 1, 3];
-        let order = [3, 2, 1];
-        reorg_vector(&mut v, &order);
-        assert_eq!(v, [3, 1, 2]);
-    }
-}
-
 /// Mappings from signer_idx to Validator Id and back
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorMaps {
@@ -98,16 +68,16 @@ pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
     }
 }
 
-/// Sort validators and find our index
-pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
-    let mut signers = signers.to_owned();
-
-    signers.sort();
-
-    let pos = signers.iter().position(|s| s == id);
-
-    // idx in multisig start at 1
-    pos.map(|idx| idx + 1)
+// TODO: should this be a part of ValidatorMaps?
+/// Map all signer ids to their corresponding signer idx
+pub fn project_signers(
+    signer_ids: &[AccountId],
+    validator_maps: &ValidatorMaps,
+) -> Result<Vec<usize>, ()> {
+    signer_ids
+        .iter()
+        .map(|id| validator_maps.get_idx(id).ok_or(()))
+        .collect()
 }
 
 /// Derive display to match the type's name
@@ -124,20 +94,6 @@ macro_rules! derive_display_as_type_name {
 #[cfg(test)]
 mod utils_tests {
     use super::*;
-
-    #[test]
-    fn get_our_idx_works() {
-        let a = AccountId(['A' as u8; 32]);
-        let b = AccountId(['B' as u8; 32]);
-        let c = AccountId(['C' as u8; 32]);
-
-        let signers = [c, a, b.clone()];
-
-        let idx = get_our_idx(&signers, &b);
-
-        // AccountID 'b' is in the second position in the list.
-        assert_eq!(idx, Some(2));
-    }
 
     #[test]
     fn get_index_mapping_works() {

@@ -1,4 +1,5 @@
 pub mod broadcast;
+pub mod broadcast_verification;
 mod ceremony_stage;
 
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
@@ -11,10 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     p2p::{AccountId, P2PMessageCommand},
-    signing::crypto::{KeyShare, Parameters, Point},
+    signing::crypto::{KeyShare, Point},
 };
 
-use super::{utils::ValidatorMaps, InnerEvent};
+use super::{client_inner::ThresholdParameters, utils::ValidatorMaps, InnerEvent};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {
@@ -38,7 +39,7 @@ impl KeygenResult {
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
     pub validator_map: Arc<ValidatorMaps>,
-    pub params: Parameters,
+    pub params: ThresholdParameters,
 }
 
 impl KeygenResultInfo {
@@ -91,4 +92,13 @@ impl RawP2PSender {
             eprintln!("Could not send p2p message: {}", err);
         }
     }
+}
+
+/// Data received by a single party for a given
+/// stage from all parties (includes our own for
+/// simplicity). Used for broadcast verification.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BroadcastVerificationMessage<T: Clone> {
+    /// Data is expected to be ordered by signer_idx
+    pub data: Vec<T>,
 }

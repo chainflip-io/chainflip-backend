@@ -11,11 +11,11 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 use crate::Pallet as Auction;
 
 benchmarks! {
-	set_auction_size_range {
+	set_active_validator_range {
 		let range = (2, 100);
 	}: _(RawOrigin::Root, range.into())
 	verify {
-		assert_eq!(Pallet::<T>::auction_size_range(), range.into())
+		assert_eq!(Pallet::<T>::active_validator_size_range(), range.into())
 	}
 }
 
