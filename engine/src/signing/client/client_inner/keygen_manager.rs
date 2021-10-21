@@ -1,249 +1,171 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, sync::Arc};
+
+use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc;
 
 use crate::{
-    logging::COMPONENT_KEY,
+    logging::CEREMONY_ID_KEY,
     p2p::AccountId,
-    signing::{
-        client::{
-            client_inner::utils::{get_index_mapping, threshold_from_share_count},
-            CeremonyId, KeygenInfo,
-        },
-        crypto,
-    },
+    signing::{KeygenInfo, KeygenOutcome},
 };
 
 use super::{
-    client_inner::{Broadcast1, KeyGenMessageWrapped, KeygenData},
-    common::KeygenResultInfo,
+    client_inner::KeygenDataWrapped,
     keygen_state::KeygenState,
-    utils::get_our_idx,
-    InnerEvent, KeygenOutcome,
+    utils::{get_index_mapping, project_signers},
+    InnerEvent, KeygenResultInfo,
 };
 
-#[cfg(test)]
-use super::keygen_state::KeygenStage;
-
-use itertools::Itertools;
-use slog::o;
-use tokio::sync::mpsc::UnboundedSender;
-
-/// Contains states (`KeygenState`) for different key ids. Responsible for directing
-/// incoming messages to the relevant instance of `KeygenState`. Delays processing of
-/// Broadcast1 messages before a corresponding keygen request is received.
 #[derive(Clone)]
 pub struct KeygenManager {
     /// States for each ceremony_id
     keygen_states: HashMap<CeremonyId, KeygenState>,
     /// Used to propagate events upstream
-    inner_event_sender: UnboundedSender<InnerEvent>,
-    /// Validator id of our node
-    our_id: AccountId,
-    /// Storage for delayed data (only Broadcast1 makes sense here).
-    /// We choose not to store it inside KeygenState, as having KeygenState currently
-    /// implies that we have received the relevant keygen request
-    /// (and know all parties involved), which is not always the case.
-    /// The `Instant` is the time at which the first messages was added to the delayed_messages queue
-    delayed_messages: HashMap<CeremonyId, (Instant, Vec<(AccountId, Broadcast1)>)>,
-    /// Abandon state for a given keygen if we can't make progress for longer than this
-    phase_timeout: Duration,
+    inner_event_sender: mpsc::UnboundedSender<InnerEvent>,
+    /// Account id of our node
+    my_account_id: AccountId,
     logger: slog::Logger,
 }
 
 impl KeygenManager {
     pub fn new(
-        our_id: AccountId,
-        inner_event_sender: UnboundedSender<InnerEvent>,
-        phase_timeout: Duration,
+        id: AccountId,
+        inner_event_sender: mpsc::UnboundedSender<InnerEvent>,
         logger: &slog::Logger,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
-            delayed_messages: Default::default(),
             inner_event_sender,
-            our_id,
-            phase_timeout,
-            logger: logger.new(o!(COMPONENT_KEY => "KeygenManager")),
+            my_account_id: id,
+            logger: logger.clone(),
         }
     }
 
-    pub fn process_keygen_message(
-        &mut self,
-        sender_id: AccountId,
-        msg: KeyGenMessageWrapped,
-    ) -> Option<KeygenResultInfo> {
-        let KeyGenMessageWrapped {
-            ceremony_id,
-            message,
-        } = msg;
-        slog::debug!(
-            self.logger,
-            "[{}] Processing a {} keygen message for ceremony_id: {:?}",
-            self.our_id,
-            message,
-            ceremony_id
-        );
-
-        match self.keygen_states.entry(ceremony_id) {
-            Entry::Occupied(mut state) => {
-                return state.get_mut().process_keygen_message(sender_id, message);
-            }
-            Entry::Vacant(_) => match message {
-                KeygenData::Broadcast1(bc1) => {
-                    slog::trace!(
-                        self.logger,
-                        "Delaying keygen bc1 for ceremony id: {:?}",
-                        ceremony_id
-                    );
-                    self.add_delayed(ceremony_id, sender_id, bc1);
-                }
-                KeygenData::Secret2(_) => {
-                    slog::warn!(
-                        self.logger,
-                        "Unexpected keygen secret2 for ceremony id: {:?}",
-                        ceremony_id
-                    );
-                }
-            },
-        };
-
-        None
-    }
-
-    fn add_delayed(&mut self, ceremony_id: CeremonyId, sender_id: AccountId, bc1: Broadcast1) {
-        let entry = self
-            .delayed_messages
-            .entry(ceremony_id)
-            .or_insert((Instant::now(), Vec::new()));
-        entry.1.push((sender_id, bc1));
-    }
-
-    /// check all states for timeouts and abandonment then remove them
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // remove all states that have become abandoned or finished (KeygenOutcome have already been sent)
-        self.keygen_states
-            .retain(|_, state| !state.is_abandoned() && !state.is_finished());
-
-        let timeout = self.phase_timeout;
-        // Remove all pending state that hasn't been updated for
-        // longer than `self.phase_timeout`
-        let logger_c = self.logger.clone();
-        self.delayed_messages.retain(|ceremony_id, (t, bc1_vec)| {
-            if t.elapsed() > timeout {
-                slog::warn!(
-                    logger_c,
-                    "Keygen state expired w/o keygen request for ceremony id: {:?}",
-                    ceremony_id
-                );
-
-                // We never received a keygen request for this key, so any parties
-                // that tried to initiate a new ceremony are deemed malicious
-                let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
-                events_to_send.push(KeygenOutcome::unauthorised(*ceremony_id, bad_validators));
-                return false;
-            }
-            true
-        });
-
-        // remove any active states that are taking too long
+        let logger = &self.logger;
         self.keygen_states.retain(|ceremony_id, state| {
-            if state.last_message_timestamp.elapsed() > timeout {
-                slog::warn!(
-                    logger_c,
-                    "Keygen state expired for ceremony id: {:?}",
-                    ceremony_id
-                );
-                let late_nodes = state.awaited_parties();
-                events_to_send.push(KeygenOutcome::timeout(*ceremony_id, late_nodes));
-                return false;
+            if let Some(bad_nodes) = state.try_expiring() {
+                slog::warn!(logger, "Keygen state expired and will be abandoned");
+                let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
+
+                events_to_send.push(InnerEvent::KeygenResult(outcome));
+
+                false
+            } else {
+                true
             }
-            true
         });
 
         for event in events_to_send {
-            if let Err(err) = self
-                .inner_event_sender
-                .send(InnerEvent::KeygenResult(event))
-            {
-                slog::error!(logger_c, "Unable to send event, error: {}", err);
+            if let Err(err) = self.inner_event_sender.send(event) {
+                slog::error!(self.logger, "Unable to send event, error: {}", err);
             }
         }
     }
 
-    /// Start the keygen ceremony
-    pub fn on_keygen_request(&mut self, ki: KeygenInfo) {
+    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
         let KeygenInfo {
             ceremony_id,
             signers,
-        } = ki;
+        } = keygen_info;
 
-        match self.keygen_states.entry(ceremony_id) {
-            Entry::Occupied(_) => {
-                // State should not have been created prior to receiving a keygen request
-                slog::warn!(
-                    self.logger,
-                    "Ignoring a keygen request for a known ceremony id: {:?}",
-                    ceremony_id
-                );
-            }
-            Entry::Vacant(entry) => match get_our_idx(&signers, &self.our_id) {
-                Some(idx) => {
-                    let idx_map = get_index_mapping(&signers);
+        let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-                    let share_count = signers.len();
-                    let threshold = threshold_from_share_count(share_count);
+        // TODO: check the number of participants?
 
-                    let params = crypto::Parameters {
-                        threshold,
-                        share_count,
-                    };
+        if !signers.contains(&self.my_account_id) {
+            // TODO: alert
+            slog::warn!(
+                logger,
+                "Keygen request ignored: we are not among participants",
+            );
 
-                    let state = KeygenState::initiate(
-                        idx,
-                        params,
-                        idx_map,
-                        ceremony_id,
-                        self.inner_event_sender.clone(),
-                        &self.logger,
-                    );
-
-                    let state = entry.insert(state);
-
-                    // Process delayed messages for `ceremony_id`
-                    if let Some((_, messages)) = self.delayed_messages.remove(&ceremony_id) {
-                        for (sender_id, msg) in messages {
-                            state.process_keygen_message(sender_id, msg.into());
-                        }
-                    }
-
-                    debug_assert!(self.delayed_messages.get(&ceremony_id).is_none());
-                }
-                None => {
-                    slog::error!(
-                        self.logger,
-                        "Unexpected keygen request w/o us as participants"
-                    )
-                }
-            },
+            return;
         }
+
+        let validator_map = Arc::new(get_index_mapping(&signers));
+
+        let our_idx = match validator_map.get_idx(&self.my_account_id) {
+            Some(idx) => idx,
+            None => {
+                // This should be impossible because of the check above,
+                // but I don't like unwrapping (would be better if we
+                // could combine this with the check above)
+                slog::warn!(logger, "Request to sign ignored: could not derive our idx");
+                return;
+            }
+        };
+
+        // Check that signer ids are known for this key
+        let signer_idxs = match project_signers(&signers, &validator_map) {
+            Ok(signer_idxs) => signer_idxs,
+            Err(_) => {
+                // TODO: alert
+                slog::warn!(logger, "Request to sign ignored: invalid signers");
+                return;
+            }
+        };
+
+        let logger = self.logger.clone();
+
+        let entry = self
+            .keygen_states
+            .entry(ceremony_id)
+            .or_insert_with(|| KeygenState::new_unauthorised(logger));
+
+        entry.on_keygen_request(
+            ceremony_id,
+            self.inner_event_sender.clone(),
+            validator_map,
+            our_idx,
+            signer_idxs,
+        );
+    }
+
+    pub fn process_keygen_data(
+        &mut self,
+        sender_id: AccountId,
+        msg: KeygenDataWrapped,
+    ) -> Option<KeygenResultInfo> {
+        let KeygenDataWrapped { ceremony_id, data } = msg;
+
+        // TODO: how can I avoid cloning the logger?
+        let logger = self.logger.clone();
+
+        let state = self
+            .keygen_states
+            .entry(ceremony_id)
+            .or_insert_with(|| KeygenState::new_unauthorised(logger));
+
+        let res = state.process_message(sender_id, data);
+
+        // TODO: this is not a complete solution, we need to clean up the state
+        // when it is failed too
+        if res.is_some() {
+            self.keygen_states.remove(&ceremony_id);
+            slog::debug!(
+                self.logger, "Removed a successfully finished keygen ceremony";
+                CEREMONY_ID_KEY => ceremony_id
+            );
+        }
+
+        res
     }
 }
 
 #[cfg(test)]
 impl KeygenManager {
-    pub fn get_state_for(&self, ceremony_id: CeremonyId) -> Option<&KeygenState> {
-        self.keygen_states.get(&ceremony_id)
-    }
-
-    pub fn get_stage_for(&self, ceremony_id: CeremonyId) -> Option<KeygenStage> {
-        self.get_state_for(ceremony_id).map(|s| s.get_stage())
-    }
-
     pub fn expire_all(&mut self) {
-        self.phase_timeout = std::time::Duration::from_secs(0);
+        for (_, state) in &mut self.keygen_states {
+            state.set_expiry_time(std::time::Instant::now());
+        }
+    }
+
+    pub fn get_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
+        self.keygen_states
+            .get(&ceremony_id)
+            .and_then(|s| s.get_stage())
     }
 }

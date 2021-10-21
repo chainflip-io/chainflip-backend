@@ -3,16 +3,14 @@
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
 
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-    fmt::Display,
-};
+use std::{collections::HashMap, convert::TryInto, fmt::Display};
 
 use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
-use super::{client_inner::MultisigMessage, SchnorrSignature};
+use super::{
+    client_inner::MultisigMessage, common::BroadcastVerificationMessage, SchnorrSignature,
+};
 use pallet_cf_vaults::crypto::destructure_pubkey;
 
 use crate::signing::crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar};
@@ -57,15 +55,6 @@ pub struct SigningCommitment {
 
 pub type Comm1 = SigningCommitment;
 
-/// Data received by a single party for a given
-/// stage from all parties (includes our own for
-/// simplicity). Used for broadcast verification.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BroadcastVerificationMessage<T: Clone> {
-    /// Data is expected to be ordered by signer_idx
-    pub data: Vec<T>,
-}
-
 pub type VerifyComm2 = BroadcastVerificationMessage<Comm1>;
 pub type VerifyLocalSig4 = BroadcastVerificationMessage<LocalSig3>;
 
@@ -87,7 +76,7 @@ macro_rules! derive_from_enum {
 
 macro_rules! derive_try_from_variant {
     ($variant: ty, $variant_path: path, $enum: ty) => {
-        impl TryFrom<$enum> for $variant {
+        impl std::convert::TryFrom<$enum> for $variant {
             type Error = &'static str;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {
@@ -186,7 +175,7 @@ fn gen_group_commitment(
 
 /// Generate a lagrange coefficient for party `signer_index`
 /// according to Section 4 (page 9)
-fn get_lagrange_coeff(
+pub fn get_lagrange_coeff(
     signer_index: usize,
     all_signer_indices: &[usize],
 ) -> Result<Scalar, &'static str> {

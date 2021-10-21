@@ -1,10 +1,7 @@
 use futures::StreamExt;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::{
-    logging,
-    signing::client::{client_inner::MultisigClient, PHASE_TIMEOUT},
-};
+use crate::{logging, signing::client::client_inner::MultisigClient};
 
 use super::helpers;
 
@@ -28,7 +25,7 @@ async fn check_signing_db() {
     let id = client1.get_my_account_id();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let logger = logging::test_utils::create_test_logger();
-    let restarted_client = MultisigClient::new(id, db, tx, PHASE_TIMEOUT, &logger);
+    let restarted_client = MultisigClient::new(id, db, tx, &logger);
 
     // 4. Replace the client
     ctx.substitute_client_at(

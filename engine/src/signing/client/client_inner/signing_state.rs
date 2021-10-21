@@ -2,13 +2,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
+use crate::logging::CEREMONY_ID_KEY;
 use crate::p2p::AccountId;
 
 use crate::signing::{MessageHash, SigningOutcome};
 
-use super::client_inner::{CeremonyOutcomeResult, Error, MultisigMessage};
+use super::client_inner::{CeremonyOutcomeResult, Error, EventSender, MultisigMessage};
 
 use super::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
@@ -20,8 +21,6 @@ use super::utils::ValidatorMaps;
 use super::{InnerEvent, KeygenResultInfo, SchnorrSignature};
 
 use super::frost_stages::AwaitCommitments1;
-
-type EventSender = mpsc::UnboundedSender<InnerEvent>;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);
 
@@ -109,10 +108,7 @@ impl SigningState {
         key_info: KeygenResultInfo,
         data: MessageHash,
         event_sender: EventSender,
-        logger: &slog::Logger,
     ) {
-        let logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
-
         if self.inner.is_some() {
             slog::warn!(
                 self.logger,
@@ -121,7 +117,11 @@ impl SigningState {
             return;
         }
 
+        // Use the updated logger once we know the ceremony id
+        self.logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
         let common = CeremonyCommon {
+            ceremony_id,
             p2p_sender: SigningP2PSender::new(
                 key_info.validator_map.clone(),
                 event_sender.clone(),
@@ -129,7 +129,7 @@ impl SigningState {
             ),
             own_idx: signer_idx,
             all_idxs: signer_idxs,
-            logger: logger.clone(),
+            logger: self.logger.clone(),
         };
 
         let processor = AwaitCommitments1::new(
@@ -150,9 +150,6 @@ impl SigningState {
             validator_map: key_info.validator_map,
             result_sender: event_sender,
         });
-
-        // Use the updated logger once we know the ceremony id
-        self.logger = logger;
 
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a request
@@ -228,10 +225,13 @@ impl SigningState {
                     return;
                 }
 
-                // Check that the validator has access to key
+                // Check that the sender is a participant in the ceremony
                 let sender_idx = match authorised_state.validator_map.get_idx(&id) {
                     Some(idx) => idx,
-                    None => return,
+                    None => {
+                        slog::debug!(self.logger, "Sender {} is not a valid participant", id);
+                        return;
+                    }
                 };
 
                 // Delegate actual processing to the current specific stage
