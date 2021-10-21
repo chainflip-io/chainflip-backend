@@ -240,7 +240,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
-
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             match self
                 .state_chain_rpc_client
@@ -271,6 +270,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 },
             }
         }
+        slog::error!("Exceeded maximum number of retry attempts");
         Err(anyhow::Error::msg(
             "Exceeded maximum number of retry attempts",
         ))
