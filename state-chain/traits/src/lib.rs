@@ -343,8 +343,8 @@ pub trait IsOnline {
 
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
-/// intervals else they are offline.  Those that are online but yet to submit a heartbeat in the
-/// current heartbeat interval are marked as awaiting.
+/// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
+/// interval are marked as awaiting.
 ///
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
@@ -352,19 +352,18 @@ pub struct NetworkState<ValidatorId: Default> {
 	pub awaiting: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// Offline nodes
-	pub offline: Vec<ValidatorId>,
+	/// Number of nodes
+	pub number_of_nodes: u32,
 }
 
 impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
-		let number_offline = self.offline.len() as u32;
 
 		number_online
 			.saturating_mul(100)
-			.checked_div(number_online + number_offline)
+			.checked_div(self.number_of_nodes)
 			.unwrap_or(0)
 	}
 }

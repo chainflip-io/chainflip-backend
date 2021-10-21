@@ -25,7 +25,7 @@ thread_local! {
 		NetworkState {
 			awaiting: vec![],
 			online: vec![],
-			offline: vec![],
+			number_of_nodes: 0,
 		}
 	);
 }

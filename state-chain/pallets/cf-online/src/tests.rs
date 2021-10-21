@@ -78,6 +78,11 @@ mod tests {
 				vec![ALICE],
 				"Alice should be missing after missing one heartbeat"
 			);
+			assert_eq!(
+				MockHeartbeat::network_state().number_of_nodes,
+				1,
+				"We should have one node"
+			);
 		});
 	}
 
@@ -98,10 +103,14 @@ mod tests {
 				"Alice was missing last heartbeat interval"
 			);
 			go_to_interval(3);
+			assert!(
+				MockHeartbeat::network_state().online.is_empty(),
+				"Alice is not online"
+			);
 			assert_eq!(
-				MockHeartbeat::network_state().offline,
-				vec![ALICE],
-				"Alice was offline last heartbeat interval"
+				MockHeartbeat::network_state().number_of_nodes,
+				1,
+				"We should have one node"
 			);
 		});
 	}
@@ -150,10 +159,15 @@ mod tests {
 				"Alice should be offline"
 			);
 
+			assert!(
+				MockHeartbeat::network_state().online.is_empty(),
+				"Alice is now not online"
+			);
+
 			assert_eq!(
-				MockHeartbeat::network_state().offline,
-				vec![ALICE],
-				"We should just have Alice offline in the network state as being validator"
+				MockHeartbeat::network_state().number_of_nodes,
+				1,
+				"We should have one node"
 			);
 		});
 	}

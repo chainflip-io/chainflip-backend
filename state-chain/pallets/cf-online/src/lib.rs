@@ -140,9 +140,8 @@ pub mod pallet {
 					// If the node is online
 					if node.is_online() {
 						network_state.online.push(validator_id);
-					} else {
-						network_state.offline.push(validator_id);
-					};
+					}
+					network_state.number_of_nodes += 1;
 				}
 				// Reset the states for all nodes for this interval
 				Some(node.update_current_interval(false))
