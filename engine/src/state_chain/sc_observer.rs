@@ -16,7 +16,7 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
         SigningInfo, SigningOutcome,
     },
-    state_chain::client::IStateChainRpcClient,
+    state_chain::client::StateChainRpcApi,
 };
 
 pub async fn start<BlockStream, RpcClient>(
@@ -29,7 +29,7 @@ pub async fn start<BlockStream, RpcClient>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RpcClient: IStateChainRpcClient,
+    RpcClient: StateChainRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 

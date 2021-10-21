@@ -8,7 +8,7 @@ use crate::{
     eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::client::IStateChainRpcClient,
+    state_chain::client::StateChainRpcApi,
 };
 
 use sp_runtime::AccountId32;
@@ -28,7 +28,7 @@ use slog::o;
 use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_witness<RPCCLient: IStateChainRpcClient>(
+pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,

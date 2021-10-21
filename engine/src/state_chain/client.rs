@@ -151,7 +151,7 @@ pub struct StateChainRpcClient {
 /// Wraps the substrate client library methods
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait IStateChainRpcClient {
+pub trait StateChainRpcApi {
     async fn submit_extrinsic_rpc<Extrinsic>(
         &self,
         nonce: u32,
@@ -165,7 +165,7 @@ pub trait IStateChainRpcClient {
 }
 
 #[async_trait]
-impl IStateChainRpcClient for StateChainRpcClient {
+impl StateChainRpcApi for StateChainRpcClient {
     async fn submit_extrinsic_rpc<Extrinsic>(
         &self,
         nonce: u32,
@@ -218,7 +218,7 @@ impl IStateChainRpcClient for StateChainRpcClient {
     }
 }
 
-pub struct StateChainClient<RpcClient: IStateChainRpcClient> {
+pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     metadata: substrate_subxt::Metadata,
     nonce: AtomicU32,
     /// Our Node's AcccountId
@@ -227,7 +227,7 @@ pub struct StateChainClient<RpcClient: IStateChainRpcClient> {
     state_chain_rpc_client: RpcClient,
 }
 
-impl<RpcClient: IStateChainRpcClient> StateChainClient<RpcClient> {
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
@@ -456,7 +456,7 @@ mod tests {
                 .unwrap();
         let tx_hash = H256::from(bytes);
 
-        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
@@ -489,7 +489,7 @@ mod tests {
     async fn tx_retried_and_nonce_incremented_on_fail_due_to_nonce_each_time() {
         let logger = create_test_logger();
 
-        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(MAX_RETRY_ATTEMPTS)
@@ -528,7 +528,7 @@ mod tests {
         let logger = create_test_logger();
 
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
-        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
@@ -572,7 +572,7 @@ mod tests {
         let tx_hash = H256::from(bytes);
 
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
-        let mut mock_state_chain_rpc_client = MockIStateChainRpcClient::new();
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
