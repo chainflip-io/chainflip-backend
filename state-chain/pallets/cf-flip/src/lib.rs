@@ -14,6 +14,9 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
@@ -72,6 +75,9 @@ pub mod pallet {
 
 		/// Providing updates on staking activity
 		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -133,7 +139,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
 			slashing_rate: T::Balance,
