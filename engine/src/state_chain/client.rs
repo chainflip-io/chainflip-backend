@@ -30,6 +30,7 @@ use substrate_subxt::{
 
 use crate::settings;
 
+#[cfg(test)]
 use mockall::automock;
 
 use async_trait::async_trait;
@@ -149,7 +150,7 @@ pub struct StateChainRpcClient {
 }
 
 /// Wraps the substrate client library methods
-#[automock]
+#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait IStateChainRpcClient {
     async fn submit_extrinsic_rpc<Extrinsic>(
@@ -224,16 +225,16 @@ impl IStateChainRpcClient for StateChainRpcClient {
     }
 }
 
-pub struct StateChainClient<RPCClient: IStateChainRpcClient> {
+pub struct StateChainClient<RpcClient: IStateChainRpcClient> {
     nonce: AtomicU32,
 
     /// Our Node's AcccountId
     pub our_account_id: AccountId32,
 
-    state_chain_rpc_client: RPCClient,
+    state_chain_rpc_client: RpcClient,
 }
 
-impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
+impl<RpcClient: IStateChainRpcClient> StateChainClient<RpcClient> {
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
@@ -263,6 +264,7 @@ impl<RPCClient: IStateChainRpcClient> StateChainClient<RPCClient> {
                 }
                 Err(rpc_err) => match rpc_err {
                     RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "priority is too low" i.e. nonce is too low
                         code: ErrorCode::ServerError(1014),
                         ..
                     }) => {
@@ -376,9 +378,9 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(anyhow::Error::msg)?[..],
     )?)?;
+
     let metadata_c = metadata.clone();
     let system_pallet_metadata = metadata_c.module("System")?;
-
     let state_chain_rpc_client = StateChainRpcClient {
         metadata,
         events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),

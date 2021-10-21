@@ -19,9 +19,9 @@ use crate::{
     state_chain::client::IStateChainRpcClient,
 };
 
-pub async fn start<BlockStream, RPCClient>(
+pub async fn start<BlockStream, RpcClient>(
     settings: &settings::Settings,
-    state_chain_client: Arc<super::client::StateChainClient<RPCClient>>,
+    state_chain_client: Arc<super::client::StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -29,7 +29,7 @@ pub async fn start<BlockStream, RPCClient>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RPCClient: IStateChainRpcClient,
+    RpcClient: IStateChainRpcClient,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
