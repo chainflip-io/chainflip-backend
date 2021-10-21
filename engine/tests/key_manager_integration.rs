@@ -45,7 +45,7 @@ pub async fn test_all_key_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -61,27 +61,26 @@ pub async fn test_all_key_manager_events() {
 
                     assert_eq!(signed,&true);
                     assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    return true
+                    true
 
                 } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
 
                     assert_eq!(signed,&false);
                     assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                    return true
+                    true
 
                  } else if new_key == &ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap(){
 
                     assert_eq!(signed,&false);
                     assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                    return true
+                    true
 
                 } else {
                     panic!("KeyChange event with unexpected key: {:?}", new_key);
                 }
             }
-            KeyManagerEvent::Refunded { .. } => {
-                return true
+            KeyManagerEvent::Shared(_) => {
+                true
             },
-        }
-        ).unwrap();
+        }).unwrap();
 }

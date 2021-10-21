@@ -23,6 +23,7 @@ use curv::elliptic::curves::traits::*;
 use curv::cryptographic_primitives::commitments::hash_commitment::HashCommitment;
 use curv::cryptographic_primitives::commitments::traits::Commitment;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
+use curv::elliptic::curves::secp256_k1::Secp256k1Point;
 use curv::BigInt;
 
 use itertools::Itertools;
@@ -59,12 +60,13 @@ pub struct KeyShare {
 impl Keys {
     pub fn phase1_create(index: usize) -> Keys {
         let u: FE = ECScalar::new_random();
-        let y = &ECPoint::generator() * &u;
+        let unscaled_point: Secp256k1Point = ECPoint::generator();
+        let y = unscaled_point * u;
 
         Keys {
             u_i: u,
             y_i: y,
-            party_index: index.clone(),
+            party_index: index,
         }
     }
 
@@ -81,9 +83,9 @@ impl Keys {
     pub fn phase1_verify_com_phase2_distribute(
         &self,
         params: &Parameters,
-        blind_vec: &Vec<BigInt>,
-        y_vec: &Vec<GE>,
-        bc1_vec: &Vec<KeyGenBroadcastMessage1>,
+        blind_vec: &[BigInt],
+        y_vec: &[GE],
+        bc1_vec: &[KeyGenBroadcastMessage1],
         parties: &[usize],
     ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), InvalidKey> {
         // test length:
@@ -115,7 +117,7 @@ impl Keys {
         );
 
         match invalid_decom_indexes.len() {
-            0 => Ok((vss_scheme, secret_shares, self.party_index.clone())),
+            0 => Ok((vss_scheme, secret_shares, self.party_index)),
             _ => Err(InvalidKey(invalid_decom_indexes)),
         }
     }
@@ -123,9 +125,9 @@ impl Keys {
     pub fn phase2_verify_vss_construct_keypair(
         &self,
         params: &Parameters,
-        y_vec: &Vec<GE>,
-        secret_shares_vec: &Vec<FE>,
-        vss_scheme_vec: &Vec<VerifiableSS<GE>>,
+        y_vec: &[GE],
+        secret_shares_vec: &[FE],
+        vss_scheme_vec: &[VerifiableSS<GE>],
         index: &usize,
     ) -> Result<(KeyShare, Vec<GE>), InvalidSS> {
         assert_eq!(y_vec.len(), params.share_count);
@@ -147,39 +149,41 @@ impl Keys {
             })
             .collect_vec();
 
-        match invalid_idxs.len() {
-            0 => {
-                let mut y_vec_iter = y_vec.iter();
-                let y0 = y_vec_iter.next().unwrap();
-                let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);
-                let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
+        // TODO: Why is it safe to unwrap in these 3 places below. Use expect and explain why
+        if invalid_idxs.is_empty() {
+            let mut y_vec_iter = y_vec.iter();
+            let y0 = y_vec_iter
+                .next()
+                .expect("Not called until we have a threshold greater than 0");
+            let y = y_vec_iter.fold(*y0, |acc, x| acc + x);
+            let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
 
-                let n = params.share_count;
-                let t = params.threshold;
+            let n = params.share_count;
+            let t = params.threshold;
 
-                let pubkeys: Vec<_> = (1..=n)
-                    .map(|idx| {
-                        let idx_scalar: FE = ECScalar::from(&BigInt::from(idx as u32));
+            let pubkeys: Vec<_> = (1..=n)
+                .map(|idx| {
+                    let idx_scalar: FE = ECScalar::from(&BigInt::from(idx as u32));
 
-                        (1..=n)
-                            .map(|j| {
-                                (0..=t)
-                                    .map(|k| vss_scheme_vec[j - 1].commitments[k])
-                                    .rev()
-                                    .reduce(|acc, x| acc * idx_scalar + x)
-                                    .unwrap()
-                            })
-                            .reduce(|acc, x| acc + x)
-                            .unwrap()
-                    })
-                    .collect();
+                    (1..=n)
+                        .map(|j| {
+                            (0..=t)
+                                .map(|k| vss_scheme_vec[j - 1].commitments[k])
+                                .rev()
+                                .reduce(|acc, x| acc * idx_scalar + x)
+                                .expect("Length is equal to the threshold size we have")
+                        })
+                        .reduce(|acc, x| acc + x)
+                        .expect("Length is equal to total shares we have")
+                })
+                .collect();
 
-                // Sanity check: our pubkey is among generated pubkeys for all parties
-                assert_eq!(pubkeys[index - 1], GE::generator() * x_i);
+            // Sanity check: our pubkey is among generated pubkeys for all parties
+            assert_eq!(pubkeys[index - 1], GE::generator() * x_i);
 
-                Ok((KeyShare { y, x_i }, pubkeys))
-            }
-            _ => Err(InvalidSS(invalid_idxs)),
+            Ok((KeyShare { y, x_i }, pubkeys))
+        } else {
+            Err(InvalidSS(invalid_idxs))
         }
     }
 }

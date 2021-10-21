@@ -61,6 +61,7 @@ impl pallet_cf_governance::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

@@ -51,7 +51,8 @@ impl P2PSender for SigningP2PSender {
 
     fn send(&self, reciever_idx: usize, data: Self::Data) {
         let msg: MultisigMessage = SigningDataWrapped::new(data, self.ceremony_id).into();
-        let data = bincode::serialize(&msg).unwrap();
+        let data = bincode::serialize(&msg)
+            .unwrap_or_else(|e| panic!("Could not serialise MultisigMessage: {:?}: {}", msg, e));
         self.sender.send(reciever_idx, data);
     }
 }
@@ -215,9 +216,9 @@ impl SigningState {
                 self.add_delayed(id, m);
             }
             Some(authorised_state) => {
-                // We know it is safe to unwrap because the value is None
-                // for a brief period of time when we swap states below
-                let stage = authorised_state.stage.as_mut().unwrap();
+                let stage = authorised_state.stage.as_mut().expect(
+                    "The value is only None for a brief period of time, when we swap states, below",
+                );
 
                 // TODO: check that the party is a signer for this ceremony
 
@@ -263,7 +264,11 @@ impl SigningState {
                                 let blamed_parties = bad_validators
                                     .iter()
                                     .map(|idx| {
-                                        authorised_state.validator_map.get_id(*idx).unwrap().clone()
+                                        authorised_state
+                                            .validator_map
+                                            .get_id(*idx)
+                                            .expect("Should have all ids here")
+                                            .clone()
                                     })
                                     .collect();
 

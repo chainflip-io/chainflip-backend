@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! # Chainflip governance
+#![feature(extended_key_value_attributes)]
+#![doc = include_str!("../README.md")]
 
 use codec::Decode;
 use codec::Encode;
@@ -140,13 +140,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new proposal was submitted [proposal_id]
+		/// A new proposal was submitted \[proposal_id\]
 		Proposed(ProposalId),
-		/// A proposal was executed [proposal_id]
+		/// A proposal was executed \[proposal_id\]
 		Executed(ProposalId),
-		/// A proposal is expired [proposal_id]
+		/// A proposal is expired \[proposal_id\]
 		Expired(ProposalId),
-		/// A proposal was approved [proposal_id]
+		/// A proposal was approved \[proposal_id\]
 		Approved(ProposalId),
 	}
 
@@ -167,6 +167,15 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Propose a governance ensured extrinsic
+		/// Propose a governance ensured extrinsic.
+		///
+		/// ## Events
+		///
+		/// - [Proposed](Event::Proposed): Successfully proposed the extrinsic to Governance Members.
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
 		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -181,7 +190,20 @@ pub mod pallet {
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
+
 		/// Sets a new set of governance members
+		/// **Can only be called via the Governance Origin**
+		///
+		/// Sets a new set of governance members. Note that this can be called with an empty vector
+		/// to remove the possibility to govern the chain at all.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): The caller is not the Governance Origin.
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -193,7 +215,19 @@ pub mod pallet {
 			<Members<T>>::put(accounts);
 			Ok(().into())
 		}
+
 		/// Approve a proposal by a given proposal id
+		/// Approve a Proposal.
+		///
+		/// ## Events
+		///
+		/// - [Approved](Event::Approved): The Proposal was successfully approved.
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
+		/// - [ProposalNotFound](Error::ProposalNotFound): There is no Proposal with this ID.
+		/// - [AlreadyApproved](Error::AlreadyApproved): This Governance Member has already approved this Proposal.
 		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -206,10 +240,22 @@ pub mod pallet {
 			);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
-			// Governance member don't pay fees
+			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
-		/// Execute the proposal
+
+		/// Execute a Proposal.
+		///
+		/// ## Events
+		///
+		/// - [Executed](Event::Executed): The Proposal was successfully executed.
+		///
+		/// ## Errors
+		///
+		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
+		/// - [ProposalNotFound](Error::ProposalNotFound): there is no Proposal with this `id`.
+		/// - [DecodeOfCallFailed](Error::DecodeOfCallFailed): the call is not a valid extrinsic submission.
+		/// - [MajorityNotReached](Error::MajorityNotReached): the Proposal has not achieved Quorum.
 		#[pallet::weight(10_000)]
 		pub fn execute(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -225,7 +271,14 @@ pub mod pallet {
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
+
+		/// **Can only be called via the Governance Origin**
+		///
 		/// Execute an extrinsic as root
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin): the caller is not the Governance Origin.
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
@@ -331,11 +384,9 @@ impl<T: Config> Pallet<T> {
 				// Execute the extrinsic
 				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
 				// Check the result and emit events
-				if result.is_ok() {
-					Self::deposit_event(Event::Executed(id));
-				} else {
-					// Get the error during the execution and return it
-					return Err(result.unwrap_err().error);
+				match result {
+					Ok(_) => Self::deposit_event(Event::Executed(id)),
+					Err(e) => return Err(e.error),
 				}
 				// Remove the proposal from storage
 				<Proposals<T>>::remove(id);
@@ -351,10 +402,10 @@ impl<T: Config> Pallet<T> {
 				Ok(())
 			} else {
 				// Emit an event if the decode of a call failed
-				return Err(Error::<T>::DecodeOfCallFailed.into());
+				Err(Error::<T>::DecodeOfCallFailed.into())
 			}
 		} else {
-			return Err(Error::<T>::MajorityNotReached.into());
+			Err(Error::<T>::MajorityNotReached.into())
 		}
 	}
 	/// Checks if the majority for a proposal is reached
@@ -376,7 +427,7 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Decodes a encoded representation of a Call
 	/// Returns None if the encode of the extrinsic has failed
-	fn decode_call(call: &Vec<u8>) -> Option<<T as Config>::Call> {
-		Decode::decode(&mut &call[..]).ok()
+	fn decode_call(call: &[u8]) -> Option<<T as Config>::Call> {
+		Decode::decode(&mut &(*call)).ok()
 	}
 }

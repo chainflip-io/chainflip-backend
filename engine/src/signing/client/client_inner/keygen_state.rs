@@ -70,7 +70,7 @@ impl KeygenState {
 
         let mut state = KeygenState {
             stage: KeygenStage::AwaitingBroadcast1,
-            sss: SharedSecretState::new(idx, params.clone(), logger),
+            sss: SharedSecretState::new(idx, params, logger),
             event_sender,
             signer_idx: idx,
             all_signer_idxs,
@@ -96,13 +96,11 @@ impl KeygenState {
             KeygenStage::KeyReady | KeygenStage::Abandoned => vec![],
         };
 
-        let awaited_ids = awaited_idxs
+        awaited_idxs
             .into_iter()
             .map(|idx| self.signer_idx_to_validator_id(idx))
             .cloned()
-            .collect_vec();
-
-        awaited_ids
+            .collect_vec()
     }
 
     /// Get index in the (sorted) array of all signers
@@ -111,9 +109,10 @@ impl KeygenState {
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
-        // Should be safe to unwrap because the `idx` is carefully
-        // chosen by our on module
-        let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
+        let id = self
+            .maps_for_validator_id_and_idx
+            .get_id(idx)
+            .expect("Idx carefully chosen by our own module");
         id
     }
 
@@ -199,7 +198,7 @@ impl KeygenState {
             }
         }
 
-        return None;
+        None
     }
 
     fn initiate_keygen_inner(&mut self) {
@@ -354,18 +353,12 @@ impl KeygenState {
 
     /// check is the KeygenStage is Abandoned
     pub fn is_abandoned(&self) -> bool {
-        match self.stage {
-            KeygenStage::Abandoned => true,
-            _ => false,
-        }
+        matches!(self.stage, KeygenStage::Abandoned)
     }
 
     /// check is the KeygenStage is in the KeyReady stage
     pub fn is_finished(&self) -> bool {
-        match self.stage {
-            KeygenStage::KeyReady => true,
-            _ => false,
-        }
+        matches!(self.stage, KeygenStage::KeyReady)
     }
 
     #[cfg(test)]

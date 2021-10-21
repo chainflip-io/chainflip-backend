@@ -109,7 +109,7 @@ impl KeygenManager {
             },
         };
 
-        return None;
+        None
     }
 
     fn add_delayed(&mut self, ceremony_id: CeremonyId, sender_id: AccountId, bc1: Broadcast1) {

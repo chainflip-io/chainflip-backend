@@ -33,7 +33,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
 			[0; 32],
-			new_public_key.clone(),
+			new_public_key,
 			SchnorrSigTruncPubkey::default(),
 			// TODO: Use a separate (non ceremony_id) nonce here, will be fixed in upcoming broadcast epic
 			// https://github.com/chainflip-io/chainflip-backend/pull/495
@@ -79,7 +79,7 @@ impl<T: Config>
 		request: ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(ceremony_id, request));
-		Ok(().into())
+		Ok(())
 	}
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
@@ -100,7 +100,7 @@ impl<T: Config>
 							message_hash,
 							vault_rotation
 								.new_public_key
-								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
+								.ok_or(RotationError::NewPublicKeyNotSet)?,
 							signature,
 							ceremony_id,
 						) {
@@ -121,7 +121,7 @@ impl<T: Config>
 				}
 			}
 			ThresholdSignatureResponse::Error(bad_validators) => {
-				T::RotationHandler::penalise(bad_validators.clone());
+				T::RotationHandler::penalise(&bad_validators);
 				Pallet::<T>::abort_rotation();
 				Err(RotationError::BadValidators(bad_validators))
 			}
@@ -165,7 +165,7 @@ impl<T: Config> EthereumChain<T> {
 			vec![],
 			false,
 		)
-		.encode_input(&vec![
+		.encode_input(&[
 			Token::Tuple(vec![
 				Token::Uint(message_hash.into()),
 				Token::Uint(signature.s.into()),

@@ -71,8 +71,14 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSigTruncPubkey;
-	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
+	use cf_traits::{Chainflip, EpochIndex, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	pub struct BlockHeightWindow {
+		pub from: u64,
+		pub to: Option<u64>,
+	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -82,8 +88,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// A public key
 		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default + MaybeSerializeDeserialize;
 		/// A transaction
@@ -122,6 +126,18 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
 		StorageMap<_, Blake2_128Concat, NonceIdentifier, Nonce>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn active_windows)]
+	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		EpochIndex,
+		Blake2_128Concat,
+		Chain,
+		BlockHeightWindow,
+		ValueQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -279,13 +295,13 @@ impl<T: Config> Pallet<T> {
 				.collect(),
 		));
 		ActiveChainVaultRotations::<T>::remove_all();
-		T::RotationHandler::abort();
+		T::RotationHandler::vault_rotation_aborted();
 	}
 
 	/// Provide the next ceremony id
 	fn next_ceremony_id() -> CeremonyId {
 		CurrentRequest::<T>::mutate(|next_ceremony_id| {
-			*next_ceremony_id = *next_ceremony_id + 1;
+			*next_ceremony_id += 1;
 			*next_ceremony_id
 		})
 	}
@@ -305,7 +321,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: Chain::Ethereum,
-			validator_candidates: candidates.clone(),
+			validator_candidates: candidates,
 		};
 
 		KeygenRequestResponse::<T>::make_request(Self::next_ceremony_id(), keygen_request)
@@ -386,9 +402,9 @@ impl<T: Config>
 				// Abort this key generation request
 				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
-				T::RotationHandler::penalise(bad_validators);
+				T::RotationHandler::penalise(&bad_validators);
 				// Report back we have processed the failure
-				Ok(().into())
+				Ok(())
 			}
 		}
 	}
@@ -426,16 +442,44 @@ impl<T: Config>
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
-			VaultRotationResponse::Success { tx_hash } => {
+			VaultRotationResponse::Success {
+				tx_hash,
+				block_number,
+			} => {
 				if let Some(vault_rotation) = ActiveChainVaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
 					match vault_rotation.keygen_request.chain {
-						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
-							vault_rotation
-								.new_public_key
-								.ok_or_else(|| RotationError::NewPublicKeyNotSet)?,
-							tx_hash,
-						),
+						Chain::Ethereum => {
+							// This is roughly the number of blocks for 14 days in Ethereum
+							const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
+
+							// Set the leaving block number for the outgoing set for this epoch
+							ActiveWindows::<T>::mutate(
+								T::EpochInfo::epoch_index(),
+								Chain::Ethereum,
+								|outgoing_set| {
+									(*outgoing_set).to =
+										Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+								},
+							);
+
+							// Record this new incoming set for the next epoch
+							ActiveWindows::<T>::insert(
+								T::EpochInfo::epoch_index().saturating_add(1u32),
+								Chain::Ethereum,
+								BlockHeightWindow {
+									from: block_number,
+									to: None,
+								},
+							);
+
+							EthereumChain::<T>::vault_rotated(
+								vault_rotation
+									.new_public_key
+									.ok_or(RotationError::NewPublicKeyNotSet)?,
+								tx_hash,
+							)
+						}
 					}
 				}
 				// This request is complete
