@@ -198,7 +198,7 @@ pub mod pallet {
 
 			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded so we might need an
 			//          intermediate VaultRotationStatus::AwaitingOtherKeygens.
-			//       2. This is implicitly also broadcasts the transaction - could be made clearer.
+			//       2. This also implicitly broadcasts the transaction - could be made clearer.
 			//       3. This is eth-specific, should be chain-agnostic.
 			T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
 				<Self as NonceProvider<Ethereum>>::next_nonce(),
