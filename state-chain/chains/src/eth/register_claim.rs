@@ -121,15 +121,15 @@ mod test_register_claim {
 
 	#[test]
 	fn test_claim_payload() {
-		// TODO: this test would be more robust with randomly generated parameters.
+		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
 		const AMOUNT: u128 = 1234567890;
-		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = [0x7f; 20];
-		const FAKE_SIG: [u8; 32] = [0xe1; 32];
-		const TEST_ACCT: [u8; 32] = [0x42; 32];
-		const TEST_ADDR: [u8; 20] = [0xcf; 20];
+		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
+		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
+		const TEST_ACCT: [u8; 32] = asymmetrise([0x42; 32]);
+		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
 		let stake_manager = ethabi::Contract::load(
 			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),

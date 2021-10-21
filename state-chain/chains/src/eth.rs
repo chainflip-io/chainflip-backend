@@ -13,8 +13,11 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
-use sp_std::convert::{TryFrom, TryInto};
 use sp_std::prelude::*;
+use sp_std::{
+	convert::{TryFrom, TryInto},
+	str,
+};
 
 //------------------------//
 // TODO: these should be on-chain constants or config items. See github issue #520.
@@ -115,6 +118,7 @@ impl AggKey {
 	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to the required
 	/// 0 / 1 representation by subtracting 2 from the supplied values, so if the source format doesn't conform
 	/// to the expected 2/3 even/odd convention, bad things will happen.
+	#[cfg(feature = "std")]
 	fn from_pubkey_compressed(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
 		let pub_key_y_parity = pub_key_y_parity - 2;
@@ -130,27 +134,31 @@ impl AggKey {
 /// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
 /// length of the slice is 33 bytes.
 impl TryFrom<&[u8]> for AggKey {
-	type Error = String;
+	type Error = &'static str;
 
 	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
 		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
 			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
-				let x: [u8; 32] = pub_key_x
-					.try_into()
-					.map_err(|e| format!("Invalid aggKey format: {:?}", e))?;
+				let x: [u8; 32] = pub_key_x.try_into().map_err(|e| {
+					frame_support::debug::error!("Invalid aggKey format: {:?}", e);
+					"Invalid aggKey format: x coordinate should be 32 bytes."
+				})?;
 
 				Ok(AggKey::from((pub_key_y_parity - 2, x)))
 			} else {
-				Err(format!(
+				frame_support::debug::error!(
 					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
-					pub_key_y_parity
-				))
+					pub_key_y_parity,
+				);
+
+				Err("Invalid aggKey format: Leading byte should be 2 or 3")
 			}
 		} else {
-			Err(format!(
+			frame_support::debug::error!(
 				"Invalid aggKey format: Should be 33 bytes total, got {}",
 				bytes.len()
-			))
+			);
+			Err("Invalid aggKey format: Should be 33 bytes total.")
 		}
 	}
 }
@@ -244,6 +252,15 @@ pub trait ChainflipContractCall {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Asymmetrisation is a very complex procedure that ensures our arrays are not symmetric.
+	pub const fn asymmetrise<const T: usize>(array: [u8; T]) -> [u8; T] {
+		let mut res = array;
+		if T > 1 && res[0] == res[1] {
+			res[0] = res[0].wrapping_add(1);
+		}
+		res
+	}
 
 	#[test]
 	fn test_agg_key_conversion() {

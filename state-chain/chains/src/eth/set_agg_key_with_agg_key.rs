@@ -133,12 +133,12 @@ mod test_set_agg_key_with_agg_key {
 
 	#[test]
 	fn test_set_agg_key_with_agg_key_payload() {
-		// TODO: this test would be more robust with randomly generated parameters.
+		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const NONCE: u64 = 6;
-		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = [0x7f; 20];
-		const FAKE_SIG: [u8; 32] = [0xe1; 32];
-		const FAKE_NEW_KEY_X: [u8; 32] = [0xcf; 32];
+		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
+		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
+		const FAKE_NEW_KEY_X: [u8; 32] = asymmetrise([0xcf; 32]);
 		const FAKE_NEW_KEY_Y: u8 = 1;
 
 		let key_manager = ethabi::Contract::load(
