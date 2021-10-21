@@ -133,12 +133,12 @@ pub mod pallet {
 
 			Nodes::<T>::translate(|validator_id, mut node: Liveness| {
 				if T::EpochInfo::is_validator(&validator_id) {
+					// Has the node submitted if not mark them as awaiting a heartbeat
+					if !node.has_submitted() {
+						network_state.awaiting.push(validator_id.clone());
+					}
+					// If the node is online
 					if node.is_online() {
-						// Has the node submitted if not mark them as awaiting but are still
-						// considered as online
-						if !node.has_submitted() {
-							network_state.awaiting.push(validator_id.clone());
-						}
 						network_state.online.push(validator_id);
 					} else {
 						network_state.offline.push(validator_id);
