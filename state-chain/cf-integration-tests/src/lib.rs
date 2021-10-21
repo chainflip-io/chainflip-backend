@@ -16,7 +16,7 @@ mod tests {
 		Timestamp, Validator, Vaults,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -274,9 +274,8 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert_eq!(
-						Online::nodes(account),
-						None,
+					assert!(
+						!Online::is_online(account),
 						"node should have not sent a heartbeat"
 					);
 				}
