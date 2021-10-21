@@ -317,7 +317,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo check --all-targets --locked --release
+          RUSTFLAGS="-D warnings" cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
