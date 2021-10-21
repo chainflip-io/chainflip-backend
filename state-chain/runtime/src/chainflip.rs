@@ -1,7 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
-	Vaults, Witnesser,
+	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation, Rewards,
+	Runtime, Validator, Vaults, Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
 use cf_chains::{
@@ -21,7 +21,7 @@ use codec::{Decode, Encode};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
 use sp_std::cmp::min;
@@ -278,11 +278,13 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				)
 				.into()
 			}
-			Self::SetAggKeyWithAggKeyBroadcast(call) => {
-				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					contract_call_to_unsigned_tx(call.clone(), &signature),
-				))
-			}
+			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
+				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
+					call.clone(),
+					&signature,
+					Environment::key_manager_address(),
+				)),
+			),
 		}
 	}
 }
@@ -290,11 +292,11 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	call: C,
 	signature: &eth::SchnorrVerificationComponents,
+	contract_address: H160,
 ) -> eth::UnsignedTransaction {
 	eth::UnsignedTransaction {
-		// TODO: get chain_id and contract from on-chain.
-		chain_id: eth::CHAIN_ID_RINKEBY,
-		contract: eth::stake_manager_contract_address().into(),
+		chain_id: Environment::ethereum_chain_id(),
+		contract: contract_address,
 		data: call.abi_encode_with_signature(signature),
 		..Default::default()
 	}

@@ -13,7 +13,7 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
-use sp_std::convert::TryFrom;
+use sp_std::convert::{TryFrom, TryInto};
 use sp_std::prelude::*;
 
 //------------------------//
@@ -125,10 +125,40 @@ impl AggKey {
 	}
 }
 
+/// [TryFrom] implementation to convert some bytes to an [AggKey].
+///
+/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
+/// length of the slice is 33 bytes.
+impl TryFrom<&[u8]> for AggKey {
+	type Error = String;
+
+	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
+			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
+				let x: [u8; 32] = pub_key_x
+					.try_into()
+					.map_err(|e| format!("Invalid aggKey format: {:?}", e))?;
+
+				Ok(AggKey::from((pub_key_y_parity - 2, x)))
+			} else {
+				Err(format!(
+					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
+					pub_key_y_parity
+				))
+			}
+		} else {
+			Err(format!(
+				"Invalid aggKey format: Should be 33 bytes total, got {}",
+				bytes.len()
+			))
+		}
+	}
+}
+
 #[cfg(feature = "std")]
 impl From<secp256k1::PublicKey> for AggKey {
 	fn from(key: secp256k1::PublicKey) -> Self {
-		AggKey::from_y_x_compressed(key.serialize())
+		AggKey::from_pubkey_compressed(key.serialize())
 	}
 }
 
@@ -227,6 +257,21 @@ mod tests {
 		let mut bytes = [0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::from_pubkey_compressed(bytes);
+		assert_eq!(key.pub_key_y_parity, 1);
+	}
+
+	#[test]
+	fn test_agg_key_conversion_with_try_from() {
+		// 2 == even
+		let mut bytes = vec![0u8; 33];
+		bytes[0] = 2;
+		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
+		assert_eq!(key.pub_key_y_parity, 0);
+
+		// 3 == odd
+		let mut bytes = vec![0u8; 33];
+		bytes[0] = 3;
+		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
 		assert_eq!(key.pub_key_y_parity, 1);
 	}
 }

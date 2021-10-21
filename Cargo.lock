@@ -808,6 +808,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex",
+ "hex-literal",
  "parity-scale-codec",
  "rlp",
  "secp256k1",

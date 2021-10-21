@@ -88,6 +88,7 @@ impl SetAggKeyWithAggKey {
 mod test_set_agg_key_with_agg_key {
 	use super::*;
 	use frame_support::assert_ok;
+	use sp_runtime::traits::{Hash, Keccak256};
 
 	#[test]
 	// There have been obtuse test failures due to the loading of the contract failing
@@ -96,6 +97,38 @@ mod test_set_agg_key_with_agg_key {
 		assert_ok!(ethabi::Contract::load(
 			std::include_bytes!("../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
 		));
+	}
+
+	#[test]
+	fn test_known_payload() {
+		let expected_payload = Keccak256::hash(
+			hex_literal::hex!(
+				"
+				24969d5d 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000000 1742daac d4dbfbe6 6d4c8965
+				55029587 3c683cb3 b65019d3 a53975ba
+				553cc31d 00000000 00000000 00000000
+				00000000 00000000 00000000 00000000
+				00000001"
+			)
+			.as_ref(),
+		);
+
+		let call = SetAggKeyWithAggKey::new_unsigned(
+			0,
+			AggKey::from_pubkey_compressed(hex_literal::hex!(
+				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
+			)),
+		);
+
+		assert_eq!(call.signing_payload(), expected_payload);
 	}
 
 	#[test]
