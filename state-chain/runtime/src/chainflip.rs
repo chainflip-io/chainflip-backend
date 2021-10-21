@@ -282,7 +282,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
 					call.clone(),
 					&signature,
-					Environment::key_manager_address(),
+					Environment::key_manager_address().into(),
 				)),
 			),
 		}

@@ -13,6 +13,16 @@ use state_chain_runtime::{
 use std::convert::TryInto;
 use std::env;
 
+const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = EnvironmentConfig {
+	stake_manager_address: Some(hex_literal::hex![
+		"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+	]),
+	key_manager_address: Some(hex_literal::hex![
+		"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+	]),
+	ethereum_chain_id: Some(4),
+};
+
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
@@ -39,7 +49,7 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 }
 
 /// Get the values for the state-chain environment.
-pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
+pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
 	let stake_manager_address: [u8; 20] = hex::decode(
 		env::var("STAKE_MANAGER_ADDRESS")
 			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
@@ -56,7 +66,7 @@ pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
 	.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
 		.unwrap_or(String::from("4"))
-		.parse::<u32>()
+		.parse::<u64>()
 		.expect("chain id is no unsigned int");
 	(
 		stake_manager_address,
@@ -98,9 +108,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: stake_manager_address,
-					key_manager_address: key_manager_address,
-					ethereum_chain_id: ethereum_chain_id,
+					stake_manager_address: Some(stake_manager_address),
+					key_manager_address: Some(key_manager_address),
+					ethereum_chain_id: Some(ethereum_chain_id),
 				},
 			)
 		},
@@ -149,9 +159,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: stake_manager_address,
-					key_manager_address: key_manager_address,
-					ethereum_chain_id: ethereum_chain_id,
+					stake_manager_address: Some(stake_manager_address),
+					key_manager_address: Some(key_manager_address),
+					ethereum_chain_id: Some(ethereum_chain_id),
 				},
 			)
 		},
@@ -230,15 +240,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				EnvironmentConfig {
-					stake_manager_address: hex_literal::hex![
-						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					],
-					key_manager_address: hex_literal::hex![
-						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					],
-					ethereum_chain_id: 4,
-				},
+				DEFAULT_ENVIRONMENT_CONFIG,
 			)
 		},
 		// Bootnodes
@@ -338,15 +340,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				EnvironmentConfig {
-					stake_manager_address: hex_literal::hex![
-						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					],
-					key_manager_address: hex_literal::hex![
-						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					],
-					ethereum_chain_id: 4,
-				},
+				DEFAULT_ENVIRONMENT_CONFIG,
 			)
 		},
 		// Bootnodes
