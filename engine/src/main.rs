@@ -88,7 +88,6 @@ async fn main() {
         ),
         // Start state chain components
         state_chain::sc_observer::start(
-            &settings,
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,

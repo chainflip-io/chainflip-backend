@@ -10,8 +10,6 @@ use sp_runtime::DispatchError;
 use sp_std::ops::Add;
 use sp_std::vec::Vec;
 
-const FIVE_DAYS_IN_SECONDS: u64 = 432000;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -19,7 +17,6 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
@@ -31,8 +28,6 @@ pub mod pallet {
 	use sp_std::boxed::Box;
 	use sp_std::vec;
 	use sp_std::vec::Vec;
-
-	use crate::FIVE_DAYS_IN_SECONDS;
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -300,6 +295,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
+			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;
 			Self {
 				members: Default::default(),
 				expiry_span: FIVE_DAYS_IN_SECONDS,

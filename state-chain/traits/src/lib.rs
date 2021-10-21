@@ -34,7 +34,7 @@ pub trait Chainflip: frame_system::Config {
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter;
+	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
@@ -93,8 +93,7 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	/// from the trait `VaultRotation`
+	/// We have ran the auction and have a set of validators with minimum active bid.
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
 	ConfirmedValidators(Vec<ValidatorId>, Amount),
@@ -162,38 +161,17 @@ pub trait VaultRotationHandler {
 	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
-/// Errors occurring during a rotation
-#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
-pub enum RotationError<ValidatorId> {
-	/// An invalid request index
-	InvalidCeremonyId,
-	/// Empty validator set provided
-	EmptyValidatorSet,
-	/// A set of badly acting validators
-	BadValidators(Vec<ValidatorId>),
-	/// The keygen response says the newly generated key is the same as the old key
-	KeyUnchanged,
-	/// Failed to construct a valid chain specific payload for rotation
-	FailedToConstructPayload,
-	/// The vault rotation is not confirmed
-	NotConfirmed,
-	/// Failed to make keygen request
-	FailedToMakeKeygenRequest,
-	/// New public key has not been set by a keygen_response
-	NewPublicKeyNotSet,
-}
-
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
+	type RotationError;
+
 	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
+	fn finalize_rotation() -> Result<(), Self::RotationError>;
 }
 
 /// An error has occurred during an auction
@@ -317,22 +295,13 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions() -> Weight;
 }
 
-/// A nonce
+/// A nonce.
 pub type Nonce = u64;
 
-/// A identifier for the chain a nonce is required
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[allow(clippy::unnecessary_cast)]
-pub enum NonceIdentifier {
-	Ethereum = 1,
-	Bitcoin = 2,
-	Dot = 3,
-}
-
-/// Provide a nonce
-pub trait NonceProvider {
-	/// Provide the next nonce for the chain identified
-	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+/// Provides a unqiue nonce for some [Chain].
+pub trait NonceProvider<C: Chain> {
+	/// Get the next nonce.
+	fn next_nonce() -> Nonce;
 }
 
 pub trait IsOnline {
