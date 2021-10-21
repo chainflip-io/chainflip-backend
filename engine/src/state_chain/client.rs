@@ -139,7 +139,6 @@ pub type EventInfo = (
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
 pub struct StateChainRpcClient {
-    pub metadata: substrate_subxt::Metadata,
     events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
@@ -163,8 +162,6 @@ pub trait IStateChainRpcClient {
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
-
-    fn get_metadata(&self) -> substrate_subxt::Metadata;
 }
 
 #[async_trait]
@@ -219,15 +216,11 @@ impl IStateChainRpcClient for StateChainRpcClient {
             .flatten()
             .collect::<Result<Vec<_>>>()
     }
-
-    fn get_metadata(&self) -> substrate_subxt::Metadata {
-        self.metadata.clone()
-    }
 }
 
 pub struct StateChainClient<RpcClient: IStateChainRpcClient> {
+    metadata: substrate_subxt::Metadata,
     nonce: AtomicU32,
-
     /// Our Node's AcccountId
     pub our_account_id: AccountId32,
 
@@ -292,12 +285,11 @@ impl<RpcClient: IStateChainRpcClient> StateChainClient<RpcClient> {
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
-        self.state_chain_rpc_client.get_metadata()
+        self.metadata.clone()
     }
 
     pub fn get_heartbeat_block_interval(&self) -> u32 {
-        self.state_chain_rpc_client
-            .get_metadata()
+        self.metadata
             .module("Reputation")
             .expect("No module 'Reputation' in chain metadata")
             .constant("HeartbeatBlockInterval")
@@ -382,7 +374,6 @@ pub async fn connect_to_state_chain(
     let metadata_c = metadata.clone();
     let system_pallet_metadata = metadata_c.module("System")?;
     let state_chain_rpc_client = StateChainRpcClient {
-        metadata,
         events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         runtime_version: state_rpc_client
             .runtime_version(latest_block_hash)
@@ -406,6 +397,7 @@ pub async fn connect_to_state_chain(
 
     Ok((
         Arc::new(StateChainClient {
+            metadata,
             nonce: AtomicU32::new({
                 let account_info: frame_system::AccountInfo<
                     <RuntimeImplForSigningExtrinsics as System>::Index,
@@ -473,6 +465,7 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -511,6 +504,7 @@ mod tests {
             });
 
         let state_chain_client = StateChainClient {
+            metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -543,6 +537,7 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Err(RpcError::Timeout));
 
         let state_chain_client = StateChainClient {
+            metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -597,6 +592,7 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
