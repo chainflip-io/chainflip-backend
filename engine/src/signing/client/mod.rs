@@ -1,6 +1,6 @@
 mod client_inner;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     logging::COMPONENT_KEY,
@@ -73,6 +73,29 @@ impl SigningInfo {
     }
 }
 
+const PENDING_SIGN_DURATION: Duration = Duration::from_secs(120);
+
+/// A wrapper around SigningInfo that contains the timeout info for cleanup
+#[derive(Clone, Debug)]
+pub struct PendingSigningInfo {
+    pub should_expire_at: Instant,
+    pub signing_info: SigningInfo,
+}
+
+impl PendingSigningInfo {
+    pub fn new(signing_info: SigningInfo) -> Self {
+        PendingSigningInfo {
+            should_expire_at: Instant::now() + PENDING_SIGN_DURATION,
+            signing_info,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn set_expiry_time(&mut self, expiry_time: Instant) {
+        self.should_expire_at = expiry_time;
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
@@ -84,10 +107,6 @@ pub enum MultisigEvent {
     MessageSigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
-
-// How long we keep individual signing phases around
-// before expiring them
-const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Start listening for p2p messages and instructions from the SC
 pub fn start<S>(
@@ -108,13 +127,7 @@ where
     slog::info!(logger, "Starting");
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
-    let mut inner = MultisigClient::new(
-        my_account_id,
-        db,
-        inner_event_sender,
-        PHASE_TIMEOUT,
-        &logger,
-    );
+    let mut inner = MultisigClient::new(my_account_id, db, inner_event_sender, &logger);
 
     async move {
         // Stream outputs () approximately every ten seconds
@@ -131,7 +144,7 @@ where
                     inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
-                    slog::debug!(logger, "Cleaning up multisig states");
+                    slog::trace!(logger, "Cleaning up multisig states");
                     inner.cleanup();
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future

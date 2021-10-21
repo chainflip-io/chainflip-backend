@@ -46,7 +46,7 @@ pub async fn start<BlockStream>(
     );
 
     state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
         .await;
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
@@ -63,7 +63,7 @@ pub async fn start<BlockStream>(
                         block_header.number
                     );
                     state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
 
@@ -242,6 +242,8 @@ pub async fn start<BlockStream>(
                                                     );
                                                     VaultRotationResponse::Success {
                                                         tx_hash: tx_hash.as_bytes().to_vec(),
+                                                        // TODO: get this from the key change event
+                                                        block_number: 0,
                                                     }
                                                 }
                                                 Err(e) => {

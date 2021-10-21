@@ -1,14 +1,4 @@
 ######################## Anchors ########################
-ignore_main_branches: &ignore_main_branches
-  filters:
-    branches:
-      ignore:
-        - main
-        - develop
-        - /epic\/.*/
-        - /release\/.*/
-        # Uncomment and add your current branch when testing
-#        - feature/ch332-rust-doc
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,24 +7,16 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - fix/eth-subscribe
-
-only_epic_branches: &only_epic_branches
+#        - update/epic-ci-1
+ignore_main_branches: &ignore_main_branches
   filters:
     branches:
-      only:
-        # Uncomment and add your current branch when testing
+      ignore:
+        - main
+        - develop
         - /epic\/.*/
         - /release\/.*/
-
-nightly: &nightly
-  triggers:
-    - schedule:
-        cron: "0 0 * * *"
-        filters:
-          branches:
-            only:
-              - develop
+#        - update/epic-ci-1
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -42,18 +24,17 @@ auth: &dockerconfig
 
 cargo-base-job: &cargo-base-job
   executor: rust-base
-  environment: &sccache_environment
+  environment:
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
-
 
 ######################## Config ########################
 version: 2.1
 executors:
   chainflip-master:
     docker:
-      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+      - image: ghcr.io/chainflip-io/chainflip-infrastructure/chainflip-master:latest
         auth: *dockerconfig
   rust-base:
     docker:
@@ -75,12 +56,54 @@ parameters:
     default: false
 ######################## /Config ########################
 
+######################## Commands ########################
+commands:
+  send_notification:
+    parameters:
+      failure_message:
+        type: string
+        default: ":red_circle: Pipeline failed for branch `<<pipeline.git.revision>>`"
+      fail_only:
+        type: boolean
+        default: true
+      only_for_branches:
+        type: string
+        default: "develop,main"
+    steps:
+      - discord/status:
+          fail_only: <<parameters.fail_only>>
+          failure_message: <<parameters.failure_message>>
+          only_for_branches: <<parameters.only_for_branches>>
+          webhook: $DW_ALERTS_STAGING
+  merge_target:
+    steps:
+      - run:
+          name: Merge target into your branch
+          command: |
+            # setup the github user
+            git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
+            git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
+
+            # if this is a PR, we extract the API URL to grab the PR as JSON from the Github API
+            if [[ -n "$CIRCLE_PULL_REQUEST" ]]; then
+              url="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/github.com/api.github.com\/repos/' | sed 's/pull/pulls/')"
+              target_branch=$(
+                curl -H "Authorization: token $GITHUB_TOKEN" "$url" | jq '.base.ref' | tr -d '"'
+              )
+              echo "$target_branch"
+
+              # this will fail if $target_branch is null
+              # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
+              git fetch && git merge origin/$target_branch --no-edit
+            fi
+######################## /Commands ########################
+
 ######################## Workflows ########################
 workflows:
   create-rust-base:
     when: <<pipeline.parameters.rust-base>>
     jobs:
-      - build-docker-image:
+      - docker-build:
           name: build-rust-base
           extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
           image: chainflip-io/chainflip-backend/rust-base
@@ -89,7 +112,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
-      - build-docker-image:
+      - docker-build:
           name: build-rust-poetry
           image: chainflip-io/chainflip-backend/rust-poetry
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -97,109 +120,74 @@ workflows:
           dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
+
+  # We run docs separately to the main flow, so it doesn't slow the process down.
+  chainflip-backend-docs:
+    jobs:
+      - cargo-doc-validator-package:
+          context:
+            - ghcr-credentials
+            - github-credentials
+
   chainflip-backend-checks:
     jobs:
-      - fmt-validator-package:
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-check-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-test-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
       - cargo-clippy-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
-      - cargo-doc-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
+            - github-credentials
           <<: *ignore_main_branches
 
-  chainflip-backend-release:
-    jobs:
-      - fmt-validator-package:
+      # The follow jobs always run, regardless of PR or merge.
+      - cargo-fmt-validator-package:
           context:
             - ghcr-credentials
-          <<: *only_main_branches
-      - cargo-clippy-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
+            - github-credentials
       - cargo-build-and-test-validator-package:
           requires:
-            - fmt-validator-package
+            - cargo-fmt-validator-package
           context:
             - ghcr-credentials
+            - github-credentials
             - discord-webhooks
-          <<: *only_main_branches
-      - cargo-doc-validator-package:
-          requires:
-            - fmt-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - build-docker-image:
-          name: build-chainflip-engine
-          image: chainflip-io/chainflip-backend/chainflip-engine
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - build-docker-image:
-          name: build-state-chain-node
-          image: chainflip-io/chainflip-backend/state-chain-node
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
-          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
       - test-single-node:
           requires:
-            - build-chainflip-engine
-            - build-state-chain-node
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
-          <<: *only_epic_branches
+            - aws-credentials
 
-  chainflip-integration-tests:
-    <<: *nightly
-    jobs:
-      - clone-contracts-repo:
-          context:
-            - github-credentials
-      - run-integration-tests:
+      # The follow jobs run on all successful merges to protected branches.
+      # Protected branches include main, develop, release/*, epic/*
+      - docker-build:
+          name: docker-build-chainflip-engine
+          image: chainflip-io/chainflip-backend/chainflip-engine
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - clone-contracts-repo
+            - test-single-node
           context:
             - ghcr-credentials
-            - discord-webhooks
+          <<: *only_main_branches
+      - docker-build:
+          name: docker-build-state-chain-node
+          image: chainflip-io/chainflip-backend/state-chain-node
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      # Deploy new testnet. Coming Soon™
 ######################## /Workflows ########################
 
 ######################## Jobs ########################
 jobs:
-  build-docker-image:
+  docker-build:
     executor: docker/docker
     working_directory: /mnt/ramdisk
     parameters:
@@ -249,11 +237,11 @@ jobs:
           image: <<parameters.image>>
           tag: <<parameters.tag>>
 
-  fmt-validator-package:
+  cargo-fmt-validator-package:
     executor: rust-base
-    resource_class: small
     steps:
       - checkout
+      - merge_target
       - run: >
           cargo fmt --all -- --check
 
@@ -261,10 +249,48 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
+  cargo-build-and-test-validator-package-integration:
+    <<: *cargo-base-job
+    executor: rust-poetry
+    steps:
+      - checkout
+      - merge_target
+      - attach_workspace:
+          at: ./
+      - run: sccache --show-stats
+      - run:
+          name: Install dependencies & run Hardhat network
+          background: true
+          command: |
+            cd eth-contracts
+            npm install
+            npx hardhat node
+      - run:
+          name: Install dependencies & deploy contracts
+          background: true
+          command: |
+            cd eth-contracts
+            poetry install --quiet
+            poetry run brownie run deploy_and all_events --network hardhat
+      - run: |
+          cargo build --locked --release
+          sccache --show-stats
+      - run: |
+          cargo test --locked --release
+          sccache --show-stats
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/release/state-chain-node
+            - target/release/chainflip-engine
+      - send_notification:
+          failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
+
   cargo-build-and-test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo build --locked --release
@@ -277,11 +303,8 @@ jobs:
           paths:
             - target/release/state-chain-node
             - target/release/chainflip-engine
-      - discord/status:
-          fail_only: true
-          failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
-          only_for_branches: "develop,main"
-          webhook: $DW_ALERTS_STAGING
+      - send_notification:
+          only_for_branches: "develop"
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
@@ -291,14 +314,16 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo check --locked --release
+          cargo check --all-targets --locked --release
           sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo test --lib --locked --release
@@ -307,6 +332,7 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo clippy
@@ -317,6 +343,7 @@ jobs:
     shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
       - checkout
+      - merge_target
       - run: sccache --show-stats
       - run: |
           cargo doc --workspace --document-private-items --no-deps
@@ -324,7 +351,7 @@ jobs:
       - store_artifacts:
           path: target/doc/
 
-  clone-contracts-repo:
+  git-clone-contracts-repo:
     resource_class: small
     docker:
       - image: "cimg/base:stable"
@@ -336,7 +363,7 @@ jobs:
       - persist_to_workspace:
           root: ./
           paths:
-            - eth-contracts
+            - eth-contracts/*
 
   run-integration-tests:
     resource_class: xlarge
@@ -345,6 +372,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
+      - merge_target
       - attach_workspace:
           at: ./
       - run:
@@ -362,11 +390,7 @@ jobs:
             poetry run brownie run deploy_and all_events --network hardhat
       - run: sccache --show-stats
       - run: cargo test --locked --release
-      - discord/status:
-          fail_only: true
-          failure_message: ":red_circle: Integration tests have failed"
-          only_for_branches: "develop"
-          webhook: $DW_ALERTS_STAGING
+      - send_notification
 
   test-single-node:
     parameters:
@@ -374,52 +398,42 @@ jobs:
         description: Name of the cluster to authenticate to
         type: string
         default: cluster-staging
-    resource_class: small
     executor: chainflip-master
     steps:
-      - doctl/initialize
-      - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
+      - checkout
+      - attach_workspace:
+          at: ./
       - run:
-          name: Port-forward into cluster
+          name: Setup config
+          command: |
+            mkdir config
+            sops -d Default.enc.toml > config/Default.toml
+            echo -n $BASHFUL_SIGNING_KEY > signing_key_file
+            echo -n $ETH_PRIVATE_KEY > private_key_file
+      - run:
+          name: Start Node
           background: true
-          command: kubectl port-forward -n chartmuseum service/chartmuseum 8080
-      - run: sleep 5
-      - run: helm repo add chainflip http://localhost:8080
+          command: ./target/release/state-chain-node --chain cf-dev
+      - run: sleep 3
       - run:
-          name: Install bashful single node
+          name: Start Engine
+          background: true
+          command: ./target/release/chainflip-engine
+      - run: sleep 3
+      - run:
+          name: Check Node Health
           command: >
-            helm install bashful chainflip/chainflip-validator
-            --namespace default
-            --set state-chain-node.nodeType=validator
-            --set state-chain-node.image.tag="<<pipeline.git.revision>>"
-            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--ws-external}"
-            --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
-            --set chainflip-engine.config.eth.node_endpoint=$RINKEBY
-            --set global.nameSuffix="default"
-            --set global.testnet_id="$CIRCLE_BUILD_NUM"
-            --set chainflip-engine.engine.backtrace=full
-            --set global.chain=dev
-            --wait
-            --wait-for-jobs
+            curl --request POST -L
+            -H "Content-Type:application/json;charset=utf-8"
+            --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
+            --url 'http://localhost:9933'
+            -vv
       - run:
-          name: Test single node
-          command: helm test bashful -n default
-      - run:
-          name: Dump logs (state-chain-node)
-          when: always
-          command: kubectl logs -l app.kubernetes.io/name=state-chain-node --tail -1 > node.log
-      - run:
-          name: Dump logs (chainflip-engine)
-          when: always
-          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine --tail -1 > engine.log
-      - run: |
-          mkdir artifacts
-          mv *.log artifacts
+          name: Check Engine Health
+          command: >
+            curl
+            --url 'http://localhost:5555/health'
+            -vv
       - store_artifacts:
-          path: artifacts
-      - run:
-          name: Destroy single node
-          when: always
-          command: helm uninstall bashful -n default
-      - run: echo $TEST_NODE_LOG_URL
+          path: target/release
 ######################## /Jobs ########################

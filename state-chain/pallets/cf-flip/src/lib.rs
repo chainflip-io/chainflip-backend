@@ -14,7 +14,7 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
-use cf_traits::Slashing;
+use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -38,6 +38,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::StakeHandler;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -68,6 +69,9 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
+
+		/// Providing updates on staking activity
+		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 	}
 
 	#[pallet::pallet]
@@ -221,9 +225,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Sets the validator bond for an account.
 	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
-		Account::<T>::mutate_exists(account_id, |maybe_account| match maybe_account.as_mut() {
-			Some(account) => account.validator_bond = amount,
-			None => {}
+		Account::<T>::mutate_exists(account_id, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				account.validator_bond = amount
+			}
 		})
 	}
 
@@ -351,7 +356,8 @@ impl<T: Config> Pallet<T> {
 		reserve_id: ReserveId,
 		amount: T::Balance,
 	) -> Result<Surplus<T>, DispatchError> {
-		Surplus::try_from_reserve(reserve_id, amount).ok_or(Error::<T>::InsufficientReserves.into())
+		Surplus::try_from_reserve(reserve_id, amount)
+			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.
@@ -383,7 +389,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
-	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
+	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
 		Account::<T>::iter().for_each(|(account, _)| {
 			if new_validators.contains(&account) {
 				Self::set_validator_bond(&account, new_bond);
@@ -397,6 +403,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
+	type Handler = T::StakeHandler;
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -409,6 +416,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -419,6 +427,8 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		);
 
 		Self::settle(account_id, Self::bridge_out(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
+
 		Ok(())
 	}
 
@@ -428,6 +438,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 		Self::settle(account_id, Self::bridge_in(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		// claim reverts automatically when dropped
 	}
 }
@@ -457,11 +468,11 @@ where
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get the slashing rate
-		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
+		let slashing_rate: T::Balance = SlashingRate::<T>::get();
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
 		// slash per day = n % of MBA
-		let slash_per_day = (bond / T::Balance::from(100 as u32)).saturating_mul(slashing_rate);
+		let slash_per_day = (bond / T::Balance::from(100_u32)).saturating_mul(slashing_rate);
 		// Burn per block
 		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
 		// Total amount of burn

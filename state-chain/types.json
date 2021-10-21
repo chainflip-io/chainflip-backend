@@ -3,40 +3,71 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
+  "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
-  "Amount": "TokenAmount",
+  "AggKeySignature": "U256",
+  "Amount": "u128",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
-      "BondIsZero",
       "Empty",
-      "MinValidatorSize"
+      "MinValidatorSize",
+      "InvalidRange",
+      "Abort",
+      "NotConfirmed"
     ]
   },
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
   },
   "AuctionRange": "(u32,u32)",
-  "CallHash": "[u8;32]",
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
   },
+  "Bid": "(ValidatorId, Amount)",
+  "BlockNumber": "u32",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
+  "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "Chain": {
     "_enum": [
       "Ethereum"
     ]
   },
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
+    ]
+  },
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
+  },
   "ClaimDetailsFor": {
+    "msg_hash": "Option<AggKeySignature>",
     "amount": "FlipBalance",
     "nonce": "Nonce",
     "address": "EthereumAddress",
@@ -48,8 +79,8 @@
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
-    "stake": "FlipBalance",
-    "validator_bond": "FlipBalance"
+    "stake": "Amount",
+    "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
   "ImbalanceSource": {
@@ -69,6 +100,8 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
+  "KeyId": "Vec<u8>",
+  "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
@@ -82,24 +115,34 @@
       "Dot"
     ]
   },
-  "OnlineCreditsFor": "u64",
+  "OnlineCreditsFor": "BlockNumber",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
+  "ReputationOf": "BlockNumber",
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSignature": {
+  "SchnorrSigTruncPubkey": {
+    "s": "[u8;32]",
+    "k_times_g_address": "[u8; 20]"
+  },
+  "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "r": "[u8; 20]"
+    "k_times_g_addr": "[u8; 20]"
   },
   "Signature": "H256",
-  "TokenAmount": "u128",
-  "ValidatorId": "AccountId",
+  "SignedTransactionFor": "Vec<u8>",
+  "StakeAttempt": "(EthereumAddress, Amount)",
+  "Timestamp": "u64",
   "TransactionHash": "Vec<u8>",
+  "UnsignedTransactionFor": "Vec<u8>",
+  "ValidatorId": "AccountId",
   "Vault": {
     "previous_key": "PublicKey",
     "current_key": "PublicKey",
@@ -112,9 +155,9 @@
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-        "tx": "TransactionHash"
+        "tx_hash": "TransactionHash"
       },
-      "Failure": ""
+      "Error": ""
     }
   },
   "ValidatorSize": "u32",

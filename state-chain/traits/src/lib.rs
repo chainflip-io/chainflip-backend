@@ -2,23 +2,43 @@
 
 pub mod mocks;
 
+use cf_chains::Chain;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
-	traits::{Imbalance, SignedImbalance},
+	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
-/// and Chainflip was born...some base types
-pub trait Chainflip {
+/// An index to a block.
+pub type BlockNumber = u32;
+pub type FlipBalance = u128;
+/// The type used as an epoch index.
+pub type EpochIndex = u32;
+pub type AuctionIndex = u64;
+
+/// Common base config for Chainflip pallets.
+pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member
+		+ Default
+		+ Parameter
+		+ From<<Self as frame_system::Config>::AccountId>
+		+ Into<<Self as frame_system::Config>::AccountId>;
+	/// An id type for keys used in threshold signature ceremonies.
+	type KeyId: Member + Parameter;
+	/// The overarching call type.
+	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -43,8 +63,6 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
-	/// The index of an epoch
-	type EpochIndex;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
@@ -61,7 +79,7 @@ pub trait EpochInfo {
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
-	fn epoch_index() -> Self::EpochIndex;
+	fn epoch_index() -> EpochIndex;
 
 	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
 	fn is_auction_phase() -> bool;
@@ -71,25 +89,37 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
-	// Waiting for bids, we store the last set of winners and min bid required
-	WaitingForBids(Vec<ValidatorId>, Amount),
-	// Bids are now taken and validated
+	/// Waiting for bids
+	WaitingForBids,
+	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	// We have ran the auction and have a set of winners with min bid.  This waits on confirmation
-	// via the trait `AuctionConfirmation`
-	WinnersSelected(Vec<ValidatorId>, Amount),
+	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
+	/// from the trait `VaultRotation`
+	ValidatorsSelected(Vec<ValidatorId>, Amount),
+	/// The confirmed set of validators
+	ConfirmedValidators(Vec<ValidatorId>, Amount),
 }
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
-		AuctionPhase::WaitingForBids(Vec::new(), Amount::default())
+		AuctionPhase::WaitingForBids
 	}
 }
 
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A range of min, max for our winning set
-pub type AuctionRange = (u32, u32);
+/// A bid that has been classified as out of the validating set
+pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
+
+/// A successful auction result
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct AuctionResult<ValidatorId, Amount> {
+	pub winners: Vec<ValidatorId>,
+	pub minimum_active_bid: Amount,
+}
+
+/// A range of min, max for active validator set
+pub type ActiveValidatorRange = (u32, u32);
 
 /// An Auction
 ///
@@ -97,31 +127,39 @@ pub type AuctionRange = (u32, u32);
 /// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
 /// This results in a set of winners and a minimum bid after the auction.  After each successful
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
-/// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
+/// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
-pub trait Auction {
+pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
 
 	/// Range describing auction set size
-	fn auction_range() -> AuctionRange;
-	/// Set the auction range
-	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
+	fn active_range() -> ActiveValidatorRange;
+	/// Set new auction range, returning on success the old value
+	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
+	/// Our last successful auction result
+	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>>;
 	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
-	/// Move the process forward by one step, returns the phase completed or error
+	/// Move our auction process to the next phase returning success with phase completed
+	///
+	/// At each phase we assess the bidders based on a fixed set of criteria which results
+	/// in us arriving at a winning list and a bond set for this auction
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
+	/// Abort the process and back the preliminary phase
+	fn abort();
 }
 
+/// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
-	/// Abort requested after failed vault rotation
-	fn abort();
-	// Penalise validators during a vault rotation
-	fn penalise(bad_validators: Vec<Self::ValidatorId>);
+	/// The vault rotation has been aborted
+	fn vault_rotation_aborted();
+	/// Penalise bad validators during a vault rotation
+	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
 /// Errors occurring during a rotation
@@ -168,11 +206,28 @@ pub enum AuctionError {
 	NotConfirmed,
 }
 
-/// Providing bidders for our auction
+/// Handler for Epoch life cycle events.
+pub trait EpochTransitionHandler {
+	/// The id type used for the validators.
+	type ValidatorId;
+	type Amount: Copy;
+	/// A new epoch has started
+	///
+	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with a
+	/// `_new_bond`
+	fn on_new_epoch(
+		old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	);
+}
+
+/// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+	/// Provide a list of bidders, those stakers that are not retired
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 /// Trait for rotate bond after epoch.
@@ -182,12 +237,21 @@ pub trait BondRotation {
 
 	/// Sets the validator bond for all new_validator to the new_bond and
 	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
+	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
+}
+
+/// Provide feedback on staking
+pub trait StakeHandler {
+	type ValidatorId;
+	type Amount;
+	/// A validator has updated their stake and now has a new total amount
+	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
+	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -241,10 +305,16 @@ pub trait RewardsDistribution {
 	fn execution_weight() -> Weight;
 }
 
+pub trait RewardRollover {
+	type AccountId;
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
+}
+
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
-	fn trigger_emissions();
+	fn trigger_emissions() -> Weight;
 }
 
 /// A nonce
@@ -252,6 +322,7 @@ pub type Nonce = u64;
 
 /// A identifier for the chain a nonce is required
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[allow(clippy::unnecessary_cast)]
 pub enum NonceIdentifier {
 	Ethereum = 1,
 	Bitcoin = 2,
@@ -264,26 +335,36 @@ pub trait NonceProvider {
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
 }
 
-pub trait Online {
+pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;
 	/// The online status of the validator
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A representation of the current network state
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
-pub struct NetworkState {
-	pub online: u32,
-	pub offline: u32,
+/// A representation of the current network state for this heartbeat interval.
+/// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
+/// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
+/// interval are marked as awaiting.
+///
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct NetworkState<ValidatorId: Default> {
+	/// Those nodes that we are awaiting a heartbeat from
+	pub awaiting: Vec<ValidatorId>,
+	/// Online nodes
+	pub online: Vec<ValidatorId>,
+	/// Number of nodes
+	pub number_of_nodes: u32,
 }
 
-impl NetworkState {
+impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
-		self.online
+		let number_online = self.online.len() as u32;
+
+		number_online
 			.saturating_mul(100)
-			.checked_div(self.online + self.offline)
+			.checked_div(self.number_of_nodes)
 			.unwrap_or(0)
 	}
 }
@@ -291,7 +372,57 @@ impl NetworkState {
 /// To handle those emergency rotations
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
-	fn request_emergency_rotation();
+	fn request_emergency_rotation() -> Weight;
+	/// Is there an emergency rotation in progress
+	fn emergency_rotation_in_progress() -> bool;
+	/// Signal that the emergency rotation has completed
+	fn emergency_rotation_completed();
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+pub enum ChainflipAccountState {
+	Passive,
+	Backup,
+	Validator,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct ChainflipAccountData {
+	pub state: ChainflipAccountState,
+}
+
+impl Default for ChainflipAccountData {
+	fn default() -> Self {
+		ChainflipAccountData {
+			state: ChainflipAccountState::Passive,
+		}
+	}
+}
+
+pub trait ChainflipAccount {
+	type AccountId;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+}
+
+pub struct ChainflipAccountStore<T>(PhantomData<T>);
+
+impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
+	for ChainflipAccountStore<T>
+{
+	type AccountId = T::AccountId;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
+		frame_system::Pallet::<T>::get(account_id)
+	}
+
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).state = state;
+		})
+		.expect("mutating account state")
+	}
 }
 
 /// Slashing a validator
@@ -302,4 +433,127 @@ pub trait Slashing {
 	type BlockNumber;
 	/// Function which implements the slashing logic
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
+}
+
+/// Something that can nominate signers from the set of active validators.
+pub trait SignerNomination {
+	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
+	type SignerId;
+
+	/// Returns a random live signer. The seed value is used as a source of randomness.
+	fn nomination_with_seed(seed: u64) -> Self::SignerId;
+
+	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
+	/// seed value is used as a source of randomness.
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+}
+
+/// Provides the currently valid key for multisig ceremonies.
+pub trait KeyProvider<C: Chain> {
+	/// The type of the provided key_id.
+	type KeyId;
+
+	/// Gets the key.
+	fn current_key() -> Self::KeyId;
+}
+
+/// Api trait for pallets that need to sign things.
+pub trait ThresholdSigner<T>
+where
+	T: Chainflip,
+{
+	type Context: SigningContext<T>;
+
+	/// Initiate a signing request and return the request id.
+	fn request_signature(context: Self::Context) -> u64;
+
+	/// Initiate a transaction signing request and return the request id.
+	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
+		Self::request_signature(transaction.into())
+	}
+}
+
+/// Types, methods and state for requesting and processing a threshold signature.
+pub trait SigningContext<T: Chainflip> {
+	/// The chain that this context applies to.
+	type Chain: Chain;
+	/// The payload type that will be signed over.
+	type Payload: Parameter;
+	/// The signature type that is returned by the threshold signature.
+	type Signature: Parameter;
+	/// The callback that will be dispatched when we receive the signature.
+	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
+
+	/// Returns the signing payload.
+	fn get_payload(&self) -> Self::Payload;
+
+	/// Returns the callback to be triggered on success.
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback;
+
+	/// Dispatches the success callback.
+	fn dispatch_callback(
+		&self,
+		origin: OriginFor<T>,
+		signature: Self::Signature,
+	) -> DispatchResultWithPostInfo {
+		self.resolve_callback(signature)
+			.dispatch_bypass_filter(origin)
+	}
+}
+
+pub mod offline_conditions {
+	use super::*;
+	pub type ReputationPoints = i32;
+
+	/// Conditions that cause a validator to be knocked offline.
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum OfflineCondition {
+		/// A broadcast of an output has failed
+		BroadcastOutputFailed,
+		/// There was a failure in participation during a signing
+		ParticipateSigningFailed,
+		/// Not Enough Performance Credits
+		NotEnoughPerformanceCredits,
+		/// Contradicting Self During a Signing Ceremony
+		ContradictingSelfDuringSigningCeremony,
+	}
+
+	/// Error on reporting an offline condition.
+	#[derive(Debug, PartialEq)]
+	pub enum ReportError {
+		/// Validator doesn't exist
+		UnknownValidator,
+	}
+
+	/// For reporting offline conditions.
+	pub trait OfflineReporter {
+		type ValidatorId;
+		/// Report the condition for validator
+		/// Returns `Ok(Weight)` else an error if the validator isn't valid
+		fn report(
+			condition: OfflineCondition,
+			penalty: ReputationPoints,
+			validator_id: &Self::ValidatorId,
+		) -> Result<Weight, ReportError>;
+	}
+}
+
+/// The heartbeat of the network
+pub trait Heartbeat {
+	type ValidatorId: Default;
+	/// A heartbeat has been submitted
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	/// Called on every heartbeat interval with the current network state
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
+}
+
+/// Updating and calculating emissions per block for validators and backup validators
+pub trait BlockEmissions {
+	type Balance;
+	/// Update the emissions per block for a validator
+	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Update the emissions per block for a backup validator
+	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
+	/// Calculate the emissions per block
+	fn calculate_block_emissions() -> Weight;
 }

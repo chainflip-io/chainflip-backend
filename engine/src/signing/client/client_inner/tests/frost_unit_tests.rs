@@ -1,11 +1,16 @@
-use itertools::Itertools;
+use crate::signing::client::client_inner::tests::helpers::check_blamed_paries;
 
 use super::*;
 
 macro_rules! assert_stage {
     ($c1:expr, $stage:expr) => {
-        assert_eq!(helpers::get_stage_for_default_ceremony(&$c1), $stage);
+        assert_eq!(helpers::get_stage_for_signing_ceremony(&$c1), $stage);
     };
+}
+
+// TODO: use function as these instead of macros?
+fn assert_no_stage(c: &helpers::MultisigClientNoDB) {
+    assert_eq!(helpers::get_stage_for_signing_ceremony(&c), None);
 }
 
 macro_rules! assert_no_stage {
@@ -113,7 +118,7 @@ async fn should_delay_comm1_before_rts() {
     // "Slow" client c1 receives a message before a request to sign, it should be delayed
     receive_comm1!(c1, 1, sign_states);
 
-    assert_no_stage!(c1);
+    assert_no_stage(&c1);
 
     let key = keygen_states.key_ready.sec_keys[0].clone();
 
@@ -277,24 +282,6 @@ async fn should_handle_inconsistent_broadcast_sig3() {
     assert_eq!(blamed_parties, vec![AccountId([bad_idx as u8 + 1; 32])]);
 }
 
-async fn check_blamed_paries(mut rx: &mut helpers::InnerEventReceiver, expected: &[usize]) {
-    let (_, blamed_parties) = helpers::check_outcome(&mut rx)
-        .await
-        .expect("should procude outcome")
-        .result
-        .clone()
-        .unwrap_err();
-
-    assert_eq!(
-        blamed_parties,
-        expected
-            .iter()
-            // Needs +1 to map from array idx to signer idx
-            .map(|idx| AccountId([*idx as u8 + 1; 32]))
-            .collect_vec()
-    );
-}
-
 #[tokio::test]
 async fn should_report_on_timeout_before_request_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
@@ -434,7 +421,7 @@ async fn should_delay_rts_until_key_is_ready() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
+    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
     assert_no_stage!(c1);
 
     // send the request to sign
@@ -443,18 +430,17 @@ async fn should_delay_rts_until_key_is_ready() {
     // The request should have been delayed, so the stage is unaffected
     assert_no_stage!(c1);
 
-    // complete the keygen by sending the sec2 from each other client to client 0
+    // complete the keygen by sending the ver5 from each other client to client 0
     for sender_idx in 1..=3 {
-        let s_id = keygen_states.keygen_phase2.clients[sender_idx].get_my_account_id();
-        let sec2 = keygen_states.keygen_phase2.sec2_vec[sender_idx]
-            .get(&c1.get_my_account_id())
-            .unwrap();
+        // send all but 1 ver2 data to the client
+        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
 
-        let m = helpers::keygen_data_to_p2p(sec2.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
         c1.process_p2p_message(m);
     }
 
-    // Now that the keygen completed, the rts should have started
+    // Now that the keygen completed, the rts should have been processed
     assert_stage1!(c1);
 }
 
@@ -548,4 +534,32 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
 
     // // The rts should not have started a ceremony
     // assert_no_stage!(c1);
+}
+
+#[tokio::test]
+async fn pending_rts_should_expire() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
+    assert_no_stage!(c1);
+
+    // Send the rts with the key id currently unknown to the client
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // Timeout all the requests
+    c1.expire_all();
+    c1.cleanup();
+
+    // Complete the keygen by sending the ver5 from each other client to client 0
+    for sender_idx in 1..=3 {
+        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
+
+        let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
+        c1.process_p2p_message(m);
+    }
+
+    // Should be no pending rts, so no stage advancement once the keygen completed.
+    assert_no_stage!(c1);
 }
