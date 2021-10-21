@@ -371,8 +371,7 @@ pub async fn connect_to_state_chain(
             .map_err(anyhow::Error::msg)?[..],
     )?)?;
 
-    let metadata_c = metadata.clone();
-    let system_pallet_metadata = metadata_c.module("System")?;
+    let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
         events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         runtime_version: state_rpc_client
