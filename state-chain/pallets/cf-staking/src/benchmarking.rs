@@ -54,7 +54,6 @@ benchmarks! {
 
 	}:_(RawOrigin::Signed(caller), eth_addr)
 
-	// Ends in success case - could be that the error case is more expensive?
 	claimed {
 		let balance_to_claim: T::Balance = T::Balance::from(100 as u32);
 		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
