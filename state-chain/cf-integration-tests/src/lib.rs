@@ -225,7 +225,7 @@ mod tests {
 					Auction::auction_result(),
 					Some(AuctionResult {
 						minimum_active_bid: GENESIS_BALANCE,
-						winners: accounts
+						winners: _accounts
 					})
 				);
 

@@ -17,9 +17,6 @@ use sp_runtime::AccountId32;
 
 use web3::types::U256;
 
-#[cfg(test)]
-mod common;
-
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
     let root_logger = utils::create_cli_logger();
@@ -47,8 +44,10 @@ pub async fn test_all_stake_manager_events() {
 
     assert!(
         !sm_events.is_empty(),
-        "{}",
-        common::EVENT_STREAM_EMPTY_MESSAGE
+        "r#
+            Event stream was empty.
+            - Have you run the setup script to deploy/run the contracts?
+            - Are you pointing to the correct contract address?",
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
