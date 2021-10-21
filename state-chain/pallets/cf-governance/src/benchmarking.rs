@@ -9,6 +9,7 @@ use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
+use crate as pallet_cf_governance;
 #[allow(unused)]
 use crate::Pallet as Governance;
 
@@ -30,23 +31,22 @@ benchmarks! {
 		let call = Call::<T>::new_membership_set(members);
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
-	// execute {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	let members = vec![caller.clone()];
-	//  // TODO: use call secured by Governance
-	// 	// let call = Call::<T>::new_membership_set(members);
-	// 	let call = pallet::Call::<T>::new_membership_set(members);
-	// 	<Members<T>>::put(members);
-	// 	let id = Governance::<T>::push_proposal(Box::new(call));
-	// 	Governance::<T>::try_approve(caller.clone(), id);
-	// }: _(RawOrigin::Signed(caller.clone()), id)
+	execute {
+		let caller: T::AccountId = whitelisted_caller();
+		let members = vec![caller.clone()];
+		// TODO: use call secured by Governance
+		let call: <T as Config>::Call = pallet_cf_governance::Call::new_membership_set(vec![]).into();
+		<Members<T>>::put(members);
+		let id = Governance::<T>::push_proposal(Box::new(call));
+		Governance::<T>::try_approve(caller.clone(), id);
+	}: _(RawOrigin::Signed(caller.clone()), id)
 	call_as_sudo {
 		let call: <T as Config>::Call = frame_system::Call::set_code_without_checks(vec![1, 2, 3, 4]).into();
 		let sudo_call = Call::<T>::call_as_sudo(Box::new(call));
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
 	on_initialize {
-		//TODO: set the time
+		// TODO: mock the time to end in the expire proposals case which is more expensive
 		for _n in 1..100 {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
 			Governance::<T>::push_proposal(call);
