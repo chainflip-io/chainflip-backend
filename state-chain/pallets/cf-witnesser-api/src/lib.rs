@@ -173,7 +173,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a keygen failure 
+		/// Witness a keygen failure
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,

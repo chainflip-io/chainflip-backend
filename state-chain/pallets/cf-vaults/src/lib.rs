@@ -53,6 +53,9 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 
+	/// This is roughly the number of Ethereum blocks in 14 days.
+	pub const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
+
 	/// The bounds within which a public key for a vault should be used for witnessing.
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 	pub struct BlockHeightWindow {
@@ -136,6 +139,8 @@ pub mod pallet {
 		KeygenAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
+		/// UnexpectedPubkeyWitnessed \[chain_id, key\]
+		UnexpectedPubkeyWitnessed(ChainId, Vec<u8>),
 	}
 
 	#[pallet::error]
@@ -262,7 +267,7 @@ pub mod pallet {
 			chain_id: ChainId,
 			new_public_key: Vec<u8>,
 			block_number: u64,
-			_tx_hash: Vec<u8>,
+			tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -278,12 +283,16 @@ pub mod pallet {
 			// If the keys don't match, we don't have much choice but to trust the witnessed one over the one
 			// we expected, but we should log the issue nonetheless.
 			if new_public_key != expected_new_key {
-				frame_support::debug::warn!(
+				frame_support::debug::error!(
 					"Unexpected new agg key witnessed for {:?}. Expected {:?}, got {:?}.",
 					chain_id,
 					expected_new_key,
 					new_public_key,
-				)
+				);
+				Self::deposit_event(Event::<T>::UnexpectedPubkeyWitnessed(
+					chain_id,
+					new_public_key.clone(),
+				));
 			}
 
 			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
@@ -295,8 +304,10 @@ pub mod pallet {
 				}
 			})?;
 
-			// This is roughly the number of blocks for 14 days in Ethereum
-			const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
+			PendingVaultRotations::<T>::insert(
+				chain_id,
+				VaultRotationStatus::<T>::Complete { tx_hash },
+			);
 
 			// Record this new incoming set for the next epoch.
 			ActiveWindows::<T>::insert(
@@ -380,7 +391,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn no_active_chain_vault_rotations() -> bool {
-		PendingVaultRotations::<T>::iter().count() == 0
+		// Returns true if the iterator is empty or if all rotations are complete.
+		PendingVaultRotations::<T>::iter().all(|(_, status)| match status {
+			VaultRotationStatus::Complete { .. } => true,
+			_ => false,
+		})
 	}
 
 	fn start_vault_rotation_for_chain(
@@ -422,9 +437,9 @@ impl<T: Config> VaultRotator for Pallet<T> {
 	}
 
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
-		// The 'exit' point for the pallet, no rotations left to process
 		if Pallet::<T>::no_active_chain_vault_rotations() {
-			// The process has completed successfully
+			// The 'exit' point for the pallet, no rotations left to process
+			PendingVaultRotations::<T>::remove_all();
 			Self::deposit_event(Event::VaultsRotated);
 			Ok(())
 		} else {
