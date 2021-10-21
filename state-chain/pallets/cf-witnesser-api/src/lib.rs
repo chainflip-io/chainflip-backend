@@ -158,7 +158,7 @@ pub mod pallet {
 
 		//*** Vaults pallet witness calls ***//
 
-		/// Witness a key generation response from 2/3 of our current validators
+		/// Witness a successful key generation.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
