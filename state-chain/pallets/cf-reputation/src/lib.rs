@@ -232,14 +232,14 @@ pub mod pallet {
 					     reputation_points,
 					 }| {
 						// Accrue some online credits of `HeartbeatInterval` size
-						*online_credits = *online_credits + Self::online_credit_reward();
+						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points
 						if *online_credits >= credits {
 							// Swap these credits for reputation
-							*online_credits = *online_credits - credits;
+							*online_credits -= credits;
 							// Update reputation
-							*reputation_points = *reputation_points + rewarded_points;
+							*reputation_points += rewarded_points;
 						}
 					},
 				);

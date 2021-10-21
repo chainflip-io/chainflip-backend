@@ -155,7 +155,7 @@ pub mod pallet {
 			offenders: Vec<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			const PENALTY: i32 = 15; // TODO: This should probably be specified somewhere common for all penalties.
-			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
+			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Report the offenders.
 			for offender in offenders.iter() {
