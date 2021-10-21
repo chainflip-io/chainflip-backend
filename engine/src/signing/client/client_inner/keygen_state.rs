@@ -361,12 +361,6 @@ impl KeygenState {
         matches!(self.stage, KeygenStage::KeyReady)
     }
 
-    // TODO: This is used, why does it say unused?
-    #[cfg(test)]
-    pub fn delayed_count(&self) -> usize {
-        self.delayed_next_stage_data.len()
-    }
-
     #[cfg(test)]
     pub fn get_stage(&self) -> KeygenStage {
         self.stage

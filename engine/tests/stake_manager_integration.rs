@@ -17,6 +17,7 @@ use sp_runtime::AccountId32;
 
 use web3::types::U256;
 
+#[cfg(test)]
 mod common;
 
 #[tokio::test]

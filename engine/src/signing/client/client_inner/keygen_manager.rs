@@ -246,21 +246,4 @@ impl KeygenManager {
     pub fn expire_all(&mut self) {
         self.phase_timeout = std::time::Duration::from_secs(0);
     }
-
-    pub fn get_delayed_count(&self, ceremony_id: CeremonyId) -> usize {
-        // BC1s are stored separately from the state
-        let bc_count = self
-            .delayed_messages
-            .get(&ceremony_id)
-            .map(|v| v.1.len())
-            .unwrap_or(0);
-
-        let other_count = self
-            .keygen_states
-            .get(&ceremony_id)
-            .map(|s| s.delayed_count())
-            .unwrap_or(0);
-
-        bc_count + other_count
-    }
 }

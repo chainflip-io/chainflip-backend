@@ -9,6 +9,7 @@ use chainflip_engine::{
 
 use futures::stream::StreamExt;
 
+#[cfg(test)]
 mod common;
 
 #[tokio::test]
