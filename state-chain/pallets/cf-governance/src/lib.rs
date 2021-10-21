@@ -22,6 +22,8 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use frame_support::pallet_prelude::Weight;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -121,18 +123,12 @@ pub mod pallet {
 						<ActiveProposals<T>>::get()
 							.iter()
 							.partition(|p| p.1 <= T::TimeSource::now().as_secs());
-					let number_of_expired_proposals = expired.len();
 					// Remove expired proposals
-					for expired_proposal in expired {
-						<Proposals<T>>::remove(expired_proposal.0);
-						Self::deposit_event(Event::Expired(expired_proposal.0));
-					}
+					let expiry_weight = Self::expire_proposals(expired);
 					<ActiveProposals<T>>::set(active);
-					// Weight is 1 reads + (n + 1) * writes
-					T::DbWeight::get().reads(1)
-						+ T::DbWeight::get().writes(number_of_expired_proposals as u64 + 1)
+					T::WeightInfo::on_initialize(proposal_len as u32) + expiry_weight
 				}
-				_ => T::DbWeight::get().reads(1),
+				_ => T::WeightInfo::on_initialize_best_case(),
 			}
 		}
 	}
@@ -353,6 +349,15 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	/// Expire proposals
+	fn expire_proposals(expired: Vec<ActiveProposal>) -> Weight {
+		let n = expired.len();
+		for expired_proposal in expired {
+			<Proposals<T>>::remove(expired_proposal.0);
+			Self::deposit_event(Event::Expired(expired_proposal.0));
+		}
+		T::WeightInfo::expire_proposals(n as u32)
+	}
 	/// Push a proposal
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
 		// Generate the next proposal id

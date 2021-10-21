@@ -46,18 +46,28 @@ benchmarks! {
 		let sudo_call = Call::<T>::call_as_sudo(Box::new(call));
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
-	on_initialize_worst_case {
+	on_initialize {
 		// TODO: mock the time to end in the expire proposals case which is more expensive
-		for _n in 1..100 {
+		let b in 1 .. 100 as u32;
+		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
 			Governance::<T>::push_proposal(call);
 		}
 	}: {
-		Governance::<T>::on_initialize((2 as u32).into());
+		Governance::<T>::on_initialize((b).into());
 	}
 	on_initialize_best_case {
 	}: {
 		Governance::<T>::on_initialize((2 as u32).into());
+	}
+	expire_proposals {
+		let b in 1 .. 100 as u32;
+		for _n in 1 .. b {
+			let call = Box::new(frame_system::Call::remark(vec![]).into());
+			Governance::<T>::push_proposal(call);
+		}
+	} : {
+		Governance::<T>::expire_proposals(<ActiveProposals<T>>::get());
 	}
 }
 
