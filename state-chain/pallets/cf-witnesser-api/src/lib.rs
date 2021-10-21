@@ -186,7 +186,7 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a vault rotation response from 2/3 of our current validators
+		/// Witness an on-chain vault key rotation
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
