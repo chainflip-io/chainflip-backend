@@ -108,10 +108,6 @@ pub enum MultisigEvent {
     KeygenResult(KeygenOutcome),
 }
 
-// How long we keep individual signing phases around
-// before expiring them
-const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
-
 /// Start listening for p2p messages and instructions from the SC
 pub fn start<S>(
     my_account_id: AccountId,
@@ -131,13 +127,7 @@ where
     slog::info!(logger, "Starting");
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
-    let mut inner = MultisigClient::new(
-        my_account_id,
-        db,
-        inner_event_sender,
-        PHASE_TIMEOUT,
-        &logger,
-    );
+    let mut inner = MultisigClient::new(my_account_id, db, inner_event_sender, &logger);
 
     async move {
         // Stream outputs () approximately every ten seconds
@@ -154,7 +144,7 @@ where
                     inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
-                    slog::debug!(logger, "Cleaning up multisig states");
+                    slog::trace!(logger, "Cleaning up multisig states");
                     inner.cleanup();
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future

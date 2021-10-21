@@ -1,345 +1,96 @@
-use crate::{logging, signing::db::KeyDBMock};
+use crate::signing::MultisigInstruction;
 
+use super::helpers::check_blamed_paries;
 use super::*;
 
-use std::time::Duration;
-
-#[test]
-fn bc1_gets_delayed_until_keygen_request() {
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let logger = logging::test_utils::create_test_logger();
-    let mut client = MultisigClient::new(
-        VALIDATOR_IDS[0].clone(),
-        KeyDBMock::new(),
-        tx,
-        PHASE_TIMEOUT,
-        &logger,
-    );
-
-    assert_eq!(keygen_stage_for(&client, *CEREMONY_ID), None);
-
-    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1], create_bc1(2), *CEREMONY_ID);
-    client.process_p2p_message(message);
-
-    assert_eq!(keygen_stage_for(&client, *CEREMONY_ID), None);
-    assert_eq!(keygen_delayed_count(&client, *CEREMONY_ID), 1);
-
-    // Keygen instruction should advance the stage and process delayed messages
-
-    let keygen = MultisigInstruction::KeyGen(KEYGEN_INFO.clone());
-
-    client.process_multisig_instruction(keygen);
-
-    assert_eq!(
-        keygen_stage_for(&client, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingBroadcast1)
-    );
-    assert_eq!(keygen_delayed_count(&client, *CEREMONY_ID), 0);
-
-    // One more message should advance the stage (share_count = 3)
-    let message = keygen_data_to_p2p(&VALIDATOR_IDS[2], create_bc1(3), *CEREMONY_ID);
-    client.process_p2p_message(message);
-
-    assert_eq!(
-        keygen_stage_for(&client, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingSecret2)
-    );
-}
-
-// Simply test the we don't crash when we receive unexpected validator id
-#[tokio::test]
-async fn keygen_message_from_invalid_validator() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    let mut c1 = states.keygen_phase1.clients[0].clone();
-
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingBroadcast1)
-    );
-
-    let invalid_validator = &UNEXPECTED_VALIDATOR_ID;
-
-    let msg = keygen_data_to_p2p(invalid_validator, create_bc1(2), KEY_ID);
-
-    c1.process_p2p_message(msg);
-}
-
-#[tokio::test]
-async fn keygen_secret2_gets_delayed() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    let phase1 = &states.keygen_phase1;
-    let phase2 = &states.keygen_phase2;
-
-    // Note the use of phase2 data on a phase1 client
-    let mut clients_p1 = phase1.clients.clone();
-    let bc1_vec = phase1.bc1_vec.clone();
-    let sec2_vec = phase2.sec2_vec.clone();
-
-    let c1 = &mut clients_p1[0];
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingBroadcast1)
-    );
-
-    // Secret sent from client 2 to client 1
-    let sec2 = sec2_vec[1].get(&VALIDATOR_IDS[0]).unwrap().clone();
-
-    // We should not process it immediately
-    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1].clone(), sec2, KEY_ID);
-
-    c1.process_p2p_message(message);
-
-    assert_eq!(keygen_delayed_count(&c1, *CEREMONY_ID), 1);
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingBroadcast1)
-    );
-
-    // Process incoming bc1_vec, so we can advance to the next phase
-    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1], bc1_vec[1].clone(), *CEREMONY_ID);
-    c1.process_p2p_message(message);
-
-    let message = keygen_data_to_p2p(&VALIDATOR_IDS[2], bc1_vec[2].clone(), *CEREMONY_ID);
-    c1.process_p2p_message(message);
-
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingSecret2)
-    );
-    assert_eq!(keygen_delayed_count(&c1, *CEREMONY_ID), 0);
-}
-
-/// Test that we can have more than one key simultaneously
-#[tokio::test]
-async fn can_have_multiple_keys() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    // Start with clients that already have an aggregate key
-    let mut c1 = states.key_ready.clients[0].clone();
-
-    let keygen_info = KeygenInfo {
-        ceremony_id: *CEREMONY_ID + 1,
-        signers: KEYGEN_INFO.signers.clone(),
+macro_rules! receive_comm1 {
+    ($client:expr, $sender: expr, $keygen_states:expr) => {
+        let comm1 = $keygen_states.comm_stage1.comm1_vec[$sender].clone();
+        let m = helpers::keygen_data_to_p2p(comm1, &VALIDATOR_IDS[$sender], KEYGEN_CEREMONY_ID);
+        $client.process_p2p_message(m);
     };
+}
 
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+fn assert_no_stage(c: &helpers::MultisigClientNoDB) {
+    assert_eq!(helpers::get_stage_for_keygen_ceremony(&c), None);
+}
 
+fn assert_stage1(c: &helpers::MultisigClientNoDB) {
     assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::KeyReady)
-    );
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID + 1),
-        Some(KeygenStage::AwaitingBroadcast1)
+        helpers::get_stage_for_keygen_ceremony(&c).as_deref(),
+        Some("BroadcastStage<AwaitCommitments1>")
     );
 }
 
-#[tokio::test]
-async fn cannot_create_key_for_known_id() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    let mut c1 = states.key_ready.clients[0].clone();
-
+fn assert_stage2(c: &helpers::MultisigClientNoDB) {
     assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::KeyReady)
+        helpers::get_stage_for_keygen_ceremony(&c).as_deref(),
+        Some("BroadcastStage<VerifyCommitmentsBroadcast2>")
     );
-
-    let keygen_info = KeygenInfo {
-        ceremony_id: *CEREMONY_ID,
-        signers: KEYGEN_INFO.signers.clone(),
-    };
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
-
-    // Previous state should be unaffected
-    assert_eq!(
-        keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::KeyReady)
-    );
-
-    // No message should be sent as a result
-    helpers::assert_channel_empty(&mut ctx.rxs[0]).await;
 }
 
-/// Test that if keygen state times out (without keygen request), we slash senders
+/// If keygen state expires before a formal request to keygen
+/// (from our SC), we should report initiators of that ceremony
 #[tokio::test]
-async fn no_keygen_request() {
+async fn report_initiators_of_unexpected_keygen() {
     let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
+    let keygen_states = ctx.generate().await;
 
-    let bad_validator = &VALIDATOR_IDS[1];
-    let next_ceremony_id = *CEREMONY_ID + 1;
-    let message = helpers::bc1_to_p2p_keygen(create_bc1(2), next_ceremony_id, bad_validator);
+    let mut c1 = keygen_states.stage0.clients[0].clone();
 
-    // We have not received a keygen request for KeyId 1
-    let message = helpers::keygen_data_to_p2p(bc1, bad_validator, *CEREMONY_ID);
+    let bad_party_idx = 1;
 
-    c1.process_p2p_message(message);
+    receive_comm1!(c1, bad_party_idx, keygen_states);
 
-    c1.set_all_states_expired(Duration::from_secs(0));
+    // Force all ceremonies to time out
+    c1.expire_all();
     c1.cleanup();
 
-    assert_eq!(
-        helpers::recv_next_inner_event(&mut ctx.rxs[0]).await,
-        InnerEvent::KeygenResult(KeygenOutcome::unauthorised(
-            next_ceremony_id,
-            vec![bad_validator.clone()]
-        ))
-    );
+    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
 }
 
-/// Test that if keygen state times out during phase 1 (with keygen request present), we slash non-senders
+/// If a ceremony expires in the middle of the first stage,
+/// we should report the slow parties
 #[tokio::test]
-async fn phase1_timeout() {
+async fn should_report_on_timeout_stage1() {
     let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
+    let keygen_states = ctx.generate().await;
 
-    let mut c1 = states.keygen_phase1.clients[0].clone();
+    let mut c1 = keygen_states.comm_stage1.clients[0].clone();
 
-    assert_eq!(
-        helpers::keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingBroadcast1)
-    );
+    let bad_party_idxs = [1, 2];
+    let good_party_idx = 3;
 
-    let bc1 = states.keygen_phase1.bc1_vec[1].clone();
+    receive_comm1!(c1, good_party_idx, keygen_states);
 
-    let message = helpers::keygen_data_to_p2p(bc1, &VALIDATOR_IDS[1], *CEREMONY_ID);
-
-    c1.process_p2p_message(message);
-
-    c1.set_all_states_expired(Duration::from_secs(0));
+    c1.expire_all();
     c1.cleanup();
 
-    let mut rx = &mut ctx.rxs[0];
-
-    let late_node = VALIDATOR_IDS[2].clone();
-
-    assert_eq!(
-        helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(*CEREMONY_ID, vec![late_node]))
-    );
-
-    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
+    check_blamed_paries(&mut ctx.rxs[0], &bad_party_idxs).await;
 }
 
-/// Test that if keygen state times out during phase 2 (with keygen request present), we slash non-senders
 #[tokio::test]
-async fn phase2_timeout() {
+async fn should_delay_comm1_before_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
+    let keygen_states = ctx.generate().await;
 
-    let mut c1 = states.keygen_phase2.clients[0].clone();
+    let mut c1 = keygen_states.stage0.clients[0].clone();
 
-    assert_eq!(
-        helpers::keygen_stage_for(&c1, *CEREMONY_ID),
-        Some(KeygenStage::AwaitingSecret2)
-    );
+    // Recieve an early stage1 message, should be delayed
+    receive_comm1!(c1, 1, keygen_states);
 
-    let sec2 = states.keygen_phase2.sec2_vec[1]
-        .get(&VALIDATOR_IDS[0])
-        .unwrap()
-        .clone();
+    assert_no_stage(&c1);
 
-    let message = helpers::keygen_data_to_p2p(sec2, &VALIDATOR_IDS[1], KEY_ID);
+    c1.process_multisig_instruction(MultisigInstruction::KeyGen(KEYGEN_INFO.clone()));
 
-    c1.process_p2p_message(message);
+    assert_stage1(&c1);
 
-    c1.set_all_states_expired(Duration::from_secs(0));
-    c1.cleanup();
+    // Recieve the remaining stage1 messages. Provided that the first
+    // message was properly delayed, this should advance us to the next stage
+    receive_comm1!(c1, 2, keygen_states);
+    receive_comm1!(c1, 3, keygen_states);
 
-    let mut rx = &mut ctx.rxs[0];
-
-    let late_node = VALIDATOR_IDS[2].clone();
-
-    assert_eq!(
-        helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(*CEREMONY_ID, vec![late_node]))
-    );
-
-    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
+    assert_stage2(&c1);
 }
 
-/// That that parties that send invalid bc1s get reported
-#[tokio::test]
-async fn invalid_bc1() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    let mut c1 = states.keygen_phase1.clients[0].clone();
-
-    // This BC1 is valid
-    let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
-    let message_a = helpers::keygen_data_to_p2p(bc1_a.clone(), &VALIDATOR_IDS[1], *CEREMONY_ID);
-    c1.process_p2p_message(message_a);
-
-    // This BC1 is invalid
-    let bad_node = VALIDATOR_IDS[2].clone();
-    let bc1_b = helpers::create_invalid_bc1();
-
-    let message_b = helpers::keygen_data_to_p2p(bc1_b, &bad_node, *CEREMONY_ID);
-    c1.process_p2p_message(message_b);
-
-    let mut rx = &mut ctx.rxs[0];
-
-    assert_eq!(
-        helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(*CEREMONY_ID, vec![bad_node]))
-    );
-
-    c1.set_all_states_expired(Duration::from_secs(0));
-    c1.cleanup();
-
-    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
-
-    // make sure the timeout is not triggered for the abandoned keygen
-    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
-}
-
-/// That that parties that send invalid sec2s get reported
-#[tokio::test]
-async fn invalid_sec2() {
-    let mut ctx = helpers::KeygenContext::new();
-    let states = ctx.generate().await;
-
-    let mut c1 = states.keygen_phase2.clients[0].clone();
-
-    // This Sec2 is valid
-    let sec2_a = states.keygen_phase2.sec2_vec[1]
-        .get(&VALIDATOR_IDS[0])
-        .unwrap()
-        .clone();
-
-    let message_a = helpers::keygen_data_to_p2p(sec2_a.clone(), &VALIDATOR_IDS[1], *CEREMONY_ID);
-    c1.process_p2p_message(message_a);
-
-    let bad_node = VALIDATOR_IDS[2].clone();
-    // This Sec2 is not for us, so it is invalid
-    let sec2_b = states.keygen_phase2.sec2_vec[1]
-        .get(&VALIDATOR_IDS[2])
-        .unwrap()
-        .clone();
-
-    let message_b = helpers::keygen_data_to_p2p(sec2_b, &bad_node, *CEREMONY_ID);
-    c1.process_p2p_message(message_b);
-
-    let mut rx = &mut ctx.rxs[0];
-
-    assert_eq!(
-        helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(*CEREMONY_ID, vec![bad_node]))
-    );
-
-    c1.set_all_states_expired(Duration::from_secs(0));
-    c1.cleanup();
-
-    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
-
-    // make sure the timeout is not triggered for the abandoned keygen
-    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
-}
+// TODO: more tests (see https://github.com/chainflip-io/chainflip-backend/issues/677)
