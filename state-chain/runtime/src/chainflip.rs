@@ -56,8 +56,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
-		// Update the list of validators in reputation
-		<Online as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, new_bond);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
 			old_validators,

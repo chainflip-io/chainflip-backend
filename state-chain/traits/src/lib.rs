@@ -29,6 +29,7 @@ pub trait Chainflip: frame_system::Config {
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
 	type ValidatorId: Member
+		+ Default
 		+ Parameter
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
@@ -225,7 +226,7 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders
+	/// Provide a list of bidders, those stakers that are not retired
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
@@ -341,27 +342,29 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A representation of the current network state
+/// A representation of the current network state for this heartbeat interval.
+/// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
+/// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
+/// interval are marked as awaiting.
+///
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId> {
-	/// We are missing the last heartbeat from this node and yet cannot determine if they
-	/// are offline or online.
-	pub missing: Vec<ValidatorId>,
-	/// The node is online
+pub struct NetworkState<ValidatorId: Default> {
+	/// Those nodes that we are awaiting a heartbeat from
+	pub awaiting: Vec<ValidatorId>,
+	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// The node has been determined as being offline
-	pub offline: Vec<ValidatorId>,
+	/// Number of nodes
+	pub number_of_nodes: u32,
 }
 
-impl<ValidatorId> NetworkState<ValidatorId> {
+impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
-		let number_offline = self.offline.len() as u32;
 
 		number_online
 			.saturating_mul(100)
-			.checked_div(number_online + number_offline)
+			.checked_div(self.number_of_nodes)
 			.unwrap_or(0)
 	}
 }
@@ -537,7 +540,7 @@ pub mod offline_conditions {
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId;
+	type ValidatorId: Default;
 	/// A heartbeat has been submitted
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
 	/// Called on every heartbeat interval with the current network state

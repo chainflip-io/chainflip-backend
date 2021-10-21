@@ -40,6 +40,7 @@ pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-featur
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
+pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
