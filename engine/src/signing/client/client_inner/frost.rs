@@ -8,10 +8,10 @@ use std::{collections::HashMap, convert::TryInto, fmt::Display};
 use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
-use cf_chains::eth::AggKey;
 use super::{
     client_inner::MultisigMessage, common::BroadcastVerificationMessage, SchnorrSignature,
 };
+use cf_chains::eth::AggKey;
 
 use crate::signing::crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar};
 
