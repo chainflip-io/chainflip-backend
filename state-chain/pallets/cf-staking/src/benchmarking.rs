@@ -109,7 +109,6 @@ benchmarks! {
 
 	}:_(RawOrigin::Signed(caller))
 
-	// worst case
 	on_initialize_best_case {
 	}: {
 		Pallet::<T>::on_initialize((2 as u32).into());
