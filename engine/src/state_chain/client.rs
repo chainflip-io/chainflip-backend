@@ -168,6 +168,7 @@ impl StateChainClient {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: std::fmt::Debug + Clone,
     {
+        // TODO: Print the hex of the tx_hash here, not the Vec<u8>
         slog::trace!(logger, "Submitting extrinsic: {:?}", extrinsic);
         let mut nonce = self.nonce.lock().await;
 
