@@ -1,386 +1,330 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{
-    p2p::{AccountId, P2PMessageCommand},
-    signing::{
-        client::client_inner::{
-            client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
-        },
-        crypto::{InvalidKey, InvalidSS, Parameters},
-    },
-};
+use crate::logging::CEREMONY_ID_KEY;
+use crate::p2p::AccountId;
 
-use super::{
-    client_inner::{KeygenData, MultisigMessage},
-    common::KeygenResultInfo,
-    shared_secret::SharedSecretState,
-    utils::ValidatorMaps,
-    InnerEvent,
-};
+use crate::signing::client::client_inner::keygen_stages::AwaitCommitments1;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
-pub enum KeygenStage {
-    AwaitingBroadcast1,
-    AwaitingSecret2,
-    KeyReady,
-    /// The ceremony couldn't proceed, so the associated state should be cleaned up
-    Abandoned,
+use super::client_inner::{EventSender, KeygenDataWrapped, MultisigMessage, ThresholdParameters};
+use super::keygen_data::KeygenData;
+use super::{InnerEvent, KeygenResultInfo};
+
+use super::common::{
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
+    ProcessMessageResult, RawP2PSender, StageResult,
+};
+use super::utils::ValidatorMaps;
+
+/// Ceremony is authorised once we receive a keygen request with a corresponding ceremony_id
+/// from our SC node, at which point the data in this struct also becomes available.
+#[derive(Clone)]
+struct KeygenStateAuthorised {
+    ceremony_id: CeremonyId,
+    /// State specific to the current ceremony stage
+    stage: Option<Box<dyn CeremonyStage<Message = KeygenData, Result = KeygenResult>>>,
+    // TODO: this should be specialized to sending
+    // results only (no p2p stuff)
+    result_sender: EventSender,
+    validator_map: Arc<ValidatorMaps>,
 }
+
+dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
 
 #[derive(Clone)]
 pub struct KeygenState {
-    stage: KeygenStage,
-    sss: SharedSecretState,
-    event_sender: UnboundedSender<InnerEvent>,
-    signer_idx: usize,
-    /// Mapping from sender indexes to validator ids and back
-    maps_for_validator_id_and_idx: Arc<ValidatorMaps>,
-    /// All valid signer indexes (1..=n)
-    all_signer_idxs: Vec<usize>,
-    delayed_next_stage_data: Vec<(AccountId, KeygenData)>,
-    ceremony_id: CeremonyId,
-    /// Multisig parameters are only stored here so we can put
-    /// them inside `KeygenResultInfo` when we create the key
-    params: Parameters,
-    /// Last time we were able to make progress
-    pub last_message_timestamp: Instant,
+    inner: Option<KeygenStateAuthorised>,
     logger: slog::Logger,
+    delayed_messages: Vec<(AccountId, KeygenData)>,
+    /// Time point at which the current ceremony is considered expired and gets aborted
+    should_expire_at: std::time::Instant,
 }
 
-/// A command to the other module to send data to a particular node
-struct MessageToSend {
-    pub to_idx: usize,
-    pub data: Vec<u8>,
-}
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
 
 impl KeygenState {
-    pub fn initiate(
-        idx: usize,
-        params: Parameters,
-        idx_map: ValidatorMaps,
-        ceremony_id: CeremonyId,
-        event_sender: UnboundedSender<InnerEvent>,
-        logger: &slog::Logger,
-    ) -> Self {
-        let all_signer_idxs = (1..=params.share_count).collect_vec();
-
-        let mut state = KeygenState {
-            stage: KeygenStage::AwaitingBroadcast1,
-            sss: SharedSecretState::new(idx, params, logger),
-            event_sender,
-            signer_idx: idx,
-            all_signer_idxs,
-            delayed_next_stage_data: Vec::new(),
-            ceremony_id,
-            params,
-            maps_for_validator_id_and_idx: Arc::new(idx_map),
-            last_message_timestamp: Instant::now(),
-            logger: logger.new(slog::o!("ceremony_id" => ceremony_id)),
-        };
-
-        state.initiate_keygen_inner();
-
-        state
-    }
-
-    /// Get ids of validators who haven't sent the data for the current stage
-    pub fn awaited_parties(&self) -> Vec<AccountId> {
-        let awaited_idxs = match self.stage {
-            KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
-                self.sss.awaited_parties()
-            }
-            KeygenStage::KeyReady | KeygenStage::Abandoned => vec![],
-        };
-
-        awaited_idxs
-            .into_iter()
-            .map(|idx| self.signer_idx_to_validator_id(idx))
-            .cloned()
-            .collect_vec()
-    }
-
-    /// Get index in the (sorted) array of all signers
-    fn validator_id_to_signer_idx(&self, id: &AccountId) -> Option<usize> {
-        self.maps_for_validator_id_and_idx.get_idx(&id)
-    }
-
-    fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
-        let id = self
-            .maps_for_validator_id_and_idx
-            .get_id(idx)
-            .expect("Idx carefully chosen by our own module");
-        id
-    }
-
-    fn update_progress_timestamp(&mut self) {
-        self.last_message_timestamp = Instant::now();
-    }
-
-    /// Returned value will signal that the key is ready
-    pub fn process_keygen_message(
-        &mut self,
-        sender_id: AccountId,
-        msg: KeygenData,
-    ) -> Option<KeygenResultInfo> {
-        slog::trace!(
-            self.logger,
-            "[{}] received {} from [{}]",
-            self.us(),
-            &msg,
-            sender_id
-        );
-
-        let signer_idx = match self.validator_id_to_signer_idx(&sender_id) {
-            Some(idx) => idx,
-            None => {
-                slog::warn!(
-                    self.logger,
-                    "[{}] Keygen message is ignored for invalid validator id: {}",
-                    self.us(),
-                    sender_id
-                );
-                return None;
-            }
-        };
-
-        match (&self.stage, msg) {
-            (KeygenStage::AwaitingBroadcast1, KeygenData::Broadcast1(bc1)) => {
-                match self.sss.process_broadcast1(signer_idx, bc1) {
-                    StageStatus::Full => {
-                        self.update_progress_timestamp();
-                        self.finalise_phase1();
-                    }
-                    StageStatus::MadeProgress => self.update_progress_timestamp(),
-                    StageStatus::Ignored => { /* do nothing */ }
-                }
-            }
-            (KeygenStage::AwaitingBroadcast1, KeygenData::Secret2(sec2)) => {
-                slog::trace!(
-                    self.logger,
-                    "[{}] delaying Secret2 from [{}]",
-                    self.us(),
-                    sender_id
-                );
-                self.delayed_next_stage_data.push((sender_id, sec2.into()));
-            }
-            (KeygenStage::AwaitingSecret2, KeygenData::Secret2(sec2)) => {
-                match self.sss.process_phase2(signer_idx, sec2) {
-                    StageStatus::Full => {
-                        slog::trace!(
-                            self.logger,
-                            "[{}] Phase 2 (keygen) successful ✅✅",
-                            self.us()
-                        );
-                        self.update_progress_timestamp();
-
-                        return self.finalize_phase2();
-                    }
-                    StageStatus::MadeProgress => {
-                        self.update_progress_timestamp();
-                    }
-                    StageStatus::Ignored => { /* do nothing */ }
-                }
-            }
-            (KeygenStage::Abandoned, data) => {
-                slog::warn!(self.logger, "Dropping {} for abandoned keygen state", data);
-            }
-            _ => {
-                slog::warn!(
-                    self.logger,
-                    "[{}] Unexpected message for stage: {:?}",
-                    self.us(),
-                    self.stage
-                );
-            }
+    pub fn new_unauthorised(logger: slog::Logger) -> Self {
+        KeygenState {
+            inner: None,
+            logger,
+            delayed_messages: Default::default(),
+            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
         }
-
-        None
     }
 
-    fn initiate_keygen_inner(&mut self) {
-        slog::trace!(self.logger, "Initiating keygen");
+    pub fn on_keygen_request(
+        &mut self,
+        ceremony_id: CeremonyId,
+        event_sender: EventSender,
+        validator_map: Arc<ValidatorMaps>,
+        own_idx: usize,
+        all_idxs: Vec<usize>,
+    ) {
+        self.logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-        let bc1 = self.sss.init_phase1();
+        let common = CeremonyCommon {
+            ceremony_id,
+            // TODO: do not clone validator map
+            p2p_sender: KeygenP2PSender::new(
+                validator_map.clone(),
+                event_sender.clone(),
+                ceremony_id,
+            ),
+            own_idx,
+            all_idxs,
+            logger: self.logger.clone(),
+        };
 
-        let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, bc1);
+        let processor = AwaitCommitments1::new(ceremony_id, common.clone());
 
-        let msg = MultisigMessage::from(wrapped);
+        let mut stage = BroadcastStage::new(processor, common);
 
-        self.keygen_broadcast(msg);
+        stage.init();
+
+        self.inner = Some(KeygenStateAuthorised {
+            stage: Some(Box::new(stage)),
+            ceremony_id,
+            validator_map,
+            result_sender: event_sender,
+        });
+
+        // Unlike other state transitions, we don't take into account
+        // any time left in the prior stage when receiving a request
+        // to sign (we don't want other parties to be able to
+        // control when our stages time out)
+        self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
         self.process_delayed();
     }
 
-    fn finalise_phase1(&mut self) {
-        // We require all parties to be active during keygen
-        match self.sss.init_phase2(&self.all_signer_idxs) {
-            Ok(msgs) => {
-                self.stage = KeygenStage::AwaitingSecret2;
-                let msgs = msgs
-                    .into_iter()
-                    .map(|(idx, secret2)| {
-                        let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, secret2);
-                        let secret2 = MultisigMessage::from(wrapped);
-                        let data = bincode::serialize(&secret2).unwrap();
-                        MessageToSend { to_idx: idx, data }
-                    })
-                    .collect_vec();
+    pub fn process_message(
+        &mut self,
+        sender_id: AccountId,
+        data: KeygenData,
+    ) -> Option<KeygenResultInfo> {
+        slog::trace!(
+            self.logger,
+            "Received message {} from party [{}] ",
+            data,
+            sender_id
+        );
 
-                self.send(msgs);
-
-                self.process_delayed();
+        match &mut self.inner {
+            None => {
+                self.add_delayed(sender_id, data);
             }
-            Err(InvalidKey(blamed_idxs)) => {
-                self.stage = KeygenStage::Abandoned;
-
-                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
-
-                slog::error!(
-                    self.logger,
-                    "Phase 2 keygen error, blamed validators: {:?}",
-                    // TODO: this should log the base58 ids
-                    &blamed_ids
+            Some(authorised_state) => {
+                let stage = authorised_state.stage.as_mut().expect(
+                    "The value is only None for a brief period of time, when we swap states, below",
                 );
 
-                let event =
-                    InnerEvent::KeygenResult(KeygenOutcome::invalid(self.ceremony_id, blamed_ids));
+                if stage.should_delay(&data) {
+                    self.add_delayed(sender_id, data);
+                    return None;
+                }
 
-                self.send_event(event);
-            }
-        }
-    }
-
-    fn finalize_phase2(&mut self) -> Option<KeygenResultInfo> {
-        match self.sss.finalize_phase2() {
-            Ok(key) => {
-                slog::info!(self.logger, "SIGNING SHARED KEY IS READY: {:?} 👍", key);
-
-                self.stage = KeygenStage::KeyReady;
-
-                let key_info = KeygenResultInfo {
-                    key: Arc::new(key),
-                    validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
-                    params: self.params,
+                // Check that the sender is a participant in the ceremony
+                let sender_idx = match authorised_state.validator_map.get_idx(&sender_id) {
+                    Some(idx) => idx,
+                    None => {
+                        slog::debug!(
+                            self.logger,
+                            "Sender {} is not a valid participant",
+                            sender_id
+                        );
+                        return None;
+                    }
                 };
 
-                return Some(key_info);
-            }
-            Err(InvalidSS(blamed_idxs)) => {
-                slog::error!(self.logger, "Invalid Phase2 keygen data, abandoning state");
-                self.stage = KeygenStage::Abandoned;
+                match stage.process_message(sender_idx, data) {
+                    ProcessMessageResult::CollectedAll => {
+                        let state = authorised_state.stage.take().unwrap();
 
-                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+                        match state.finalize() {
+                            StageResult::NextStage(mut next_stage) => {
+                                slog::debug!(
+                                    self.logger,
+                                    "Ceremony transitions to {}",
+                                    &next_stage
+                                );
 
-                self.send_event(InnerEvent::KeygenResult(KeygenOutcome::invalid(
-                    self.ceremony_id,
-                    blamed_ids,
-                )));
+                                next_stage.init();
+
+                                authorised_state.stage = Some(next_stage);
+
+                                // Instead of resetting the expiration time, we simply extend
+                                // it (any remaining time carries over to the next stage).
+                                // Doing it otherwise would allow other parties to influence
+                                // when stages in individual nodes time out (by sending their
+                                // data at specific times) thus making some attacks possible.
+                                self.should_expire_at += MAX_STAGE_DURATION;
+
+                                self.process_delayed();
+                            }
+                            StageResult::Error(_) => {
+                                // TODO: should delete this state
+                            }
+                            StageResult::Done(keygen_result) => {
+                                slog::debug!(
+                                    self.logger,
+                                    "Keygen ceremony reached the final stage!"
+                                );
+
+                                let params = ThresholdParameters::from_share_count(
+                                    keygen_result.party_public_keys.len(),
+                                );
+
+                                let keygen_result_info = KeygenResultInfo {
+                                    key: Arc::new(keygen_result),
+                                    validator_map: authorised_state.validator_map.clone(),
+                                    params,
+                                };
+
+                                return Some(keygen_result_info);
+                            }
+                        }
+                    }
+                    ProcessMessageResult::Ignored | ProcessMessageResult::Progress => {
+                        // Nothing to do
+                    }
+                }
             }
         }
 
         None
     }
 
-    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
-        idxs.into_iter()
-            .map(|idx| self.signer_idx_to_validator_id(idx))
-            .cloned()
-            .collect()
-    }
+    /// Try to process delayed messages
+    fn process_delayed(&mut self) {
+        let messages = std::mem::take(&mut self.delayed_messages);
 
-    fn send_event(&self, event: InnerEvent) {
-        if let Err(err) = self.event_sender.send(event) {
-            slog::error!(self.logger, "Could not send inner event: {}", err);
-        }
-    }
-
-    fn send(&self, messages: Vec<MessageToSend>) {
-        for MessageToSend { to_idx, data } in messages {
-            let destination = self.signer_idx_to_validator_id(to_idx).clone();
-
+        for (id, m) in messages {
             slog::debug!(
                 self.logger,
-                "[{}] sending direct message to [{}]",
-                self.us(),
-                destination
+                "Processing delayed message {} from party [{}]",
+                m,
+                id,
             );
-
-            let message = P2PMessageCommand { destination, data };
-
-            let event = InnerEvent::P2PMessageCommand(message);
-
-            self.send_event(event);
+            self.process_message(id, m);
         }
     }
 
-    fn keygen_broadcast(&self, msg: MultisigMessage) {
-        // TODO: see if there is a way to publish a bunch of messages
-        for idx in &self.all_signer_idxs {
-            if *idx == self.signer_idx {
-                continue;
+    fn add_delayed(&mut self, id: AccountId, m: KeygenData) {
+        match &self.inner {
+            Some(_) => {
+                slog::debug!(self.logger, "Delaying message {} from party [{}]", m, id);
             }
+            None => {
+                slog::debug!(
+                    self.logger,
+                    "Delaying message {} from party [{}] (pre signing request)",
+                    m,
+                    id
+                )
+            }
+        }
 
-            let destination = self.signer_idx_to_validator_id(*idx).clone();
+        self.delayed_messages.push((id, m));
+    }
 
-            slog::debug!(self.logger, "[{}] Sending to {}", self.us(), destination);
+    /// Check expiration time, and report responsible nodes if expired
+    pub fn try_expiring(&self) -> Option<Vec<AccountId>> {
+        if self.should_expire_at < std::time::Instant::now() {
+            match &self.inner {
+                None => {
+                    // blame the parties that tried to initiate the ceremony
+                    let blamed_ids = self
+                        .delayed_messages
+                        .iter()
+                        .map(|(id, _)| id.clone())
+                        .collect();
 
-            let message = P2PMessageCommand {
-                destination,
-                data: bincode::serialize(&msg).unwrap(),
-            };
+                    slog::warn!(
+                        self.logger,
+                        "Keygen ceremony expired before a request to sign, blaming parties: {:?}",
+                        blamed_ids
+                    );
 
-            let event = InnerEvent::P2PMessageCommand(message);
+                    Some(blamed_ids)
+                }
+                Some(authorised_state) => {
+                    // blame slow parties
+                    let blamed_idx = authorised_state
+                        .stage
+                        .as_ref()
+                        .expect("stage in authorised state is always present")
+                        .awaited_parties();
 
-            self.send_event(event);
+                    let blamed_ids = blamed_idx
+                        .iter()
+                        .map(|idx| {
+                            authorised_state
+                                .validator_map
+                                .get_id(*idx)
+                                .expect("id for a blamed party should always be known")
+                                .clone()
+                        })
+                        .collect();
+
+                    slog::warn!(
+                        self.logger,
+                        "Keygen ceremony expired, blaming parties: {:?}",
+                        blamed_ids,
+                    );
+
+                    Some(blamed_ids)
+                }
+            }
+        } else {
+            None
         }
     }
+}
 
-    fn process_delayed(&mut self) {
-        while let Some((sender_id, msg)) = self.delayed_next_stage_data.pop() {
-            slog::trace!(
-                self.logger,
-                "[{}] Processing a delayed message from [{}]",
-                self.us(),
-                sender_id
-            );
-            self.process_keygen_message(sender_id, msg);
+#[cfg(test)]
+impl KeygenState {
+    pub fn get_stage(&self) -> Option<String> {
+        self.inner
+            .as_ref()
+            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
+    }
+
+    #[cfg(test)]
+    pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
+        self.should_expire_at = expiry_time;
+    }
+}
+
+/// Sending half of the channel that additionally maps signer_idx -> accountId
+/// and wraps the binary data into the appropriate for keygen type
+#[derive(Clone)]
+pub struct KeygenP2PSender {
+    ceremony_id: CeremonyId,
+    sender: RawP2PSender,
+}
+
+impl KeygenP2PSender {
+    fn new(
+        validator_map: Arc<ValidatorMaps>,
+        sender: UnboundedSender<InnerEvent>,
+        ceremony_id: CeremonyId,
+    ) -> Self {
+        KeygenP2PSender {
+            ceremony_id,
+            sender: RawP2PSender::new(validator_map, sender),
         }
     }
+}
 
-    /// check is the KeygenStage is Abandoned
-    pub fn is_abandoned(&self) -> bool {
-        matches!(self.stage, KeygenStage::Abandoned)
-    }
+impl P2PSender for KeygenP2PSender {
+    type Data = KeygenData;
 
-    /// check is the KeygenStage is in the KeyReady stage
-    pub fn is_finished(&self) -> bool {
-        matches!(self.stage, KeygenStage::KeyReady)
-    }
-
-    #[cfg(test)]
-    pub fn delayed_count(&self) -> usize {
-        self.delayed_next_stage_data.len()
-    }
-
-    #[cfg(test)]
-    pub fn get_stage(&self) -> KeygenStage {
-        self.stage
-    }
-
-    /// We want to be able to control how our id is printed in tests
-    #[cfg(test)]
-    fn us(&self) -> String {
-        self.signer_idx.to_string()
-    }
-
-    /// We don't want to print our id in production. Generating an empty
-    /// string should not result in memory allocation, and therefore should be fast
-    #[cfg(not(test))]
-    fn us(&self) -> String {
-        String::default()
+    fn send(&self, reciever_idx: usize, data: Self::Data) {
+        let msg: MultisigMessage = KeygenDataWrapped::new(self.ceremony_id, data).into();
+        let data = bincode::serialize(&msg).unwrap();
+        self.sender.send(reciever_idx, data);
     }
 }

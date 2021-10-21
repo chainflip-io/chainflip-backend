@@ -1,18 +1,16 @@
 use std::collections::HashMap;
 
 use super::common::{
-    broadcast::{BroadcastStage, BroadcastStageProcessor},
+    broadcast::{BroadcastStage, BroadcastStageProcessor, DataToSend},
+    broadcast_verification::verify_broadcasts,
     {CeremonyCommon, StageResult},
 };
 use super::frost::{
-    self, BroadcastVerificationMessage, Comm1, LocalSig3, SecretNoncePair, SigningData,
-    VerifyComm2, VerifyLocalSig4,
+    self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 use super::SchnorrSignature;
 
 use super::signing_state::{SigningP2PSender, SigningStateCommonInfo};
-
-use super::utils::threshold_from_share_count;
 
 type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
 
@@ -54,12 +52,12 @@ derive_display_as_type_name!(AwaitCommitments1);
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
     type Message = Comm1;
 
-    fn init(&self) -> Self::Message {
-        Comm1 {
+    fn init(&self) -> DataToSend<Self::Message> {
+        DataToSend::Broadcast(Comm1 {
             index: self.common.own_idx,
             d: self.nonces.d_pub,
             e: self.nonces.e_pub,
-        }
+        })
     }
 
     should_delay!(SigningData::BroadcastVerificationStage2);
@@ -100,12 +98,13 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
-    fn init(&self) -> Self::Message {
+    fn init(&self) -> DataToSend<Self::Message> {
         let data = self
             .common
             .all_idxs
             .iter()
             .map(|idx| {
+                // It is safe to unwrap as all indexes should be present at this point
                 self.commitments
                     .get(&idx)
                     .cloned()
@@ -113,7 +112,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             })
             .collect();
 
-        VerifyComm2 { data }
+        DataToSend::Broadcast(VerifyComm2 { data })
     }
 
     should_delay!(SigningData::LocalSigStage3);
@@ -163,17 +162,17 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
-    fn init(&self) -> Self::Message {
+    fn init(&self) -> DataToSend<Self::Message> {
         slog::trace!(self.common.logger, "Generating local signature response");
 
-        frost::generate_local_sig(
+        DataToSend::Broadcast(frost::generate_local_sig(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
             &self.nonces,
             &self.commitments,
             self.common.own_idx,
             &self.common.all_idxs,
-        )
+        ))
 
         // TODO: make sure secret nonces are deleted here (according to
         // step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
@@ -215,7 +214,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     type Message = VerifyLocalSig4;
 
     /// Broadcast all signature shares sent to us
-    fn init(&self) -> Self::Message {
+    fn init(&self) -> DataToSend<Self::Message> {
         let data = self
             .common
             .all_idxs
@@ -228,7 +227,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             })
             .collect();
 
-        VerifyLocalSig4 { data }
+        DataToSend::Broadcast(VerifyLocalSig4 { data })
     }
 
     fn should_delay(&self, _: &SigningData) -> bool {
@@ -248,7 +247,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
         slog::debug!(
             self.common.logger,
-            "Local signatures have been correctly broadcast for ceremony: [todo]"
+            "Local signatures have been correctly broadcast"
         );
 
         let all_idxs = &self.common.all_idxs;
@@ -270,110 +269,4 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             Err(failed_idxs) => StageResult::Error(failed_idxs),
         }
     }
-}
-
-// This might result in an error in case we don't get 2/3 of parties agreeing on the same value.
-// If we don't, this means that either the broadcaster did an inconsitent broadcast or that
-// 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
-// for symmetry?)
-fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
-    signer_idxs: &[usize],
-    verification_messages: &HashMap<usize, BroadcastVerificationMessage<T>>,
-) -> Result<Vec<T>, Vec<usize>> {
-    let num_parties = signer_idxs.len();
-
-    // Sanity check: we should have N messages, each containing N messages
-    assert_eq!(verification_messages.len(), num_parties);
-
-    assert!(verification_messages
-        .iter()
-        .all(|(_, m)| m.data.len() == num_parties));
-
-    let threshold = threshold_from_share_count(num_parties);
-
-    // NOTE: ideally we wouldn't need to serialize the messages again here, but
-    // we can't use T as key directly (in our case it holds third-party structs)
-    // and delaying deserialization when we receive these over p2p would would make
-    // our code more complicated than necessary.
-
-    let mut agreed_on_values: Vec<T> = Vec::with_capacity(num_parties);
-
-    let mut blamed_parties = vec![];
-
-    'outer: for i in 0..num_parties {
-        let mut value_counts = HashMap::<Vec<u8>, usize>::new();
-        for m in verification_messages.values() {
-            let data =
-                bincode::serialize(&m.data[i]).expect("Could not serialise broadcast message data");
-            *value_counts.entry(data).or_default() += 1;
-        }
-
-        for (data, count) in value_counts {
-            if count > threshold {
-                let data = bincode::deserialize::<T>(&data)
-                    .expect("Could not deserialise broadcast message data");
-                agreed_on_values.push(data);
-                continue 'outer;
-            }
-        }
-
-        // If we reach here, we couldn't reach consensus on
-        // values sent from party `idx = i + 1` and we are going to report them
-        blamed_parties.push(i + 1);
-    }
-
-    if blamed_parties.is_empty() {
-        Ok(agreed_on_values)
-    } else {
-        Err(blamed_parties)
-    }
-}
-
-#[test]
-fn check_correct_broadcast() {
-    let mut verification_messages = HashMap::new();
-
-    // There is a concensus on each of the values,
-    // even though some parties disagree on some values
-
-    let all_messages = vec![
-        vec![1, 1, 1, 1], // "correct" message
-        vec![1, 2, 1, 1],
-        vec![2, 1, 2, 1],
-        vec![1, 1, 1, 2],
-    ];
-
-    for (i, m) in all_messages.into_iter().enumerate() {
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
-    }
-
-    assert_eq!(
-        verify_broadcasts(&[1, 2, 3, 4], &verification_messages),
-        Ok(vec![1, 1, 1, 1])
-    );
-}
-
-#[test]
-fn check_incorrect_broadcast() {
-    let mut verification_messages = HashMap::new();
-
-    // We can't achieve consensus on values from parties
-    // 2 and 4 (indexes in inner vectors), which we assume
-    // is due to them sending messages inconsistently
-
-    let all_messages = vec![
-        vec![1, 2, 1, 2],
-        vec![1, 2, 1, 1],
-        vec![2, 1, 2, 1],
-        vec![1, 1, 1, 2],
-    ];
-
-    for (i, m) in all_messages.into_iter().enumerate() {
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
-    }
-
-    assert_eq!(
-        verify_broadcasts(&[1, 2, 3, 4], &verification_messages),
-        Err(vec![2, 4])
-    );
 }

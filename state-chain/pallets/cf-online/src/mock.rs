@@ -11,20 +11,21 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
-use cf_traits::mocks::epoch_info::Mock;
+use cf_traits::impl_mock_stake_transfer;
 use cf_traits::{Chainflip, Heartbeat, NetworkState};
-use sp_std::cell::RefCell;
 
 type ValidatorId = u64;
+
+cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32);
+impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {
 	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
-			missing: vec![],
+			awaiting: vec![],
 			online: vec![],
-			offline: vec![],
+			number_of_nodes: 0,
 		}
 	);
 }
@@ -36,7 +37,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>, Config},
+		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -91,6 +92,12 @@ impl Heartbeat for MockHeartbeat {
 	}
 }
 
+impl MockHeartbeat {
+	pub(crate) fn network_state() -> NetworkState<ValidatorId> {
+		NETWORK_STATE.with(|cell| (*cell.borrow()).clone())
+	}
+}
+
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
@@ -107,19 +114,18 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type EpochInfo = epoch_info::Mock;
 	type Heartbeat = MockHeartbeat;
+	type EpochInfo = MockEpochInfo;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_online: Some(OnlinePalletConfig {}),
 	};
 
-	// We only expect Alice to be a validator at the moment
-	Mock::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+	MockEpochInfo::add_validator(ALICE);
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

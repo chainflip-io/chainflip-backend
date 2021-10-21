@@ -1,25 +1,24 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Instant};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
+    logging::CEREMONY_ID_KEY,
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, PendingSigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, Point, Scalar, VerifiableSS},
         KeyDB,
     },
 };
+
+use serde::{Deserialize, Serialize};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
     common::KeygenResultInfo, frost::SigningDataWrapped, key_store::KeyStore,
-    keygen_manager::KeygenManager, signing_manager::SigningManager,
+    keygen_data::KeygenData, keygen_manager::KeygenManager, signing_manager::SigningManager,
+    utils::threshold_from_share_count,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -28,6 +27,23 @@ pub struct SchnorrSignature {
     pub s: [u8; 32],
     /// Point component (commitment)
     pub r: secp256k1::PublicKey,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ThresholdParameters {
+    /// Total number of key shares (equals the total number of parties in keygen)
+    pub share_count: usize,
+    /// Max number of parties that can *NOT* generate signature
+    pub threshold: usize,
+}
+
+impl ThresholdParameters {
+    pub fn from_share_count(share_count: usize) -> Self {
+        ThresholdParameters {
+            share_count,
+            threshold: threshold_from_share_count(share_count),
+        }
+    }
 }
 
 impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
@@ -41,71 +57,31 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MultisigMessage {
-    KeyGenMessage(KeyGenMessageWrapped),
+    KeyGenMessage(KeygenDataWrapped),
     SigningMessage(SigningDataWrapped),
 }
 
-use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Broadcast1 {
-    pub bc1: KeyGenBroadcastMessage1,
-    pub blind: BigInt,
-    pub y_i: Point,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Secret2 {
-    pub vss: VerifiableSS<Point>,
-    pub secret_share: Scalar,
-}
-
-impl From<Secret2> for KeygenData {
-    fn from(sec2: Secret2) -> Self {
-        KeygenData::Secret2(sec2)
-    }
-}
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeyGenMessageWrapped {
+pub struct KeygenDataWrapped {
     pub ceremony_id: CeremonyId,
-    pub message: KeygenData,
+    pub data: KeygenData,
 }
 
-impl KeyGenMessageWrapped {
+impl KeygenDataWrapped {
     pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
     where
         M: Into<KeygenData>,
     {
-        KeyGenMessageWrapped {
+        KeygenDataWrapped {
             ceremony_id,
-            message: m.into(),
+            data: m.into(),
         }
     }
 }
 
-impl From<KeyGenMessageWrapped> for MultisigMessage {
-    fn from(wrapped: KeyGenMessageWrapped) -> Self {
+impl From<KeygenDataWrapped> for MultisigMessage {
+    fn from(wrapped: KeygenDataWrapped) -> Self {
         MultisigMessage::KeyGenMessage(wrapped)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum KeygenData {
-    Broadcast1(Broadcast1),
-    Secret2(Secret2),
-}
-
-impl From<Broadcast1> for KeygenData {
-    fn from(bc1: Broadcast1) -> Self {
-        KeygenData::Broadcast1(bc1)
-    }
-}
-
-impl Display for KeygenData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            KeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
-            KeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
-        }
     }
 }
 
@@ -162,6 +138,8 @@ pub enum InnerEvent {
     KeygenResult(KeygenOutcome),
 }
 
+pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
+
 impl From<P2PMessageCommand> for InnerEvent {
     fn from(m: P2PMessageCommand) -> Self {
         InnerEvent::P2PMessageCommand(m)
@@ -175,7 +153,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
-    keygen: KeygenManager,
+    keygen_manager: KeygenManager,
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
@@ -191,16 +169,14 @@ where
         my_account_id: AccountId,
         db: S,
         inner_event_sender: UnboundedSender<InnerEvent>,
-        phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
-            keygen: KeygenManager::new(
+            keygen_manager: KeygenManager::new(
                 my_account_id.clone(),
                 inner_event_sender.clone(),
-                phase_timeout,
                 &logger,
             ),
             signing_manager: SigningManager::new(
@@ -216,7 +192,7 @@ where
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
-        self.keygen.cleanup();
+        self.keygen_manager.cleanup();
         self.signing_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
@@ -227,9 +203,9 @@ where
                     if pending.should_expire_at < Instant::now() {
                         slog::warn!(
                             logger,
-                            "Request to sign expired waiting for key id: {:?}, ceremony id: {:?}",
-                            key_id,
-                            pending.signing_info.ceremony_id,
+                            "Request to sign expired waiting for key id: {:?}",
+                            key_id;
+                            CEREMONY_ID_KEY => pending.signing_info.ceremony_id,
                         );
                         return false;
                     }
@@ -247,22 +223,21 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a keygen request, ceremony_id: {}, participants: {:?}",
-                    keygen_info.ceremony_id,
-                    keygen_info.signers
+                    "Received a keygen request, participants: {:?}",
+                    keygen_info.signers;
+                    CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.keygen.on_keygen_request(keygen_info);
+                self.keygen_manager.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
 
                 slog::debug!(
                     self.logger,
-                    "Received a request to sign, ceremony_id: {}, message_hash: {}, signers: {:?}",
-                    sign_info.ceremony_id,
-                    sign_info.data,
-                    sign_info.signers
+                    "Received a request to sign, message_hash: {}, signers: {:?}",
+                    sign_info.data, sign_info.signers;
+                    CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
                 match self.key_store.get_key(&key_id) {
                     Some(key) => {
@@ -278,9 +253,9 @@ where
 
                         slog::debug!(
                             self.logger,
-                            "Delaying a request to sign for unknown key: {:?} [ceremony_id: {}]",
-                            sign_info.key_id,
-                            sign_info.ceremony_id
+                            "Delaying a request to sign for unknown key: {:?}",
+                            sign_info.key_id;
+                            CEREMONY_ID_KEY => sign_info.ceremony_id
                         );
 
                         self.pending_requests_to_sign
@@ -303,8 +278,8 @@ where
                 let signing_info = pending.signing_info;
                 slog::debug!(
                     self.logger,
-                    "Processing a pending requests to sign [ceremony_id: {}]",
-                    signing_info.ceremony_id
+                    "Processing a pending requests to sign";
+                    CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
                 self.signing_manager.on_request_to_sign(
@@ -348,29 +323,29 @@ where
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
-            Ok(MultisigMessage::KeyGenMessage(multisig_message)) => {
+            Ok(MultisigMessage::KeyGenMessage(keygen_message)) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let ceremony_id = multisig_message.ceremony_id;
+                let ceremony_id = keygen_message.ceremony_id;
 
                 if let Some(key) = self
-                    .keygen
-                    .process_keygen_message(sender_id, multisig_message)
+                    .keygen_manager
+                    .process_keygen_data(sender_id, keygen_message)
                 {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(multisig_message)) => {
+            Ok(MultisigMessage::SigningMessage(signing_message)) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
                 self.signing_manager
-                    .process_signing_data(sender_id, multisig_message);
+                    .process_signing_data(sender_id, signing_message);
             }
             Err(_) => {
                 slog::warn!(
@@ -389,7 +364,7 @@ where
     S: KeyDB,
 {
     pub fn get_keygen(&self) -> &KeygenManager {
-        &self.keygen
+        &self.keygen_manager
     }
 
     pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
@@ -406,7 +381,7 @@ where
 
     /// Change the time we wait until deleting all unresolved states
     pub fn expire_all(&mut self) {
-        self.keygen.expire_all();
+        self.keygen_manager.expire_all();
         self.signing_manager.expire_all();
 
         self.pending_requests_to_sign.retain(|_, pending_infos| {
