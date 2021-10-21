@@ -409,10 +409,7 @@ mod tests {
         let response =
             generate_contract_schnorr_sig(private_key, public_key, commitment, nonce, &message);
 
-        assert_eq!(
-            hex::encode(response.get_element().as_ref()),
-            "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538"
-        );
+        assert_eq!(hex::encode(response.get_element().as_ref()), EXPECTED_SIGMA);
 
         // Build the challenge again to match how it is done on the receiving side
         let challenge =

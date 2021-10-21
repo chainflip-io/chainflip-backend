@@ -24,7 +24,7 @@ use crate::{
             },
             KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{Keys, Point},
+        crypto::Point,
         KeyDBMock, SigningInfo,
     },
 };
@@ -113,10 +113,6 @@ pub fn keygen_stage_for(
     ceremony_id: CeremonyId,
 ) -> Option<KeygenStage> {
     client.get_keygen().get_stage_for(ceremony_id)
-}
-
-pub fn keygen_delayed_count(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> usize {
-    client.get_keygen().get_delayed_count(ceremony_id)
 }
 
 /// Contains the states at different points of key generation
@@ -688,19 +684,6 @@ pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
     assert!(check_for_inner_event(rx).await.is_none());
 }
 
-/// Skip all non-signal messages
-pub async fn recv_next_signal_message_skipping(
-    rx: &mut InnerEventReceiver,
-) -> Option<SigningOutcome> {
-    loop {
-        let res = check_for_inner_event(rx).await?;
-
-        if let InnerEvent::SigningResult(s) = res {
-            return Some(s);
-        }
-    }
-}
-
 /// Check if the next event produced by the receiver is SigningOutcome
 pub async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
     let event: &InnerEvent = tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
@@ -871,30 +854,6 @@ pub fn get_stage_for_ceremony(c: &MultisigClientNoDB, id: CeremonyId) -> Option<
 
 pub fn get_stage_for_default_ceremony(c: &MultisigClientNoDB) -> Option<String> {
     get_stage_for_ceremony(c, SIGN_CEREMONY_ID)
-}
-
-pub fn create_bc1(signer_idx: usize) -> Broadcast1 {
-    let key = Keys::phase1_create(signer_idx);
-
-    let (bc1, blind) = key.phase1_broadcast();
-
-    let y_i = key.y_i;
-
-    Broadcast1 { bc1, blind, y_i }
-}
-
-pub fn create_invalid_bc1() -> Broadcast1 {
-    let key = Keys::phase1_create(0);
-
-    let key2 = Keys::phase1_create(0);
-
-    let (_, blind) = key.phase1_broadcast();
-
-    let (bc1, _) = key2.phase1_broadcast();
-
-    let y_i = key.y_i;
-
-    Broadcast1 { bc1, blind, y_i }
 }
 
 impl MultisigClientNoDB {

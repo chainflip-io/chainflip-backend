@@ -3,8 +3,6 @@
 mod tests {
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
-	use frame_support::traits::OnInitialize;
-	use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -13,39 +11,21 @@ mod tests {
 	use state_chain_runtime::opaque::SessionKeys;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
-		Timestamp, Validator, Vaults,
+		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Validator,
+		Vaults,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+	use cf_traits::{BlockNumber, FlipBalance};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
 	pub const ERIN: [u8; 32] = [7u8; 32];
 
-	pub const INIT_TIMESTAMP: u64 = 30_000;
-	pub const BLOCK_TIME: u64 = 1000;
-
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 		TPublic::Pair::from_string(&format!("//{}", seed), None)
 			.expect("static values are valid; qed")
 			.public()
-	}
-	fn run_to_block(n: u32) {
-		while System::block_number() < n {
-			System::set_block_number(System::block_number() + 1);
-			Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
-			Session::on_initialize(System::block_number());
-			Flip::on_initialize(System::block_number());
-			Staking::on_initialize(System::block_number());
-			Auction::on_initialize(System::block_number());
-			Emissions::on_initialize(System::block_number());
-			Governance::on_initialize(System::block_number());
-			Reputation::on_initialize(System::block_number());
-			Vaults::on_initialize(System::block_number());
-			Validator::on_initialize(System::block_number());
-		}
 	}
 
 	pub struct ExtBuilder {
@@ -79,11 +59,6 @@ mod tests {
 
 		fn root(mut self, root: AccountId) -> Self {
 			self.root = root;
-			self
-		}
-
-		fn blocks_per_epoch(mut self, blocks_per_epoch: BlockNumber) -> Self {
-			self.blocks_per_epoch = blocks_per_epoch;
 			self
 		}
 
@@ -182,7 +157,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
+		use cf_traits::{AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
 
 		const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 

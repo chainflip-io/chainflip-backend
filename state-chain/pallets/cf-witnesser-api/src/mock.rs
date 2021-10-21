@@ -73,7 +73,7 @@ impl system::Config for Test {
 impl_mock_stake_transfer!(u64, u128);
 
 impl NonceProvider for Test {
-	fn next_nonce(identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+	fn next_nonce(_identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
 		42
 	}
 }
@@ -97,7 +97,7 @@ impl cf_traits::SigningContext<Test> for MockSigningContext {
 		()
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
 		Call::System(frame_system::Call::remark(b"Hello".to_vec()))
 	}
 }
@@ -123,7 +123,7 @@ impl From<AccountIdU64> for u64 {
 }
 
 impl IsType<u64> for AccountIdU64 {
-	fn from_ref(t: &u64) -> &Self {
+	fn from_ref(_t: &u64) -> &Self {
 		unimplemented!()
 	}
 
@@ -131,7 +131,7 @@ impl IsType<u64> for AccountIdU64 {
 		&self.0
 	}
 
-	fn from_mut(t: &mut u64) -> &mut Self {
+	fn from_mut(_t: &mut u64) -> &mut Self {
 		unimplemented!()
 	}
 
@@ -186,9 +186,9 @@ impl pallet_cf_broadcast::BroadcastConfig<Test> for MockBroadcastConfig {
 	type TransactionHash = ();
 
 	fn verify_transaction(
-		signer: &<Test as Chainflip>::ValidatorId,
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
+		_signer: &<Test as Chainflip>::ValidatorId,
+		_unsigned_tx: &Self::UnsignedTransaction,
+		_signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
 		Some(())
 	}
