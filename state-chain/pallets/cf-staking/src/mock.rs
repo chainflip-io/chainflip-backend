@@ -115,6 +115,7 @@ impl pallet_cf_flip::Config for Test {
 	type EnsureGovernance = MockEnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
