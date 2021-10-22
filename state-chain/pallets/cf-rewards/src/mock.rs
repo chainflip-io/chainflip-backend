@@ -83,6 +83,7 @@ impl pallet_cf_flip::Config for Test {
 	type EnsureGovernance = MockEnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
 }
 
 impl pallet_cf_rewards::Config for Test {
