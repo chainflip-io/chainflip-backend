@@ -278,7 +278,7 @@ impl SigningState {
 
                                 slog::warn!(
                                     self.logger,
-                                    "<TODO> ceremony failed, blaming parties: {:?} ({:?})",
+                                    "Signing ceremony failed, blaming parties: {:?} ({:?})",
                                     &bad_validators,
                                     blamed_parties,
                                 );
@@ -293,7 +293,7 @@ impl SigningState {
 
                                 slog::debug!(
                                     self.logger,
-                                    "<TODO> ceremony reached the final stage!"
+                                    "Signing ceremony reached the final stage!"
                                 );
                             }
                         }
@@ -320,7 +320,7 @@ impl SigningState {
 
                     slog::warn!(
                         self.logger,
-                        "<TODO> ceremony expired before a request to sign, blaming parties: {:?}",
+                        "Signing ceremony expired before a request to sign, blaming parties: {:?}",
                         blamed_ids
                     );
 
@@ -337,7 +337,7 @@ impl SigningState {
 
                     slog::warn!(
                         self.logger,
-                        "<TODO> ceremony expired, blaming parties: {:?}",
+                        "Signing ceremony expired, blaming parties: {:?}",
                         blamed_ids,
                     );
 

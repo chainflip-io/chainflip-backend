@@ -1,4 +1,4 @@
-//! Multisig signing
+//! Multisig signing and keygen
 
 /// Multisig client
 mod client;
