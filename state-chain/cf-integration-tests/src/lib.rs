@@ -28,6 +28,221 @@ mod tests {
 		}
 	}
 
+	mod cfe {
+		use super::*;
+		use frame_support::traits::HandleLifetime;
+		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+		use sp_runtime::AccountId32;
+		use state_chain_runtime::HeartbeatBlockInterval;
+		use std::collections::HashMap;
+		use state_chain_runtime::{Event, Origin, WitnesserApi};
+		type ValidatorId = AccountId32;
+
+		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+		const TX_HASH: EthTransactionHash = [211u8; 32];
+
+		// Staking, simply
+		trait Staking {
+			fn stake(&mut self, account_id: &ValidatorId, amount: FlipBalance);
+			fn clear(&mut self, account_id: &ValidatorId);
+		}
+
+		// Witness a staking event
+		trait StakingWitness {
+			fn stake_witnessed(
+				witnesser: &ValidatorId,
+				account_id: &ValidatorId,
+				amount: FlipBalance,
+			);
+		}
+
+		trait Events {
+			fn process();
+		}
+
+		// A client of the blockchain
+		// It is fed blocks to keep it alive
+		pub trait StateChainClient {
+			type Witness: StakingWitness;
+			type Events: Events;
+			// A new block created
+			fn on_block(&mut self, block_number: BlockNumber);
+		}
+
+		// Our bridge to the real world
+		trait ContractListener {
+			fn stake_updated(&mut self, account_id: ValidatorId, amount: FlipBalance);
+		}
+
+		struct Contract {
+			stakes: HashMap<ValidatorId, FlipBalance>,
+		}
+
+		impl Staking for Contract {
+			fn stake(&mut self, account_id: &ValidatorId, amount: FlipBalance) {
+				self.stakes.insert(account_id.clone(), amount);
+			}
+
+			fn clear(&mut self, account_id: &ValidatorId) {
+				self.stakes.remove(account_id);
+			}
+		}
+
+		// The engine, the CFE (sub)component ;-)
+		pub struct Engine {
+			validator_id: ValidatorId,
+			witnessed: Vec<(ValidatorId, FlipBalance)>,
+		}
+
+		impl Engine {
+			fn new(validator_id: ValidatorId) -> Self {
+				Engine {
+					validator_id,
+					witnessed: vec![],
+				}
+			}
+		}
+
+		impl ContractListener for Engine {
+			fn stake_updated(&mut self, account_id: ValidatorId, amount: FlipBalance) {
+				self.witnessed.push((account_id, amount));
+			}
+		}
+
+		impl StakingWitness for Engine {
+			fn stake_witnessed(
+				witnesser: &ValidatorId,
+				account_id: &ValidatorId,
+				amount: FlipBalance,
+			) {
+				state_chain_runtime::WitnesserApi::witness_staked(
+					Origin::signed(witnesser.clone()),
+					account_id.clone(),
+					amount,
+					ETH_ZERO_ADDRESS,
+					TX_HASH,
+				);
+			}
+		}
+
+		/*
+		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
+		/// The vault for the request has rotated \[chain_id\]
+		VaultRotationCompleted(ChainId),
+		/// All KeyGen ceremonies have been aborted \[chain_ids\]
+		KeygenAborted(Vec<ChainId>),
+		/// A complete set of vaults have been rotated
+		VaultsRotated,
+		/// UnexpectedPubkeyWitnessed \[chain_id, key\]
+		UnexpectedPubkeyWitnessed(ChainId, Vec<u8>),
+		 */
+
+		impl Events for Engine {
+			fn process() {
+				on_events!(
+					frame_system::Pallet::<Runtime>::events()
+					.into_iter()
+					.map(|e| e.event)
+					.collect::<Vec<_>>(),
+					Event::pallet_cf_vaults(
+						pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+							assert_eq!(ceremony_id, 1, "this should be the first ceremony");
+					},
+					Event::pallet_cf_vaults(
+						pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
+							assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+					},
+					Event::pallet_cf_vaults(
+						pallet_cf_vaults::Event::KeygenAborted(ref chain_ids)) => {
+							assert_eq!(chain_ids, &[ChainId::Ethereum], "this should be Ethereum");
+					},
+					Event::pallet_cf_vaults(
+						pallet_cf_vaults::Event::VaultsRotated) => {
+
+					},
+					Event::pallet_cf_vaults(
+						pallet_cf_vaults::Event::UnexpectedPubkeyWitnessed(chain_id, key)) => {
+							assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+					}
+				);
+
+				frame_system::Pallet::<Runtime>::reset_events();
+			}
+		}
+
+		impl StateChainClient for Engine {
+			type Witness = Self;
+			type Events = Self;
+
+			fn on_block(&mut self, block_number: BlockNumber) {
+				// Submit twice an interval
+				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+					Online::heartbeat(state_chain_runtime::Origin::signed(
+						self.validator_id.clone(),
+					));
+				}
+
+				// Witness staking events
+				for (validator_id, amount) in &self.witnessed {
+					Self::Witness::stake_witnessed(&self.validator_id, &validator_id, *amount);
+				}
+
+				self.witnessed.clear();
+
+				Self::Events::process();
+			}
+		}
+
+		fn setup(validator_id: &ValidatorId) {
+			// Create an account, generate and register the session keys
+			assert_ok!(frame_system::Provider::<Runtime>::created(&validator_id));
+
+			let seed = &validator_id.clone().to_string();
+
+			let key = SessionKeys {
+				aura: get_from_seed::<AuraId>(seed),
+				grandpa: get_from_seed::<GrandpaId>(seed),
+			};
+
+			assert_ok!(state_chain_runtime::Session::set_keys(
+				state_chain_runtime::Origin::signed(validator_id.clone()),
+				key,
+				vec![]
+			));
+		}
+
+		pub struct Network {
+			pub nodes:
+				HashMap<ValidatorId, Box<dyn StateChainClient<Witness = Engine, Events = Engine>>>,
+		}
+
+		impl Network {
+			fn update(&mut self, block_number: BlockNumber) {
+				for (_, node) in self.nodes.iter_mut() {
+					node.on_block(block_number);
+				}
+			}
+		}
+
+		pub fn create_network(number_of_nodes: u8) -> Network {
+			let mut network: Network = Network {
+				nodes: HashMap::new(),
+			};
+
+			for index in 1..=number_of_nodes {
+				let validator_id: ValidatorId = [index; 32].into();
+				setup(&validator_id);
+				network
+					.nodes
+					.insert(validator_id.clone(), Box::new(Engine::new(validator_id)));
+			}
+
+			network
+		}
+	}
+
+	use crate::tests::cfe::*;
+
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
@@ -580,8 +795,8 @@ mod tests {
 						.map(|e| e.event)
 						.collect::<Vec<_>>(),
 						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-            				assert_eq!(ceremony_id, 1, "this should be the first ceremony");
-        				}
+							assert_eq!(ceremony_id, 1, "this should be the first ceremony");
+						}
 					);
 
 					// assert_eq!(
@@ -597,7 +812,6 @@ mod tests {
 					// 	None,
 					// 	"we should have no more events after auction has completed"
 					// );
-
 
 					// if let Some(AuctionResult {
 					// 	winners,
