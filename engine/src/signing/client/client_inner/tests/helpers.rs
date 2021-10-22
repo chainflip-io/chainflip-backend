@@ -406,7 +406,9 @@ impl KeygenContext {
         KeygenContext::inner_new(account_ids)
     }
 
-    pub fn new_with_account_ids(account_ids: Vec<AccountId>) -> Self {
+    pub fn new_with_account_ids(mut account_ids: Vec<AccountId>) -> Self {
+        // The test expects the array to be sorted
+        account_ids.sort();
         KeygenContext::inner_new(account_ids)
     }
 
