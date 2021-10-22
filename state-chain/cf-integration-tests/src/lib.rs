@@ -20,6 +20,14 @@ mod tests {
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 
+	macro_rules! on_events {
+		($events:expr, $( $p:pat => $b:block ),*) => {
+			for event in $events {
+				$(if let $p = event { $b })*
+			}
+		}
+	}
+
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
@@ -554,8 +562,8 @@ mod tests {
 						"we should have no more events until we have confirmation of auction"
 					);
 
-					// Reset system events
-					frame_system::Pallet::<Runtime>::reset_events();
+					// // Reset system events
+					// frame_system::Pallet::<Runtime>::reset_events();
 
 					assert_eq!(
 						Auction::current_auction_index(),
@@ -567,10 +575,14 @@ mod tests {
 					// The following block should be confirmed
 					run_to_block(EPOCH_BLOCKS + 1);
 
-					assert_eq!(
-						System::events().len(),
-						0,
-						"we should have no more events until we have confirmation of auction"
+					on_events!(
+						frame_system::Pallet::<Runtime>::events()
+						.into_iter()
+						.map(|e| e.event)
+						.collect::<Vec<_>>(),
+						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+            				assert_eq!(ceremony_id, 1, "this should be the first ceremony");
+        				}
 					);
 
 					let mut events = reverse_events::<Runtime>();
