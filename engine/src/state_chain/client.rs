@@ -270,7 +270,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 },
             }
         }
-        slog::error!("Exceeded maximum number of retry attempts");
+        slog::error!(logger, "Exceeded maximum number of retry attempts");
         Err(anyhow::Error::msg(
             "Exceeded maximum number of retry attempts",
         ))
