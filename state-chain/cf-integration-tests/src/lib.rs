@@ -511,6 +511,11 @@ mod tests {
 						"we should have had no auction as of yet"
 					);
 
+					// TODO Mock this out into the mock CFE
+					for validator_id in validators {
+						assert_ok!(Online::heartbeat(Origin::signed(validator_id)));
+					}
+
 					// Auction commences on epoch
 					run_to_block(EPOCH_BLOCKS);
 
