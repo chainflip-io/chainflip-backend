@@ -7,7 +7,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - update/epic-ci-1
+        #        - update/epic-ci-1
         - feature/sc-2224
 ignore_main_branches: &ignore_main_branches
   filters:
@@ -17,7 +17,7 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-#        - update/epic-ci-1
+        #        - update/epic-ci-1
         - feature/sc-2224
 
 auth: &dockerconfig
@@ -129,8 +129,7 @@ workflows:
   # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-docs:
     when:
-      and:
-        - not: <<pipeline.parameters.build_testnet>>
+      not: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-doc-validator-package:
           context:
@@ -139,8 +138,7 @@ workflows:
 
   chainflip-backend-checks:
     when:
-      condition:
-        - not: <<pipeline.parameters.build_testnet>>
+      not: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-clippy-validator-package:
           requires:
@@ -194,7 +192,6 @@ workflows:
             - ghcr-credentials
           <<: *only_main_branches
       # Deploy new testnet. Coming Soon™
-      #/
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
     jobs:
@@ -209,7 +206,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package 
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -219,7 +216,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
           extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package 
+            - cargo-build-and-test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -236,11 +233,6 @@ workflows:
             - do-credentials
             - infura-endpoints
           <<: *only_main_branches
-#/
-#  vault-e2e-rotation-test:
-#    jobs:
-
-
 
 ######################## /Workflows ########################
 
@@ -363,7 +355,7 @@ jobs:
             - target/release/state-chain-node
             - target/release/chainflip-engine
       - send_notification:
-          only_for_branches: ""
+          only_for_branches: "develop"
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
@@ -423,7 +415,7 @@ jobs:
           root: ./
           paths:
             - eth-contracts/*
-  #/
+
   clone-cluster-repo:
     resource_class: small
     docker:
@@ -509,7 +501,7 @@ jobs:
             -vv
       - store_artifacts:
           path: target/release
-#/
+
   create-testnet:
     parameters:
       cluster_name:
@@ -528,10 +520,4 @@ jobs:
           command: |
             cd cluster
             ./build.sh -b="$CIRCLE_BRANCH" -t="latest" --local --reset
-#/
-#  vault-rotation:
-#    parameters:
-#      cluster_name:
-#        description: 
-
 ######################## /Jobs ########################
