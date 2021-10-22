@@ -2,7 +2,10 @@ use crate as pallet_cf_witness_api;
 use codec::{Decode, Encode};
 use std::time::Duration;
 
-use cf_chains::{eth::register_claim::RegisterClaim, Ethereum};
+use cf_chains::{
+	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
+	Ethereum,
+};
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
 	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider,
@@ -28,7 +31,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Event<T>, Storage},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Event<T>, Storage},
@@ -72,8 +75,8 @@ impl system::Config for Test {
 
 impl_mock_stake_transfer!(u64, u128);
 
-impl NonceProvider for Test {
-	fn next_nonce(_identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+impl NonceProvider<Ethereum> for Test {
+	fn next_nonce() -> cf_traits::Nonce {
 		42
 	}
 }
@@ -83,6 +86,12 @@ pub struct MockSigningContext;
 
 impl From<RegisterClaim> for MockSigningContext {
 	fn from(_: RegisterClaim) -> Self {
+		unimplemented!()
+	}
+}
+
+impl From<SetAggKeyWithAggKey> for MockSigningContext {
+	fn from(_: SetAggKeyWithAggKey) -> Self {
 		unimplemented!()
 	}
 }
@@ -161,7 +170,7 @@ impl Chainflip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type EnsureWitnessed = MockEnsureWitnessed;
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type Call = Call;
 }
 
@@ -173,7 +182,7 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 	type TargetChain = Ethereum;
 	type SigningContext = MockSigningContext;
 	type SignerNomination = MockSignerNomination;
-	type KeyProvider = MockKeyProvider<Ethereum, u32>;
+	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 	type OfflineReporter = MockOfflineReporter;
 }
 
@@ -218,11 +227,11 @@ impl VaultRotationHandler for Test {
 
 impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
-	type PublicKey = Vec<u8>;
-	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
-	type NonceProvider = Self;
 	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
+	type OfflineReporter = MockOfflineReporter;
+	type SigningContext = MockSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 }
 
 impl pallet_cf_witness_api::Config for Test {

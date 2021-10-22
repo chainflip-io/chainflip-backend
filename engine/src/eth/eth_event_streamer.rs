@@ -19,6 +19,18 @@ pub struct Event<EventEnum: Debug> {
     /// The event specific parameters
     pub event_enum: EventEnum,
 }
+
+impl<EventEnum: Debug> std::fmt::Display for Event<EventEnum> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "EventEnum: {:?}; tx_hash: 0x{}",
+            self.event_enum,
+            hex::encode(self.tx_hash)
+        )
+    }
+}
+
 impl<EventEnum: Debug> Event<EventEnum> {
     pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(
         decode_log: &LogDecoder,
@@ -117,11 +129,9 @@ pub async fn new_eth_event_stream<
                 let result_event =
                     result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
-                slog::debug!(
-                    logger,
-                    "Received ETH log, parsing result: {:?}",
-                    result_event
-                );
+                if let Ok(ok_result) = &result_event {
+                    slog::debug!(logger, "Received ETH log {}", ok_result);
+                }
 
                 result_event
             },

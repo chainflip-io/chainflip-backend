@@ -1,11 +1,14 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Online, Reputation, Rewards, Runtime, Validator,
-	Witnesser,
+	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation, Rewards,
+	Runtime, Validator, Vaults, Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
 use cf_chains::{
-	eth::{self, register_claim::RegisterClaim, ChainflipContractCall},
+	eth::{
+		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
+		ChainflipContractCall,
+	},
 	Ethereum,
 };
 use cf_traits::{
@@ -18,13 +21,11 @@ use codec::{Decode, Encode};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
 use sp_std::cmp::min;
-use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
-use sp_std::vec::Vec;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -238,12 +239,18 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
-	Broadcast(RegisterClaim),
+	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
-	fn from(rc: RegisterClaim) -> Self {
-		EthereumSigningContext::PostClaimSignature(rc)
+	fn from(call: RegisterClaim) -> Self {
+		EthereumSigningContext::PostClaimSignature(call)
+	}
+}
+
+impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
+	fn from(call: SetAggKeyWithAggKey) -> Self {
+		EthereumSigningContext::SetAggKeyWithAggKeyBroadcast(call)
 	}
 }
 
@@ -256,7 +263,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 	fn get_payload(&self) -> Self::Payload {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
-			Self::Broadcast(ref call) => call.signing_payload(),
+			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -269,26 +276,26 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				)
 				.into()
 			}
-			Self::Broadcast(contract_call) => {
-				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
-				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					unsigned_tx,
-				))
-			}
+			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
+				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
+					call.clone(),
+					&signature,
+					Environment::key_manager_address().into(),
+				)),
+			),
 		}
 	}
 }
 
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
-	mut call: C,
-	signature: eth::SchnorrVerificationComponents,
+	call: C,
+	signature: &eth::SchnorrVerificationComponents,
+	contract_address: H160,
 ) -> eth::UnsignedTransaction {
-	call.insert_signature(&signature);
 	eth::UnsignedTransaction {
-		// TODO: get chain_id and contract from on-chain.
-		chain_id: eth::CHAIN_ID_RINKEBY,
-		contract: eth::stake_manager_contract_address().into(),
-		data: call.abi_encoded(),
+		chain_id: Environment::ethereum_chain_id(),
+		contract: contract_address,
+		data: call.abi_encode_with_signature(signature),
 		..Default::default()
 	}
 }
@@ -317,12 +324,15 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	}
 }
 
-pub struct VaultKeyProvider<T>(PhantomData<T>);
+/// Simple Ethereum-specific key provider that reads from the vault.
+pub struct EthereumKeyProvider;
 
-impl<T: pallet_cf_vaults::Config> KeyProvider<Ethereum> for VaultKeyProvider<T> {
-	type KeyId = T::PublicKey;
+impl KeyProvider<Ethereum> for EthereumKeyProvider {
+	type KeyId = Vec<u8>;
 
 	fn current_key() -> Self::KeyId {
-		pallet_cf_vaults::Pallet::<T>::eth_vault().current_key
+		Vaults::vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
+			.expect("Ethereum is always supported.")
+			.public_key
 	}
 }
