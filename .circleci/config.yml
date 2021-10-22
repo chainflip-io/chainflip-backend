@@ -129,7 +129,7 @@ workflows:
   # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-docs:
     when:
-      condition:
+      and:
         - not: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-doc-validator-package:
