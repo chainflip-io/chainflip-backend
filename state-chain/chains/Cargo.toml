@@ -19,6 +19,10 @@ ethereum = {default-features = false, version = "0.9"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
+secp256k1 = {optional = true, version = "0.20"}
+
+[dev-dependencies]
+hex-literal = {version = "0.3"}
 
 [features]
 default = ['std']
@@ -33,4 +37,5 @@ std = [
     'serde',
     'sp-runtime/std',
     'sp-std/std',
+    'secp256k1'
 ]

@@ -1,9 +1,9 @@
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
+    multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
-    signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     state_chain,
 };
 use slog::{o, Drain};
@@ -59,7 +59,7 @@ async fn main() {
 
     tokio::join!(
         // Start signing components
-        signing::start(
+        multisig::start_client(
             account_id.clone(),
             db,
             multisig_instruction_receiver,
@@ -88,7 +88,6 @@ async fn main() {
         ),
         // Start state chain components
         state_chain::sc_observer::start(
-            &settings,
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
