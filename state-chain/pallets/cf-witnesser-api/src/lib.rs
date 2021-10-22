@@ -63,6 +63,14 @@ pub mod pallet {
 		/// Witness the success of a threshold signing ceremony.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
@@ -78,6 +86,14 @@ pub mod pallet {
 		/// Witness the failure of a threshold signing ceremony.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
@@ -95,6 +111,14 @@ pub mod pallet {
 		/// Witness the successful completion of an outgoing broadcast.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
@@ -110,6 +134,14 @@ pub mod pallet {
 		/// Witness the failure of an outgoing broadcast.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
@@ -128,6 +160,14 @@ pub mod pallet {
 		/// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_staked(
 			origin: OriginFor<T>,
@@ -144,6 +184,14 @@ pub mod pallet {
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_claimed(
 			origin: OriginFor<T>,
@@ -161,6 +209,14 @@ pub mod pallet {
 		/// Witness a successful key generation.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_success(
 			origin: OriginFor<T>,
@@ -174,6 +230,14 @@ pub mod pallet {
 		}
 
 		/// Witness a keygen failure
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,
@@ -189,6 +253,14 @@ pub mod pallet {
 		/// Witness an on-chain vault key rotation
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_key_rotated(
 			origin: OriginFor<T>,
