@@ -356,7 +356,7 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
-	type AccountId = AccountId;
+	type StakerId = AccountId;
 	type Flip = Flip;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
@@ -365,6 +365,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -677,6 +678,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
+			add_benchmark!(params, batches, pallet_cf_staking, Staking);
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 

@@ -157,10 +157,11 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
-	type AccountId = AccountIdU64;
+	type StakerId = AccountIdU64;
 	type NonceProvider = Self;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = ();
 }
 
 type Amount = u64;

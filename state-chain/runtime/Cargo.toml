@@ -85,6 +85,7 @@ runtime-benchmarks = [
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-auction/runtime-benchmarks',
+  'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
 ]
