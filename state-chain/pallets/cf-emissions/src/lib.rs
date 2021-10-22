@@ -139,6 +139,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Updates the emission rate to Validators.
+		///
+		/// Can only be called by the root origin.
+		///
+		/// ## Events
+		///
+		/// - [ValidatorInflationEmissionsUpdated](Event::ValidatorInflationEmissionsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub(super) fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
@@ -150,6 +161,15 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Updates the emission rate to Backup Validators.
+		///
+		/// ## Events
+		///
+		/// - [BackupValidatorInflationEmissionsUpdated](Event::BackupValidatorInflationEmissionsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub(super) fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
