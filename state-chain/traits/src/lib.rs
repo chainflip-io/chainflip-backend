@@ -29,11 +29,12 @@ pub trait Chainflip: frame_system::Config {
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
 	type ValidatorId: Member
+		+ Default
 		+ Parameter
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter;
+	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
@@ -92,8 +93,7 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	/// from the trait `VaultRotation`
+	/// We have ran the auction and have a set of validators with minimum active bid.
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
 	ConfirmedValidators(Vec<ValidatorId>, Amount),
@@ -161,38 +161,17 @@ pub trait VaultRotationHandler {
 	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
-/// Errors occurring during a rotation
-#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
-pub enum RotationError<ValidatorId> {
-	/// An invalid request index
-	InvalidCeremonyId,
-	/// Empty validator set provided
-	EmptyValidatorSet,
-	/// A set of badly acting validators
-	BadValidators(Vec<ValidatorId>),
-	/// The keygen response says the newly generated key is the same as the old key
-	KeyUnchanged,
-	/// Failed to construct a valid chain specific payload for rotation
-	FailedToConstructPayload,
-	/// The vault rotation is not confirmed
-	NotConfirmed,
-	/// Failed to make keygen request
-	FailedToMakeKeygenRequest,
-	/// New public key has not been set by a keygen_response
-	NewPublicKeyNotSet,
-}
-
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
+	type RotationError;
+
 	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
+	fn finalize_rotation() -> Result<(), Self::RotationError>;
 }
 
 /// An error has occurred during an auction
@@ -225,7 +204,7 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders
+	/// Provide a list of bidders, those stakers that are not retired
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
@@ -316,22 +295,13 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions() -> Weight;
 }
 
-/// A nonce
+/// A nonce.
 pub type Nonce = u64;
 
-/// A identifier for the chain a nonce is required
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[allow(clippy::unnecessary_cast)]
-pub enum NonceIdentifier {
-	Ethereum = 1,
-	Bitcoin = 2,
-	Dot = 3,
-}
-
-/// Provide a nonce
-pub trait NonceProvider {
-	/// Provide the next nonce for the chain identified
-	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+/// Provides a unqiue nonce for some [Chain].
+pub trait NonceProvider<C: Chain> {
+	/// Get the next nonce.
+	fn next_nonce() -> Nonce;
 }
 
 pub trait IsOnline {
@@ -341,27 +311,29 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A representation of the current network state
+/// A representation of the current network state for this heartbeat interval.
+/// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
+/// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
+/// interval are marked as awaiting.
+///
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId> {
-	/// We are missing the last heartbeat from this node and yet cannot determine if they
-	/// are offline or online.
-	pub missing: Vec<ValidatorId>,
-	/// The node is online
+pub struct NetworkState<ValidatorId: Default> {
+	/// Those nodes that we are awaiting a heartbeat from
+	pub awaiting: Vec<ValidatorId>,
+	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// The node has been determined as being offline
-	pub offline: Vec<ValidatorId>,
+	/// Number of nodes
+	pub number_of_nodes: u32,
 }
 
-impl<ValidatorId> NetworkState<ValidatorId> {
+impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
-		let number_offline = self.offline.len() as u32;
 
 		number_online
 			.saturating_mul(100)
-			.checked_div(number_online + number_offline)
+			.checked_div(self.number_of_nodes)
 			.unwrap_or(0)
 	}
 }
@@ -537,7 +509,7 @@ pub mod offline_conditions {
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId;
+	type ValidatorId: Default;
 	/// A heartbeat has been submitted
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
 	/// Called on every heartbeat interval with the current network state
