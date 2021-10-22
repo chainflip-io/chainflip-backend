@@ -54,7 +54,7 @@ benchmarks! {
 			Governance::<T>::push_proposal(call);
 		}
 	}: {
-		Governance::<T>::on_initialize((b).into());
+		Governance::<T>::on_initialize((2 as u32).into());
 	}
 	on_initialize_best_case {
 	}: {
