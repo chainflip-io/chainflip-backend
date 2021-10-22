@@ -355,7 +355,7 @@ jobs:
             - target/release/state-chain-node
             - target/release/chainflip-engine
       - send_notification:
-          only_for_branches: ""
+          only_for_branches: "develop"
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
