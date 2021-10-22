@@ -691,8 +691,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		let expired_claims = (to_expire.len() as usize).try_into().unwrap();
-		return T::WeightInfo::on_initialize_worst_case(expired_claims);
+		return T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32);
 	}
 }
 

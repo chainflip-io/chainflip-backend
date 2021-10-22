@@ -52,6 +52,17 @@ benchmarks! {
 		let eth_addr: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
+		let balance_to_claim: T::Balance = T::Balance::from(50 as u32);
+		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
+		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
+
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = T::EnsureWitnessed::successful_origin();
+
+		// Stake some funds to claim
+		let stake_call = Call::<T>::staked(caller.clone(), balance_to_stake, eth_addr, tx_hash);
+		stake_call.dispatch_bypass_filter(origin)?;
+
 	}:_(RawOrigin::Signed(caller), eth_addr)
 
 	claimed {
