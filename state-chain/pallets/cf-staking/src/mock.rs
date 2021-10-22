@@ -165,7 +165,7 @@ impl pallet_cf_staking::Config for Test {
 	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
-	type AccountId = AccountId;
+	type StakerId = AccountId;
 	type NonceProvider = Self;
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
