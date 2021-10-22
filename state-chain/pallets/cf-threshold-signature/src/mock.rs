@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
@@ -112,15 +112,15 @@ impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
 }
 
 // Mock KeyProvider
-pub const DOGE_KEY_ID: u32 = 0xd093;
+pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
 
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 
 	fn current_key() -> Self::KeyId {
-		DOGE_KEY_ID
+		MOCK_KEY_ID.to_vec()
 	}
 }
 
@@ -155,7 +155,9 @@ impl OfflineReporter for MockOfflineReporter {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct Doge;
-impl cf_chains::Chain for Doge {}
+impl cf_chains::Chain for Doge {
+	const CHAIN_ID: cf_chains::ChainId = cf_chains::ChainId::Ethereum;
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct DogeThresholdSignerContext {

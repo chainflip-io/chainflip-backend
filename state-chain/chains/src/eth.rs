@@ -1,10 +1,11 @@
 //! Types and functions that are common to ethereum.
 pub mod register_claim;
+pub mod set_agg_key_with_agg_key;
 
 use codec::{Decode, Encode};
-use ethabi::{
+pub use ethabi::{
 	ethereum_types::{H256, U256},
-	Address, Token, Uint,
+	Address, Hash as TxHash, Token, Uint,
 };
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,10 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::prelude::*;
+use sp_std::{
+	convert::{TryFrom, TryInto},
+	str,
+};
 
 //------------------------//
 // TODO: these should be on-chain constants or config items. See github issue #520.
@@ -22,7 +27,7 @@ pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 pub fn stake_manager_contract_address() -> [u8; 20] {
-	const ADDR: &'static str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+	const ADDR: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 	let mut buffer = [0u8; 20];
 	buffer.copy_from_slice(hex::decode(ADDR).unwrap().as_slice());
 	buffer
@@ -97,6 +102,101 @@ impl Tokenizable for SigData {
 	}
 }
 
+/// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct AggKey {
+	/// The public key as a 32-byte array.
+	pub pub_key_x: [u8; 32],
+	/// The parity bit can be `1u8` (odd) or `0u8` (even).
+	pub pub_key_y_parity: u8,
+}
+
+impl AggKey {
+	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
+	///
+	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to the required
+	/// 0 / 1 representation by subtracting 2 from the supplied values, so if the source format doesn't conform
+	/// to the expected 2/3 even/odd convention, bad things will happen.
+	#[cfg(feature = "std")]
+	fn from_pubkey_compressed(bytes: [u8; 33]) -> Self {
+		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
+		let pub_key_y_parity = pub_key_y_parity - 2;
+		Self {
+			pub_key_x,
+			pub_key_y_parity,
+		}
+	}
+}
+
+/// [TryFrom] implementation to convert some bytes to an [AggKey].
+///
+/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
+/// length of the slice is 33 bytes.
+impl TryFrom<&[u8]> for AggKey {
+	type Error = &'static str;
+
+	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
+			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
+				let x: [u8; 32] = pub_key_x.try_into().map_err(|e| {
+					frame_support::debug::error!("Invalid aggKey format: {:?}", e);
+					"Invalid aggKey format: x coordinate should be 32 bytes."
+				})?;
+
+				Ok(AggKey::from((pub_key_y_parity - 2, x)))
+			} else {
+				frame_support::debug::error!(
+					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
+					pub_key_y_parity,
+				);
+
+				Err("Invalid aggKey format: Leading byte should be 2 or 3")
+			}
+		} else {
+			frame_support::debug::error!(
+				"Invalid aggKey format: Should be 33 bytes total, got {}",
+				bytes.len()
+			);
+			Err("Invalid aggKey format: Should be 33 bytes total.")
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<secp256k1::PublicKey> for AggKey {
+	fn from(key: secp256k1::PublicKey) -> Self {
+		AggKey::from_pubkey_compressed(key.serialize())
+	}
+}
+
+impl From<(u8, [u8; 32])> for AggKey {
+	fn from(tuple: (u8, [u8; 32])) -> Self {
+		Self {
+			pub_key_x: tuple.1,
+			pub_key_y_parity: tuple.0,
+		}
+	}
+}
+
+impl From<([u8; 32], u8)> for AggKey {
+	fn from(tuple: ([u8; 32], u8)) -> Self {
+		Self {
+			pub_key_x: tuple.0,
+			pub_key_y_parity: tuple.1,
+		}
+	}
+}
+
+impl Tokenizable for AggKey {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![
+			Token::Uint(Uint::from_big_endian(&self.pub_key_x[..])),
+			Token::Uint(self.pub_key_y_parity.into()),
+		])
+	}
+}
+
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -142,15 +242,53 @@ pub trait ChainflipContractCall {
 	/// Whether or not the call has been signed.
 	fn has_signature(&self) -> bool;
 
-	/// Ethereum abi-encoded calldata for the contract call.
-	fn abi_encoded(&self) -> Vec<u8>;
-
 	/// The payload data over which the threshold signature should be made.
 	fn signing_payload(&self) -> H256;
 
-	/// Add the threshold signature to the contract call.
-	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents);
+	/// Abi-encode the call with a provided signature.
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
+}
 
-	/// Create a new call from the old one, with a new nonce and discarding the old signature.
-	fn into_new(self, new_nonce: u64) -> Self;
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Asymmetrisation is a very complex procedure that ensures our arrays are not symmetric.
+	pub const fn asymmetrise<const T: usize>(array: [u8; T]) -> [u8; T] {
+		let mut res = array;
+		if T > 1 && res[0] == res[1] {
+			res[0] = res[0].wrapping_add(1);
+		}
+		res
+	}
+
+	#[test]
+	fn test_agg_key_conversion() {
+		// 2 == even
+		let mut bytes = [0u8; 33];
+		bytes[0] = 2;
+		let key = AggKey::from_pubkey_compressed(bytes);
+		assert_eq!(key.pub_key_y_parity, 0);
+
+		// 3 == odd
+		let mut bytes = [0u8; 33];
+		bytes[0] = 3;
+		let key = AggKey::from_pubkey_compressed(bytes);
+		assert_eq!(key.pub_key_y_parity, 1);
+	}
+
+	#[test]
+	fn test_agg_key_conversion_with_try_from() {
+		// 2 == even
+		let mut bytes = vec![0u8; 33];
+		bytes[0] = 2;
+		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
+		assert_eq!(key.pub_key_y_parity, 0);
+
+		// 3 == odd
+		let mut bytes = vec![0u8; 33];
+		bytes[0] = 3;
+		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
+		assert_eq!(key.pub_key_y_parity, 1);
+	}
 }

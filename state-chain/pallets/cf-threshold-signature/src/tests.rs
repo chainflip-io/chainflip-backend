@@ -33,7 +33,7 @@ impl MockCfe {
 					payload,
 				),
 			) => {
-				assert_eq!(key_id, DOGE_KEY_ID);
+				assert_eq!(key_id, MOCK_KEY_ID);
 				assert_eq!(signers, vec![RANDOM_NOMINEE]);
 				assert_eq!(payload, DOGE_PAYLOAD);
 

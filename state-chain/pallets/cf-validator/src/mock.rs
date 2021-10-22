@@ -7,7 +7,7 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnFinalize, OnInitialize},
 };
-use pallet_cf_auction::WeightInfo as AuctionWeightTrait;
+
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -23,14 +23,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type Amount = u64;
 pub type ValidatorId = u64;
-
-pub struct AuctionWeight;
-
-impl AuctionWeightTrait for AuctionWeight {
-	fn set_auction_size_range() -> u64 {
-		0 as Weight
-	}
-}
 
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
@@ -122,7 +114,7 @@ impl pallet_cf_auction::Config for Test {
 	type BidderProvider = MockBidderProvider;
 	type Registrar = Test;
 	type MinValidators = MinValidators;
-	type WeightInfo = AuctionWeight;
+	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Self>;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;

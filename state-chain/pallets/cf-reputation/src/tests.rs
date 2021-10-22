@@ -43,7 +43,7 @@ mod tests {
 	type MockNetworkState = NetworkState<<Test as frame_system::Config>::AccountId>;
 	fn dead_network() -> MockNetworkState {
 		MockNetworkState {
-			missing: Mock::current_validators(),
+			awaiting: Mock::current_validators(),
 			..MockNetworkState::default()
 		}
 	}

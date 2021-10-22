@@ -27,26 +27,14 @@ impl ChainflipContractCall for RegisterClaim {
 		!self.sig_data.sig.is_zero()
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
 	fn signing_payload(&self) -> H256 {
 		self.sig_data.msg_hash
 	}
 
-	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents) {
-		self.sig_data.insert_signature(signature)
-	}
-
-	fn into_new(self, new_nonce: u64) -> Self {
-		Self::new_unsigned(
-			new_nonce,
-			&self.node_id,
-			self.amount,
-			self.address.as_fixed_bytes(),
-			self.expiry.low_u64(),
-		)
+	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
+		let mut call = self.clone();
+		call.sig_data.insert_signature(signature);
+		call.abi_encoded()
 	}
 }
 
@@ -133,16 +121,15 @@ mod test_register_claim {
 
 	#[test]
 	fn test_claim_payload() {
-		// TODO: this test would be more robust with randomly generated parameters.
+		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
 		const AMOUNT: u128 = 1234567890;
-		const FAKE_HASH: [u8; 32] = [0x21; 32];
-		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = [0x7f; 20];
-		const FAKE_SIG: [u8; 32] = [0xe1; 32];
-		const TEST_ACCT: [u8; 32] = [0x42; 32];
-		const TEST_ADDR: [u8; 20] = [0xcf; 20];
+		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
+		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
+		const TEST_ACCT: [u8; 32] = asymmetrise([0x42; 32]);
+		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
 		let stake_manager = ethabi::Contract::load(
 			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
@@ -151,26 +138,19 @@ mod test_register_claim {
 
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
-		let mut register_claim_runtime =
+		let register_claim_runtime =
 			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
 
-		// Replace the msg_hash.
-		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::insert_signature(
-			&mut register_claim_runtime,
-			&SchnorrVerificationComponents {
+		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
+
+		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
+		let runtime_payload =
+			register_claim_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			},
-		);
-		assert_eq!(
-			ChainflipContractCall::signing_payload(&register_claim_runtime),
-			FAKE_HASH.into()
-		);
-		assert!(ChainflipContractCall::has_signature(
-			&register_claim_runtime
-		));
-		let runtime_payload = ChainflipContractCall::abi_encoded(&register_claim_runtime);
+			}); // Ensure signing payload isn't modified by signature.
+
+		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
@@ -180,7 +160,7 @@ mod test_register_claim {
 				.encode_input(&vec![
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_HASH.into()),
+						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

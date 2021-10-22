@@ -162,11 +162,11 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type PublicKey = Vec<u8>;
-	type TransactionHash = Vec<u8>;
-	type RotationHandler = ChainflipVaultRotationHandler;
-	type NonceProvider = Vaults;
 	type EpochInfo = Validator;
+	type RotationHandler = ChainflipVaultRotationHandler;
+	type OfflineReporter = Reputation;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -372,6 +372,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type Event = Event;
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -426,8 +427,8 @@ impl pallet_cf_reputation::Config for Runtime {
 impl pallet_cf_online::Config for Runtime {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Heartbeat = ChainflipHeartbeat;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
 use frame_support::instances::Instance0;
@@ -437,7 +438,7 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type KeyProvider = chainflip::VaultKeyProvider<Self>;
+	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
 }
 
@@ -482,7 +483,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Module, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
@@ -675,6 +676,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
+			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
