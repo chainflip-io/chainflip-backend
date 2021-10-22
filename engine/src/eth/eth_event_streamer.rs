@@ -129,12 +129,8 @@ pub async fn new_eth_event_stream<
                 let result_event =
                     result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
-                if result_event.is_ok() {
-                    slog::debug!(
-                        logger,
-                        "Received ETH log {}",
-                        result_event.as_ref().expect("is ok")
-                    );
+                if let Ok(ok_result) = &result_event {
+                    slog::debug!(logger, "Received ETH log {}", ok_result);
                 }
 
                 result_event
