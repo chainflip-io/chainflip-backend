@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use super::super::common::KeygenResultInfo;
 use super::super::InnerEvent;
 use super::frost::SigningDataWrapped;
-use crate::logging::CEREMONY_ID_KEY;
+use crate::logging::{CEREMONY_ID_KEY, PROCESS_SIGNING_DATA, REQUEST_TO_SIGN_IGNORED};
 use crate::p2p::AccountId;
 
 use crate::multisig::{client::utils::project_signers, MessageHash, SigningOutcome};
@@ -87,14 +87,14 @@ impl SigningManager {
         if signers.len() != key_info.params.threshold + 1 {
             slog::warn!(
                 logger,
+                #REQUEST_TO_SIGN_IGNORED,
                 "Request to sign ignored: incorrect number of signers"
             );
             return;
         }
 
         if !signers.contains(&self.id) {
-            // TODO: alert
-            slog::warn!(logger, "Request to sign ignored: we are not among signers");
+            slog::warn!(logger,#REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: we are not among signers");
             return;
         }
 
@@ -104,7 +104,7 @@ impl SigningManager {
                 // This should be impossible because of the check above,
                 // but I don't like unwrapping (would be better if we
                 // could combine this with the check above)
-                slog::warn!(logger, "Request to sign ignored: could not derive our idx");
+                slog::warn!(logger,#REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: could not derive our idx");
                 return;
             }
         };
@@ -113,8 +113,7 @@ impl SigningManager {
         let signer_idxs = match project_signers(&signers, &key_info.validator_map) {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
-                // TODO: alert
-                slog::warn!(logger, "Request to sign ignored: invalid signers");
+                slog::warn!(logger,#REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: invalid signers");
                 return;
             }
         };
@@ -142,7 +141,11 @@ impl SigningManager {
 
         let SigningDataWrapped { data, ceremony_id } = wdata;
 
-        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+        slog::trace!(
+            self.logger,
+            #PROCESS_SIGNING_DATA,
+            "Received signing data"; CEREMONY_ID_KEY => ceremony_id, "data"=>format!("{}",&data)
+        );
 
         let logger = self.logger.clone();
         let state = self
