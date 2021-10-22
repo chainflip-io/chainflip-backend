@@ -4,7 +4,6 @@ use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
 use sp_runtime::AccountId32;
 use std::sync::Arc;
-use substrate_subxt::Signer;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -15,10 +14,11 @@ use crate::{
         SigningInfo, SigningOutcome,
     },
     p2p,
+    state_chain::client::StateChainRpcApi,
 };
 
-pub async fn start<BlockStream>(
-    state_chain_client: Arc<super::client::StateChainClient>,
+pub async fn start<BlockStream, RpcClient>(
+    state_chain_client: Arc<super::client::StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -26,17 +26,12 @@ pub async fn start<BlockStream>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
+    RpcClient: StateChainRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client
-        .metadata
-        .module("Reputation")
-        .expect("No module 'Reputation' in chain metadata")
-        .constant("HeartbeatBlockInterval")
-        .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
-        .value::<u32>()
-        .expect("Could not decode HeartbeatBlockInterval to u32");
+    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
+
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
@@ -45,7 +40,8 @@ pub async fn start<BlockStream>(
 
     state_chain_client
         .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-        .await;
+        .await
+        .expect("Should be able to submit first heartbeat");
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -60,7 +56,7 @@ pub async fn start<BlockStream>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
@@ -133,7 +129,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
                                             response_extrinsic,
@@ -200,7 +196,7 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
                                             response_extrinsic,
@@ -213,7 +209,7 @@ pub async fn start<BlockStream>(
                                         validator_id,
                                         unsigned_tx
                                     ),
-                                ) if &validator_id == state_chain_client.signer.account_id() => {
+                                ) if validator_id == state_chain_client.our_account_id => {
                                     slog::debug!(
                                         logger,
                                         "Received signing request {} for transaction: {:?}",
@@ -222,7 +218,7 @@ pub async fn start<BlockStream>(
                                     );
                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                         Ok(raw_signed_tx) => {
-                                            state_chain_client.submit_extrinsic(
+                                            let _ = state_chain_client.submit_extrinsic(
                                                 &logger,
                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission(
@@ -297,7 +293,7 @@ pub async fn start<BlockStream>(
                                         }
                                     };
                                     for ext in response_extrinsics {
-                                        state_chain_client.submit_extrinsic(
+                                        let _ = state_chain_client.submit_extrinsic(
                                             &logger,
                                             ext,
                                         ).await;
