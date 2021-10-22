@@ -372,6 +372,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type Event = Event;
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -675,6 +676,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
+			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
