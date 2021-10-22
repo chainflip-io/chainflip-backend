@@ -28,7 +28,7 @@ cargo-base-job: &cargo-base-job
   executor: rust-base
   environment:
     SCCACHE_CACHE_SIZE: 14G
-  resource_class: 2xlarge+
+  resource_class: xlarge
 ######################## /Anchors ########################
 
 ######################## Config ########################
@@ -129,8 +129,7 @@ workflows:
   # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-docs:
     when:
-      condition:
-        - not: <<pipeline.parameters.build_testnet>>
+      not: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-doc-validator-package:
           context:
@@ -139,8 +138,7 @@ workflows:
 
   chainflip-backend-checks:
     when:
-      condition:
-        - not: <<pipeline.parameters.build_testnet>>
+      not: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-clippy-validator-package:
           requires:
