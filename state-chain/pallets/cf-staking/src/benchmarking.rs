@@ -76,7 +76,10 @@ benchmarks! {
 	}: { call.dispatch_bypass_filter(origin.clone())? }
 
 	post_claim_signature {
-		let sig: U256 = U256::zero();
+		let sig: SchnorrVerificationComponents = SchnorrVerificationComponents {
+			s: [0xcf; 32],
+			k_times_g_addr: [0xcf; 20],
+		};
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let eth_addr: EthereumAddress = [42u8; 20];
 		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
@@ -92,8 +95,7 @@ benchmarks! {
 		let claimable = T::Flip::claimable_balance(&caller);
 		Pallet::<T>::do_claim(&caller, claimable, eth_addr)?;
 
-		let msg_hash = PendingClaims::<T>::get(caller.clone()).unwrap().msg_hash.unwrap();
-		let call = Call::<T>::post_claim_signature(caller, msg_hash, sig);
+		let call = Call::<T>::post_claim_signature(caller, sig);
 	}: { call.dispatch_bypass_filter(origin)? }
 
 	retire_account {

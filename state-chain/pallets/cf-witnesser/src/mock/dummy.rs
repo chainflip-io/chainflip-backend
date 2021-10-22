@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg(test)]
 
 /// Based on the substrate example template pallet
 pub use pallet::*;
 
+#[allow(dead_code)]
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
@@ -30,7 +32,6 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
 	pub type Something<T> = StorageValue<_, u32>;
 
 	#[pallet::event]

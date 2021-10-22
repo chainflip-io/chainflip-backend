@@ -19,7 +19,7 @@ use cf_chains::eth::{
 	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
 };
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, NonceProvider, SigningContext, StakeTransfer, ThresholdSigner,
 };
 use core::time::Duration;
 use frame_support::{
@@ -52,7 +52,6 @@ pub mod pallet {
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	pub type EthereumAddress = [u8; 20];
-	pub type AggKeySignature = U256;
 
 	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
@@ -68,7 +67,7 @@ pub mod pallet {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		type AccountId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
+		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
 		type Balance: Parameter
 			+ Member
@@ -92,10 +91,10 @@ pub mod pallet {
 		>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider;
+		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
 		/// Top-level Ethereum signing context needs to support `RegisterClaim`.
-		type SigningContext: From<RegisterClaim>;
+		type SigningContext: From<RegisterClaim> + SigningContext<Self, Chain = cf_chains::Ethereum>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
@@ -399,14 +398,15 @@ pub mod pallet {
 				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
-			// Insert the signature and notify the CFE.
-			claim_details.insert_signature(&signature);
-			PendingClaims::<T>::insert(&account_id, &claim_details);
-
+			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id,
-				claim_details.abi_encoded(),
+				account_id.clone(),
+				claim_details.abi_encode_with_signature(&signature),
 			));
+
+			// Store the signature.
+			claim_details.sig_data.insert_signature(&signature);
+			PendingClaims::<T>::insert(&account_id, &claim_details);
 
 			Ok(().into())
 		}
@@ -572,7 +572,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
 			// Check if the address is different from the stored address - if yes error out
 			if withdrawal_address != address {
-				Err(Error::<T>::WithdrawalAddressRestricted)?
+				return Err(Error::<T>::WithdrawalAddressRestricted.into());
 			}
 		}
 
@@ -585,8 +585,8 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let transaction = RegisterClaim::new_unsigned(
-			T::NonceProvider::next_nonce(NonceIdentifier::Ethereum),
-			<T as Config>::AccountId::from_ref(account_id).as_ref(),
+			T::NonceProvider::next_nonce(),
+			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount,
 			&address,
 			expiry.as_secs(),

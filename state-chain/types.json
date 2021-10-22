@@ -8,7 +8,6 @@
   "ActiveValidatorRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
-  "AggKeySignature": "U256",
   "Amount": "u128",
   "AttemptCount": "u32",
   "AuctionError": {
@@ -45,11 +44,6 @@
   },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
-  "Chain": {
-    "_enum": [
-      "Ethereum"
-    ]
-  },
   "ChainflipAccountData": {
     "state": "ChainflipAccountState"
   },
@@ -60,19 +54,10 @@
       "Validator"
     ]
   },
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
-  },
-  "ClaimDetailsFor": {
-    "msg_hash": "Option<AggKeySignature>",
-    "amount": "FlipBalance",
-    "nonce": "Nonce",
-    "address": "EthereumAddress",
-    "expiry": "Duration",
-    "signature": "Option<Signature>"
+  "ChainId": {
+    "_enum": [
+      "Ethereum"
+    ]
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
@@ -90,16 +75,6 @@
       "Emissions"
     ]
   },
-  "KeygenRequest": {
-    "chain": "Chain",
-    "validator_candidates": "Vec<ValidatorId>"
-  },
-  "KeygenResponse": {
-    "_enum": {
-      "Success": "(PublicKey)",
-      "Failure": "(Vec<ValidatorId>)"
-    }
-  },
   "KeyId": "Vec<u8>",
   "Liveness": "u8",
   "LookupSource": "MultiAddress",
@@ -108,13 +83,6 @@
     "offline": "u32"
   },
   "Nonce": "u64",
-  "NonceIdentifier": {
-    "_enum": [
-      "Ethereum",
-      "Bitcoin",
-      "Dot"
-    ]
-  },
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
@@ -128,10 +96,6 @@
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSigTruncPubkey": {
-    "s": "[u8;32]",
-    "k_times_g_address": "[u8; 20]"
-  },
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
     "k_times_g_addr": "[u8; 20]"
@@ -144,21 +108,7 @@
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "Vault": {
-    "previous_key": "PublicKey",
-    "current_key": "PublicKey",
-    "tx_hash": "TransactionHash"
-  },
-  "VaultRotation": {
-    "new_public_key": "PublicKey",
-    "keygen_request": "KeygenRequest"
-  },
-  "VaultRotationResponse": {
-    "_enum": {
-      "Success": {
-        "tx_hash": "TransactionHash"
-      },
-      "Error": ""
-    }
+    "public_key": "PublicKey"
   },
   "ValidatorSize": "u32",
   "VoteCount": "u32"

@@ -123,6 +123,14 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// A threshold signature ceremony has succeeded.
+		///
+		/// ## Events
+		///
+		/// - [ThresholdSignatureSuccess](Event::ThresholdSignatureSuccess)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -148,6 +156,14 @@ pub mod pallet {
 		}
 
 		/// A threshold signature ceremony has failed.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		#[pallet::weight(10_000)]
 		pub fn signature_failed(
 			origin: OriginFor<T>,
@@ -155,7 +171,7 @@ pub mod pallet {
 			offenders: Vec<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			const PENALTY: i32 = 15; // TODO: This should probably be specified somewhere common for all penalties.
-			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
+			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Report the offenders.
 			for offender in offenders.iter() {

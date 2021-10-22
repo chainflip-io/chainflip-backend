@@ -232,14 +232,14 @@ pub mod pallet {
 					     reputation_points,
 					 }| {
 						// Accrue some online credits of `HeartbeatInterval` size
-						*online_credits = *online_credits + Self::online_credit_reward();
+						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points
 						if *online_credits >= credits {
 							// Swap these credits for reputation
-							*online_credits = *online_credits - credits;
+							*online_credits -= credits;
 							// Update reputation
-							*reputation_points = *reputation_points + rewarded_points;
+							*reputation_points += rewarded_points;
 						}
 					},
 				);
@@ -256,7 +256,7 @@ pub mod pallet {
 		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
 			// Penalise those that are missing this heartbeat
 			let mut weight = 0;
-			for validator_id in network_state.missing {
+			for validator_id in network_state.awaiting {
 				let reputation_points = Reputations::<T>::mutate(
 					&validator_id,
 					|Reputation {
