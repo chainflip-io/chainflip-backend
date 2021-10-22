@@ -283,6 +283,15 @@ pub mod pallet {
 		/// Begin the process of broadcasting a transaction.
 		///
 		/// This triggers the first step - requesting a transaction signature from a nominated validator.
+		///
+		/// ## Events
+		///
+		/// - [TransactionSigningRequest](Events::TransactionSigningRequest): Signing has been requested
+		///   from the nominated Validator.
+		///
+		/// ## Errors
+		///
+		/// - None
 		#[pallet::weight(10_000)]
 		pub fn start_broadcast(
 			origin: OriginFor<T>,
@@ -305,6 +314,20 @@ pub mod pallet {
 		/// Called by the nominated signer when they have completed and signed the transaction, and it is therefore ready
 		/// to be transmitted. The signed transaction is stored on-chain so that any node can potentially transmit it to
 		/// the target chain. Emits an event that will trigger the transmission to the target chain.
+		///
+		/// ## Events
+		///
+		/// - [TransmissionRequest](Events::TransmissionRequest): Signed transaction should now be broadcast to the
+		///   outgoing chain by all Validators.
+		/// - [BroadcastRetryScheduled](Events::BroadcastRetryScheduled): Signed transaction is not valid, so we have
+		///   scheduled a retry attempt for the next block.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastAttemptId](Errors::InvalidBroadcastAttemptId): There is no broadcast for this attempt_id.
+		/// - [InvalidSigner](Errors::InvalidSigner): Submitter of this extrinsic is not the nominated Validator for this
+		///   attempt_id.
+		///
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
@@ -362,6 +385,15 @@ pub mod pallet {
 		}
 
 		/// Nodes have witnessed that the transaction has reached finality on the target chain.
+		///
+		/// ## Events
+		///
+		/// - [BroadcastComplete](Event::BroadcastComplete): The broadcast to the target chain was successful.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
+		///   queue of broadcasts awaiting transmission.
 		#[pallet::weight(10_000)]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
@@ -382,6 +414,15 @@ pub mod pallet {
 
 		/// Nodes have witnessed that something went wrong during transmission. See [BroadcastFailure] for categories
 		/// of failures that may be reported.
+		///
+		/// ## Events
+		///
+		/// - [BroadcastFailed](Event::BroadcastFailed): The broadcast failed.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
+		///   queue of broadcasts awaiting transmission.
 		#[pallet::weight(10_000)]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
