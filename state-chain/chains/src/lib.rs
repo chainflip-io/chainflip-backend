@@ -2,10 +2,12 @@
 
 pub mod eth;
 
-pub trait Chain {}
+pub trait Chain {
+	const CHAIN_ID: ChainId;
+}
 
 macro_rules! impl_chains {
-	( $( $chain:ident ),+ ) => {
+	( $( $chain:ident ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
@@ -19,19 +21,21 @@ macro_rules! impl_chains {
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
 			pub struct $chain;
 
-			impl Chain for $chain {}
-
-			impl From<$chain> for ChainId {
-				fn from(_: $chain) -> Self {
-					ChainId::$chain
-				}
+			impl Chain for $chain {
+				const CHAIN_ID: ChainId = ChainId::$chain;
 			}
 		)+
 	};
 }
 
 impl_chains! {
-	Ethereum
+	Ethereum,
+}
+
+impl<C: Chain> From<C> for ChainId {
+	fn from(_: C) -> Self {
+		C::CHAIN_ID
+	}
 }
 
 #[cfg(test)]
@@ -41,5 +45,6 @@ mod test_chains {
 	#[test]
 	fn test_conversion() {
 		assert_eq!(ChainId::from(Ethereum), ChainId::Ethereum);
+		assert_eq!(Ethereum::CHAIN_ID, ChainId::Ethereum);
 	}
 }

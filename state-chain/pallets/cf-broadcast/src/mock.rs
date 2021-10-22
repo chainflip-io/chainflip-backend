@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
+use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -20,7 +21,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		MockBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -58,7 +59,7 @@ cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
@@ -80,13 +81,8 @@ impl SignerNomination for MockNominator {
 	}
 }
 
-// Doge
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct Doge;
-impl cf_chains::Chain for Doge {}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockBroadcast;
+pub struct MockBroadcastConfig;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockUnsignedTx;
@@ -97,8 +93,8 @@ pub enum MockSignedTx {
 	Invalid,
 }
 
-impl BroadcastConfig<Test> for MockBroadcast {
-	type Chain = Doge;
+impl BroadcastConfig<Test> for MockBroadcastConfig {
+	type Chain = Ethereum;
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
 	type TransactionHash = [u8; 4];
@@ -125,8 +121,8 @@ parameter_types! {
 
 impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type Event = Event;
-	type TargetChain = Doge;
-	type BroadcastConfig = MockBroadcast;
+	type TargetChain = Ethereum;
+	type BroadcastConfig = MockBroadcastConfig;
 	type SignerNomination = MockNominator;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;

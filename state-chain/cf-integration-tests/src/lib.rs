@@ -4,7 +4,6 @@ mod tests {
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
 	use frame_support::traits::OnInitialize;
-	use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -17,14 +16,14 @@ mod tests {
 		Timestamp, Validator, Vaults,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance};
+	use cf_chains::ChainId;
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
 	pub const CHARLIE: [u8; 32] = [6u8; 32];
 	pub const ERIN: [u8; 32] = [7u8; 32];
 
-	pub const INIT_TIMESTAMP: u64 = 30_000;
 	pub const BLOCK_TIME: u64 = 1000;
 
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -33,6 +32,7 @@ mod tests {
 			.public()
 	}
 	fn run_to_block(n: u32) {
+		pub const INIT_TIMESTAMP: u64 = 30_000;
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
 			Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
@@ -149,13 +149,17 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			pallet_cf_vaults::GenesisConfig::<Runtime> {
-				ethereum_vault_key: hex_literal::hex![
-					"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"
-				]
-				.to_vec(),
-			}
-			.assimilate_storage(storage)
+			GenesisBuild::<Runtime>::assimilate_storage(
+				&pallet_cf_vaults::GenesisConfig {
+					ethereum_vault_key: {
+						let key: [u8; 33] = hex_literal::hex![
+							"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+						];
+						key.to_vec()
+					},
+				},
+				storage,
+			)
 			.unwrap();
 
 			pallet_cf_validator::GenesisConfig::<Runtime> {
@@ -182,7 +186,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, NonceIdentifier, StakeTransfer};
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, StakeTransfer};
 
 		const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -275,10 +279,9 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert_eq!(
-						Online::validators_liveness(account),
-						Some(0),
-						"validator should have not sent a heartbeat"
+					assert!(
+						!Online::is_online(account),
+						"node should have not sent a heartbeat"
 					);
 				}
 
@@ -290,10 +293,14 @@ mod tests {
 					"no rewards"
 				);
 
-				assert_eq!(Vaults::current_request(), 0, "no key generation requests");
 				assert_eq!(
-					Vaults::chain_nonces(NonceIdentifier::Ethereum),
-					None,
+					Vaults::keygen_ceremony_id_counter(),
+					0,
+					"no key generation requests"
+				);
+				assert_eq!(
+					Vaults::chain_nonces(ChainId::Ethereum),
+					0,
 					"nonce not incremented"
 				);
 
