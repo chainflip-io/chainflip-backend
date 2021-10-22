@@ -170,7 +170,7 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(T::WeightInfo::set_auction_size_range())]
+		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,
 			range: ActiveValidatorRange,
@@ -289,7 +289,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				let phase = AuctionPhase::BidsTaken(bidders);
 				CurrentPhase::<T>::put(phase.clone());
 
-				CurrentAuctionIndex::<T>::mutate(|idx| *idx = *idx + 1);
+				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				Ok(phase)
@@ -419,8 +419,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 							ChainflipAccountState::Passive,
 						);
 
-						let phase =
-							AuctionPhase::ConfirmedValidators(winners.clone(), minimum_active_bid);
+						let phase = AuctionPhase::ConfirmedValidators(winners, minimum_active_bid);
 						// Set phase
 						CurrentPhase::<T>::put(phase.clone());
 
