@@ -10,8 +10,6 @@ use sp_runtime::DispatchError;
 use sp_std::ops::Add;
 use sp_std::vec::Vec;
 
-const FIVE_DAYS_IN_SECONDS: u64 = 432000;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -19,7 +17,6 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
@@ -31,8 +28,6 @@ pub mod pallet {
 	use sp_std::boxed::Box;
 	use sp_std::vec;
 	use sp_std::vec::Vec;
-
-	use crate::FIVE_DAYS_IN_SECONDS;
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -300,6 +295,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
+			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;
 			Self {
 				members: Default::default(),
 				expiry_span: FIVE_DAYS_IN_SECONDS,
@@ -366,11 +362,9 @@ impl<T: Config> Pallet<T> {
 				// Execute the extrinsic
 				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
 				// Check the result and emit events
-				if result.is_ok() {
-					Self::deposit_event(Event::Executed(id));
-				} else {
-					// Get the error during the execution and return it
-					return Err(result.unwrap_err().error);
+				match result {
+					Ok(_) => Self::deposit_event(Event::Executed(id)),
+					Err(e) => return Err(e.error),
 				}
 				// Remove the proposal from storage
 				<Proposals<T>>::remove(id);
@@ -386,10 +380,10 @@ impl<T: Config> Pallet<T> {
 				Ok(())
 			} else {
 				// Emit an event if the decode of a call failed
-				return Err(Error::<T>::DecodeOfCallFailed.into());
+				Err(Error::<T>::DecodeOfCallFailed.into())
 			}
 		} else {
-			return Err(Error::<T>::MajorityNotReached.into());
+			Err(Error::<T>::MajorityNotReached.into())
 		}
 	}
 	/// Checks if the majority for a proposal is reached
@@ -411,7 +405,7 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Decodes a encoded representation of a Call
 	/// Returns None if the encode of the extrinsic has failed
-	fn decode_call(call: &Vec<u8>) -> Option<<T as Config>::Call> {
-		Decode::decode(&mut &call[..]).ok()
+	fn decode_call(call: &[u8]) -> Option<<T as Config>::Call> {
+		Decode::decode(&mut &(*call)).ok()
 	}
 }

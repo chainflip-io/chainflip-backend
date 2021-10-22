@@ -10,9 +10,7 @@ pub mod bs58_vec {
 
 	pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
 		let s = String::deserialize(d)?;
-		bs58::decode(s)
-			.into_vec()
-			.map_err(|e| serde::de::Error::custom(e))
+		bs58::decode(s).into_vec().map_err(serde::de::Error::custom)
 	}
 }
 
@@ -25,9 +23,7 @@ pub mod bs58_fixed_size {
 	) -> Result<[u8; SIZE], D::Error> {
 		let mut buffer = [0xFF; SIZE];
 		let s = String::deserialize(d)?;
-		let decoded = bs58::decode(s)
-			.into(&mut buffer)
-			.map_err(|e| Error::custom(e))?;
+		let decoded = bs58::decode(s).into(&mut buffer).map_err(Error::custom)?;
 		if decoded != buffer.len() {
 			return Err(Error::custom(format!(
 				"Decoded is {} bytes, but buffer len is {} bytes",

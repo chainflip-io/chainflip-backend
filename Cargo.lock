@@ -808,8 +808,10 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex",
+ "hex-literal",
  "parity-scale-codec",
  "rlp",
+ "secp256k1",
  "serde 1.0.126",
  "sp-runtime",
  "sp-std",
@@ -820,6 +822,7 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -834,6 +837,7 @@ dependencies = [
  "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-governance",
+ "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
@@ -1806,21 +1810,6 @@ checksum = "14ca354e36190500e1e1fb267c647932382b54053c50b14970856c0b00a35067"
 dependencies = [
  "gcc",
  "libc",
-]
-
-[[package]]
-name = "ethabi"
-version = "13.0.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=a53cb47#a53cb47d43cd89434a2228f95695da2dc01f036b"
-dependencies = [
- "anyhow",
- "ethereum-types 0.11.0",
- "hex",
- "serde 1.0.126",
- "serde_json",
- "sha3 0.9.1",
- "thiserror",
- "uint",
 ]
 
 [[package]]
@@ -5082,12 +5071,11 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 13.0.0",
  "frame-support",
  "frame-system",
  "hex",
- "log 0.4.14",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",

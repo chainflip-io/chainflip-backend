@@ -100,7 +100,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
