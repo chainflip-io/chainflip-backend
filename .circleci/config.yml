@@ -56,6 +56,9 @@ parameters:
   rust-base:
     type: boolean
     default: false
+  build_testnet:
+    type: boolean
+    default: false
 ######################## /Config ########################
 
 ######################## Commands ########################
@@ -187,6 +190,7 @@ workflows:
       # Deploy new testnet. Coming Soon™
       #/
   chainflip-testnet:
+    when: <<pipeline.parameters.build_testnet>>
     jobs:
       - cargo-build-and-test-validator-package:
           context:
