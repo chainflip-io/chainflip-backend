@@ -334,6 +334,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
+	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -678,6 +679,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 			add_benchmark!(params, batches, pallet_cf_staking, Staking);
+			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
