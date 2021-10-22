@@ -538,24 +538,22 @@ mod tests {
 						events.pop().expect("auction started event"),
 						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionStarted(..))
 					);
+
 					assert_matches!(
 						events.pop().expect("auction completed event"),
 						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionCompleted(..))
 					);
+
 					assert_matches!(
 						events.pop().expect("keygen request event"),
 						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(..))
 					);
+
 					assert_matches!(
 						events.pop().expect("new session event"),
 						Event::pallet_session(pallet_session::Event::NewSession(..))
 					);
-					assert_matches!(
-						events.pop().expect("emissions distributed event"),
-						Event::pallet_cf_emissions(
-							pallet_cf_emissions::Event::EmissionsDistributed(..)
-						)
-					);
+
 					assert_eq!(
 						events.pop(),
 						None,
@@ -572,6 +570,7 @@ mod tests {
 					);
 
 					// TODO Mock CFE for vault rotation.  The below will fail until this.
+
 					// The following block should be confirmed
 					run_to_block(EPOCH_BLOCKS + 1);
 
@@ -585,13 +584,20 @@ mod tests {
         				}
 					);
 
-					let mut events = reverse_events::<Runtime>();
+					// assert_eq!(
+					// 	System::events().len(),
+					// 	0,
+					// 	"we should have no more events until we have confirmation of auction"
+					// );
+					//
+					// let mut events = reverse_events::<Runtime>();
+					//
+					// assert_eq!(
+					// 	events.pop(),
+					// 	None,
+					// 	"we should have no more events after auction has completed"
+					// );
 
-					assert_eq!(
-						events.pop(),
-						None,
-						"we should have no more events after auction has completed"
-					);
 
 					// if let Some(AuctionResult {
 					// 	winners,
