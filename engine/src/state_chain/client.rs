@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cf_traits::ChainflipAccountData;
+use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -199,6 +199,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
+    // TODO: Can factor some of this out into the upper method now
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
         self.state_rpc_client
             .query_storage_at(
@@ -305,7 +306,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     /// get the status of the node at a particular block
-    pub async fn node_status(&self, block_header: &state_chain_runtime::Header) {
+    pub async fn node_status(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<ChainflipAccountState> {
         let storage_key = self
             .metadata
             .module("System")
@@ -316,9 +320,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map()
             .unwrap()
             .key(&self.our_account_id);
-        let result = self
+
+        let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events(block_header, storage_key)
+            .await
+            .expect("TODO: Handle this error maybe?...")
             .into_iter()
             .map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
@@ -326,13 +333,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
                         option_data.map(|data| {
-                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                            ChainflipAccountData::decode(&mut &data.0[..])
+                                .map_err(anyhow::Error::msg)
                         })
                     })
-                    .flatten_ok()
             })
             .flatten()
-            .collect::<Result<Vec<_>>>();
+            .collect::<Result<_>>()?;
+
+        Ok(node_status_updates
+            .last()
+            .expect("Node must have a status")
+            .state)
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -507,25 +519,15 @@ mod tests {
         let (state_chain_client, mut block_stream) =
             connect_to_state_chain(&settings).await.unwrap();
 
-        let storage_key = state_chain_client
-            .metadata
-            .module("System")
-            .unwrap()
-            .clone()
-            .storage("Account")
-            .unwrap()
-            .map()
-            .unwrap()
-            .key(&state_chain_client.our_account_id);
-
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
-            let stuff = state_chain_client
-                .state_chain_rpc_client
-                .storage_events(&block_header, storage_key.clone())
-                .await;
+            let my_state_for_this_block =
+                state_chain_client.node_status(&block_header).await.unwrap();
 
-            println!("Returning stuff for this block: {:?}", stuff);
+            println!(
+                "Returning ChainflipAccountStatus for this block: {:?}",
+                my_state_for_this_block
+            );
         }
     }
 
