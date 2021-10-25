@@ -16,15 +16,15 @@ use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
 use web3::{
-    ethabi::{Contract, Event},
+    ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
-    types::{SyncState, TransactionParameters, H160, H256},
+    types::{Bytes, SyncState, TransactionParameters, H256},
     Web3,
 };
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
-    #[error("Unexpected event signature in log subscription: {0:#}")]
+    #[error("Unexpected event signature in log subscription: {0:?}")]
     UnexpectedEvent(H256),
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
@@ -57,7 +57,7 @@ pub async fn new_synced_web3_client(
         ))
     })
     // Flatten the Result<Result<>> returned by timeout()
-    .map_err(|error| anyhow::Error::new(error))
+    .map_err(anyhow::Error::new)
     .and_then(|x| async { x })
     // Make sure the eth node is fully synced
     .and_then(|web3| async {
@@ -86,34 +86,98 @@ impl EthBroadcaster {
         let key = read_to_string(settings.eth.private_key_file.as_path())?;
         Ok(Self {
             web3,
-            secret_key: SecretKey::from_str(&key[..]).expect(&format!(
-                "Should read in secret key from: {}",
-                settings.eth.private_key_file.display(),
-            )),
+            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
+                panic!(
+                    "Should read in secret key from: {}: {}",
+                    settings.eth.private_key_file.display(),
+                    e,
+                )
+            }),
         })
     }
 
-    /// Sign and broadcast a transaction to a particular contract
-    pub async fn send(&self, tx_data: Vec<u8>, contract: H160) -> Result<H256> {
+    /// Encode and sign a transaction.
+    pub async fn encode_and_sign_tx(
+        &self,
+        unsigned_tx: cf_chains::eth::UnsignedTransaction,
+    ) -> Result<Bytes> {
         let tx_params = TransactionParameters {
-            to: Some(contract),
-            data: tx_data.into(),
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
             ..Default::default()
         };
 
-        let raw_transaction = self
+        Ok(self
             .web3
             .accounts()
             .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
             .await?
-            .raw_transaction;
+            .raw_transaction)
+    }
 
+    /// Broadcast a transaction to the network
+    pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
         let tx_hash = self
             .web3
             .eth()
-            .send_raw_transaction(raw_transaction)
+            .send_raw_transaction(raw_signed_tx.into())
             .await?;
 
         Ok(tx_hash)
     }
+}
+
+/// Events that both the Key and Stake Manager contracts can output (Shared.sol)
+#[derive(Debug)]
+pub enum SharedEvent {
+    /// `Refunded(amount)`
+    Refunded {
+        /// The amount of ETH refunded
+        amount: u128,
+    },
+
+    /// `RefundFailed(to, amount, currentBalance)`
+    RefundFailed {
+        /// The refund recipient
+        to: ethabi::Address,
+        /// The amount of ETH to refund
+        amount: u128,
+        /// The contract's current balance
+        current_balance: u128,
+    },
+}
+
+fn decode_shared_event_closure(
+    contract: &Contract,
+) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<SharedEvent>> {
+    let refunded = SignatureAndEvent::new(contract, "Refunded")?;
+    let refund_failed = SignatureAndEvent::new(contract, "RefundFailed")?;
+
+    Ok(
+        move |signature: H256, raw_log: ethabi::RawLog| -> Result<SharedEvent> {
+            if signature == refunded.signature {
+                let log = refunded.event.parse_log(raw_log)?;
+                Ok(SharedEvent::Refunded {
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                })
+            } else if signature == refund_failed.signature {
+                let log = refund_failed.event.parse_log(raw_log)?;
+                Ok(SharedEvent::RefundFailed {
+                    to: utils::decode_log_param::<ethabi::Address>(&log, "to")?,
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    current_balance: utils::decode_log_param::<ethabi::Uint>(
+                        &log,
+                        "currentBalance",
+                    )?
+                    .as_u128(),
+                })
+            } else {
+                Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
+                    signature,
+                )))
+            }
+        },
+    )
 }

@@ -3,59 +3,69 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
+  "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
-  "Amount": "TokenAmount",
+  "Amount": "u128",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
-      "BondIsZero",
       "Empty",
-      "MinValidatorSize"
+      "MinValidatorSize",
+      "InvalidRange",
+      "Abort",
+      "NotConfirmed"
     ]
   },
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
   },
   "AuctionRange": "(u32,u32)",
-  "CallHash": "[u8;32]",
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
   },
+  "Bid": "(ValidatorId, Amount)",
+  "BlockNumber": "u32",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
+  "CallHash": "[u8;32]",
   "CeremonyId": "u64",
-  "Chain": {
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
+    ]
+  },
+  "ChainId": {
     "_enum": [
       "Ethereum"
     ]
   },
-  "ClaimDetailsFor": {
-    "amount": "FlipBalance",
-    "nonce": "Nonce",
-    "address": "EthereumAddress",
-    "expiry": "Duration",
-    "signature": "Option<Signature>"
-  },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
-  "EthSigningTxResponse": {
-    "_enum": {
-      "Success": "(Vec<u8>)",
-      "Error": "(Vec<ValidatorId>)"
-    }
-  },
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
-    "stake": "FlipBalance",
-    "validator_bond": "FlipBalance"
+    "stake": "Amount",
+    "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
   "ImbalanceSource": {
@@ -65,63 +75,40 @@
       "Emissions"
     ]
   },
-  "KeygenRequest": {
-    "chain": "Chain",
-    "validator_candidates": "Vec<ValidatorId>"
-  },
-  "KeygenResponse": {
-    "_enum": {
-      "Success": "(PublicKey)",
-      "Failure": "(Vec<ValidatorId>)"
-    }
-  },
+  "KeyId": "Vec<u8>",
+  "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
   },
   "Nonce": "u64",
-  "NonceIdentifier": {
-    "_enum": [
-      "Ethereum",
-      "Bitcoin",
-      "Dot"
-    ]
-  },
-  "OnlineCreditsFor": "u64",
+  "OnlineCreditsFor": "BlockNumber",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
+  "ReputationOf": "BlockNumber",
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSignature": {
+  "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "r": "[u8; 20]"
+    "k_times_g_addr": "[u8; 20]"
   },
   "Signature": "H256",
-  "TokenAmount": "u128",
-  "ValidatorId": "AccountId",
+  "SignedTransactionFor": "Vec<u8>",
+  "StakeAttempt": "(EthereumAddress, Amount)",
+  "Timestamp": "u64",
   "TransactionHash": "Vec<u8>",
+  "UnsignedTransactionFor": "Vec<u8>",
+  "ValidatorId": "AccountId",
   "Vault": {
-    "previous_key": "PublicKey",
-    "current_key": "PublicKey",
-    "tx_hash": "TransactionHash"
-  },
-  "VaultRotation": {
-    "new_public_key": "PublicKey",
-    "keygen_request": "KeygenRequest"
-  },
-  "VaultRotationResponse": {
-    "_enum": {
-      "Success": {
-        "tx": "TransactionHash"
-      },
-      "Failure": ""
-    }
+    "public_key": "PublicKey"
   },
   "ValidatorSize": "u32",
   "VoteCount": "u32"

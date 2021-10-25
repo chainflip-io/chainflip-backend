@@ -26,6 +26,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
 cf-traits = { path = "../traits", default-features = false }
+cf-chains = { path = "../chains", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
@@ -37,6 +38,10 @@ pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-featur
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
+pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
+pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
+pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
+pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -80,9 +85,13 @@ runtime-benchmarks = [
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-auction/runtime-benchmarks',
+  'pallet-cf-staking/runtime-benchmarks',
+  'pallet-cf-flip/runtime-benchmarks',
+  'pallet-cf-governance/runtime-benchmarks',
 ]
 std = [
   'cf-traits/std',
+  'cf-chains/std',
   'codec/std',
   'serde',
   'frame-executive/std',
@@ -120,5 +129,11 @@ std = [
   'pallet-cf-witnesser-api/std',
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
-  'pallet-cf-reputation/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-threshold-signature/std',
+  'pallet-cf-environment/std',
+  'pallet-cf-online/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-threshold-signature/std',
+  'pallet-cf-environment/std'
 ]

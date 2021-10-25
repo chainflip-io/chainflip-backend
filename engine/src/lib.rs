@@ -1,9 +1,8 @@
 pub mod common;
 pub mod health;
-pub mod heartbeat;
+pub mod multisig;
 pub mod p2p;
 pub mod settings;
-pub mod signing;
 pub mod state_chain;
 #[macro_use]
 mod testing;

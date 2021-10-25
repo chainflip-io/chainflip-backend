@@ -800,6 +800,76 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "hex-literal",
+ "parity-scale-codec",
+ "rlp",
+ "secp256k1",
+ "serde 1.0.126",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "cf-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "cf-chains",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "hex-literal",
+ "pallet-aura",
+ "pallet-authorship",
+ "pallet-cf-auction",
+ "pallet-cf-emissions",
+ "pallet-cf-flip",
+ "pallet-cf-governance",
+ "pallet-cf-online",
+ "pallet-cf-reputation",
+ "pallet-cf-rewards",
+ "pallet-cf-staking",
+ "pallet-cf-validator",
+ "pallet-cf-vaults",
+ "pallet-cf-witnesser",
+ "pallet-cf-witnesser-api",
+ "pallet-grandpa",
+ "pallet-offences",
+ "pallet-randomness-collective-flip",
+ "pallet-session",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-inherents",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "state-chain-runtime",
+]
+
+[[package]]
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
@@ -818,7 +888,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-runtime",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-compat-02",
  "tokio-stream",
 ]
@@ -827,6 +897,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -878,11 +949,13 @@ dependencies = [
  "async-trait",
  "bincode",
  "bs58",
+ "cf-chains",
  "cf-p2p",
  "cf-traits",
  "config",
  "crossbeam-channel",
  "curv",
+ "dyn-clone",
  "env_logger 0.9.0",
  "failure",
  "frame-support",
@@ -901,31 +974,42 @@ dependencies = [
  "kvdb-rocksdb",
  "lazy_static",
  "log 0.4.14",
+ "mockall",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-flip",
+ "pallet-cf-governance",
+ "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
+ "pallet-cf-witnesser-api",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",
  "regex",
  "reqwest",
+ "sc-rpc-api",
  "secp256k1",
  "serde 1.0.126",
  "serde_json",
+ "sha2 0.9.5",
  "slog",
  "slog-async",
  "slog-json",
  "sp-core",
  "sp-keyring",
+ "sp-rpc",
  "sp-runtime",
+ "sp-version",
  "state-chain-runtime",
+ "structopt",
  "substrate-subxt",
  "thiserror",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
@@ -1502,6 +1586,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "difference"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
+
+[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1569,6 +1659,18 @@ dependencies = [
  "byteorder",
  "quick-error 1.2.3",
 ]
+
+[[package]]
+name = "downcast"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
+
+[[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 
 [[package]]
 name = "dyn-clonable"
@@ -1726,21 +1828,6 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "13.0.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=a53cb47#a53cb47d43cd89434a2228f95695da2dc01f036b"
-dependencies = [
- "anyhow",
- "ethereum-types 0.11.0",
- "hex",
- "serde 1.0.126",
- "serde_json",
- "sha3 0.9.1",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
 version = "14.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c52991643379afc90bfe2df3c64d53983e59c35a82ba6e75c997cfc2880d8524"
@@ -1771,6 +1858,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.1.0"
+source = "git+https://github.com/chainflip-io/ethabi?rev=1279085#1279085d28798744d2107046a8f0c7221d7e76ce"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex",
+ "serde 1.0.126",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1778,9 +1880,28 @@ checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a67be3eaf296ef668733f54c637e84d0ca34eaf194f0077455135981ad464c3"
+dependencies = [
+ "bytes 1.0.1",
+ "ethereum-types 0.12.0",
+ "hash-db",
+ "hash256-std-hasher",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde 1.0.126",
+ "sha3 0.9.1",
+ "triehash",
 ]
 
 [[package]]
@@ -1791,6 +1912,7 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -1805,6 +1927,7 @@ checksum = "0dd6bde671199089e601e8d47e153368b893ef885f11f365a3261ec58153c211"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-rlp",
  "primitive-types 0.10.1",
  "uint",
 ]
@@ -1970,6 +2093,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-cmp"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
+dependencies = [
+ "num-traits 0.2.14",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2008,6 +2140,12 @@ dependencies = [
  "matches",
  "percent-encoding 2.1.0",
 ]
+
+[[package]]
+name = "fragile"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69a039c3498dc930fe810151a34ba0c1c70b02b8625035592e74432f678591f2"
 
 [[package]]
 name = "frame-benchmarking"
@@ -2572,7 +2710,7 @@ dependencies = [
  "http 0.2.4",
  "indexmap",
  "slab",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-util 0.6.7",
  "tracing",
 ]
@@ -2896,7 +3034,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.6",
  "socket2 0.4.0",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -2932,7 +3070,7 @@ dependencies = [
  "log 0.4.14",
  "rustls 0.19.1",
  "rustls-native-certs 0.5.0",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-rustls 0.22.0",
  "webpki",
 ]
@@ -2946,7 +3084,7 @@ dependencies = [
  "bytes 1.0.1",
  "hyper 0.14.9",
  "native-tls",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-native-tls",
 ]
 
@@ -4261,6 +4399,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "mockall"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ab571328afa78ae322493cacca3efac6a0f2e0a67305b4df31fd439ef129ac0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "downcast",
+ "fragile",
+ "lazy_static",
+ "mockall_derive",
+ "predicates",
+ "predicates-tree",
+]
+
+[[package]]
+name = "mockall_derive"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e25b214433f669161f414959594216d8e6ba83b6679d3db96899c0b4639033"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "more-asserts"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4432,6 +4597,12 @@ dependencies = [
  "memchr",
  "version_check 0.9.3",
 ]
+
+[[package]]
+name = "normalize-line-endings"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "ntapi"
@@ -4769,6 +4940,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-threshold-signature",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4786,10 +4975,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-environment"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
@@ -4818,12 +5019,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-online"
+version = "0.0.1"
+dependencies = [
+ "cf-traits",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-validator",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-reputation"
 version = "0.0.1"
 dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-online",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -4855,12 +5074,15 @@ dependencies = [
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -4869,6 +5091,24 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-wasm-builder",
+]
+
+[[package]]
+name = "pallet-cf-threshold-signature"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "downcast-rs",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -4895,12 +5135,11 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 13.0.0",
  "frame-support",
  "frame-system",
  "hex",
- "log 0.4.14",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -4931,11 +5170,14 @@ dependencies = [
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
  "frame-system",
+ "pallet-cf-broadcast",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-vaults",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5577,6 +5819,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac74c624d6b2d21f425f752262f42188365d7b8ff1aff74c82e45136510a4857"
 
 [[package]]
+name = "predicates"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
+dependencies = [
+ "difference",
+ "float-cmp",
+ "normalize-line-endings",
+ "predicates-core",
+ "regex",
+]
+
+[[package]]
+name = "predicates-core"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57e35a3326b75e49aa85f5dc6ec15b41108cf5aee58eabb1f274dd18b73c2451"
+
+[[package]]
+name = "predicates-tree"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338c7be2905b732ae3984a2f40032b5e94fd8f52505b186c7d4d68d193445df7"
+dependencies = [
+ "predicates-core",
+ "termtree",
+]
+
+[[package]]
 name = "primitive-types"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5597,6 +5868,7 @@ checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "impl-codec",
+ "impl-rlp",
  "uint",
 ]
 
@@ -5657,9 +5929,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.27"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d8caf72986c1a598726adc988bb5984792ef84f5ee5aa50209145ee8077038"
+checksum = "edc3358ebc67bc8b7fa0c007f945b0b18226f78437d61bec735a9eb96b61ee70"
 dependencies = [
  "unicode-xid",
 ]
@@ -6212,7 +6484,7 @@ dependencies = [
  "serde 1.0.126",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-native-tls",
  "url 2.2.2",
  "wasm-bindgen",
@@ -6261,6 +6533,17 @@ checksum = "e54369147e3e7796c9b885c7304db87ca3d09a0a98f72843d532868675bbfba8"
 dependencies = [
  "bytes 1.0.1",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -8569,6 +8852,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "futures 0.3.15",
+ "hex",
  "hex-literal",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
@@ -8606,6 +8890,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8617,12 +8902,16 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-emissions",
+ "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
+ "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
@@ -8696,9 +8985,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "bf9d950ef167e25e0bdb073cf1d68e9ad2795ac826f2f3f59647817cf23c0bfa"
 dependencies = [
  "clap",
  "lazy_static",
@@ -8707,9 +8996,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "134d838a2c9943ac3125cf6df165eda53493451b719f3255b2a26b85f772d0ba"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -8803,7 +9092,8 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feb057a856b185f95a2b4dff834604a05c224e44fefa2d98a0a51ce9b2d666d0"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -8835,7 +9125,8 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-events#053f9ad47f93d377286a56982c75d53621924905"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9995016a22428cb7ffd83193a03eea32f6158a516a0c130bb60c5e5f6c467c44"
 dependencies = [
  "heck",
  "proc-macro-crate 0.1.5",
@@ -8876,9 +9167,9 @@ checksum = "1e81da0851ada1f3e9d4312c704aa4f8806f0f9d69faaf8df2f3464b4a9437c2"
 
 [[package]]
 name = "syn"
-version = "1.0.73"
+version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f71489ff30030d2ae598524f61326b902466f72a0fb1a8564c001cc63425bcc7"
+checksum = "d010a1623fbd906d51d650a9916aaefc05ffa0e4053ff7fe601167f3e715d194"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8937,6 +9228,12 @@ checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "termtree"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78fbf2dd23e79c28ccfa2472d3e6b3b189866ffef1aeb91f17c2d968b6586378"
 
 [[package]]
 name = "textwrap"
@@ -9086,9 +9383,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.7.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c79ba603c337335df6ba6dd6afc38c38a7d5e1b0c871678439ea973cd62a118e"
+checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -9136,7 +9433,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite 0.2.6",
  "tokio 0.2.25",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-stream",
 ]
 
@@ -9213,7 +9510,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9254,7 +9551,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls 0.19.1",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "webpki",
 ]
 
@@ -9275,7 +9572,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9401,7 +9698,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.6",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9445,9 +9742,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.18"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9ff14f98b1a4b289c6248a023c1c2fa1491062964e9fed67ab29c4e4da4a052"
+checksum = "46125608c26121c81b0c6d693eab5a420e416da7e43c426d2e8f7df8da8a3acf"
 dependencies = [
  "lazy_static",
 ]
@@ -9485,9 +9782,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.18"
+version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
+checksum = "56c42e73a9d277d4d2b6a88389a137ccf3c58599660b17e8f5fc39305e490669"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
@@ -9531,6 +9828,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
+dependencies = [
+ "hash-db",
+ "rlp",
 ]
 
 [[package]]
@@ -10158,7 +10465,7 @@ dependencies = [
  "serde_json",
  "soketto 0.5.0",
  "tiny-keccak",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-stream",
  "tokio-util 0.6.7",
  "url 2.2.2",
@@ -10173,7 +10480,7 @@ checksum = "1f6d8d1636b2627fe63518d5a9b38a569405d9c9bc665c43c9c341de57227ebb"
 dependencies = [
  "native-tls",
  "thiserror",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "url 2.2.2",
 ]
 

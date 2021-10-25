@@ -14,11 +14,10 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{EmergencyRotation, Slashing};
+use cf_traits::{Chainflip, Slashing};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
-	pub static EMERGENCY_ROTATION_REQUESTED: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -77,7 +76,6 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 // Mocking the `Slasher` trait
@@ -96,32 +94,26 @@ impl Slashing for MockSlasher {
 	}
 }
 
-pub struct MockEmergencyRotation;
-impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() {
-		EMERGENCY_ROTATION_REQUESTED.with(|requested| {
-			*requested.borrow_mut() = true;
-		});
-	}
-}
-
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 300u64;
-pub const DAVE: <Test as frame_system::Config>::AccountId = 400u64;
-pub const ERIN: <Test as frame_system::Config>::AccountId = 500u64;
+
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
+}
 
 impl Config for Test {
 	type Event = Event;
-	type ValidatorId = u64;
-	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
-	type EmergencyRotation = MockEmergencyRotation;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -141,12 +133,4 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
-}
-
-pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		ReputationPallet::on_finalize(System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		ReputationPallet::on_initialize(System::block_number());
-	}
 }

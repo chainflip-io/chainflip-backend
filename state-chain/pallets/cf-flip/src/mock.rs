@@ -12,6 +12,8 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 pub type AccountId = u64;
 
+cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -71,6 +73,8 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
 }
 
 parameter_types! {

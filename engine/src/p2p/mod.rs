@@ -31,7 +31,7 @@ pub trait P2PNetworkClient {
 
 /// Handles P2P network events.
 #[async_trait]
-pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
+pub trait NetworkEventHandler<C: P2PNetworkClient> {
     async fn handle_event(&self, event: C::NetworkEvent);
 }
 
@@ -91,6 +91,12 @@ pub struct P2PMessage {
 pub struct P2PMessageCommand {
     pub destination: AccountId,
     pub data: Vec<u8>,
+}
+
+impl P2PMessageCommand {
+    pub fn new(destination: AccountId, data: Vec<u8>) -> Self {
+        P2PMessageCommand { destination, data }
+    }
 }
 
 /// A command to the conductor to send message `data` to

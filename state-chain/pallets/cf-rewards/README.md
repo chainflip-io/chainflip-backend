@@ -2,12 +2,12 @@
 
 This pallet contains logic for distribution of Chainflip rewards.
 
-## Purpose
+## Overview
 
 Distribute rewards from emissions lazily, meaning: When rewards are distributed, instead of eagerly crediting all the
 accounts with their portion of the rewards, wait until the owner of the account actually asks for their share.
 
-In order to do this, we need to set the rewards aside in a `Reserve` of funds and track (a) how much of that pot each
+In order to do this, we need to set the rewards aside in a Reserve of funds and track (a) how much of that pot each
 beneficiary is entitled to and (b) how much they have actually been apportioned so far. This allows us to calculate the
 net entitlement for each beneficiary on demand.
 
@@ -24,30 +24,16 @@ net entitlement for each beneficiary on demand.
 
 ## Usage
 
-Usage is via `OnDemandRewardsDistribution`, which implements the `RewardsDistribution` trait.
+Usage is via [OnDemandRewardsDistribution], which implements the [RewardsDistribution] trait.
 
 Rollovers should be triggered when a new set of beneficiaries is available, typically when validator sets are rotated.
 
 ## Dependencies
 
-This pallet depends on `pallet-cf-flip` in order to manipulate reserves and settle imbalances against externally owned
+This pallet depends on [pallet_cf_flip] in order to manipulate reserves and settle imbalances against externally owned
 accounts.
-[`OnChargeTransaction`](https://substrate.dev/rustdocs/v3.0.0/pallet_transaction_payment/trait.OnChargeTransaction.html)
-
-Implementations for the following [chainflip traits](../traits) are provided:
-
-- [`Issuance`](../traits)
-- [`StakeTransfer`](../traits)
 
 ### Genesis Configuration
 
 This pallet has no genesis configuration. Instead, the initial set of beneficiaries should be provided by triggering
 a rollover on genesis.
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open --document-private-items
-```

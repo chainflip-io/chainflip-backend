@@ -34,7 +34,12 @@ impl HealthMonitor {
         slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
             .await
-            .expect(format!("Could not bind TCP listener to {}", self.bind_address).as_str());
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Could not bind TCP listener to {}: {}",
+                    self.bind_address, e
+                )
+            });
 
         let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
@@ -93,11 +98,9 @@ impl HealthMonitor {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::logging;
-    use crate::testing::assert_ok;
-    use tokio::process::Command;
 
     use super::*;
 

@@ -1,25 +1,24 @@
-# Chainflip Auction Module
-
-A module to manage auctions for the Chainflip State Chain
-
-- [`Config`]
-- [`Call`]
-- [`Module`]
+# Chainflip Auction Pallet
 
 ## Overview
 
-The module contains functionality to run a contest or auction in which a set of bidders are provided via
-the `BidderProvider` trait. Calling `process()` we push forward the state of our auction. First we are looking
-for `Bidders` with which we validate their suitability for the next phase `Auction`. During this phase we run an auction
-which selects a list of winners sets a minimum bid of what was need to get in the winning list and set the state
-to `Completed`. The caller would then finally call `process()` to clear the auction in which it would move to
-`Bidders` waiting for the next auction to be started. At any point in time the auction can be aborted returning state
-to `Bidders`
+A pallet to manage an [Auction] for the Chainflip State Chain.
+
+The pallet implements the Chainflip Validator selection process. Upon execution of the selection process, a set of Bidders, provided by the [BidderProvider] trait, have their suitability evaluated and a set winners is selected.
+
+The set of Winners is the subset of Bidders which meet the following criteria:
+
+- A status of Online
+- A Staked balance > 0
+- Have registered session keys for both AURA and GRANDPA
+- A Staked balance which is greater than or equal to the 150th valid Bidder's Staked balance
 
 ## Terminology
-
-- **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
-- **Winners:** Those bidders that have been evaluated and have been included in the the winning set
-- **Minimum Bid:** The minimum bid required to be included in the Winners set
-- **Auction Range:** A range specifying the minimum number of bidders we require and an upper range specifying the
-  maximum size for the winning set
+- Bidder: An entity that has placed a bid and would hope to be included in the winning set
+- Winners: Those Bidders that have been evaluated and have been included in the the winning set
+- Minimum Bid: The minimum bid required to be included in the Winners set
+- Backup Validator: A group of bidders who make up a group size of ideally 1/3 of the desired validator
+  group size.  They are expected to act as a reserve in that they are fully functioning nodes that are ready
+  to become a validator during any upcoming rotation.
+- Emergency Rotation A rotation can be called in which classification of bidders is such that a maximum of 30% of
+  the new active set can only be formed by ex backup validators. 

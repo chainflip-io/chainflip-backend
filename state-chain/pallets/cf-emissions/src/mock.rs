@@ -19,6 +19,10 @@ use cf_traits::{
 	RewardsDistribution,
 };
 
+pub type AccountId = u64;
+
+cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -28,7 +32,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Config<T>, Storage, Event<T>},
+		Emissions: pallet_cf_emissions::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -76,12 +80,15 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
 }
 
 pub const MINT_INTERVAL: u64 = 5;
 
 parameter_types! {
 	pub const MintInterval: u64 = MINT_INTERVAL;
+
 }
 
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
@@ -110,24 +117,26 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type MintInterval = MintInterval;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext(
-	validators: Vec<u64>,
-	issuance: Option<u128>,
-	emissions: Option<u128>,
-) -> sp_io::TestExternalities {
-	let total_issuance = issuance.unwrap_or(1_000u128);
+pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
+	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: emissions.unwrap_or(total_issuance / 100),
+		pallet_cf_emissions: Some({
+			EmissionsConfig {
+				validator_emission_inflation: 1000,       // 10%
+				backup_validator_emission_inflation: 100, // 1%
+			}
 		}),
 	};
+
 	for v in validators {
 		epoch_info::Mock::add_validator(v);
 	}
+
 	config.build_storage().unwrap().into()
 }
