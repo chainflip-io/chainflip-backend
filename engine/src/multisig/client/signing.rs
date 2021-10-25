@@ -1,8 +1,9 @@
 // TODO: make it unnecessary to expose macros here
 #[macro_use]
 pub mod frost;
-mod frost_stages;
-mod signing_state;
+// MAXIM: make these private again
+pub mod frost_stages;
+pub mod signing_state;
 
 use std::time::{Duration, Instant};
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use client::SchnorrSignature;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
@@ -10,6 +11,11 @@ use super::signing::frost::SigningDataWrapped;
 use super::utils::PartyIdxMapping;
 use crate::logging::CEREMONY_ID_KEY;
 
+use crate::multisig::client::common::broadcast::BroadcastStage;
+use crate::multisig::client::common::{CeremonyCommon, CeremonyStage};
+use crate::multisig::client::signing::frost::SigningData;
+use crate::multisig::client::state_runner::{StateAuthorised, StateRunner};
+use crate::multisig::client::CeremonyAbortReason;
 use crate::multisig::{client, InnerEvent, KeygenInfo, KeygenOutcome};
 
 use crate::p2p::AccountId;
@@ -19,13 +25,17 @@ use crate::multisig::{MessageHash, SigningOutcome};
 
 use super::signing::SigningState;
 
+type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
+
 /// Responsible for mapping ceremonies to signing states and
 /// Generating signer indexes based on the list of parties
+
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
-    signing_states: HashMap<CeremonyId, SigningState>,
+    signing_states: HashMap<CeremonyId, SigningStateRunner>,
+    // signing_states: HashMap<CeremonyId, SigningState>,
     keygen_states: HashMap<CeremonyId, KeygenState>,
     logger: slog::Logger,
 }
@@ -191,16 +201,47 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningState::new_unauthorised(logger));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
-        state.on_request_to_sign(
-            ceremony_id,
-            our_idx,
-            signer_idxs,
-            key_info,
-            data,
-            self.event_sender.clone(),
-        );
+        let inner = {
+            use super::signing::{
+                frost_stages::AwaitCommitments1,
+                signing_state::{SigningP2PSender, SigningStateCommonInfo},
+            };
+
+            let common = CeremonyCommon {
+                ceremony_id,
+                p2p_sender: SigningP2PSender::new(
+                    key_info.validator_map.clone(),
+                    self.event_sender.clone(),
+                    ceremony_id,
+                ),
+                own_idx: our_idx,
+                all_idxs: signer_idxs,
+                logger: self.logger.clone(),
+            };
+
+            let processor = AwaitCommitments1::new(
+                common.clone(),
+                SigningStateCommonInfo {
+                    data,
+                    key: key_info.key.clone(),
+                },
+            );
+
+            let mut state = BroadcastStage::new(processor, common);
+
+            state.init();
+
+            StateAuthorised {
+                ceremony_id,
+                stage: Some(Box::new(state)),
+                validator_map: key_info.validator_map,
+                result_sender: self.event_sender.clone(),
+            }
+        };
+
+        state.init(inner);
     }
 
     pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
@@ -215,9 +256,37 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningState::new_unauthorised(logger));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
-        state.process_message(sender_id, data);
+        if let Some(result) = state.process_message(sender_id, data) {
+            match result {
+                Ok(result) => {
+                    self.event_sender
+                        .send(InnerEvent::SigningResult(SigningOutcome {
+                            id: ceremony_id,
+                            result: Ok(result),
+                        }))
+                        .unwrap();
+                }
+                Err(blamed_parties) => {
+                    slog::warn!(
+                        self.logger,
+                        "Signing ceremony failed, blaming parties: {:?} ({:?})",
+                        &blamed_parties,
+                        blamed_parties,
+                    );
+
+                    self.event_sender
+                        .send(InnerEvent::SigningResult(SigningOutcome {
+                            id: ceremony_id,
+                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                        }))
+                        .unwrap();
+                }
+            }
+        }
+
+        // TODO: delete state when done
     }
 
     pub fn process_keygen_data(

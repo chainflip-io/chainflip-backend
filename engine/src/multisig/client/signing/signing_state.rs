@@ -37,7 +37,7 @@ pub struct SigningP2PSender {
 }
 
 impl SigningP2PSender {
-    fn new(
+    pub fn new(
         validator_map: Arc<PartyIdxMapping>,
         sender: UnboundedSender<InnerEvent>,
         ceremony_id: CeremonyId,
@@ -365,6 +365,6 @@ impl SigningState {
 /// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo {
-    pub(super) data: MessageHash,
-    pub(super) key: Arc<KeygenResult>,
+    pub data: MessageHash,
+    pub key: Arc<KeygenResult>,
 }

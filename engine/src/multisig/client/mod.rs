@@ -4,7 +4,7 @@ mod common;
 mod key_store;
 pub mod keygen;
 pub mod signing;
-// mod state_runner;
+mod state_runner;
 
 #[cfg(test)]
 mod tests;
