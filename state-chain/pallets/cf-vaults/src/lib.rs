@@ -18,6 +18,11 @@ use frame_support::{
 pub use pallet::*;
 use sp_std::{convert::TryFrom, prelude::*};
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -87,6 +92,9 @@ pub mod pallet {
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -167,7 +175,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A key generation succeeded. Update the state of the rotation and attempt to broadcast the setAggKey
 		/// transaction.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::keygen_success())]
 		pub fn keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -216,7 +224,7 @@ pub mod pallet {
 		/// Key generation failed. We report the guilty parties and abort all pending keygen ceremonies.
 		///
 		/// If key generation fails for *any* chain we need to abort *all* chains.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::keygen_failure())]
 		pub fn keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -261,7 +269,7 @@ pub mod pallet {
 		}
 
 		/// A vault rotation event has been witnessed, we update the vault with the new key.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,

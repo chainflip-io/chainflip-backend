@@ -5137,6 +5137,7 @@ version = "0.0.1"
 dependencies = [
  "cf-chains",
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex",

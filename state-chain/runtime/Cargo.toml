@@ -82,12 +82,12 @@ runtime-benchmarks = [
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
-  'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-auction/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
+  'pallet-cf-vaults/runtime-benchmarks',
 ]
 std = [
   'cf-traits/std',
