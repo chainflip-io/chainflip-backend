@@ -1,4 +1,5 @@
 use anyhow::Result;
+use cf_traits::ChainflipAccountData;
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -162,6 +163,12 @@ pub trait StateChainRpcApi {
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
+
+    async fn storage_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 }
 
 #[async_trait]
@@ -215,6 +222,19 @@ impl StateChainRpcApi for StateChainRpcClient {
             })
             .flatten()
             .collect::<Result<Vec<_>>>()
+    }
+
+    async fn storage_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
+        Ok(self
+            .state_rpc_client
+            .query_storage_at(vec![storage_key], Some(block_header.hash()))
+            .compat()
+            .await
+            .map_err(anyhow::Error::msg)?)
     }
 }
 
@@ -282,6 +302,37 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
         self.state_chain_rpc_client.events(block_header).await
+    }
+
+    /// get the status of the node at a particular block
+    pub async fn node_status(&self, block_header: &state_chain_runtime::Header) {
+        let storage_key = self
+            .metadata
+            .module("System")
+            .unwrap()
+            .clone()
+            .storage("Account")
+            .unwrap()
+            .map()
+            .unwrap()
+            .key(&self.our_account_id);
+        let result = self
+            .state_chain_rpc_client
+            .storage_events(block_header, storage_key)
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+                    .flatten_ok()
+            })
+            .flatten()
+            .collect::<Result<Vec<_>>>();
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -442,9 +493,41 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{logging::test_utils::create_test_logger, testing::assert_ok};
+    use crate::{
+        logging::test_utils::create_test_logger,
+        settings::{test_utils::new_test_settings, Settings},
+        testing::assert_ok,
+    };
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_finalised_storage_subs() {
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let (state_chain_client, mut block_stream) =
+            connect_to_state_chain(&settings).await.unwrap();
+
+        let storage_key = state_chain_client
+            .metadata
+            .module("System")
+            .unwrap()
+            .clone()
+            .storage("Account")
+            .unwrap()
+            .map()
+            .unwrap()
+            .key(&state_chain_client.our_account_id);
+
+        while let Some(block) = block_stream.next().await {
+            let block_header = block.unwrap();
+            let stuff = state_chain_client
+                .state_chain_rpc_client
+                .storage_events(&block_header, storage_key.clone())
+                .await;
+
+            println!("Returning stuff for this block: {:?}", stuff);
+        }
+    }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
