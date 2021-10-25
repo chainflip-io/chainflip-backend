@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -312,20 +312,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     ) -> Result<ChainflipAccountState> {
         let storage_key = self
             .metadata
-            .module("System")
-            .unwrap()
+            .module("System")?
             .clone()
-            .storage("Account")
-            .unwrap()
-            .map()
-            .unwrap()
+            .storage("Account")?
+            .map()?
             .key(&self.our_account_id);
 
         let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events(block_header, storage_key)
-            .await
-            .expect("TODO: Handle this error maybe?...")
+            .await?
             .into_iter()
             .map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
@@ -388,7 +384,9 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&settings.state_chain.signing_key_file)?.replace("\"", ""),
+                &std::fs::read_to_string(&settings.state_chain.signing_key_file)
+                    .context("Failed to read in state_chain.signing_key_file")?
+                    .replace("\"", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
@@ -505,15 +503,12 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{
-        logging::test_utils::create_test_logger,
-        settings::{test_utils::new_test_settings, Settings},
-        testing::assert_ok,
-    };
+    use crate::{logging::test_utils::create_test_logger, settings::Settings, testing::assert_ok};
 
     use super::*;
 
     #[tokio::test]
+    #[ignore = "depends on running state chain"]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (state_chain_client, mut block_stream) =
