@@ -4,14 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 
 use crate::{
-    multisig::client::{
-        common::{ProcessMessageResult, StageResult},
-        ThresholdParameters,
-    },
+    multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
 
@@ -31,7 +27,7 @@ where
     pub ceremony_id: CeremonyId,
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
     pub result_sender: EventSender,
-    pub validator_map: Arc<PartyIdxMapping>,
+    pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
 #[derive(Clone)]
@@ -108,7 +104,7 @@ where
                 }
 
                 // Check that the sender is a participant in the ceremony
-                let sender_idx = match authorised_state.validator_map.get_idx(&sender_id) {
+                let sender_idx = match authorised_state.idx_mapping.get_idx(&sender_id) {
                     Some(idx) => idx,
                     None => {
                         slog::debug!(
@@ -153,7 +149,7 @@ where
                                     .iter()
                                     .map(|idx| {
                                         authorised_state
-                                            .validator_map
+                                            .idx_mapping
                                             .get_id(*idx)
                                             .expect("Should have all ids here")
                                             .clone()
@@ -243,7 +239,7 @@ where
                         .iter()
                         .map(|idx| {
                             authorised_state
-                                .validator_map
+                                .idx_mapping
                                 .get_id(*idx)
                                 .expect("id for a blamed party should always be known")
                                 .clone()

@@ -312,7 +312,7 @@ pub struct KeygenP2PSender {
 }
 
 impl KeygenP2PSender {
-    fn new(
+    pub fn new(
         validator_map: Arc<PartyIdxMapping>,
         sender: UnboundedSender<InnerEvent>,
         ceremony_id: CeremonyId,

@@ -10,7 +10,8 @@ pub use keygen_data::{
     Comm1, Complaints4, KeygenData, SecretShare3, VerifyComm2, VerifyComplaints5,
 };
 
-pub use keygen_state::KeygenState;
+pub use keygen_stages::AwaitCommitments1;
+pub use keygen_state::{KeygenP2PSender, KeygenState};
 
 use crate::p2p::AccountId;
 

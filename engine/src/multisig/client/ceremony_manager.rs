@@ -6,7 +6,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
 use super::common::KeygenResultInfo;
-use super::keygen::KeygenState;
+use super::keygen_state_runner::KeygenStateRunner;
 use super::signing::frost::SigningDataWrapped;
 use super::utils::PartyIdxMapping;
 use crate::logging::CEREMONY_ID_KEY;
@@ -23,8 +23,6 @@ use client::{utils::get_index_mapping, KeygenDataWrapped};
 
 use crate::multisig::{MessageHash, SigningOutcome};
 
-use super::signing::SigningState;
-
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
 /// Responsible for mapping ceremonies to signing states and
@@ -35,8 +33,7 @@ pub struct CeremonyManager {
     my_account_id: AccountId,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
-    // signing_states: HashMap<CeremonyId, SigningState>,
-    keygen_states: HashMap<CeremonyId, KeygenState>,
+    keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
 }
 
@@ -141,12 +138,12 @@ impl CeremonyManager {
 
         let logger = self.logger.clone();
 
-        let entry = self
+        let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenState::new_unauthorised(logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
-        entry.on_keygen_request(
+        state.on_keygen_request(
             ceremony_id,
             self.event_sender.clone(),
             validator_map,
@@ -236,7 +233,7 @@ impl CeremonyManager {
             StateAuthorised {
                 ceremony_id,
                 stage: Some(Box::new(state)),
-                validator_map: key_info.validator_map,
+                idx_mapping: key_info.validator_map,
                 result_sender: self.event_sender.clone(),
             }
         };
@@ -302,21 +299,35 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenState::new_unauthorised(logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
-        let res = state.process_message(sender_id, data);
-
-        // TODO: this is not a complete solution, we need to clean up the state
-        // when it is failed too
-        if res.is_some() {
+        state.process_message(sender_id, data).and_then(|res| {
             self.keygen_states.remove(&ceremony_id);
             slog::debug!(
-                self.logger, "Removed a successfully finished keygen ceremony";
+                self.logger, "Removed a finished keygen ceremony";
                 CEREMONY_ID_KEY => ceremony_id
             );
-        }
 
-        res
+            match res {
+                Ok(keygen_result_info) => Some(keygen_result_info),
+                Err(blamed_parties) => {
+                    slog::warn!(
+                        self.logger,
+                        "Keygen ceremony failed, blaming parties: {:?} ({:?})",
+                        &blamed_parties,
+                        blamed_parties,
+                    );
+
+                    self.event_sender
+                        .send(InnerEvent::KeygenResult(KeygenOutcome {
+                            id: ceremony_id,
+                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                        }))
+                        .unwrap();
+                    None
+                }
+            }
+        })
     }
 }
 
