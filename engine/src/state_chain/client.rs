@@ -435,9 +435,7 @@ pub async fn connect_to_state_chain(
 
     let our_account_id = signer.account_id().to_owned();
 
-    let account_storage_key = metadata
-        .module("System")?
-        .clone()
+    let account_storage_key = system_pallet_metadata
         .storage("Account")?
         .map()?
         .key(&our_account_id);
