@@ -1,27 +1,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use client::SchnorrSignature;
+use super::{
+    state_runner::StateRunner, utils::get_index_mapping, CeremonyAbortReason, KeygenDataWrapped,
+    SchnorrSignature,
+};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
-use super::common::KeygenResultInfo;
 use super::keygen_state_runner::KeygenStateRunner;
-use super::signing::frost::SigningDataWrapped;
+use super::signing::frost::{SigningData, SigningDataWrapped};
 use super::utils::PartyIdxMapping;
 use crate::logging::CEREMONY_ID_KEY;
 
-use crate::multisig::client::common::broadcast::BroadcastStage;
-use crate::multisig::client::common::{CeremonyCommon, CeremonyStage};
-use crate::multisig::client::signing::frost::SigningData;
-use crate::multisig::client::state_runner::{StateAuthorised, StateRunner};
-use crate::multisig::client::CeremonyAbortReason;
-use crate::multisig::{client, InnerEvent, KeygenInfo, KeygenOutcome};
+use super::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
+
+use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use crate::p2p::AccountId;
-use client::{utils::get_index_mapping, KeygenDataWrapped};
-
-use crate::multisig::{MessageHash, SigningOutcome};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -200,10 +196,9 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
-        let inner = {
+        let initial_stage = {
             use super::signing::{
-                frost_stages::AwaitCommitments1,
-                signing_state::{SigningP2PSender, SigningStateCommonInfo},
+                frost_stages::AwaitCommitments1, SigningP2PSender, SigningStateCommonInfo,
             };
 
             let common = CeremonyCommon {
@@ -226,19 +221,15 @@ impl CeremonyManager {
                 },
             );
 
-            let mut state = BroadcastStage::new(processor, common);
-
-            state.init();
-
-            StateAuthorised {
-                ceremony_id,
-                stage: Some(Box::new(state)),
-                idx_mapping: key_info.validator_map,
-                result_sender: self.event_sender.clone(),
-            }
+            Box::new(BroadcastStage::new(processor, common))
         };
 
-        state.init(inner);
+        state.on_ceremony_request(
+            ceremony_id,
+            initial_stage,
+            key_info.validator_map,
+            self.event_sender.clone(),
+        );
     }
 
     pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
@@ -256,6 +247,7 @@ impl CeremonyManager {
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
+            self.keygen_states.remove(&ceremony_id);
             match result {
                 Ok(result) => {
                     self.event_sender
@@ -282,8 +274,6 @@ impl CeremonyManager {
                 }
             }
         }
-
-        // TODO: delete state when done
     }
 
     pub fn process_keygen_data(

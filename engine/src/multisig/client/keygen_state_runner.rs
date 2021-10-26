@@ -6,16 +6,15 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{multisig::client::ThresholdParameters, p2p::AccountId};
 
 use super::{
-    common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult},
+    common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
     keygen::{AwaitCommitments1, KeygenData, KeygenP2PSender},
-    state_runner::{StateAuthorised, StateRunner},
+    state_runner::StateRunner,
     utils::PartyIdxMapping,
     InnerEvent, KeygenResultInfo,
 };
 
 #[derive(Clone)]
 pub struct KeygenStateRunner {
-    //
     inner: StateRunner<KeygenData, KeygenResult>,
     idx_mapping: Option<Arc<PartyIdxMapping>>,
     logger: slog::Logger,
@@ -42,7 +41,6 @@ impl KeygenStateRunner {
 
         let common = CeremonyCommon {
             ceremony_id,
-            // TODO: do not clone validator map
             p2p_sender: KeygenP2PSender::new(
                 idx_mapping.clone(),
                 event_sender.clone(),
@@ -55,18 +53,10 @@ impl KeygenStateRunner {
 
         let processor = AwaitCommitments1::new(ceremony_id, common.clone());
 
-        let mut stage = BroadcastStage::new(processor, common);
+        let stage = Box::new(BroadcastStage::new(processor, common));
 
-        stage.init();
-
-        let state = StateAuthorised {
-            ceremony_id,
-            stage: Some(Box::new(stage)),
-            idx_mapping,
-            result_sender: event_sender,
-        };
-
-        self.inner.init(state);
+        self.inner
+            .on_ceremony_request(ceremony_id, stage, idx_mapping, event_sender);
     }
 
     pub fn try_expiring(&mut self) -> Option<Vec<AccountId>> {

@@ -21,7 +21,7 @@ use keygen::{
         generate_shares_and_commitment, validate_commitments, verify_share, DKGCommitment,
         DKGUnverifiedCommitment, ShamirShare,
     },
-    keygen_state::KeygenP2PSender,
+    KeygenP2PSender,
 };
 
 type KeygenCeremonyCommon = CeremonyCommon<KeygenData, KeygenP2PSender>;

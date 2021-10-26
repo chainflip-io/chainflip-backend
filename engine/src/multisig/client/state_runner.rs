@@ -5,13 +5,14 @@ use std::{
 };
 
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender};
+use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender, InnerEvent};
 
 trait StateRunnerInner {
     fn on_request();
@@ -56,7 +57,13 @@ where
         }
     }
 
-    pub fn init(&mut self, state: StateAuthorised<CeremonyData, CeremonyResult>) {
+    pub fn on_ceremony_request(
+        &mut self,
+        ceremony_id: CeremonyId,
+        mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
+        idx_mapping: Arc<PartyIdxMapping>,
+        result_sender: UnboundedSender<InnerEvent>,
+    ) {
         if self.inner.is_some() {
             slog::warn!(
                 self.logger,
@@ -65,7 +72,14 @@ where
             return;
         }
 
-        self.inner = Some(state);
+        stage.init();
+
+        self.inner = Some(StateAuthorised {
+            ceremony_id,
+            stage: Some(stage),
+            idx_mapping,
+            result_sender,
+        });
 
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a request
