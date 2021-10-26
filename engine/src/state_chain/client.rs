@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -162,6 +163,12 @@ pub trait StateChainRpcApi {
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
+
+    async fn storage_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 }
 
 #[async_trait]
@@ -192,6 +199,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
+    // TODO: Can factor some of this out into the upper method now
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
         self.state_rpc_client
             .query_storage_at(
@@ -215,6 +223,19 @@ impl StateChainRpcApi for StateChainRpcClient {
             })
             .flatten()
             .collect::<Result<Vec<_>>>()
+    }
+
+    async fn storage_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
+        Ok(self
+            .state_rpc_client
+            .query_storage_at(vec![storage_key], Some(block_header.hash()))
+            .compat()
+            .await
+            .map_err(anyhow::Error::msg)?)
     }
 }
 
@@ -284,6 +305,44 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         self.state_chain_rpc_client.events(block_header).await
     }
 
+    /// get the status of the node at a particular block
+    pub async fn node_status(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<ChainflipAccountState> {
+        let storage_key = self
+            .metadata
+            .module("System")?
+            .clone()
+            .storage("Account")?
+            .map()?
+            .key(&self.our_account_id);
+
+        let node_status_updates: Vec<_> = self
+            .state_chain_rpc_client
+            .storage_events(block_header, storage_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            ChainflipAccountData::decode(&mut &data.0[..])
+                                .map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        Ok(node_status_updates
+            .last()
+            .expect("Node must have a status")
+            .state)
+    }
+
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
         self.metadata.clone()
     }
@@ -325,7 +384,9 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&settings.state_chain.signing_key_file)?.replace("\"", ""),
+                &std::fs::read_to_string(&settings.state_chain.signing_key_file)
+                    .context("Failed to read in state_chain.signing_key_file")?
+                    .replace("\"", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
@@ -442,9 +503,28 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{logging::test_utils::create_test_logger, testing::assert_ok};
+    use crate::{logging::test_utils::create_test_logger, settings::Settings, testing::assert_ok};
 
     use super::*;
+
+    #[tokio::test]
+    #[ignore = "depends on running state chain"]
+    async fn test_finalised_storage_subs() {
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let (state_chain_client, mut block_stream) =
+            connect_to_state_chain(&settings).await.unwrap();
+
+        while let Some(block) = block_stream.next().await {
+            let block_header = block.unwrap();
+            let my_state_for_this_block =
+                state_chain_client.node_status(&block_header).await.unwrap();
+
+            println!(
+                "Returning ChainflipAccountStatus for this block: {:?}",
+                my_state_for_this_block
+            );
+        }
+    }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
