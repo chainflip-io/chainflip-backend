@@ -6,8 +6,6 @@ pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, St
 
 pub use broadcast_verification::BroadcastVerificationMessage;
 
-use tokio::sync::mpsc::UnboundedSender;
-
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +15,7 @@ use crate::{
     p2p::P2PMessageCommand,
 };
 
-use super::{utils::PartyIdxMapping, InnerEvent, ThresholdParameters};
+use super::{utils::PartyIdxMapping, EventSender, ThresholdParameters};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {
@@ -57,11 +55,11 @@ pub trait P2PSender: Clone {
 #[derive(Clone)]
 pub struct RawP2PSender {
     validator_map: Arc<PartyIdxMapping>,
-    sender: UnboundedSender<InnerEvent>,
+    sender: EventSender,
 }
 
 impl RawP2PSender {
-    pub fn new(validator_map: Arc<PartyIdxMapping>, sender: UnboundedSender<InnerEvent>) -> Self {
+    pub fn new(validator_map: Arc<PartyIdxMapping>, sender: EventSender) -> Self {
         RawP2PSender {
             validator_map,
             sender,

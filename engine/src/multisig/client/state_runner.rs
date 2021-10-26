@@ -5,14 +5,13 @@ use std::{
 };
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender, InnerEvent};
+use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender};
 
 trait StateRunnerInner {
     fn on_request();
@@ -62,7 +61,7 @@ where
         ceremony_id: CeremonyId,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: UnboundedSender<InnerEvent>,
+        result_sender: EventSender,
     ) {
         if self.inner.is_some() {
             slog::warn!(
@@ -130,7 +129,6 @@ where
                     }
                 };
 
-                // MAXIM: continue here tomorrow
                 match stage.process_message(sender_idx, data) {
                     ProcessMessageResult::CollectedAll => {
                         let state = authorised_state.stage.take().unwrap();

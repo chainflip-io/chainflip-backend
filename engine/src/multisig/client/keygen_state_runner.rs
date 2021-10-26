@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{multisig::client::ThresholdParameters, p2p::AccountId};
 
@@ -10,7 +9,7 @@ use super::{
     keygen::{AwaitCommitments1, KeygenData, KeygenP2PSender},
     state_runner::StateRunner,
     utils::PartyIdxMapping,
-    InnerEvent, KeygenResultInfo,
+    EventSender, KeygenResultInfo,
 };
 
 #[derive(Clone)]
@@ -32,7 +31,7 @@ impl KeygenStateRunner {
     pub fn on_keygen_request(
         &mut self,
         ceremony_id: CeremonyId,
-        event_sender: UnboundedSender<InnerEvent>,
+        event_sender: EventSender,
         idx_mapping: Arc<PartyIdxMapping>,
         our_idx: usize,
         all_idxs: Vec<usize>,

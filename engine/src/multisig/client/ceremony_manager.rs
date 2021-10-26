@@ -8,10 +8,9 @@ use client::{
     signing::frost::{SigningData, SigningDataWrapped},
     state_runner::StateRunner,
     utils::{get_index_mapping, PartyIdxMapping},
-    CeremonyAbortReason, KeygenDataWrapped, SchnorrSignature,
+    CeremonyAbortReason, EventSender, KeygenDataWrapped, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc;
 
 use crate::logging::CEREMONY_ID_KEY;
 
@@ -28,18 +27,14 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
-    event_sender: mpsc::UnboundedSender<InnerEvent>,
+    event_sender: EventSender,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
 }
 
 impl CeremonyManager {
-    pub fn new(
-        my_account_id: AccountId,
-        event_sender: mpsc::UnboundedSender<InnerEvent>,
-        logger: &slog::Logger,
-    ) -> Self {
+    pub fn new(my_account_id: AccountId, event_sender: EventSender, logger: &slog::Logger) -> Self {
         CeremonyManager {
             my_account_id,
             event_sender,

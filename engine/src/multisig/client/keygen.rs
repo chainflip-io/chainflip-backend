@@ -12,7 +12,6 @@ pub use keygen_data::{
 };
 
 pub use keygen_stages::AwaitCommitments1;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::p2p::AccountId;
 
@@ -21,7 +20,7 @@ dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = Keyg
 use super::{
     common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
     utils::PartyIdxMapping,
-    InnerEvent, KeygenDataWrapped, MultisigMessage,
+    EventSender, KeygenDataWrapped, MultisigMessage,
 };
 
 /// Information necessary for the multisig client to start a new keygen ceremony
@@ -51,7 +50,7 @@ pub struct KeygenP2PSender {
 impl KeygenP2PSender {
     pub fn new(
         validator_map: Arc<PartyIdxMapping>,
-        sender: UnboundedSender<InnerEvent>,
+        sender: EventSender,
         ceremony_id: CeremonyId,
     ) -> Self {
         KeygenP2PSender {

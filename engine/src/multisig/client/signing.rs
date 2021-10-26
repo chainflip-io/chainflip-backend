@@ -1,7 +1,6 @@
 // TODO: make it unnecessary to expose macros here
 #[macro_use]
 pub mod frost;
-// MAXIM: make these private again
 pub mod frost_stages;
 
 use std::{
@@ -13,7 +12,6 @@ pub use frost::SigningDataWrapped;
 use pallet_cf_vaults::CeremonyId;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     multisig::{client::MultisigMessage, KeyId, MessageHash},
@@ -25,7 +23,7 @@ use self::frost::SigningData;
 use super::{
     common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
     utils::PartyIdxMapping,
-    InnerEvent, SchnorrSignature,
+    EventSender, SchnorrSignature,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -86,7 +84,7 @@ pub struct SigningP2PSender {
 impl SigningP2PSender {
     pub fn new(
         validator_map: Arc<PartyIdxMapping>,
-        sender: UnboundedSender<InnerEvent>,
+        sender: EventSender,
         ceremony_id: CeremonyId,
     ) -> Self {
         SigningP2PSender {

@@ -27,7 +27,6 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedSender;
 
 use key_store::KeyStore;
 use signing::SigningDataWrapped;
@@ -175,7 +174,7 @@ where
     my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
-    inner_event_sender: UnboundedSender<InnerEvent>,
+    inner_event_sender: EventSender,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     logger: slog::Logger,
@@ -188,7 +187,7 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        inner_event_sender: UnboundedSender<InnerEvent>,
+        inner_event_sender: EventSender,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
