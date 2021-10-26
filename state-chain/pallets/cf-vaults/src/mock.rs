@@ -140,6 +140,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

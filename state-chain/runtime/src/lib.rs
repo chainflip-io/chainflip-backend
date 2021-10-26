@@ -432,6 +432,7 @@ impl pallet_cf_online::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
 use frame_support::instances::Instance0;
@@ -683,6 +684,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
+			add_benchmark!(params, batches, pallet_cf_online, Online);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

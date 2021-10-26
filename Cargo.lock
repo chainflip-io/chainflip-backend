@@ -5023,6 +5023,7 @@ name = "pallet-cf-online"
 version = "0.0.1"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-validator",

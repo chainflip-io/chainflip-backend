@@ -2,10 +2,15 @@
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 pub mod liveness;
 
@@ -38,6 +43,9 @@ pub mod pallet {
 
 		/// Epoch info
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -51,7 +59,7 @@ pub mod pallet {
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return network_weight;
+				return T::WeightInfo::on_initialize();
 			}
 
 			Zero::zero()
@@ -102,7 +110,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin): This is not a staked node.
 		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
 		///   submitted the heartbeat for this interval.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 

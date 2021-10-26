@@ -233,6 +233,7 @@ impl pallet_cf_vaults::Config for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 }
 
 impl pallet_cf_witness_api::Config for Test {
