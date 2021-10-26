@@ -19,6 +19,9 @@ mod tests {
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use sp_runtime::AccountId32;
+
+	type NodeId = AccountId32;
 
 	macro_rules! on_events {
 		($events:expr, $( $p:pat => $b:block ),*) => {
@@ -28,176 +31,169 @@ mod tests {
 		}
 	}
 
-	mod cfe {
+	mod network {
 		use super::*;
-		use frame_support::traits::HandleLifetime;
-		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-		use sp_runtime::AccountId32;
-		use state_chain_runtime::HeartbeatBlockInterval;
 		use std::collections::HashMap;
+		use pallet_cf_staking::{EthereumAddress, EthTransactionHash};
+		use state_chain_runtime::HeartbeatBlockInterval;
 		use state_chain_runtime::{Event, Origin, WitnesserApi};
-		type ValidatorId = AccountId32;
+		use crate::tests::BLOCK_TIME;
+		use frame_support::traits::HandleLifetime;
+		use cf_traits::ChainflipAccountState;
+		use std::io::Chain;
 
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		const TX_HASH: EthTransactionHash = [211u8; 32];
 
-		// Staking, simply
-		trait Staking {
-			fn stake(&mut self, account_id: &ValidatorId, amount: FlipBalance);
-			fn clear(&mut self, account_id: &ValidatorId);
-		}
-
-		// Witness a staking event
-		trait StakingWitness {
-			fn stake_witnessed(
-				witnesser: &ValidatorId,
-				account_id: &ValidatorId,
+		// Events from ethereum contract
+		#[derive(Debug, Clone)]
+		pub enum ContractEvent {
+			Staked {
+				node_id: NodeId,
 				amount: FlipBalance,
-			);
+				total: FlipBalance
+			},
 		}
 
-		trait Events {
-			fn process();
+		// A staking contract
+		#[derive(Default)]
+		pub struct StakingContract {
+			// List of stakes
+			pub stakes: HashMap<NodeId, FlipBalance>,
+			// Events to be processed
+			pub events: Vec<ContractEvent>,
 		}
 
-		// A client of the blockchain
-		// It is fed blocks to keep it alive
-		pub trait StateChainClient {
-			type Witness: StakingWitness;
-			type Events: Events;
-			// A new block created
-			fn on_block(&mut self, block_number: BlockNumber);
-		}
+		impl StakingContract {
+			// Stake for validator
+			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance) {
+				let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
+				let total = current_amount + amount;
+				self.stakes.insert(node_id.clone(), total);
 
-		// Our bridge to the real world
-		trait ContractListener {
-			fn stake_updated(&mut self, account_id: ValidatorId, amount: FlipBalance);
-		}
-
-		struct Contract {
-			stakes: HashMap<ValidatorId, FlipBalance>,
-		}
-
-		impl Staking for Contract {
-			fn stake(&mut self, account_id: &ValidatorId, amount: FlipBalance) {
-				self.stakes.insert(account_id.clone(), amount);
+				self.events.push(ContractEvent::Staked{ node_id, amount, total});
 			}
-
-			fn clear(&mut self, account_id: &ValidatorId) {
-				self.stakes.remove(account_id);
+			// Get events for this contract
+			fn events(&self) -> Vec<ContractEvent> {
+				self.events.clone()
+			}
+			// Clear events
+			fn clear(&mut self) {
+				self.events.clear();
 			}
 		}
 
-		// The engine, the CFE (sub)component ;-)
+		// Engine monitoring contract
 		pub struct Engine {
-			validator_id: ValidatorId,
-			witnessed: Vec<(ValidatorId, FlipBalance)>,
+			pub node_id: NodeId,
+			pub state: ChainflipAccountState,
 		}
 
 		impl Engine {
-			fn new(validator_id: ValidatorId) -> Self {
+			fn new(node_id: NodeId) -> Self {
 				Engine {
-					validator_id,
-					witnessed: vec![],
+					node_id,
+					state: ChainflipAccountState::Passive,
 				}
 			}
-		}
 
-		impl ContractListener for Engine {
-			fn stake_updated(&mut self, account_id: ValidatorId, amount: FlipBalance) {
-				self.witnessed.push((account_id, amount));
-			}
-		}
-
-		impl StakingWitness for Engine {
-			fn stake_witnessed(
-				witnesser: &ValidatorId,
-				account_id: &ValidatorId,
-				amount: FlipBalance,
-			) {
-				state_chain_runtime::WitnesserApi::witness_staked(
-					Origin::signed(witnesser.clone()),
-					account_id.clone(),
-					amount,
-					ETH_ZERO_ADDRESS,
-					TX_HASH,
-				);
-			}
-		}
-
-		/*
-		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
-		/// The vault for the request has rotated \[chain_id\]
-		VaultRotationCompleted(ChainId),
-		/// All KeyGen ceremonies have been aborted \[chain_ids\]
-		KeygenAborted(Vec<ChainId>),
-		/// A complete set of vaults have been rotated
-		VaultsRotated,
-		/// UnexpectedPubkeyWitnessed \[chain_id, key\]
-		UnexpectedPubkeyWitnessed(ChainId, Vec<u8>),
-		 */
-
-		impl Events for Engine {
-			fn process() {
-				on_events!(
-					frame_system::Pallet::<Runtime>::events()
-					.into_iter()
-					.map(|e| e.event)
-					.collect::<Vec<_>>(),
-					Event::pallet_cf_vaults(
-						pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-							assert_eq!(ceremony_id, 1, "this should be the first ceremony");
-					},
-					Event::pallet_cf_vaults(
-						pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
-							assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
-					},
-					Event::pallet_cf_vaults(
-						pallet_cf_vaults::Event::KeygenAborted(ref chain_ids)) => {
-							assert_eq!(chain_ids, &[ChainId::Ethereum], "this should be Ethereum");
-					},
-					Event::pallet_cf_vaults(
-						pallet_cf_vaults::Event::VaultsRotated) => {
-
-					},
-					Event::pallet_cf_vaults(
-						pallet_cf_vaults::Event::UnexpectedPubkeyWitnessed(chain_id, key)) => {
-							assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+			// Handle events from contract
+			fn on_contract_event(&self, event: &ContractEvent) {
+				if self.state == ChainflipAccountState::Validator {
+					match event {
+						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
+							// Witness event -> send transaction to state chain
+							state_chain_runtime::WitnesserApi::witness_staked(
+								Origin::signed(self.node_id.clone()),
+								validator_id.clone(),
+								*amount,
+								ETH_ZERO_ADDRESS,
+								TX_HASH,
+							);
+						}
 					}
-				);
-
-				frame_system::Pallet::<Runtime>::reset_events();
+				}
 			}
-		}
 
-		impl StateChainClient for Engine {
-			type Witness = Self;
-			type Events = Self;
+			// Handle events coming in from the state chain
+			fn handle_state_chain_events(&self) {
+				if self.state == ChainflipAccountState::Validator {
+					// Handle vault events
+					on_events!(
+						frame_system::Pallet::<Runtime>::events()
+						.into_iter()
+						.map(|e| e.event)
+						.collect::<Vec<_>>(),
+						Event::pallet_cf_vaults(
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+								assert_eq!(ceremony_id, 1, "this should be the first ceremony");
+						},
+						Event::pallet_cf_vaults(
+							pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
+								assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+						},
+						Event::pallet_cf_vaults(
+							pallet_cf_vaults::Event::KeygenAborted(ref chain_ids)) => {
+								assert_eq!(chain_ids, &[ChainId::Ethereum], "this should be Ethereum");
+						},
+						Event::pallet_cf_vaults(
+							pallet_cf_vaults::Event::VaultsRotated) => {
 
-			fn on_block(&mut self, block_number: BlockNumber) {
-				// Submit twice an interval
+						},
+						Event::pallet_cf_vaults(
+							pallet_cf_vaults::Event::UnexpectedPubkeyWitnessed(chain_id, key)) => {
+								assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+						}
+					);
+				}
+			}
+
+			// On block handler
+			fn on_block(&self, block_number: BlockNumber) {
+				// Heartbeat -> Send transaction to state chain twice an interval
 				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+					// Online pallet
 					Online::heartbeat(state_chain_runtime::Origin::signed(
-						self.validator_id.clone(),
+						self.node_id.clone(),
 					));
 				}
-
-				// Witness staking events
-				for (validator_id, amount) in &self.witnessed {
-					Self::Witness::stake_witnessed(&self.validator_id, &validator_id, *amount);
-				}
-
-				self.witnessed.clear();
-
-				Self::Events::process();
 			}
 		}
 
-		fn setup(validator_id: &ValidatorId) {
-			// Create an account, generate and register the session keys
-			assert_ok!(frame_system::Provider::<Runtime>::created(&validator_id));
+		struct EventLoop {
+			pub contract: StakingContract,
+		}
 
-			let seed = &validator_id.clone().to_string();
+		impl EventLoop {
+			fn process(&mut self, engines: Vec<Engine>, block_number: u32) {
+				// Witness contract events
+				for event in self.contract.events() {
+					for engine in &engines {
+						if engine.state == ChainflipAccountState::Validator {
+							engine.on_contract_event(&event);
+						}
+					}
+				}
+
+				// State chain events
+				for engine in &engines {
+					engine.handle_state_chain_events();
+				}
+
+				frame_system::Pallet::<Runtime>::reset_events();
+
+				// A completed block notification
+				for engine in &engines {
+					engine.on_block(block_number);
+				}
+			}
+		}
+
+		// Create an account, generate and register the session keys
+		fn setup_account(node_id: &NodeId) {
+			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
+
+			let seed = &node_id.clone().to_string();
 
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
@@ -205,43 +201,67 @@ mod tests {
 			};
 
 			assert_ok!(state_chain_runtime::Session::set_keys(
-				state_chain_runtime::Origin::signed(validator_id.clone()),
+				state_chain_runtime::Origin::signed(node_id.clone()),
 				key,
 				vec![]
 			));
 		}
 
 		pub struct Network {
-			pub nodes:
-				HashMap<ValidatorId, Box<dyn StateChainClient<Witness = Engine, Events = Engine>>>,
+			engines: HashMap<NodeId, Engine>,
 		}
 
 		impl Network {
-			fn update(&mut self, block_number: BlockNumber) {
-				for (_, node) in self.nodes.iter_mut() {
-					node.on_block(block_number);
+			pub fn create(number_of_nodes: u8) -> (Self, Vec<NodeId>) {
+				let mut network: Network = Network {
+					engines: HashMap::new(),
+				};
+
+				let mut nodes = Vec::new();
+				for index in 1..=number_of_nodes {
+					let node_id: NodeId = [index; 32].into();
+					nodes.push(node_id.clone());
+					setup_account(&node_id);
+					network
+						.engines
+						.insert(node_id.clone(), Engine::new(node_id));
+				}
+
+				(network, nodes)
+			}
+
+			pub fn add(&mut self, node_id: NodeId, state: ChainflipAccountState) {
+				setup_account(&node_id);
+				self
+					.engines
+					.insert(node_id.clone(), Engine {
+						node_id,
+						state,
+					});
+			}
+
+			pub fn run_to_block(&self, n: u32) {
+				pub const INIT_TIMESTAMP: u64 = 30_000;
+				while System::block_number() < n {
+					System::set_block_number(System::block_number() + 1);
+					Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
+					Session::on_initialize(System::block_number());
+					Flip::on_initialize(System::block_number());
+					Staking::on_initialize(System::block_number());
+					Auction::on_initialize(System::block_number());
+					Emissions::on_initialize(System::block_number());
+					Governance::on_initialize(System::block_number());
+					Reputation::on_initialize(System::block_number());
+					Vaults::on_initialize(System::block_number());
+					Validator::on_initialize(System::block_number());
+
+					for (_, engine) in &self.engines {
+						engine.on_block(System::block_number());
+					}
 				}
 			}
 		}
-
-		pub fn create_network(number_of_nodes: u8) -> Network {
-			let mut network: Network = Network {
-				nodes: HashMap::new(),
-			};
-
-			for index in 1..=number_of_nodes {
-				let validator_id: ValidatorId = [index; 32].into();
-				setup(&validator_id);
-				network
-					.nodes
-					.insert(validator_id.clone(), Box::new(Engine::new(validator_id)));
-			}
-
-			network
-		}
 	}
-
-	use crate::tests::cfe::*;
 
 	pub const ALICE: [u8; 32] = [4u8; 32];
 	pub const BOB: [u8; 32] = [5u8; 32];
@@ -262,23 +282,6 @@ mod tests {
 			.rev()
 			.map(|e| e.event)
 			.collect::<Vec<_>>()
-	}
-
-	fn run_to_block(n: u32) {
-		pub const INIT_TIMESTAMP: u64 = 30_000;
-		while System::block_number() < n {
-			System::set_block_number(System::block_number() + 1);
-			Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
-			Session::on_initialize(System::block_number());
-			Flip::on_initialize(System::block_number());
-			Staking::on_initialize(System::block_number());
-			Auction::on_initialize(System::block_number());
-			Emissions::on_initialize(System::block_number());
-			Governance::on_initialize(System::block_number());
-			Reputation::on_initialize(System::block_number());
-			Vaults::on_initialize(System::block_number());
-			Validator::on_initialize(System::block_number());
-		}
 	}
 
 	pub struct ExtBuilder {
@@ -572,8 +575,7 @@ mod tests {
 
 	mod epoch {
 		use super::*;
-		use crate::tests::run_to_block;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer};
+		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer, ChainflipAccountState};
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::{Auction, Flip, Origin, Validator, WitnesserApi};
@@ -587,265 +589,42 @@ mod tests {
 		// - TODO Vaults rotated
 		// - TODO New epoch
 		fn epoch_rotates() {
-			const EPOCH_BLOCKS: BlockNumber = 10;
+			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.build()
 				.execute_with(|| {
-					const STAKE_AMOUNT: FlipBalance = genesis::GENESIS_BALANCE + 1;
-					const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-					const TX_HASH: EthTransactionHash = [211u8; 32];
-
-					// New users stake in the network
-					const STAKER_1: [u8; 32] = [100u8; 32];
-					const STAKER_2: [u8; 32] = [101u8; 32];
-					const STAKER_3: [u8; 32] = [102u8; 32];
-					let stakers = &[STAKER_1, STAKER_2, STAKER_3];
-
-					// Create accounts and register session keys
-					for staker in stakers {
-						let staker = AccountId::from(*staker);
-						assert_ok!(frame_system::Provider::<Runtime>::created(&staker));
-						let seed = &staker.clone().to_string();
-						let key = SessionKeys {
-							aura: get_from_seed::<AuraId>(seed),
-							grandpa: get_from_seed::<GrandpaId>(seed),
-						};
-						assert_ok!(Session::set_keys(Origin::signed(staker), key, vec![]));
+					// Create a staking contract
+					let mut staking_contract = network::StakingContract::default();
+					// A network with a set of passive nodes
+					let (mut testnet, nodes) = network::Network::create(5);
+					// Add the genesis nodes to the test network
+					for validator in Validator::current_validators() {
+						testnet.add(validator, ChainflipAccountState::Validator);
 					}
-
-					// Reset system events for this block
-					frame_system::Pallet::<Runtime>::reset_events();
-
-					// Run to block before epoch
-					run_to_block(EPOCH_BLOCKS - 1);
-
-					assert_eq!(
-						frame_system::Pallet::<Runtime>::events().len(),
-						0,
-						"no events should have been emitted"
-					);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						0,
-						"we should have had no auction yet"
-					);
-
-					// Stake and witness stakes
-					let validators = Validator::current_validators();
-					for staker in stakers.iter() {
-						assert_eq!(
-							Flip::stakeable_balance(&AccountId::from(*staker)),
-							0,
-							"Should have no stake"
-						);
-
-						pallet_cf_staking::Call::<Runtime>::staked(
-							AccountId::from(STAKER_1),
-							STAKE_AMOUNT,
-							ETH_ZERO_ADDRESS,
-							TX_HASH,
-						);
-
-						for validator in validators.iter() {
-							assert_ok!(WitnesserApi::witness_staked(
-								Origin::signed(validator.clone()),
-								AccountId::from(*staker),
-								STAKE_AMOUNT,
-								ETH_ZERO_ADDRESS,
-								TX_HASH
-							));
-						}
-
-						// Should expect the following events:
-						// 2 x Witness::WitnessReceived
-						// 1 x Witness::ThresholdReached
-						// 1 x Flip::BalanceSettled
-						// 1 x Staking::Staked
-						// 1 x Witness::WitnessExecuted
-						// 1 x Witness::WitnessReceived
-
-						let mut events = reverse_events::<Runtime>();
-
-						assert_matches!(
-							events.pop().expect("witness received event"),
-							Event::pallet_cf_witnesser(
-								pallet_cf_witnesser::Event::WitnessReceived(..)
-							)
-						);
-
-						assert_matches!(
-							events.pop().expect("witness received event"),
-							Event::pallet_cf_witnesser(
-								pallet_cf_witnesser::Event::WitnessReceived(..)
-							)
-						);
-
-						assert_matches!(
-							events.pop().expect("threshold reached event"),
-							Event::pallet_cf_witnesser(
-								pallet_cf_witnesser::Event::ThresholdReached(..)
-							)
-						);
-
-						assert_matches!(
-							events.pop().expect("balance settled event"),
-							Event::pallet_cf_flip(pallet_cf_flip::Event::BalanceSettled(..))
-						);
-
-						assert_matches!(
-							events.pop().expect("staked event"),
-							Event::pallet_cf_staking(pallet_cf_staking::Event::Staked(..))
-						);
-
-						assert_matches!(
-							events.pop().expect("witness executed event"),
-							Event::pallet_cf_witnesser(
-								pallet_cf_witnesser::Event::WitnessExecuted(..)
-							)
-						);
-
-						assert_matches!(
-							events.pop().expect("witness received event"),
-							Event::pallet_cf_witnesser(
-								pallet_cf_witnesser::Event::WitnessReceived(..)
-							)
-						);
-
-						assert_eq!(
-							Flip::stakeable_balance(&AccountId::from(*staker)),
-							STAKE_AMOUNT,
-							"Should have stake"
-						);
-
-						assert_eq!(
-							events.pop(),
-							None,
-							"we should have no more events for this iteration"
-						);
-						// Reset system events for this iteration
-						frame_system::Pallet::<Runtime>::reset_events();
+					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					for node in &nodes {
+						staking_contract.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						0,
-						"we should have had no auction as of yet"
-					);
-
-					// TODO Mock this out into the mock CFE
-					for validator_id in validators {
-						assert_ok!(Online::heartbeat(Origin::signed(validator_id)));
-					}
-
-					// Auction commences on epoch
-					run_to_block(EPOCH_BLOCKS);
-
-					// We should expect the following events:
-					// Auction::AuctionStarted
-					// Auction::AuctionCompleted
-					// Vaults::KeygenRequest
-					// Session::NewSession
-
-					let mut events = reverse_events::<Runtime>();
-					assert_matches!(
-						events.pop().expect("auction started event"),
-						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionStarted(..))
-					);
-
-					assert_matches!(
-						events.pop().expect("auction completed event"),
-						Event::pallet_cf_auction(pallet_cf_auction::Event::AuctionCompleted(..))
-					);
-
-					assert_matches!(
-						events.pop().expect("keygen request event"),
-						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(..))
-					);
-
-					assert_matches!(
-						events.pop().expect("new session event"),
-						Event::pallet_session(pallet_session::Event::NewSession(..))
-					);
-
-					assert_eq!(
-						events.pop(),
-						None,
-						"we should have no more events until we have confirmation of auction"
-					);
-
-					// // Reset system events
-					// frame_system::Pallet::<Runtime>::reset_events();
-
+					// Run to the next epoch to start the auction
+					testnet.run_to_block(EPOCH_BLOCKS);
+					// We should be in auction 1
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
 						"this should be the first auction"
 					);
-
-					// TODO Mock CFE for vault rotation.  The below will fail until this.
-
-					// The following block should be confirmed
-					run_to_block(EPOCH_BLOCKS + 1);
-
-					on_events!(
-						frame_system::Pallet::<Runtime>::events()
-						.into_iter()
-						.map(|e| e.event)
-						.collect::<Vec<_>>(),
-						Event::pallet_cf_vaults(pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-							assert_eq!(ceremony_id, 1, "this should be the first ceremony");
-						}
+					// In this block we should have reached the state `ValidatorsSelected`
+					// and in this group we would have in this network the genesis validators and
+					// the nodes that have staked well above
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::ValidatorsSelected(candidates, _)
+						if candidates.len() == Validator::current_validators().len() + nodes.len()
 					);
 
-					// assert_eq!(
-					// 	System::events().len(),
-					// 	0,
-					// 	"we should have no more events until we have confirmation of auction"
-					// );
-					//
-					// let mut events = reverse_events::<Runtime>();
-					//
-					// assert_eq!(
-					// 	events.pop(),
-					// 	None,
-					// 	"we should have no more events after auction has completed"
-					// );
-
-					// if let Some(AuctionResult {
-					// 	winners,
-					// 	minimum_active_bid,
-					// }) = Auction::auction_result()
-					// {
-					// 	assert_eq!(
-					// 		winners,
-					// 		stakers
-					// 			.iter()
-					// 			.map(|account_id| AccountId::from(*account_id))
-					// 			.collect::<Vec<_>>(),
-					// 		"new stakers should be the winners of this auction"
-					// 	);
-					// } else {
-					// 	unreachable!("we should have an auction result")
-					// }
-
-					// TODO Confirm vault rotation
-					// What should we exactly expect here in terms of cf-vaults state?
-
-					// TODO Confirm new epoch has been shared to concerned pallets:
-					// Online
-					// Witnesser
-					// Emissions
-					// Rewards
-					// Flip
 				});
 		}
 	}
 
-	mod witnessing {
-		#[test]
-		// Witness
-		fn witness() {}
-	}
 }
