@@ -165,7 +165,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
     type Message = SecretShare3;
 
     fn init(&self) -> DataToSend<Self::Message> {
-        // With everyone commited to their secrets and sharing polynomial coefficients
+        // With everyone committed to their secrets and sharing polynomial coefficients
         // we can now send the *distinct* secret shares to each party
 
         DataToSend::Private(self.shares.clone())
@@ -238,7 +238,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
         self,
         messages: HashMap<usize, Self::Message>,
     ) -> StageResult<KeygenData, KeygenResult> {
-        let processor = VerfiyComplaintsBroadcastStage5 {
+        let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
             commitments: self.commitments,
@@ -252,16 +252,16 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
 }
 
 #[derive(Clone)]
-struct VerfiyComplaintsBroadcastStage5 {
+struct VerifyComplaintsBroadcastStage5 {
     common: KeygenCeremonyCommon,
     received_complaints: HashMap<usize, Complaints4>,
     commitments: Vec<DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
 }
 
-derive_display_as_type_name!(VerfiyComplaintsBroadcastStage5);
+derive_display_as_type_name!(VerifyComplaintsBroadcastStage5);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerfiyComplaintsBroadcastStage5 {
+impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroadcastStage5 {
     type Message = VerifyComplaints5;
 
     fn init(&self) -> DataToSend<Self::Message> {

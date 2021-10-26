@@ -52,6 +52,18 @@ impl PartyIdxMapping {
             .map(|id| self.get_idx(id).ok_or(()))
             .collect()
     }
+
+    /// Convert all indexes to Account Ids. Precondition: the indexes must be
+    /// valid for the ceremony
+    pub fn get_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
+        idxs.iter()
+            .map(|idx| {
+                self.get_id(*idx)
+                    .expect("Precondition violation: unknown idx")
+                    .clone()
+            })
+            .collect()
+    }
 }
 
 pub fn get_index_mapping(signers: &[AccountId]) -> PartyIdxMapping {

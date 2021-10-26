@@ -131,7 +131,7 @@ where
                     self,
                     signer_idx
                 );
-                return ProcessMessageResult::Ignored;
+                return ProcessMessageResult::NotReady;
             }
         };
 
@@ -142,7 +142,7 @@ where
                 self,
                 signer_idx
             );
-            return ProcessMessageResult::Ignored;
+            return ProcessMessageResult::NotReady;
         }
 
         if !self.common.all_idxs.contains(&signer_idx) {
@@ -152,15 +152,15 @@ where
                 self,
                 signer_idx
             );
-            return ProcessMessageResult::Ignored;
+            return ProcessMessageResult::NotReady;
         }
 
         self.messages.insert(signer_idx, m);
 
         if self.messages.len() == self.common.all_idxs.len() {
-            ProcessMessageResult::CollectedAll
+            ProcessMessageResult::Ready
         } else {
-            ProcessMessageResult::Progress
+            ProcessMessageResult::NotReady
         }
     }
 

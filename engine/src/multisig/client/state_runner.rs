@@ -13,10 +13,6 @@ use crate::{
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender};
 
-trait StateRunnerInner {
-    fn on_request();
-}
-
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
 
 #[derive(Clone)]
@@ -129,56 +125,34 @@ where
                     }
                 };
 
-                match stage.process_message(sender_idx, data) {
-                    ProcessMessageResult::CollectedAll => {
-                        let state = authorised_state.stage.take().unwrap();
+                if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
+                    let stage = authorised_state.stage.take().unwrap();
 
-                        match state.finalize() {
-                            StageResult::NextStage(mut next_stage) => {
-                                slog::debug!(
-                                    self.logger,
-                                    "Ceremony transitions to {}",
-                                    &next_stage
-                                );
+                    match stage.finalize() {
+                        StageResult::NextStage(mut next_stage) => {
+                            slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
 
-                                next_stage.init();
+                            next_stage.init();
 
-                                authorised_state.stage = Some(next_stage);
+                            authorised_state.stage = Some(next_stage);
 
-                                // Instead of resetting the expiration time, we simply extend
-                                // it (any remaining time carries over to the next stage).
-                                // Doing it otherwise would allow other parties to influence
-                                // when stages in individual nodes time out (by sending their
-                                // data at specific times) thus making some attacks possible.
-                                self.should_expire_at += MAX_STAGE_DURATION;
+                            // Instead of resetting the expiration time, we simply extend
+                            // it (any remaining time carries over to the next stage).
+                            // Doing it otherwise would allow other parties to influence
+                            // when stages in individual nodes time out (by sending their
+                            // data at specific times) thus making some attacks possible.
+                            self.should_expire_at += MAX_STAGE_DURATION;
 
-                                self.process_delayed();
-                            }
-                            StageResult::Error(bad_validators) => {
-                                // TODO: should delete this state
-
-                                let blamed_parties: Vec<_> = bad_validators
-                                    .iter()
-                                    .map(|idx| {
-                                        authorised_state
-                                            .idx_mapping
-                                            .get_id(*idx)
-                                            .expect("Should have all ids here")
-                                            .clone()
-                                    })
-                                    .collect();
-
-                                return Some(Err(blamed_parties));
-                            }
-                            StageResult::Done(result) => {
-                                slog::debug!(self.logger, "Ceremony reached the final stage!");
-
-                                return Some(Ok(result));
-                            }
+                            self.process_delayed();
                         }
-                    }
-                    ProcessMessageResult::Ignored | ProcessMessageResult::Progress => {
-                        // Nothing to do
+                        StageResult::Error(bad_validators) => {
+                            return Some(Err(authorised_state.idx_mapping.get_ids(bad_validators)));
+                        }
+                        StageResult::Done(result) => {
+                            slog::debug!(self.logger, "Ceremony reached the final stage!");
+
+                            return Some(Ok(result));
+                        }
                     }
                 }
             }
@@ -240,22 +214,13 @@ where
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let blamed_idx = authorised_state
+                    let blamed_idxs = authorised_state
                         .stage
                         .as_ref()
                         .expect("stage in authorised state is always present")
                         .awaited_parties();
 
-                    let blamed_ids = blamed_idx
-                        .iter()
-                        .map(|idx| {
-                            authorised_state
-                                .idx_mapping
-                                .get_id(*idx)
-                                .expect("id for a blamed party should always be known")
-                                .clone()
-                        })
-                        .collect();
+                    let blamed_ids = authorised_state.idx_mapping.get_ids(blamed_idxs);
 
                     slog::warn!(
                         self.logger,
