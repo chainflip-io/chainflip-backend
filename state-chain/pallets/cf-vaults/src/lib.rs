@@ -234,7 +234,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - None
+		/// - [KeygenAborted](Event::KeygenAborted)
 		///
 		/// ## Errors
 		///
