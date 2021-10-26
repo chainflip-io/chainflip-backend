@@ -296,7 +296,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [UnexpectedPubkeyWitnessepd](Event::UnexpectedPubkeyWitnessepd)
+		/// - [UnexpectedPubkeyWitnessed](Event::UnexpectedPubkeyWitnessed)
 		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
 		///
 		/// ## Errors
