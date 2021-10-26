@@ -140,7 +140,6 @@ pub type EventInfo = (
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
 pub struct StateChainRpcClient {
-    events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
@@ -161,8 +160,6 @@ pub trait StateChainRpcApi {
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
-
-    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
 
     async fn storage_events_at(
         &self,
@@ -199,25 +196,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
-    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
-        self.storage_events_at(block_header, self.events_storage_key.clone())
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
-                    })
-                    .flatten_ok()
-            })
-            .flatten()
-            .collect::<Result<Vec<_>>>()
-    }
-
     async fn storage_events_at(
         &self,
         block_header: &state_chain_runtime::Header,
@@ -234,6 +212,8 @@ impl StateChainRpcApi for StateChainRpcClient {
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     metadata: substrate_subxt::Metadata,
+    account_storage_key: StorageKey,
+    events_storage_key: StorageKey,
     nonce: AtomicU32,
     /// Our Node's AcccountId
     pub our_account_id: AccountId32,
@@ -295,25 +275,33 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
-        self.state_chain_rpc_client.events(block_header).await
+        self.state_chain_rpc_client
+            .storage_events_at(block_header, self.events_storage_key.clone())
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+                    .flatten_ok()
+            })
+            .flatten()
+            .collect::<Result<Vec<_>>>()
     }
 
-    /// get the status of the node at a particular block
+    /// Get the status of the node at a particular block
     pub async fn node_status(
         &self,
         block_header: &state_chain_runtime::Header,
     ) -> Result<ChainflipAccountState> {
-        let storage_key = self
-            .metadata
-            .module("System")?
-            .clone()
-            .storage("Account")?
-            .map()?
-            .key(&self.our_account_id);
-
         let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events_at(block_header, storage_key)
+            .storage_events_at(block_header, self.account_storage_key.clone())
             .await?
             .into_iter()
             .map(|storage_change_set| {
@@ -427,7 +415,6 @@ pub async fn connect_to_state_chain(
 
     let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
-        events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         runtime_version: state_rpc_client
             .runtime_version(latest_block_hash)
             .compat()
@@ -448,6 +435,13 @@ pub async fn connect_to_state_chain(
 
     let our_account_id = signer.account_id().to_owned();
 
+    let account_storage_key = metadata
+        .module("System")?
+        .clone()
+        .storage("Account")?
+        .map()?
+        .key(&our_account_id);
+
     Ok((
         Arc::new(StateChainClient {
             metadata,
@@ -458,13 +452,7 @@ pub async fn connect_to_state_chain(
                 > = Decode::decode(
                     &mut &state_chain_rpc_client
                         .state_rpc_client
-                        .storage(
-                            system_pallet_metadata
-                                .storage("Account")?
-                                .map()?
-                                .key(&our_account_id),
-                            latest_block_hash,
-                        )
+                        .storage(account_storage_key.clone(), latest_block_hash)
                         .compat()
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -480,6 +468,8 @@ pub async fn connect_to_state_chain(
             }),
             state_chain_rpc_client,
             our_account_id,
+            account_storage_key,
+            events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         }),
         chain_rpc_client
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
