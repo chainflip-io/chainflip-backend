@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(array_map)] // stable as of rust 1.55
 
 pub mod eth;
 
