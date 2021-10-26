@@ -89,6 +89,8 @@ runtime-benchmarks = [
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-online/runtime-benchmarks',
+  'pallet-cf-witnesser/runtime-benchmarks',
+  # 'pallet-cf-broadcast/runtime-benchmarks',
 ]
 std = [
   'cf-traits/std',

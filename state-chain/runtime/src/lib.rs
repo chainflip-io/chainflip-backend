@@ -685,6 +685,8 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
 			add_benchmark!(params, batches, pallet_cf_online, Online);
+			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
+			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

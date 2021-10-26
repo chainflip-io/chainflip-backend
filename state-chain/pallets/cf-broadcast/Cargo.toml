@@ -48,6 +48,3 @@ runtime-benchmarks = [
 	'frame-support/runtime-benchmarks',
 	'frame-system/runtime-benchmarks',
 ]
-# Note: frame-support `try-runtime` feature is released after v3.
-#   Uncomment the following line when `frame-support` version > `3.0.0`.
-# try-runtime = ['frame-support/try-runtime']
