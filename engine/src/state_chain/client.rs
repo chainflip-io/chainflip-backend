@@ -527,6 +527,8 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -566,6 +568,8 @@ mod tests {
             });
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -600,6 +604,8 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             metadata: substrate_subxt::Metadata::default(),
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -654,6 +660,8 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
