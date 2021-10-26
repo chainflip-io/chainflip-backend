@@ -164,7 +164,7 @@ pub trait StateChainRpcApi {
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
 
-    async fn storage_events(
+    async fn storage_events_at(
         &self,
         block_header: &state_chain_runtime::Header,
         storage_key: StorageKey,
@@ -199,16 +199,9 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
-    // TODO: Can factor some of this out into the upper method now
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
-        self.state_rpc_client
-            .query_storage_at(
-                vec![self.events_storage_key.clone()],
-                Some(block_header.hash()),
-            )
-            .compat()
-            .await
-            .map_err(anyhow::Error::msg)?
+        self.storage_events_at(block_header, self.events_storage_key.clone())
+            .await?
             .into_iter()
             .map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
@@ -225,7 +218,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .collect::<Result<Vec<_>>>()
     }
 
-    async fn storage_events(
+    async fn storage_events_at(
         &self,
         block_header: &state_chain_runtime::Header,
         storage_key: StorageKey,
@@ -320,7 +313,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events(block_header, storage_key)
+            .storage_events_at(block_header, storage_key)
             .await?
             .into_iter()
             .map(|storage_change_set| {
