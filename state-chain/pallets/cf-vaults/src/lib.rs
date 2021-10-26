@@ -178,6 +178,11 @@ pub mod pallet {
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
+		///
+		/// ## Dependencies
+		///
+		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
+		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_success(
 			origin: OriginFor<T>,
@@ -237,6 +242,12 @@ pub mod pallet {
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		///
+		/// ## Dependencies
+		///
+		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
+		/// - [Reputation Pallet](pallet_cf_reputation::Config)
+		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_failure(
 			origin: OriginFor<T>,
@@ -294,6 +305,11 @@ pub mod pallet {
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [UnsupportedChain](Error::UnsupportedChain)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
+		///
+		/// ## Dependencies
+		///
+		/// - [Validator Pallet](pallet_cf_validator::Config)
+		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
 		#[pallet::weight(10_000)]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
