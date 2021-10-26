@@ -181,7 +181,6 @@ pub mod pallet {
 		///
 		/// ## Dependencies
 		///
-		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
 		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_success(
@@ -245,8 +244,7 @@ pub mod pallet {
 		///
 		/// ## Dependencies
 		///
-		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
-		/// - [Reputation Pallet](pallet_cf_reputation::Config)
+		/// - [Offline Reporter Trait](OfflineReporter)
 		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_failure(
@@ -308,8 +306,7 @@ pub mod pallet {
 		///
 		/// ## Dependencies
 		///
-		/// - [Validator Pallet](pallet_cf_validator::Config)
-		/// - [Witnesser Pallet](pallet_cf_witnesser::Config)
+		/// - [Epoch Info Trait](EpochInfo)
 		#[pallet::weight(10_000)]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
