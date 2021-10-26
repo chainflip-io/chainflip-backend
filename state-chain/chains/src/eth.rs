@@ -311,64 +311,156 @@ mod tests {
 }
 
 #[cfg(test)]
-mod test {
+mod verification_tests {
 	use super::*;
 	use ethabi::ethereum_types::H160;
-	use libsecp256k1::{self, PublicKey, SecretKey, curve::Affine};
+	use libsecp256k1::{
+		self,
+		curve::{Affine, Field, Jacobian, Scalar},
+		PublicKey, SecretKey, ECMULT_CONTEXT,
+	};
+	use sp_io::crypto;
 	use Keccak256;
 
-	const PUBKEY_COMPRESSED: [u8; 33] = [0u8; 33];
+	#[test]
+	fn schnorr_signature_verification() {
+		/*
+			The below constants have been derived from integration tests with the KeyManager contract.
 
-	fn verify_sig_data(sig_data: &SigData) -> bool {
-		let mut pubkey_bytes = PUBKEY_COMPRESSED;
-		pubkey_bytes[0] -= 2;
-		let msg_challenge = Keccak256::hash([
-			&pubkey_bytes[1..],
-			&pubkey_bytes[..1],
-			sig_data.msg_hash.as_bytes(), // msghash
-			sig_data.k_times_g_addr.as_bytes(), // nonceTimesGeneratorAddr
-		]
-		.concat()
-		.as_ref());
+			In order to check if verification works, we need to use this to construct the AggKey and `SigData` as we
+			normally would when submitting a function call to a threshold-signature-protected smart contract.
+		*/
+		const AGG_KEY_PRIV: [u8; 32] =
+			hex_literal::hex!("fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba");
+		const MSG_HASH: [u8; 32] =
+			hex_literal::hex!("2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e");
+		const SIG: [u8; 32] =
+			hex_literal::hex!("beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538");
+		const SIG_NONCE: [u8; 32] =
+			hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
 
-		let e = SecretKey::parse(&msg_challenge.as_fixed_bytes()).expect("msg_challenge is always a 32 byte hash");
+		let (agg_key, sig_data) = build_test_data(AGG_KEY_PRIV, MSG_HASH.into(), SIG_NONCE, SIG.into());
 
-		let s = {
-			let mut buf = [0u8; 32];
-			sig_data.sig.to_big_endian(&mut buf[..]);
-			SecretKey::parse(&buf).unwrap()
-		};
+		// This should pass.
+		assert!(is_valid_sig(&agg_key, &sig_data));
 
-		let sG = PublicKey::from_secret_key(&s);
-		
-		let mut pk = PublicKey::parse_compressed(&PUBKEY_COMPRESSED).expect("public key should always be valid");
-		pk.tweak_mul_assign(&e).expect("succeeds for all e != 0");
-
-		let mut k_times_g_reconstructed: Affine = sG.into().neg();
-
-		if sig_data.k_times_g_addr == H160::from_slice(&Keccak256::hash((sG - pk).as_bytes().as_ref())[12..]) {
-			true
-		} else {
-			false
-		}
+		// Swapping the y parity bit should cause verification to fail (but without panicking!).
+		let agg_key = AggKey::from((if agg_key.pub_key_y_parity == 0 { 1 } else { 0 }, agg_key.pub_key_x));
+		assert!(!is_valid_sig(&agg_key, &sig_data));
 	}
 
-	fn test_verify_threshold_signature(
-		message: &H256,
-		signature: &SchnorrSignature,
-		pubkey: &PublicKey,
-	) -> bool {
-		let mut pubkey_bytes = pubkey.serialize_compressed();
-		pubkey_bytes[0] -= 2;
-		let msg_challenge = Keccak256::hash([
-			&pubkey_bytes[1..],
-			&pubkey_bytes[..1],
-			message.as_bytes(),
-			signature.r.serialize().as_ref(),
-		]
-		.concat()
-		.as_ref());
+	fn build_test_data(
+		// The private key component resulting from a Schnorr keygen ceremony.
+		agg_key_private: [u8; 32],
+		// The message has that was signed over.
+		msg_hash: H256,
+		// The signature nonce for this signing round, expressed as a private key.
+		sig_nonce: [u8; 32],
+		// The signature itself.
+		sig: U256,
+	) -> (AggKey, SigData) {
+		let secret_key = SecretKey::parse(&agg_key_private).expect("Valid private key");
+		let agg_key = AggKey::from_pubkey_compressed(
+			PublicKey::from_secret_key(&secret_key).serialize_compressed(),
+		);
 
-		false
+		let k = SecretKey::parse(&sig_nonce).expect("Valid signature nonce");
+		let [_, k_times_g @ ..] = PublicKey::from_secret_key(&k).serialize();
+		let k_times_g_addr = H160({
+			let h = Keccak256::hash(&k_times_g[..]);
+			let mut res = [0u8; 20];
+			res.copy_from_slice(&h.0[12..]);
+			res
+		});
+
+		let sig_data = SigData {
+			msg_hash,
+			sig,
+			nonce: Default::default(),
+			k_times_g_addr,
+		};
+
+		(agg_key, sig_data)
+	}
+
+	fn is_valid_sig(agg_key: &AggKey, sig_data: &SigData) -> bool {
+		// Same as in the KeyManager contract:
+		//
+		// uint256 msgChallenge = // "e"
+		//   // solium-disable-next-line indentation
+		//   uint256(keccak256(abi.encodePacked(signingPubKeyX, pubKeyYParity,
+		//     msgHash, nonceTimesGeneratorAddress))
+		// );
+		let msg_challenge = Keccak256::hash(
+			[
+				&agg_key.pub_key_x[..],
+				&[agg_key.pub_key_y_parity],
+				sig_data.msg_hash.as_bytes(),       // msghash
+				sig_data.k_times_g_addr.as_bytes(), // nonceTimesGeneratorAddr
+			]
+			.concat()
+			.as_ref(),
+		);
+
+		// Verify: msgChallenge * signingPubKey + signature <*> generator ==
+		//        nonce <*> generator
+		//
+		// challenge_times_pubkey + s_times_g == k_times_g
+		//
+		// s_times_g =? NonceTimesGenerator + challenge * PubkeyX
+
+		// signature <*> generator
+		let s_times_g = {
+			let mut buf = [0u8; 32];
+			sig_data.sig.to_big_endian(&mut buf[..]);
+			let s = SecretKey::parse(&buf)
+				.expect("Invalid signature - not a valid secp256k1 private key.");
+			PublicKey::from_secret_key(&s)
+		};
+
+		// msgChallenge * signingPubKey
+		let challenge_times_pubkey = {
+			let public_key_point = {
+				let mut point = Affine::default();
+				let mut x = Field::default();
+				assert!(x.set_b32(&agg_key.pub_key_x), "Invalid pubkey x coordinate");
+				point.set_xo_var(&x, agg_key.pub_key_y_parity == 1);
+				point
+			};
+
+			let msg_challenge_scalar = {
+				let mut e = Scalar::default();
+				let mut bytes = [0u8; 32];
+				bytes.copy_from_slice(msg_challenge.as_ref());
+				// Question: Is it ok that this prevents overflow?
+				let _ = e.set_b32(&bytes);
+				e
+			};
+			let mut res = Jacobian::default();
+			ECMULT_CONTEXT.ecmult(
+				&mut res,
+				&Jacobian::from_ge(&public_key_point),
+				&msg_challenge_scalar,
+				&Scalar::default(),
+			);
+			res
+		};
+
+		// k_times_g_recovered ~ challenge_times_pubkey + s_times_g
+		let mut k_times_g_recovered =
+			Affine::from_gej(&challenge_times_pubkey.add_ge(&s_times_g.into()));
+		k_times_g_recovered.x.normalize();
+		k_times_g_recovered.y.normalize();
+
+		// We now have the recovered value for k_times_g, however we only have a k_times_g_address to compare against.
+		// So we need to convert our recovered k_times_g to an Ethereum address to compare against our expected value.
+		let k_times_g_hash_recovered = Keccak256::hash(
+			[k_times_g_recovered.x.b32(), k_times_g_recovered.y.b32()]
+				.concat()
+				.as_ref(),
+		);
+
+		// The signature is valid if the recovered value matches the provided one.
+		k_times_g_hash_recovered[12..] == sig_data.k_times_g_addr.0
 	}
 }
