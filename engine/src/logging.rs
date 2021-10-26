@@ -129,7 +129,6 @@ pub mod utils {
 pub mod test_utils {
     use super::utils::*;
     use slog::{o, Drain, Fuse, OwnedKVList, Record};
-    use std::result;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -140,7 +139,7 @@ pub mod test_utils {
     impl TagCache {
         pub fn new() -> Self {
             let log = Arc::new(Mutex::new(vec![]));
-            Self { log: log.clone() }
+            Self { log }
         }
 
         /// returns true if the given tag was found in the log
@@ -168,9 +167,9 @@ pub mod test_utils {
         type Ok = ();
         type Err = ();
 
-        fn log(&self, record: &Record, _: &OwnedKVList) -> result::Result<Self::Ok, Self::Err> {
+        fn log(&self, record: &Record, _: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
             if !record.tag().is_empty() {
-                let mut log = self.log.lock().unwrap();
+                let mut log = self.log.lock().expect("Should be able to get lock");
                 log.push(record.tag().to_owned());
             }
             Ok(())
@@ -205,7 +204,7 @@ fn test_logging_tags() {
     // Print a bunch of stuff with tags
     slog::error!(logger, #"E1234", "Test error");
     slog::error!(logger, #"E1234", "Test error again");
-    slog::error!(logger2, #"2222", "Different test error");
+    slog::warn!(logger2, #"2222", "Test warning");
 
     // Check that tags are collected in the same cache, even from the logger clone
     assert!(tag_cache.contains_tag("E1234"));
