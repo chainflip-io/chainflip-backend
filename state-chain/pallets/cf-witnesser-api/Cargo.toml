@@ -28,6 +28,7 @@ frame-support = {default-features = false, version = '3.0.0'}
 frame-system = {default-features = false, version = '3.0.0'}
 sp-core = {default-features = false, version = '3.0.0'}
 sp-std = {default-features = false, version = '3.0.0'}
+frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
 
 [dev-dependencies]
 serde = {version = "1.0.119"}
@@ -49,7 +50,10 @@ std = [
   'pallet-cf-vaults/std',
   'sp-std/std',
   'sp-core/std',
+  'frame-benchmarking/std',
 ]
-# Note: frame-support `try-runtime` feature is released after v3.
-#   Uncomment the following line when `frame-support` version > `3.0.0`.
-# try-runtime = ['frame-support/try-runtime']
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]
