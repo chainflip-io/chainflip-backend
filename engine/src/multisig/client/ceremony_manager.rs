@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::{
-    state_runner::StateRunner, utils::get_index_mapping, CeremonyAbortReason, KeygenDataWrapped,
-    SchnorrSignature,
+use crate::multisig::client;
+
+use client::{
+    keygen_state_runner::KeygenStateRunner,
+    signing::frost::{SigningData, SigningDataWrapped},
+    state_runner::StateRunner,
+    utils::{get_index_mapping, PartyIdxMapping},
+    CeremonyAbortReason, KeygenDataWrapped, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
-use super::keygen_state_runner::KeygenStateRunner;
-use super::signing::frost::{SigningData, SigningDataWrapped};
-use super::utils::PartyIdxMapping;
 use crate::logging::CEREMONY_ID_KEY;
 
-use super::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
+use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
 use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
@@ -21,9 +23,8 @@ use crate::p2p::AccountId;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
-/// Responsible for mapping ceremonies to signing states and
-/// Generating signer indexes based on the list of parties
-
+/// Responsible for mapping ceremonies to the corresponding states and
+/// generating signer indexes based on the list of parties
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,

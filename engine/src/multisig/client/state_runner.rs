@@ -201,7 +201,6 @@ where
             );
             self.process_message(id, m);
         }
-        //
     }
 
     fn add_delayed(&mut self, id: AccountId, m: CeremonyData) {
