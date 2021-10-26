@@ -10,6 +10,9 @@ mod mock;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod tests;
 
@@ -57,6 +60,9 @@ pub mod pallet {
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// A hash to index the call by.
@@ -146,7 +152,7 @@ pub mod pallet {
 		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
 		///   outside of the range of our bitmask. Should be impossible?
 		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::WeightInfo::witness())]
 		pub fn witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,

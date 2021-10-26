@@ -345,6 +345,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
+	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
