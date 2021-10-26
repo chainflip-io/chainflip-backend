@@ -319,7 +319,6 @@ mod verification_tests {
 		curve::{Affine, Field, Jacobian, Scalar},
 		PublicKey, SecretKey, ECMULT_CONTEXT,
 	};
-	use sp_io::crypto;
 	use Keccak256;
 
 	#[test]
@@ -339,13 +338,17 @@ mod verification_tests {
 		const SIG_NONCE: [u8; 32] =
 			hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
 
-		let (agg_key, sig_data) = build_test_data(AGG_KEY_PRIV, MSG_HASH.into(), SIG_NONCE, SIG.into());
+		let (agg_key, sig_data) =
+			build_test_data(AGG_KEY_PRIV, MSG_HASH.into(), SIG_NONCE, SIG.into());
 
 		// This should pass.
 		assert!(is_valid_sig(&agg_key, &sig_data));
 
 		// Swapping the y parity bit should cause verification to fail (but without panicking!).
-		let agg_key = AggKey::from((if agg_key.pub_key_y_parity == 0 { 1 } else { 0 }, agg_key.pub_key_x));
+		let agg_key = AggKey::from((
+			if agg_key.pub_key_y_parity == 0 { 1 } else { 0 },
+			agg_key.pub_key_x,
+		));
 		assert!(!is_valid_sig(&agg_key, &sig_data));
 	}
 
