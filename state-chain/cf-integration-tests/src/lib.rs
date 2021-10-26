@@ -34,15 +34,15 @@ mod tests {
 	mod network {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
+		use cf_chains::eth::SchnorrVerificationComponents;
 		use cf_traits::ChainflipAccountState;
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+		use pallet_cf_vaults::CeremonyId;
 		use state_chain_runtime::HeartbeatBlockInterval;
 		use state_chain_runtime::{Event, Origin, WitnesserApi};
 		use std::collections::HashMap;
 		use std::io::Chain;
-		use cf_chains::eth::SchnorrVerificationComponents;
-		use pallet_cf_vaults::CeremonyId;
 
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		const TX_HASH: EthTransactionHash = [211u8; 32];
@@ -142,7 +142,7 @@ mod tests {
 
 							// Participate in signing ceremony if requested
 							if signers.contains(&self.node_id) {
-								// TODO signature generation
+								// TODO signature generation, will fail when we have verification implemented
 								let signature = SchnorrVerificationComponents {
 									s: [0u8; 32],
 									k_times_g_addr: [0u8; 20],
@@ -154,6 +154,23 @@ mod tests {
 									signature,
 								);
 							}
+						},
+						Event::pallet_cf_threshold_signature_Instance0(
+							// A threshold has been met for this signature
+							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
+								ceremony_id)) => {
+								// Witness a vault rotation?
+								let ethereum_block_number: u64 = 100;
+								let mut new_public_key = vec![0u8; 33];
+								new_public_key[0] = 2;
+								let tx_hash = vec![1u8; 32];
+								state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+									Origin::signed(self.node_id.clone()),
+									ChainId::Ethereum,
+									new_public_key,
+									ethereum_block_number,
+									tx_hash,
+								);
 						},
 						Event::pallet_cf_vaults(
 							// A keygen request has been made
@@ -635,14 +652,16 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, nodes) = network::Network::create(5);
+					let (mut testnet, mut nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
 					for validator in Validator::current_validators() {
 						testnet.add(validator, ChainflipAccountState::Validator);
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
-						testnet.contract.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+						testnet
+							.contract
+							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 					// Run to the next epoch to start the auction
 					testnet.run_to_block(EPOCH_BLOCKS);
@@ -652,6 +671,8 @@ mod tests {
 						1,
 						"this should be the first auction"
 					);
+					let genesis_validators: Vec<NodeId> = Validator::current_validators();
+
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
@@ -659,11 +680,30 @@ mod tests {
 						Auction::current_phase(),
 						AuctionPhase::ValidatorsSelected(candidates, _)
 						// TODO compare exactly
-						if candidates.len() == Validator::current_validators().len() + nodes.len()
+						if candidates.len() == genesis_validators.len() + nodes.len()
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
+					// Run things another 10 blocks
 					testnet.run_to_block(EPOCH_BLOCKS + 10);
+					// The vault rotation should have proceeded and we should now be back
+					// at `WaitingForBids` with a new set of winners; the genesis validators and
+					// the new nodes we staked into the network
+					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+					let AuctionResult {
+						mut winners,
+						minimum_active_bid,
+					} = Auction::last_auction_result().expect("last auction result");
+					assert_eq!(minimum_active_bid, genesis::GENESIS_BALANCE);
+					let mut expected_validators = genesis_validators;
+					expected_validators.append(&mut nodes);
+					expected_validators.sort();
+					winners.sort();
+					assert_eq!(winners, expected_validators);
+					let mut new_validators = Validator::current_validators();
+					new_validators.sort();
+					// This new set of winners should also be the validators of the network
+					assert_eq!(new_validators, expected_validators);
 				});
 		}
 	}
