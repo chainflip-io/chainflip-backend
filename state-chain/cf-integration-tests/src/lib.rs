@@ -42,6 +42,7 @@ mod tests {
 		use std::collections::HashMap;
 		use std::io::Chain;
 		use cf_chains::eth::SchnorrVerificationComponents;
+		use pallet_cf_vaults::CeremonyId;
 
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		const TX_HASH: EthTransactionHash = [211u8; 32];
@@ -126,28 +127,11 @@ mod tests {
 
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
-			fn handle_state_chain_events(&self) {
+			fn handle_state_chain_events(&self, block_number: BlockNumber, events: &[Event]) {
 				if self.state == ChainflipAccountState::Validator {
-					let events = frame_system::Pallet::<Runtime>::events()
-						.into_iter()
-						.map(|e| e.event)
-						.collect::<Vec<_>>();
 					// Handle events
 					on_events!(
 						events,
-						Event::pallet_cf_vaults(
-							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								// Generate a public agg key, TODO refactor out
-								let mut public_key = vec![0u8; 33];
-								public_key[0] = 2;
-
-								state_chain_runtime::WitnesserApi::witness_keygen_success(
-									Origin::signed(self.node_id.clone()),
-									ceremony_id,
-									ChainId::Ethereum,
-									public_key);
-						},
 						Event::pallet_cf_threshold_signature_Instance0(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -166,18 +150,32 @@ mod tests {
 
 								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
 									Origin::signed(self.node_id.clone()),
-									ceremony_id,
+									*ceremony_id,
 									signature,
 								);
 							}
 						},
 						Event::pallet_cf_vaults(
+							// A keygen request has been made
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+								// Generate a public agg key, TODO refactor out
+								let mut public_key = vec![0u8; 33];
+								public_key[0] = 2;
+
+								state_chain_runtime::WitnesserApi::witness_keygen_success(
+									Origin::signed(self.node_id.clone()),
+									*ceremony_id,
+									ChainId::Ethereum,
+									public_key
+								);
+						},
+						Event::pallet_cf_vaults(
 							pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
-								assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+
 						},
 						Event::pallet_cf_vaults(
 							pallet_cf_vaults::Event::KeygenAborted(ref chain_ids)) => {
-								assert_eq!(chain_ids, &[ChainId::Ethereum], "this should be Ethereum");
+
 						},
 						Event::pallet_cf_vaults(
 							pallet_cf_vaults::Event::VaultsRotated) => {
@@ -185,7 +183,7 @@ mod tests {
 						},
 						Event::pallet_cf_vaults(
 							pallet_cf_vaults::Event::UnexpectedPubkeyWitnessed(chain_id, key)) => {
-								assert_eq!(chain_id, ChainId::Ethereum, "this should be Ethereum");
+
 						}
 					);
 				}
@@ -223,6 +221,7 @@ mod tests {
 		pub struct Network {
 			engines: HashMap<NodeId, Engine>,
 			pub contract: StakingContract,
+			last_event: usize,
 		}
 
 		impl Network {
@@ -278,12 +277,19 @@ mod tests {
 					// Clear events on contract
 					self.contract.clear();
 
+					// Collect state chain events
+					let events = frame_system::Pallet::<Runtime>::events()
+						.into_iter()
+						.map(|e| e.event)
+						.skip(self.last_event)
+						.collect::<Vec<Event>>();
+
+					self.last_event += events.len();
+
 					// State chain events
 					for (_, engine) in &self.engines {
-						engine.handle_state_chain_events();
+						engine.handle_state_chain_events(System::block_number(), &events);
 					}
-
-					frame_system::Pallet::<Runtime>::reset_events();
 
 					// A completed block notification
 					for (_, engine) in &self.engines {
