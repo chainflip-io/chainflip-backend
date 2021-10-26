@@ -33,13 +33,13 @@ mod tests {
 
 	mod network {
 		use super::*;
-		use std::collections::HashMap;
-		use pallet_cf_staking::{EthereumAddress, EthTransactionHash};
+		use crate::tests::BLOCK_TIME;
+		use cf_traits::ChainflipAccountState;
+		use frame_support::traits::HandleLifetime;
+		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::HeartbeatBlockInterval;
 		use state_chain_runtime::{Event, Origin, WitnesserApi};
-		use crate::tests::BLOCK_TIME;
-		use frame_support::traits::HandleLifetime;
-		use cf_traits::ChainflipAccountState;
+		use std::collections::HashMap;
 		use std::io::Chain;
 
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
@@ -51,7 +51,7 @@ mod tests {
 			Staked {
 				node_id: NodeId,
 				amount: FlipBalance,
-				total: FlipBalance
+				total: FlipBalance,
 			},
 		}
 
@@ -71,7 +71,11 @@ mod tests {
 				let total = current_amount + amount;
 				self.stakes.insert(node_id.clone(), total);
 
-				self.events.push(ContractEvent::Staked{ node_id, amount, total});
+				self.events.push(ContractEvent::Staked {
+					node_id,
+					amount,
+					total,
+				});
 			}
 			// Get events for this contract
 			fn events(&self) -> Vec<ContractEvent> {
@@ -101,7 +105,11 @@ mod tests {
 			fn on_contract_event(&self, event: &ContractEvent) {
 				if self.state == ChainflipAccountState::Validator {
 					match event {
-						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
+						ContractEvent::Staked {
+							node_id: validator_id,
+							amount,
+							..
+						} => {
 							// Witness event -> send transaction to state chain
 							state_chain_runtime::WitnesserApi::witness_staked(
 								Origin::signed(self.node_id.clone()),
@@ -153,38 +161,7 @@ mod tests {
 				// Heartbeat -> Send transaction to state chain twice an interval
 				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
 					// Online pallet
-					Online::heartbeat(state_chain_runtime::Origin::signed(
-						self.node_id.clone(),
-					));
-				}
-			}
-		}
-
-		struct EventLoop {
-			pub contract: StakingContract,
-		}
-
-		impl EventLoop {
-			fn process(&mut self, engines: Vec<Engine>, block_number: u32) {
-				// Witness contract events
-				for event in self.contract.events() {
-					for engine in &engines {
-						if engine.state == ChainflipAccountState::Validator {
-							engine.on_contract_event(&event);
-						}
-					}
-				}
-
-				// State chain events
-				for engine in &engines {
-					engine.handle_state_chain_events();
-				}
-
-				frame_system::Pallet::<Runtime>::reset_events();
-
-				// A completed block notification
-				for engine in &engines {
-					engine.on_block(block_number);
+					Online::heartbeat(state_chain_runtime::Origin::signed(self.node_id.clone()));
 				}
 			}
 		}
@@ -207,15 +184,15 @@ mod tests {
 			));
 		}
 
+		#[derive(Default)]
 		pub struct Network {
 			engines: HashMap<NodeId, Engine>,
+			pub contract: StakingContract,
 		}
 
 		impl Network {
 			pub fn create(number_of_nodes: u8) -> (Self, Vec<NodeId>) {
-				let mut network: Network = Network {
-					engines: HashMap::new(),
-				};
+				let mut network: Network = Network::default();
 
 				let mut nodes = Vec::new();
 				for index in 1..=number_of_nodes {
@@ -232,19 +209,18 @@ mod tests {
 
 			pub fn add(&mut self, node_id: NodeId, state: ChainflipAccountState) {
 				setup_account(&node_id);
-				self
-					.engines
-					.insert(node_id.clone(), Engine {
-						node_id,
-						state,
-					});
+				self.engines
+					.insert(node_id.clone(), Engine { node_id, state });
 			}
 
-			pub fn run_to_block(&self, n: u32) {
+			pub fn run_to_block(&mut self, n: u32) {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
+
 				while System::block_number() < n {
 					System::set_block_number(System::block_number() + 1);
-					Timestamp::set_timestamp((System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
+					Timestamp::set_timestamp(
+						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
+					);
 					Session::on_initialize(System::block_number());
 					Flip::on_initialize(System::block_number());
 					Staking::on_initialize(System::block_number());
@@ -255,6 +231,26 @@ mod tests {
 					Vaults::on_initialize(System::block_number());
 					Validator::on_initialize(System::block_number());
 
+					// Notify contract events
+					for event in self.contract.events() {
+						for (_, engine) in &self.engines {
+							if engine.state == ChainflipAccountState::Validator {
+								engine.on_contract_event(&event);
+							}
+						}
+					}
+
+					// Clear events on contract
+					self.contract.clear();
+
+					// State chain events
+					for (_, engine) in &self.engines {
+						engine.handle_state_chain_events();
+					}
+
+					frame_system::Pallet::<Runtime>::reset_events();
+
+					// A completed block notification
 					for (_, engine) in &self.engines {
 						engine.on_block(System::block_number());
 					}
@@ -263,10 +259,10 @@ mod tests {
 		}
 	}
 
-	pub const ALICE: [u8; 32] = [4u8; 32];
-	pub const BOB: [u8; 32] = [5u8; 32];
-	pub const CHARLIE: [u8; 32] = [6u8; 32];
-	pub const ERIN: [u8; 32] = [7u8; 32];
+	pub const ALICE: [u8; 32] = [0xa1u8; 32];
+	pub const BOB: [u8; 32] = [0xb0u8; 32];
+	pub const CHARLIE: [u8; 32] = [0xc4u8; 32];
+	pub const ERIN: [u8; 32] = [0xe3u8; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
 
@@ -575,7 +571,10 @@ mod tests {
 
 	mod epoch {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, Auctioneer, EpochInfo, StakeTransfer, ChainflipAccountState};
+		use cf_traits::{
+			AuctionPhase, AuctionResult, Auctioneer, ChainflipAccountState, EpochInfo,
+			StakeTransfer,
+		};
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::{Auction, Flip, Origin, Validator, WitnesserApi};
@@ -594,8 +593,6 @@ mod tests {
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.build()
 				.execute_with(|| {
-					// Create a staking contract
-					let mut staking_contract = network::StakingContract::default();
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
@@ -604,7 +601,7 @@ mod tests {
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
-						staking_contract.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+						testnet.contract.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 					// Run to the next epoch to start the auction
 					testnet.run_to_block(EPOCH_BLOCKS);
@@ -622,9 +619,7 @@ mod tests {
 						AuctionPhase::ValidatorsSelected(candidates, _)
 						if candidates.len() == Validator::current_validators().len() + nodes.len()
 					);
-
 				});
 		}
 	}
-
 }
