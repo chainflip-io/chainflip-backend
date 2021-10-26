@@ -386,7 +386,17 @@ mod verification_tests {
 		(agg_key, sig_data)
 	}
 
+	pub enum ValidationError {
+		InvalidSignature,
+		InvalidPubkey,
+		NoMatch
+	}
+
 	fn is_valid_sig(agg_key: &AggKey, sig_data: &SigData) -> bool {
+		validate_sig(agg_key, sig_data).is_ok()
+	}
+
+	fn validate_sig(agg_key: &AggKey, sig_data: &SigData) -> Result<(), ValidationError> {
 		// Same as in the KeyManager contract:
 		//
 		// uint256 msgChallenge = // "e"
@@ -398,39 +408,46 @@ mod verification_tests {
 			[
 				&agg_key.pub_key_x[..],
 				&[agg_key.pub_key_y_parity],
-				sig_data.msg_hash.as_bytes(),       // msghash
-				sig_data.k_times_g_addr.as_bytes(), // nonceTimesGeneratorAddr
+				sig_data.msg_hash.as_bytes(),
+				sig_data.k_times_g_addr.as_bytes(),
 			]
 			.concat()
 			.as_ref(),
 		);
 
-		// Verify: msgChallenge * signingPubKey + signature <*> generator ==
-		//        nonce <*> generator
-		//
-		// challenge_times_pubkey + s_times_g == k_times_g
-		//
-		// s_times_g =? NonceTimesGenerator + challenge * PubkeyX
+		// Verification:
+		//     msgChallenge * signingPubKey + signature * generator == nonce * generator
+		// We don't have nonce, we have k_times_g_addr so will instead verify like this:
+		//     encode_addr(msgChallenge * signingPubKey + signature * generator) == encode_addr(nonce * generator)
+		// Simplified:
+		//     encode_addr(msgChallenge * signingPubKey + signature * generator) == k_times_g_addr
 
-		// signature <*> generator
+		// signature * generator
 		let s_times_g = {
 			let mut buf = [0u8; 32];
 			sig_data.sig.to_big_endian(&mut buf[..]);
 			let s = SecretKey::parse(&buf)
-				.expect("Invalid signature - not a valid secp256k1 private key.");
+				.map_err(|e| {
+					ValidationError::InvalidSignature
+				})?;
 			PublicKey::from_secret_key(&s)
 		};
 
 		// msgChallenge * signingPubKey
 		let challenge_times_pubkey = {
+			// Derive the public key point equivalent from the AggKey: effectively the inverse of 
+			// AggKey::from_pubkey_compressed();
 			let public_key_point = {
 				let mut point = Affine::default();
 				let mut x = Field::default();
-				assert!(x.set_b32(&agg_key.pub_key_x), "Invalid pubkey x coordinate");
+				if !x.set_b32(&agg_key.pub_key_x) {
+					return Err(ValidationError::InvalidPubkey);
+				}
 				point.set_xo_var(&x, agg_key.pub_key_y_parity == 1);
 				point
 			};
 
+			// Convert the message challenge to a Scalar value so it can be multiplied with the point.
 			let msg_challenge_scalar = {
 				let mut e = Scalar::default();
 				let mut bytes = [0u8; 32];
@@ -439,6 +456,8 @@ mod verification_tests {
 				let _ = e.set_b32(&bytes);
 				e
 			};
+
+			// Some mathematical magic - multiplies the point and scalar value.
 			let mut res = Jacobian::default();
 			ECMULT_CONTEXT.ecmult(
 				&mut res,
@@ -464,6 +483,10 @@ mod verification_tests {
 		);
 
 		// The signature is valid if the recovered value matches the provided one.
-		k_times_g_hash_recovered[12..] == sig_data.k_times_g_addr.0
+		if k_times_g_hash_recovered[12..] == sig_data.k_times_g_addr.0 {
+			Ok(())
+		} else {
+			Err(ValidationError::NoMatch)
+		}
 	}
 }
