@@ -167,6 +167,21 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A key generation succeeded. Update the state of the rotation and attempt to broadcast the setAggKey
 		/// transaction.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [NoActiveRotation](Error::NoActiveRotation)
+		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		/// - [InvalidPublicKey](Error::InvalidPublicKey)
+		///
+		/// ## Dependencies
+		///
+		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_success(
 			origin: OriginFor<T>,
@@ -216,6 +231,21 @@ pub mod pallet {
 		/// Key generation failed. We report the guilty parties and abort all pending keygen ceremonies.
 		///
 		/// If key generation fails for *any* chain we need to abort *all* chains.
+		///
+		/// ## Events
+		///
+		/// - [KeygenAborted](Event::KeygenAborted)
+		///
+		/// ## Errors
+		///
+		/// - [NoActiveRotation](Error::NoActiveRotation)
+		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		///
+		/// ## Dependencies
+		///
+		/// - [Offline Reporter Trait](OfflineReporter)
+		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(10_000)]
 		pub fn keygen_failure(
 			origin: OriginFor<T>,
@@ -261,6 +291,22 @@ pub mod pallet {
 		}
 
 		/// A vault rotation event has been witnessed, we update the vault with the new key.
+		///
+		/// ## Events
+		///
+		/// - [UnexpectedPubkeyWitnessed](Event::UnexpectedPubkeyWitnessed)
+		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
+		///
+		/// ## Errors
+		///
+		/// - [NoActiveRotation](Error::NoActiveRotation)
+		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
+		/// - [UnsupportedChain](Error::UnsupportedChain)
+		/// - [InvalidPublicKey](Error::InvalidPublicKey)
+		///
+		/// ## Dependencies
+		///
+		/// - [Epoch Info Trait](EpochInfo)
 		#[pallet::weight(10_000)]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
