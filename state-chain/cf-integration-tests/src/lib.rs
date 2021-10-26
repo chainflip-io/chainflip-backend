@@ -41,6 +41,7 @@ mod tests {
 		use state_chain_runtime::{Event, Origin, WitnesserApi};
 		use std::collections::HashMap;
 		use std::io::Chain;
+		use cf_chains::eth::SchnorrVerificationComponents;
 
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		const TX_HASH: EthTransactionHash = [211u8; 32];
@@ -124,17 +125,51 @@ mod tests {
 			}
 
 			// Handle events coming in from the state chain
+			// TODO have this abstracted out
 			fn handle_state_chain_events(&self) {
 				if self.state == ChainflipAccountState::Validator {
-					// Handle vault events
-					on_events!(
-						frame_system::Pallet::<Runtime>::events()
+					let events = frame_system::Pallet::<Runtime>::events()
 						.into_iter()
 						.map(|e| e.event)
-						.collect::<Vec<_>>(),
+						.collect::<Vec<_>>();
+					// Handle events
+					on_events!(
+						events,
 						Event::pallet_cf_vaults(
+							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								assert_eq!(ceremony_id, 1, "this should be the first ceremony");
+								// Generate a public agg key, TODO refactor out
+								let mut public_key = vec![0u8; 33];
+								public_key[0] = 2;
+
+								state_chain_runtime::WitnesserApi::witness_keygen_success(
+									Origin::signed(self.node_id.clone()),
+									ceremony_id,
+									ChainId::Ethereum,
+									public_key);
+						},
+						Event::pallet_cf_threshold_signature_Instance0(
+							// A signature request
+							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+								ceremony_id,
+								_,
+								ref signers,
+								_)) => {
+
+							// Participate in signing ceremony if requested
+							if signers.contains(&self.node_id) {
+								// TODO signature generation
+								let signature = SchnorrVerificationComponents {
+									s: [0u8; 32],
+									k_times_g_addr: [0u8; 20],
+								};
+
+								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
+									Origin::signed(self.node_id.clone()),
+									ceremony_id,
+									signature,
+								);
+							}
 						},
 						Event::pallet_cf_vaults(
 							pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
@@ -613,12 +648,16 @@ mod tests {
 					);
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
-					// the nodes that have staked well above
+					// the nodes that have staked as well
 					assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::ValidatorsSelected(candidates, _)
+						// TODO compare exactly
 						if candidates.len() == Validator::current_validators().len() + nodes.len()
 					);
+					// For each subsequent block the state chain will check if the vault has rotated
+					// until then we stay in the `ValidatorsSelected`
+					testnet.run_to_block(EPOCH_BLOCKS + 10);
 				});
 		}
 	}
