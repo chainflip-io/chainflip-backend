@@ -92,20 +92,22 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
-			pub state: ChainflipAccountState,
 		}
 
 		impl Engine {
 			fn new(node_id: NodeId) -> Self {
 				Engine {
 					node_id,
-					state: ChainflipAccountState::Passive,
 				}
+			}
+
+			fn state(&self) -> ChainflipAccountState {
+				ChainflipAccountStore::<Runtime>::get(&self.node_id).state
 			}
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state == ChainflipAccountState::Validator {
+				if self.state() == ChainflipAccountState::Validator {
 					match event {
 						ContractEvent::Staked {
 							node_id: validator_id,
@@ -127,8 +129,8 @@ mod tests {
 
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
-			fn handle_state_chain_events(&self, block_number: BlockNumber, events: &[Event]) {
-				if self.state == ChainflipAccountState::Validator {
+			fn handle_state_chain_events(&self, events: &[Event]) {
+				if self.state() == ChainflipAccountState::Validator {
 					// Handle events
 					on_events!(
 						events,
@@ -258,10 +260,10 @@ mod tests {
 				(network, nodes)
 			}
 
-			pub fn add(&mut self, node_id: NodeId, state: ChainflipAccountState) {
+			pub fn add(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
 				self.engines
-					.insert(node_id.clone(), Engine { node_id, state });
+					.insert(node_id.clone(), Engine { node_id });
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -285,7 +287,7 @@ mod tests {
 					// Notify contract events
 					for event in self.contract.events() {
 						for (_, engine) in &self.engines {
-							if engine.state == ChainflipAccountState::Validator {
+							if engine.state() == ChainflipAccountState::Validator {
 								engine.on_contract_event(&event);
 							}
 						}
@@ -653,7 +655,7 @@ mod tests {
 					let (mut testnet, mut nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
 					for validator in Validator::current_validators() {
-						testnet.add(validator, ChainflipAccountState::Validator);
+						testnet.add(validator);
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
