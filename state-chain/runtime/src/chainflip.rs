@@ -9,7 +9,7 @@ use cf_chains::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
 		ChainflipContractCall,
 	},
-	Ethereum,
+	Chain, ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
@@ -24,8 +24,8 @@ use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::{H160, H256};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
-use sp_std::cmp::min;
 use sp_std::prelude::*;
+use sp_std::{cmp::min, convert::TryInto};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -330,9 +330,17 @@ pub struct EthereumKeyProvider;
 impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
 
-	fn current_key() -> Self::KeyId {
-		Vaults::vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
+	fn current_key_id() -> Self::KeyId {
+		Vaults::vaults(<Ethereum as Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
+	}
+
+	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
+		Vaults::vaults(<Ethereum as Chain>::CHAIN_ID)
+			.expect("Ethereum is always supported.")
+			.public_key
+			.try_into()
+			.expect("TODO: make it so this call can't fail.")
 	}
 }

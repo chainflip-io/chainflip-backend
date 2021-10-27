@@ -5150,6 +5150,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",

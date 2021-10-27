@@ -8,7 +8,7 @@ use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim' function.
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -133,13 +133,13 @@ mod test_set_agg_key_with_agg_key {
 
 	#[test]
 	fn test_set_agg_key_with_agg_key_payload() {
-		use crate::eth::tests::asymmetrise;
+		use crate::eth::{tests::asymmetrise, ParityBit};
 		use ethabi::Token;
 		const NONCE: u64 = 6;
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 		const FAKE_NEW_KEY_X: [u8; 32] = asymmetrise([0xcf; 32]);
-		const FAKE_NEW_KEY_Y: u8 = 1;
+		const FAKE_NEW_KEY_Y: ParityBit = ParityBit::Odd;
 
 		let key_manager = ethabi::Contract::load(
 			std::include_bytes!("../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
@@ -148,8 +148,13 @@ mod test_set_agg_key_with_agg_key {
 
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
-		let set_agg_key_runtime =
-			SetAggKeyWithAggKey::new_unsigned(NONCE, (FAKE_NEW_KEY_X, FAKE_NEW_KEY_Y));
+		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
+			NONCE,
+			AggKey {
+				pub_key_x: FAKE_NEW_KEY_X,
+				pub_key_y_parity: FAKE_NEW_KEY_Y,
+			},
+		);
 
 		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;
 

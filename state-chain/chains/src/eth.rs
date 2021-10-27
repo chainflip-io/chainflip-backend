@@ -113,14 +113,57 @@ pub enum AggKeyVerificationError {
 	NoMatch,
 }
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+pub enum ParityBit {
+	Odd,
+	Even,
+}
+
+impl ParityBit {
+	pub fn is_odd(&self) -> bool {
+		match self {
+			Self::Odd => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_even(&self) -> bool {
+		match self {
+			Self::Even => true,
+			_ => false,
+		}
+	}
+}
+
+/// When serializing we use `2` and `3` to represent parity bits.
+impl From<ParityBit> for u8 {
+	fn from(parity_bit: ParityBit) -> Self {
+		match parity_bit {
+			ParityBit::Odd => 3,
+			ParityBit::Even => 2,
+		}
+	}
+}
+
+/// Ethereum contracts use `0` and `1` to represent parity bits.
+impl From<ParityBit> for Uint {
+	fn from(parity_bit: ParityBit) -> Self {
+		match parity_bit {
+			ParityBit::Odd => Uint::one(),
+			ParityBit::Even => Uint::zero(),
+		}
+	}
+}
+
 /// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AggKey {
 	/// The public key as a 32-byte array.
 	pub pub_key_x: [u8; 32],
-	/// The parity bit can be `1u8` (odd) or `0u8` (even).
-	pub pub_key_y_parity: u8,
+	/// The parity bit can be odd or even.
+	pub pub_key_y_parity: ParityBit,
 }
 
 impl AggKey {
@@ -129,16 +172,20 @@ impl AggKey {
 	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to the required
 	/// 0 / 1 representation by subtracting 2 from the supplied values, so if the source format doesn't conform
 	/// to the expected 2/3 even/odd convention, bad things will happen.
-	#[cfg(feature = "std")]
-	fn from_pubkey_compressed(bytes: [u8; 33]) -> Self {
+	pub fn from_pubkey_compressed(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
-		let pub_key_y_parity = pub_key_y_parity - 2;
+		let pub_key_y_parity = if pub_key_y_parity == 2 {
+			ParityBit::Even
+		} else {
+			ParityBit::Odd
+		};
 		Self {
 			pub_key_x,
 			pub_key_y_parity,
 		}
 	}
 
+	/// Create a public `AggKey` from the private key component.
 	pub fn from_private_key_bytes(agg_key_private: [u8; 32]) -> Self {
 		let secret_key = SecretKey::parse(&agg_key_private).expect("Valid private key");
 		AggKey::from_pubkey_compressed(
@@ -146,28 +193,50 @@ impl AggKey {
 		)
 	}
 
+	/// Convert to 'compressed pubkey` format where a leading `2` means 'even parity bit' and a leading `3` means 'odd'.
+	pub fn to_pubkey_compressed(&self) -> [u8; 33] {
+		let mut result = [0u8; 33];
+		result[0] = self.pub_key_y_parity.into();
+		result[1..].copy_from_slice(&self.pub_key_x[..]);
+		result
+	}
+
+	/// Compute the message challenge e according to the format expected by the ethereum contracts.
+	///
+	/// From the [Schnorr verification contract]
+	/// (https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol):
+	///
+	/// ```python
+	/// uint256 msgChallenge = // "e"
+	///   uint256(keccak256(abi.encodePacked(signingPubKeyX, pubKeyYParity,
+	///     msgHash, nonceTimesGeneratorAddress))
+	/// );
+	/// ```
+	pub fn message_challenge(&self, msg_hash: &[u8; 32], k_times_g_addr: &[u8; 20]) -> [u8; 32] {
+		// Note the contract expects a packed u8 of 0 (even) or 1 (odd).
+		let parity_bit_uint_packed = match self.pub_key_y_parity {
+			ParityBit::Odd => 1u8,
+			ParityBit::Even => 0u8,
+		};
+		Keccak256::hash(
+			[
+				&self.pub_key_x[..],
+				&[parity_bit_uint_packed],
+				&msg_hash[..],
+				&k_times_g_addr[..],
+			]
+			.concat()
+			.as_ref(),
+		)
+		.into()
+	}
+
+	/// Verify a signature against a given message hash for this public key.
 	pub fn verify(
 		&self,
 		msg_hash: &[u8; 32],
 		sig: &SchnorrVerificationComponents,
 	) -> Result<(), AggKeyVerificationError> {
-		// Same as in the KeyManager contract:
-		//
-		// uint256 msgChallenge = // "e"
-		//   uint256(keccak256(abi.encodePacked(signingPubKeyX, pubKeyYParity,
-		//     msgHash, nonceTimesGeneratorAddress))
-		// );
-		let msg_challenge = Keccak256::hash(
-			[
-				&self.pub_key_x[..],
-				&[self.pub_key_y_parity],
-				&msg_hash[..],
-				&sig.k_times_g_addr[..],
-			]
-			.concat()
-			.as_ref(),
-		);
-
 		//----
 		// Verification:
 		//     msgChallenge * signingPubKey + signature * generator == nonce * generator
@@ -194,11 +263,12 @@ impl AggKey {
 				if !x.set_b32(&self.pub_key_x) {
 					return Err(AggKeyVerificationError::InvalidPubkey);
 				}
-				point.set_xo_var(&x, self.pub_key_y_parity == 1);
+				point.set_xo_var(&x, self.pub_key_y_parity.is_odd());
 				point
 			};
 
 			// Convert the message challenge to a Scalar value so it can be multiplied with the point.
+			let msg_challenge = self.message_challenge(msg_hash, &sig.k_times_g_addr);
 			let msg_challenge_scalar = {
 				let mut e = Scalar::default();
 				let mut bytes = [0u8; 32];
@@ -242,6 +312,15 @@ impl AggKey {
 	}
 }
 
+impl Tokenizable for AggKey {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![
+			Token::Uint(Uint::from_big_endian(&self.pub_key_x[..])),
+			Token::Uint(self.pub_key_y_parity.into()),
+		])
+	}
+}
+
 /// [TryFrom] implementation to convert some bytes to an [AggKey].
 ///
 /// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
@@ -250,29 +329,50 @@ impl TryFrom<&[u8]> for AggKey {
 	type Error = &'static str;
 
 	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
-			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
-				let x: [u8; 32] = pub_key_x.try_into().map_err(|e| {
-					frame_support::debug::error!("Invalid aggKey format: {:?}", e);
-					"Invalid aggKey format: x coordinate should be 32 bytes."
-				})?;
-
-				Ok(AggKey::from((pub_key_y_parity - 2, x)))
-			} else {
-				frame_support::debug::error!(
-					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
-					pub_key_y_parity,
-				);
-
-				Err("Invalid aggKey format: Leading byte should be 2 or 3")
-			}
-		} else {
+		if bytes.len() != 33 {
 			frame_support::debug::error!(
 				"Invalid aggKey format: Should be 33 bytes total, got {}",
 				bytes.len()
 			);
-			Err("Invalid aggKey format: Should be 33 bytes total.")
+			return Err("Invalid aggKey format: Should be 33 bytes total.");
 		}
+
+		let pub_key_y_parity = match bytes[0] {
+			2 => Ok(ParityBit::Even),
+			3 => Ok(ParityBit::Odd),
+			invalid => {
+				frame_support::debug::error!(
+					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
+					invalid,
+				);
+
+				Err("Invalid aggKey format: Leading byte should be 2 or 3")
+			}
+		}?;
+
+		let pub_key_x: [u8; 32] = bytes[1..].try_into().map_err(|e| {
+			frame_support::debug::error!("Invalid aggKey format: {:?}", e);
+			"Invalid aggKey format: x coordinate should be 32 bytes."
+		})?;
+
+		Ok(Self {
+			pub_key_x,
+			pub_key_y_parity,
+		})
+	}
+}
+
+impl From<AggKey> for Vec<u8> {
+	fn from(agg_key: AggKey) -> Self {
+		agg_key.to_pubkey_compressed().to_vec()
+	}
+}
+
+impl TryFrom<Vec<u8>> for AggKey {
+	type Error = &'static str;
+
+	fn try_from(serialized: Vec<u8>) -> Result<Self, Self::Error> {
+		serialized.as_slice().try_into()
 	}
 }
 
@@ -280,33 +380,6 @@ impl TryFrom<&[u8]> for AggKey {
 impl From<secp256k1::PublicKey> for AggKey {
 	fn from(key: secp256k1::PublicKey) -> Self {
 		AggKey::from_pubkey_compressed(key.serialize())
-	}
-}
-
-impl From<(u8, [u8; 32])> for AggKey {
-	fn from(tuple: (u8, [u8; 32])) -> Self {
-		Self {
-			pub_key_x: tuple.1,
-			pub_key_y_parity: tuple.0,
-		}
-	}
-}
-
-impl From<([u8; 32], u8)> for AggKey {
-	fn from(tuple: ([u8; 32], u8)) -> Self {
-		Self {
-			pub_key_x: tuple.0,
-			pub_key_y_parity: tuple.1,
-		}
-	}
-}
-
-impl Tokenizable for AggKey {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::Uint(Uint::from_big_endian(&self.pub_key_x[..])),
-			Token::Uint(self.pub_key_y_parity.into()),
-		])
 	}
 }
 
@@ -398,13 +471,13 @@ mod tests {
 		let mut bytes = [0u8; 33];
 		bytes[0] = 2;
 		let key = AggKey::from_pubkey_compressed(bytes);
-		assert_eq!(key.pub_key_y_parity, 0);
+		assert!(key.pub_key_y_parity.is_even());
 
 		// 3 == odd
 		let mut bytes = [0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::from_pubkey_compressed(bytes);
-		assert_eq!(key.pub_key_y_parity, 1);
+		assert!(key.pub_key_y_parity.is_odd());
 	}
 
 	#[test]
@@ -413,13 +486,13 @@ mod tests {
 		let mut bytes = vec![0u8; 33];
 		bytes[0] = 2;
 		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
-		assert_eq!(key.pub_key_y_parity, 0);
+		assert!(key.pub_key_y_parity.is_even());
 
 		// 3 == odd
 		let mut bytes = vec![0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
-		assert_eq!(key.pub_key_y_parity, 1);
+		assert!(key.pub_key_y_parity.is_odd());
 	}
 }
 
@@ -440,6 +513,8 @@ mod verification_tests {
 		*/
 		const AGG_KEY_PRIV: [u8; 32] =
 			hex_literal::hex!("fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba");
+		const AGG_KEY_PUB: [u8; 33] =
+			hex_literal::hex!("0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae");
 		const MSG_HASH: [u8; 32] =
 			hex_literal::hex!("2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e");
 		const SIG: [u8; 32] =
@@ -448,6 +523,7 @@ mod verification_tests {
 			hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
 
 		let agg_key = AggKey::from_private_key_bytes(AGG_KEY_PRIV);
+		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
 		let [_, k_times_g @ ..] = PublicKey::from_secret_key(&k).serialize();
@@ -467,10 +543,14 @@ mod verification_tests {
 		assert_ok!(agg_key.verify(&MSG_HASH, &sig));
 
 		// Swapping the y parity bit should cause verification to fail.
-		let bad_agg_key = AggKey::from((
-			if agg_key.pub_key_y_parity == 0 { 1 } else { 0 },
-			agg_key.pub_key_x,
-		));
+		let bad_agg_key = AggKey {
+			pub_key_y_parity: if agg_key.pub_key_y_parity.is_even() {
+				ParityBit::Odd
+			} else {
+				ParityBit::Even
+			},
+			pub_key_x: agg_key.pub_key_x,
+		};
 		assert_err!(
 			bad_agg_key.verify(&MSG_HASH, &sig),
 			AggKeyVerificationError::NoMatch

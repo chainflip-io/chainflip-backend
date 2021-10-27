@@ -9,7 +9,6 @@ mod mock;
 mod benchmarking;
 
 pub mod weights;
-use core::convert::TryInto;
 pub use weights::WeightInfo;
 
 #[cfg(test)]

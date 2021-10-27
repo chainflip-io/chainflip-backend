@@ -10,7 +10,7 @@ mod tests;
 
 use codec::{Decode, Encode};
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
@@ -49,7 +49,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: Chain;
+		type TargetChain: Chain + ChainCrypto;
 
 		/// The context definition for this instance.
 		type SigningContext: SigningContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
@@ -144,6 +144,8 @@ pub mod pallet {
 				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
 
 			// TODO: verify the threshold signature.
+			// 1. get key from KeyProvider
+			// 2. cf_chains::eth::AggKey::verify(&self, msg_hash, sig);
 
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
@@ -216,7 +218,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Get the current signing key.
-		let key_id = T::KeyProvider::current_key();
+		let key_id = T::KeyProvider::current_key_id();
 
 		// Construct the payload.
 		let payload = context.get_payload();

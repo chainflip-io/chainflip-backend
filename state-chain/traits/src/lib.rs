@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
@@ -418,12 +418,15 @@ pub trait SignerNomination {
 }
 
 /// Provides the currently valid key for multisig ceremonies.
-pub trait KeyProvider<C: Chain> {
+pub trait KeyProvider<C: ChainCrypto> {
 	/// The type of the provided key_id.
 	type KeyId;
 
-	/// Gets the key.
-	fn current_key() -> Self::KeyId;
+	/// Gets the key id for the current key.
+	fn current_key_id() -> Self::KeyId;
+
+	/// Get the chain's current agg key.
+	fn current_key() -> C::AggKey;
 }
 
 /// Api trait for pallets that need to sign things.
