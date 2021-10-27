@@ -395,6 +395,7 @@ impl pallet_cf_emissions::Config for Runtime {
 
 impl pallet_cf_rewards::Config for Runtime {
 	type Event = Event;
+	type WeightInfoRewards = pallet_cf_rewards::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -688,6 +689,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_online, Online);
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
 			add_benchmark!(params, batches, pallet_cf_witnesser_api, WitnesserApi);
+			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }

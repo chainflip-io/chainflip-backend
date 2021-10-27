@@ -4,6 +4,9 @@
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 
@@ -22,6 +25,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -35,6 +41,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + pallet_cf_flip::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Benchmark stuff
+		type WeightInfoRewards: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -80,7 +88,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Credits any outstanding rewards to the caller's account.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoRewards::redeem_rewards())]
 		pub fn redeem_rewards(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			Self::try_apportion_full_entitlement(&account_id)?;

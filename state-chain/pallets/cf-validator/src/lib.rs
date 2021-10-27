@@ -147,7 +147,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin): This was not called by Governance Origin.
 		/// - [AuctionInProgress](Error::AuctionInProgress): There is already an Auction occurring.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			ensure!(
@@ -173,7 +173,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Session Pallet](pallet_session::Config)
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
+		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
 		pub(super) fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,
