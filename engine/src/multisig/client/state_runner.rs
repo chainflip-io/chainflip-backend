@@ -43,6 +43,9 @@ where
     CeremonyData: Display,
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
+    /// Create ceremony state without a ceremony request (which is expected to arrive
+    /// shortly). Until such request is received, we can start delaying messages, but
+    /// cannot make any progress otherwise
     pub fn new_unauthorised(logger: slog::Logger) -> Self {
         StateRunner {
             inner: None,
@@ -52,6 +55,8 @@ where
         }
     }
 
+    /// Process ceremony request from the State Chain, which allows
+    /// the state machine to make progress
     pub fn on_ceremony_request(
         &mut self,
         ceremony_id: CeremonyId,
@@ -85,7 +90,8 @@ where
         self.process_delayed();
     }
 
-    // This sometimes returns the result
+    /// Process message from a peer, returning ceremony outcome if
+    /// the ceremony stage machine cannot progress any further
     pub fn process_message(
         &mut self,
         sender_id: AccountId,
@@ -161,6 +167,7 @@ where
         None
     }
 
+    /// Process previously delayed messages (which arrived one stage too early)
     pub fn process_delayed(&mut self) {
         let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -175,10 +182,21 @@ where
         }
     }
 
+    /// Delay message to be processed in the next stage
     fn add_delayed(&mut self, id: AccountId, m: CeremonyData) {
         match &self.inner {
-            Some(_) => {
-                slog::debug!(self.logger, "Delaying message {} from party [{}]", m, id);
+            Some(authorised_state) => {
+                let stage = authorised_state
+                    .stage
+                    .as_ref()
+                    .expect("stage should always exist");
+                slog::debug!(
+                    self.logger,
+                    "Delaying message {} from party [{}] during stage: {}",
+                    m,
+                    id,
+                    stage
+                );
             }
             None => {
                 slog::debug!(
@@ -193,6 +211,8 @@ where
         self.delayed_messages.push((id, m));
     }
 
+    /// Check if the state expired, and if so, return the parties that
+    /// haven't submitted data for the current stage
     pub fn try_expiring(&self) -> Option<Vec<AccountId>> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {

@@ -33,7 +33,7 @@ impl KeygenStateRunner {
         ceremony_id: CeremonyId,
         event_sender: EventSender,
         idx_mapping: Arc<PartyIdxMapping>,
-        our_idx: usize,
+        own_idx: usize,
         all_idxs: Vec<usize>,
     ) {
         self.idx_mapping = Some(idx_mapping.clone());
@@ -45,7 +45,7 @@ impl KeygenStateRunner {
                 event_sender.clone(),
                 ceremony_id,
             ),
-            own_idx: our_idx,
+            own_idx,
             all_idxs,
             logger: self.logger.clone(),
         };

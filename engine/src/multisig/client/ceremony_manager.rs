@@ -90,7 +90,6 @@ impl CeremonyManager {
         validator_mapping: &PartyIdxMapping,
     ) -> Result<(usize, Vec<usize>), &'static str> {
         if !participants.contains(&self.my_account_id) {
-            // slog::warn!(logger, "Request to sign ignored: we are not among signers");
             return Err("we are not among participants");
         }
 
@@ -109,6 +108,7 @@ impl CeremonyManager {
         Ok((our_idx, signer_idxs))
     }
 
+    /// Process a keygen request
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
         let KeygenInfo {
             ceremony_id,
@@ -144,7 +144,7 @@ impl CeremonyManager {
         );
     }
 
-    // some functionality could be extracted and shared between keygen/signing
+    /// Process a request to sign
     pub fn on_request_to_sign(
         &mut self,
         data: MessageHash,
@@ -175,7 +175,7 @@ impl CeremonyManager {
 
         // NOTE: truncation above might remove us (but it should never be applied anyway)
 
-        let (our_idx, signer_idxs) =
+        let (own_idx, signer_idxs) =
             match self.map_ceremony_parties(&signers, &key_info.validator_map) {
                 Ok(res) => res,
                 Err(reason) => {
@@ -204,7 +204,7 @@ impl CeremonyManager {
                     self.event_sender.clone(),
                     ceremony_id,
                 ),
-                own_idx: our_idx,
+                own_idx,
                 all_idxs: signer_idxs,
                 logger: self.logger.clone(),
             };
@@ -228,6 +228,7 @@ impl CeremonyManager {
         );
     }
 
+    /// Process data for a signing ceremony arriving from a peer
     pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
@@ -245,11 +246,11 @@ impl CeremonyManager {
         if let Some(result) = state.process_message(sender_id, data) {
             self.keygen_states.remove(&ceremony_id);
             match result {
-                Ok(result) => {
+                Ok(schnorr_sig) => {
                     self.event_sender
                         .send(InnerEvent::SigningResult(SigningOutcome {
                             id: ceremony_id,
-                            result: Ok(result),
+                            result: Ok(schnorr_sig),
                         }))
                         .unwrap();
                 }
@@ -272,6 +273,7 @@ impl CeremonyManager {
         }
     }
 
+    /// Process data for a keygen ceremony arriving from a peer
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
