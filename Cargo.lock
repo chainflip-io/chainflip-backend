@@ -4991,6 +4991,7 @@ name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
@@ -5078,6 +5079,7 @@ dependencies = [
  "cf-traits",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",

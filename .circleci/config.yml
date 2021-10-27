@@ -8,7 +8,6 @@ only_main_branches: &only_main_branches
         - /epic\/.*/
         - /release\/.*/
         #        - update/epic-ci-1
-        - feature/sc-2224
 ignore_main_branches: &ignore_main_branches
   filters:
     branches:
@@ -18,7 +17,6 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         #        - update/epic-ci-1
-        - feature/sc-2224
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -191,7 +189,7 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      # Deploy new testnet. Coming Soon™
+
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
     jobs:
@@ -519,5 +517,5 @@ jobs:
           name: Install cluster
           command: |
             cd cluster
-            ./build.sh -b="$CIRCLE_BRANCH" -t="latest" --local --reset
+            ./build.sh -b="$CIRCLE_BRANCH" -t="$CIRCLE_SHA1" --reset
 ######################## /Jobs ########################

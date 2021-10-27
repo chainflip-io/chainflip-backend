@@ -170,6 +170,14 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged): Range was successfully changed.
+		///
+		/// ## Errors
+		///
+		/// - [InvalidRange](Error::InvalidRange): Provided range values are invalid.
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,

@@ -301,7 +301,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about
-                                    slog::trace!(logger, "Ignoring event: {:?}", ignored_event);
+                                    slog::trace!(logger, "Ignoring event at block {}: {:?}", block_header.number, ignored_event);
                                 }
                             }
                         }

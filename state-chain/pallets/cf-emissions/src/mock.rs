@@ -1,10 +1,7 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use frame_support::{
-	parameter_types,
-	traits::{EnsureOrigin, Imbalance},
-};
+use frame_support::{parameter_types, traits::Imbalance};
 use frame_system as system;
 use pallet_cf_flip;
 use sp_core::H256;
@@ -17,7 +14,14 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{mocks::epoch_info, RewardsDistribution};
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
+	RewardsDistribution,
+};
+
+pub type AccountId = u64;
+
+cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -66,18 +70,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-pub struct MockEnsureGovernance;
-
-impl EnsureOrigin<Origin> for MockEnsureGovernance {
-	type Success = ();
-
-	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
-		Ok(().into())
-	}
-}
-
-cf_traits::impl_mock_stake_transfer!(u64, u128);
-
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
@@ -86,9 +78,10 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
 }
 
 pub const MINT_INTERVAL: u64 = 5;
@@ -98,7 +91,6 @@ parameter_types! {
 
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
 
 pub struct MockRewardsDistribution<T>(PhantomData<T>);

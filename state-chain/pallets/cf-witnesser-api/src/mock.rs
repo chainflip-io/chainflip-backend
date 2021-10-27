@@ -8,7 +8,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider,
+	impl_mock_witnesser_for_account_and_call_types,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider::MockKeyProvider},
 	Chainflip, NonceProvider, VaultRotationHandler,
 };
 use frame_support::{instances::Instance0, parameter_types, traits::IsType};
@@ -39,7 +40,6 @@ frame_support::construct_runtime!(
 );
 
 impl_mock_witnesser_for_account_and_call_types!(u64, Call);
-impl_mock_ensure_witnessed_for_origin!(Origin);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -157,10 +157,11 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
-	type AccountId = AccountIdU64;
+	type StakerId = AccountIdU64;
 	type NonceProvider = Self;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = ();
 }
 
 type Amount = u64;
@@ -169,7 +170,7 @@ type ValidatorId = u64;
 impl Chainflip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type KeyId = Vec<u8>;
 	type Call = Call;
 }
