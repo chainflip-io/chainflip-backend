@@ -158,7 +158,9 @@ impl CeremonyManager {
 
         let signers_expected = key_info.params.threshold + 1;
 
-        // Hack to truncate the signers
+        // Hack to truncate the signers (sorting is also done at a later point
+        // but we don't care about duplicating it as this is temporary code)
+        signers.sort();
         if signers.len() > signers_expected {
             slog::warn!(
                 logger,
