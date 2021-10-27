@@ -264,10 +264,10 @@ mod tests {
 					.insert(node_id.clone(), Engine { node_id, state });
 			}
 
-			pub fn run_to_block(&mut self, n: u32) {
+			pub fn move_forward_blocks(&mut self, n: u32) {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
-
-				while System::block_number() < n {
+				let current_block_number = System::block_number();
+				while System::block_number() < current_block_number + n {
 					System::set_block_number(System::block_number() + 1);
 					Timestamp::set_timestamp(
 						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
@@ -643,8 +643,6 @@ mod tests {
 		// - New stakers that were above the genesis MAB are now validating the network with the
 		//   genesis validators
 		// - A new auction index has been generated
-		// - TODO Vaults rotated
-		// - TODO New epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -664,7 +662,7 @@ mod tests {
 							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 					// Run to the next epoch to start the auction
-					testnet.run_to_block(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					// We should be in auction 1
 					assert_eq!(
 						Auction::current_auction_index(),
@@ -685,7 +683,7 @@ mod tests {
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
 					// Run things another 10 blocks
-					testnet.run_to_block(EPOCH_BLOCKS + 10);
+					testnet.move_forward_blocks(10);
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
