@@ -35,6 +35,10 @@
   },
   "Bid": "(ValidatorId, Amount)",
   "BlockNumber": "u32",
+  "BlockHeightWindow": {
+    "from": "BlockNumber",
+    "to": "Option<BlockNumber>"
+  },
   "BroadcastAttemptId": "u64",
   "BroadcastStage": {
     "_enum": [
