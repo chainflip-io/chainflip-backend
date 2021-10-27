@@ -412,6 +412,7 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
+	type WeightInfoWitnesserApi = pallet_cf_witnesser_api::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {

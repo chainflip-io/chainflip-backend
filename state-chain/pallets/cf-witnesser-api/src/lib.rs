@@ -55,6 +55,9 @@ pub mod pallet {
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
+
+		/// Benchmark stuff
+		type WeightInfoWitnesserApi: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -78,7 +81,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_signature_success())]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -101,7 +104,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_signature_failed())]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -126,7 +129,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_transmission_success())]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -149,7 +152,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_transmission_failure())]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -175,7 +178,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_staked())]
 		pub fn witness_staked(
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
@@ -199,7 +202,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_claimed())]
 		pub fn witness_claimed(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -224,7 +227,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_keygen_success())]
 		pub fn witness_keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -245,7 +248,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_keygen_failure())]
 		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -268,7 +271,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesserApi::witness_vault_key_rotated())]
 		pub fn witness_vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,
