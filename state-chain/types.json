@@ -34,11 +34,11 @@
     "minimum_active_bid": "Amount"
   },
   "Bid": "(ValidatorId, Amount)",
-  "BlockNumber": "u32",
   "BlockHeightWindow": {
     "from": "BlockNumber",
     "to": "Option<BlockNumber>"
   },
+  "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
   "BroadcastStage": {
     "_enum": [
