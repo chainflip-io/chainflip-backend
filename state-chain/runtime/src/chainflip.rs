@@ -191,7 +191,7 @@ impl Heartbeat for ChainflipHeartbeat {
 
 		// Check the state of the network and if we are below the emergency rotation trigger
 		// then issue an emergency rotation request
-		if network_state.percentage_online() < EmergencyRotationPercentageTrigger::get() as u32 {
+		if network_state.percentage_online() <= EmergencyRotationPercentageTrigger::get() as u32 {
 			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
 		}
 
