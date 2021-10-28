@@ -111,7 +111,7 @@ mod tests {
         let health_check = settings::test_utils::new_test_settings()
             .unwrap()
             .health_check;
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
         let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
 

@@ -151,7 +151,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_key_manager_events() {
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
 
         let settings = settings::test_utils::new_test_settings().unwrap();
 
