@@ -46,12 +46,12 @@ where
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(logger: slog::Logger) -> Self {
+    pub fn new_unauthorised(logger: &slog::Logger) -> Self {
         StateRunner {
             inner: None,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
-            logger,
+            logger: logger.clone(),
         }
     }
 

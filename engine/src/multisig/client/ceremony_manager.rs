@@ -128,8 +128,7 @@ impl CeremonyManager {
             }
         };
 
-        let logger = self.logger.clone();
-
+        let logger = &self.logger;
         let state = self
             .keygen_states
             .entry(ceremony_id)
@@ -188,7 +187,7 @@ impl CeremonyManager {
             };
 
         // We have the key and have received a request to sign
-        let logger = self.logger.clone();
+        let logger = &self.logger;
         let state = self
             .signing_states
             .entry(ceremony_id)
@@ -239,7 +238,7 @@ impl CeremonyManager {
 
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
-        let logger = self.logger.clone();
+        let logger = &self.logger;
         let state = self
             .signing_states
             .entry(ceremony_id)
@@ -283,9 +282,7 @@ impl CeremonyManager {
     ) -> Option<KeygenResultInfo> {
         let KeygenDataWrapped { ceremony_id, data } = msg;
 
-        // TODO: how can I avoid cloning the logger?
-        let logger = self.logger.clone();
-
+        let logger = &self.logger;
         let state = self
             .keygen_states
             .entry(ceremony_id)

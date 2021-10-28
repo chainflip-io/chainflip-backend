@@ -20,7 +20,7 @@ pub struct KeygenStateRunner {
 }
 
 impl KeygenStateRunner {
-    pub fn new_unauthorised(logger: slog::Logger) -> Self {
+    pub fn new_unauthorised(logger: &slog::Logger) -> Self {
         KeygenStateRunner {
             logger: logger.clone(),
             inner: StateRunner::new_unauthorised(logger),
