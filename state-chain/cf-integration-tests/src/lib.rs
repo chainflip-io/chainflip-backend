@@ -1,9 +1,10 @@
 #![feature(assert_matches)]
-#[macro_use]
-extern crate assert_matches;
+#[cfg(test)]
+#[macro_use] extern crate assert_matches;
 
 #[cfg(test)]
 mod tests {
+
 	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
