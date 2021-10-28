@@ -112,7 +112,6 @@ where
                 for (destination_idx, data) in messages {
                     if destination_idx == self.common.own_idx {
                         self.messages.insert(self.common.own_idx, data);
-                        continue;
                     } else {
                         self.common.p2p_sender.send(destination_idx, data.into());
                     }

@@ -7,7 +7,7 @@ use client::{
     keygen_state_runner::KeygenStateRunner,
     signing::frost::{SigningData, SigningDataWrapped},
     state_runner::StateRunner,
-    utils::{get_index_mapping, PartyIdxMapping},
+    utils::PartyIdxMapping,
     CeremonyAbortReason, EventSender, KeygenDataWrapped, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
@@ -87,7 +87,7 @@ impl CeremonyManager {
     fn map_ceremony_parties(
         &self,
         participants: &[AccountId],
-        validator_mapping: &PartyIdxMapping,
+        validator_map: &PartyIdxMapping,
     ) -> Result<(usize, Vec<usize>), &'static str> {
         if !participants.contains(&self.my_account_id) {
             return Err("we are not among participants");
@@ -96,12 +96,12 @@ impl CeremonyManager {
         // It should be impossible to fail here because of the check above,
         // but I don't like unwrapping (would be better if we
         // could combine this with the check above)
-        let our_idx = validator_mapping
+        let our_idx = validator_map
             .get_idx(&self.my_account_id)
             .ok_or("could not derive our idx")?;
 
         // Check that signer ids are known for this key
-        let signer_idxs = validator_mapping
+        let signer_idxs = validator_map
             .get_all_idxs(&participants)
             .map_err(|_| "invalid participants")?;
 
@@ -117,7 +117,7 @@ impl CeremonyManager {
 
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-        let validator_map = Arc::new(get_index_mapping(&signers));
+        let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&signers));
 
         let (our_idx, signer_idxs) = match self.map_ceremony_parties(&signers, &validator_map) {
             Ok(res) => res,
@@ -258,9 +258,8 @@ impl CeremonyManager {
                 Err(blamed_parties) => {
                     slog::warn!(
                         self.logger,
-                        "Signing ceremony failed, blaming parties: {:?} ({:?})",
-                        &blamed_parties,
-                        blamed_parties,
+                        "Signing ceremony failed, blaming parties: {:?}",
+                        &blamed_parties; CEREMONY_ID_KEY => ceremony_id
                     );
 
                     self.event_sender

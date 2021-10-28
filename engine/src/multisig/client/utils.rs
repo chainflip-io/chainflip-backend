@@ -64,30 +64,22 @@ impl PartyIdxMapping {
             })
             .collect()
     }
-}
 
-pub fn get_index_mapping(signers: &[AccountId]) -> PartyIdxMapping {
-    let idxs: Vec<_> = (1..=signers.len()).collect();
+    pub fn from_unsorted_signers(signers: &[AccountId]) -> Self {
+        let mut signers = signers.to_owned();
+        signers.sort();
 
-    debug_assert_eq!(idxs.len(), signers.len());
+        let mut id_to_idx = HashMap::new();
 
-    let mut combined: Vec<_> = signers.iter().zip(idxs).collect();
+        for (i, account_id) in signers.iter().enumerate() {
+            // indexes start with 1 for signing
+            id_to_idx.insert(account_id.clone(), i + 1);
+        }
 
-    combined.sort_by_key(|(v, _)| *v);
-
-    let mut id_to_idx = HashMap::new();
-
-    let mut sorted_validator_ids = Vec::with_capacity(signers.len());
-
-    for (i, (vid, _)) in combined.into_iter().enumerate() {
-        // indexes start with 1 for signing
-        id_to_idx.insert(vid.clone(), i + 1);
-        sorted_validator_ids.push(vid.clone());
-    }
-
-    PartyIdxMapping {
-        id_to_idx,
-        account_ids: sorted_validator_ids,
+        PartyIdxMapping {
+            id_to_idx,
+            account_ids: signers,
+        }
     }
 }
 
@@ -148,7 +140,7 @@ mod utils_tests {
 
         let signers = [a, c.clone(), b];
 
-        let map = get_index_mapping(&signers);
+        let map = PartyIdxMapping::from_unsorted_signers(&signers);
 
         assert_eq!(map.get_idx(&c), Some(3));
         assert_eq!(map.get_id(3), Some(&c));
