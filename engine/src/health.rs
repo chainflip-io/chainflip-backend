@@ -18,6 +18,7 @@ pub struct HealthMonitor {
 }
 
 impl HealthMonitor {
+    /// Instantiate a health monitoring server
     pub fn new(health_check_settings: &settings::HealthCheck, logger: &slog::Logger) -> Self {
         let bind_address = format!(
             "{}:{}",
@@ -30,6 +31,7 @@ impl HealthMonitor {
         }
     }
 
+    /// Start the health monitoring server
     pub async fn run(&self) -> Sender<()> {
         slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
