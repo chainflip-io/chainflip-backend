@@ -167,6 +167,16 @@ impl cf_chains::Chain for Doge {
 }
 impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
+	type Payload = [u8; 4];
+	type ThresholdSignature = String;
+
+	fn verify_threshold_signature(
+		_agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
+	) -> bool {
+		*payload == DOGE_PAYLOAD && signature == "Wow!"
+	}
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
@@ -175,6 +185,8 @@ pub struct DogeThresholdSignerContext {
 }
 
 pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
+pub const VALID_SIGNATURE: &'static str = "Wow!";
+pub const INVALID_SIGNATURE: &'static str = "Pow!";
 
 impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;

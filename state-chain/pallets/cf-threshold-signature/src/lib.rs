@@ -39,8 +39,8 @@ pub mod pallet {
 		pub chain_signing_context: T::SigningContext,
 	}
 
-	type SignatureFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Signature;
-	type PayloadFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Payload;
+	type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+	type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -52,7 +52,14 @@ pub mod pallet {
 		type TargetChain: Chain + ChainCrypto;
 
 		/// The context definition for this instance.
-		type SigningContext: SigningContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
+		/// TODO: Remove `Payload` and `Signature` from this type.
+		type SigningContext: SigningContext<
+				Self,
+				Chain = Self::TargetChain,
+				Payload = PayloadFor<Self, I>,
+				Signature = SignatureFor<Self, I>,
+			> + Member
+			+ FullCodec;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -97,6 +104,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The provided ceremony id is invalid.
 		InvalidCeremonyId,
+		/// The provided threshold signature is invalid.
+		InvalidThresholdSignature,
 	}
 
 	#[pallet::hooks]
@@ -131,6 +140,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		/// - [InvalidThresholdSignature](Error::InvalidThresholdSignature)
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -139,13 +149,23 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			// Ensure the id is valid and remove the context.
+			// Ensure the id is valid and get the context.
 			let context =
-				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
+				PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
 
-			// TODO: verify the threshold signature.
-			// 1. get key from KeyProvider
-			// 2. cf_chains::eth::AggKey::verify(&self, msg_hash, sig);
+			// Verify the threshold signature.
+			let agg_key = T::KeyProvider::current_key();
+			ensure!(
+				<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+					&agg_key,
+					&context.chain_signing_context.get_payload(),
+					&signature,
+				),
+				Error::<T, I>::InvalidThresholdSignature
+			);
+
+			// The request succeeded, remove it.
+			PendingRequests::<T, I>::remove(id);
 
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 

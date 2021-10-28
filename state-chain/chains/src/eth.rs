@@ -136,16 +136,6 @@ impl ParityBit {
 	}
 }
 
-/// When serializing we use `2` and `3` to represent parity bits.
-impl From<ParityBit> for u8 {
-	fn from(parity_bit: ParityBit) -> Self {
-		match parity_bit {
-			ParityBit::Odd => 3,
-			ParityBit::Even => 2,
-		}
-	}
-}
-
 /// Ethereum contracts use `0` and `1` to represent parity bits.
 impl From<ParityBit> for Uint {
 	fn from(parity_bit: ParityBit) -> Self {
@@ -196,7 +186,10 @@ impl AggKey {
 	/// Convert to 'compressed pubkey` format where a leading `2` means 'even parity bit' and a leading `3` means 'odd'.
 	pub fn to_pubkey_compressed(&self) -> [u8; 33] {
 		let mut result = [0u8; 33];
-		result[0] = self.pub_key_y_parity.into();
+		result[0] = match self.pub_key_y_parity {
+			ParityBit::Odd => 3u8,
+			ParityBit::Even => 2u8,
+		};
 		result[1..].copy_from_slice(&self.pub_key_x[..]);
 		result
 	}
@@ -389,23 +382,6 @@ pub struct SchnorrVerificationComponents {
 	pub s: [u8; 32],
 	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
 	pub k_times_g_addr: [u8; 20],
-}
-
-pub struct SchnorrSignature {
-	s: libsecp256k1::curve::Scalar,
-	r: libsecp256k1::PublicKey,
-}
-
-impl From<SchnorrSignature> for SchnorrVerificationComponents {
-	fn from(sig: SchnorrSignature) -> Self {
-		let mut k_times_g_addr = [0u8; 20];
-		let k_times_g = Keccak256::hash(&sig.r.serialize()[..]);
-		k_times_g_addr.copy_from_slice(&k_times_g[12..]);
-		SchnorrVerificationComponents {
-			s: sig.s.b32(),
-			k_times_g_addr,
-		}
-	}
 }
 
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]

@@ -8,9 +8,8 @@ use frame_system::pallet_prelude::BlockNumberFor;
 enum Scenario {
 	HappyPath,
 	RetryPath,
+	InvalidThresholdSignaturePath,
 }
-
-pub const SIGNATURE: &'static str = "Wow!";
 
 struct MockCfe;
 
@@ -37,20 +36,32 @@ impl MockCfe {
 				assert_eq!(signers, vec![RANDOM_NOMINEE]);
 				assert_eq!(payload, DOGE_PAYLOAD);
 
-				assert_ok!(match scenario {
-					Scenario::HappyPath => DogeThresholdSigner::signature_success(
-						Origin::root(),
-						req_id,
-						SIGNATURE.to_string(),
-					),
+				match scenario {
+					Scenario::HappyPath => {
+						assert_ok!(DogeThresholdSigner::signature_success(
+							Origin::root(),
+							req_id,
+							VALID_SIGNATURE.to_string(),
+						));
+					}
 					Scenario::RetryPath => {
-						DogeThresholdSigner::signature_failed(
+						assert_ok!(DogeThresholdSigner::signature_failed(
 							Origin::root(),
 							req_id,
 							vec![RANDOM_NOMINEE],
-						)
+						));
 					}
-				});
+					Scenario::InvalidThresholdSignaturePath => {
+						assert_noop!(
+							DogeThresholdSigner::signature_success(
+								Origin::root(),
+								req_id,
+								INVALID_SIGNATURE.to_string(),
+							),
+							Error::<Test, Instance0>::InvalidThresholdSignature
+						);
+					}
+				};
 			}
 			_ => panic!("Unexpected event"),
 		};
@@ -131,5 +142,20 @@ fn retry_path() {
 		let pending = DogeThresholdSigner::pending_request(request_id + 1).unwrap();
 		assert_eq!(pending.attempt, 1);
 		assert_eq!(pending.signatories, vec![RANDOM_NOMINEE]);
+	});
+}
+
+#[test]
+fn invalid_threshold_signature_path() {
+	new_test_ext().execute_with(|| {
+		// Initiate request
+		let _request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
+			message: "So threshold!".to_string(),
+		});
+
+		// CFE responds
+		MockCfe::respond(Scenario::InvalidThresholdSignaturePath);
+
+		// TODO: Define what behaviour we expect from here.
 	});
 }
