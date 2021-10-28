@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 
 use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
-use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -12,18 +11,16 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_traits::{Chainflip, Nonce, NonceIdentifier};
+use cf_chains::eth;
+use cf_traits::Chainflip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
-type Amount = u64;
 type ValidatorId = u64;
 
 thread_local! {
-	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static GENESIS_ETHEREUM_AGG_PUB_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0;33]);
 }
 
 construct_runtime!(
@@ -33,7 +30,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
+		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -68,75 +65,93 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		ensure_root(o).or(Err(RawOrigin::None.into()))
-	}
-}
-
-pub struct MockWitnesser;
-
-impl cf_traits::Witnesser for MockWitnesser {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-		Ok(result.unwrap_or_else(|err| err.post_info))
-	}
-}
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for MockRuntime {
-	type Amount = Amount;
+	type KeyId = Vec<u8>;
 	type ValidatorId = ValidatorId;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
-impl VaultRotationHandler for MockRuntime {
-	type ValidatorId = u64;
-	fn abort() {}
+pub struct MockRotationHandler;
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+impl VaultRotationHandler for MockRotationHandler {
+	type ValidatorId = ValidatorId;
+	fn vault_rotation_aborted() {}
+
+	fn penalise(_bad_validators: &[Self::ValidatorId]) {
+		unimplemented!("This should be handled by the offline reporter and will be removed.")
 	}
 }
 
-impl NonceProvider for MockRuntime {
-	fn next_nonce(_identifier: NonceIdentifier) -> Nonce {
+pub struct MockCallback;
+
+impl UnfilteredDispatchable for MockCallback {
+	type Origin = Origin;
+
+	fn dispatch_bypass_filter(
+		self,
+		_origin: Self::Origin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		Ok(().into())
+	}
+}
+
+pub struct MockEthSigningContext;
+
+impl From<eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey> for MockEthSigningContext {
+	fn from(_: eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey) -> Self {
+		MockEthSigningContext
+	}
+}
+
+impl SigningContext<MockRuntime> for MockEthSigningContext {
+	type Chain = Ethereum;
+	type Payload = Vec<u8>;
+	type Signature = Vec<u8>;
+	type Callback = MockCallback;
+
+	fn get_payload(&self) -> Self::Payload {
+		b"payloooooad".to_vec()
+	}
+
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+		MockCallback
+	}
+}
+
+pub struct MockThresholdSigner;
+
+impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
+	type Context = MockEthSigningContext;
+
+	fn request_signature(_context: Self::Context) -> u64 {
 		0
 	}
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type EnsureWitnessed = MockEnsureWitness;
-	type PublicKey = Vec<u8>;
-	type TransactionHash = Vec<u8>;
-	type RotationHandler = Self;
-	type NonceProvider = Self;
-	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
-}
-
-pub fn bad_validators() -> Vec<ValidatorId> {
-	BAD_VALIDATORS.with(|l| l.borrow().to_vec())
+	type RotationHandler = MockRotationHandler;
+	type OfflineReporter = MockOfflineReporter;
+	type SigningContext = MockEthSigningContext;
+	type ThresholdSigner = MockThresholdSigner;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
-
-pub fn ethereum_public_key() -> Vec<u8> {
-	GENESIS_ETHEREUM_AGG_PUB_KEY.with(|l| l.borrow().to_vec())
-}
+pub const GENESIS_ETHEREUM_AGG_PUB_KEY: [u8; 33] = [0x02; 33];
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_vaults: Some(VaultsPalletConfig {
-			ethereum_vault_key: ethereum_public_key(),
+			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
 		}),
 	};
 

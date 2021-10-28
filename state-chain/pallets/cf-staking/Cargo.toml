@@ -17,7 +17,9 @@ substrate-wasm-builder = '3.0.0'
 [dependencies]
 # Internal deps
 cf-traits = {path = '../../traits', default-features = false}
+cf-chains = {path = '../../chains', default-features = false}
 pallet-cf-validator = {path = '../cf-validator', default-features = false}
+pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
 
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
@@ -27,10 +29,11 @@ ethereum-types = {default-features = false, version = "0.12"}
 # Substrate deps
 frame-support = {default-features = false, version = '3.0.0'}
 frame-system = {default-features = false, version = '3.0.0'}
-serde = {default-features = false, version = '1.0.119'}
+serde = {optional = true, version = '1.0.119'}
 sp-core = {default-features = false, version = '3.0.0'}
 sp-runtime = {default-features = false, version = '3.0.0'}
 sp-std = {default-features = false, version = '3.0.0'}
+frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
 
 [dev-dependencies]
 pallet-cf-flip = {path = '../cf-flip'}
@@ -39,14 +42,22 @@ sp-io = {version = '3.0.0'}
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-traits/std',
   'pallet-cf-validator/std',
+  'pallet-cf-threshold-signature/std',
   'codec/std',
   'frame-support/std',
   'frame-system/std',
   'sp-runtime/std',
   'sp-core/std',
   'sp-std/std',
-  'serde/std',
+  'serde',
   'ethabi/std',
+  'frame-benchmarking/std',
+]
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
 ]

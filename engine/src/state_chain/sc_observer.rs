@@ -1,26 +1,24 @@
+use cf_chains::ChainId;
 use futures::{Stream, StreamExt};
-use pallet_cf_vaults::{
-    rotation::{ChainParams, VaultRotationResponse},
-    KeygenResponse, ThresholdSignatureResponse,
-};
+use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
 use sp_runtime::AccountId32;
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
-    p2p, settings,
-    signing::{
+    multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
         SigningInfo, SigningOutcome,
     },
+    p2p,
+    state_chain::client::StateChainRpcApi,
 };
 
-pub async fn start<BlockStream>(
-    settings: &settings::Settings,
-    state_chain_client: Arc<super::client::StateChainClient>,
+pub async fn start<BlockStream, RpcClient>(
+    state_chain_client: Arc<super::client::StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
@@ -28,17 +26,12 @@ pub async fn start<BlockStream>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
+    RpcClient: StateChainRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client
-        .metadata
-        .module("Reputation")
-        .expect("No module 'Reputation' in chain metadata")
-        .constant("HeartbeatBlockInterval")
-        .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
-        .value::<u32>()
-        .expect("Could not decode HeartbeatBlockInterval to u32");
+    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
+
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
@@ -46,8 +39,9 @@ pub async fn start<BlockStream>(
     );
 
     state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
-        .await;
+        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+        .await
+        .expect("Should be able to submit first heartbeat");
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -62,8 +56,8 @@ pub async fn start<BlockStream>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_reputation::Call::heartbeat())
+                    let _ = state_chain_client
+                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
 
@@ -75,11 +69,11 @@ pub async fn start<BlockStream>(
                                 state_chain_runtime::Event::pallet_cf_vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
-                                        keygen_request,
+                                        chain_id,
+                                        validator_candidates
                                     ),
                                 ) => {
-                                    let signers: Vec<_> = keygen_request
-                                        .validator_candidates
+                                    let signers: Vec<_> = validator_candidates
                                         .iter()
                                         .map(|v| p2p::AccountId(v.clone().into()))
                                         .collect();
@@ -93,7 +87,7 @@ pub async fn start<BlockStream>(
                                         .map_err(|_| "Receiver should exist")
                                         .unwrap();
 
-                                    let response = match multisig_event_receiver
+                                    let response_extrinsic = match multisig_event_receiver
                                         .recv()
                                         .await
                                         .expect("Channel closed!")
@@ -103,8 +97,10 @@ pub async fn start<BlockStream>(
                                             result,
                                         }) => match result {
                                             Ok(pubkey) => {
-                                                KeygenResponse::<AccountId32, Vec<u8>>::Success(
-                                                    pubkey.serialize().into(),
+                                                pallet_cf_witnesser_api::Call::witness_keygen_success(
+                                                    ceremony_id,
+                                                    chain_id,
+                                                    pubkey.serialize().to_vec(),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -117,7 +113,11 @@ pub async fn start<BlockStream>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                KeygenResponse::Error(bad_account_ids)
+                                                pallet_cf_witnesser_api::Call::witness_keygen_failure(
+                                                    ceremony_id,
+                                                    chain_id,
+                                                    bad_account_ids,
+                                                )
                                             }
                                         },
                                         MultisigEvent::MessageSigningResult(
@@ -129,36 +129,30 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
-                                            pallet_cf_witnesser_api::Call::witness_keygen_response(
-                                                ceremony_id,
-                                                response,
-                                            ),
+                                            response_extrinsic,
                                         )
                                         .await;
                                 }
-                                state_chain_runtime::Event::pallet_cf_vaults(
-                                    pallet_cf_vaults::Event::ThresholdSignatureRequest(
+                                state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(
+                                    pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
                                         ceremony_id,
-                                        threshold_signature_request,
+                                        key_id,
+                                        validators,
+                                        payload,
                                     ),
                                 ) => {
-                                    let signers: Vec<_> = threshold_signature_request
-                                        .validators
+                                    let signers: Vec<_> = validators
                                         .iter()
                                         .map(|v| p2p::AccountId(v.clone().into()))
                                         .collect();
 
-                                    let message_hash: [u8; 32] = threshold_signature_request
-                                        .payload
-                                        .try_into()
-                                        .expect("Should be a 32 byte hash");
                                     let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
                                         ceremony_id,
-                                        KeyId(threshold_signature_request.public_key),
-                                        MessageHash(message_hash),
+                                        KeyId(key_id),
+                                        MessageHash(payload.to_fixed_bytes()),
                                         signers,
                                     ));
 
@@ -168,7 +162,7 @@ pub async fn start<BlockStream>(
                                         .map_err(|_| "Receiver should exist")
                                         .unwrap();
 
-                                    let response = match multisig_event_receiver
+                                    let response_extrinsic = match multisig_event_receiver
                                         .recv()
                                         .await
                                         .expect("Channel closed!")
@@ -177,13 +171,9 @@ pub async fn start<BlockStream>(
                                             id: _,
                                             result,
                                         }) => match result {
-                                            Ok(sig) => ThresholdSignatureResponse::<
-                                                AccountId32,
-                                                pallet_cf_vaults::SchnorrSigTruncPubkey,
-                                            >::Success {
-                                                message_hash,
-                                                signature: sig.into(),
-                                            },
+                                            Ok(sig) => pallet_cf_witnesser_api::Call::witness_eth_signature_success(
+                                                ceremony_id, sig.into()
+                                            ),
                                             Err((err, bad_account_ids)) => {
                                                 slog::error!(
                                                     logger,
@@ -194,7 +184,9 @@ pub async fn start<BlockStream>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                ThresholdSignatureResponse::Error(bad_account_ids)
+                                                pallet_cf_witnesser_api::Call::witness_eth_signature_failed(
+                                                    ceremony_id, bad_account_ids
+                                                )
                                             }
                                         },
                                         MultisigEvent::KeygenResult(keygen_result) => {
@@ -204,68 +196,112 @@ pub async fn start<BlockStream>(
                                             );
                                         }
                                     };
-                                    state_chain_client
+                                    let _ = state_chain_client
                                         .submit_extrinsic(
                                             &logger,
-                                            pallet_cf_witnesser_api::Call::witness_threshold_signature_response(
-                                                ceremony_id,
-                                                response,
-                                            ),
+                                            response_extrinsic,
                                         )
                                         .await;
                                 }
-                                state_chain_runtime::Event::pallet_cf_vaults(
-                                    pallet_cf_vaults::Event::VaultRotationRequest(
-                                        ceremony_id,
-                                        vault_rotation_request,
+                                state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+                                    pallet_cf_broadcast::Event::TransactionSigningRequest(
+                                        attempt_id,
+                                        validator_id,
+                                        unsigned_tx
+                                    ),
+                                ) if validator_id == state_chain_client.our_account_id => {
+                                    slog::debug!(
+                                        logger,
+                                        "Received signing request {} for transaction: {:?}",
+                                        attempt_id,
+                                        unsigned_tx,
+                                    );
+                                    match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
+                                        Ok(raw_signed_tx) => {
+                                            let _ = state_chain_client.submit_extrinsic(
+                                                &logger,
+                                                state_chain_runtime::Call::EthereumBroadcaster(
+                                                    pallet_cf_broadcast::Call::transaction_ready_for_transmission(
+                                                        attempt_id,
+                                                        raw_signed_tx.0,
+                                                    ),
+                                                )
+                                            ).await;
+                                        },
+                                        Err(e) => {
+                                            // Note: this error case should only occur if there is a problem with the
+                                            // local ethereum node, which would mean the web3 lib is unable to fill in 
+                                            // the tranaction params, mainly the gas limit.
+                                            // In the long run all transaction parameters will be provided by the state
+                                            // chain and the above eth_broadcaster.sign_tx method can be made 
+                                            // infallible.
+                                            slog::error!(
+                                                logger,
+                                                "Transaction signing attempt {} failed: {:?}",
+                                                attempt_id,
+                                                e
+                                            );
+                                        },
+                                    }
+                                }
+                                state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+                                    pallet_cf_broadcast::Event::TransmissionRequest(
+                                        attempt_id,
+                                        signed_tx,
                                     ),
                                 ) => {
-                                    match vault_rotation_request.chain {
-                                        ChainParams::Ethereum(tx) => {
+                                    slog::debug!(
+                                        logger,
+                                        "Sending signed tx for broadcast attempt {}: {:?}",
+                                        attempt_id,
+                                        hex::encode(&signed_tx),
+                                    );
+                                    let response_extrinsics = match eth_broadcaster.send(signed_tx).await
+                                    {
+                                        Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Sending ETH vault rotation tx for ceremony {}: {:?}",
-                                                ceremony_id,
-                                                tx
+                                                "Successful broadcast attempt {}, tx_hash: {}",
+                                                attempt_id,
+                                                tx_hash
                                             );
-                                            // TODO: Contract address should come from the state chain
-                                            // https://github.com/chainflip-io/chainflip-backend/issues/459
-                                            let response = match eth_broadcaster
-                                                .send(tx, settings.eth.key_manager_eth_address)
-                                                .await
-                                            {
-                                                Ok(tx_hash) => {
-                                                    slog::debug!(
-                                                        logger,
-                                                        "Broadcast set_agg_key_with_agg_key tx, tx_hash: {}",
-                                                        tx_hash
-                                                    );
-                                                    VaultRotationResponse::Success {
-                                                        tx_hash: tx_hash.as_bytes().to_vec(),
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    slog::error!(
-                                                        logger,
-                                                        "Failed to broadcast set_agg_key_with_agg_key tx: {}",
-                                                        e
-                                                    );
-                                                    VaultRotationResponse::Error
-                                                }
-                                            };
-                                            state_chain_client.submit_extrinsic(
-                                                &logger,
-                                                pallet_cf_witnesser_api::Call::witness_vault_rotation_response(
-                                                    ceremony_id,
-                                                    response,
+                                            [
+                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
+                                                    attempt_id, tx_hash.into()
                                                 ),
-                                            ).await;
+                                                // TODO: This should be triggered from the eth event.
+                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
+                                                pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
+                                                    ChainId::Ethereum, vec![], 0, tx_hash.as_bytes().to_vec()
+                                                ),
+                                            ].to_vec()
                                         }
+                                        Err(e) => {
+                                            slog::error!(
+                                                logger,
+                                                "Broadcast attempt {} failed: {:?}",
+                                                attempt_id,
+                                                e
+                                            );
+                                            [
+                                                // TODO: Fill in the transaction hash with the real one
+                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
+                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
+                                                    attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
+                                                ),
+                                            ].to_vec()
+                                        }
+                                    };
+                                    for ext in response_extrinsics {
+                                        let _ = state_chain_client.submit_extrinsic(
+                                            &logger,
+                                            ext,
+                                        ).await;
                                     }
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about
-                                    slog::trace!(logger, "Ignoring event: {:?}", ignored_event);
+                                    slog::trace!(logger, "Ignoring event at block {}: {:?}", block_header.number, ignored_event);
                                 }
                             }
                         }
@@ -297,7 +333,7 @@ mod tests {
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
     async fn run_the_sc_observer() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
 
         let (state_chain_client, block_stream) =
             crate::state_chain::client::connect_to_state_chain(&settings)
@@ -315,7 +351,6 @@ mod tests {
         let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
 
         start(
-            &settings,
             state_chain_client,
             block_stream,
             eth_broadcaster,

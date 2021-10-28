@@ -3,35 +3,25 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, EnvironmentConfig,
 	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
-	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig,
 	WASM_BINARY,
 };
 use std::convert::TryInto;
 use std::env;
 
-const TOTAL_ISSUANCE: FlipBalance = {
-	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-	const TOKEN_DECIMALS: u32 = 18;
-	const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-	TOKEN_ISSUANCE * TOKEN_FRACTIONS
+const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = EnvironmentConfig {
+	stake_manager_address: Some(hex_literal::hex![
+		"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+	]),
+	key_manager_address: Some(hex_literal::hex![
+		"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
+	]),
+	ethereum_chain_id: Some(4),
 };
-
-const MAX_VALIDATORS: u32 = 150;
-
-const BLOCK_EMISSIONS: FlipBalance = {
-	const ANNUAL_INFLATION_PERCENT: FlipBalance = 10;
-	const ANNUAL_INFLATION: FlipBalance = TOTAL_ISSUANCE * ANNUAL_INFLATION_PERCENT / 100;
-	// Note: DAYS is the number of blocks in a day.
-	ANNUAL_INFLATION / 365 / DAYS as u128
-};
-
-// Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS: u32 = 2500;
-// Number of accrual points
-pub const ACCRUAL_POINTS: i32 = 1;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -59,20 +49,24 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 }
 
 /// Get the values for the state-chain environment.
-pub fn get_environment() -> ([u8; 20], [u8; 20], u32) {
-	let stake_manager_address: [u8; 20] =
-		hex::decode(env::var("STAKE_MANAGER_ADDRESS").expect("STAKE_MANAGER_ADDRESS not set"))
-			.unwrap()
-			.try_into()
-			.expect("address cast failed");
-	let key_manager_address: [u8; 20] =
-		hex::decode(env::var("KEY_MANAGER_ADDRESS").expect("KEY_MANAGER_ADDRESS not set"))
-			.unwrap()
-			.try_into()
-			.expect("address cast failed");
+pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
+	let stake_manager_address: [u8; 20] = hex::decode(
+		env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
+	let key_manager_address: [u8; 20] = hex::decode(
+		env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or(String::from("36fB9E46D6cBC14600D9089FD7Ce95bCf664179f")),
+	)
+	.unwrap()
+	.try_into()
+	.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.expect("ETHEREUM_CHAIN_ID not set")
-		.parse::<u32>()
+		.unwrap_or(String::from("4"))
+		.parse::<u64>()
 		.expect("chain id is no unsigned int");
 	(
 		stake_manager_address,
@@ -114,9 +108,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: stake_manager_address,
-					key_manager_address: key_manager_address,
-					ethereum_chain_id: ethereum_chain_id,
+					stake_manager_address: Some(stake_manager_address),
+					key_manager_address: Some(key_manager_address),
+					ethereum_chain_id: Some(ethereum_chain_id),
 				},
 			)
 		},
@@ -165,9 +159,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
-					stake_manager_address: stake_manager_address,
-					key_manager_address: key_manager_address,
-					ethereum_chain_id: ethereum_chain_id,
+					stake_manager_address: Some(stake_manager_address),
+					key_manager_address: Some(key_manager_address),
+					ethereum_chain_id: Some(ethereum_chain_id),
 				},
 			)
 		},
@@ -246,15 +240,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				EnvironmentConfig {
-					stake_manager_address: hex_literal::hex![
-						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					],
-					key_manager_address: hex_literal::hex![
-						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					],
-					ethereum_chain_id: 4,
-				},
+				DEFAULT_ENVIRONMENT_CONFIG,
 			)
 		},
 		// Bootnodes
@@ -354,15 +340,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				EnvironmentConfig {
-					stake_manager_address: hex_literal::hex![
-						"9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
-					],
-					key_manager_address: hex_literal::hex![
-						"36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-					],
-					ethereum_chain_id: 4,
-				},
+				DEFAULT_ENVIRONMENT_CONFIG,
 			)
 		},
 		// Bootnodes
@@ -394,7 +372,9 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {}),
+		pallet_cf_validator: Some(ValidatorConfig {
+			blocks_per_epoch: 7 * DAYS,
+		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -417,7 +397,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (min_validators, MAX_VALIDATORS),
+			validator_size_range: (min_validators, MAX_VALIDATORS),
 			winners: initial_authorities
 				.iter()
 				.map(|(validator_id, ..)| validator_id.clone())
@@ -430,10 +410,6 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_cf_emissions: Some(EmissionsConfig {
-			emission_per_block: BLOCK_EMISSIONS,
-			..Default::default()
-		}),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
@@ -443,10 +419,16 @@ fn testnet_genesis(
 		}),
 		pallet_cf_environment: Some(config_set),
 		pallet_cf_vaults: Some(VaultsConfig {
-			ethereum_vault_key: hex_literal::hex![
-				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
-			]
-			.to_vec(),
+			ethereum_vault_key: {
+				let key: [u8; 33] = hex_literal::hex![
+					"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+				];
+				key.to_vec()
+			},
+		}),
+		pallet_cf_emissions: Some(EmissionsConfig {
+			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
+			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 		}),
 	}
 }

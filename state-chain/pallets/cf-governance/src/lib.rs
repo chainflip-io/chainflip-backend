@@ -3,14 +3,22 @@
 #![doc = include_str!("../README.md")]
 
 use codec::Decode;
+use codec::Encode;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnfilteredDispatchable;
+use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
+use sp_std::boxed::Box;
 use sp_std::ops::Add;
+use sp_std::vec;
 use sp_std::vec::Vec;
 
-const FIVE_DAYS_IN_SECONDS: u64 = 432000;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -19,7 +27,6 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
@@ -29,10 +36,9 @@ pub mod pallet {
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::boxed::Box;
-	use sp_std::vec;
 	use sp_std::vec::Vec;
 
-	use crate::FIVE_DAYS_IN_SECONDS;
+	use crate::WeightInfo;
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -62,9 +68,12 @@ pub mod pallet {
 		type Call: Member
 			+ FullCodec
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ From<frame_system::Call<Self>>
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -109,18 +118,14 @@ pub mod pallet {
 						<ActiveProposals<T>>::get()
 							.iter()
 							.partition(|p| p.1 <= T::TimeSource::now().as_secs());
-					let number_of_expired_proposals = expired.len();
 					// Remove expired proposals
-					for expired_proposal in expired {
-						<Proposals<T>>::remove(expired_proposal.0);
-						Self::deposit_event(Event::Expired(expired_proposal.0));
-					}
+					let number_expired_proposals = expired.len() as u32;
+					Self::expire_proposals(expired);
 					<ActiveProposals<T>>::set(active);
-					// Weight is 1 reads + (n + 1) * writes
-					T::DbWeight::get().reads(1)
-						+ T::DbWeight::get().writes(number_of_expired_proposals as u64 + 1)
+					T::WeightInfo::on_initialize(proposal_len as u32)
+						+ T::WeightInfo::expire_proposals(number_expired_proposals)
 				}
-				_ => T::DbWeight::get().reads(1),
+				_ => T::WeightInfo::on_initialize_best_case(),
 			}
 		}
 	}
@@ -154,6 +159,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Propose a governance ensured extrinsic
 		/// Propose a governance ensured extrinsic.
 		///
 		/// ## Events
@@ -163,7 +169,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
@@ -171,28 +177,14 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
-			// Generate the next proposal id
-			let id = Self::get_next_id();
-			// Insert a new proposal
-			<Proposals<T>>::insert(
-				id,
-				Proposal {
-					call: call.encode(),
-					approved: vec![],
-				},
-			);
-			// Update the proposal counter
-			<ProposalCount<T>>::put(id);
-			// Add the proposal to the active proposals array
-			<ActiveProposals<T>>::append((
-				id,
-				T::TimeSource::now().as_secs() + <ExpiryTime<T>>::get(),
-			));
+			// Push proposal
+			let id = Self::push_proposal(call);
 			Self::deposit_event(Event::Proposed(id));
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
 
+		/// Sets a new set of governance members
 		/// **Can only be called via the Governance Origin**
 		///
 		/// Sets a new set of governance members. Note that this can be called with an empty vector
@@ -205,7 +197,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin): The caller is not the Governance Origin.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
 			accounts: Vec<T::AccountId>,
@@ -217,6 +209,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Approve a proposal by a given proposal id
 		/// Approve a Proposal.
 		///
 		/// ## Events
@@ -228,7 +221,7 @@ pub mod pallet {
 		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
 		/// - [ProposalNotFound](Error::ProposalNotFound): There is no Proposal with this ID.
 		/// - [AlreadyApproved](Error::AlreadyApproved): This Governance Member has already approved this Proposal.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
@@ -279,7 +272,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin): the caller is not the Governance Origin.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
@@ -300,6 +293,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
+			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;
 			Self {
 				members: Default::default(),
 				expiry_span: FIVE_DAYS_IN_SECONDS,
@@ -353,6 +347,31 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	/// Expire proposals
+	fn expire_proposals(expired: Vec<ActiveProposal>) {
+		for expired_proposal in expired {
+			<Proposals<T>>::remove(expired_proposal.0);
+			Self::deposit_event(Event::Expired(expired_proposal.0));
+		}
+	}
+	/// Push a proposal
+	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
+		// Generate the next proposal id
+		let id = Self::get_next_id();
+		// Insert a new proposal
+		<Proposals<T>>::insert(
+			id,
+			Proposal {
+				call: call.encode(),
+				approved: vec![],
+			},
+		);
+		// Update the proposal counter
+		<ProposalCount<T>>::put(id);
+		// Add the proposal to the active proposals array
+		<ActiveProposals<T>>::append((id, T::TimeSource::now().as_secs() + <ExpiryTime<T>>::get()));
+		id
+	}
 	/// Returns the next proposal id
 	fn get_next_id() -> ProposalId {
 		<ProposalCount<T>>::get().add(1)
@@ -366,11 +385,9 @@ impl<T: Config> Pallet<T> {
 				// Execute the extrinsic
 				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
 				// Check the result and emit events
-				if result.is_ok() {
-					Self::deposit_event(Event::Executed(id));
-				} else {
-					// Get the error during the execution and return it
-					return Err(result.unwrap_err().error);
+				match result {
+					Ok(_) => Self::deposit_event(Event::Executed(id)),
+					Err(e) => return Err(e.error),
 				}
 				// Remove the proposal from storage
 				<Proposals<T>>::remove(id);
@@ -386,10 +403,10 @@ impl<T: Config> Pallet<T> {
 				Ok(())
 			} else {
 				// Emit an event if the decode of a call failed
-				return Err(Error::<T>::DecodeOfCallFailed.into());
+				Err(Error::<T>::DecodeOfCallFailed.into())
 			}
 		} else {
-			return Err(Error::<T>::MajorityNotReached.into());
+			Err(Error::<T>::MajorityNotReached.into())
 		}
 	}
 	/// Checks if the majority for a proposal is reached
@@ -411,7 +428,7 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Decodes a encoded representation of a Call
 	/// Returns None if the encode of the extrinsic has failed
-	fn decode_call(call: &Vec<u8>) -> Option<<T as Config>::Call> {
-		Decode::decode(&mut &call[..]).ok()
+	fn decode_call(call: &[u8]) -> Option<<T as Config>::Call> {
+		Decode::decode(&mut &(*call)).ok()
 	}
 }

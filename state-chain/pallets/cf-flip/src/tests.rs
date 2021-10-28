@@ -175,6 +175,7 @@ fn stake_transfers() {
 		assert_eq!(<Flip as StakeTransfer>::stakeable_balance(&ALICE), 100);
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::stakeable_balance(&ALICE), 200);
+		assert_eq!(true, MockStakeHandler::has_stake_updated(&ALICE));
 		check_balance_integrity();
 
 		// Bond all of it
@@ -192,6 +193,7 @@ fn stake_transfers() {
 		Flip::set_validator_bond(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 100);
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
+		assert_eq!(true, MockStakeHandler::has_stake_updated(&ALICE));
 
 		check_balance_integrity();
 	});

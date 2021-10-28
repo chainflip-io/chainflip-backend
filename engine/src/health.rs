@@ -18,6 +18,7 @@ pub struct HealthMonitor {
 }
 
 impl HealthMonitor {
+    /// Instantiate a health monitoring server
     pub fn new(health_check_settings: &settings::HealthCheck, logger: &slog::Logger) -> Self {
         let bind_address = format!(
             "{}:{}",
@@ -30,11 +31,17 @@ impl HealthMonitor {
         }
     }
 
+    /// Start the health monitoring server
     pub async fn run(&self) -> Sender<()> {
         slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
             .await
-            .expect(format!("Could not bind TCP listener to {}", self.bind_address).as_str());
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Could not bind TCP listener to {}: {}",
+                    self.bind_address, e
+                )
+            });
 
         let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
@@ -93,7 +100,7 @@ impl HealthMonitor {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use crate::logging;
 
@@ -104,7 +111,7 @@ mod test {
         let health_check = settings::test_utils::new_test_settings()
             .unwrap()
             .health_check;
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
         let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
 

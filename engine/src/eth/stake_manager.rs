@@ -5,9 +5,10 @@ use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
-    eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
+    eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
+    state_chain::client::StateChainRpcApi,
 };
 
 use sp_runtime::AccountId32;
@@ -19,23 +20,24 @@ use web3::{
     Web3,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 
+use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
+
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_witness(
+pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient>,
+    state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");
 
-    slog::info!(logger, "Load Contract ABI");
-    let stake_manager = StakeManager::new(&settings)?;
+    let stake_manager = StakeManager::new(&settings).context(here!())?;
 
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
@@ -44,36 +46,34 @@ pub async fn start_stake_manager_witness(
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
-            match result_event.unwrap() {
+            let event = result_event.unwrap();
+            match event.event_enum {
                 StakeManagerEvent::Staked {
                     account_id,
                     amount,
                     staker: _,
                     return_addr,
-                    tx_hash,
                 } => {
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_staked(
                                 account_id,
                                 amount,
                                 return_addr.0,
-                                tx_hash,
+                                event.tx_hash,
                             ),
                         )
                         .await;
                 }
-                StakeManagerEvent::ClaimExecuted {
-                    account_id,
-                    amount,
-                    tx_hash,
-                } => {
-                    state_chain_client
+                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id, amount, tx_hash,
+                                account_id,
+                                amount,
+                                event.tx_hash,
                             ),
                         )
                         .await;
@@ -111,8 +111,6 @@ pub enum StakeManagerEvent {
         staker: ethabi::Address,
         /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
         return_addr: ethabi::Address,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
@@ -127,8 +125,6 @@ pub enum StakeManagerEvent {
         start_time: ethabi::Uint,
         /// The expiry time of the claim
         expiry_time: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `ClaimExecuted(nodeId, amount)` event
@@ -137,8 +133,6 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was claimed
         amount: u128,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `FlipSupplyUpdated(oldSupply, newTotalSupply, stateChainBlockNumber)` event
@@ -149,8 +143,6 @@ pub enum StakeManagerEvent {
         new_supply: ethabi::Uint,
         /// State Chain block number for the new total supply
         block_number: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
     /// `MinStakeChanged(oldMinStake, newMinStake)`
@@ -159,15 +151,10 @@ pub enum StakeManagerEvent {
         old_min_stake: ethabi::Uint,
         /// New minimum stake
         new_min_stake: ethabi::Uint,
-        /// Transaction hash that created the event
-        tx_hash: [u8; 32],
     },
 
-    /// `Refunded(amount)`
-    Refunded {
-        /// The amount of ETH refunded
-        amount: u128,
-    },
+    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
+    Shared(SharedEvent),
 }
 
 impl StakeManager {
@@ -187,7 +174,7 @@ impl StakeManager {
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
+    ) -> Result<impl Stream<Item = Result<Event<StakeManagerEvent>>>> {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
@@ -201,16 +188,17 @@ impl StakeManager {
 
     pub fn decode_log_closure(
         &self,
-    ) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
+    ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
-        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
+
+        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(
-            move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
+            move |signature: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -222,7 +210,6 @@ impl StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                let tx_hash = tx_hash.to_fixed_bytes();
                 if signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
@@ -231,7 +218,6 @@ impl StakeManager {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                         staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == claim_registered.signature {
@@ -243,7 +229,6 @@ impl StakeManager {
                         staker: utils::decode_log_param(&log, "staker")?,
                         start_time: utils::decode_log_param(&log, "startTime")?,
                         expiry_time: utils::decode_log_param(&log, "expiryTime")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == claim_executed.signature {
@@ -252,7 +237,6 @@ impl StakeManager {
                     let event = StakeManagerEvent::ClaimExecuted {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == flip_supply_updated.signature {
@@ -261,7 +245,6 @@ impl StakeManager {
                         old_supply: utils::decode_log_param(&log, "oldSupply")?,
                         new_supply: utils::decode_log_param(&log, "newSupply")?,
                         block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                        tx_hash,
                     };
                     Ok(event)
                 } else if signature == min_stake_changed.signature {
@@ -269,19 +252,12 @@ impl StakeManager {
                     let event = StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
-                        tx_hash,
-                    };
-                    Ok(event)
-                } else if signature == refunded.signature {
-                    let log = refunded.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::Refunded {
-                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     };
                     Ok(event)
                 } else {
-                    Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
-                        signature,
-                    )))
+                    Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
+                        signature, raw_log,
+                    )?))
                 }
             },
         )
@@ -299,7 +275,7 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(StakeManager::new(&settings).is_ok());
+        assert_ok!(StakeManager::new(&settings));
     }
 
     #[test]
@@ -312,12 +288,8 @@ mod tests {
         let staked_event_signature =
             H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa")
-                .unwrap();
         match decode_log(
             staked_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![
                     staked_event_signature,
@@ -331,7 +303,6 @@ mod tests {
                 amount,
                 staker,
                 return_addr,
-                tx_hash,
             } => {
                 let expected_account_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
@@ -347,7 +318,6 @@ mod tests {
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
                         .unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
@@ -363,12 +333,8 @@ mod tests {
         let claimed_register_event_signature =
             H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185")
-                .unwrap();
         match decode_log(
             claimed_register_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![
                     claimed_register_event_signature,
@@ -383,7 +349,6 @@ mod tests {
                 staker,
                 start_time,
                 expiry_time,
-                tx_hash,
             } => {
                 assert_eq!(
                     account_id,
@@ -407,7 +372,6 @@ mod tests {
                     expiry_time,
                     web3::types::U256::from_dec_str("1624716290").unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes())
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
         }
@@ -423,12 +387,8 @@ mod tests {
         let claimed_executed_event_signature =
             H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605")
-                .unwrap();
         match decode_log(
             claimed_executed_event_signature,
-            transaction_hash,
             RawLog {
                 topics: vec![
                     claimed_executed_event_signature,
@@ -445,17 +405,12 @@ mod tests {
         )
         .unwrap()
         {
-            StakeManagerEvent::ClaimExecuted {
-                account_id,
-                amount,
-                tx_hash,
-            } => {
+            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let expected_node_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap();
                 assert_eq!(account_id, expected_node_id);
                 assert_eq!(amount, 13333333333333334032384);
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
@@ -471,12 +426,8 @@ mod tests {
         let flip_supply_updated_event_signature =
             H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f")
-                .unwrap();
         match decode_log(
             flip_supply_updated_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![flip_supply_updated_event_signature],
                 data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
@@ -486,7 +437,6 @@ mod tests {
                 old_supply,
                 new_supply,
                 block_number,
-                tx_hash,
             } => {
                 assert_eq!(
                     old_supply,
@@ -497,7 +447,6 @@ mod tests {
                     U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
                 assert_eq!(block_number, U256::from_dec_str("100").unwrap());
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
         }
@@ -513,12 +462,8 @@ mod tests {
         let min_stake_changed_event_signature =
             H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0x7224ca5aae97dc9f9b25fd0ba337fd936709d277cf8600786c4168e1d86d7c1f")
-                .unwrap();
         match decode_log(
             min_stake_changed_event_signature,
-            transaction_hash,
             RawLog {
                 topics : vec![min_stake_changed_event_signature],
                 data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
@@ -527,7 +472,6 @@ mod tests {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
-                tx_hash,
             } => {
                 assert_eq!(
                     old_min_stake,
@@ -537,7 +481,6 @@ mod tests {
                     new_min_stake,
                     U256::from_dec_str("13333333333333334032384").unwrap()
                 );
-                assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
         }
@@ -553,13 +496,9 @@ mod tests {
         let refunded_event_signature =
             H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
                 .unwrap();
-        let transaction_hash =
-            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
-                .unwrap();
 
         match decode_log(
             refunded_event_signature,
-            transaction_hash,
             RawLog {
                 topics: vec![refunded_event_signature],
                 data: hex::decode(
@@ -570,7 +509,7 @@ mod tests {
         )
         .unwrap()
         {
-            StakeManagerEvent::Refunded { amount } => {
+            StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
                 assert_eq!(11126819398980, amount);
             }
             _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),

@@ -1,16 +1,20 @@
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
+    multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
-    settings::Settings,
-    signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
+    settings::{CommandLineOptions, Settings},
     state_chain,
 };
 use slog::{o, Drain};
-use substrate_subxt::Signer;
+use structopt::StructOpt;
 
+#[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
+    let settings =
+        Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
+
     let drain = slog_json::Json::new(std::io::stdout())
         .add_default_keys()
         .build()
@@ -18,8 +22,6 @@ async fn main() {
     let drain = slog_async::Async::new(drain).build().fuse();
     let root_logger = slog::Logger::root(drain, o!());
     slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
-
-    let settings = Settings::new().expect("Failed to initialise settings");
 
     HealthMonitor::new(&settings.health_check, &root_logger)
         .run()
@@ -29,7 +31,8 @@ async fn main() {
         state_chain::client::connect_to_state_chain(&settings)
             .await
             .unwrap();
-    let account_id = AccountId(*state_chain_client.signer.account_id().as_ref()); /*TODO: Use the correct sc types*/
+
+    let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
@@ -56,7 +59,7 @@ async fn main() {
 
     tokio::join!(
         // Start signing components
-        signing::start(
+        multisig::start_client(
             account_id.clone(),
             db,
             multisig_instruction_receiver,
@@ -68,10 +71,12 @@ async fn main() {
         ),
         p2p::conductor::start(
             p2p_rpc::connect(
-                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
-                    "Should be valid ws endpoint: {}",
-                    settings.state_chain.ws_endpoint
-                )),
+                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).unwrap_or_else(
+                    |e| panic!(
+                        "Should be valid ws endpoint: {}: {}",
+                        settings.state_chain.ws_endpoint, e
+                    )
+                ),
                 account_id
             )
             .await
@@ -79,11 +84,10 @@ async fn main() {
             p2p_message_sender,
             p2p_message_command_receiver,
             p2p_shutdown_rx,
-            &root_logger.clone()
+            &root_logger
         ),
         // Start state chain components
         state_chain::sc_observer::start(
-            &settings,
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
