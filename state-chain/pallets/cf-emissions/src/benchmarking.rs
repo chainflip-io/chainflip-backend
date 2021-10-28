@@ -37,15 +37,12 @@ const MINT_INTERVAL: u32 = 100;
 use crate::Pallet as Emissions;
 
 benchmarks! {
-	// Works
 	update_backup_validator_emission_inflation {
 		let b in 1 .. 1_000;
 	}: _(RawOrigin::Root, b.into())
-	// Works
 	update_validator_emission_inflation {
 		let b in 1 .. 1_000;
 	}: _(RawOrigin::Root, b.into())
-	// Works
 	zero_reward {
 		let x in 1 .. 1_000;
 		let balance: T::FlipBalance = T::FlipBalance::from(0 as u32);
@@ -57,13 +54,11 @@ benchmarks! {
 			}
 		}
 	}
-	// Works
 	no_rewards_minted {
 
 	} : {
 		Emissions::<T>::on_initialize((5 as u32).into());
 	}
-	// Works
 	rewards_minted {
 		let x in 1 .. 1_000;
 	}: {
