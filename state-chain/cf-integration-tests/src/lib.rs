@@ -616,6 +616,9 @@ mod tests {
 		}
 	}
 
+	// The number of blocks we expect an auction should last
+	const AUCTION_BLOCKS: BlockNumber = 2;
+
 	mod epoch {
 		use super::*;
 		use cf_traits::{AuctionPhase, AuctionResult, ChainflipAccountState, EpochInfo};
@@ -692,8 +695,6 @@ mod tests {
 		}
 	}
 
-	const AUCTION_BLOCKS: BlockNumber = 2;
-
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
 		use cf_traits::{
@@ -704,9 +705,12 @@ mod tests {
 		#[test]
 		// We have a set of backup validators who receive rewards
 		// A network is created where we have a validating set with a set of backup validators
-		// The validating set would receive emissions and so would the backup validators
+		// The backup validators would receive emissions on each heartbeat
 		fn backup_rewards() {
+			// We want to have at least one heartbeat within our reduced epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			// Reduce our validating set and hence the number of nodes we need to have a backup
+			// set
 			const MAX_VALIDATORS: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
@@ -723,13 +727,14 @@ mod tests {
 						testnet.add(validator.clone());
 					}
 
+					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
 						testnet.contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
-					// Start an auction
+					// Start an auction and confirm
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(
 						Auction::current_auction_index(),
@@ -743,6 +748,7 @@ mod tests {
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
+
 					current_validators.sort();
 					nodes.sort();
 
@@ -760,6 +766,7 @@ mod tests {
 
 					current_backup_validators.sort();
 					genesis_validators.sort();
+
 					assert_eq!(
 						genesis_validators, current_backup_validators,
 						"we should have new backup validators"
@@ -769,7 +776,7 @@ mod tests {
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We won't calculate the exact emissions but they should be greater than their
-					// original stake
+					// initial stake
 					for backup_validator in &current_backup_validators {
 						assert!(INITIAL_STAKE < Flip::stakeable_balance(backup_validator));
 					}
