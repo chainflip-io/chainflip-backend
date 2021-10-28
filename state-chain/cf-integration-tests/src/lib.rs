@@ -328,6 +328,7 @@ mod tests {
 		winners: Vec<AccountId>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
+		max_validators: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -337,6 +338,7 @@ mod tests {
 				winners: vec![],
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
+				max_validators: MAX_VALIDATORS,
 			}
 		}
 	}
@@ -359,6 +361,11 @@ mod tests {
 
 		fn blocks_per_epoch(mut self, blocks_per_epoch: BlockNumber) -> Self {
 			self.blocks_per_epoch = blocks_per_epoch;
+			self
+		}
+
+		fn max_validators(mut self, max_validators: u32) -> Self {
+			self.max_validators = max_validators;
 			self
 		}
 
@@ -395,7 +402,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_auction::GenesisConfig::<Runtime> {
-				validator_size_range: (1, MAX_VALIDATORS),
+				validator_size_range: (1, self.max_validators),
 				winners: self.winners.clone(),
 				minimum_active_bid: TOTAL_ISSUANCE / 100,
 			}
