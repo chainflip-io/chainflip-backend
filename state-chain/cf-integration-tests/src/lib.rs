@@ -229,7 +229,7 @@ mod tests {
 		#[derive(Default)]
 		pub struct Network {
 			engines: HashMap<NodeId, Engine>,
-			pub contract: StakingContract,
+			pub stake_manager_contract: StakingContract,
 			last_event: usize,
 		}
 
