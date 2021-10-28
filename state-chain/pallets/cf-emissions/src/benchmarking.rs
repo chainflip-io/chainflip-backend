@@ -59,6 +59,7 @@ benchmarks! {
 	} : {
 		Emissions::<T>::on_initialize((5 as u32).into());
 	}
+	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
 		let x in 1 .. 1_000;
 	}: {
