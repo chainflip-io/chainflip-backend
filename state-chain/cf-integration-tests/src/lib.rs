@@ -1,6 +1,7 @@
 #![feature(assert_matches)]
 #[cfg(test)]
-#[macro_use] extern crate assert_matches;
+#[macro_use]
+extern crate assert_matches;
 
 #[cfg(test)]
 mod tests {
@@ -96,9 +97,7 @@ mod tests {
 
 		impl Engine {
 			fn new(node_id: NodeId) -> Self {
-				Engine {
-					node_id,
-				}
+				Engine { node_id }
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -252,8 +251,7 @@ mod tests {
 
 			pub fn add(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
-				self.engines
-					.insert(node_id.clone(), Engine { node_id });
+				self.engines.insert(node_id.clone(), Engine { node_id });
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
