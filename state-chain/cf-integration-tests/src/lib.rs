@@ -93,11 +93,15 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
+			pub active: bool,
 		}
 
 		impl Engine {
 			fn new(node_id: NodeId) -> Self {
-				Engine { node_id }
+				Engine {
+					node_id,
+					active: true,
+				}
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -106,7 +110,7 @@ mod tests {
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state() == ChainflipAccountState::Validator {
+				if self.state() == ChainflipAccountState::Validator && self.active {
 					match event {
 						ContractEvent::Staked {
 							node_id: validator_id,
@@ -130,7 +134,7 @@ mod tests {
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&self, events: &[Event]) {
-				if self.state() == ChainflipAccountState::Validator {
+				if self.state() == ChainflipAccountState::Validator && self.active {
 					// Handle events
 					on_events!(
 						events,
@@ -197,12 +201,14 @@ mod tests {
 
 			// On block handler
 			fn on_block(&self, block_number: BlockNumber) {
-				// Heartbeat -> Send transaction to state chain twice an interval
-				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
-					// Online pallet, ignore error
-					let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
-						self.node_id.clone(),
-					));
+				if self.active {
+					// Heartbeat -> Send transaction to state chain twice an interval
+					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+						// Online pallet, ignore error
+						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+							self.node_id.clone(),
+						));
+					}
 				}
 			}
 		}
@@ -249,9 +255,19 @@ mod tests {
 				(network, nodes)
 			}
 
+			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
+				self.engines.get_mut(node_id).expect("valid node_id").active = active;
+			}
+
 			pub fn add(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
-				self.engines.insert(node_id.clone(), Engine { node_id });
+				self.engines.insert(
+					node_id.clone(),
+					Engine {
+						node_id,
+						active: true,
+					},
+				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
