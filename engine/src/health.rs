@@ -1,3 +1,8 @@
+//! Health monitor for the CFE
+//! allowing external services to query, ensuring it's online
+//! Returns a HTTP 200 response to any request on {hostname}:{port}/health
+//! Method returns a Sender, allowing graceful termination of the infinite loop
+
 use slog::o;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -8,10 +13,7 @@ use tokio::{
 
 use crate::{logging::COMPONENT_KEY, settings};
 
-/// Health monitor for the CFE
-/// allowing external services to query, ensuring it's online
-/// Returns a HTTP 200 response to any request on {hostname}:{port}/health
-/// Method returns a Sender, allowing graceful termination of the infinite loop
+/// Configuration holder for the health server
 pub struct HealthMonitor {
     bind_address: String,
     logger: slog::Logger,
