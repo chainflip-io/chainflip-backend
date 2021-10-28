@@ -250,7 +250,7 @@ mod tests {
 				(network, nodes)
 			}
 
-			pub fn add(&mut self, node_id: NodeId, state: ChainflipAccountState) {
+			pub fn add_node(&mut self, node_id: NodeId, state: ChainflipAccountState) {
 				setup_account(&node_id);
 				self.engines
 					.insert(node_id.clone(), Engine { node_id, state });
