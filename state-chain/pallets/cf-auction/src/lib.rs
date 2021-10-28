@@ -218,6 +218,14 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::set_active_range(self.validator_size_range).expect("valid range");
+
+			for validator_id in &self.winners {
+				T::ChainflipAccount::update_state(
+					&(validator_id.clone().into()),
+					ChainflipAccountState::Validator,
+				);
+			}
+
 			LastAuctionResult::<T>::put(AuctionResult {
 				winners: self.winners.clone(),
 				minimum_active_bid: self.minimum_active_bid,
