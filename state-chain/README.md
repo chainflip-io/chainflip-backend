@@ -44,8 +44,8 @@ process. After the project has been built, there are other ways to launch the no
 For local development you need to set the following env vars:
 
 ```bash
-export STAKE_MANAGER_ADDRESS="x0..."
-export KEY_MANAGER_ADDRESS="x0..."
+export STAKE_MANAGER_ADDRESS="0x..."
+export KEY_MANAGER_ADDRESS="0x..."
 export ETHEREUM_CHAIN_ID=4
 ```
 
