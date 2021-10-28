@@ -37,6 +37,7 @@ const MINT_INTERVAL: u32 = 100;
 use crate::Pallet as Emissions;
 
 benchmarks! {
+	// Benchmark for the backup validator extrinsic
 	update_backup_validator_emission_inflation {
 		let b in 1 .. 1_000;
 	}: _(RawOrigin::Root, b.into())
