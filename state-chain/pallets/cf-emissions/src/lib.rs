@@ -107,11 +107,11 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Emissions have been distributed. [block_number, amount_minted]
+		/// Emissions have been distributed. \[block_number, amount_minted\]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
-		/// Validator inflation emission has been updated [new]
+		/// Validator inflation emission has been updated \[new\]
 		ValidatorInflationEmissionsUpdated(BasisPoints),
-		/// Backup Validator inflation emission has been updated [new]
+		/// Backup Validator inflation emission has been updated \[new\]
 		BackupValidatorInflationEmissionsUpdated(BasisPoints),
 	}
 
@@ -149,7 +149,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - None
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
 		pub(super) fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
@@ -169,7 +169,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - None
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
 		pub(super) fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
