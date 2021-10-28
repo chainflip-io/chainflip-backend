@@ -691,4 +691,89 @@ mod tests {
 				});
 		}
 	}
+
+	const AUCTION_BLOCKS: BlockNumber = 2;
+
+	mod validators {
+		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
+		use cf_traits::{
+			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, StakeTransfer,
+		};
+		use state_chain_runtime::{Auction, Flip, HeartbeatBlockInterval, Validator};
+
+		#[test]
+		// We have a set of backup validators who receive rewards
+		// A network is created where we have a validating set with a set of backup validators
+		// The validating set would receive emissions and so would the backup validators
+		fn backup_rewards() {
+			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const MAX_VALIDATORS: u32 = 10;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
+					// The result will be our newly created nodes will be validators and the
+					// genesis validators will become backup validators
+					let (mut testnet, mut nodes) = network::Network::create(MAX_VALIDATORS as u8);
+					// Add the genesis nodes to the test network
+					let mut genesis_validators = Validator::current_validators();
+					for validator in &genesis_validators {
+						testnet.add(validator.clone());
+					}
+
+					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					// Stake these nodes so that they are included in the next epoch
+					for node in &nodes {
+						testnet.contract.stake(node.clone(), INITIAL_STAKE);
+					}
+
+					// Start an auction
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// Complete auction over AUCTION_BLOCKS
+					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+
+					// assert list of validators as being the new nodes
+					let mut current_validators: Vec<NodeId> = Validator::current_validators();
+					current_validators.sort();
+					nodes.sort();
+
+					assert_eq!(
+						nodes, current_validators,
+						"our new nodes should be the new validators"
+					);
+
+					// assert list of backup validators as being the genesis validators
+					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
+						.iter()
+						.take(Auction::backup_group_size() as usize)
+						.map(|(validator_id, _)| validator_id.clone())
+						.collect();
+
+					current_backup_validators.sort();
+					genesis_validators.sort();
+					assert_eq!(
+						genesis_validators, current_backup_validators,
+						"we should have new backup validators"
+					);
+
+					// Move forward a heartbeat, emissions should be shared to backup validators
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					// We won't calculate the exact emissions but they should be greater than their
+					// original stake
+					for backup_validator in &current_backup_validators {
+						assert!(INITIAL_STAKE < Flip::stakeable_balance(backup_validator));
+					}
+				});
+		}
+	}
 }
