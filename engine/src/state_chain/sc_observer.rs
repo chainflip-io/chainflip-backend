@@ -333,7 +333,7 @@ mod tests {
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
     async fn run_the_sc_observer() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
 
         let (state_chain_client, block_stream) =
             crate::state_chain::client::connect_to_state_chain(&settings)

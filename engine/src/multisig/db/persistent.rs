@@ -87,7 +87,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        logging::test_utils::create_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
+        logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
     };
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
@@ -102,7 +102,7 @@ mod tests {
         assert_ok!(bincode::deserialize::<KeygenResultInfo>(
             bashful_secret_bin.as_ref()
         ));
-        let logger = create_test_logger();
+        let logger = new_test_logger();
         // just a random key
         let key: [u8; 33] = [
             3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132,
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn can_update_key() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
         let key_id = KeyId(vec![0; 33]);
         let db_path = Path::new("db2");
         {
