@@ -15,7 +15,7 @@ pub mod utils {
     const LOCATION_INDENT: &str = "    \x1b[0;34m-->\x1b[0m";
 
     use slog::{o, Drain, Fuse, Key, Level, OwnedKVList, Record, Serializer, KV};
-
+    use std::sync::{Arc, Mutex};
     use std::{fmt, result};
 
     fn print_readable_log(record: &Record) {
@@ -111,16 +111,86 @@ pub mod utils {
     /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn create_json_logger() -> slog::Logger {
-        let drain = slog_json::Json::new(std::io::stdout())
+        slog::Logger::root(
+            slog_async::Async::new(create_json_drain()).build().fuse(),
+            o!(),
+        )
+    }
+
+    /// Creates an async json logger with the 'tag' added as a key (not a key by default)
+    /// Also filters the log using the tags
+    pub fn create_json_logger_with_tag_filter(
+        tag_whitelist: Arc<Mutex<Vec<String>>>,
+        tag_blacklist: Arc<Mutex<Vec<String>>>,
+    ) -> slog::Logger {
+        let drain = RuntimeTagFilter {
+            drain: create_json_drain(),
+            whitelist: tag_whitelist.clone(),
+            blacklist: tag_blacklist.clone(),
+        }
+        .fuse();
+        slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
+    }
+
+    /// Creates a custom json drain that includes the tag as a key
+    fn create_json_drain() -> Fuse<slog_json::Json<std::io::Stdout>> {
+        slog_json::Json::new(std::io::stdout())
             .add_default_keys()
             .add_key_value(
-                slog::o!("tag" => slog::PushFnValue(move |rinfo : &slog::Record, ser| {
-                    ser.emit(rinfo.tag())
+                slog::o!("tag" => slog::PushFnValue(move |rec : &slog::Record, ser| {
+                    ser.emit(rec.tag())
                 })),
             )
             .build()
-            .fuse();
+            .fuse()
+    }
 
+    pub struct RuntimeTagFilter<D> {
+        pub drain: D,
+        pub whitelist: Arc<Mutex<Vec<String>>>,
+        pub blacklist: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl<D> Drain for RuntimeTagFilter<D>
+    where
+        D: Drain,
+    {
+        type Ok = Option<D::Ok>;
+        type Err = Option<D::Err>;
+
+        fn log(
+            &self,
+            record: &slog::Record,
+            values: &slog::OwnedKVList,
+        ) -> result::Result<Self::Ok, Self::Err> {
+            let whitelist = self.whitelist.lock().unwrap();
+            let blacklist = self.blacklist.lock().unwrap();
+
+            if !blacklist.contains(&record.tag().to_owned()) {
+                if whitelist.contains(&record.tag().to_owned()) || whitelist.is_empty() {
+                    self.drain.log(record, values).map(Some).map_err(Some)
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    /// Prints an easy to read log and the list of key/values.
+    /// Also filters the log via the tag.
+    /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
+    pub fn create_cli_logger_with_tag_filter(
+        tag_whitelist: Arc<Mutex<Vec<String>>>,
+        tag_blacklist: Arc<Mutex<Vec<String>>>,
+    ) -> slog::Logger {
+        let drain = RuntimeTagFilter {
+            drain: PrintlnDrainVerbose,
+            whitelist: tag_whitelist,
+            blacklist: tag_blacklist,
+        }
+        .fuse();
         slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
     }
 }
@@ -188,6 +258,32 @@ pub mod test_utils {
     }
 
     /// Prints an easy to read log and the list of key/values.
+    /// Also filters the logs via tags before displaying the log and collecting them in the cache
+    /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
+    pub fn create_test_logger_with_tag_cache_and_tag_filter(
+        tag_whitelist: Arc<Mutex<Vec<String>>>,
+        tag_blacklist: Arc<Mutex<Vec<String>>>,
+    ) -> (slog::Logger, TagCache) {
+        let tc = TagCache::new();
+        let drain1 = RuntimeTagFilter {
+            drain: tc.clone(),
+            whitelist: tag_whitelist.clone(),
+            blacklist: tag_blacklist.clone(),
+        }
+        .fuse();
+        let drain2 = RuntimeTagFilter {
+            drain: PrintlnDrainVerbose,
+            whitelist: tag_whitelist,
+            blacklist: tag_blacklist,
+        }
+        .fuse();
+        (
+            slog::Logger::root(slog::Duplicate::new(drain1, drain2).fuse(), o!()),
+            tc,
+        )
+    }
+
+    /// Prints an easy to read log and the list of key/values.
     pub fn create_test_logger() -> slog::Logger {
         create_cli_logger_verbose()
     }
@@ -215,4 +311,39 @@ fn test_logging_tags() {
     // Check that clearing the cache works
     tag_cache.clear();
     assert!(!tag_cache.contains_tag("E1234"));
+}
+
+#[test]
+fn test_logging_tag_filter() {
+    use super::logging::test_utils::*;
+    use std::sync::{Arc, Mutex};
+
+    // Create a logger and whitelist/blacklist
+    let whitelist = Arc::new(Mutex::new(vec!["included".to_owned()]));
+    let blacklist = Arc::new(Mutex::new(vec!["excluded".to_owned()]));
+    let (logger, mut tag_cache) =
+        create_test_logger_with_tag_cache_and_tag_filter(whitelist.clone(), blacklist);
+
+    // Print a bunch of stuff with tags
+    slog::error!(logger, #"included", "on the whitelist");
+    slog::error!(logger, #"not_included", "not on the whitelist");
+    slog::info!(logger, "No tag on this");
+    slog::warn!(logger, #"excluded", "on the blacklist");
+
+    // Check that it was filtered correctly
+    assert!(tag_cache.contains_tag("included"));
+    assert!(!tag_cache.contains_tag("not_included"));
+    assert!(!tag_cache.contains_tag("excluded"));
+
+    // Clear the whitelist and tag cache
+    {
+        whitelist.lock().unwrap().clear();
+        tag_cache.clear();
+    }
+
+    // Test that an empty whitelist lets all through except blacklist
+    slog::error!(logger, #"not_included", "no more whitelist");
+    slog::warn!(logger, #"excluded", "on the blacklist");
+    assert!(tag_cache.contains_tag("not_included"));
+    assert!(!tag_cache.contains_tag("excluded"));
 }

@@ -1,12 +1,14 @@
+use std::sync::{Arc, Mutex};
+
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
+    logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
-use slog::{o, Drain};
 use structopt::StructOpt;
 use substrate_subxt::Signer;
 
@@ -16,13 +18,15 @@ async fn main() {
     let settings =
         Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
 
-    let drain = slog_json::Json::new(std::io::stdout())
-        .add_default_keys()
-        .build()
-        .fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    let root_logger = slog::Logger::root(drain, o!());
-    slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
+    let root_logger = match settings.log {
+        Some(ref log) => logging::utils::create_json_logger_with_tag_filter(
+            Arc::new(Mutex::new(log.whitelist.clone())),
+            Arc::new(Mutex::new(log.blacklist.clone())),
+        ),
+        None => logging::utils::create_json_logger(),
+    };
+
+    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
     HealthMonitor::new(&settings.health_check, &root_logger)
         .run()
