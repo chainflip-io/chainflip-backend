@@ -1,4 +1,7 @@
 #![feature(assert_matches)]
+#[macro_use]
+extern crate assert_matches;
+
 #[cfg(test)]
 mod tests {
 	use frame_support::assert_ok;
@@ -13,12 +16,12 @@ mod tests {
 	use state_chain_runtime::opaque::SessionKeys;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 	use state_chain_runtime::{
-		Auction, Emissions, Event, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
-		Timestamp, Validator, Vaults, Witnesser,
+		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
+		Timestamp, Validator, Vaults,
 	};
 
 	use cf_chains::ChainId;
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
 	use sp_runtime::AccountId32;
 
 	type NodeId = AccountId32;
@@ -38,12 +41,9 @@ mod tests {
 		use cf_traits::ChainflipAccountState;
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-		use pallet_cf_vaults::CeremonyId;
 		use state_chain_runtime::HeartbeatBlockInterval;
-		use state_chain_runtime::{Event, Origin, WitnesserApi};
+		use state_chain_runtime::{Event, Origin};
 		use std::collections::HashMap;
-		use std::io::Chain;
-
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		const TX_HASH: EthTransactionHash = [211u8; 32];
 
@@ -121,7 +121,8 @@ mod tests {
 								*amount,
 								ETH_ZERO_ADDRESS,
 								TX_HASH,
-							);
+							)
+							.expect("should be able to witness stake for node");
 						}
 					}
 				}
@@ -154,13 +155,13 @@ mod tests {
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
 									signature,
-								);
+								).expect("should be able to ethereum signature for node");
 							}
 						},
 						Event::pallet_cf_threshold_signature_Instance0(
 							// A threshold has been met for this signature
 							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
-								ceremony_id)) => {
+								_ceremony_id)) => {
 								// Witness a vault rotation?
 								let ethereum_block_number: u64 = 100;
 								let mut new_public_key = vec![0u8; 33];
@@ -172,7 +173,7 @@ mod tests {
 									new_public_key,
 									ethereum_block_number,
 									tx_hash,
-								);
+								).expect("should be able to vault key rotation for node");
 						},
 						Event::pallet_cf_vaults(
 							// A keygen request has been made
@@ -186,23 +187,10 @@ mod tests {
 									*ceremony_id,
 									ChainId::Ethereum,
 									public_key
+								).expect(&format!(
+									"should be able to witness keygen request from node: {:?}",
+									self.node_id)
 								);
-						},
-						Event::pallet_cf_vaults(
-							pallet_cf_vaults::Event::VaultRotationCompleted(chain_id)) => {
-
-						},
-						Event::pallet_cf_vaults(
-							pallet_cf_vaults::Event::KeygenAborted(ref chain_ids)) => {
-
-						},
-						Event::pallet_cf_vaults(
-							pallet_cf_vaults::Event::VaultsRotated) => {
-
-						},
-						Event::pallet_cf_vaults(
-							pallet_cf_vaults::Event::UnexpectedPubkeyWitnessed(chain_id, key)) => {
-
 						}
 					);
 				}
@@ -212,8 +200,10 @@ mod tests {
 			fn on_block(&self, block_number: BlockNumber) {
 				// Heartbeat -> Send transaction to state chain twice an interval
 				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
-					// Online pallet
-					Online::heartbeat(state_chain_runtime::Origin::signed(self.node_id.clone()));
+					// Online pallet, ignore error
+					let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+						self.node_id.clone(),
+					));
 				}
 			}
 		}
@@ -307,7 +297,7 @@ mod tests {
 
 					// State chain events
 					for (_, engine) in &self.engines {
-						engine.handle_state_chain_events(System::block_number(), &events);
+						engine.handle_state_chain_events(&events);
 					}
 
 					// A completed block notification
@@ -330,14 +320,6 @@ mod tests {
 		TPublic::Pair::from_string(&format!("//{}", seed), None)
 			.expect("static values are valid; qed")
 			.public()
-	}
-
-	fn reverse_events<T: frame_system::Config>() -> Vec<T::Event> {
-		frame_system::Pallet::<T>::events()
-			.into_iter()
-			.rev()
-			.map(|e| e.event)
-			.collect::<Vec<_>>()
 	}
 
 	pub struct ExtBuilder {
@@ -541,13 +523,12 @@ mod tests {
 					0,
 					"we should have had no auction yet"
 				);
-				assert_matches!(
-					Auction::auction_result(),
-					Some(AuctionResult {
-						minimum_active_bid: GENESIS_BALANCE,
-						winners: accounts
-					})
-				);
+				let AuctionResult {
+					winners,
+					minimum_active_bid,
+				} = Auction::auction_result().expect("an auction result");
+				assert_eq!(minimum_active_bid, GENESIS_BALANCE);
+				assert_eq!(winners, accounts);
 
 				assert_eq!(
 					Session::validators(),
@@ -631,13 +612,8 @@ mod tests {
 
 	mod epoch {
 		use super::*;
-		use cf_traits::{
-			AuctionPhase, AuctionResult, Auctioneer, ChainflipAccountState, EpochInfo,
-			StakeTransfer,
-		};
-		use frame_support::traits::HandleLifetime;
-		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-		use state_chain_runtime::{Auction, Flip, Origin, Validator, WitnesserApi};
+		use cf_traits::{AuctionPhase, AuctionResult, ChainflipAccountState, EpochInfo};
+		use state_chain_runtime::{Auction, Validator};
 
 		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
@@ -671,21 +647,26 @@ mod tests {
 						1,
 						"this should be the first auction"
 					);
+
 					let genesis_validators: Vec<NodeId> = Validator::current_validators();
+
+					// We expect the following to become the next set of validators
+					let mut expected_validators = genesis_validators;
+					expected_validators.append(&mut nodes);
+					expected_validators.sort();
 
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
-					assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::ValidatorsSelected(candidates, _)
-						// TODO compare exactly
-						if candidates.len() == genesis_validators.len() + nodes.len()
+					assert_matches!(Auction::current_phase(), AuctionPhase::ValidatorsSelected(mut candidates, _) => {
+							candidates.sort();
+							assert_eq!(candidates, expected_validators);
+						}
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
-					// Run things another 10 blocks
-					testnet.move_forward_blocks(10);
+					// Run things the amount needed for an auction
+					testnet.move_forward_blocks(2);
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
@@ -695,9 +676,6 @@ mod tests {
 						minimum_active_bid,
 					} = Auction::last_auction_result().expect("last auction result");
 					assert_eq!(minimum_active_bid, genesis::GENESIS_BALANCE);
-					let mut expected_validators = genesis_validators;
-					expected_validators.append(&mut nodes);
-					expected_validators.sort();
 					winners.sort();
 					assert_eq!(winners, expected_validators);
 					let mut new_validators = Validator::current_validators();
