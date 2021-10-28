@@ -1,6 +1,6 @@
 #![feature(assert_matches)]
-#[macro_use]
-extern crate assert_matches;
+#[cfg(test)]
+#[macro_use] extern crate assert_matches;
 
 #[cfg(test)]
 mod tests {
@@ -38,7 +38,7 @@ mod tests {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::SchnorrVerificationComponents;
-		use cf_traits::ChainflipAccountState;
+		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::HeartbeatBlockInterval;
