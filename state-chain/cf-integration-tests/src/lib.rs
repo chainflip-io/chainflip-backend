@@ -279,6 +279,7 @@ mod tests {
 						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
 					);
 					Session::on_initialize(System::block_number());
+					Online::on_initialize(System::block_number());
 					Flip::on_initialize(System::block_number());
 					Staking::on_initialize(System::block_number());
 					Auction::on_initialize(System::block_number());
