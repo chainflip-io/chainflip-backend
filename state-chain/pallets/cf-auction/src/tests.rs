@@ -8,6 +8,14 @@ mod tests {
 	fn we_have_a_set_of_winners_at_genesis() {
 		new_test_ext().execute_with(|| {
 			let (winners, minimum_active_bid) = expected_validating_set();
+
+			for winner in &winners {
+				assert_eq!(
+					MockChainflipAccount::get(winner).state,
+					ChainflipAccountState::Validator
+				);
+			}
+
 			assert_eq!(
 				AuctionPallet::auction_result(),
 				Some(AuctionResult {
