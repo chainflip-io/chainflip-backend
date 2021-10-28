@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::TryStreamExt;
 
 use tokio_stream::{Stream, StreamExt};
@@ -79,7 +79,8 @@ pub async fn new_eth_event_stream<
                 .address(vec![deployed_address])
                 .build(),
         )
-        .await?;
+        .await
+        .context("Error subscribing to ETH logs")?;
     let from_block = U64::from(from_block);
     let current_block = web3.eth().block_number().await?;
 
@@ -95,7 +96,8 @@ pub async fn new_eth_event_stream<
                         .address(vec![deployed_address])
                         .build(),
                 )
-                .await?,
+                .await
+                .context("Failed to fetch past ETH logs")?,
             current_block + 1,
         )
     } else {
