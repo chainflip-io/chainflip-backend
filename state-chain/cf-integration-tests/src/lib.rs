@@ -309,10 +309,11 @@ mod tests {
 		}
 	}
 
-	pub const ALICE: [u8; 32] = [0xa1u8; 32];
-	pub const BOB: [u8; 32] = [0xb0u8; 32];
-	pub const CHARLIE: [u8; 32] = [0xc4u8; 32];
-	pub const ERIN: [u8; 32] = [0xe3u8; 32];
+	// TODO - remove collision of account numbers
+	pub const ALICE: [u8; 32] = [0xff; 32];
+	pub const BOB: [u8; 32] = [0xfe; 32];
+	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
 
