@@ -6,7 +6,6 @@ pub mod settings;
 pub mod state_chain;
 #[macro_use]
 mod testing;
-pub mod types;
 // Blockchains
 pub mod eth;
 
