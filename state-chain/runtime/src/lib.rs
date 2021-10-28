@@ -391,6 +391,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
+	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
@@ -428,6 +429,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_online::Config for Runtime {
@@ -691,6 +693,8 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
 			add_benchmark!(params, batches, pallet_cf_witnesser_api, WitnesserApi);
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
+			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
+			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
 			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }

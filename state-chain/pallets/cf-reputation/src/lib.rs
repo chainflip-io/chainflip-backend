@@ -7,10 +7,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
 use sp_runtime::traits::Zero;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -68,6 +74,9 @@ pub mod pallet {
 
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::hooks]
@@ -118,7 +127,7 @@ pub mod pallet {
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints): If points < zero.
 		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits): If online_credits < zero
 		///   or online_credits possible per interval is more than the blocks per interval.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,

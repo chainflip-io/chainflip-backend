@@ -6,6 +6,9 @@ use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 
@@ -21,6 +24,9 @@ use sp_runtime::{
 	offchain::storage_lock::BlockNumberProvider,
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
 };
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 type BasisPoints = u32;
 
@@ -69,6 +75,9 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -133,13 +142,13 @@ pub mod pallet {
 				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
 			}
 
-			weight
+			return T::WeightInfo::on_initialize();
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation())]
 		pub(super) fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -150,7 +159,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation())]
 		pub(super) fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
