@@ -101,7 +101,7 @@ pub mod pallet {
 
 	/// A failed signing or broadcasting attempt.
 	///
-	/// Implements `From` for both [BroadcastAttempt] and [TransactionSigningAttempt] for easy conversion.
+	/// Implements `From` for both [TransmissionAttempt] and [TransactionSigningAttempt] for easy conversion.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct FailedBroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
@@ -210,21 +210,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A request to a specific validator to sign a transaction. [broadcast_attempt_id, validator_id, unsigned_tx]
+		/// A request to a specific validator to sign a transaction. \[broadcast_attempt_id, validator_id, unsigned_tx\]
 		TransactionSigningRequest(
 			BroadcastAttemptId,
 			T::ValidatorId,
 			UnsignedTransactionFor<T, I>,
 		),
-		/// A request to transmit a signed transaction to the target chain. [broadcast_attempt_id, signed_tx]
+		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id, signed_tx\]
 		TransmissionRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
-		/// A broadcast has successfully been completed. [broadcast_id]
+		/// A broadcast has successfully been completed. \[broadcast_id\]
 		BroadcastComplete(BroadcastId),
-		/// A failed broadcast attempt has been scheduled for retry. [broadcast_id, attempt]
+		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_id, attempt\]
 		BroadcastRetryScheduled(BroadcastId, AttemptCount),
-		/// A broadcast has failed irrecoverably. [broadcast_id, attempt, failed_transaction]
+		/// A broadcast has failed irrecoverably. \[broadcast_id, attempt, failed_transaction\]
 		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
-		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. [broadcast_attempt_id, stage]
+		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 	}
 
@@ -288,7 +288,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransactionSigningRequest](Events::TransactionSigningRequest)
+		/// - [TransactionSigningRequest](Event::TransactionSigningRequest)
 		///
 		/// ## Errors
 		///
@@ -318,13 +318,13 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransmissionRequest](Events::TransmissionRequest)
-		/// - [BroadcastRetryScheduled](Events::BroadcastRetryScheduled)
+		/// - [TransmissionRequest](Event::TransmissionRequest)
+		/// - [BroadcastRetryScheduled](Event::BroadcastRetryScheduled)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttemptId](Errors::InvalidBroadcastAttemptId)
-		/// - [InvalidSigner](Errors::InvalidSigner)
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidSigner](Error::InvalidSigner)
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
@@ -408,8 +408,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong during transmission. See [BroadcastFailure] for categories
-		/// of failures that may be reported.
+		/// Nodes have witnessed that something went wrong during transmission. See
+		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be reported.
 		///
 		/// ## Events
 		///

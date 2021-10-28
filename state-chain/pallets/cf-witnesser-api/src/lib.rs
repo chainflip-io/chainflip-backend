@@ -2,8 +2,6 @@
 #![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 
-#![doc = include_str!("../../cf-doc-head.md")]
-
 pub use pallet::*;
 
 #[cfg(test)]

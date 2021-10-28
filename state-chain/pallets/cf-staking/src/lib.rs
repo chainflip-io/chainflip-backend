@@ -243,7 +243,7 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// On success, emits a [ThresholdSignatureRequest](Event::ThresholdSignatureRequest) event. The attached claim request needs
+		/// On success, the implementatation of [ThresholdSigner] should emit an event. The attached claim request needs
 		/// to be signed by a threshold of validators in order to produce valid data that can be submitted to the
 		/// StakeManager Smart Contract.
 		///
@@ -252,17 +252,17 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ThresholdSignatureRequest](Event::ThresholdSignatureRequest)
+		/// - None
 		///
 		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim)
 		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
-		/// - [EthEncodingFailed](Error::EthEncodingFailed)
 		///
 		/// ## Dependencies
 		///
+		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(
@@ -468,7 +468,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Checks that the call orginates from the witnesser by delegating to the configured implementation of
-	/// [EnsureWitnessed](Config::EnsureWitnessed).
+	/// [EnsureOrigin].
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
 	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
