@@ -3,6 +3,8 @@
 #![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 
+#![doc = include_str!("../../cf-doc-head.md")]
+
 #[cfg(test)]
 mod mock;
 
@@ -286,8 +288,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransactionSigningRequest](Events::TransactionSigningRequest): Signing has been requested
-		///   from the nominated Validator.
+		/// - [TransactionSigningRequest](Events::TransactionSigningRequest)
 		///
 		/// ## Errors
 		///
@@ -317,17 +318,13 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransmissionRequest](Events::TransmissionRequest): Signed transaction should now be broadcast to the
-		///   outgoing chain by all Validators.
-		/// - [BroadcastRetryScheduled](Events::BroadcastRetryScheduled): Signed transaction is not valid, so we have
-		///   scheduled a retry attempt for the next block.
+		/// - [TransmissionRequest](Events::TransmissionRequest)
+		/// - [BroadcastRetryScheduled](Events::BroadcastRetryScheduled)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttemptId](Errors::InvalidBroadcastAttemptId): There is no broadcast for this attempt_id.
-		/// - [InvalidSigner](Errors::InvalidSigner): Submitter of this extrinsic is not the nominated Validator for this
-		///   attempt_id.
-		///
+		/// - [InvalidBroadcastAttemptId](Errors::InvalidBroadcastAttemptId)
+		/// - [InvalidSigner](Errors::InvalidSigner)
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
@@ -388,12 +385,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BroadcastComplete](Event::BroadcastComplete): The broadcast to the target chain was successful.
+		/// - [BroadcastComplete](Event::BroadcastComplete)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
-		///   queue of broadcasts awaiting transmission.
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
 		#[pallet::weight(10_000)]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
@@ -417,12 +413,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BroadcastFailed](Event::BroadcastFailed): The broadcast failed.
+		/// - [BroadcastFailed](Event::BroadcastFailed)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
-		///   queue of broadcasts awaiting transmission.
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
 		#[pallet::weight(10_000)]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,

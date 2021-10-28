@@ -2,6 +2,8 @@
 #![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 
+#![doc = include_str!("../../cf-doc-head.md")]
+
 #[cfg(test)]
 pub mod mock;
 
@@ -85,11 +87,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// [ceremony_id, key_id, signatories, payload]
+		/// \[ceremony_id, key_id, signatories, payload\]
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
-		/// [ceremony_id, key_id, offenders]
+		/// \[ceremony_id, key_id, offenders\]
 		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
-		/// [ceremony_id]
+		/// \[ceremony_id\]
 		ThresholdSignatureSuccess(CeremonyId),
 	}
 

@@ -2,6 +2,8 @@
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 
+#![doc = include_str!("../../cf-doc-head.md")]
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -111,13 +113,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AccrualRatioUpdated](Event::AccrualRatioUpdated): The accrual ratio was successfully updated.
+		/// - [AccrualRateUpdated](Event::AccrualRateUpdated)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints): If points < zero.
-		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits): If online_credits < zero
-		///   or online_credits possible per interval is more than the blocks per interval.
+		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
+		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits)
 		#[pallet::weight(10_000)]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,

@@ -2,6 +2,8 @@
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 
+#![doc = include_str!("../../cf-doc-head.md")]
+
 pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
