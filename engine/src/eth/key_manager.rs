@@ -37,7 +37,7 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
     slog::info!(logger, "Starting KeyManager witness");
 
-    let key_manager = KeyManager::new(&settings).context("Loading KeyManager contract ABI")?;
+    let key_manager = KeyManager::new(&settings).context(here!())?;
 
     let mut event_stream = key_manager
         .event_stream(&web3, settings.eth.from_block, &logger)

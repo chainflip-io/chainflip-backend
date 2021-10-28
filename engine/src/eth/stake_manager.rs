@@ -37,8 +37,7 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");
 
-    let stake_manager =
-        StakeManager::new(&settings).context("Loading StakeManager contract ABI")?;
+    let stake_manager = StakeManager::new(&settings).context(here!())?;
 
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
