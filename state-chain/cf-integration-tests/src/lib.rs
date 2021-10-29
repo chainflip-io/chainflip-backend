@@ -293,9 +293,7 @@ mod tests {
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
 						for (_, engine) in &self.engines {
-							if engine.state() == ChainflipAccountState::Validator {
-								engine.on_contract_event(&event);
-							}
+							engine.on_contract_event(&event);
 						}
 					}
 
