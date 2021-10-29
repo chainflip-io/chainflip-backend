@@ -126,8 +126,8 @@ pub mod utils {
     ) -> slog::Logger {
         let drain = RuntimeTagFilter {
             drain: new_json_drain(),
-            whitelist: Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>()),
-            blacklist: Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>()),
+            whitelist: Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>()),
+            blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
         slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
@@ -166,7 +166,7 @@ pub mod utils {
             record: &slog::Record,
             values: &slog::OwnedKVList,
         ) -> result::Result<Self::Ok, Self::Err> {
-            if self.blacklist.iter().find(|s| *s == record.tag()).is_none() {
+            if !self.blacklist.iter().any(|s| *s == record.tag()) {
                 if self.whitelist.iter().any(|s| *s == record.tag()) || self.whitelist.is_empty() {
                     self.drain.log(record, values).map(Some).map_err(Some)
                 } else {
@@ -187,8 +187,8 @@ pub mod utils {
     ) -> slog::Logger {
         let drain = RuntimeTagFilter {
             drain: PrintlnDrainVerbose,
-            whitelist: Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>()),
-            blacklist: Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>()),
+            whitelist: Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>()),
+            blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
         slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
@@ -266,8 +266,8 @@ pub mod test_utils {
         tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
         let tc = TagCache::new();
-        let tag_whitelist = Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>());
-        let tag_blacklist = Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>());
+        let tag_whitelist = Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>());
+        let tag_blacklist = Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>());
 
         let drain1 = RuntimeTagFilter {
             drain: tc.clone(),
