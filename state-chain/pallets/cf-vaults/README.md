@@ -36,13 +36,13 @@ individual rotation transactions have been initiated, we can't go back.
 
 ## Terminology
 
-- **Vault:** A cryptocurrency wallet or smart contract for managing liquidity pools.
-- **Validators:** A set of nodes that validate and support the ChainFlip network.
-- **Bad Validators:** A set of nodes that have acted badly, the definition "bad" is beyond the scope of
+- Vault: A cryptocurrency wallet or smart contract for managing liquidity pools.
+- Validators: A set of nodes that validate and support the ChainFlip network.
+- Bad Validators: A set of nodes that have acted badly, the definition "bad" is beyond the scope of
   this pallet.
-- **Key generation:** Aka. Keygen: The process of creating a new key pair which would be used for operating a vault.
-- **Vault Rotation:** The rotation of a vault whereby funds are transferred to a new wallet or where the controlling key
+- Key generation: Aka. Keygen: The process of creating a new key pair which would be used for operating a vault.
+- Vault Rotation: The rotation of a vault whereby funds are transferred to a new wallet or where the controlling key
   of the smart contract is updated.
-- **AggKey:** Short for Aggregate Key, which is the multi-party threshold key for controlling the vault and its funds.
-- **ActiveWindow:** We track the block (on the external chain) at which vault was rotated so that validators can
+- AggKey: Short for Aggregate Key, which is the multi-party threshold key for controlling the vault and its funds.
+- ActiveWindow: We track the block (on the external chain) at which vault was rotated so that validators can
   determine a cut-off point for their witnessing duties.

@@ -34,6 +34,10 @@
     "minimum_active_bid": "Amount"
   },
   "Bid": "(ValidatorId, Amount)",
+  "BlockHeightWindow": {
+    "from": "u64",
+    "to": "Option<u64>"
+  },
   "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
   "BroadcastStage": {
@@ -111,5 +115,19 @@
     "public_key": "PublicKey"
   },
   "ValidatorSize": "u32",
+  "VaultRotationStatus": {
+    "_enum": {
+      "AwaitingKeygen": {
+        "ceremony_id": "CeremonyId", 
+        "candidates": "Vec<ValidatorId>"
+      },
+      "AwaitingRotation": {
+        "new_public_key": "Vec<u8>"
+      },
+      "Complete": {
+        "tx_hash": "Vec<u8>"
+      }
+    }
+  },
   "VoteCount": "u32"
 }

@@ -8,8 +8,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 mod imbalances;
 mod on_charge_transaction;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
@@ -69,6 +75,9 @@ pub mod pallet {
 
 		/// Providing updates on staking activity
 		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -130,7 +139,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
 			slashing_rate: T::Balance,
@@ -476,8 +485,8 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		// Calc the weight for the operation - assume 1r for slashing rate
-		// + 1r get bond + 1w update bond + 1w update balance
+		// TODO: remove weight calculation and delegate it to benchmarking of the calling pallets
+		// also remove the return type and change the function to void
 		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
 	}
 }

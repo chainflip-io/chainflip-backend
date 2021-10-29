@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 
-use super::super::common::{
+use crate::multisig::client::{self, signing};
+
+use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
     {CeremonyCommon, StageResult},
 };
-use super::super::SchnorrSignature;
-use super::frost::{
+use client::SchnorrSignature;
+use signing::frost::{
     self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
-use super::signing_state::{SigningP2PSender, SigningStateCommonInfo};
+use signing::{SigningP2PSender, SigningStateCommonInfo};
 
 type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
 

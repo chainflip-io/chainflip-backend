@@ -334,6 +334,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
+	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -355,7 +356,7 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
-	type AccountId = AccountId;
+	type StakerId = AccountId;
 	type Flip = Flip;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
@@ -364,6 +365,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -372,6 +374,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type Event = Event;
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -675,6 +678,9 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
+			add_benchmark!(params, batches, pallet_cf_staking, Staking);
+			add_benchmark!(params, batches, pallet_cf_flip, Flip);
+			add_benchmark!(params, batches, pallet_cf_governance, Governance);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

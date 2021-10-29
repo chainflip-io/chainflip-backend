@@ -8,6 +8,7 @@ use crate::{
     eth::{eth_event_streamer, utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
+    state_chain::client::StateChainRpcApi,
 };
 
 use sp_runtime::AccountId32;
@@ -19,7 +20,7 @@ use web3::{
     Web3,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use futures::{Future, Stream, StreamExt};
 use slog::o;
@@ -27,17 +28,16 @@ use slog::o;
 use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_witness(
+pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient>,
+    state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");
 
-    slog::info!(logger, "Load Contract ABI");
-    let stake_manager = StakeManager::new(&settings)?;
+    let stake_manager = StakeManager::new(&settings).context(here!())?;
 
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)
@@ -54,7 +54,7 @@ pub async fn start_stake_manager_witness(
                     staker: _,
                     return_addr,
                 } => {
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_staked(
@@ -67,7 +67,7 @@ pub async fn start_stake_manager_witness(
                         .await;
                 }
                 StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                    state_chain_client
+                    let _ = state_chain_client
                         .submit_extrinsic(
                             &logger,
                             pallet_cf_witnesser_api::Call::witness_claimed(

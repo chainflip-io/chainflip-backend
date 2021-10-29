@@ -93,7 +93,7 @@ pub mod utils {
     /// ```sh
     /// [level] <module::module> - <msg>
     /// ```
-    pub fn create_cli_logger() -> slog::Logger {
+    pub fn new_cli_logger() -> slog::Logger {
         slog::Logger::root(Fuse(PrintlnDrain), o!())
     }
 
@@ -103,7 +103,7 @@ pub mod utils {
     ///     <Key> = <value>
     ///     <Key> = <value>
     /// ```
-    pub fn create_cli_logger_verbose() -> slog::Logger {
+    pub fn new_cli_logger_verbose() -> slog::Logger {
         slog::Logger::root(Fuse(PrintlnDrainVerbose), o!())
     }
 

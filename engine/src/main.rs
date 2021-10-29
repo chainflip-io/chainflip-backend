@@ -8,7 +8,6 @@ use chainflip_engine::{
     state_chain,
 };
 use structopt::StructOpt;
-use substrate_subxt::Signer;
 
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
@@ -31,7 +30,8 @@ async fn main() {
         state_chain::client::connect_to_state_chain(&settings)
             .await
             .unwrap();
-    let account_id = AccountId(*state_chain_client.signer.account_id().as_ref()); /*TODO: Use the correct sc types*/
+
+    let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
