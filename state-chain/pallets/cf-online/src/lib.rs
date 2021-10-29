@@ -103,7 +103,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat)
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 
 			match Nodes::<T>::get(&validator_id) {
