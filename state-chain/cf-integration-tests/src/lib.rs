@@ -739,7 +739,7 @@ mod tests {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
 		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use state_chain_runtime::{
-			Auction, Flip, HeartbeatBlockInterval, Online, PercentageOfBackupValidatorsInEmergency,
+			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
 			Validator,
 		};
 
@@ -830,14 +830,13 @@ mod tests {
 
 		#[test]
 		// A network is created with a set of validators and backup validators.
-		// PercentageOfBackupValidatorsInEmergency(30%) of the validators stop submitting heartbeats
+		// EmergencyRotationPercentageTrigger(80%) of the validators stop submitting heartbeats
 		// and the live backup validators are included in a forced rotation and are included in the
 		// validating set
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 3 heartbeats
-			const EMERGENCY_ROTATION_PERCENTAGE: u32 =
-				PercentageOfBackupValidatorsInEmergency::get();
+			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
 			// Blocks for our epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 4;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -867,9 +866,8 @@ mod tests {
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 
-					// Set EMERGENCY_ROTATION_PERCENTAGE of the validators inactive
-					let number_offline =
-						(MAX_VALIDATORS * EMERGENCY_ROTATION_PERCENTAGE / 100) as usize;
+					// Set PERCENTAGE_OFFLINE of the validators inactive
+					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
