@@ -828,8 +828,9 @@ mod tests {
 
 		#[test]
 		// A network is created with a set of validators and backup validators.
-		// 20% of the validators stop submitting heartbeats and the live backup validators
-		// are included in a forced rotation and are including in the validating set
+		// PercentageOfBackupValidatorsInEmergency(30%) of the validators stop submitting heartbeats
+		// and the live backup validators are included in a forced rotation and are including in the
+		// validating set
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want 2 missing heartbeats which is the definition of being
@@ -862,8 +863,10 @@ mod tests {
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 
-					// Set 20% of the validators inactive
-					let number_offline = (MAX_VALIDATORS * 2 / 10) as usize;
+					// Set EMERGENCY_ROTATION_PERCENTAGE of the validators inactive
+					let number_offline =
+						(MAX_VALIDATORS * EMERGENCY_ROTATION_PERCENTAGE / 100) as usize;
+
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
 
