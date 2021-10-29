@@ -5,6 +5,7 @@ extern crate assert_matches;
 
 #[cfg(test)]
 mod tests {
+
 	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
@@ -234,7 +235,7 @@ mod tests {
 		#[derive(Default)]
 		pub struct Network {
 			engines: HashMap<NodeId, Engine>,
-			pub contract: StakingContract,
+			pub stake_manager_contract: StakingContract,
 			last_event: usize,
 		}
 
@@ -259,7 +260,7 @@ mod tests {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
-			pub fn add(&mut self, node_id: NodeId) {
+			pub fn add_node(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
 				self.engines.insert(
 					node_id.clone(),
@@ -290,7 +291,7 @@ mod tests {
 					Validator::on_initialize(System::block_number());
 
 					// Notify contract events
-					for event in self.contract.events() {
+					for event in self.stake_manager_contract.events() {
 						for (_, engine) in &self.engines {
 							if engine.state() == ChainflipAccountState::Validator {
 								engine.on_contract_event(&event);
@@ -299,7 +300,7 @@ mod tests {
 					}
 
 					// Clear events on contract
-					self.contract.clear();
+					self.stake_manager_contract.clear();
 
 					// Collect state chain events
 					let events = frame_system::Pallet::<Runtime>::events()
@@ -657,12 +658,12 @@ mod tests {
 					let (mut testnet, mut nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
 					for validator in Validator::current_validators() {
-						testnet.add(validator);
+						testnet.add_node(validator);
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
 						testnet
-							.contract
+							.stake_manager_contract
 							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 					// Run to the next epoch to start the auction

@@ -1,3 +1,8 @@
+//! Health monitor for the CFE
+//! allowing external services to query, ensuring it's online
+//! Returns a HTTP 200 response to any request on {hostname}:{port}/health
+//! Method returns a Sender, allowing graceful termination of the infinite loop
+
 use slog::o;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -8,16 +13,14 @@ use tokio::{
 
 use crate::{logging::COMPONENT_KEY, settings};
 
-/// Health monitor for the CFE
-/// allowing external services to query, ensuring it's online
-/// Returns a HTTP 200 response to any request on {hostname}:{port}/health
-/// Method returns a Sender, allowing graceful termination of the infinite loop
+/// Configuration holder for the health server
 pub struct HealthMonitor {
     bind_address: String,
     logger: slog::Logger,
 }
 
 impl HealthMonitor {
+    /// Instantiate a health monitoring server
     pub fn new(health_check_settings: &settings::HealthCheck, logger: &slog::Logger) -> Self {
         let bind_address = format!(
             "{}:{}",
@@ -30,6 +33,7 @@ impl HealthMonitor {
         }
     }
 
+    /// Start the health monitoring server
     pub async fn run(&self) -> Sender<()> {
         slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
@@ -109,7 +113,7 @@ mod tests {
         let health_check = settings::test_utils::new_test_settings()
             .unwrap()
             .health_check;
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
         let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
 

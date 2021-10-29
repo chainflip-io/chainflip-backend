@@ -185,7 +185,9 @@ pub struct ValidSigningStates {
 }
 
 pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
-    client.get_keygen().get_stage_for(KEYGEN_CEREMONY_ID)
+    client
+        .ceremony_manager
+        .get_keygen_stage_for(KEYGEN_CEREMONY_ID)
 }
 
 /// Contains the states at different points of key generation
@@ -411,7 +413,7 @@ impl KeygenContext {
     }
 
     fn inner_new(account_ids: Vec<AccountId>) -> Self {
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {
@@ -939,7 +941,7 @@ pub fn keygen_data_to_p2p(
 }
 
 pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> {
-    c.signing_manager.get_stage_for(SIGN_CEREMONY_ID)
+    c.ceremony_manager.get_signing_stage_for(SIGN_CEREMONY_ID)
 }
 
 impl MultisigClientNoDB {
