@@ -24,60 +24,63 @@ fn check_threshold_calculation() {
 }
 
 /// Mappings from signer_idx to Validator Id and back
+/// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ValidatorMaps {
+pub struct PartyIdxMapping {
     id_to_idx: HashMap<AccountId, usize>,
     // TODO: create SortedVec and use it here:
-    // Sorted Validator Ids
-    validator_ids: Vec<AccountId>,
+    // Sorted Account Ids
+    account_ids: Vec<AccountId>,
 }
 
-impl ValidatorMaps {
+impl PartyIdxMapping {
+    /// Get party index based on their account id
     pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
         self.id_to_idx.get(id).copied()
     }
 
+    /// Get party account id based on their index
     pub fn get_id(&self, idx: usize) -> Option<&AccountId> {
         let idx = idx.checked_sub(1)?;
-        self.validator_ids.get(idx)
-    }
-}
-
-pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
-    let idxs: Vec<_> = (1..=signers.len()).collect();
-
-    debug_assert_eq!(idxs.len(), signers.len());
-
-    let mut combined: Vec<_> = signers.iter().zip(idxs).collect();
-
-    combined.sort_by_key(|(v, _)| *v);
-
-    let mut id_to_idx = HashMap::new();
-
-    let mut sorted_validator_ids = Vec::with_capacity(signers.len());
-
-    for (i, (vid, _)) in combined.into_iter().enumerate() {
-        // indexes start with 1 for siging
-        id_to_idx.insert(vid.clone(), i + 1);
-        sorted_validator_ids.push(vid.clone());
+        self.account_ids.get(idx)
     }
 
-    ValidatorMaps {
-        id_to_idx,
-        validator_ids: sorted_validator_ids,
+    /// Map all signer ids to their corresponding signer idx
+    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<Vec<usize>, ()> {
+        signer_ids
+            .iter()
+            .map(|id| self.get_idx(id).ok_or(()))
+            .collect()
     }
-}
 
-// TODO: should this be a part of ValidatorMaps?
-/// Map all signer ids to their corresponding signer idx
-pub fn project_signers(
-    signer_ids: &[AccountId],
-    validator_maps: &ValidatorMaps,
-) -> Result<Vec<usize>, ()> {
-    signer_ids
-        .iter()
-        .map(|id| validator_maps.get_idx(id).ok_or(()))
-        .collect()
+    /// Convert all indexes to Account Ids. Precondition: the indexes must be
+    /// valid for the ceremony
+    pub fn get_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
+        idxs.iter()
+            .map(|idx| {
+                self.get_id(*idx)
+                    .expect("Precondition violation: unknown idx")
+                    .clone()
+            })
+            .collect()
+    }
+
+    pub fn from_unsorted_signers(signers: &[AccountId]) -> Self {
+        let mut signers = signers.to_owned();
+        signers.sort();
+
+        let mut id_to_idx = HashMap::new();
+
+        for (i, account_id) in signers.iter().enumerate() {
+            // indexes start with 1 for signing
+            id_to_idx.insert(account_id.clone(), i + 1);
+        }
+
+        PartyIdxMapping {
+            id_to_idx,
+            account_ids: signers,
+        }
+    }
 }
 
 macro_rules! derive_from_enum {
@@ -137,7 +140,7 @@ mod utils_tests {
 
         let signers = [a, c.clone(), b];
 
-        let map = get_index_mapping(&signers);
+        let map = PartyIdxMapping::from_unsorted_signers(&signers);
 
         assert_eq!(map.get_idx(&c), Some(3));
         assert_eq!(map.get_id(3), Some(&c));
