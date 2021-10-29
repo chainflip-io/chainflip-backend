@@ -415,7 +415,7 @@ impl KeygenContext {
     }
 
     fn inner_new(account_ids: Vec<AccountId>) -> Self {
-        let (logger, tag_cache) = logging::test_utils::create_test_logger_with_tag_cache();
+        let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
         let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {

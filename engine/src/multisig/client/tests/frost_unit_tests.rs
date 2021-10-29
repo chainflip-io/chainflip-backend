@@ -496,8 +496,6 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
 #[tokio::test]
 async fn should_ignore_rts_if_not_participating() {
-    use crate::logging::REQUEST_TO_SIGN_IGNORED;
-
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -515,9 +513,6 @@ async fn should_ignore_rts_if_not_participating() {
 
     // The rts should not have started a ceremony
     assert_no_stage!(c1);
-
-    // Check that the alert was triggered
-    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]

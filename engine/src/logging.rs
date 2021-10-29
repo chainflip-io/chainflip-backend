@@ -111,21 +111,21 @@ pub mod utils {
     /// ```sh
     /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
-    pub fn create_json_logger() -> slog::Logger {
+    pub fn new_json_logger() -> slog::Logger {
         slog::Logger::root(
-            slog_async::Async::new(create_json_drain()).build().fuse(),
+            slog_async::Async::new(new_json_drain()).build().fuse(),
             o!(),
         )
     }
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// Also filters the log using the tags
-    pub fn create_json_logger_with_tag_filter(
+    pub fn new_json_logger_with_tag_filter(
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> slog::Logger {
         let drain = RuntimeTagFilter {
-            drain: create_json_drain(),
+            drain: new_json_drain(),
             whitelist: Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>()),
             blacklist: Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>()),
         }
@@ -134,7 +134,7 @@ pub mod utils {
     }
 
     /// Creates a custom json drain that includes the tag as a key
-    fn create_json_drain() -> Fuse<slog_json::Json<std::io::Stdout>> {
+    fn new_json_drain() -> Fuse<slog_json::Json<std::io::Stdout>> {
         slog_json::Json::new(std::io::stdout())
             .add_default_keys()
             .add_key_value(
@@ -181,7 +181,7 @@ pub mod utils {
     /// Prints an easy to read log and the list of key/values.
     /// Also filters the log via the tag.
     /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
-    pub fn create_cli_logger_with_tag_filter(
+    pub fn new_cli_logger_with_tag_filter(
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> slog::Logger {
@@ -200,7 +200,6 @@ pub mod test_utils {
     use super::utils::*;
     use slog::{o, Drain, Fuse, OwnedKVList, Record};
     use std::collections::HashSet;
-    use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -250,7 +249,7 @@ pub mod test_utils {
 
     /// Prints an easy to read log and the list of key/values.
     /// Also creates a tag cache that collects all tags so you can later confirm a log was triggered.
-    pub fn create_test_logger_with_tag_cache() -> (slog::Logger, TagCache) {
+    pub fn new_test_logger_with_tag_cache() -> (slog::Logger, TagCache) {
         let d1 = TagCache::new();
         let d2 = Fuse(PrintlnDrainVerbose);
         (
@@ -262,7 +261,7 @@ pub mod test_utils {
     /// Prints an easy to read log and the list of key/values.
     /// Also filters the logs via tags before displaying the log and collecting them in the cache
     /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
-    pub fn create_test_logger_with_tag_cache_and_tag_filter(
+    pub fn new_test_logger_with_tag_cache_and_tag_filter(
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
@@ -290,8 +289,8 @@ pub mod test_utils {
     }
 
     /// Prints an easy to read log and the list of key/values.
-    pub fn create_test_logger() -> slog::Logger {
-        create_cli_logger_verbose()
+    pub fn new_test_logger() -> slog::Logger {
+        new_cli_logger_verbose()
     }
 }
 
@@ -300,7 +299,7 @@ fn test_logging_tags() {
     use super::logging::test_utils::*;
 
     // Create a logger and tag cache
-    let (logger, mut tag_cache) = create_test_logger_with_tag_cache();
+    let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
     let logger2 = logger.clone();
 
     // Print a bunch of stuff with tags
@@ -324,7 +323,7 @@ fn test_logging_tag_filter() {
     use super::logging::test_utils::*;
 
     // Create a logger and whitelist/blacklist
-    let (logger, tag_cache) = create_test_logger_with_tag_cache_and_tag_filter(
+    let (logger, tag_cache) = new_test_logger_with_tag_cache_and_tag_filter(
         vec!["included".to_owned()],
         vec!["excluded".to_owned()],
     );
@@ -342,7 +341,7 @@ fn test_logging_tag_filter() {
 
     // Clear the whitelist and tag cache
     let (logger, tag_cache) =
-        create_test_logger_with_tag_cache_and_tag_filter(vec![], vec!["excluded".to_owned()]);
+        new_test_logger_with_tag_cache_and_tag_filter(vec![], vec!["excluded".to_owned()]);
 
     // Test that an empty whitelist lets all through except blacklist
     slog::error!(logger, #"not_included", "no more whitelist");

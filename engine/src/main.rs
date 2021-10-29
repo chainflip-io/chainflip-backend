@@ -15,7 +15,7 @@ async fn main() {
     let settings =
         Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
 
-    let root_logger = logging::utils::create_json_logger_with_tag_filter(
+    let root_logger = logging::utils::new_json_logger_with_tag_filter(
         settings.log.whitelist.clone(),
         settings.log.blacklist.clone(),
     );
