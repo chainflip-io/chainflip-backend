@@ -15,7 +15,8 @@ pub mod utils {
     const LOCATION_INDENT: &str = "    \x1b[0;34m-->\x1b[0m";
 
     use slog::{o, Drain, Fuse, Key, Level, OwnedKVList, Record, Serializer, KV};
-    use std::sync::{Arc, Mutex};
+    use std::collections::HashSet;
+    use std::sync::Arc;
     use std::{fmt, result};
 
     fn print_readable_log(record: &Record) {
@@ -120,13 +121,13 @@ pub mod utils {
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// Also filters the log using the tags
     pub fn create_json_logger_with_tag_filter(
-        tag_whitelist: Arc<Mutex<Vec<String>>>,
-        tag_blacklist: Arc<Mutex<Vec<String>>>,
+        tag_whitelist: Vec<String>,
+        tag_blacklist: Vec<String>,
     ) -> slog::Logger {
         let drain = RuntimeTagFilter {
             drain: create_json_drain(),
-            whitelist: tag_whitelist.clone(),
-            blacklist: tag_blacklist.clone(),
+            whitelist: Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>()),
+            blacklist: Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>()),
         }
         .fuse();
         slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
@@ -147,8 +148,10 @@ pub mod utils {
 
     pub struct RuntimeTagFilter<D> {
         pub drain: D,
-        pub whitelist: Arc<Mutex<Vec<String>>>,
-        pub blacklist: Arc<Mutex<Vec<String>>>,
+        // pub whitelist: Arc<Vec<String>>,
+        // pub blacklist: Arc<Vec<String>>,
+        pub whitelist: Arc<HashSet<String>>,
+        pub blacklist: Arc<HashSet<String>>,
     }
 
     impl<D> Drain for RuntimeTagFilter<D>
@@ -163,11 +166,8 @@ pub mod utils {
             record: &slog::Record,
             values: &slog::OwnedKVList,
         ) -> result::Result<Self::Ok, Self::Err> {
-            let whitelist = self.whitelist.lock().unwrap();
-            let blacklist = self.blacklist.lock().unwrap();
-
-            if !blacklist.contains(&record.tag().to_owned()) {
-                if whitelist.contains(&record.tag().to_owned()) || whitelist.is_empty() {
+            if self.blacklist.iter().find(|s| *s == record.tag()).is_none() {
+                if self.whitelist.iter().any(|s| *s == record.tag()) || self.whitelist.is_empty() {
                     self.drain.log(record, values).map(Some).map_err(Some)
                 } else {
                     Ok(None)
@@ -182,13 +182,13 @@ pub mod utils {
     /// Also filters the log via the tag.
     /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
     pub fn create_cli_logger_with_tag_filter(
-        tag_whitelist: Arc<Mutex<Vec<String>>>,
-        tag_blacklist: Arc<Mutex<Vec<String>>>,
+        tag_whitelist: Vec<String>,
+        tag_blacklist: Vec<String>,
     ) -> slog::Logger {
         let drain = RuntimeTagFilter {
             drain: PrintlnDrainVerbose,
-            whitelist: tag_whitelist,
-            blacklist: tag_blacklist,
+            whitelist: Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>()),
+            blacklist: Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>()),
         }
         .fuse();
         slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
@@ -199,6 +199,8 @@ pub mod utils {
 pub mod test_utils {
     use super::utils::*;
     use slog::{o, Drain, Fuse, OwnedKVList, Record};
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -261,16 +263,20 @@ pub mod test_utils {
     /// Also filters the logs via tags before displaying the log and collecting them in the cache
     /// If the `tag_whitelist` is empty, it will allow all except whats on the `tag_blacklist`
     pub fn create_test_logger_with_tag_cache_and_tag_filter(
-        tag_whitelist: Arc<Mutex<Vec<String>>>,
-        tag_blacklist: Arc<Mutex<Vec<String>>>,
+        tag_whitelist: Vec<String>,
+        tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
         let tc = TagCache::new();
+        let tag_whitelist = Arc::new(tag_whitelist.iter().cloned().collect::<HashSet<_>>());
+        let tag_blacklist = Arc::new(tag_blacklist.iter().cloned().collect::<HashSet<_>>());
+
         let drain1 = RuntimeTagFilter {
             drain: tc.clone(),
             whitelist: tag_whitelist.clone(),
             blacklist: tag_blacklist.clone(),
         }
         .fuse();
+
         let drain2 = RuntimeTagFilter {
             drain: PrintlnDrainVerbose,
             whitelist: tag_whitelist,
@@ -316,13 +322,12 @@ fn test_logging_tags() {
 #[test]
 fn test_logging_tag_filter() {
     use super::logging::test_utils::*;
-    use std::sync::{Arc, Mutex};
 
     // Create a logger and whitelist/blacklist
-    let whitelist = Arc::new(Mutex::new(vec!["included".to_owned()]));
-    let blacklist = Arc::new(Mutex::new(vec!["excluded".to_owned()]));
-    let (logger, mut tag_cache) =
-        create_test_logger_with_tag_cache_and_tag_filter(whitelist.clone(), blacklist);
+    let (logger, tag_cache) = create_test_logger_with_tag_cache_and_tag_filter(
+        vec!["included".to_owned()],
+        vec!["excluded".to_owned()],
+    );
 
     // Print a bunch of stuff with tags
     slog::error!(logger, #"included", "on the whitelist");
@@ -336,10 +341,8 @@ fn test_logging_tag_filter() {
     assert!(!tag_cache.contains_tag("excluded"));
 
     // Clear the whitelist and tag cache
-    {
-        whitelist.lock().unwrap().clear();
-        tag_cache.clear();
-    }
+    let (logger, tag_cache) =
+        create_test_logger_with_tag_cache_and_tag_filter(vec![], vec!["excluded".to_owned()]);
 
     // Test that an empty whitelist lets all through except blacklist
     slog::error!(logger, #"not_included", "no more whitelist");

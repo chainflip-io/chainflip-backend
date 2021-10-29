@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
@@ -18,13 +16,10 @@ async fn main() {
     let settings =
         Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
 
-    let root_logger = match settings.log {
-        Some(ref log) => logging::utils::create_json_logger_with_tag_filter(
-            Arc::new(Mutex::new(log.whitelist.clone())),
-            Arc::new(Mutex::new(log.blacklist.clone())),
-        ),
-        None => logging::utils::create_json_logger(),
-    };
+    let root_logger = logging::utils::create_json_logger_with_tag_filter(
+        settings.log.whitelist.clone(),
+        settings.log.blacklist.clone(),
+    );
 
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 

@@ -41,7 +41,7 @@ pub struct Signing {
     pub db_file: PathBuf,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Log {
     pub whitelist: Vec<String>,
     pub blacklist: Vec<String>,
@@ -53,7 +53,8 @@ pub struct Settings {
     pub eth: Eth,
     pub health_check: HealthCheck,
     pub signing: Signing,
-    pub log: Option<Log>,
+    #[serde(default)]
+    pub log: Log,
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -197,21 +198,12 @@ impl Settings {
         };
 
         // log
-        if settings.log.is_none() {
-            settings.log = Some(Log {
-                whitelist: vec![],
-                blacklist: vec![],
-            })
-        }
-        if let Some(mut log) = settings.log {
-            if let Some(opt) = opts.log_whitelist {
-                log.whitelist = opt;
-            };
-            if let Some(opt) = opts.log_blacklist {
-                log.blacklist = opt;
-            };
-            settings.log = Some(log);
-        }
+        if let Some(opt) = opts.log_whitelist {
+            settings.log.whitelist = opt;
+        };
+        if let Some(opt) = opts.log_blacklist {
+            settings.log.blacklist = opt;
+        };
 
         // Run the validation again
         settings.validate_settings()?;
@@ -417,10 +409,7 @@ mod tests {
 
         assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 
-        assert_eq!(
-            opts.log_whitelist.unwrap(),
-            settings.log.clone().unwrap().whitelist
-        );
-        assert_eq!(opts.log_blacklist.unwrap(), settings.log.unwrap().blacklist);
+        assert_eq!(opts.log_whitelist.unwrap(), settings.log.whitelist);
+        assert_eq!(opts.log_blacklist.unwrap(), settings.log.blacklist);
     }
 }
