@@ -40,7 +40,7 @@ mod tests {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::SchnorrVerificationComponents;
-		use cf_traits::ChainflipAccountState;
+		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::HeartbeatBlockInterval;
@@ -94,20 +94,24 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
-			pub state: ChainflipAccountState,
+			pub active: bool,
 		}
 
 		impl Engine {
 			fn new(node_id: NodeId) -> Self {
 				Engine {
 					node_id,
-					state: ChainflipAccountState::Passive,
+					active: true,
 				}
+			}
+
+			fn state(&self) -> ChainflipAccountState {
+				ChainflipAccountStore::<Runtime>::get(&self.node_id).state
 			}
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state == ChainflipAccountState::Validator {
+				if self.state() == ChainflipAccountState::Validator && self.active {
 					match event {
 						ContractEvent::Staked {
 							node_id: validator_id,
@@ -131,7 +135,7 @@ mod tests {
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&self, events: &[Event]) {
-				if self.state == ChainflipAccountState::Validator {
+				if self.state() == ChainflipAccountState::Validator && self.active {
 					// Handle events
 					on_events!(
 						events,
@@ -198,12 +202,14 @@ mod tests {
 
 			// On block handler
 			fn on_block(&self, block_number: BlockNumber) {
-				// Heartbeat -> Send transaction to state chain twice an interval
-				if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
-					// Online pallet, ignore error
-					let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
-						self.node_id.clone(),
-					));
+				if self.active {
+					// Heartbeat -> Send transaction to state chain twice an interval
+					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+						// Online pallet, ignore error
+						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+							self.node_id.clone(),
+						));
+					}
 				}
 			}
 		}
@@ -250,10 +256,19 @@ mod tests {
 				(network, nodes)
 			}
 
-			pub fn add_node(&mut self, node_id: NodeId, state: ChainflipAccountState) {
+			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
+				self.engines.get_mut(node_id).expect("valid node_id").active = active;
+			}
+
+			pub fn add_node(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
-				self.engines
-					.insert(node_id.clone(), Engine { node_id, state });
+				self.engines.insert(
+					node_id.clone(),
+					Engine {
+						node_id,
+						active: true,
+					},
+				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -265,6 +280,7 @@ mod tests {
 						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
 					);
 					Session::on_initialize(System::block_number());
+					Online::on_initialize(System::block_number());
 					Flip::on_initialize(System::block_number());
 					Staking::on_initialize(System::block_number());
 					Auction::on_initialize(System::block_number());
@@ -277,9 +293,7 @@ mod tests {
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
 						for (_, engine) in &self.engines {
-							if engine.state == ChainflipAccountState::Validator {
-								engine.on_contract_event(&event);
-							}
+							engine.on_contract_event(&event);
 						}
 					}
 
@@ -309,10 +323,11 @@ mod tests {
 		}
 	}
 
-	pub const ALICE: [u8; 32] = [0xa1u8; 32];
-	pub const BOB: [u8; 32] = [0xb0u8; 32];
-	pub const CHARLIE: [u8; 32] = [0xc4u8; 32];
-	pub const ERIN: [u8; 32] = [0xe3u8; 32];
+	// TODO - remove collision of account numbers
+	pub const ALICE: [u8; 32] = [0xff; 32];
+	pub const BOB: [u8; 32] = [0xfe; 32];
+	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
 
@@ -327,6 +342,7 @@ mod tests {
 		winners: Vec<AccountId>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
+		max_validators: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -336,6 +352,7 @@ mod tests {
 				winners: vec![],
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
+				max_validators: MAX_VALIDATORS,
 			}
 		}
 	}
@@ -358,6 +375,11 @@ mod tests {
 
 		fn blocks_per_epoch(mut self, blocks_per_epoch: BlockNumber) -> Self {
 			self.blocks_per_epoch = blocks_per_epoch;
+			self
+		}
+
+		fn max_validators(mut self, max_validators: u32) -> Self {
+			self.max_validators = max_validators;
 			self
 		}
 
@@ -394,7 +416,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_auction::GenesisConfig::<Runtime> {
-				validator_size_range: (1, MAX_VALIDATORS),
+				validator_size_range: (1, self.max_validators),
 				winners: self.winners.clone(),
 				minimum_active_bid: TOTAL_ISSUANCE / 100,
 			}
@@ -610,9 +632,12 @@ mod tests {
 		}
 	}
 
+	// The number of blocks we expect an auction should last
+	const AUCTION_BLOCKS: BlockNumber = 2;
+
 	mod epoch {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, ChainflipAccountState, EpochInfo};
+		use cf_traits::{AuctionPhase, AuctionResult, EpochInfo};
 		use state_chain_runtime::{Auction, Validator};
 
 		#[test]
@@ -631,7 +656,7 @@ mod tests {
 					let (mut testnet, mut nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
 					for validator in Validator::current_validators() {
-						testnet.add_node(validator, ChainflipAccountState::Validator);
+						testnet.add_node(validator);
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
@@ -658,10 +683,13 @@ mod tests {
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
-					assert_matches!(Auction::current_phase(), AuctionPhase::ValidatorsSelected(mut candidates, _) => {
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
 							candidates.sort();
 							assert_eq!(candidates, expected_validators);
-						}
+						},
+						"the new candidates should be those genesis validators and the new nodes created in test"
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
@@ -670,18 +698,219 @@ mod tests {
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
-					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
+
 					let AuctionResult {
 						mut winners,
 						minimum_active_bid,
 					} = Auction::last_auction_result().expect("last auction result");
-					assert_eq!(minimum_active_bid, genesis::GENESIS_BALANCE);
+
+					assert_eq!(
+						minimum_active_bid,
+						genesis::GENESIS_BALANCE,
+						"minimum active bid should be that set at genesis"
+					);
+
 					winners.sort();
-					assert_eq!(winners, expected_validators);
+					assert_eq!(
+						winners,
+						expected_validators,
+						"the new winners should be those genesis validators and the new nodes created in test"
+					);
+
 					let mut new_validators = Validator::current_validators();
 					new_validators.sort();
+
 					// This new set of winners should also be the validators of the network
-					assert_eq!(new_validators, expected_validators);
+					assert_eq!(
+						new_validators,
+						expected_validators,
+						"the new validators should be those genesis validators and the new nodes created in test"
+					);
+				});
+		}
+	}
+
+	mod validators {
+		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
+		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use state_chain_runtime::{
+			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
+			Validator,
+		};
+
+		#[test]
+		// We have a set of backup validators who receive rewards
+		// A network is created where we have a validating set with a set of backup validators
+		// The backup validators would receive emissions on each heartbeat
+		fn backup_rewards() {
+			// We want to have at least one heartbeat within our reduced epoch
+			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			// Reduce our validating set and hence the number of nodes we need to have a backup
+			// set
+			const MAX_VALIDATORS: u32 = 10;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
+					// The result will be our newly created nodes will be validators and the
+					// genesis validators will become backup validators
+					let (mut testnet, mut nodes) = network::Network::create(MAX_VALIDATORS as u8);
+					// Add the genesis nodes to the test network
+					let mut genesis_validators = Validator::current_validators();
+					for validator in &genesis_validators {
+						testnet.add_node(validator.clone());
+					}
+
+					// An initial stake which is superior to the genesis stakes
+					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					// Stake these nodes so that they are included in the next epoch
+					for node in &nodes {
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), INITIAL_STAKE);
+					}
+
+					// Start an auction and confirm
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// Complete auction over AUCTION_BLOCKS
+					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
+
+					// assert list of validators as being the new nodes
+					let mut current_validators: Vec<NodeId> = Validator::current_validators();
+
+					current_validators.sort();
+					nodes.sort();
+
+					assert_eq!(
+						nodes, current_validators,
+						"our new nodes should be the new validators"
+					);
+
+					// assert list of backup validators as being the genesis validators
+					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
+						.iter()
+						.take(Auction::backup_group_size() as usize)
+						.map(|(validator_id, _)| validator_id.clone())
+						.collect();
+
+					current_backup_validators.sort();
+					genesis_validators.sort();
+
+					assert_eq!(
+						genesis_validators, current_backup_validators,
+						"we should have new backup validators"
+					);
+
+					// Move forward a heartbeat, emissions should be shared to backup validators
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					// We won't calculate the exact emissions but they should be greater than their
+					// initial stake
+					for backup_validator in &current_backup_validators {
+						assert!(INITIAL_STAKE < Flip::stakeable_balance(backup_validator));
+					}
+				});
+		}
+
+		#[test]
+		// A network is created with a set of validators and backup validators.
+		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
+		// with 20% going offline and forcing an emergency rotation in which a new set of validators
+		// start to validate the network which includes live validators and previous backup validators
+		fn emergency_rotations() {
+			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
+			// In order to do this we would want to have missed 3 heartbeats
+			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
+			// Blocks for our epoch
+			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 4;
+			// Reduce our validating set and hence the number of nodes we need to have a backup
+			// set to speed the test up
+			const MAX_VALIDATORS: u32 = 10;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
+					// Add the genesis nodes to the test network
+					let genesis_validators = Validator::current_validators();
+					for validator in &genesis_validators {
+						testnet.add_node(validator.clone());
+					}
+
+					// An initial stake which is superior to the genesis stakes
+					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					// Stake these nodes so that they are included in the next epoch
+					for node in &nodes {
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), INITIAL_STAKE);
+					}
+
+					// Start an auction and confirm
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					// Complete auction over AUCTION_BLOCKS
+					testnet.move_forward_blocks(AUCTION_BLOCKS);
+
+					// Set PERCENTAGE_OFFLINE of the validators inactive
+					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
+
+					let offline_nodes: Vec<_> =
+						nodes.iter().take(number_offline).cloned().collect();
+
+					for node in &offline_nodes {
+						testnet.set_active(node, false);
+					}
+
+					// We need to move forward three heartbeats to be regarded as offline
+					testnet.move_forward_blocks(3 * HeartbeatBlockInterval::get());
+
+					// We should have a set of nodes offline
+					for node in &offline_nodes {
+						assert_eq!(false, Online::is_online(node), "the node should be offline");
+					}
+
+					// The network state should now be in an emergency and that the validator
+					// pallet has been requested to start an emergency rotation
+					assert!(
+						Validator::emergency_rotation_requested(),
+						"we should have requested an emergency rotation"
+					);
+
+					// The next block should see an auction started
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						2,
+						"this should be the second auction"
+					);
+
+					// Complete the 'Emergency rotation'
+					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
 				});
 		}
 	}
