@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
-
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use codec::Decode;
