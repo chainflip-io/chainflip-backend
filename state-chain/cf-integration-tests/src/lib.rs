@@ -832,9 +832,9 @@ mod tests {
 
 		#[test]
 		// A network is created with a set of validators and backup validators.
-		// EmergencyRotationPercentageTrigger(80%) of the validators stop submitting heartbeats
-		// and the live backup validators are included in a forced rotation and are included in the
-		// validating set
+		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
+		// with 20% going offline and forcing an emergency rotation in which a new set of validators
+		// start to validate the network which includes live validators and previous backup validators
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 3 heartbeats
