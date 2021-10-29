@@ -739,7 +739,10 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
 		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
-		use state_chain_runtime::{Auction, Flip, HeartbeatBlockInterval, Online, Validator};
+		use state_chain_runtime::{
+			Auction, Flip, HeartbeatBlockInterval, Online, PercentageOfBackupValidatorsInEmergency,
+			Validator,
+		};
 
 		#[test]
 		// We have a set of backup validators who receive rewards
@@ -829,15 +832,17 @@ mod tests {
 		#[test]
 		// A network is created with a set of validators and backup validators.
 		// PercentageOfBackupValidatorsInEmergency(30%) of the validators stop submitting heartbeats
-		// and the live backup validators are included in a forced rotation and are including in the
+		// and the live backup validators are included in a forced rotation and are included in the
 		// validating set
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
-			// In order to do this we would want 2 missing heartbeats which is the definition of being
-			// offline
+			// In order to do this we would want to have missed 3 heartbeats
+			const EMERGENCY_ROTATION_PERCENTAGE: u32 =
+				PercentageOfBackupValidatorsInEmergency::get();
+			// Blocks for our epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 4;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
-			// set
+			// set to speed the test up
 			const MAX_VALIDATORS: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
