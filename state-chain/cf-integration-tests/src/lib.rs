@@ -638,7 +638,7 @@ mod tests {
 
 	mod epoch {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, ChainflipAccountState, EpochInfo};
+		use cf_traits::{AuctionPhase, AuctionResult, EpochInfo};
 		use state_chain_runtime::{Auction, Validator};
 
 		#[test]
@@ -738,9 +738,7 @@ mod tests {
 
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
-		use cf_traits::{
-			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
-		};
+		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use state_chain_runtime::{Auction, Flip, HeartbeatBlockInterval, Online, Validator};
 
 		#[test]
@@ -868,8 +866,6 @@ mod tests {
 					let number_offline = (MAX_VALIDATORS * 2 / 10) as usize;
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
-					let mut online_nodes: Vec<_> =
-						nodes.iter().skip(number_offline).cloned().collect();
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
