@@ -944,6 +944,10 @@ dependencies = [
 name = "chainflip-cli"
 version = "0.1.0"
 dependencies = [
+ "chainflip-engine",
+ "clap",
+ "hex",
+ "pallet-cf-staking",
  "tokio 1.11.0",
 ]
 

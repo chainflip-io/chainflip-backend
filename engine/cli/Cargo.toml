@@ -5,4 +5,8 @@ name = "chainflip-cli"
 version = "0.1.0"
 
 [dependencies]
+chainflip-engine = {path = "../../engine/"}
+clap = "*"
+hex = "0.4.3"
+pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 tokio = {version = "1.5.0", features = ["full"]}
