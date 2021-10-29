@@ -303,7 +303,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
-    settings: &settings::Settings,
+    state_chain_settings: &settings::StateChain,
 ) -> Result<(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
@@ -325,14 +325,14 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&settings.state_chain.signing_key_file)?.replace("\"", ""),
+                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?.replace("\"", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
 
-    let rpc_server_url = &url::Url::parse(settings.state_chain.ws_endpoint.as_str())?;
+    let rpc_server_url = &url::Url::parse(state_chain_settings.ws_endpoint.as_str())?;
 
     // TODO connect only once (Using a single RpcChannel)
 
