@@ -941,6 +941,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainflip-cli"
+version = "0.1.0"
+dependencies = [
+ "tokio 1.11.0",
+]
+
+[[package]]
 name = "chainflip-engine"
 version = "0.1.0"
 dependencies = [
