@@ -898,6 +898,7 @@ name = "cf-traits"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
