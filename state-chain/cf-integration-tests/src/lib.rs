@@ -765,14 +765,16 @@ mod tests {
 					// Add the genesis nodes to the test network
 					let mut genesis_validators = Validator::current_validators();
 					for validator in &genesis_validators {
-						testnet.add(validator.clone());
+						testnet.add_node(validator.clone());
 					}
 
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
-						testnet.contract.stake(node.clone(), INITIAL_STAKE);
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction and confirm
@@ -851,14 +853,16 @@ mod tests {
 					// Add the genesis nodes to the test network
 					let genesis_validators = Validator::current_validators();
 					for validator in &genesis_validators {
-						testnet.add(validator.clone());
+						testnet.add_node(validator.clone());
 					}
 
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
-						testnet.contract.stake(node.clone(), INITIAL_STAKE);
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction and confirm
