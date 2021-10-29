@@ -30,12 +30,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
-		WitnessApi: pallet_cf_witness_api::{Module, Call},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Event<T>, Storage},
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Event<T>, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Pallet, Call, Event<T>, Config},
+		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Pallet, Call, Event<T>, Storage},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Pallet, Call, Event<T>, Storage},
 	}
 );
 
@@ -49,7 +49,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -71,6 +71,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl_mock_stake_transfer!(u64, u128);

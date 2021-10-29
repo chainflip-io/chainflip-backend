@@ -43,10 +43,10 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
+		ValidatorPallet: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -54,7 +54,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -76,6 +76,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl_opaque_keys! {

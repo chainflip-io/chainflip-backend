@@ -6,13 +6,6 @@ edition = "2018"
 description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [dependencies]
-# Substrate packages
-sp-std = { version = '3.0', default-features = false }
-frame-support = { default-features = false, version = '3.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-runtime = { default-features = false, version = '3.0.0' }
-
 # Ethereum
 ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
 ethereum = {default-features = false, version = "0.9"}
@@ -20,6 +13,30 @@ hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 secp256k1 = {optional = true, version = "0.20"}
+
+# Substrate packages
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.0.0'
+
+[dependencies.sp-std]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-support]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-runtime]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
 
 [dev-dependencies]
 hex-literal = {version = "0.3"}

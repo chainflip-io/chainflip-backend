@@ -20,8 +20,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 	}
 );
 
@@ -31,7 +31,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -53,6 +53,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl pallet_cf_governance::Config for Test {

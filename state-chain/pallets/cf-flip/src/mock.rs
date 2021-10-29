@@ -21,9 +21,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Module, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 	}
 );
 
@@ -33,7 +33,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -55,6 +55,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = BurnFlipAccount<Self>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 pub type FlipBalance = u128;

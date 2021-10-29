@@ -176,7 +176,7 @@ pub mod pallet {
 			keys: T::Keys,
 			proof: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
+			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
 	}
@@ -246,7 +246,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type Amount = T::Amount;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Module<T>>::validators()
+		<pallet_session::Pallet<T>>::validators()
 	}
 
 	fn is_validator(account: &Self::ValidatorId) -> bool {
@@ -254,7 +254,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Module<T>>::queued_keys()
+		<pallet_session::Pallet<T>>::queued_keys()
 			.into_iter()
 			.map(|(k, _)| k)
 			.collect()
@@ -345,7 +345,7 @@ impl<T: Config> Pallet<T> {
 	fn generate_lookup() {
 		// Update our internal list of validators
 		ValidatorLookup::<T>::remove_all();
-		for validator in <pallet_session::Module<T>>::validators() {
+		for validator in <pallet_session::Pallet<T>>::validators() {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 	}

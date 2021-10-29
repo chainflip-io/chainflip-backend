@@ -1,3 +1,3 @@
 pub mod chain_spec;
-#[rustfmt::skip]
+pub mod rpc;
 pub mod service;

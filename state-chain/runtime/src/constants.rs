@@ -24,7 +24,9 @@ pub mod common {
 	///
 	/// Change this to adjust the block time.
 	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
-
+	
+	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
+	//       Attempting to do so will brick block production.
 	pub const SLOT_DURATION: u64 = MILLISECONDS_PER_BLOCK;
 
 	// Time is measured by number of blocks.

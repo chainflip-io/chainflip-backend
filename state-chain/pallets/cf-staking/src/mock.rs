@@ -31,10 +31,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Signer: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Signer: pallet_cf_threshold_signature::<Instance0>::{Pallet, Call, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -46,7 +46,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -68,6 +68,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl Chainflip for Test {

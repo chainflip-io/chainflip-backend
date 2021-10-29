@@ -1,4 +1,4 @@
-# Chainflip Vaults Module
+# Chainflip Vaults Pallet
 
 A pallet for managing Chainflip Vaults and Vault Rotations.
 

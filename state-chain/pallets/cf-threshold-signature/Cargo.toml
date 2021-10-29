@@ -1,12 +1,13 @@
 [package]
+name = 'pallet-cf-threshold-signature'
+version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet template for requesting threshold signatures.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-threshold-signature'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -15,18 +16,54 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 
-codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-frame-support = { default-features = false, version = '3.0.0' }
-frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
-sp-std = { default-features = false, version = '3.0.0' }
-downcast-rs = { default-features = false, version = '1.2' }
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.0.0'
 
-[dev-dependencies]
-serde = { version = "1.0.119" }
-sp-core = { default-features = false, version = '3.0.0' }
-sp-io = { default-features = false, version = '3.0.0' }
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-10'
+
+# Dev dependencies
+[dev-dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dev-dependencies.sp-io]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
 
 [features]
 default = ['std']
@@ -34,7 +71,7 @@ std = [
 	'cf-chains/std',
 	'cf-traits/std',
 	'codec/std',
-	'downcast-rs/std',
+	'scale-info/std',
 	'frame-support/std',
 	'frame-system/std',
 	'frame-benchmarking/std',
@@ -46,6 +83,4 @@ runtime-benchmarks = [
 	'frame-support/runtime-benchmarks',
 	'frame-system/runtime-benchmarks',
 ]
-# Note: frame-support `try-runtime` feature is released after v3.
-#   Uncomment the following line when `frame-support` version > `3.0.0`.
-# try-runtime = ['frame-support/try-runtime']
+try-runtime = ['frame-support/try-runtime'] 

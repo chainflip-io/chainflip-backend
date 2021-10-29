@@ -1,32 +1,52 @@
 [package]
+name = 'pallet-cf-environment'
+version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet which manages general global environment items of the Chainflip protocol.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-environment'
-readme = 'README.md'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 
-# Substrate stuff
-serde = { optional = true, version = "1.0.119" }
-codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-frame-support = { default-features = false, version = '3.0.0' }
-sp-std = { default-features = false, version = '3.0.0' }
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.0.0'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
 
 [features]
 default = ['std']
 std = [
 	'codec/std',
+	'scale-info/std',
 	'frame-support/std',
 	'frame-system/std',
 	'sp-std/std',
-	'serde',
 ]

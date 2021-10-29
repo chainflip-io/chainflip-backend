@@ -1,35 +1,21 @@
 [package]
+name = 'cf-integration-tests'
+version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'cf-integration-tests'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-# alias "parity-scale-code" to "codec"
-[dependencies.codec]
-default-features = false
-features = ['derive']
-package = 'parity-scale-codec'
-version = '2.0'
-
-[dev-dependencies]
-hex-literal = "0.3.1"
-assert_matches = { version = "1.5.0" }
-sp-finality-grandpa = '3.0.0'
-
 [dependencies]
-hex-literal = {optional = true, version = '0.3.1'}
-serde = {features = ['derive'], optional = true, version = '1.0.119'}
-
-# Chainflip dependencies
+# Chainflip local dependencies
 state-chain-runtime = { path = "../runtime", default-features = false }
-cf-chains = { path = "../chains", default-features = false }
 cf-traits = { path = "../traits", default-features = false }
+cf-chains = { path = "../chains", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
@@ -43,78 +29,199 @@ pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = f
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
 pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
 pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
+pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
+pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
+
+
+# Additional FRAME pallets
+[dependencies.pallet-authorship]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.pallet-session]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+features = ['historical']
 
 # Substrate dependencies
-frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
-frame-executive = {default-features = false, version = '3.0.0'}
-frame-support = {default-features = false, version = '3.0.0'}
-frame-system = {default-features = false, version = '3.0.0'}
-frame-system-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
-frame-system-rpc-runtime-api = {default-features = false, version = '3.0.0'}
-pallet-aura = {default-features = false, version = '3.0.0'}
-pallet-authorship = {default-features = false, version = '3.0.0'}
-pallet-grandpa = {default-features = false, version = '3.0.0'}
-pallet-offences = {default-features = false, version = '3.0.0'}
-pallet-randomness-collective-flip = {default-features = false, version = '3.0.0'}
-pallet-session = {default-features = false, version = '3.0.0', features = ['historical']}
-pallet-sudo = {default-features = false, version = '3.0.0'}
-pallet-timestamp = {default-features = false, version = '3.0.0'}
-pallet-transaction-payment = {default-features = false, version = '3.0.0'}
-sp-api = {default-features = false, version = '3.0.0'}
-sp-block-builder = {default-features = false, version = '3.0.0'}
-sp-consensus-aura = {default-features = false, version = '0.9.0'}
-sp-core = {default-features = false, version = '3.0.0'}
-sp-inherents = {default-features = false, version = '3.0.0'}
-sp-offchain = {default-features = false, version = '3.0.0'}
-sp-runtime = {default-features = false, version = '3.0.0'}
-sp-session = {default-features = false, version = '3.0.0'}
-sp-std = {default-features = false, version = '3.0.0'}
-sp-transaction-pool = {default-features = false, version = '3.0.0'}
-sp-version = {default-features = false, version = '3.0.0'}
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.0'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-10'
+
+[dependencies.frame-executive]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-10'
+
+[dependencies.frame-system-rpc-runtime-api]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.hex-literal]
+optional = true
+version = '0.3.1'
+
+[dependencies.pallet-aura]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.pallet-grandpa]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.pallet-randomness-collective-flip]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.pallet-timestamp]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.pallet-transaction-payment]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.sp-api]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-block-builder]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-consensus-aura]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+version = '0.10.0-dev'
+
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-inherents]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-offchain]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-session]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-transaction-pool]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dependencies.sp-version]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-10'
+
+[dev-dependencies]
+assert_matches = { version = '1.5.0' }
+sp-finality-grandpa = '3.0.0'
 
 [features]
 default = ['std']
 std = [
-    'cf-traits/std',
-    'cf-chains/std',
-    'codec/std',
-    'serde',
-    'frame-executive/std',
-    'frame-support/std',
-    'frame-system/std',
-    'frame-system-rpc-runtime-api/std',
-    'pallet-aura/std',
-    'pallet-authorship/std',
-    'pallet-grandpa/std',
-    'pallet-offences/std',
-    'pallet-randomness-collective-flip/std',
-    'pallet-session/std',
-    'pallet-sudo/std',
-    'pallet-timestamp/std',
-    'pallet-transaction-payment/std',
-    'sp-api/std',
-    'sp-block-builder/std',
-    'sp-consensus-aura/std',
-    'sp-core/std',
-    'sp-inherents/std',
-    'sp-offchain/std',
-    'sp-runtime/std',
-    'sp-session/std',
-    'sp-std/std',
-    'sp-transaction-pool/std',
-    'sp-version/std',
-    'pallet-cf-validator/std',
-    'pallet-cf-staking/std',
-    'pallet-cf-witnesser/std',
-    'pallet-cf-flip/std',
-    'pallet-cf-auction/std',
-    'pallet-cf-emissions/std',
-    'pallet-cf-reputation/std',
-    'pallet-cf-rewards/std',
-    'pallet-cf-witnesser-api/std',
-    'pallet-cf-governance/std',
-    'pallet-cf-vaults/std',
-    'pallet-cf-reputation/std',
-    'state-chain-runtime/std',
-    'sp-finality-grandpa/std',
+  'cf-traits/std',
+  'cf-chains/std',
+  'codec/std',
+  'scale-info/std',
+  'frame-executive/std',
+  'frame-support/std',
+  'frame-system/std',
+  'frame-system-rpc-runtime-api/std',
+  'pallet-aura/std',
+  'pallet-grandpa/std',
+  'pallet-randomness-collective-flip/std',
+  'pallet-session/std',
+  'pallet-timestamp/std',
+  'pallet-transaction-payment/std',
+  'sp-api/std',
+  'sp-block-builder/std',
+  'sp-consensus-aura/std',
+  'sp-core/std',
+  'sp-inherents/std',
+  'sp-offchain/std',
+  'sp-runtime/std',
+  'sp-session/std',
+  'sp-std/std',
+  'sp-transaction-pool/std',
+  'sp-version/std',
+  'pallet-cf-validator/std',
+  'pallet-cf-staking/std',
+  'pallet-cf-witnesser/std',
+  'pallet-cf-flip/std',
+  'pallet-cf-auction/std',
+  'pallet-cf-emissions/std',
+  'pallet-cf-reputation/std',
+  'pallet-cf-rewards/std',
+  'pallet-cf-witnesser-api/std',
+  'pallet-cf-governance/std',
+  'pallet-cf-vaults/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-threshold-signature/std',
+  'pallet-cf-environment/std',
+  'pallet-cf-online/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-threshold-signature/std',
+  'pallet-cf-environment/std'
 ]
