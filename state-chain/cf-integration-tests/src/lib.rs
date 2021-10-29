@@ -684,10 +684,13 @@ mod tests {
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
-					assert_matches!(Auction::current_phase(), AuctionPhase::ValidatorsSelected(mut candidates, _) => {
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
 							candidates.sort();
 							assert_eq!(candidates, expected_validators);
-						}
+						},
+						"the new candidates should be those genesis validators and the new nodes created in test"
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
@@ -696,18 +699,39 @@ mod tests {
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
-					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
+
 					let AuctionResult {
 						mut winners,
 						minimum_active_bid,
 					} = Auction::last_auction_result().expect("last auction result");
-					assert_eq!(minimum_active_bid, genesis::GENESIS_BALANCE);
+
+					assert_eq!(
+						minimum_active_bid,
+						genesis::GENESIS_BALANCE,
+						"minimum active bid should be that set at genesis"
+					);
+
 					winners.sort();
-					assert_eq!(winners, expected_validators);
+					assert_eq!(
+						winners,
+						expected_validators,
+						"the new winners should be those genesis validators and the new nodes created in test"
+					);
+
 					let mut new_validators = Validator::current_validators();
 					new_validators.sort();
+
 					// This new set of winners should also be the validators of the network
-					assert_eq!(new_validators, expected_validators);
+					assert_eq!(
+						new_validators,
+						expected_validators,
+						"the new validators should be those genesis validators and the new nodes created in test"
+					);
 				});
 		}
 	}
@@ -761,7 +785,11 @@ mod tests {
 
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
@@ -847,12 +875,12 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					// Move forward two heartbeats
+					// We need to move forward three heartbeats to be regarded as offline
 					testnet.move_forward_blocks(3 * HeartbeatBlockInterval::get());
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
-						assert_eq!(false, Online::is_online(node));
+						assert_eq!(false, Online::is_online(node), "the node should be offline");
 					}
 
 					// The network state should now be in an emergency and that the validator
@@ -873,7 +901,11 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(Auction::current_phase(), AuctionPhase::WaitingForBids);
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::WaitingForBids,
+						"we should back waiting for bids after a successful auction and rotation"
+					);
 				});
 		}
 	}
