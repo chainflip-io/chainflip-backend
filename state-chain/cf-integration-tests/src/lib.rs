@@ -275,7 +275,7 @@ mod tests {
 					Validator::on_initialize(System::block_number());
 
 					// Notify contract events
-					for event in self.contract.events() {
+					for event in self.stake_manager_contract.events() {
 						for (_, engine) in &self.engines {
 							if engine.state == ChainflipAccountState::Validator {
 								engine.on_contract_event(&event);
@@ -284,7 +284,7 @@ mod tests {
 					}
 
 					// Clear events on contract
-					self.contract.clear();
+					self.stake_manager_contract.clear();
 
 					// Collect state chain events
 					let events = frame_system::Pallet::<Runtime>::events()
@@ -631,12 +631,12 @@ mod tests {
 					let (mut testnet, mut nodes) = network::Network::create(5);
 					// Add the genesis nodes to the test network
 					for validator in Validator::current_validators() {
-						testnet.add(validator, ChainflipAccountState::Validator);
+						testnet.add_node(validator, ChainflipAccountState::Validator);
 					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					for node in &nodes {
 						testnet
-							.contract
+							.stake_manager_contract
 							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 					// Run to the next epoch to start the auction
