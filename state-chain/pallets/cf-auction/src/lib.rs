@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -173,11 +174,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged): Range was successfully changed.
+		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidRange](Error::InvalidRange): Provided range values are invalid.
+		/// - [InvalidRange](Error::InvalidRange)
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,

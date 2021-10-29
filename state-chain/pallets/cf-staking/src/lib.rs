@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(test)]
 mod mock;
@@ -9,7 +10,6 @@ mod mock;
 mod benchmarking;
 
 pub mod weights;
-use core::convert::TryInto;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -218,14 +218,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [FailedStakeAttempt](Event::FailedStakeAttempt): The stake was rejected. This happens if the
-		///   withdrawal address provided does not match the withdrawal address we already have in storage for
-		///   the account_id
-		/// - [Staked](Event::Staked): The stake has been successfully registered.
+		/// - [FailedStakeAttempt](Event::FailedStakeAttempt)
+		/// - [Staked](Event::Staked)
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::staked())]
 		pub fn staked(
 			origin: OriginFor<T>,
@@ -244,7 +242,7 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// On success, emits a [ClaimSigRequested](Event::ClaimSigRequested) event. The attached claim request needs
+		/// On success, the implementatation of [ThresholdSigner] should emit an event. The attached claim request needs
 		/// to be signed by a threshold of validators in order to produce valid data that can be submitted to the
 		/// StakeManager Smart Contract.
 		///
@@ -253,21 +251,17 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ClaimSigRequested](Event::ClaimSigRequested): We successfully requested a signature over the claim details.
+		/// - None
 		///
 		/// ## Errors
 		///
-		/// - [PendingClaim](Error::PendingClaim): The account may not have a claim already pending. Any pending
-		///   claim must be finalized or expired before a new claim can be requested.
-		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during
-		///   auction.
-		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted): The withdrawal address specified
-		///   does not match the one on file, and the one on file is not the ETH_ZERO_ADDRESS
-		/// - [EthEncodingFailed](Error::EthEncodingFailed): The claim request could not be encoded as a valid
-		///   Ethereum transaction.
+		/// - [PendingClaim](Error::PendingClaim)
+		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase)
+		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		///
 		/// ## Dependencies
 		///
+		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
 		#[pallet::weight(T::WeightInfo::claim())]
 		pub fn claim(
@@ -312,13 +306,13 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ClaimSettled](Event::ClaimSettled): The claim was successfully settled and balances are resolved.
+		/// - [ClaimSettled](Event::ClaimSettled)
 		///
 		/// ## Errors
 		///
-		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
-		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): Claimed amount is not the same as witnessed amount.
-		/// - [BadOrigin](frame_support::error::BadOrigin): The extrinsic was not dispatched by the witness origin.
+		/// - [NoPendingClaim](Error::NoPendingClaim)
+		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::claimed())]
 		pub fn claimed(
 			origin: OriginFor<T>,
@@ -366,15 +360,14 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ClaimSignatureIssued](Event::ClaimSignatureIssued): Successfully issued a claim signature
-		///   signed by the Validator quorum.
+		/// - [ClaimSignatureIssued](Event::ClaimSignatureIssued)
 		///
 		/// ## Errors
 		///
-		/// - [NoPendingClaim](Error::NoPendingClaim): There is no pending claim associated with this account.
-		/// - [SignatureAlreadyIssued](Error::SignatureAlreadyIssued): The signature was already issued.
-		/// - [InvalidClaimDetails](Error::InvalidClaimDetails): The claim is not valid.
-		/// - [SignatureTooLate](Error::SignatureTooLate): We're calling this function after the expiration of
+		/// - [NoPendingClaim](Error::NoPendingClaim)
+		/// - [SignatureAlreadyIssued](Error::SignatureAlreadyIssued)
+		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
+		/// - [SignatureTooLate](Error::SignatureTooLate)
 		///   the claim.
 		#[pallet::weight(T::WeightInfo::post_claim_signature())]
 		pub fn post_claim_signature(
@@ -416,12 +409,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AccountRetired](Event::AccountRetired): The account has successfully retired from the auction.
+		/// - [AccountRetired](Event::AccountRetired)
 		///
 		/// ## Errors
 		///
-		/// - [AlreadyRetired](Error::AlreadyRetired): The account is already retired.
-		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
+		/// - [AlreadyRetired](Error::AlreadyRetired)
+		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::retire_account())]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -434,13 +427,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AccountActivated](Event::AccountActivated): The account has successfully re-activated and will
-		///   be re-considrered for future auctions.
+		/// - [AccountActivated](Event::AccountActivated)
 		///
 		/// ## Errors
 		///
-		/// - [AlreadyActive](Error::AlreadyActive): The account is not in a retired state.
-		/// - [UnknownAccount](Error::UnknownAccount): The account has no stake associated or doesn't exist.
+		/// - [AlreadyActive](Error::AlreadyActive)
+		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::activate_account())]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -475,7 +467,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Checks that the call orginates from the witnesser by delegating to the configured implementation of
-	/// [EnsureWitnessed](Config::EnsureWitnessed).
+	/// [EnsureOrigin].
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
 	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
