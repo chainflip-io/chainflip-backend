@@ -8,16 +8,22 @@ use crate::multisig::{
     crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, Point, Scalar, ScalarExt},
 };
 
-/// Ceremony peers are interested in evaluations of our secret polynomial
-/// at their index `signer_idx`
-fn evaluate_polynomial(secret: &Scalar, coefficients: &[Scalar], signer_idx: usize) -> Scalar {
-    let index = Scalar::from_usize(signer_idx);
+/// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
+/// an iterator over its coefficients [c0, c1, c2, ...]) at x = index
+fn evaluate_polynomial<'a, T>(
+    coefficients: impl DoubleEndedIterator<Item = &'a T>,
+    index: usize,
+) -> T
+where
+    T: 'a + Clone,
+    T: std::ops::Mul<Scalar, Output = T>,
+    T: std::ops::Add<Output = T>,
+{
+    let index = Scalar::from_usize(index);
 
-    [*secret]
-        .iter()
-        .cloned()
-        .chain(coefficients.iter().cloned())
+    coefficients
         .rev()
+        .cloned()
         .reduce(|acc, coefficient| acc * index + coefficient)
         .unwrap()
 }
@@ -29,7 +35,7 @@ fn test_simple_polynomial() {
     let coefficients = [Scalar::from_usize(5), Scalar::from_usize(2)];
 
     // f(3) = 4 + 15 + 18 = 37
-    let value = evaluate_polynomial(&secret, &coefficients, 3);
+    let value = evaluate_polynomial([secret].iter().chain(coefficients.iter()), 3);
     assert_eq!(value, Scalar::from_usize(37));
 }
 
@@ -58,7 +64,7 @@ fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     )
 }
 
-/// Generate challenge agains which a ZKP of our secret will be generated
+/// Generate challenge against which a ZKP of our secret will be generated
 fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment: Point) -> Scalar {
     use sha2::{Digest, Sha256};
 
@@ -139,7 +145,7 @@ fn generate_secret_and_shares(
                 index,
                 ShamirShare {
                     index,
-                    value: evaluate_polynomial(&secret, &coefficients, index),
+                    value: evaluate_polynomial([secret].iter().chain(coefficients.iter()), index),
                 },
             )
         })
@@ -155,18 +161,7 @@ fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitm
 
 // (Figure 1: Round 2, Step 2)
 pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
-    let index = Scalar::from_usize(share.index);
-
-    let res = com
-        .commitments
-        .0
-        .iter()
-        .copied()
-        .rev()
-        .reduce(|acc, coefficient| acc * index + coefficient)
-        .expect("can't be empty");
-
-    Point::generator() * share.value == res
+    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), share.index)
 }
 
 /// Commitments to the sharing polynomial coefficient
@@ -262,15 +257,9 @@ pub fn derive_local_pubkeys_for_parties(
 
     (1..=n)
         .map(|idx| {
-            let idx_scalar = Scalar::from_usize(idx);
-
             (1..=n)
                 .map(|j| {
-                    (0..=t)
-                        .map(|k| commitments[j - 1].commitments.0[k])
-                        .rev()
-                        .reduce(|acc, x| acc * idx_scalar + x)
-                        .unwrap()
+                    evaluate_polynomial((0..=t).map(|k| &commitments[j - 1].commitments.0[k]), idx)
                 })
                 .reduce(|acc, x| acc + x)
                 .unwrap()
