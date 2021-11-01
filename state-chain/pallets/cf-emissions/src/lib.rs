@@ -142,8 +142,7 @@ pub mod pallet {
 
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
-				T::WeightInfo::no_rewards_minted()
-			// T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
+				T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
 			} else {
 				T::WeightInfo::no_rewards_minted()
 			}

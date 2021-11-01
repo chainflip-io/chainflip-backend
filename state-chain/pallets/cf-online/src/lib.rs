@@ -14,6 +14,7 @@ pub use weights::WeightInfo;
 
 pub mod liveness;
 
+use core::convert::TryInto;
 use frame_support::pallet_prelude::*;
 use liveness::*;
 pub use pallet::*;
@@ -54,15 +55,16 @@ pub mod pallet {
 		/// On initializing each block we check network liveness on every heartbeat interval and
 		/// feedback the state of the network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			let block = current_block.try_into().unwrap_or_default();
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				let (network_weight, network_state) = Self::check_network_liveness();
+				let network_state = Self::check_network_liveness();
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return T::WeightInfo::on_initialize();
+				return T::WeightInfo::submit_network_state(block);
 			}
 
-			Zero::zero()
+			T::WeightInfo::on_initialize_no_action(block)
 		}
 	}
 
@@ -136,7 +138,7 @@ pub mod pallet {
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
 		/// of the network for those nodes that are validators.  All nodes are then marked as having
 		/// not submitted a heartbeat for the next upcoming heartbeat interval.
-		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
+		fn check_network_liveness() -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
 			Nodes::<T>::translate(|validator_id, mut node: Liveness| {
@@ -156,7 +158,7 @@ pub mod pallet {
 			});
 
 			// Weight will be treated when we have benchmarks
-			(Zero::zero(), network_state)
+			network_state
 		}
 	}
 }
