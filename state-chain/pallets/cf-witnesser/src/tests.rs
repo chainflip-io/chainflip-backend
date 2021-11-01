@@ -35,7 +35,7 @@ fn call_on_threshold() {
 		// Vote again, we should reach the threshold and dispatch the call.
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
 		let dispatch_result =
-			if let Event::pallet_cf_witness(crate::Event::WitnessExecuted(_, dispatch_result)) =
+			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
 				pop_last_event()
 			{
 				assert_ok!(dispatch_result);

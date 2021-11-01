@@ -15,9 +15,10 @@ mod tests {
 	}
 
 	fn assert_winners() -> Vec<ValidatorId> {
-		assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(winners, _) => {
-			winners
-		})
+		if let AuctionPhase::ValidatorsSelected(winners, _) = AuctionPallet::phase() {
+			return winners
+		}
+		panic!("Expected `ValidatorsSelected` auction phase, got {:?}", AuctionPallet::phase());
 	}
 
 	#[test]
@@ -50,7 +51,7 @@ mod tests {
 			// Confirm we have an event for the change from 0 to 2
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
+				mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(0, 2)),
 			);
 			// We throw up an error if we try to set it to the current
 			assert_noop!(

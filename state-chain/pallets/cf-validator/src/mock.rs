@@ -116,7 +116,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type MinValidators = MinValidators;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Self>;
-	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type Handler = MockHandler;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
 	type EmergencyRotation = ValidatorPallet;
@@ -190,16 +190,16 @@ impl Config for Test {
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_session: None,
-		pallet_cf_validator: Some(ValidatorPalletConfig {
+		system: Default::default(),
+		session: Default::default(),
+		validator_pallet: ValidatorPalletConfig {
 			blocks_per_epoch: 0,
-		}),
-		pallet_cf_auction: Some(AuctionPalletConfig {
+		},
+		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],
 			minimum_active_bid: 0,
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

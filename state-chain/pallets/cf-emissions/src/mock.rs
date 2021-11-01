@@ -125,14 +125,14 @@ impl pallet_cf_emissions::Config for Test {
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-		pallet_cf_emissions: Some({
+		system: Default::default(),
+		flip: FlipConfig { total_issuance },
+		emissions: {
 			EmissionsConfig {
 				validator_emission_inflation: 1000,       // 10%
 				backup_validator_emission_inflation: 100, // 1%
 			}
-		}),
+		},
 	};
 
 	for v in validators {

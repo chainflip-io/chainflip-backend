@@ -119,10 +119,10 @@ impl Config for Test {
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_reputation: Some(ReputationPalletConfig {
+		system: Default::default(),
+		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-		}),
+		},
 	};
 
 	// We only expect Alice to be a validator at the moment

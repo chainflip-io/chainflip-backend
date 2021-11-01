@@ -140,7 +140,7 @@ impl SigningContext<Test> for ClaimSigningContext {
 	type Callback = pallet_cf_staking::Call<Test>;
 
 	fn get_payload(&self) -> Self::Payload {
-		ChainflipContractCall::signing_payload(&self.0)
+		H256(ChainflipContractCall::signing_payload(&self.0).0)
 	}
 
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
@@ -169,13 +169,13 @@ pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig {
+		system: Default::default(),
+		flip: FlipConfig {
 			total_issuance: 1_000,
-		}),
-		pallet_cf_staking: Some(StakingConfig {
+		},
+		staking: StakingConfig {
 			genesis_stakers: vec![],
-		}),
+		},
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

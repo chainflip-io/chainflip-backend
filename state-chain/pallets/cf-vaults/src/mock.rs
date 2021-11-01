@@ -150,10 +150,10 @@ pub const GENESIS_ETHEREUM_AGG_PUB_KEY: [u8; 33] = [0x02; 33];
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {
+		system: Default::default(),
+		vaults_pallet: VaultsPalletConfig {
 			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

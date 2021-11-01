@@ -75,11 +75,11 @@ pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_governance: Some(GovernanceConfig {
+		system: Default::default(),
+		governance: GovernanceConfig {
 			members: vec![ALICE, BOB, CHARLES],
 			expiry_span: 50,
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

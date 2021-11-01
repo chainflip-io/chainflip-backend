@@ -66,10 +66,10 @@ mod tests {
 	#[should_panic]
 	fn should_panic_if_accrual_rate_is_less_than_heartbeat_interval_at_genesis() {
 		mock::GenesisConfig {
-			frame_system: Default::default(),
-			pallet_cf_reputation: Some(ReputationPalletConfig {
+			system: Default::default(),
+			reputation_pallet: ReputationPalletConfig {
 				accrual_ratio: (1, HEARTBEAT_BLOCK_INTERVAL - 1),
-			}),
+			},
 		}
 		.build_storage()
 		.unwrap();
@@ -156,7 +156,7 @@ mod tests {
 
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_reputation(crate::Event::AccrualRateUpdated(
+				mock::Event::ReputationPallet(crate::Event::AccrualRateUpdated(
 					accrual_points,
 					ACCRUAL_BLOCKS
 				))
@@ -245,7 +245,7 @@ mod tests {
 				assert_eq!(reputation_points(who), points_before - penalty);
 				assert_eq!(
 					last_event(),
-					mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
+					mock::Event::ReputationPallet(crate::Event::OfflineConditionPenalty(
 						who,
 						offline_condition,
 						penalty
@@ -278,7 +278,7 @@ mod tests {
 			assert_eq!(reputation_points(ALICE), points_before - penalty);
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
+				mock::Event::ReputationPallet(crate::Event::OfflineConditionPenalty(
 					ALICE,
 					OfflineCondition::ParticipateSigningFailed,
 					penalty

@@ -33,7 +33,7 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_broadcast_Instance1(broadcast_event) => match broadcast_event {
+			Event::MockBroadcast(broadcast_event) => match broadcast_event {
 				BroadcastEvent::TransactionSigningRequest(attempt_id, nominee, unsigned_tx) => {
 					if let Scenario::Timeout = scenario {
 						// Ignore the request.

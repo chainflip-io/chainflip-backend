@@ -25,7 +25,7 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_threshold_signature_Instance1(
+			Event::DogeThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 					req_id,
 					key_id,

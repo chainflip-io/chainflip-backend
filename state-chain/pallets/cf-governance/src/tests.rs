@@ -77,7 +77,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		// Assert the proposed event was fired
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
+			crate::mock::Event::Governance(crate::Event::Proposed(1)),
 		);
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
@@ -87,7 +87,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		// Expect the Executed event was fired
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+			crate::mock::Event::Governance(crate::Event::Executed(1)),
 		);
 		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
@@ -129,7 +129,7 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		// Expect the Expired event to be fired
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(1)),
+			crate::mock::Event::Governance(crate::Event::Expired(1)),
 		);
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
 	});
@@ -144,7 +144,7 @@ fn several_open_proposals() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
+			crate::mock::Event::Governance(crate::Event::Proposed(1)),
 		);
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(BOB),
@@ -152,7 +152,7 @@ fn several_open_proposals() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(2)),
+			crate::mock::Event::Governance(crate::Event::Proposed(2)),
 		);
 		assert_eq!(ProposalCount::<Test>::get(), 2);
 	});
@@ -176,7 +176,7 @@ fn sudo_extrinsic() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
+			crate::mock::Event::Governance(crate::Event::Proposed(1)),
 		);
 		// Do the two necessary approvals
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
@@ -186,7 +186,7 @@ fn sudo_extrinsic() {
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+			crate::mock::Event::Governance(crate::Event::Executed(1)),
 		);
 	});
 }
@@ -218,7 +218,7 @@ fn execute_extrinsic() {
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+			crate::mock::Event::Governance(crate::Event::Executed(1)),
 		);
 		// Check if the storage was cleaned up
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);

@@ -208,12 +208,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_auction: Some(AuctionPalletConfig {
+		system: Default::default(),
+		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners,
 			minimum_active_bid,
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

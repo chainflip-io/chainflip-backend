@@ -58,7 +58,7 @@ mod tests {
 			);
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(
+				mock::Event::AuctionPallet(crate::Event::AuctionCompleted(
 					1,
 					expected_validating_set().0
 				)),
@@ -428,7 +428,7 @@ mod tests {
 			// Confirm we have an event
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::ActiveValidatorRangeChanged(
+				mock::Event::AuctionPallet(crate::Event::ActiveValidatorRangeChanged(
 					(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 					(2, 100)
 				)),

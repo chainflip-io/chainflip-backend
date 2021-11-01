@@ -117,27 +117,27 @@ fn staked_amount_is_added_and_subtracted() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_threshold_signature_Instance1(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from BOB
-			Event::pallet_cf_threshold_signature_Instance1(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
+			Event::Staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
 				assert_eq!(total, STAKE_B);
 			},
 			_, // stake credited to BOB
-			Event::frame_system(frame_system::Event::NewAccount(BOB)),
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
+			Event::System(frame_system::Event::NewAccount(BOB)),
+			Event::Staking(crate::Event::Staked(ALICE, staked, total)) => {
 				assert_eq!(staked, STAKE_A2);
 				assert_eq!(total, STAKE_A1 + STAKE_A2);
 			},
 			_, // stake credited to ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
+			Event::Staking(crate::Event::Staked(ALICE, staked, total)) => {
 				assert_eq!(staked, STAKE_A1);
 				assert_eq!(total, STAKE_A1);
 			},
 			_, // stake credited to ALICE
-			Event::frame_system(frame_system::Event::NewAccount(ALICE))
+			Event::System(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
@@ -174,7 +174,7 @@ fn claiming_unclaimable_is_err() {
 		// Make sure storage hasn't been touched.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE);
 
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::Staked(
+		assert_event_stack!(Event::Staking(crate::Event::Staked(
 			ALICE, STAKE, STAKE
 		)));
 	});
@@ -273,18 +273,18 @@ fn staked_and_claimed_events_must_match() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
+			Event::Staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
 				assert_eq!(claimed_amount, STAKE);
 			},
-			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
-			Event::pallet_cf_threshold_signature_Instance1(SigningEvent::ThresholdSignatureRequest(..)),
+			Event::System(frame_system::Event::KilledAccount(ALICE)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // Claim debited from account
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => {
+			Event::Staking(crate::Event::Staked(ALICE, added, total)) => {
 				assert_eq!(added, STAKE);
 				assert_eq!(total, STAKE);
 			},
 			_, // stake credited to ALICE
-			Event::frame_system(frame_system::Event::NewAccount(ALICE))
+			Event::System(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
@@ -348,7 +348,7 @@ fn signature_is_inserted() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_threshold_signature_Instance1(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
 				// Insert a signature.
 				assert_ok!(Signer::signature_success(
 					Origin::root(),
@@ -357,7 +357,7 @@ fn signature_is_inserted() {
 			}
 		);
 
-		assert_event_stack!(Event::pallet_cf_staking(
+		assert_event_stack!(Event::Staking(
 			crate::Event::ClaimSignatureIssued(ALICE, _)
 		));
 
@@ -468,8 +468,8 @@ fn test_retirement() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::AccountActivated(_)),
-			Event::pallet_cf_staking(crate::Event::AccountRetired(_))
+			Event::Staking(crate::Event::AccountActivated(_)),
+			Event::Staking(crate::Event::AccountRetired(_))
 		);
 	});
 }
@@ -546,13 +546,13 @@ fn claim_expiry() {
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
 		assert_event_stack!(
-			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
+			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
 				STAKE,
 				0
 			)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(ALICE, STAKE))
+			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE))
 		);
 
 		// Tick forward again and expire.
@@ -562,13 +562,13 @@ fn claim_expiry() {
 		// Bob's (unsigned) claim should now be expired too.
 		assert!(!PendingClaims::<Test>::contains_key(BOB));
 		assert_event_stack!(
-			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
+			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
 				STAKE,
 				0
 			)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(BOB, STAKE))
+			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE))
 		);
 	});
 }
@@ -619,11 +619,11 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::pallet_cf_threshold_signature_Instance1(
+			Event::Signer(
 				SigningEvent::ThresholdSignatureRequest(..)
 			),
 			_, // claim debited from ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE
 		);
 	});
@@ -657,7 +657,7 @@ fn test_check_withdrawal_address() {
 		let stake_attempt = stake_attempts.get(0);
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
+		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(
 			..
 		)));
 		// Case: User stakes again with the same address
@@ -702,7 +702,7 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 			TX_HASH
 		));
 		// Expect an Staked event to be fired
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::Staked(..)));
+		assert_event_stack!(Event::Staking(crate::Event::Staked(..)));
 		// Stake some FLIP again with an provided withdrawal address
 		assert_ok!(Staking::staked(
 			Origin::root(),
@@ -712,7 +712,7 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 			TX_HASH
 		));
 		// Expect an failed stake event to be fired but no stake event
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
+		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(
 			..
 		)));
 	});
