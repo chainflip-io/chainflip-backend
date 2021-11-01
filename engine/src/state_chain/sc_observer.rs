@@ -256,7 +256,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         attempt_id,
                                         hex::encode(&signed_tx),
                                     );
-                                    let response_extrinsics = match eth_broadcaster.send(signed_tx).await
+                                    let response_extrinsic = match eth_broadcaster.send(signed_tx).await
                                     {
                                         Ok(tx_hash) => {
                                             slog::debug!(
@@ -265,16 +265,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                 attempt_id,
                                                 tx_hash
                                             );
-                                            [
-                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                    attempt_id, tx_hash.into()
-                                                ),
-                                                // TODO: This should be triggered from the eth event.
-                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
-                                                pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                                                    ChainId::Ethereum, vec![], 0, tx_hash.as_bytes().to_vec()
-                                                ),
-                                            ].to_vec()
+                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
+                                                attempt_id, tx_hash.into()
+                                            )
                                         }
                                         Err(e) => {
                                             slog::error!(
@@ -283,21 +276,16 @@ pub async fn start<BlockStream, RpcClient>(
                                                 attempt_id,
                                                 e
                                             );
-                                            [
-                                                // TODO: Fill in the transaction hash with the real one
-                                                // See https://github.com/chainflip-io/chainflip-backend/issues/586
-                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                    attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
-                                                ),
-                                            ].to_vec()
+                                            // TODO: Fill in the transaction hash with the real one
+                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
+                                                attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
+                                            )
                                         }
                                     };
-                                    for ext in response_extrinsics {
-                                        let _ = state_chain_client.submit_extrinsic(
-                                            &logger,
-                                            ext,
-                                        ).await;
-                                    }
+                                    let _ = state_chain_client.submit_extrinsic(
+                                        &logger,
+                                        response_extrinsic,
+                                    ).await;
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about
