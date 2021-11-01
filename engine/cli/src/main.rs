@@ -57,7 +57,7 @@ async fn send_claim(
     settings: &CLISettings,
     logger: &slog::Logger,
 ) {
-    let (state_chain_client, _) = connect_to_state_chain(&settings.state_chain)
+    let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain)
         .await
         .expect("Could not connect to State Chain node");
 

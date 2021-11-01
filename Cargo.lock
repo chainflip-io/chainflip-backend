@@ -987,6 +987,7 @@ dependencies = [
  "jsonrpc-http-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
+ "jsonrpsee-types",
  "kvdb-rocksdb",
  "lazy_static",
  "log 0.4.14",
