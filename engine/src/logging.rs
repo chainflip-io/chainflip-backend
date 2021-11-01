@@ -294,58 +294,62 @@ pub mod test_utils {
     }
 }
 
-#[test]
-fn test_logging_tags() {
-    use super::logging::test_utils::*;
+#[cfg(test)]
+mod tests {
+    use crate::logging::test_utils::*;
 
-    // Create a logger and tag cache
-    let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
-    let logger2 = logger.clone();
+    #[test]
+    fn test_logging_tags() {
+        // Create a logger and tag cache
+        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let logger2 = logger.clone();
 
-    // Print a bunch of stuff with tags
-    slog::error!(logger, #"E1234", "Test error");
-    slog::error!(logger, #"E1234", "Test error again");
-    slog::warn!(logger2, #"2222", "Test warning");
+        // Print a bunch of stuff with tags
+        slog::error!(logger, #"E1234", "Test error");
+        slog::error!(logger, #"E1234", "Test error again");
+        slog::warn!(logger2, #"2222", "Test warning");
 
-    // Check that tags are collected in the same cache, even from the logger clone
-    assert!(tag_cache.contains_tag("E1234"));
-    assert_eq!(tag_cache.get_tag_count("E1234"), 2);
-    assert!(tag_cache.contains_tag("2222"));
-    assert!(!tag_cache.contains_tag("not_tagged"));
+        // Check that tags are collected in the same cache, even from the logger clone
+        assert!(tag_cache.contains_tag("E1234"));
+        assert_eq!(tag_cache.get_tag_count("E1234"), 2);
+        assert!(tag_cache.contains_tag("2222"));
+        assert!(!tag_cache.contains_tag("not_tagged"));
 
-    // Check that clearing the cache works
-    tag_cache.clear();
-    assert!(!tag_cache.contains_tag("E1234"));
-}
+        // Check that clearing the cache works
+        tag_cache.clear();
+        assert!(!tag_cache.contains_tag("E1234"));
+    }
 
-#[test]
-fn test_logging_tag_filter() {
-    use super::logging::test_utils::*;
+    #[test]
+    fn test_logging_tag_filter() {
+        // Create a logger with a whitelist & blacklist
+        let (logger, tag_cache) = new_test_logger_with_tag_cache_and_tag_filter(
+            vec!["included".to_owned()],
+            vec!["excluded".to_owned()],
+        );
 
-    // Create a logger and whitelist/blacklist
-    let (logger, tag_cache) = new_test_logger_with_tag_cache_and_tag_filter(
-        vec!["included".to_owned()],
-        vec!["excluded".to_owned()],
-    );
+        // Print a bunch of stuff with tags
+        slog::error!(logger, #"included", "on the whitelist");
+        slog::error!(logger, #"not_included", "not on the whitelist");
+        slog::info!(logger, "No tag on this");
+        slog::warn!(logger, #"excluded", "on the blacklist");
 
-    // Print a bunch of stuff with tags
-    slog::error!(logger, #"included", "on the whitelist");
-    slog::error!(logger, #"not_included", "not on the whitelist");
-    slog::info!(logger, "No tag on this");
-    slog::warn!(logger, #"excluded", "on the blacklist");
+        // Check that it was filtered correctly
+        assert!(tag_cache.contains_tag("included"));
+        assert!(!tag_cache.contains_tag("not_included"));
+        assert!(!tag_cache.contains_tag("excluded"));
+    }
 
-    // Check that it was filtered correctly
-    assert!(tag_cache.contains_tag("included"));
-    assert!(!tag_cache.contains_tag("not_included"));
-    assert!(!tag_cache.contains_tag("excluded"));
+    #[test]
+    fn test_logging_tag_filter_empty() {
+        // Create a logger with an empty whitelist
+        let (logger, tag_cache) =
+            new_test_logger_with_tag_cache_and_tag_filter(vec![], vec!["excluded".to_owned()]);
 
-    // Clear the whitelist and tag cache
-    let (logger, tag_cache) =
-        new_test_logger_with_tag_cache_and_tag_filter(vec![], vec!["excluded".to_owned()]);
-
-    // Test that an empty whitelist lets all through except blacklist
-    slog::error!(logger, #"not_included", "no more whitelist");
-    slog::warn!(logger, #"excluded", "on the blacklist");
-    assert!(tag_cache.contains_tag("not_included"));
-    assert!(!tag_cache.contains_tag("excluded"));
+        // Check that an empty whitelist lets all through except blacklist
+        slog::error!(logger, #"not_included", "no whitelist");
+        slog::warn!(logger, #"excluded", "on the blacklist");
+        assert!(tag_cache.contains_tag("not_included"));
+        assert!(!tag_cache.contains_tag("excluded"));
+    }
 }
