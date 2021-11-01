@@ -19,19 +19,19 @@ futures = { version = '0.3.4', features = ['compat'] }
 
 [dependencies.sp-runtime]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sc-network]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-core]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sc-rpc]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 features = ['test-helpers']
 
 [dev-dependencies]

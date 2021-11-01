@@ -139,7 +139,7 @@ mod tests {
 					// Handle events
 					on_events!(
 						events,
-						Event::pallet_cf_threshold_signature_Instance0(
+						Event::pallet_cf_threshold_signature_Instance1(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 								ceremony_id,
@@ -162,7 +162,7 @@ mod tests {
 								).expect("should be able to ethereum signature for node");
 							}
 						},
-						Event::pallet_cf_threshold_signature_Instance0(
+						Event::pallet_cf_threshold_signature_Instance1(
 							// A threshold has been met for this signature
 							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
 								_ceremony_id)) => {

@@ -1,6 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// This can be removed after rustc version 1.53.
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -495,7 +493,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, PENALTY, signer)
 			.unwrap_or_else(|_| {
 				// Should never fail unless the validator doesn't exist.
-				frame_support::debug::error!("Unable to report unknown validator {:?}", signer);
+				log::error!("Unable to report unknown validator {:?}", signer);
 				0
 			});
 		Self::schedule_retry(failed);

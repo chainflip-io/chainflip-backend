@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 
-log = { version = "0.4.14", default-features = false }
+log = { version = '0.4.14', default-features = false }
 
 [dependencies.codec]
 default-features = false
@@ -27,12 +27,12 @@ version = '2.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -42,35 +42,29 @@ version = '1.0'
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
-
-[dependencies.sp-io]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
-
-[dev-dependencies.sp-core]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 optional = true
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dev-dependencies]
 assert_matches = { version = "1.5.0" }
 
-[dev-dependencies.sp-std]
+[dev-dependencies.sp-core]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
+
+[dev-dependencies.sp-io]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
 
 
 [features]
@@ -83,8 +77,6 @@ std = [
     'frame-system/std',
     'sp-std/std',
     'sp-runtime/std',
-    'sp-core/std',
-    'sp-io/std',
     'log/std',
     'frame-benchmarking/std',
 ]

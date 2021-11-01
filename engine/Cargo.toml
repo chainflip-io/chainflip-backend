@@ -45,7 +45,6 @@ kvdb-rocksdb = "0.14.0"
 lazy_static = "1.4"
 num = "0.4.0"
 parking_lot = "0.11"
-rand = "0.7.3"
 regex = "1"
 reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
@@ -80,7 +79,8 @@ state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
 
 # substrate deps
-substrate-subxt = "0.15"
+[dependencies.substrate-subxt]
+git = 'https://github.com/chainflip-io/substrate-subxt.git'
 
 [dependencies.codec]
 features = ['derive', 'full']
@@ -89,35 +89,35 @@ version = '2.1'
 
 [dependencies.frame-support]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-system]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sc-rpc-api]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-core]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-keyring]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-rpc]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-version]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.curv]
 features = ["rust-gmp-kzen"]
@@ -131,3 +131,4 @@ log = "0.4.14"
 mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
+rand = "0.8.4"

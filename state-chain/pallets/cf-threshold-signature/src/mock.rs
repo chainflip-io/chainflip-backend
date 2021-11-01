@@ -3,7 +3,7 @@ use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
 use frame_support::traits::EnsureOrigin;
-use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
+use frame_support::{instances::Instance1, traits::UnfilteredDispatchable};
 use frame_system;
 use sp_core::H256;
 use sp_runtime::{
@@ -22,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Pallet, Call, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -182,7 +182,7 @@ impl SigningContext<Test> for DogeThresholdSignerContext {
 	}
 }
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
 	type SigningContext = DogeThresholdSignerContext;

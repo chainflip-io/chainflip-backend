@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -19,7 +18,6 @@ use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::traits::CheckedDiv;
 use sp_runtime::{
-	offchain::storage_lock::BlockNumberProvider,
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
 };
 
@@ -152,7 +150,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
-		pub(super) fn update_validator_emission_inflation(
+		pub fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
@@ -172,7 +170,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
-		pub(super) fn update_backup_validator_emission_inflation(
+		pub fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
@@ -307,12 +305,11 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() -> Weight {
-		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		let current_block_number = frame_system::Pallet::<T>::block_number();
 		match Self::mint_rewards_for_block(current_block_number) {
 			Ok(weight) => weight,
 			Err(weight) => {
-				frame_support::debug::RuntimeLogger::init();
-				frame_support::debug::error!(
+				log::error!(
 					"Failed to mint rewards at block {:?}",
 					current_block_number
 				);

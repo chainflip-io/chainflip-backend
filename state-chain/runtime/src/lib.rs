@@ -259,10 +259,6 @@ impl frame_system::Config for Runtime {
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
-parameter_types! {
-	pub const MaxAuthorities: u32 = 256;
-}
-
 impl frame_system::offchain::SigningTypes for Runtime {
 	type Public = <Signature as Verify>::Signer;
 	type Signature = Signature;
@@ -271,7 +267,6 @@ impl frame_system::offchain::SigningTypes for Runtime {
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
-	type MaxAuthorities = MaxAuthorities;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -439,9 +434,9 @@ impl pallet_cf_online::Config for Runtime {
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
-use frame_support::instances::Instance0;
+use frame_support::instances::Instance1;
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Runtime {
+impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
@@ -455,7 +450,7 @@ parameter_types! {
 	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
 }
 
-impl pallet_cf_broadcast::Config<Instance0> for Runtime {
+impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
@@ -489,13 +484,12 @@ construct_runtime!(
 		Aura: pallet_aura::{Pallet, Config<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
-		Offences: pallet_offences::{Pallet, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage, Event<T>,},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Pallet, Call, Storage, Event<T>},
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Pallet, Call, Storage, Event<T>},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -545,7 +539,7 @@ impl_runtime_apis! {
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			OpaqueMetadata::new(Runtime::metadata().into())
+			Runtime::metadata().into()
 		}
 	}
 
@@ -592,7 +586,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities().into_inner()
+			Aura::authorities()
 		}
 	}
 

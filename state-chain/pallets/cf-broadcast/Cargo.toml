@@ -18,6 +18,8 @@ cf-chains = { path = "../../chains", default-features = false }
 cf-traits = { path = "../../traits", default-features = false }
 pallet-cf-threshold-signature = { path = "../cf-threshold-signature", default-features = false }
 
+log = { version = '0.4.14', default-features = false }
+
 # Parity deps
 [dependencies.codec]
 default-features = false
@@ -28,12 +30,12 @@ version = '2.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -43,29 +45,29 @@ version = '1.0'
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 optional = true
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 # Dev dependencies
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [features]
 default = ['std']
@@ -77,6 +79,7 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'frame-benchmarking/std',
+  'log/std',
   'pallet-cf-threshold-signature/std',
   'sp-core/std',
   'sp-runtime/std',

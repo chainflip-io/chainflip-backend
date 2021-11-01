@@ -16,6 +16,8 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 
+log = { version = '0.4.14', default-features = false }
+
 # Parity deps
 [dependencies.codec]
 default-features = false
@@ -31,27 +33,27 @@ version = '1.0'
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-arithmetic]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dev-dependencies]
 pallet-cf-flip = { path = '../cf-flip' }
@@ -59,12 +61,12 @@ pallet-cf-flip = { path = '../cf-flip' }
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [features]
 default = ['std']
@@ -73,6 +75,7 @@ std = [
 	'scale-info/std',
 	'frame-support/std',
 	'frame-system/std',
+	'log/std',
 	'sp-arithmetic/std',
 	'sp-std/std',
 	'sp-runtime/std',

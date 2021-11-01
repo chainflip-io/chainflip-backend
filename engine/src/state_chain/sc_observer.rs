@@ -136,7 +136,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         )
                                         .await;
                                 }
-                                state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(
+                                state_chain_runtime::Event::pallet_cf_threshold_signature_Instance1(
                                     pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
                                         ceremony_id,
                                         key_id,
@@ -203,7 +203,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         )
                                         .await;
                                 }
-                                state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+                                state_chain_runtime::Event::pallet_cf_broadcast_Instance1(
                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
                                         attempt_id,
                                         validator_id,
@@ -244,7 +244,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         },
                                     }
                                 }
-                                state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+                                state_chain_runtime::Event::pallet_cf_broadcast_Instance1(
                                     pallet_cf_broadcast::Event::TransmissionRequest(
                                         attempt_id,
                                         signed_tx,

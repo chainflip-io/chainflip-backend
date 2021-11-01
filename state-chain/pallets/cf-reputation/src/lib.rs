@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -119,7 +118,7 @@ pub mod pallet {
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
 		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits)
 		#[pallet::weight(10_000)]
-		pub(super) fn update_accrual_ratio(
+		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,
 			online_credits: OnlineCreditsFor<T>,

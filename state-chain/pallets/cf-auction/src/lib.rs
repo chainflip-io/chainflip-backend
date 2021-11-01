@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -180,7 +179,7 @@ pub mod pallet {
 		///
 		/// - [InvalidRange](Error::InvalidRange)
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
-		pub(super) fn set_active_validator_range(
+		pub fn set_active_validator_range(
 			origin: OriginFor<T>,
 			range: ActiveValidatorRange,
 		) -> DispatchResultWithPostInfo {
@@ -294,8 +293,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::error!(
+					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
 						bidders.len(),
 						ActiveValidatorSizeRange::<T>::get().0

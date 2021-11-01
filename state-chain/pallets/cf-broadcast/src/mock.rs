@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
@@ -21,7 +21,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MockBroadcast: pallet_cf_broadcast::<Instance0>::{Pallet, Call, Storage, Event<T>},
+		MockBroadcast: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -120,7 +120,7 @@ parameter_types! {
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
 }
 
-impl pallet_cf_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type BroadcastConfig = MockBroadcastConfig;

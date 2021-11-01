@@ -13,6 +13,7 @@ hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 secp256k1 = {optional = true, version = "0.20"}
+log = { version = '0.4.14', default-features = false }
 
 # Substrate packages
 [dependencies.codec]
@@ -23,19 +24,19 @@ version = '2.0.0'
 
 [dependencies.sp-std]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-support]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.frame-system]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-10'
+tag = 'monthly-2021-09+1'
 
 
 [dev-dependencies]
@@ -50,6 +51,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'hex/std',
+    'log/std',
     'rlp/std',
     'serde',
     'sp-runtime/std',

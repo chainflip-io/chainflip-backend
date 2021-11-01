@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -111,7 +110,7 @@ pub mod pallet {
 		/// - [AuctionInProgress](Error::AuctionInProgress)
 		/// - [InvalidEpoch](Error::InvalidEpoch)
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
-		pub(super) fn set_blocks_for_epoch(
+		pub fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
@@ -145,7 +144,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [AuctionInProgress](Error::AuctionInProgress)
 		#[pallet::weight(10_000)]
-		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			ensure!(
 				T::Auctioneer::waiting_on_bids(),
@@ -171,7 +170,7 @@ pub mod pallet {
 		///
 		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
-		pub(super) fn set_keys(
+		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,
 			proof: Vec<u8>,
@@ -344,7 +343,7 @@ impl<T: Config> Pallet<T> {
 	/// Generate our validator lookup list
 	fn generate_lookup() {
 		// Update our internal list of validators
-		ValidatorLookup::<T>::remove_all();
+		ValidatorLookup::<T>::remove_all(None);
 		for validator in <pallet_session::Pallet<T>>::validators() {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
@@ -402,17 +401,6 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	fn end_session(_end_index: SessionIndex) {}
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {}
-}
-
-impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
-	fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
-		None
-	}
-
-	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
-	fn weight(_now: T::BlockNumber) -> u64 {
-		0
-	}
 }
 
 /// In this module, for simplicity, we just return the same AccountId.

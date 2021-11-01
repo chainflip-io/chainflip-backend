@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -204,7 +203,7 @@ pub mod pallet {
 				Error::<T>::InvalidCeremonyId
 			);
 			let agg_key = AggKey::try_from(&new_public_key[..]).map_err(|e| {
-				frame_support::debug::error!(
+				log::error!(
 					"Unable to decode new public key {:?}: {:?}",
 					new_public_key,
 					e
@@ -279,7 +278,7 @@ pub mod pallet {
 					&offender,
 				)
 				.unwrap_or_else(|e| {
-					frame_support::debug::error!(
+					log::error!(
 						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
 						offender,
 						e
@@ -330,7 +329,7 @@ pub mod pallet {
 			// If the keys don't match, we don't have much choice but to trust the witnessed one over the one
 			// we expected, but we should log the issue nonetheless.
 			if new_public_key != expected_new_key {
-				frame_support::debug::error!(
+				log::error!(
 					"Unexpected new agg key witnessed for {:?}. Expected {:?}, got {:?}.",
 					chain_id,
 					expected_new_key,
@@ -433,7 +432,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::KeygenAborted(
 			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
 		));
-		PendingVaultRotations::<T>::remove_all();
+		PendingVaultRotations::<T>::remove_all(None);
 		T::RotationHandler::vault_rotation_aborted();
 	}
 
@@ -486,7 +485,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
 		if Pallet::<T>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotations::<T>::remove_all();
+			PendingVaultRotations::<T>::remove_all(None);
 			Self::deposit_event(Event::VaultsRotated);
 			Ok(())
 		} else {

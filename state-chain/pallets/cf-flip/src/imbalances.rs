@@ -5,7 +5,7 @@
 
 use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, Encode};
-use frame_support::traits::{Imbalance, TryDrop};
+use frame_support::traits::{Imbalance, SameOrOther, TryDrop};
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
@@ -266,15 +266,15 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 			mem::forget(other);
 		}
 	}
-	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+	fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 		let (a, b) = (self.amount, other.amount);
 		let (s_a, s_b) = (self.source.clone(), other.source.clone());
 		mem::forget((self, other));
 
 		if a >= b {
-			Ok(Self::new(a - b, s_a))
+			SameOrOther::Same(Self::new(a - b, s_a))
 		} else {
-			Err(Deficit::new(b - a, s_b))
+			SameOrOther::Other(Deficit::new(b - a, s_b))
 		}
 	}
 	fn peek(&self) -> T::Balance {
@@ -324,15 +324,15 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 			mem::forget(other);
 		}
 	}
-	fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+	fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 		let (a, b) = (self.amount, other.amount);
 		let (s_a, s_b) = (self.source.clone(), other.source.clone());
 		mem::forget((self, other));
 
 		if a >= b {
-			Ok(Self::new(a - b, s_a))
+			SameOrOther::Same(Self::new(a - b, s_a))
 		} else {
-			Err(Surplus::new(b - a, s_b))
+			SameOrOther::Other(Surplus::new(b - a, s_b))
 		}
 	}
 	fn peek(&self) -> T::Balance {

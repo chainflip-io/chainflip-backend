@@ -73,7 +73,7 @@ impl SigData {
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.
 	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
-		self.msg_hash = Keccak256::hash(calldata);
+		self.msg_hash = H256(Keccak256::hash(calldata).0);
 	}
 
 	/// Add the actual signature. This method does no verification.
@@ -140,13 +140,13 @@ impl TryFrom<&[u8]> for AggKey {
 		if let [pub_key_y_parity, pub_key_x @ ..] = bytes {
 			if *pub_key_y_parity == 2 || *pub_key_y_parity == 3 {
 				let x: [u8; 32] = pub_key_x.try_into().map_err(|e| {
-					frame_support::debug::error!("Invalid aggKey format: {:?}", e);
+					log::error!("Invalid aggKey format: {:?}", e);
 					"Invalid aggKey format: x coordinate should be 32 bytes."
 				})?;
 
 				Ok(AggKey::from((pub_key_y_parity - 2, x)))
 			} else {
-				frame_support::debug::error!(
+				log::error!(
 					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
 					pub_key_y_parity,
 				);
@@ -154,7 +154,7 @@ impl TryFrom<&[u8]> for AggKey {
 				Err("Invalid aggKey format: Leading byte should be 2 or 3")
 			}
 		} else {
-			frame_support::debug::error!(
+			log::error!(
 				"Invalid aggKey format: Should be 33 bytes total, got {}",
 				bytes.len()
 			);

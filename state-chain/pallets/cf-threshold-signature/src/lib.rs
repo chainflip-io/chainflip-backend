@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -182,7 +181,7 @@ pub mod pallet {
 					offender,
 				)
 				.unwrap_or_else(|e| {
-					frame_support::debug::error!(
+					log::error!(
 						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
 						offender,
 						e

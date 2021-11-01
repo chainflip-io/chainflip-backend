@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
-use frame_support::instances::Instance0;
+use frame_support::instances::Instance1;
 use frame_support::traits::Hooks;
 use frame_support::{assert_noop, assert_ok};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -25,7 +25,7 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_threshold_signature_Instance0(
+			Event::pallet_cf_threshold_signature_Instance1(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 					req_id,
 					key_id,
@@ -75,7 +75,7 @@ fn happy_path() {
 				request_id + 1,
 				"MaliciousSignature".to_string()
 			),
-			Error::<Test, Instance0>::InvalidCeremonyId
+			Error::<Test, Instance1>::InvalidCeremonyId
 		);
 
 		// CFE responds

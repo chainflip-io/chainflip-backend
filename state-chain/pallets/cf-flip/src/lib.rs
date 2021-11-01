@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -283,6 +282,7 @@ impl<T: Config> Pallet<T> {
 				let amount = surplus.peek();
 				surplus
 					.offset(Self::credit(account_id, amount))
+					.same()
 					.map(SignedImbalance::Positive)
 					.unwrap_or_else(SignedImbalance::Negative)
 			}
@@ -290,6 +290,7 @@ impl<T: Config> Pallet<T> {
 				let amount = deficit.peek();
 				deficit
 					.offset(Self::debit(account_id, amount))
+					.same()
 					.map(SignedImbalance::Negative)
 					.unwrap_or_else(SignedImbalance::Positive)
 			}

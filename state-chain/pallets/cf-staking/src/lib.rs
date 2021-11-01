@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -23,7 +22,6 @@ use cf_traits::{
 };
 use core::time::Duration;
 use frame_support::{
-	debug,
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	error::BadOrigin,
@@ -33,7 +31,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
-use sp_core::U256;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	DispatchError,
@@ -76,7 +73,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ From<u128>
-			+ Into<U256>;
+			+ Into<cf_chains::eth::Uint>;
 
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
@@ -338,7 +335,7 @@ pub mod pallet {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a subsequent release.
 					// Consequences are minor.
-					debug::error!(
+					log::error!(
 						"Unexpected reference count error while reaping the account {:?}: {:?}.",
 						account_id,
 						e
@@ -527,7 +524,7 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
 				// The standard impl of this in the system pallet never fails.
-				debug::error!(
+				log::error!(
 					"Unexpected error when creating an account upon staking: {:?}",
 					e
 				);
