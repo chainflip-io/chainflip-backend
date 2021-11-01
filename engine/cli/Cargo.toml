@@ -5,6 +5,7 @@ name = "chainflip-cli"
 version = "0.1.0"
 
 [dependencies]
+anyhow = "1.0"
 chainflip-engine = {path = "../../engine/"}
 clap = "*"
 hex = "0.4.3"
