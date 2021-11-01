@@ -1,75 +1,45 @@
 use std::convert::TryInto;
 
-use chainflip_engine::{settings::StateChain, state_chain::client::connect_to_state_chain};
-use clap::{App, Arg, SubCommand};
+use chainflip_engine::state_chain::client::connect_to_state_chain;
 use settings::{CLICommandLineOptions, CLISettings};
 use structopt::StructOpt;
 
+use crate::settings::CFCommand::*;
 use anyhow::Result;
 
 mod settings;
 
-// The commands:
-const CLAIM: &str = "claim";
-
 #[tokio::main]
 async fn main() {
-    // let matches = App::new("Chainflip CLI")
-    //     .version("0.1.0")
-    //     .author("Chainflip Team <team@chainflip.io>")
-    //     .about("Run commands and use Chainflip")
-    //     .arg(
-    //         Arg::with_name("CFE config")
-    //             .short("c")
-    //             .long("config")
-    //             .help("Points to the configuration of the Chainflip engine")
-    //             .required(false),
-    //     )
-    //     .subcommand(
-    //         SubCommand::with_name(CLAIM)
-    //             .arg(
-    //                 Arg::with_name("amount")
-    //                     .help("Amount of FLIP to claim")
-    //                     .required(true),
-    //             )
-    //             .arg(
-    //                 Arg::with_name("eth_address")
-    //                     .help("ETH address claimed FLIP will be sent to")
-    //                     .required(true),
-    //             ),
-    //     )
-    //     .about("register for a claim certificate")
-    //     .get_matches();
+    let command_line_opts = CLICommandLineOptions::from_args();
+    let cli_settings =
+        CLISettings::new(command_line_opts.clone()).expect("Should be able to create settings");
 
-    let cli_command_line_opts = CLICommandLineOptions::from_args();
+    println!(
+        "Connecting to state chain node at: `{}` and using private key located at: `{}`",
+        cli_settings.state_chain.ws_endpoint, cli_settings.state_chain.signing_key_file
+    );
 
-    let cli_settings = CLISettings::new(cli_command_line_opts).unwrap();
-
-    println!("Using settings: {:?}", cli_settings);
-
-    // match cli_command_line_opts.subcommand_matches(CLAIM) {
-    //     Some(args) => {
-    //         let amount: u128 =
-    //             str::parse::<u128>(args.value_of("amount").expect("amount is required"))
-    //                 .expect("Invalid amount provided");
-
-    //         let eth_address_arg = args
-    //             .value_of("eth_address")
-    //             .expect("Ethereum return address not provided");
-
-    //         let eth_address_arg = clean_eth_address(eth_address_arg).expect("Invalid ETH address");
-
-    //         send_claim_request(amount, eth_address_arg).await;
-    //     }
-    //     _ => (),
-    // }
+    match command_line_opts.cmd {
+        Claim {
+            amount,
+            eth_address,
+        } => {
+            send_claim_request(
+                amount,
+                clean_eth_address(eth_address).expect("Invalid ETH address"),
+                &cli_settings,
+            )
+            .await;
+        }
+    };
 }
 
-fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20]> {
+fn clean_eth_address(dirty_eth_address: String) -> Result<[u8; 20]> {
     let eth_address_hex_str = if dirty_eth_address.starts_with("0x") {
         &dirty_eth_address[2..]
     } else {
-        dirty_eth_address
+        &dirty_eth_address
     };
 
     let eth_address: [u8; 20] = hex::decode(eth_address_hex_str)?
@@ -79,16 +49,16 @@ fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20]> {
     Ok(eth_address)
 }
 
-async fn send_claim_request(amount: u128, eth_address: [u8; 20]) {
-    // TODO: Read in actual values here. Take as CLI args, and use these as a default
-    let state_chain_settings = StateChain {
-        ws_endpoint: "ws://127.0.0.1:9944".to_string(),
-        signing_key_file: "/Users/kaz/Documents/cf-dev-keys/bashful_key".to_string(),
-    };
+async fn send_claim_request(amount: u128, eth_address: [u8; 20], settings: &CLISettings) {
+    println!(
+        "Executing claim with amount `{}` and eth-address `0x{}`",
+        amount,
+        hex::encode(eth_address)
+    );
 
     let logger = chainflip_engine::logging::utils::new_cli_logger();
 
-    let (state_chain_client, _) = connect_to_state_chain(&state_chain_settings)
+    let (state_chain_client, _) = connect_to_state_chain(&settings.state_chain)
         .await
         .expect("Could not connect to State Chain node");
 
@@ -98,4 +68,17 @@ async fn send_claim_request(amount: u128, eth_address: [u8; 20]) {
         .submit_extrinsic(&logger, claim_call)
         .await
         .expect("Could not submit extrinsic");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use chainflip_engine::testing;
+
+    #[test]
+    fn cleans_eth_address() {
+        let input = "0x323232".to_string();
+        testing::assert_ok!(clean_eth_address(input));
+    }
 }

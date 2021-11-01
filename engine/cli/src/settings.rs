@@ -3,7 +3,7 @@ use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct CLICommandLineOptions {
     // Config path
     #[structopt(short = "c", long = "config-path")]
@@ -16,17 +16,17 @@ pub struct CLICommandLineOptions {
     state_chain_signing_key_file: Option<String>,
 
     #[structopt(subcommand)]
-    cmd: CFCommand,
+    pub cmd: CFCommand,
 }
 
-#[derive(StructOpt)]
-enum CFCommand {
+#[derive(StructOpt, Clone)]
+pub enum CFCommand {
     Claim { amount: u128, eth_address: String },
 }
 
 #[derive(Deserialize, Debug)]
 pub struct CLISettings {
-    state_chain: StateChain,
+    pub state_chain: StateChain,
 }
 
 impl CLISettings {

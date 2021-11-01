@@ -6,8 +6,9 @@ pub mod multisig;
 pub mod p2p;
 pub mod settings;
 pub mod state_chain;
-#[macro_use]
-mod testing;
+
+// #[cfg(test)]
+pub mod testing;
 // Blockchains
 pub mod eth;
 
