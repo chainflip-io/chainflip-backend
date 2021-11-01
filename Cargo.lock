@@ -947,8 +947,11 @@ dependencies = [
  "anyhow",
  "chainflip-engine",
  "clap",
+ "config",
  "hex",
  "pallet-cf-staking",
+ "serde 1.0.126",
+ "structopt",
  "tokio 1.11.0",
 ]
 

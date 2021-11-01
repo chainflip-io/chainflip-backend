@@ -2,57 +2,67 @@ use std::convert::TryInto;
 
 use chainflip_engine::{settings::StateChain, state_chain::client::connect_to_state_chain};
 use clap::{App, Arg, SubCommand};
+use settings::{CLICommandLineOptions, CLISettings};
+use structopt::StructOpt;
 
 use anyhow::Result;
+
+mod settings;
 
 // The commands:
 const CLAIM: &str = "claim";
 
 #[tokio::main]
 async fn main() {
-    let matches = App::new("Chainflip CLI")
-        .version("0.1.0")
-        .author("Chainflip Team <team@chainflip.io>")
-        .about("Run commands and use Chainflip")
-        .arg(
-            Arg::with_name("CFE config")
-                .short("c")
-                .long("config")
-                .help("Points to the configuration of the Chainflip engine")
-                .required(false),
-        )
-        .subcommand(
-            SubCommand::with_name(CLAIM)
-                .arg(
-                    Arg::with_name("amount")
-                        .help("Amount of FLIP to claim")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("eth_address")
-                        .help("ETH address claimed FLIP will be sent to")
-                        .required(true),
-                ),
-        )
-        .about("register for a claim certificate")
-        .get_matches();
+    // let matches = App::new("Chainflip CLI")
+    //     .version("0.1.0")
+    //     .author("Chainflip Team <team@chainflip.io>")
+    //     .about("Run commands and use Chainflip")
+    //     .arg(
+    //         Arg::with_name("CFE config")
+    //             .short("c")
+    //             .long("config")
+    //             .help("Points to the configuration of the Chainflip engine")
+    //             .required(false),
+    //     )
+    //     .subcommand(
+    //         SubCommand::with_name(CLAIM)
+    //             .arg(
+    //                 Arg::with_name("amount")
+    //                     .help("Amount of FLIP to claim")
+    //                     .required(true),
+    //             )
+    //             .arg(
+    //                 Arg::with_name("eth_address")
+    //                     .help("ETH address claimed FLIP will be sent to")
+    //                     .required(true),
+    //             ),
+    //     )
+    //     .about("register for a claim certificate")
+    //     .get_matches();
 
-    match matches.subcommand_matches(CLAIM) {
-        Some(args) => {
-            let amount: u128 =
-                str::parse::<u128>(args.value_of("amount").expect("amount is required"))
-                    .expect("Invalid amount provided");
+    let cli_command_line_opts = CLICommandLineOptions::from_args();
 
-            let eth_address_arg = args
-                .value_of("eth_address")
-                .expect("Ethereum return address not provided");
+    let cli_settings = CLISettings::new(cli_command_line_opts).unwrap();
 
-            let eth_address_arg = clean_eth_address(eth_address_arg).expect("Invalid ETH address");
+    println!("Using settings: {:?}", cli_settings);
 
-            send_claim_request(amount, eth_address_arg).await;
-        }
-        _ => (),
-    }
+    // match cli_command_line_opts.subcommand_matches(CLAIM) {
+    //     Some(args) => {
+    //         let amount: u128 =
+    //             str::parse::<u128>(args.value_of("amount").expect("amount is required"))
+    //                 .expect("Invalid amount provided");
+
+    //         let eth_address_arg = args
+    //             .value_of("eth_address")
+    //             .expect("Ethereum return address not provided");
+
+    //         let eth_address_arg = clean_eth_address(eth_address_arg).expect("Invalid ETH address");
+
+    //         send_claim_request(amount, eth_address_arg).await;
+    //     }
+    //     _ => (),
+    // }
 }
 
 fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20]> {

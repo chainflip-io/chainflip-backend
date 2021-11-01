@@ -140,8 +140,8 @@ impl Settings {
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
         let mut settings = match opts.config_path {
-            Some(path) => Settings::from_file(&path)?,
-            None => Settings::from_file("config/Default.toml")?,
+            Some(path) => Self::from_file(&path)?,
+            None => Self::from_file("config/Default.toml")?,
         };
 
         // Override the settings with the cmd line options
