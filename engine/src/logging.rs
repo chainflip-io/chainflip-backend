@@ -86,6 +86,12 @@ pub mod utils {
     pub fn new_cli_logger_verbose() -> slog::Logger {
         slog::Logger::root(Fuse(PrintlnDrainVerbose), o!())
     }
+
+    /// Logger that discards everything, useful when typical logging isn't necessary
+    /// or is distracting e.g. in the CLI
+    pub fn new_discard_logger() -> slog::Logger {
+        slog::Logger::root(slog::Discard, o!())
+    }
 }
 
 #[cfg(test)]

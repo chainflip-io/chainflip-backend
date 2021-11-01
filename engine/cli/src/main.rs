@@ -12,22 +12,21 @@ mod settings;
 #[tokio::main]
 async fn main() {
     let command_line_opts = CLICommandLineOptions::from_args();
-    let cli_settings =
-        CLISettings::new(command_line_opts.clone()).expect("Should be able to create settings");
+    let cli_settings = CLISettings::new(command_line_opts.clone()).expect("Could not read config");
 
     println!(
         "Connecting to state chain node at: `{}` and using private key located at: `{}`",
         cli_settings.state_chain.ws_endpoint, cli_settings.state_chain.signing_key_file
     );
 
-    let logger = chainflip_engine::logging::utils::new_cli_logger();
+    let logger = chainflip_engine::logging::utils::new_discard_logger();
 
     match command_line_opts.cmd {
         Claim {
             amount,
             eth_address,
         } => {
-            send_claim_request(
+            send_claim(
                 amount,
                 clean_eth_address(eth_address).expect("Invalid ETH address"),
                 &cli_settings,
@@ -52,7 +51,7 @@ fn clean_eth_address(dirty_eth_address: String) -> Result<[u8; 20]> {
     Ok(eth_address)
 }
 
-async fn send_claim_request(
+async fn send_claim(
     amount: u128,
     eth_address: [u8; 20],
     settings: &CLISettings,
@@ -62,20 +61,20 @@ async fn send_claim_request(
         .await
         .expect("Could not connect to State Chain node");
 
-    let claim_call = pallet_cf_staking::Call::claim(amount, eth_address);
-
     println!(
-        "Submitting claim with amount `{}` and eth-address `0x{}`",
+        "Submitting claim with amount `{}` to ETH address `0x{}`",
         amount,
         hex::encode(eth_address)
     );
 
     confirm_submit();
 
-    state_chain_client
-        .submit_extrinsic(&logger, claim_call)
+    let tx_hash = state_chain_client
+        .submit_extrinsic(&logger, pallet_cf_staking::Call::claim(amount, eth_address))
         .await
         .expect("Could not submit extrinsic");
+
+    println!("Your claim has transaction hash: `{:?}`", tx_hash);
 }
 
 fn confirm_submit() {
@@ -94,13 +93,15 @@ fn confirm_submit() {
 
     match input {
         "y" | "yes" | "1" | "true" | "ofc" => {
+            println!("Submitting...");
             return;
         }
         "n" | "no" | "0" | "false" | "nah" => {
-            println!("Ok, exiting.");
+            println!("Ok, exiting...");
             std::process::exit(0);
         }
         _ => {
+            eprintln!("Invalid: please type `y` or `n` to confirm");
             std::process::exit(1);
         }
     }
