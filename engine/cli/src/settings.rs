@@ -1,6 +1,6 @@
-use chainflip_engine::settings::StateChain;
+use chainflip_engine::settings::{parse_websocket_url, StateChain};
 use config::{Config, ConfigError, File};
-use serde::{de, Deserialize, Deserializer};
+use serde::Deserialize;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone)]
@@ -57,26 +57,14 @@ impl CLISettings {
         let s: Self = s.try_into()?;
 
         // make sure the settings are clean
-        // s.validate_settings()?;
+        s.validate_settings()?;
 
         Ok(s)
     }
+
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
+        parse_websocket_url(&self.state_chain.ws_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+        Ok(())
+    }
 }
-
-// impl CLICommandLineOptions {
-//     /// Creates an empty CommandLineOptions with `None` for all fields
-//     pub fn new() -> CLICommandLineOptions {
-//         CLICommandLineOptions {
-//             config_path: None,
-//             state_chain_ws_endpoint: None,
-//             state_chain_signing_key_file: None,
-//             cmd: CFCommand::default(),
-//         }
-//     }
-// }
-
-// impl Default for CLICommandLineOptions {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }

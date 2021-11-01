@@ -951,6 +951,7 @@ dependencies = [
  "hex",
  "pallet-cf-staking",
  "serde 1.0.126",
+ "slog",
  "structopt",
  "tokio 1.11.0",
 ]

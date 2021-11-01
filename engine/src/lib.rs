@@ -7,7 +7,7 @@ pub mod p2p;
 pub mod settings;
 pub mod state_chain;
 
-// #[cfg(test)]
+#[macro_use]
 pub mod testing;
 // Blockchains
 pub mod eth;

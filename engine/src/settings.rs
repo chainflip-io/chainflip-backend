@@ -191,8 +191,10 @@ impl Settings {
 
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        // check the Websocket URLs
         parse_websocket_url(&self.eth.node_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+        parse_websocket_url(&self.state_chain.ws_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         is_valid_db_path(self.signing.db_file.as_path())
@@ -219,7 +221,7 @@ impl Settings {
 }
 
 /// Parse the URL and check that it is a valid websocket url
-fn parse_websocket_url(url: &str) -> Result<Url> {
+pub fn parse_websocket_url(url: &str) -> Result<Url> {
     let issue_list_url = Url::parse(&url)?;
     if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
         return Err(anyhow::Error::msg("Wrong scheme"));
