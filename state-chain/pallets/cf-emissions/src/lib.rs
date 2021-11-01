@@ -17,6 +17,7 @@ mod tests;
 
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
+use core::convert::TryInto;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::traits::CheckedDiv;
@@ -32,7 +33,6 @@ type BasisPoints = u32;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use std::convert::TryInto;
 
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -142,7 +142,8 @@ pub mod pallet {
 
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
-				T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
+				T::WeightInfo::no_rewards_minted()
+			// T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
 			} else {
 				T::WeightInfo::no_rewards_minted()
 			}
