@@ -127,6 +127,7 @@ impl pallet_cf_emissions::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type MintInterval = MintInterval;
 	type BlocksPerDay = BlocksPerDay;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

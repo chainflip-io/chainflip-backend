@@ -1,4 +1,4 @@
-use crate as pallet_cf_rewards;
+use crate::{self as pallet_cf_rewards, WeightInfo};
 use cf_traits::{RewardRollover, StakeTransfer};
 use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
 use frame_system as system;
@@ -88,6 +88,7 @@ impl pallet_cf_flip::Config for Test {
 
 impl pallet_cf_rewards::Config for Test {
 	type Event = Event;
+	type WeightInfoRewards = ();
 }
 
 pub fn check_balance_integrity() {
