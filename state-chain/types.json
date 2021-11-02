@@ -112,7 +112,8 @@
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "Vault": {
-    "public_key": "PublicKey"
+    "public_key": "PublicKey",
+    "active_window": "BlockHeightWindow"
   },
   "ValidatorSize": "u32",
   "VaultRotationStatus": {
