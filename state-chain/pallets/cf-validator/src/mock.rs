@@ -31,6 +31,7 @@ pub const MAX_VALIDATOR_SIZE: u32 = 3;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
+	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
 	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
@@ -170,10 +171,11 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
+		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
 		new_bond: Self::Amount,
 	) {
+		OUTGOING_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}
@@ -220,9 +222,15 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
+
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
+
+pub fn outgoing_validators() -> Vec<u64> {
+	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
+}
+
 pub fn min_bid() -> u64 {
 	MIN_BID.with(|l| *l.borrow())
 }
