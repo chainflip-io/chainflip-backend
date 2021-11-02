@@ -18,7 +18,7 @@ use sp_runtime::{
 };
 use std::cell::RefCell;
 use cf_traits::mocks::epoch_info::MockEpochInfo;
-use cf_traits::mocks::chainflipaccount::MockChainflipAccount;
+use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
