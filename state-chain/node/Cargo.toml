@@ -30,8 +30,8 @@ cf-p2p = { path = '../client/cf-p2p' }
 futures = { version = '0.3.4', features = ['compat'] }
 hex-literal = '0.3.1'
 hex = '0.4'
-jsonrpc-core-client = '18.0'
-jsonrpc-derive = '18.0'
+jsonrpc-core-client = '18.0.0'
+jsonrpc-derive = '18.0.0'
 
 # Substrate dependencies
 jsonrpc-core = '18.0.0'
