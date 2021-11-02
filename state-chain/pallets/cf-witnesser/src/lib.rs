@@ -49,6 +49,7 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Member
 			+ FullCodec
+			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
 
@@ -152,7 +153,7 @@ pub mod pallet {
 		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
 		///   outside of the range of our bitmask. Should be impossible?
 		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
-		#[pallet::weight(T::WeightInfo::witness())]
+		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,

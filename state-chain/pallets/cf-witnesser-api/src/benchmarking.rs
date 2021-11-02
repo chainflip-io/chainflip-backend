@@ -11,10 +11,16 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 use crate::Pallet as Auction;
 
 benchmarks! {
-	// TODO: implement benchmark
+	// witness_eth_signature_success {
+	// 	let caller = whitelisted_caller();
+	// 	let id: u64 = 1;
+	// 	let signature: u128 = 12345;
+	// } : _(RawOrigin::Signed(caller), id, signature)
 	witness_eth_signature_success {} : {}
 	// TODO: implement benchmark
-	witness_eth_signature_failed {} : {}
+	witness_eth_signature_failed {
+		let caller = whitelisted_caller();
+	} : _(RawOrigin::Signed(caller), 1, vec![])
 	// TODO: implement benchmark
 	witness_eth_transmission_success {} : {}
 	// TODO: implement benchmark
