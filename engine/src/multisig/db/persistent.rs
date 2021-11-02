@@ -54,17 +54,8 @@ impl KeyDB for PersistentKeyDB {
         self.db
             .iter(0)
             .filter_map(|(key_id, key_info)| {
-                let key_id: Vec<u8> = match key_id.try_into() {
-                    Ok(key_id) => Some(key_id),
-                    Err(err) => {
-                        slog::error!(self.logger, "Could not deserialize key_id from DB: {}", err);
-                        None
-                    }
-                }?;
-
-                let key_id: KeyId = KeyId(key_id);
-                let key_info_bytes: Vec<u8> = key_info.try_into().unwrap();
-                match bincode::deserialize::<KeygenResultInfo>(key_info_bytes.as_ref()) {
+                let key_id: KeyId = KeyId(key_id.into());
+                match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
                     Ok(keygen_info) => Some((key_id, keygen_info)),
                     Err(err) => {
                         slog::error!(
