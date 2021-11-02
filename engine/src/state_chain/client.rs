@@ -29,7 +29,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::Mutex;
+use crate::common;
 use crate::settings;
 
 #[cfg(test)]
@@ -174,7 +174,7 @@ pub trait StateChainRpcApi {
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        block_stream: Arc<Mutex<BlockStream>>,
+        block_stream: Arc<common::Mutex<BlockStream>>,
     ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
@@ -228,7 +228,7 @@ impl StateChainRpcApi for StateChainRpcClient {
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        block_stream: Arc<Mutex<BlockStream>>,
+        block_stream: Arc<common::Mutex<BlockStream>>,
     ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
@@ -360,7 +360,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub async fn watch_submitted_extrinsic<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        block_stream: Arc<Mutex<BlockStream>>,
+        block_stream: Arc<common::Mutex<BlockStream>>,
     ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
