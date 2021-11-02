@@ -23,18 +23,22 @@ package = 'parity-scale-codec'
 version = '2.3.1'
 
 [dependencies.sp-std]
+default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
 [dependencies.frame-support]
+default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
 [dependencies.frame-system]
+default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
 [dependencies.sp-runtime]
+default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
