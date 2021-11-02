@@ -6,6 +6,7 @@ use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
+use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim' function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]

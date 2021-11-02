@@ -17,6 +17,7 @@ use sp_std::prelude::*;
 use sp_std::{
 	convert::{TryFrom, TryInto},
 	str,
+	vec,
 };
 
 //------------------------//
