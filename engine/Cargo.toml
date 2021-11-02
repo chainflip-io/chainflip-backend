@@ -102,5 +102,4 @@ jsonrpc-pubsub = "15.1"
 log = "0.4.14"
 mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
-jsonrpsee-types = "=0.2.0-alpha.3"
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
