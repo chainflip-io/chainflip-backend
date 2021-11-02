@@ -18,7 +18,10 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{AuctionPhase, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, Chainflip};
+use cf_traits::{
+	AuctionPhase, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler,
+};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -31,7 +34,6 @@ type SessionIndex = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{ChainflipAccount, EpochIndex, Chainflip};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
