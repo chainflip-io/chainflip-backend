@@ -322,7 +322,7 @@ jobs:
             poetry install --quiet
             poetry run brownie run deploy_and all_events --network hardhat
       - run: |
-          cargo build --locked --release
+          cargo build --locked --release --features runtime-benchmarks
           sccache --show-stats
       - run: |
           cargo test --locked --release
@@ -342,7 +342,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo build --locked --release
+          cargo build --locked --release --features runtime-benchmarks
           sccache --show-stats
       - run: |
           cargo test --lib --locked --release
