@@ -20,10 +20,12 @@ mod benchmarking;
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
 };
-use frame_support::pallet_prelude::*;
-use frame_support::sp_runtime::traits::{Saturating, Zero};
+use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, OpaqueKeys};
+use sp_runtime::traits::{
+	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, OpaqueKeys, Saturating,
+	UniqueSaturatedInto, Zero,
+};
 use sp_std::prelude::*;
 
 pub type ValidatorSize = u32;
@@ -115,14 +117,8 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(
-				T::Auctioneer::waiting_on_bids(),
-				Error::<T>::AuctionInProgress
-			);
-			ensure!(
-				number_of_blocks >= T::MinEpoch::get(),
-				Error::<T>::InvalidEpoch
-			);
+			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
 			BlocksPerEpoch::<T>::set(number_of_blocks);
@@ -146,10 +142,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(
-				T::Auctioneer::waiting_on_bids(),
-				Error::<T>::AuctionInProgress
-			);
+			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			Self::force_validator_rotation();
 			Ok(().into())
 		}
@@ -218,9 +211,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				blocks_per_epoch: Zero::zero(),
-			}
+			Self { blocks_per_epoch: Zero::zero() }
 		}
 	}
 
@@ -253,10 +244,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::queued_keys()
-			.into_iter()
-			.map(|(k, _)| k)
-			.collect()
+		<pallet_session::Pallet<T>>::queued_keys().into_iter().map(|(k, _)| k).collect()
 	}
 
 	fn bond() -> Self::Amount {
@@ -297,22 +285,20 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_rotate(now)
-					&& T::Auctioneer::process()
-						.and(T::Auctioneer::process())
-						.is_ok()
-			}
+				Self::should_rotate(now) &&
+					T::Auctioneer::process().and(T::Auctioneer::process()).is_ok()
+			},
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auctioneer::process().is_ok()
-			}
+			},
 			_ => {
 				// If we were in one, mark as completed
 				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
-			}
+			},
 		}
 	}
 }
@@ -323,12 +309,12 @@ impl<T: Config> Pallet<T> {
 	fn should_rotate(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
-			return true;
+			return true
 		}
 
 		let blocks_per_epoch = BlocksPerEpoch::<T>::get();
 		if blocks_per_epoch == Zero::zero() {
-			return false;
+			return false
 		}
 		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 		let diff = now.saturating_sub(current_epoch_started_at);
@@ -391,7 +377,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 
 				let _ = T::Auctioneer::process();
 				None
-			}
+			},
 			// Return
 			_ => None,
 		}
@@ -401,6 +387,41 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	fn end_session(_end_index: SessionIndex) {}
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {}
+}
+
+impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
+	fn average_session_length() -> T::BlockNumber {
+		Self::epoch_number_of_blocks()
+	}
+
+	fn estimate_current_session_progress(
+		now: T::BlockNumber,
+	) -> (Option<sp_runtime::Permill>, Weight) {
+		if Self::epoch_number_of_blocks().is_zero() {
+			return (None, T::DbWeight::get().reads(1))
+		}
+
+		(
+			now.checked_sub(&Self::current_epoch_started_at())
+				.and_then(|progress_blocks| {
+					progress_blocks.checked_div(&Self::epoch_number_of_blocks())
+				})
+				.map(|progress| sp_runtime::Permill::from_parts(progress.unique_saturated_into())),
+			T::DbWeight::get().reads(2),
+		)
+	}
+
+	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+		if Self::epoch_number_of_blocks().is_zero() {
+			return (None, T::DbWeight::get().reads(1))
+		}
+
+		(
+			now.checked_sub(&Self::current_epoch_started_at())
+				.and_then(|progress_blocks| Self::epoch_number_of_blocks().checked_sub(&progress_blocks)),
+			T::DbWeight::get().reads(2),
+		)
+	}
 }
 
 /// In this module, for simplicity, we just return the same AccountId.
@@ -417,7 +438,7 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation();
+			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
 		}
 
 		T::DbWeight::get().reads_writes(1, 0)

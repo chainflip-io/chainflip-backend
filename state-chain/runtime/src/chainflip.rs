@@ -18,7 +18,7 @@ use cf_traits::{
 	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{debug, weights::Weight};
+use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::{H160, H256};
@@ -53,7 +53,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			debug::error!("Unable to process rewards rollover: {:?}!", err);
+			log::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
@@ -315,7 +315,7 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	) -> Option<()> {
 		eth::verify_raw(signed_tx, signer)
 			.map_err(|e| {
-				frame_support::debug::info!(
+				log::info!(
 					"Ethereum signed transaction verification failed: {:?}.",
 					e
 				)

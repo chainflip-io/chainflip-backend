@@ -118,11 +118,6 @@ default-features = false
 features = ['derive']
 version = '1.0'
 
-[dependencies.sp-api]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
 [dependencies.sp-block-builder]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
@@ -199,7 +194,6 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
-  'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',
   'sp-core/std',

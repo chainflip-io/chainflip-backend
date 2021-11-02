@@ -288,17 +288,6 @@ impl pallet_grandpa::Config for Runtime {
 }
 
 parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
-impl pallet_offences::Config for Runtime {
-	type Event = Event;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
-	type OnOffenceHandler = ();
-	type WeightSoftLimit = OffencesWeightSoftLimit;
-}
-
-parameter_types! {
 	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
 
