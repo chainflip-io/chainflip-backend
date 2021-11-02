@@ -1,6 +1,6 @@
 use std::{convert::TryInto, sync::Arc};
 
-use chainflip_engine::state_chain::client::connect_to_state_chain;
+use chainflip_engine::{common::Mutex, state_chain::client::connect_to_state_chain};
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use structopt::StructOpt;
@@ -76,37 +76,45 @@ async fn send_claim(
         .expect("Could not submit extrinsic");
 
     println!(
-        "Your claim has transaction hash: `{:?}`. Watching for response...",
+        "Your claim has transaction hash: `{:?}`. Waiting for your request to be confirmed...",
         tx_hash
     );
 
-    // TODO: Watch for the threshold sig event here, strip the ceremony_id and we can use this to link back later
+    let block_stream = Arc::new(Mutex::new(block_stream));
+
     let events = state_chain_client
-        .watch_submitted_extrinsic(tx_hash, block_stream)
+        .watch_submitted_extrinsic(tx_hash, block_stream.clone())
         .await;
 
     for event in events {
         if let state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(
-            pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(..),
+            pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(_, ..),
         ) = event
         {
-            println!("Claim request is on chain. Waiting for transaction generation...");
-            while let Some(block_header) = block_stream.next().await {
+            println!("Your claim request is on chain.\nWaiting for signed transaction...");
+            'outer: while let Some(block_header) = block_stream.lock().await.next().await {
                 let header = block_header.unwrap();
                 let events = state_chain_client.events(&header).await.unwrap();
                 for (_phase, event, _) in events {
                     match event {
                         state_chain_runtime::Event::pallet_cf_staking(
-                            pallet_cf_staking::Event::ClaimSettled(validator_id, amount),
+                            pallet_cf_staking::Event::ClaimSignatureIssued(
+                                validator_id,
+                                signed_payload,
+                            ),
                         ) => {
-                            println!("Aye good on ya mate, claim settled for validator: {}, and amount: {}", validator_id, amount);
+                            if validator_id == state_chain_client.our_account_id {
+                                println!("Here's the signed transaction. You now need to broadcast this on the Ethereum chain for your funds to be sent to the wallet you specified.");
+                                println!("\t{}", hex::encode(signed_payload))
+                            }
+                            break 'outer;
                         }
-                        _ => println!("Hello. Not interested."),
+                        _ => {
+                            // ignore
+                        }
                     }
                 }
             }
-
-            // now we have the ceremony id. We have to watch for all events, that submit *back* with this ceremony id.
         } else {
             println!("Not a threshold signature event we were expecting to see.")
         }

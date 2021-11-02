@@ -29,6 +29,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
+use crate::common::Mutex;
 use crate::settings;
 
 #[cfg(test)]
@@ -173,7 +174,7 @@ pub trait StateChainRpcApi {
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        block_stream: BlockStream,
+        block_stream: Arc<Mutex<BlockStream>>,
     ) -> Vec<state_chain_runtime::Event>
     where
         BlockStream:
@@ -227,7 +228,7 @@ impl StateChainRpcApi for StateChainRpcClient {
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        mut block_stream: BlockStream,
+        block_stream: Arc<Mutex<BlockStream>>,
     ) -> Vec<state_chain_runtime::Event>
     where
         BlockStream:
@@ -235,7 +236,7 @@ impl StateChainRpcApi for StateChainRpcClient {
     {
         let mut events_for_ext = Vec::new();
         let mut found_event = false;
-        while let Some(block_header) = block_stream.next().await {
+        while let Some(block_header) = block_stream.lock().await.next().await {
             let header = block_header.unwrap();
             let hash = header.hash();
             if let Some(signed_block) = self.block(Some(hash)).await.unwrap() {
@@ -366,7 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub async fn watch_submitted_extrinsic<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        block_stream: BlockStream,
+        block_stream: Arc<Mutex<BlockStream>>,
     ) -> Vec<state_chain_runtime::Event>
     where
         BlockStream:
