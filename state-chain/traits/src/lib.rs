@@ -388,7 +388,7 @@ pub trait IsOutgoing {
 	/// active set in the *last* epoch
 	fn is_outgoing(account_id: &Self::AccountId) -> bool {
 		if let Some(last_active_epoch) = Self::ChainflipAccount::get(account_id).last_active_epoch {
-			return last_active_epoch.saturating_add(1) == Self::EpochInfo::epoch_index()
+			return last_active_epoch.saturating_add(1) == Self::EpochInfo::epoch_index();
 		}
 		false
 	}

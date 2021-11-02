@@ -2,9 +2,9 @@ mod tests {
 	use crate::*;
 	use crate::{mock::*, Error};
 	use cf_traits::mocks::vault_rotation::clear_confirmation;
+	use cf_traits::IsOutgoing;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
-	use cf_traits::IsOutgoing;
 
 	const ALICE: u64 = 100;
 

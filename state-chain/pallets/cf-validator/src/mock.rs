@@ -8,6 +8,8 @@ use frame_support::{
 	traits::{OnFinalize, OnInitialize},
 };
 
+use cf_traits::mocks::chainflip_account::MockChainflipAccount;
+use cf_traits::mocks::epoch_info::MockEpochInfo;
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -17,8 +19,6 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
-use cf_traits::mocks::epoch_info::MockEpochInfo;
-use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -221,7 +221,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext
 }
-
 
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())

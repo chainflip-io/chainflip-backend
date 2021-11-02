@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
+use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
 use cf_traits::{Bid, ChainflipAccountData, EmergencyRotation};
 use frame_support::traits::ValidatorRegistration;
@@ -12,7 +13,6 @@ use sp_runtime::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
-use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
