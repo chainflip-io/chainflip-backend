@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -44,8 +44,7 @@ impl KeyDB for PersistentKeyDB {
         self.db.write(tx).unwrap_or_else(|e| {
             panic!(
                 "Could not write key share for key_id `{}` to database: {}",
-                &key_id,
-                e,
+                &key_id, e,
             )
         });
     }
@@ -63,7 +62,7 @@ impl KeyDB for PersistentKeyDB {
                             key_id
                         );
                         Some((key_id, keygen_info))
-                    },
+                    }
                     Err(err) => {
                         slog::error!(
                             self.logger,
