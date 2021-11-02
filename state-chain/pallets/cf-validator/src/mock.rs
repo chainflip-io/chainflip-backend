@@ -129,8 +129,8 @@ impl pallet_cf_auction::Config for Test {
 pub struct MockIsOutgoing;
 impl IsOutgoing for MockIsOutgoing {
 	type AccountId = ValidatorId;
-	type EpochInfo = MockEpochInfo;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Test>;
+	type EpochInfo = ValidatorPallet;
+	type ChainflipAccount = MockChainflipAccount;
 }
 
 pub struct MockOnline;
