@@ -92,7 +92,7 @@ async fn send_claim(
             pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(_, ..),
         ) = event
         {
-            println!("Your claim request is on chain.\nWaiting for signed transaction...");
+            println!("Your claim request is on chain.\nWaiting for signed claim data...");
             'outer: while let Some(block_header) = block_stream.lock().await.next().await {
                 let header = block_header.expect("Failed to get a valid block header");
                 let events = state_chain_client.events(&header).await.expect(&format!(
@@ -108,7 +108,7 @@ async fn send_claim(
                             ),
                         ) => {
                             if validator_id == state_chain_client.our_account_id {
-                                println!("Here's the signed transaction. You now need to broadcast this on the Ethereum chain for your funds to be sent to the wallet you specified.");
+                                println!("Here's the signed claim data. Please proceed to the Staking UI to complete your claim. <LINK>");
                                 println!("\n{}\n", hex::encode(signed_payload));
                                 break 'outer;
                             }
