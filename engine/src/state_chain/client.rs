@@ -9,10 +9,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
-use jsonrpsee_types::{
-    jsonrpc::{to_value as to_json_value, DeserializeOwned, Params},
-    traits::{Client, SubscriptionClient},
-};
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
@@ -238,6 +234,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
         let mut events_for_ext = Vec::new();
+        let mut found_event = false;
         while let Some(block_header) = block_stream.next().await {
             let header = block_header.unwrap();
             let hash = header.hash();
@@ -246,19 +243,29 @@ impl StateChainRpcApi for StateChainRpcClient {
                     let hash = BlakeTwo256::hash_of(ext);
                     hash == ext_hash
                 });
+
                 // we may need to modify the events code to get out RawEvent stuff, like subxt does;
                 let events_for_block = self.events(&header).await.unwrap();
                 for (phase, event, _) in events_for_block {
                     if let Phase::ApplyExtrinsic(i) = phase {
                         if let Some(ext_index) = xt_index {
+                            found_event = true;
+                            // what if the exact same extrinsic is submitted. How would we know which is which?
                             if i as usize != ext_index {
                                 continue;
                             }
+                            println!(
+                                "here's the event at block {} and index: {}: {:?}",
+                                header.number, ext_index, event
+                            );
 
                             events_for_ext.push(event);
                         }
                     }
                 }
+            };
+            if found_event {
+                break;
             };
         }
         events_for_ext
@@ -356,17 +363,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         self.state_chain_rpc_client.events(block_header).await
     }
 
-    pub async fn watch_extrinsic<BlockStream>(
+    pub async fn watch_submitted_extrinsic<BlockStream>(
         &self,
         ext_hash: state_chain_runtime::Hash,
-        mut block_stream: BlockStream,
-    ) where
+        block_stream: BlockStream,
+    ) -> Vec<state_chain_runtime::Event>
+    where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
         self.state_chain_rpc_client
-            .watch_extrinsic_rpc(ext_hash, block_stream)
-            .await;
+            .watch_submitted_extrinsic_rpc(ext_hash, block_stream)
+            .await
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {

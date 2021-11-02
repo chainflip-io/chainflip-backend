@@ -10,8 +10,12 @@ chainflip-engine = {path = "../../engine/"}
 clap = "*"
 config = "0.11.0"
 hex = "0.4.3"
-pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 structopt = "0.3.23"
 tokio = {version = "1.5.0", features = ["full"]}
+
+# State chain
+pallet-cf-broadcast = {path = "../../state-chain/pallets/cf-broadcast"}
+pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
+state-chain-runtime = {path = "../../state-chain/runtime"}

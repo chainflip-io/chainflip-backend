@@ -949,9 +949,11 @@ dependencies = [
  "clap",
  "config",
  "hex",
+ "pallet-cf-broadcast",
  "pallet-cf-staking",
  "serde 1.0.126",
  "slog",
+ "state-chain-runtime",
  "structopt",
  "tokio 1.11.0",
 ]

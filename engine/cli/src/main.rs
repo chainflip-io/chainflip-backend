@@ -74,12 +74,33 @@ async fn send_claim(
         .await
         .expect("Could not submit extrinsic");
 
+    println!(
+        "Your claim has transaction hash: `{:?}`. Watching for response...",
+        tx_hash
+    );
+
     // TODO: Watch for the threshold sig event here, strip the ceremony_id and we can use this to link back later
-    state_chain_client
-        .watch_extrinsic(tx_hash, block_stream)
+    let events = state_chain_client
+        .watch_submitted_extrinsic(tx_hash, block_stream)
         .await;
 
-    println!("Your claim has transaction hash: `{:?}`", tx_hash);
+    for event in events {
+        if let state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
+            pallet_cf_broadcast::Event::TransactionSigningRequest(
+                attempt_id,
+                validator_id,
+                unsigned_tx,
+            ),
+        ) = event
+        {
+            println!(
+                "this is the event I want. Cheers bud. Attempt id: {}, validator_id: {}",
+                attempt_id, validator_id
+            )
+        } else {
+            println!("nah mate")
+        }
+    }
 }
 
 fn confirm_submit() {
@@ -123,7 +144,7 @@ mod tests {
         assert!(clean_eth_address(input).is_err());
 
         // fail invalid chars
-        let input = "0xZ29aB9EbDb421CE48b70699758a6e9a3DBD609C5".to_string();
+        let input = "0xZ29aB9EbDb421CE48b70flippya6e9a3DBD609C5".to_string();
         assert!(clean_eth_address(input).is_err());
 
         // success with 0x
