@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_threshold_signature};
-use cf_chains::{eth, Chain, ChainCrypto, ChainId};
+use cf_chains::{eth, ChainCrypto};
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;

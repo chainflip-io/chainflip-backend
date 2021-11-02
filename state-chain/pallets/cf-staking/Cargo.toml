@@ -23,8 +23,6 @@ pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-fea
 
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
-ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
-ethereum-types = {default-features = false, version = "0.12"}
 
 # Substrate deps
 frame-support = {default-features = false, version = '3.0.0'}
@@ -53,7 +51,6 @@ std = [
   'sp-core/std',
   'sp-std/std',
   'serde',
-  'ethabi/std',
   'frame-benchmarking/std',
 ]
 runtime-benchmarks = [

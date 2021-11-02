@@ -803,7 +803,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=1279085)",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
  "ethereum",
  "frame-support",
  "frame-system",
@@ -811,11 +811,14 @@ dependencies = [
  "hex-literal",
  "libsecp256k1 0.7.0",
  "parity-scale-codec",
+ "rand 0.8.4",
  "rlp",
  "secp256k1",
  "serde 1.0.126",
+ "sp-core",
  "sp-runtime",
  "sp-std",
+ "web3",
 ]
 
 [[package]]
@@ -1849,22 +1852,19 @@ version = "14.1.0"
 source = "git+https://github.com/chainflip-io/ethabi?rev=114a29d#114a29de12b8b2d5af4de17c44634dd006b9997a"
 dependencies = [
  "anyhow",
- "ethereum-types 0.12.0",
+ "ethereum-types 0.12.1",
  "hex",
- "serde 1.0.126",
- "serde_json",
  "sha3 0.9.1",
- "thiserror",
  "uint",
 ]
 
 [[package]]
 name = "ethabi"
 version = "14.1.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=1279085#1279085d28798744d2107046a8f0c7221d7e76ce"
+source = "git+https://github.com/chainflip-io/ethabi?rev=87ea2a3#87ea2a3270c5cdd18b829e901a9c1d3424bff491"
 dependencies = [
  "anyhow",
- "ethereum-types 0.11.0",
+ "ethereum-types 0.12.1",
  "hex",
  "serde 1.0.126",
  "serde_json",
@@ -1889,17 +1889,18 @@ dependencies = [
 
 [[package]]
 name = "ethereum"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a67be3eaf296ef668733f54c637e84d0ca34eaf194f0077455135981ad464c3"
+checksum = "81fb916554a4dba293ea69c69ad5653e21d770a9d0c2496b5fa0a1f5a3946d87"
 dependencies = [
  "bytes 1.0.1",
- "ethereum-types 0.12.0",
+ "ethereum-types 0.12.1",
  "hash-db",
  "hash256-std-hasher",
  "parity-scale-codec",
  "rlp",
  "rlp-derive",
+ "scale-info",
  "serde 1.0.126",
  "sha3 0.9.1",
  "triehash",
@@ -1913,7 +1914,6 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
- "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -1922,14 +1922,17 @@ dependencies = [
 
 [[package]]
 name = "ethereum-types"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dd6bde671199089e601e8d47e153368b893ef885f11f365a3261ec58153c211"
+checksum = "05136f7057fe789f06e6d41d07b34e6f70d8c86e5693b60f97aaa6553553bdaf"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
+ "impl-serde",
  "primitive-types 0.10.1",
+ "scale-info",
  "uint",
 ]
 
@@ -5123,8 +5126,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
- "ethereum-types 0.12.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5917,6 +5918,8 @@ dependencies = [
  "fixed-hash",
  "impl-codec",
  "impl-rlp",
+ "impl-serde",
+ "scale-info",
  "uint",
 ]
 
@@ -7682,6 +7685,31 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "thiserror",
  "wasm-timer",
+]
+
+[[package]]
+name = "scale-info"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c55b744399c25532d63a0d2789b109df8d46fc93752d46b0782991a931a782f"
+dependencies = [
+ "bitvec 0.20.4",
+ "cfg-if 1.0.0",
+ "derive_more",
+ "parity-scale-codec",
+ "scale-info-derive",
+]
+
+[[package]]
+name = "scale-info-derive"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baeb2780690380592f86205aa4ee49815feb2acad8c2f59e6dd207148c3f1fcd"
+dependencies = [
+ "proc-macro-crate 1.0.0",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

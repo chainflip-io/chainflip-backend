@@ -128,7 +128,7 @@ mod test_set_agg_key_with_agg_key {
 			)),
 		);
 
-		assert_eq!(call.signing_payload(), expected_payload);
+		assert_eq!(call.signing_payload(), H256(expected_payload.0));
 	}
 
 	#[test]

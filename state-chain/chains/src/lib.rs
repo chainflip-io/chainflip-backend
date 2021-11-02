@@ -62,7 +62,7 @@ impl<C: Chain> From<C> for ChainId {
 
 impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
-	type Payload = [u8; 32];
+	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 
 	fn verify_threshold_signature(
@@ -71,7 +71,7 @@ impl ChainCrypto for Ethereum {
 		signature: &Self::ThresholdSignature,
 	) -> bool {
 		agg_key
-			.verify(payload, signature)
+			.verify(payload.as_fixed_bytes(), signature)
 			.map_err(|e| {
 				frame_support::debug::debug!("Ethereum signature verification failed: {:?}.", e)
 			})

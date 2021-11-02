@@ -15,7 +15,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::eth::{
-	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
+	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents, Uint,
 };
 use cf_traits::{
 	Bid, BidderProvider, EpochInfo, NonceProvider, SigningContext, StakeTransfer, ThresholdSigner,
@@ -32,7 +32,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
-use sp_core::U256;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	DispatchError,
@@ -75,7 +74,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ From<u128>
-			+ Into<U256>;
+			+ Into<Uint>;
 
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<

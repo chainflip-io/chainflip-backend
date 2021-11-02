@@ -29,7 +29,7 @@ pub enum TransmissionFailure {
 
 /// The [BroadcastConfig] should contain all the state required to construct and process transactions for a given
 /// chain.
-pub trait BroadcastConfig<T: Chainflip> {
+pub trait BroadcastConfig {
 	/// A chain identifier.
 	type Chain: Chain;
 	/// An unsigned version of the transaction that needs to signed before it can be broadcast.
@@ -38,6 +38,8 @@ pub trait BroadcastConfig<T: Chainflip> {
 	type SignedTransaction: Parameter;
 	/// The transaction hash type used to uniquely identify signed transactions.
 	type TransactionHash: Parameter;
+	/// The signer id or credential used to verify a signed message. Usually a public key or address.
+	type SignerId: Parameter;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated signer.
 	///
@@ -45,9 +47,9 @@ pub trait BroadcastConfig<T: Chainflip> {
 	/// returned transaction for this `Chain` and can include verification of the byte encoding, the transaction
 	/// content, metadata, signer idenity, etc.
 	fn verify_transaction(
-		signer: &T::ValidatorId,
 		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		signer: &Self::SignerId,
 	) -> Option<()>;
 }
 
@@ -68,15 +70,18 @@ pub mod pallet {
 
 	/// Type alias for the instance's configured SignedTransaction.
 	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::SignedTransaction;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::SignedTransaction;
 
 	/// Type alias for the instance's configured UnsignedTransaction.
 	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::UnsignedTransaction;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::UnsignedTransaction;
 
 	/// Type alias for the instance's configured TransactionHash.
 	pub type TransactionHashFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::TransactionHash;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::TransactionHash;
+
+	/// Type alias for the instance's configured SignerId.
+	pub type SignerIdFor<T, I> = <<T as Config<I>>::BroadcastConfig as BroadcastConfig>::SignerId;
 
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -146,7 +151,7 @@ pub mod pallet {
 		type TargetChain: Chain;
 
 		/// The broadcast configuration for this instance.
-		type BroadcastConfig: BroadcastConfig<Self, Chain = Self::TargetChain>;
+		type BroadcastConfig: BroadcastConfig<Chain = Self::TargetChain>;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -333,6 +338,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
 			signed_tx: SignedTransactionFor<T, I>,
+			signer_id: SignerIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
@@ -347,9 +353,9 @@ pub mod pallet {
 			AwaitingTransactionSignature::<T, I>::remove(attempt_id);
 
 			if T::BroadcastConfig::verify_transaction(
-				&signing_attempt.nominee,
 				&signing_attempt.unsigned_tx,
 				&signed_tx,
+				&signer_id,
 			)
 			.is_some()
 			{

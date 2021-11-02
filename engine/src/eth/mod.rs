@@ -17,8 +17,8 @@ use std::str::FromStr;
 use std::time::Duration;
 use web3::{
     ethabi::{self, Contract, Event},
-    signing::SecretKeyRef,
-    types::{Bytes, SyncState, TransactionParameters, H256},
+    signing::{Key, SecretKeyRef},
+    types::{Address, Bytes, SyncState, TransactionParameters, H256},
     Web3,
 };
 
@@ -76,6 +76,7 @@ pub async fn new_synced_web3_client(
 pub struct EthBroadcaster {
     web3: Web3<web3::transports::WebSocket>,
     secret_key: SecretKey,
+    pub address: Address,
 }
 
 impl EthBroadcaster {
@@ -84,15 +85,17 @@ impl EthBroadcaster {
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
         let key = read_to_string(settings.eth.private_key_file.as_path())?;
+        let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
+            panic!(
+                "Should read in secret key from: {}: {}",
+                settings.eth.private_key_file.display(),
+                e,
+            )
+        });
         Ok(Self {
             web3,
-            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
-                panic!(
-                    "Should read in secret key from: {}: {}",
-                    settings.eth.private_key_file.display(),
-                    e,
-                )
-            }),
+            secret_key,
+            address: SecretKeyRef::new(&secret_key).address(),
         })
     }
 
@@ -102,10 +105,10 @@ impl EthBroadcaster {
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
         let tx_params = TransactionParameters {
-            to: Some(unsigned_tx.contract),
+            to: Some(unsigned_tx.contract.0.into()),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
-            value: unsigned_tx.value,
+            value: web3::types::U256(unsigned_tx.value.0),
             ..Default::default()
         };
 
