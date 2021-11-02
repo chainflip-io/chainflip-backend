@@ -948,11 +948,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chainflip-engine",
- "clap",
  "config",
  "futures 0.3.15",
  "hex",
- "pallet-cf-broadcast",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "serde 1.0.126",
