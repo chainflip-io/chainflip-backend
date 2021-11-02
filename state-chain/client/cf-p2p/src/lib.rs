@@ -341,10 +341,10 @@ pub fn new_p2p_validator_network_node<
 					let (sender, receiver) = unbounded();
 					let subscription_id =
 						self.notification_rpc_subscription_manager
-							.add(subscriber, |sink| {
+							.add(subscriber, move |sink| async move {
 								sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-									.send_all(&mut receiver)
-									.map(|_| ())
+									.send_all(&mut receiver.map(Ok::<_, jsonrpc_core::Error>).map(Ok::<_, ()>))
+									.map(|_| ()).await
 							});
 					self.state
 						.lock()
