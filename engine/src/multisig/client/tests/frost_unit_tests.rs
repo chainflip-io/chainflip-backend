@@ -502,6 +502,9 @@ async fn should_ignore_rts_if_not_participating() {
     let mut c1 = keygen_states.key_ready.clients[3].clone();
     assert_no_stage!(c1);
 
+    // Clear the tags
+    ctx.tag_cache.clear();
+
     // Make sure our id is not in the signers list
     assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
 

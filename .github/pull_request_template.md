@@ -6,7 +6,7 @@
    - [ ] Has the chainspec version been incremented?
 - [ ] Is `types.json` up to date? Test this against polka js.
 - [ ] Have any new dependencies been added? If yes:
-   - [ ] Has `Cargo.toml/std` section been updated accordinglt?
+   - [ ] Has `Cargo.toml/std` section been updated accordingly? [Reference](https://www.notion.so/chainflip/Cargo-toml-s-std-section-95e0d5370bc74ecc99fd310bf5b21142)
 
 ### New Pallets
 

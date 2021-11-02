@@ -4,18 +4,22 @@ The Chainflip Engine is layer between the State Chain (Chainflip's blockchain) a
 
 ## Responsibilites
 
-- Witness transactions on external chains (e.g. Bitcoin, Ethereum, Oxen, Polkadot)
-- Observe and respond to events on the State Chain
-- Generate aggregate keys and signatures for various processes
-- Submit data back to the state chain (such as votes on `Witness`es)
+Broadly the Chainflip Engine's responsibilities include:
 
+- Multisig ceremonies: This includes distributed key generation and distributed signing
+- Interfacing with the State Chain to gather and respond to events emitted by the chain
+- Observe events occurring on other chains by monitoring particular addresses
+- Submitting data from other chains back to the State Chain for concensus purposes
+- Provide an endpoint to allow for monitoring services to check it's online
 
-## How it Works
+## Contents
 
-The Chainflip Engine utilises a message queue to pass messages between its various components.
+- [State Chain](./src/state_chain/README.md)
+- [Multi-signature](./src/multisig/README.md)
+- [Peer-2-Peer](./src/p2p/README.md)
+- [Ethereum](./src/eth/README.md)
+- [Health](./src/health.rs)
 
-The components are broadly:
-- Signing module - generates aggregate keys and signatures
-- Witness modules (one per chain)
-- Broadcasters (one per chain)
-- P2P module - can read and push messages to the p2p layer so messages go to the required nodes
+The blockchains currently supported are:
+
+- Ethereum (ETH)

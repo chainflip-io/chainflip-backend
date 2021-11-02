@@ -12,6 +12,22 @@ pub struct BroadcastVerificationMessage<T: Clone> {
     pub data: Vec<T>,
 }
 
+fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
+    use std::convert::TryInto;
+
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+
+    hasher.update(bincode::serialize(data).unwrap());
+
+    hasher
+        .finalize()
+        .as_slice()
+        .try_into()
+        .expect("Invalid hash size")
+}
+
 // This might result in an error if we don't get 2/3 of parties agreeing on the same value.
 // If we don't, this means that either the broadcaster did an inconsistent broadcast or that
 // 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
@@ -45,14 +61,16 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
 
         if let Some((data, _)) = verification_messages
             .values()
-            .map(|m| bincode::serialize(&m.data[i]).unwrap())
-            .sorted()
-            .group_by(|x| x.clone())
+            .map(|m| (m.data[i].clone(), hash::<T>(&m.data[i])))
+            .sorted_by_key(|(_, hash)| hash.clone())
+            .group_by(|(_, hash)| hash.clone())
             .into_iter()
-            .map(|(data, group)| (data, group.count()))
+            .map(|(_, mut group)| {
+                let first = group.next().expect("must have at least one element").0;
+                (first, group.count() + 1)
+            })
             .find(|(_, count)| *count > threshold)
         {
-            let data = bincode::deserialize(&data).unwrap();
             agreed_on_values.push(data);
         } else {
             blamed_parties.push(i + 1);
