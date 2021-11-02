@@ -14,7 +14,7 @@ use signing::frost::{
 };
 
 use crate::{
-    logging,
+    logging::{self, test_utils::TagCache},
     multisig::{
         client::{
             common::KeygenResultInfo,
@@ -185,7 +185,9 @@ pub struct ValidSigningStates {
 }
 
 pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
-    client.get_keygen().get_stage_for(KEYGEN_CEREMONY_ID)
+    client
+        .ceremony_manager
+        .get_keygen_stage_for(KEYGEN_CEREMONY_ID)
 }
 
 /// Contains the states at different points of key generation
@@ -213,6 +215,8 @@ pub struct KeygenContext {
     sig3_to_send: HashMap<(usize, usize), LocalSig3>,
     /// The key that was generated
     key_id: Option<KeyId>,
+    // Cache of all tags that used in log calls
+    pub tag_cache: TagCache,
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
@@ -411,7 +415,7 @@ impl KeygenContext {
     }
 
     fn inner_new(account_ids: Vec<AccountId>) -> Self {
-        let logger = logging::test_utils::create_test_logger();
+        let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
         let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {
@@ -429,6 +433,7 @@ impl KeygenContext {
             comm1_to_send: HashMap::new(),
             sig3_to_send: HashMap::new(),
             key_id: None,
+            tag_cache,
         }
     }
 
@@ -939,7 +944,7 @@ pub fn keygen_data_to_p2p(
 }
 
 pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> {
-    c.signing_manager.get_stage_for(SIGN_CEREMONY_ID)
+    c.ceremony_manager.get_signing_stage_for(SIGN_CEREMONY_ID)
 }
 
 impl MultisigClientNoDB {

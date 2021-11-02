@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(test)]
 mod mock;
@@ -103,15 +104,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [EpochDurationChanged](Event::EpochDurationChanged): We successfully changed the number
-		///   of blocks in an Epoch.
+		/// - [EpochDurationChanged](Event::EpochDurationChanged)
 		///
 		/// ## Errors
 		///
-		/// - [AuctionInProgress](Error::AuctionInProgress): Can't change the Epoch length during an
-		///   Auction.
-		/// - [InvalidEpoch](Error::InvalidEpoch): Can't set the Epoch length to less than the minimum
-		///   Epoch length (default 1), or the same as our current Epoch length.
+		/// - [AuctionInProgress](Error::AuctionInProgress)
+		/// - [InvalidEpoch](Error::InvalidEpoch)
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -140,13 +138,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ForceRotationRequested](Event::ForceRotationRequested): We successfully requested a
-		///   Validator Rotation.
+		/// - [ForceRotationRequested](Event::ForceRotationRequested)
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](frame_support::error::BadOrigin): This was not called by Governance Origin.
-		/// - [AuctionInProgress](Error::AuctionInProgress): There is already an Auction occurring.
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [AuctionInProgress](Error::AuctionInProgress)
 		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;

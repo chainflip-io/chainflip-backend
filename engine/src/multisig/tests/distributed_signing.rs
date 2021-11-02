@@ -141,7 +141,7 @@ async fn coordinate_signing(
 
 #[tokio::test]
 async fn distributed_signing() {
-    let logger = logging::test_utils::create_test_logger();
+    let logger = logging::test_utils::new_test_logger();
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
     let threshold = (2 * N_PARTIES - 1) / 3;

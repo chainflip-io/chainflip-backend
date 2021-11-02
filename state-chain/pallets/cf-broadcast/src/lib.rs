@@ -2,6 +2,7 @@
 // This can be removed after rustc version 1.53.
 #![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -100,7 +101,7 @@ pub mod pallet {
 
 	/// A failed signing or broadcasting attempt.
 	///
-	/// Implements `From` for both [BroadcastAttempt] and [TransactionSigningAttempt] for easy conversion.
+	/// Implements `From` for both [TransmissionAttempt] and [TransactionSigningAttempt] for easy conversion.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct FailedBroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
@@ -209,21 +210,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A request to a specific validator to sign a transaction. [broadcast_attempt_id, validator_id, unsigned_tx]
+		/// A request to a specific validator to sign a transaction. \[broadcast_attempt_id, validator_id, unsigned_tx\]
 		TransactionSigningRequest(
 			BroadcastAttemptId,
 			T::ValidatorId,
 			UnsignedTransactionFor<T, I>,
 		),
-		/// A request to transmit a signed transaction to the target chain. [broadcast_attempt_id, signed_tx]
+		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id, signed_tx\]
 		TransmissionRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
-		/// A broadcast has successfully been completed. [broadcast_id]
+		/// A broadcast has successfully been completed. \[broadcast_id\]
 		BroadcastComplete(BroadcastId),
-		/// A failed broadcast attempt has been scheduled for retry. [broadcast_id, attempt]
+		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_id, attempt\]
 		BroadcastRetryScheduled(BroadcastId, AttemptCount),
-		/// A broadcast has failed irrecoverably. [broadcast_id, attempt, failed_transaction]
+		/// A broadcast has failed irrecoverably. \[broadcast_id, attempt, failed_transaction\]
 		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
-		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. [broadcast_attempt_id, stage]
+		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 	}
 
@@ -287,8 +288,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransactionSigningRequest](Events::TransactionSigningRequest): Signing has been requested
-		///   from the nominated Validator.
+		/// - [TransactionSigningRequest](Event::TransactionSigningRequest)
 		///
 		/// ## Errors
 		///
@@ -318,17 +318,13 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [TransmissionRequest](Events::TransmissionRequest): Signed transaction should now be broadcast to the
-		///   outgoing chain by all Validators.
-		/// - [BroadcastRetryScheduled](Events::BroadcastRetryScheduled): Signed transaction is not valid, so we have
-		///   scheduled a retry attempt for the next block.
+		/// - [TransmissionRequest](Event::TransmissionRequest)
+		/// - [BroadcastRetryScheduled](Event::BroadcastRetryScheduled)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttemptId](Errors::InvalidBroadcastAttemptId): There is no broadcast for this attempt_id.
-		/// - [InvalidSigner](Errors::InvalidSigner): Submitter of this extrinsic is not the nominated Validator for this
-		///   attempt_id.
-		///
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidSigner](Error::InvalidSigner)
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
@@ -389,12 +385,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BroadcastComplete](Event::BroadcastComplete): The broadcast to the target chain was successful.
+		/// - [BroadcastComplete](Event::BroadcastComplete)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
-		///   queue of broadcasts awaiting transmission.
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
 		#[pallet::weight(10_000)]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
@@ -413,17 +408,16 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong during transmission. See [BroadcastFailure] for categories
-		/// of failures that may be reported.
+		/// Nodes have witnessed that something went wrong during transmission. See
+		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be reported.
 		///
 		/// ## Events
 		///
-		/// - [BroadcastFailed](Event::BroadcastFailed): The broadcast failed.
+		/// - [BroadcastFailed](Event::BroadcastFailed)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId): The attempt id was not in the
-		///   queue of broadcasts awaiting transmission.
+		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
 		#[pallet::weight(10_000)]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,

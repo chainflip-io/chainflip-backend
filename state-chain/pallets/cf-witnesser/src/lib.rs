@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 pub use pallet::*;
 
@@ -143,16 +144,15 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [WitnessReceived](Event::WitnessReceived): A witness vote has been counted.
-		/// - [ThresholdReached](Event::ThresholdReached): We have collected enough votes to execute the call.
-		/// - [WitnessExecuted](Event::WitnessExecuted): We have executed the call, successfully or not.
+		/// - [WitnessReceived](Event::WitnessReceived)
+		/// - [ThresholdReached](Event::ThresholdReached)
+		/// - [WitnessExecuted](Event::WitnessExecuted)
 		///
 		/// ## Errors
 		///
-		/// - [UnauthorisedWitness](Error::UnauthorisedWitness): The Validator is not in the active set for this epoch.
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
-		///   outside of the range of our bitmask. Should be impossible?
-		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
+		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
+		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
 			origin: OriginFor<T>,
