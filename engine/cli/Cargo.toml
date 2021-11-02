@@ -16,6 +16,7 @@ structopt = "0.3.23"
 tokio = {version = "1.5.0", features = ["full"]}
 
 # State chain
+pallet-cf-rewards = {path = "../../state-chain/pallets/cf-rewards"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
