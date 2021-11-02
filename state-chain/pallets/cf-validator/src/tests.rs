@@ -4,6 +4,7 @@ mod tests {
 	use cf_traits::mocks::vault_rotation::clear_confirmation;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
+	use cf_traits::IsOutgoing;
 
 	const ALICE: u64 = 100;
 
@@ -174,6 +175,10 @@ mod tests {
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(16);
+
+			for old_winner in &winners {
+				assert!(MockIsOutgoing::is_outgoing(old_winner));
+			}
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);

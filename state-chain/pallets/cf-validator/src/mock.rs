@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline, IsOutgoing};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -17,6 +17,7 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
+use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -63,7 +64,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = ValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -121,6 +122,13 @@ impl pallet_cf_auction::Config for Test {
 	type EmergencyRotation = ValidatorPallet;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+}
+
+pub struct MockIsOutgoing;
+impl IsOutgoing for MockIsOutgoing {
+	type AccountId = ValidatorId;
+	type EpochInfo = MockEpochInfo;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Test>;
 }
 
 pub struct MockOnline;
@@ -182,6 +190,7 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
