@@ -386,6 +386,13 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 						.expect("from genesis we would expect a previous auction")
 						.winners;
 
+					// Determine who is outgoing
+					let outgoing_validators: Vec<_> = old_validators
+						.iter()
+						.filter(|old_validator| !winners.contains(old_validator))
+						.cloned()
+						.collect();
+
 					// Update the last active epoch for our winners
 					for winner in &winners {
 						T::ChainflipAccount::update_last_active_epoch(
@@ -395,7 +402,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					}
 					// Our trait callback
 					T::EpochTransitionHandler::on_new_epoch(
-						&old_validators,
+						&outgoing_validators,
 						&winners,
 						minimum_active_bid,
 					);
