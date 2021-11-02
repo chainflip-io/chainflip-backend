@@ -74,6 +74,11 @@ async fn send_claim(
         .await
         .expect("Could not submit extrinsic");
 
+    // TODO: Watch for the threshold sig event here, strip the ceremony_id and we can use this to link back later
+    state_chain_client
+        .watch_extrinsic(tx_hash, block_stream)
+        .await;
+
     println!("Your claim has transaction hash: `{:?}`", tx_hash);
 }
 

@@ -13,12 +13,13 @@ use jsonrpsee_types::{
     jsonrpc::{to_value as to_json_value, DeserializeOwned, Params},
     traits::{Client, SubscriptionClient},
 };
-use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
 };
+use sp_core::{Hasher, H256};
 use sp_runtime::generic::Era;
+use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use std::convert::TryFrom;
 use std::fmt::Debug;
@@ -131,8 +132,6 @@ type ChainRpcClient = sc_rpc_api::chain::ChainClient<
 >;
 type StateRpcClient = sc_rpc_api::state::StateClient<state_chain_runtime::Hash>;
 
-// type ChainBlock = SignedBlock<Block<state_chain_runtime::Header, sp_runtime::traits::Extrinsic>>;
-
 pub type EventInfo = (
     Phase,
     state_chain_runtime::Event,
@@ -174,16 +173,17 @@ pub trait StateChainRpcApi {
         block_hash: Option<state_chain_runtime::Hash>,
     ) -> Result<Option<state_chain_runtime::SignedBlock>>;
 
-    async fn watch_extrinsic_rpc<BlockStream>(
+    /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
+    async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
-        // extrinsic: Extrinsic,
+        ext_hash: state_chain_runtime::Hash,
         block_stream: BlockStream,
-    ) where
-        // state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        // Extrinsic: 'static + std::fmt::Debug + Clone + Send + Encode,
+    ) -> Vec<state_chain_runtime::Event>
+    where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
 
+    /// Get events for a particular block
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
 }
 
@@ -228,42 +228,40 @@ impl StateChainRpcApi for StateChainRpcClient {
         Ok(block)
     }
 
-    async fn watch_extrinsic_rpc<BlockStream>(
+    async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
-        // extrinsic: Extrinsic,
+        ext_hash: state_chain_runtime::Hash,
         mut block_stream: BlockStream,
-    ) where
-        // state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        // Extrinsic: 'static + std::fmt::Debug + Clone + Send + Encode,
+    ) -> Vec<state_chain_runtime::Event>
+    where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
-        // let bytes: Bytes = extrinsic.encode().into();
-        // let params = Params::Array(vec![to_json_value(bytes).unwrap()]);
-
-        // let stuff = self.state_rpc_client.get_block()
-
-        // while let Some(block_header) = block_stream.next().await {
-        //     let events_for_block = self.block(&block_header.unwrap())).await.unwrap();
-        //     for e in events_for_block {
-        //         println!("e: {:?}", e);
-        //         let vec_hashes = e.2;
-        //         println!("{:?}", vec_hashes);
-        //     }
-        // }
-
+        let mut events_for_ext = Vec::new();
         while let Some(block_header) = block_stream.next().await {
-            let hash = block_header.unwrap().hash();
-            let extrinsics_for_block = self
-                .block(hash.into())
-                .await
-                .unwrap()
-                .unwrap()
-                .block
-                .extrinsics;
-            println!("Here's the block: {:?}", extrinsics_for_block);
+            let header = block_header.unwrap();
+            let hash = header.hash();
+            if let Some(signed_block) = self.block(Some(hash)).await.unwrap() {
+                let xt_index = signed_block.block.extrinsics.iter().position(|ext| {
+                    let hash = BlakeTwo256::hash_of(ext);
+                    hash == ext_hash
+                });
+                // we may need to modify the events code to get out RawEvent stuff, like subxt does;
+                let events_for_block = self.events(&header).await.unwrap();
+                for (phase, event, _) in events_for_block {
+                    if let Phase::ApplyExtrinsic(i) = phase {
+                        if let Some(ext_index) = xt_index {
+                            if i as usize != ext_index {
+                                continue;
+                            }
+
+                            events_for_ext.push(event);
+                        }
+                    }
+                }
+            };
         }
-        panic!("test");
+        events_for_ext
     }
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
@@ -356,6 +354,19 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
         self.state_chain_rpc_client.events(block_header).await
+    }
+
+    pub async fn watch_extrinsic<BlockStream>(
+        &self,
+        ext_hash: state_chain_runtime::Hash,
+        mut block_stream: BlockStream,
+    ) where
+        BlockStream:
+            Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
+    {
+        self.state_chain_rpc_client
+            .watch_extrinsic_rpc(ext_hash, block_stream)
+            .await;
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -525,21 +536,23 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn watch_extrinsic_rpc_test() {
-        let logger = new_test_logger();
-        let settings = Settings::from_file(
-            "/Users/kaz/Documents/Chainflip/chainflip-backend/engine/config/Local.toml",
-        )
-        .unwrap();
+    // #[tokio::test]
+    // async fn watch_extrinsic_rpc_test() {
+    //     let logger = new_test_logger();
+    //     let settings = Settings::from_file(
+    //         "/Users/kaz/Documents/Chainflip/chainflip-backend/engine/config/Local.toml",
+    //     )
+    //     .unwrap();
 
-        let (client, stream) = connect_to_state_chain(&settings.state_chain).await.unwrap();
+    //     let (client, stream) = connect_to_state_chain(&settings.state_chain).await.unwrap();
 
-        client
-            .state_chain_rpc_client
-            .watch_extrinsic_rpc(stream)
-            .await;
-    }
+    //     let client.submit_extrinsic()
+
+    //     client
+    //         .state_chain_rpc_client
+    //         .watch_extrinsic_rpc(stream, )
+    //         .await;
+    // }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
