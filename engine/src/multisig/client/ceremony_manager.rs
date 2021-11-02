@@ -112,10 +112,12 @@ impl CeremonyManager {
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
         let KeygenInfo {
             ceremony_id,
-            signers,
+            mut signers,
         } = keygen_info;
 
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
+        signers.sort(); // TODO: This "fix" makes the code below unnecessarily complex and therefore it should be cleaned up. For example the signer_idx will always be a vec containing 1 to signers-len() in ascending order.
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&signers));
 
