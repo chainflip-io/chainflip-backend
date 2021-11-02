@@ -84,7 +84,8 @@ async fn send_claim(
 
     let events = state_chain_client
         .watch_submitted_extrinsic(tx_hash, block_stream.clone())
-        .await;
+        .await
+        .expect("Failed to watch extrinsic");
 
     for event in events {
         if let state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(

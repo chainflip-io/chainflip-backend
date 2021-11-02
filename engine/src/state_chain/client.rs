@@ -9,11 +9,11 @@ use futures::StreamExt;
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
+use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
 };
-use sp_core::{Hasher, H256};
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
@@ -175,7 +175,7 @@ pub trait StateChainRpcApi {
         &self,
         ext_hash: state_chain_runtime::Hash,
         block_stream: Arc<Mutex<BlockStream>>,
-    ) -> Vec<state_chain_runtime::Event>
+    ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
@@ -229,7 +229,7 @@ impl StateChainRpcApi for StateChainRpcClient {
         &self,
         ext_hash: state_chain_runtime::Hash,
         block_stream: Arc<Mutex<BlockStream>>,
-    ) -> Vec<state_chain_runtime::Event>
+    ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
@@ -237,16 +237,16 @@ impl StateChainRpcApi for StateChainRpcClient {
         let mut events_for_ext = Vec::new();
         let mut found_event = false;
         while let Some(block_header) = block_stream.lock().await.next().await {
-            let header = block_header.unwrap();
+            let header = block_header?;
             let hash = header.hash();
-            if let Some(signed_block) = self.block(Some(hash)).await.unwrap() {
+            if let Some(signed_block) = self.block(Some(hash)).await? {
                 let xt_index = signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);
                     hash == ext_hash
                 });
 
                 // we may need to modify the events code to get out RawEvent stuff, like subxt does;
-                let events_for_block = self.events(&header).await.unwrap();
+                let events_for_block = self.events(&header).await?;
                 for (phase, event, _) in events_for_block {
                     if let Phase::ApplyExtrinsic(i) = phase {
                         if let Some(ext_index) = xt_index {
@@ -269,7 +269,7 @@ impl StateChainRpcApi for StateChainRpcClient {
                 break;
             };
         }
-        events_for_ext
+        Ok(events_for_ext)
     }
 
     async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
@@ -368,7 +368,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         ext_hash: state_chain_runtime::Hash,
         block_stream: Arc<Mutex<BlockStream>>,
-    ) -> Vec<state_chain_runtime::Event>
+    ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
