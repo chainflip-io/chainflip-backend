@@ -9,6 +9,7 @@ anyhow = "1.0"
 chainflip-engine = {path = "../../engine/"}
 clap = "*"
 config = "0.11.0"
+futures = "0.3.14"
 hex = "0.4.3"
 serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
@@ -18,4 +19,5 @@ tokio = {version = "1.5.0", features = ["full"]}
 # State chain
 pallet-cf-broadcast = {path = "../../state-chain/pallets/cf-broadcast"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
+pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 state-chain-runtime = {path = "../../state-chain/runtime"}

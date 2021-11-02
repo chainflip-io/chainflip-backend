@@ -1,6 +1,7 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, sync::Arc};
 
 use chainflip_engine::state_chain::client::connect_to_state_chain;
+use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use structopt::StructOpt;
 
@@ -85,20 +86,29 @@ async fn send_claim(
         .await;
 
     for event in events {
-        if let state_chain_runtime::Event::pallet_cf_broadcast_Instance0(
-            pallet_cf_broadcast::Event::TransactionSigningRequest(
-                attempt_id,
-                validator_id,
-                unsigned_tx,
-            ),
+        if let state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(
+            pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(..),
         ) = event
         {
-            println!(
-                "this is the event I want. Cheers bud. Attempt id: {}, validator_id: {}",
-                attempt_id, validator_id
-            )
+            println!("Claim request is on chain. Waiting for transaction generation...");
+            while let Some(block_header) = block_stream.next().await {
+                let header = block_header.unwrap();
+                let events = state_chain_client.events(&header).await.unwrap();
+                for (_phase, event, _) in events {
+                    match event {
+                        state_chain_runtime::Event::pallet_cf_staking(
+                            pallet_cf_staking::Event::ClaimSettled(validator_id, amount),
+                        ) => {
+                            println!("Aye good on ya mate, claim settled for validator: {}, and amount: {}", validator_id, amount);
+                        }
+                        _ => println!("Hello. Not interested."),
+                    }
+                }
+            }
+
+            // now we have the ceremony id. We have to watch for all events, that submit *back* with this ceremony id.
         } else {
-            println!("nah mate")
+            println!("Not a threshold signature event we were expecting to see.")
         }
     }
 }
