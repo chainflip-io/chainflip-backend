@@ -362,21 +362,21 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		pallet_cf_validator: ValidatorConfig { blocks_per_epoch: 7 * DAYS },
-		pallet_session: SessionConfig {
+		validator: ValidatorConfig { blocks_per_epoch: 7 * DAYS },
+		session: SessionConfig {
 			keys: initial_authorities
 				.iter()
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))
 				.collect::<Vec<_>>(),
 		},
-		pallet_cf_flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
-		pallet_cf_staking: StakingConfig {
+		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+		staking: StakingConfig {
 			genesis_stakers: endowed_accounts
 				.iter()
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		},
-		pallet_cf_auction: AuctionConfig {
+		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),
 			winners: initial_authorities
 				.iter()
@@ -384,17 +384,17 @@ fn testnet_genesis(
 				.collect::<Vec<AccountId>>(),
 			minimum_active_bid: TOTAL_ISSUANCE / 100,
 		},
-		pallet_aura: AuraConfig { authorities: vec![] },
-		pallet_grandpa: GrandpaConfig { authorities: vec![] },
-		pallet_cf_governance: GovernanceConfig {
+		aura: AuraConfig { authorities: vec![] },
+		grandpa: GrandpaConfig { authorities: vec![] },
+		governance: GovernanceConfig {
 			members: vec![root_key],
 			expiry_span: 80000,
 		},
-		pallet_cf_reputation: ReputationConfig {
+		reputation: ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		},
-		pallet_cf_environment: config_set,
-		pallet_cf_vaults: VaultsConfig {
+		environment: config_set,
+		vaults: VaultsConfig {
 			ethereum_vault_key: {
 				let key: [u8; 33] = hex_literal::hex![
 					"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
@@ -402,7 +402,7 @@ fn testnet_genesis(
 				key.to_vec()
 			},
 		},
-		pallet_cf_emissions: EmissionsConfig {
+		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
 			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 		},
