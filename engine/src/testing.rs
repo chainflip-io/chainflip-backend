@@ -1,14 +1,13 @@
+#![cfg(test)]
+
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
-///
-#[macro_export]
 macro_rules! assert_ok {
     ($result:expr) => {
         $result.unwrap()
     };
 }
-
-pub use assert_ok;
+pub(crate) use assert_ok;
 
 mod tests {
     #[test]

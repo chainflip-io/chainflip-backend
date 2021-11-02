@@ -245,21 +245,14 @@ impl StateChainRpcApi for StateChainRpcClient {
                     hash == ext_hash
                 });
 
-                // we may need to modify the events code to get out RawEvent stuff, like subxt does;
                 let events_for_block = self.events(&header).await?;
                 for (phase, event, _) in events_for_block {
                     if let Phase::ApplyExtrinsic(i) = phase {
                         if let Some(ext_index) = xt_index {
-                            found_event = true;
-                            // what if the exact same extrinsic is submitted. How would we know which is which?
                             if i as usize != ext_index {
                                 continue;
                             }
-                            println!(
-                                "here's the event at block {} and index: {}: {:?}",
-                                header.number, ext_index, event
-                            );
-
+                            found_event = true;
                             events_for_ext.push(event);
                         }
                     }
@@ -537,31 +530,9 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{
-        logging::test_utils::new_test_logger,
-        settings::{test_utils::new_test_settings, Settings},
-        testing::assert_ok,
-    };
+    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
 
     use super::*;
-
-    // #[tokio::test]
-    // async fn watch_extrinsic_rpc_test() {
-    //     let logger = new_test_logger();
-    //     let settings = Settings::from_file(
-    //         "/Users/kaz/Documents/Chainflip/chainflip-backend/engine/config/Local.toml",
-    //     )
-    //     .unwrap();
-
-    //     let (client, stream) = connect_to_state_chain(&settings.state_chain).await.unwrap();
-
-    //     let client.submit_extrinsic()
-
-    //     client
-    //         .state_chain_rpc_client
-    //         .watch_extrinsic_rpc(stream, )
-    //         .await;
-    // }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
