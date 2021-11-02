@@ -427,10 +427,8 @@ impl<T: Config> Pallet<T> {
 
 	fn no_active_chain_vault_rotations() -> bool {
 		// Returns true if the iterator is empty or if all rotations are complete.
-		PendingVaultRotations::<T>::iter().all(|(_, status)| match status {
-			VaultRotationStatus::Complete { .. } => true,
-			_ => false,
-		})
+		PendingVaultRotations::<T>::iter()
+			.all(|(_, status)| matches!(status, VaultRotationStatus::Complete { .. }))
 	}
 
 	fn start_vault_rotation_for_chain(
