@@ -20,6 +20,7 @@ pallet-cf-staking = {path = '../cf-staking', default-features = false}
 pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
 pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
 pallet-cf-broadcast = {path = '../cf-broadcast', default-features = false}
+pallet-cf-witnesser = {path = '../cf-witnesser', default-features = false}
 
 # Substrate stuff
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
@@ -28,7 +29,6 @@ frame-support = {default-features = false, version = '3.0.0'}
 frame-system = {default-features = false, version = '3.0.0'}
 sp-core = {default-features = false, version = '3.0.0'}
 sp-std = {default-features = false, version = '3.0.0'}
-frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
 
 [dev-dependencies]
 serde = {version = "1.0.119"}
@@ -50,10 +50,4 @@ std = [
   'pallet-cf-vaults/std',
   'sp-std/std',
   'sp-core/std',
-  'frame-benchmarking/std',
-]
-runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
 ]

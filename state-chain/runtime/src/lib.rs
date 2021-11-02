@@ -413,7 +413,7 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
-	type WeightInfoWitnesserApi = pallet_cf_witnesser_api::weights::PalletWeight<Runtime>;
+	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -691,7 +691,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
 			add_benchmark!(params, batches, pallet_cf_online, Online);
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
-			add_benchmark!(params, batches, pallet_cf_witnesser_api, WitnesserApi);
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);

@@ -13,7 +13,19 @@ use crate::Pallet;
 
 benchmarks! {
 	// TODO: implement benchmark
-	keygen_success {} : {}
+	keygen_success {
+		let chain_id = ChainId::Ethereum;
+		let caller: T::AccountId = whitelisted_caller();
+		let new_public_key: [u8; 33] = [0x02; 33];
+		// 1. Pass the active rotation check
+		PendingVaultRotations::<T>::insert(
+			chain_id,
+			VaultRotationStatus::<T>::AwaitingRotation {  new_public_key: new_public_key.to_vec() },
+		);
+		let call = Call::<T>::keygen_success(1, chain_id, new_public_key.to_vec());
+		let origin = T::EnsureWitnessed::successful_origin();
+		// 2. Pass invalid rotations status check
+	} : { call.dispatch_bypass_filter(origin)? }
 	// TODO: implement benchmark
 	keygen_failure {} : {}
 	// TODO: implement benchmark

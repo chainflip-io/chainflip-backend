@@ -239,7 +239,7 @@ impl pallet_cf_vaults::Config for Test {
 impl pallet_cf_witness_api::Config for Test {
 	type Call = Call;
 	type Witnesser = MockWitnesser;
-	type WeightInfoWitnesserApi = ();
+	type WeightInfoWitnesser = ();
 }
 
 // Build genesis storage according to the mock runtime.

@@ -90,7 +90,6 @@ runtime-benchmarks = [
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-online/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
-  'pallet-cf-witnesser-api/runtime-benchmarks',
   'pallet-cf-rewards/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',

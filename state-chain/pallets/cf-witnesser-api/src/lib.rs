@@ -12,17 +12,11 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod weights;
-pub use weights::WeightInfo;
-
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::weights::WeightInfo;
 	use cf_chains::{ChainId, Ethereum};
 	use cf_traits::{SigningContext, Witnesser};
+	use frame_support::dispatch::GetDispatchInfo;
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance0, pallet_prelude::*,
 	};
@@ -34,6 +28,7 @@ pub mod pallet {
 	};
 	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_vaults::{Call as VaultsCall, CeremonyId, Config as VaultsConfig};
+	use pallet_cf_witnesser::WeightInfo;
 	use sp_std::prelude::*;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -57,7 +52,7 @@ pub mod pallet {
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
 
 		/// Benchmark stuff
-		type WeightInfoWitnesserApi: WeightInfo;
+		type WeightInfoWitnesser: pallet_cf_witnesser::WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -81,7 +76,10 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_signature_success())]
+		// #[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_success(id, signature).call_weight()))]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_success(*id, signature.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -104,7 +102,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_signature_failed())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_failed(*id, offenders.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -129,7 +129,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_transmission_success())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance0>::transmission_success(*id, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -152,7 +154,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_eth_transmission_failure())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance0>::transmission_failure(*id, failure.clone(), tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -178,7 +182,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_staked())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::staked(staker_account_id.clone(), *amount, *withdrawal_address, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_staked(
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
@@ -202,7 +208,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_claimed())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::claimed(account_id.clone(), *claimed_amount, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_claimed(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -227,7 +235,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_keygen_success())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_success(*ceremony_id, *chain_id, new_public_key.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -248,7 +258,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_keygen_failure())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_failure(*ceremony_id, *chain_id, guilty_validators.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -271,7 +283,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesserApi::witness_vault_key_rotated())]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::vault_key_rotated(*chain_id, new_public_key.clone(), *block_number, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,
