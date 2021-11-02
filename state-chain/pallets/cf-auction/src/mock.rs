@@ -12,6 +12,7 @@ use sp_runtime::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
+use cf_traits::mocks::chainflipaccount::MockChainflipAccount;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -157,23 +158,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-}
-
-pub struct MockChainflipAccount;
-
-impl ChainflipAccount for MockChainflipAccount {
-	type AccountId = u64;
-
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
-	}
-
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
-		CHAINFLIP_ACCOUNTS.with(|cell| {
-			cell.borrow_mut()
-				.insert(*account_id, ChainflipAccountData { state });
-		})
-	}
 }
 
 pub struct MockOnline;

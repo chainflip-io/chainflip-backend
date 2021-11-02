@@ -9,3 +9,4 @@ pub mod stake_transfer;
 pub mod time_source;
 pub mod vault_rotation;
 pub mod witnesser;
+pub mod chainflipaccount;
