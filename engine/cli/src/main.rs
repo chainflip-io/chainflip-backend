@@ -93,8 +93,11 @@ async fn send_claim(
         {
             println!("Your claim request is on chain.\nWaiting for signed transaction...");
             'outer: while let Some(block_header) = block_stream.lock().await.next().await {
-                let header = block_header.unwrap();
-                let events = state_chain_client.events(&header).await.unwrap();
+                let header = block_header.expect("Failed to get a valid block header");
+                let events = state_chain_client.events(&header).await.expect(&format!(
+                    "Failed to fetch events for block: {}",
+                    header.number
+                ));
                 for (_phase, event, _) in events {
                     match event {
                         state_chain_runtime::Event::pallet_cf_staking(
@@ -105,9 +108,9 @@ async fn send_claim(
                         ) => {
                             if validator_id == state_chain_client.our_account_id {
                                 println!("Here's the signed transaction. You now need to broadcast this on the Ethereum chain for your funds to be sent to the wallet you specified.");
-                                println!("\t{}", hex::encode(signed_payload))
+                                println!("\n{}\n", hex::encode(signed_payload));
+                                break 'outer;
                             }
-                            break 'outer;
                         }
                         _ => {
                             // ignore
@@ -115,8 +118,6 @@ async fn send_claim(
                     }
                 }
             }
-        } else {
-            println!("Not a threshold signature event we were expecting to see.")
         }
     }
 }
@@ -131,7 +132,7 @@ fn confirm_submit() {
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        .expect("error: failed to get user input");
+        .expect("Error: Failed to get user input");
 
     let input = input.trim_end_matches(char::is_whitespace);
 
