@@ -101,7 +101,7 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// The active vaults for the current epoch.
+	/// A map of vaults by epoch and chain
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
 	pub(super) type Vaults<T: Config> =

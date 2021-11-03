@@ -229,7 +229,7 @@ mod tests {
 				public_key,
 				active_window,
 			} = Vaults::<MockRuntime>::get(new_epoch, ChainId::Ethereum)
-				.expect("Ethereum Vault should exists");
+				.expect("Ethereum Vault should exist");
 
 			// The genesis vault is updated with the active window
 			assert_eq!(
@@ -243,7 +243,7 @@ mod tests {
 					from: ROTATION_BLOCK_NUMBER,
 					to: None
 				},
-				"we should set the starting point for the new vault's active window"
+				"we should have set the starting point for the new vault's active window"
 			);
 
 			// Status is complete.
