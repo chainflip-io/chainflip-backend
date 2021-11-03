@@ -1,6 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use state_chain_runtime::{self, opaque::Block, RuntimeApi};
+use jsonrpc_core::MetaIoHandler;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 pub use sc_executor::NativeElseWasmExecutor;
@@ -10,6 +10,7 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus::SlotData;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{sync::Arc, time::Duration};
 
 // Our native executor instance.
@@ -220,17 +221,22 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	);
 
 	let rpc_extensions_builder = {
+		let p2p_rpc_request_handler =
+			cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler);
+
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-
 		Box::new(move |deny_unsafe, _| {
-			let deps = crate::rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				p2p_rpc_handler: rpc_request_handler.clone(),
-				deny_unsafe,
-			};
-			Ok(crate::rpc::create_full(deps))
+			let mut io = MetaIoHandler::default();
+			io.extend_with(p2p_rpc_request_handler.clone());
+			io.extend_with(substrate_frame_rpc_system::SystemApi::to_delegate(
+				substrate_frame_rpc_system::FullSystem::new(
+					client.clone(),
+					pool.clone(),
+					deny_unsafe,
+				),
+			));
+			Ok(io)
 		})
 	};
 

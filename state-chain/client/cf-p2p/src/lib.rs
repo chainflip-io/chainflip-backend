@@ -1,8 +1,9 @@
 //! Chainflip P2P layer.
 //!
-//! This code allows this node's CFE to communicate with other node's CFEs using substrate's existing p2p network.
-//! We give substrate a RpcRequestHandler object which substrate uses to process Rpc requests, and we create and run a
-//! background future that processes incoming p2p messages and sends them to any Rpc subscribers we have (Our local CFE).
+//! This code allows this node's CFE to communicate with other node's CFEs using substrate's
+//! existing p2p network. We give substrate a RpcRequestHandler object which substrate uses to
+//! process Rpc requests, and we create and run a background future that processes incoming p2p
+//! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
 pub mod p2p_serde;
 pub use gen_client::Client as P2PRpcClient;
@@ -10,9 +11,8 @@ pub use gen_client::Client as P2PRpcClient;
 use core::iter;
 use futures::{
 	channel::mpsc::{unbounded, UnboundedSender},
-	FutureExt,
-	Stream, StreamExt, TryStreamExt, Sink, SinkExt, 
-	task::Spawn
+	task::Spawn,
+	FutureExt, SinkExt, StreamExt,
 };
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
@@ -20,12 +20,16 @@ use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, Subscripti
 use log::{debug, warn};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
 use serde::{self, Deserialize, Serialize};
-use sp_runtime::sp_std::sync::{Arc, Mutex};
-use sp_runtime::traits::Block as BlockT;
-use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap};
-use std::marker::Send;
-use std::pin::Pin;
+use sp_runtime::{
+	sp_std::sync::{Arc, Mutex},
+	traits::Block as BlockT,
+};
+use std::{
+	borrow::Cow,
+	collections::{hash_map::Entry, HashMap},
+	marker::Send,
+	pin::Pin,
+};
 
 // TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
@@ -132,7 +136,7 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
-    	fallback_names: Vec::new(),
+		fallback_names: Vec::new(),
 	}
 }
 
@@ -640,12 +644,11 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 			Arc::new(TestNetworkInterface::new(peer_id, network)),
 			sc_rpc::testing::TaskExecutor,
 		);
-		let rpc_request_handler = Arc::new(rpc_request_handler);
-		let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>({
-			let io = MetaIoHandler::default();
+		let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(Arc::new({
+			let mut io = MetaIoHandler::default();
 			io.extend_with(P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler));
 			io
-		});
+		}));
 
 		tokio::runtime::Handle::current().spawn(server);
 		tokio::runtime::Handle::current().spawn(p2p_event_handler_fut);
