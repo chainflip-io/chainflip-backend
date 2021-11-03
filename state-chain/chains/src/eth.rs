@@ -1,6 +1,7 @@
 //! Types and functions that are common to ethereum.
 pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
+pub mod update_flip_supply;
 
 use codec::{Decode, Encode};
 pub use ethabi::{
