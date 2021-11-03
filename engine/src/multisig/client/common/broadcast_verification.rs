@@ -13,19 +13,13 @@ pub struct BroadcastVerificationMessage<T: Clone> {
 }
 
 fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
-    use std::convert::TryInto;
-
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
 
     hasher.update(bincode::serialize(data).unwrap());
 
-    hasher
-        .finalize()
-        .as_slice()
-        .try_into()
-        .expect("Invalid hash size")
+    *hasher.finalize().as_ref()
 }
 
 // This might result in an error if we don't get 2/3 of parties agreeing on the same value.
