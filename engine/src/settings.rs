@@ -19,6 +19,13 @@ pub struct StateChain {
     pub signing_key_file: String,
 }
 
+impl StateChain {
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
+        parse_websocket_url(&self.ws_endpoint).map_err(|e| ConfigError::Message(e.to_string()))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
     pub from_block: u64,
@@ -214,9 +221,6 @@ impl Settings {
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
         parse_websocket_url(&self.eth.node_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        parse_websocket_url(&self.state_chain.ws_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         is_valid_db_path(self.signing.db_file.as_path())

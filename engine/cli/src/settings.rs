@@ -63,8 +63,6 @@ impl CLISettings {
     }
 
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.state_chain.ws_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-        Ok(())
+        Ok(self.state_chain.validate_settings()?)
     }
 }
