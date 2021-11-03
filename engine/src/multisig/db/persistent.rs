@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -44,8 +44,7 @@ impl KeyDB for PersistentKeyDB {
         self.db.write(tx).unwrap_or_else(|e| {
             panic!(
                 "Could not write key share for key_id `{}` to database: {}",
-                hex::encode(&key_id.0),
-                e,
+                &key_id, e,
             )
         });
     }
@@ -54,22 +53,20 @@ impl KeyDB for PersistentKeyDB {
         self.db
             .iter(0)
             .filter_map(|(key_id, key_info)| {
-                let key_id: Vec<u8> = match key_id.try_into() {
-                    Ok(key_id) => Some(key_id),
-                    Err(err) => {
-                        slog::error!(self.logger, "Could not deserialize key_id from DB: {}", err);
-                        None
+                let key_id: KeyId = KeyId(key_id.into());
+                match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
+                    Ok(keygen_info) => {
+                        slog::info!(
+                            self.logger,
+                            "Loaded key_info (key_id: {}) from database",
+                            key_id
+                        );
+                        Some((key_id, keygen_info))
                     }
-                }?;
-
-                let key_id: KeyId = KeyId(key_id);
-                let key_info_bytes: Vec<u8> = key_info.try_into().unwrap();
-                match bincode::deserialize::<KeygenResultInfo>(key_info_bytes.as_ref()) {
-                    Ok(keygen_info) => Some((key_id, keygen_info)),
                     Err(err) => {
                         slog::error!(
                             self.logger,
-                            "Could not deserialize key_info (key_id: {:?}) from DB: {}",
+                            "Could not deserialize key_info (key_id: {}) from database: {}",
                             key_id,
                             err
                         );
@@ -87,7 +84,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        logging::test_utils::create_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
+        logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
     };
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
@@ -102,7 +99,7 @@ mod tests {
         assert_ok!(bincode::deserialize::<KeygenResultInfo>(
             bashful_secret_bin.as_ref()
         ));
-        let logger = create_test_logger();
+        let logger = new_test_logger();
         // just a random key
         let key: [u8; 33] = [
             3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132,
@@ -130,7 +127,7 @@ mod tests {
 
     #[test]
     fn can_update_key() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
         let key_id = KeyId(vec![0; 33]);
         let db_path = Path::new("db2");
         {

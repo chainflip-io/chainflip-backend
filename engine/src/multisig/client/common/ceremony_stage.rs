@@ -17,12 +17,10 @@ pub enum StageResult<M, Result> {
 /// (currently used to indicate whether we are ready to proceed to the
 /// next stage)
 pub enum ProcessMessageResult {
-    /// Some progress was made
-    Progress,
-    /// No further messages are expected
-    CollectedAll,
-    /// No progress was made
-    Ignored,
+    /// No further messages are expected for the current stage
+    Ready,
+    /// Should wait for more messages
+    NotReady,
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform

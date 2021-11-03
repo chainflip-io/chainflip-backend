@@ -845,6 +845,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
@@ -902,6 +903,7 @@ name = "cf-traits"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -1017,6 +1019,7 @@ dependencies = [
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
+ "utilities",
  "web3",
  "websocket",
 ]
@@ -5213,6 +5216,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
@@ -10085,6 +10089,10 @@ dependencies = [
  "matches",
  "percent-encoding 2.1.0",
 ]
+
+[[package]]
+name = "utilities"
+version = "0.1.0"
 
 [[package]]
 name = "value-bag"

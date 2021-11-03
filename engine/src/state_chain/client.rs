@@ -442,13 +442,13 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{logging::test_utils::create_test_logger, testing::assert_ok};
+    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
 
     use super::*;
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
         let bytes: [u8; 32] =
             hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")
                 .unwrap()
@@ -487,7 +487,7 @@ mod tests {
 
     #[tokio::test]
     async fn tx_retried_and_nonce_incremented_on_fail_due_to_nonce_each_time() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
@@ -525,7 +525,7 @@ mod tests {
 
     #[tokio::test]
     async fn tx_fails_for_reason_unrelated_to_nonce_does_not_retry_does_not_increment_nonce() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
 
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -562,7 +562,7 @@ mod tests {
     // 4. We succeed, therefore the nonce for the next call is 2.
     #[tokio::test]
     async fn tx_fails_due_to_nonce_increments_nonce_then_exits_when_successful() {
-        let logger = create_test_logger();
+        let logger = new_test_logger();
 
         let bytes: [u8; 32] =
             hex::decode("276dabe5c09f607729280c91c3de2dc588cd0e6ccba24db90cae050d650b3fc3")

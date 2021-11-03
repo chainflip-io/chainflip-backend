@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -170,6 +171,14 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
+		///
+		/// ## Events
+		///
+		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidRange](Error::InvalidRange)
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,
@@ -210,6 +219,14 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::set_active_range(self.validator_size_range).expect("valid range");
+
+			for validator_id in &self.winners {
+				T::ChainflipAccount::update_state(
+					&(validator_id.clone().into()),
+					ChainflipAccountState::Validator,
+				);
+			}
+
 			LastAuctionResult::<T>::put(AuctionResult {
 				winners: self.winners.clone(),
 				minimum_active_bid: self.minimum_active_bid,
