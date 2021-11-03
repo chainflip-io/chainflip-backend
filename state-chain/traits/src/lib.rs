@@ -447,6 +447,8 @@ pub trait SignerNomination {
 pub trait KeyProvider<C: Chain> {
 	/// The type of the provided key_id.
 	type KeyId;
+	/// Information regarding the current epoch
+	type EpochInfo: EpochInfo;
 
 	/// Gets the key.
 	fn current_key() -> Self::KeyId;

@@ -10,6 +10,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -118,7 +119,7 @@ pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = Vec<u8>;
-
+	type EpochInfo = MockEpochInfo;
 	fn current_key() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
 	}
