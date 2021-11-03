@@ -12,6 +12,16 @@ mod settings;
 
 #[tokio::main]
 async fn main() {
+    std::process::exit(match run_cli().await {
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("Error: {:?}", err);
+            1
+        }
+    })
+}
+
+async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::from_args();
     let cli_settings = CLISettings::new(command_line_opts.clone()).expect("Could not read config");
 
@@ -22,23 +32,21 @@ async fn main() {
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();
 
-    match command_line_opts.cmd {
+    Ok(match command_line_opts.cmd {
         Claim {
             amount,
             eth_address,
         } => {
             send_claim(
                 amount,
-                clean_eth_address(eth_address).unwrap_or_else(|_| {
-                    eprintln!("Invalid ETH address");
-                    std::process::exit(1);
-                }),
+                clean_eth_address(eth_address)
+                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
                 &cli_settings,
                 &logger,
             )
-            .await;
+            .await?
         }
-    };
+    })
 }
 
 fn clean_eth_address(dirty_eth_address: String) -> Result<[u8; 20]> {
@@ -60,13 +68,8 @@ async fn send_claim(
     eth_address: [u8; 20],
     settings: &CLISettings,
     logger: &slog::Logger,
-) {
-    let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain)
-        .await
-        .unwrap_or_else(|_| {
-            eprintln!("Could not connect to State Chain node. Please ensure you are pointing to a working node.");
-            std::process::exit(1);
-        });
+) -> Result<()> {
+    let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     println!(
         "Submitting claim with amount `{}` to ETH address `0x{}`",
@@ -75,7 +78,7 @@ async fn send_claim(
     );
 
     if !confirm_submit() {
-        std::process::exit(0);
+        return Ok(());
     }
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
@@ -140,6 +143,7 @@ async fn send_claim(
             }
         }
     }
+    Ok(())
 }
 
 fn confirm_submit() -> bool {
