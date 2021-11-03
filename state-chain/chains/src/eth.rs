@@ -697,7 +697,10 @@ mod tests {
 #[cfg(test)]
 mod verification_tests {
 	use super::*;
-	use ethereum::{EIP1559Transaction, EIP1559TransactionMessage, TransactionV2};
+	use ethereum::{
+		EIP1559Transaction, EIP1559TransactionMessage, LegacyTransaction, LegacyTransactionMessage,
+		TransactionV2,
+	};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
 	use rand::prelude::*;
@@ -828,6 +831,66 @@ mod verification_tests {
 				access_list: msg.access_list.clone(),
 				// EIP-155: sig.v = y_parity + CHAIN_ID * 2 + 35
 				odd_y_parity: sig.v - msg.chain_id * 2 - 35 == 1,
+			});
+
+			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+
+			let verificaton_result =
+				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
+			assert_eq!(
+				verificaton_result,
+				Ok(()),
+				"Unable to verify tx signed by key {:#x}",
+				key
+			);
+		}
+	}
+
+	#[test]
+	fn test_legacy_ethereum_signature_verification() {
+		let unsigned = UnsignedTransaction {
+			chain_id: 42,
+			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
+			gas_limit: U256::from(21_000u32).into(),
+			contract: [0xcf; 20].into(),
+			value: 0.into(),
+			data: b"do_something()".to_vec(),
+			..Default::default()
+		};
+
+		let msg = LegacyTransactionMessage {
+			chain_id: Some(unsigned.chain_id),
+			nonce: 0.into(),
+			gas_limit: unsigned.gas_limit.unwrap(),
+			gas_price: U256::from(1_000_000_000u32),
+			action: ethereum::TransactionAction::Call(unsigned.contract),
+			value: unsigned.value,
+			input: unsigned.data.clone(),
+		};
+
+		for seed in 0..10 {
+			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
+			let key_ref = web3::signing::SecretKeyRef::new(&key);
+
+			use web3::signing::Key;
+			let sig = key_ref
+				.sign(msg.hash().as_bytes(), unsigned.chain_id.into())
+				.unwrap();
+
+			let signed_tx = TransactionV2::Legacy(LegacyTransaction {
+				nonce: msg.nonce,
+				gas_price: msg.gas_price,
+				gas_limit: msg.gas_limit,
+				action: msg.action,
+				value: msg.value,
+				input: msg.input.clone(),
+				signature: ethereum::TransactionSignature::new(
+					sig.v,
+					sig.r.0.into(),
+					sig.s.0.into(),
+				)
+				.unwrap(),
 			});
 
 			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
