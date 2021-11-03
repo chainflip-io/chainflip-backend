@@ -223,6 +223,8 @@ impl Settings {
         parse_websocket_url(&self.eth.node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
+        self.state_chain.validate_settings()?;
+
         is_valid_db_path(self.signing.db_file.as_path())
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
