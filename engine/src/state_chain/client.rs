@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -164,12 +164,6 @@ pub trait StateChainRpcApi {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
-    /// Get a block
-    async fn get_block(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Option<state_chain_runtime::SignedBlock>>;
-
     /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
@@ -215,19 +209,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
-    async fn get_block(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Option<state_chain_runtime::SignedBlock>> {
-        let block = self
-            .chain_rpc_client
-            .block(Some(block_hash))
-            .compat()
-            .await
-            .unwrap();
-        Ok(block)
-    }
-
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
         extrinsic_hash: state_chain_runtime::Hash,
@@ -241,8 +222,14 @@ impl StateChainRpcApi for StateChainRpcClient {
         let mut found_event = false;
         while let Some(block_header) = block_stream.lock().await.next().await {
             let header = block_header?;
-            let hash = header.hash();
-            if let Some(signed_block) = self.get_block(hash).await? {
+            let block_hash = header.hash();
+            if let Some(signed_block) = self
+                .chain_rpc_client
+                .block(Some(block_hash))
+                .compat()
+                .await
+                .map_err(|e| anyhow!(e))?
+            {
                 let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);
                     hash == extrinsic_hash
