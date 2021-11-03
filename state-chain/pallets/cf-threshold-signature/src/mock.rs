@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_threshold_signature};
+use cf_traits::mocks::epoch_info::MockEpochInfo;
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -10,7 +11,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

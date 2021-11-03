@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use crate::mocks::epoch_info::MockEpochInfo;
+use std::marker::PhantomData;
 
 /// A Mock that just returns KeyId::default().
 #[derive(Default)]
