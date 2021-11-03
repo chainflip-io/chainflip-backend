@@ -29,7 +29,10 @@ async fn main() {
         } => {
             send_claim(
                 amount,
-                clean_eth_address(eth_address).expect("Invalid ETH address"),
+                clean_eth_address(eth_address).unwrap_or_else(|_| {
+                    eprintln!("Invalid ETH address");
+                    std::process::exit(1);
+                }),
                 &cli_settings,
                 &logger,
             )
@@ -60,7 +63,10 @@ async fn send_claim(
 ) {
     let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain)
         .await
-        .expect("Could not connect to State Chain node");
+        .unwrap_or_else(|_| {
+            eprintln!("Could not connect to State Chain node. Please ensure you are pointing to a working node.");
+            std::process::exit(1);
+        });
 
     println!(
         "Submitting claim with amount `{}` to ETH address `0x{}`",
@@ -68,7 +74,9 @@ async fn send_claim(
         hex::encode(eth_address)
     );
 
-    confirm_submit();
+    if !confirm_submit() {
+        std::process::exit(0);
+    }
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
@@ -80,7 +88,7 @@ async fn send_claim(
     let tx_hash = state_chain_client
         .submit_extrinsic(&logger, pallet_cf_staking::Call::claim(amount, eth_address))
         .await
-        .expect("Could not submit extrinsic");
+        .expect("Failed to submit claim extrinsic");
 
     println!(
         "Your claim has transaction hash: `{:?}`. Waiting for your request to be confirmed...",
@@ -102,10 +110,13 @@ async fn send_claim(
             println!("Your claim request is on chain.\nWaiting for signed claim data...");
             'outer: while let Some(block_header) = block_stream.lock().await.next().await {
                 let header = block_header.expect("Failed to get a valid block header");
-                let events = state_chain_client.events(&header).await.expect(&format!(
-                    "Failed to fetch events for block: {}",
-                    header.number
-                ));
+                let events = state_chain_client
+                    .get_events(&header)
+                    .await
+                    .expect(&format!(
+                        "Failed to fetch events for block: {}",
+                        header.number
+                    ));
                 for (_phase, event, _) in events {
                     match event {
                         state_chain_runtime::Event::pallet_cf_staking(
@@ -130,32 +141,32 @@ async fn send_claim(
     }
 }
 
-fn confirm_submit() {
+fn confirm_submit() -> bool {
     use std::io;
     use std::io::*;
 
-    print!("Do you wish to proceed? [y/n] > ");
-    std::io::stdout().flush().unwrap();
+    loop {
+        print!("Do you wish to proceed? [y/n] > ");
+        std::io::stdout().flush().unwrap();
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Error: Failed to get user input");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Error: Failed to get user input");
+        let input = input.trim();
 
-    let input = input.trim_end_matches(char::is_whitespace);
-
-    match input {
-        "y" | "yes" | "1" | "true" | "ofc" => {
-            println!("Submitting...");
-            return;
-        }
-        "n" | "no" | "0" | "false" | "nah" => {
-            println!("Ok, exiting...");
-            std::process::exit(0);
-        }
-        _ => {
-            eprintln!("Invalid: please type `y` or `n` to confirm");
-            std::process::exit(1);
+        match input {
+            "y" | "yes" | "1" | "true" | "ofc" => {
+                println!("Submitting...");
+                return true;
+            }
+            "n" | "no" | "0" | "false" | "nah" => {
+                println!("Ok, exiting...");
+                return false;
+            }
+            _ => {
+                continue;
+            }
         }
     }
 }

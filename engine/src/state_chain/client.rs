@@ -165,9 +165,9 @@ pub trait StateChainRpcApi {
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
     /// Get a block
-    async fn block(
+    async fn get_block(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
     ) -> Result<Option<state_chain_runtime::SignedBlock>>;
 
     /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
@@ -181,7 +181,10 @@ pub trait StateChainRpcApi {
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
 
     /// Get events for a particular block
-    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>>;
+    async fn get_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<Vec<EventInfo>>;
 }
 
 #[async_trait]
@@ -212,13 +215,13 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
-    async fn block(
+    async fn get_block(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
     ) -> Result<Option<state_chain_runtime::SignedBlock>> {
         let block = self
             .chain_rpc_client
-            .block(block_hash)
+            .block(Some(block_hash))
             .compat()
             .await
             .unwrap();
@@ -227,33 +230,33 @@ impl StateChainRpcApi for StateChainRpcClient {
 
     async fn watch_submitted_extrinsic_rpc<BlockStream>(
         &self,
-        ext_hash: state_chain_runtime::Hash,
+        extrinsic_hash: state_chain_runtime::Hash,
         block_stream: Arc<common::Mutex<BlockStream>>,
     ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
-        let mut events_for_ext = Vec::new();
+        let mut events_for_extrinsic = Vec::new();
         let mut found_event = false;
         while let Some(block_header) = block_stream.lock().await.next().await {
             let header = block_header?;
             let hash = header.hash();
-            if let Some(signed_block) = self.block(Some(hash)).await? {
-                let xt_index = signed_block.block.extrinsics.iter().position(|ext| {
+            if let Some(signed_block) = self.get_block(hash).await? {
+                let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);
-                    hash == ext_hash
+                    hash == extrinsic_hash
                 });
 
-                let events_for_block = self.events(&header).await?;
+                let events_for_block = self.get_events(&header).await?;
                 for (phase, event, _) in events_for_block {
                     if let Phase::ApplyExtrinsic(i) = phase {
-                        if let Some(ext_index) = xt_index {
-                            if i as usize != ext_index {
+                        if let Some(extrinsic_index) = extrinsic_index_found {
+                            if i as usize != extrinsic_index {
                                 continue;
                             }
                             found_event = true;
-                            events_for_ext.push(event);
+                            events_for_extrinsic.push(event);
                         }
                     }
                 }
@@ -262,10 +265,13 @@ impl StateChainRpcApi for StateChainRpcClient {
                 break;
             };
         }
-        Ok(events_for_ext)
+        Ok(events_for_extrinsic)
     }
 
-    async fn events(&self, block_header: &state_chain_runtime::Header) -> Result<Vec<EventInfo>> {
+    async fn get_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<Vec<EventInfo>> {
         self.state_rpc_client
             .query_storage_at(
                 vec![self.events_storage_key.clone()],
@@ -350,11 +356,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     /// Get all the events from a particular block
-    pub async fn events(
+    pub async fn get_events(
         &self,
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
-        self.state_chain_rpc_client.events(block_header).await
+        self.state_chain_rpc_client.get_events(block_header).await
     }
 
     pub async fn watch_submitted_extrinsic<BlockStream>(
