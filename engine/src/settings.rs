@@ -19,6 +19,13 @@ pub struct StateChain {
     pub signing_key_file: String,
 }
 
+impl StateChain {
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
+        parse_websocket_url(&self.ws_endpoint).map_err(|e| ConfigError::Message(e.to_string()))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
     pub from_block: u64,
@@ -57,6 +64,14 @@ pub struct Settings {
     pub log: Log,
 }
 
+#[derive(StructOpt, Debug, Clone, Default)]
+pub struct StateChainOptions {
+    #[structopt(long = "state_chain.ws_endpoint")]
+    pub state_chain_ws_endpoint: Option<String>,
+    #[structopt(long = "state_chain.signing_key_file")]
+    pub state_chain_signing_key_file: Option<String>,
+}
+
 #[derive(StructOpt, Debug, Clone)]
 pub struct CommandLineOptions {
     // Misc Options
@@ -67,11 +82,8 @@ pub struct CommandLineOptions {
     #[structopt(short = "b", long = "log-blacklist")]
     log_blacklist: Option<Vec<String>>,
 
-    // State Chain Settings
-    #[structopt(long = "state_chain.ws_endpoint")]
-    state_chain_ws_endpoint: Option<String>,
-    #[structopt(long = "state_chain.signing_key_file")]
-    state_chain_signing_key_file: Option<String>,
+    #[structopt(flatten)]
+    state_chain_opts: StateChainOptions,
 
     // Eth Settings
     #[structopt(long = "eth.from_block")]
@@ -103,8 +115,7 @@ impl CommandLineOptions {
             config_path: None,
             log_whitelist: None,
             log_blacklist: None,
-            state_chain_ws_endpoint: None,
-            state_chain_signing_key_file: None,
+            state_chain_opts: StateChainOptions::default(),
             eth_from_block: None,
             eth_node_endpoint: None,
             eth_stake_manager_eth_address: None,
@@ -160,10 +171,10 @@ impl Settings {
 
         // Override the settings with the cmd line options
         // State Chain
-        if let Some(opt) = opts.state_chain_ws_endpoint {
+        if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
             settings.state_chain.ws_endpoint = opt
         };
-        if let Some(opt) = opts.state_chain_signing_key_file {
+        if let Some(opt) = opts.state_chain_opts.state_chain_signing_key_file {
             settings.state_chain.signing_key_file = opt
         };
 
@@ -216,8 +227,7 @@ impl Settings {
         parse_websocket_url(&self.eth.node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-        parse_websocket_url(&self.state_chain.ws_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
+        self.state_chain.validate_settings()?;
 
         is_valid_db_path(self.signing.db_file.as_path())
             .map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -359,8 +369,10 @@ mod tests {
             config_path: None,
             log_whitelist: Some(vec!["test1".to_owned()]),
             log_blacklist: Some(vec!["test2".to_owned()]),
-            state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
-            state_chain_signing_key_file: Some("signing_key_file".to_owned()),
+            state_chain_opts: StateChainOptions {
+                state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
+                state_chain_signing_key_file: Some("signing_key_file".to_owned()),
+            },
             eth_from_block: Some(1234),
             eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
             eth_stake_manager_eth_address: Some(
@@ -380,11 +392,11 @@ mod tests {
 
         // Compare the opts and the settings
         assert_eq!(
-            opts.state_chain_ws_endpoint.unwrap(),
+            opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
             settings.state_chain.ws_endpoint
         );
         assert_eq!(
-            opts.state_chain_signing_key_file.unwrap(),
+            opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
             settings.state_chain.signing_key_file
         );
 

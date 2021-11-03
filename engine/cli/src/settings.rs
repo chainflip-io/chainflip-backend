@@ -1,4 +1,4 @@
-use chainflip_engine::settings::{parse_websocket_url, StateChain};
+use chainflip_engine::settings::{StateChain, StateChainOptions};
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
 use structopt::StructOpt;
@@ -9,11 +9,8 @@ pub struct CLICommandLineOptions {
     #[structopt(short = "c", long = "config-path")]
     config_path: Option<String>,
 
-    // State Chain Settings
-    #[structopt(long = "state_chain.ws_endpoint")]
-    state_chain_ws_endpoint: Option<String>,
-    #[structopt(long = "state_chain.signing_key_file")]
-    state_chain_signing_key_file: Option<String>,
+    #[structopt(flatten)]
+    state_chain_opts: StateChainOptions,
 
     #[structopt(subcommand)]
     pub cmd: CFCommand,
@@ -37,10 +34,10 @@ impl CLISettings {
         };
 
         // Override the settings with the cmd line options
-        if let Some(opt) = opts.state_chain_ws_endpoint {
+        if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
             cli_config.state_chain.ws_endpoint = opt
         };
-        if let Some(opt) = opts.state_chain_signing_key_file {
+        if let Some(opt) = opts.state_chain_opts.state_chain_signing_key_file {
             cli_config.state_chain.signing_key_file = opt
         };
 
@@ -63,8 +60,6 @@ impl CLISettings {
     }
 
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.state_chain.ws_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-        Ok(())
+        Ok(self.state_chain.validate_settings()?)
     }
 }
