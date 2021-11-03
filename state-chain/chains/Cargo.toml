@@ -8,6 +8,7 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 [dependencies]
 # Substrate packages
 sp-std = { version = '3.0', default-features = false }
+sp-core = { version = '3.0', default-features = false }
 frame-support = { default-features = false, version = '3.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
@@ -17,8 +18,8 @@ sp-runtime = { default-features = false, version = '3.0.0' }
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
 
 # Ethereum
-ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
-ethereum = {default-features = false, version = "0.9"}
+ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
+ethereum = {default-features = false, version = "0.10"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
@@ -26,6 +27,8 @@ secp256k1 = {optional = true, version = "0.20"}
 
 [dev-dependencies]
 hex-literal = {version = "0.3"}
+web3 = {version = "0.17"}
+rand = {version="0.8.4"}
 
 [features]
 default = ['std']

@@ -42,6 +42,14 @@ pub fn stake_manager_contract_address() -> [u8; 20] {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumTransactionError {
 	InvalidRlp,
+	InvalidSignature,
+	InvalidRecoveryId,
+	WrongChainId,
+	WrongGasLimit,
+	WrongData,
+	WrongValue,
+	WrongContractAddress,
+	WrongAction,
 }
 
 pub trait Tokenizable {
@@ -78,7 +86,7 @@ impl SigData {
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.
 	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
-		self.msg_hash = Keccak256::hash(calldata);
+		self.msg_hash = H256(Keccak256::hash(calldata).0);
 	}
 
 	/// Add the actual signature. This method does no verification.
@@ -377,7 +385,7 @@ impl From<secp256k1::PublicKey> for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
@@ -403,18 +411,91 @@ pub struct UnsignedTransaction {
 	pub data: Vec<u8>,
 }
 
+impl UnsignedTransaction {
+	/// Returns an error if any of the following items don't match the recovered message:
+	///
+	/// - chain_id
+	/// - gas_limit
+	/// - data
+	/// - value
+	/// - contract
+	///
+	/// OR if the the wrong `action` was not a call to the correct contract.
+	///
+	/// See [EthereumTransactionError].
+	pub fn match_against_recovered(
+		&self,
+		recovered: &ethereum::EIP1559TransactionMessage,
+	) -> Result<(), EthereumTransactionError> {
+		if self.chain_id != recovered.chain_id {
+			return Err(EthereumTransactionError::WrongChainId);
+		}
+
+		if let Some(x) = self.gas_limit {
+			if x.0 != recovered.gas_limit.0 {
+				return Err(EthereumTransactionError::WrongGasLimit);
+			}
+		}
+
+		if self.data != recovered.input {
+			return Err(EthereumTransactionError::WrongData);
+		}
+
+		if self.value.0 != recovered.value.0 {
+			return Err(EthereumTransactionError::WrongValue);
+		}
+
+		match recovered.action {
+			ethereum::TransactionAction::Call(address) => {
+				if address.as_bytes() != self.contract.as_bytes() {
+					return Err(EthereumTransactionError::WrongContractAddress);
+				}
+			}
+			ethereum::TransactionAction::Create => {
+				return Err(EthereumTransactionError::WrongAction)
+			}
+		}
+
+		Ok(())
+	}
+}
+
 /// Raw bytes of an rlp-encoded Ethereum transaction.
 pub type RawSignedTransaction = Vec<u8>;
 
 /// Checks that the raw transaction is a valid rlp-encoded EIP1559 transaction.
-pub fn verify_raw<SignerId>(
-	tx: &RawSignedTransaction,
-	_signer: &SignerId,
+///
+/// See [here](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) for details.
+pub fn verify_transaction(
+	unsigned: &UnsignedTransaction,
+	signed: &RawSignedTransaction,
+	address: &Address,
 ) -> Result<(), EthereumTransactionError> {
-	let _decoded: ethereum::EIP1559Transaction =
-		rlp::decode(&tx[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
-	// TODO check contents, signature, etc.
-	Ok(())
+	let decoded_tx: ethereum::EIP1559Transaction =
+		rlp::decode(&signed[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
+
+	let message: ethereum::EIP1559TransactionMessage = decoded_tx.clone().into();
+
+	let public_key = libsecp256k1::recover(
+		&libsecp256k1::Message::parse(message.hash().as_fixed_bytes()),
+		&libsecp256k1::Signature::parse_standard_slice(
+			[decoded_tx.r.as_bytes(), decoded_tx.s.as_bytes()]
+				.concat()
+				.as_slice(),
+		)
+		.map_err(|_| EthereumTransactionError::InvalidSignature)?,
+		&libsecp256k1::RecoveryId::parse_rpc(if decoded_tx.odd_y_parity { 27 } else { 28 })
+			.map_err(|_| EthereumTransactionError::InvalidRecoveryId)?,
+	)
+	.map_err(|_| EthereumTransactionError::InvalidSignature)?;
+
+	let expected_address = &Keccak256::hash(&public_key.serialize()[1..])[12..];
+
+	if expected_address != address.as_bytes() {
+		return Err(EthereumTransactionError::InvalidSignature);
+	}
+
+	unsigned.match_against_recovered(&message)
 }
 
 /// Represents calls to Chainflip contracts requiring a threshold signature.
@@ -476,6 +557,7 @@ mod tests {
 #[cfg(test)]
 mod verification_tests {
 	use super::*;
+	use ethereum::{EIP1559Transaction, EIP1559TransactionMessage};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
 	use Keccak256;
@@ -555,5 +637,62 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
+	}
+
+	#[test]
+	fn test_ethereum_signature_verification() {
+		let unsigned = UnsignedTransaction {
+			chain_id: 42,
+			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
+			gas_limit: U256::from(21_000u32).into(),
+			contract: [0xcf; 20].into(),
+			value: 0.into(),
+			data: b"do_something()".to_vec(),
+			..Default::default()
+		};
+
+		let msg = EIP1559TransactionMessage {
+			chain_id: unsigned.chain_id,
+			nonce: 0.into(),
+			max_priority_fee_per_gas: 0.into(),
+			max_fee_per_gas: unsigned.max_fee_per_gas.unwrap().into(),
+			gas_limit: unsigned.gas_limit.unwrap(),
+			action: ethereum::TransactionAction::Call(unsigned.contract),
+			value: unsigned.value,
+			input: unsigned.data.clone(),
+			access_list: vec![],
+		};
+
+		let key = secp256k1::SecretKey::from_slice(&rand::random::<[u8; 32]>()[..]).unwrap();
+		let key_ref = web3::signing::SecretKeyRef::new(&key);
+
+		use web3::signing::Key;
+		let sig = key_ref
+			.sign(msg.hash().as_bytes(), unsigned.chain_id.into())
+			.unwrap();
+
+		let signed_tx = EIP1559Transaction {
+			r: H256(sig.r.0),
+			s: H256(sig.s.0),
+			chain_id: msg.chain_id,
+			nonce: msg.nonce,
+			max_priority_fee_per_gas: msg.max_priority_fee_per_gas,
+			max_fee_per_gas: msg.max_fee_per_gas,
+			gas_limit: msg.gas_limit,
+			action: msg.action,
+			value: msg.value,
+			input: msg.input,
+			access_list: msg.access_list,
+			// EIP-155: sig.v = y_parity + CHAIN_ID * 2 + 35
+			odd_y_parity: sig.v - msg.chain_id * 2 + 35 == 1,
+		};
+
+		let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+
+		assert_ok!(verify_transaction(
+			&unsigned,
+			&signed_tx_bytes,
+			&key_ref.address().0.into()
+		));
 	}
 }

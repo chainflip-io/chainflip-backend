@@ -83,7 +83,7 @@ mod staking_witness_tests {
 			let call: Call =
 				pallet_cf_threshold_signature::Call::<Test, Instance0>::signature_success(
 					STAKER,
-					(),
+					Default::default(),
 				)
 				.into();
 
@@ -91,14 +91,18 @@ mod staking_witness_tests {
 			assert_ok!(WitnessApi::witness_eth_signature_success(
 				Origin::signed(WITNESS),
 				STAKER,
-				(),
+				Default::default(),
 			));
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
 
 			// Second vote - fails because there is no pending request. Expected behaviour.
 			assert_noop!(
-				WitnessApi::witness_eth_signature_success(Origin::signed(WITNESS), STAKER, (),),
+				WitnessApi::witness_eth_signature_success(
+					Origin::signed(WITNESS),
+					STAKER,
+					Default::default()
+				),
 				pallet_cf_threshold_signature::Error::<Test, Instance0>::InvalidCeremonyId
 			);
 

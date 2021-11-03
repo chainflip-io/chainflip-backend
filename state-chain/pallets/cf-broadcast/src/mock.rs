@@ -93,16 +93,17 @@ pub enum MockSignedTx {
 	Invalid,
 }
 
-impl BroadcastConfig<Test> for MockBroadcastConfig {
+impl BroadcastConfig for MockBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
 	type TransactionHash = [u8; 4];
+	type SignerId = ();
 
 	fn verify_transaction(
-		_signer: &<Test as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		_signer_id: &Self::SignerId,
 	) -> Option<()> {
 		match signed_tx {
 			MockSignedTx::Valid => Some(()),

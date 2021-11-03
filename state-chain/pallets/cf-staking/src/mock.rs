@@ -1,12 +1,13 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
-	eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents},
-	Ethereum,
+	eth::{
+		self, register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
+	},
+	ChainCrypto, Ethereum,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::Instance0, parameter_types, traits::EnsureOrigin};
+use frame_support::{instances::Instance0, parameter_types};
 use pallet_cf_flip;
-use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -20,7 +21,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info, key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
@@ -54,7 +55,7 @@ impl frame_system::Config for Test {
 	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Hash = H256;
+	type Hash = sp_core::H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -81,12 +82,29 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(AccountId);
 cf_traits::impl_mock_offline_conditions!(AccountId);
 
+pub struct MockKeyProvider;
+
+impl cf_traits::KeyProvider<Ethereum> for MockKeyProvider {
+	type KeyId = Vec<u8>;
+
+	fn current_key_id() -> Self::KeyId {
+		Default::default()
+	}
+
+	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
+		eth::AggKey {
+			pub_key_x: Default::default(),
+			pub_key_y_parity: eth::ParityBit::Even,
+		}
+	}
+}
+
 impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type SigningContext = ClaimSigningContext;
 	type SignerNomination = MockSignerNomination;
-	type KeyProvider = key_provider::MockKeyProvider<Ethereum, Self::KeyId>;
+	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
 }
 
@@ -134,7 +152,7 @@ impl From<RegisterClaim> for ClaimSigningContext {
 
 impl SigningContext<Test> for ClaimSigningContext {
 	type Chain = Ethereum;
-	type Payload = H256;
+	type Payload = cf_chains::eth::H256;
 	type Signature = SchnorrVerificationComponents;
 	type Callback = pallet_cf_staking::Call<Test>;
 

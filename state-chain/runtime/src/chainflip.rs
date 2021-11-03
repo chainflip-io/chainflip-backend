@@ -7,7 +7,7 @@ use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInter
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		ChainflipContractCall,
+		Address, ChainflipContractCall,
 	},
 	Chain, ChainCrypto, Ethereum,
 };
@@ -21,7 +21,6 @@ use codec::{Decode, Encode};
 use frame_support::{debug, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_core::{H160, H256};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
@@ -256,7 +255,7 @@ impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
 
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
-	type Payload = H256;
+	type Payload = eth::H256;
 	type Signature = eth::SchnorrVerificationComponents;
 	type Callback = Call;
 
@@ -290,7 +289,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	call: C,
 	signature: &eth::SchnorrVerificationComponents,
-	contract_address: H160,
+	contract_address: Address,
 ) -> eth::UnsignedTransaction {
 	eth::UnsignedTransaction {
 		chain_id: Environment::ethereum_chain_id(),
@@ -302,18 +301,19 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 
 pub struct EthereumBroadcastConfig;
 
-impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
+impl BroadcastConfig for EthereumBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
 	type TransactionHash = [u8; 32];
+	type SignerId = eth::Address;
 
 	fn verify_transaction(
-		signer: &<Runtime as Chainflip>::ValidatorId,
-		_unsigned_tx: &Self::UnsignedTransaction,
+		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		address: &Self::SignerId,
 	) -> Option<()> {
-		eth::verify_raw(signed_tx, signer)
+		eth::verify_transaction(unsigned_tx, signed_tx, address)
 			.map_err(|e| {
 				frame_support::debug::info!(
 					"Ethereum signed transaction verification failed: {:?}.",
