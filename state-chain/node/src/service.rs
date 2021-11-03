@@ -40,21 +40,17 @@ pub fn new_partial(
 		FullClient,
 		FullBackend,
 		FullSelectChain,
-		sp_consensus::DefaultImportQueue<Block, FullClient>,
+		sc_consensus::DefaultImportQueue<Block, FullClient>,
 		sc_transaction_pool::FullPool<Block, FullClient>,
 		(
-			sc_consensus_aura::AuraBlockImport<
+			sc_finality_grandpa::GrandpaBlockImport<
+				FullBackend,
 				Block,
 				FullClient,
-				sc_finality_grandpa::GrandpaBlockImport<
-					FullBackend,
-					Block,
-					FullClient,
-					FullSelectChain,
-				>,
-				AuraPair,
+				FullSelectChain,
 			>,
 			sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+			Option<Telemetry>,
 		),
 	>,
 	ServiceError,
@@ -221,14 +217,11 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	);
 
 	let rpc_extensions_builder = {
-		let p2p_rpc_request_handler =
-			cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler);
-
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 		Box::new(move |deny_unsafe, _| {
 			let mut io = MetaIoHandler::default();
-			io.extend_with(p2p_rpc_request_handler.clone());
+			io.extend_with(cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler.clone()));
 			io.extend_with(substrate_frame_rpc_system::SystemApi::to_delegate(
 				substrate_frame_rpc_system::FullSystem::new(
 					client.clone(),
@@ -240,7 +233,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		})
 	};
 
-	let (_rpc_handlers, telemetry_connection_notifier) =
+	let _rpc_handlers =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			network: network.clone(),
 			client: client.clone(),
