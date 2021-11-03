@@ -140,13 +140,17 @@ impl ParityBit {
 	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
 	///
 	/// Returns `None` if conversion was not possible for this chain id.
-	pub(super) fn to_eth_recovery_id(&self, chain_id: u64) -> Option<ethereum::TransactionRecoveryId> {
+	pub(super) fn to_eth_recovery_id(
+		&self,
+		chain_id: u64,
+	) -> Option<ethereum::TransactionRecoveryId> {
 		let offset = match self {
 			ParityBit::Odd => 36,
 			ParityBit::Even => 35,
 		};
 
-		chain_id.checked_mul(2)
+		chain_id
+			.checked_mul(2)
 			.and_then(|x| x.checked_add(offset))
 			.map(ethereum::TransactionRecoveryId)
 	}
@@ -400,7 +404,6 @@ pub struct SchnorrVerificationComponents {
 	pub k_times_g_addr: [u8; 20],
 }
 
-
 /// Errors that can occur when verifying an Ethereum transaction.
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
@@ -436,7 +439,6 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 		Self::InvalidParam(p)
 	}
 }
-
 
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
 /// with the following fields omitted: nonce,
@@ -477,7 +479,7 @@ impl UnsignedTransaction {
 	fn check_gas_limit(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.gas_limit {
 			if expected != recovered {
-				return Err(CheckedTransactionParameter::GasLimit)
+				return Err(CheckedTransactionParameter::GasLimit);
 			}
 		}
 		Ok(())
@@ -485,7 +487,7 @@ impl UnsignedTransaction {
 
 	fn check_chain_id(&self, recovered: u64) -> Result<(), CheckedTransactionParameter> {
 		if self.chain_id != recovered {
-			return Err(CheckedTransactionParameter::ChainId)
+			return Err(CheckedTransactionParameter::ChainId);
 		}
 		Ok(())
 	}
@@ -581,14 +583,21 @@ pub fn verify_transaction(
 		rlp::decode(&signed[..]).map_err(|_| TransactionVerificationError::InvalidRlp)?;
 
 	let message_hash = match decoded_tx {
-		ethereum::TransactionV2::Legacy(ref tx) => ethereum::LegacyTransactionMessage::from(tx.clone()).hash(),
-		ethereum::TransactionV2::EIP2930(ref tx) => ethereum::EIP2930TransactionMessage::from(tx.clone()).hash(),
-		ethereum::TransactionV2::EIP1559(ref tx) => ethereum::EIP1559TransactionMessage::from(tx.clone()).hash(),
+		ethereum::TransactionV2::Legacy(ref tx) => {
+			ethereum::LegacyTransactionMessage::from(tx.clone()).hash()
+		}
+		ethereum::TransactionV2::EIP2930(ref tx) => {
+			ethereum::EIP2930TransactionMessage::from(tx.clone()).hash()
+		}
+		ethereum::TransactionV2::EIP1559(ref tx) => {
+			ethereum::EIP1559TransactionMessage::from(tx.clone()).hash()
+		}
 	};
 
 	let parity_to_recovery_id = |odd: bool, chain_id: u64| {
 		let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
-		parity.to_eth_recovery_id(chain_id)
+		parity
+			.to_eth_recovery_id(chain_id)
 			.ok_or(TransactionVerificationError::InvalidChainId)
 	};
 	let (r, s, v) = match decoded_tx {
@@ -600,24 +609,23 @@ pub fn verify_transaction(
 		ethereum::TransactionV2::EIP2930(ref tx) => (
 			&tx.r,
 			&tx.s,
-			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()
+			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard(),
 		),
 		ethereum::TransactionV2::EIP1559(ref tx) => (
 			&tx.r,
 			&tx.s,
-			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()
+			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard(),
 		),
 	};
 
 	let public_key = libsecp256k1::recover(
 		&libsecp256k1::Message::parse(message_hash.as_fixed_bytes()),
 		&libsecp256k1::Signature::parse_standard_slice(
-			[r.as_bytes(), s.as_bytes()]
-				.concat()
-				.as_slice(),
+			[r.as_bytes(), s.as_bytes()].concat().as_slice(),
 		)
 		.map_err(|_| TransactionVerificationError::InvalidSignature)?,
-		&libsecp256k1::RecoveryId::parse(v).map_err(|_| TransactionVerificationError::InvalidRecoveryId)?,
+		&libsecp256k1::RecoveryId::parse(v)
+			.map_err(|_| TransactionVerificationError::InvalidRecoveryId)?,
 	)
 	.map_err(|_| TransactionVerificationError::InvalidSignature)?;
 
@@ -692,8 +700,8 @@ mod verification_tests {
 	use ethereum::{EIP1559Transaction, EIP1559TransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
-	use Keccak256;
 	use rand::prelude::*;
+	use Keccak256;
 
 	#[test]
 	fn test_schnorr_signature_verification() {
@@ -824,11 +832,8 @@ mod verification_tests {
 
 			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
 
-			let verificaton_result = verify_transaction(
-				&unsigned,
-				&signed_tx_bytes,
-				&key_ref.address().0.into()
-			);
+			let verificaton_result =
+				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
 			assert_eq!(
 				verificaton_result,
 				Ok(()),
