@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use super::super::utils::threshold_from_share_count;
 use serde::{Deserialize, Serialize};
+use utilities::threshold_from_share_count;
 
 /// Data received by a single party for a given
 /// stage from all parties (includes our own for
@@ -45,7 +45,7 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
         .iter()
         .all(|(_, m)| m.data.len() == num_parties));
 
-    let threshold = threshold_from_share_count(num_parties);
+    let threshold = threshold_from_share_count(num_parties as u32) as usize;
 
     // NOTE: ideally we wouldn't need to serialize the messages again here, but
     // we can't use T as key directly (in our case it holds third-party structs)
