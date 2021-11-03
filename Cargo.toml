@@ -25,4 +25,5 @@ members = [
   'state-chain/runtime',
   'state-chain/traits',
   'engine',
+  'utilities',
 ]
