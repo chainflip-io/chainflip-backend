@@ -5011,6 +5011,7 @@ dependencies = [
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-support",
  "frame-system",

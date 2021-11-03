@@ -7,7 +7,7 @@ use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInter
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		Address, ChainflipContractCall,
+		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
 	},
 	Chain, ChainCrypto, Ethereum,
 };
@@ -239,6 +239,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
 	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
+	UpdateFlipSupply(UpdateFlipSupply),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
@@ -253,6 +254,12 @@ impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
 	}
 }
 
+impl From<UpdateFlipSupply> for EthereumSigningContext {
+	fn from(call: UpdateFlipSupply) -> Self {
+		EthereumSigningContext::UpdateFlipSupply(call)
+	}
+}
+
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
 	type Payload = eth::H256;
@@ -263,6 +270,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
 			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
+			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -282,6 +290,15 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 					Environment::key_manager_address().into(),
 				)),
 			),
+			Self::UpdateFlipSupply(call) => {
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					contract_call_to_unsigned_tx(
+						call.clone(),
+						&signature,
+						Environment::stake_manager_address().into(),
+					),
+				))
+			}
 		}
 	}
 }

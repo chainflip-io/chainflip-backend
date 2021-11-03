@@ -389,6 +389,9 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
+	type NonceProvider = Vaults;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
 }
 
 impl pallet_cf_rewards::Config for Runtime {

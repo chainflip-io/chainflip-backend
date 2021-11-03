@@ -23,6 +23,7 @@ sp-std = { default-features = false, version = '3.0.0' }
 
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+cf-chains = {path = '../../chains', default-features = false}
 
 [dev-dependencies]
 sp-core = { default-features = false, version = '3.0.0' }
@@ -32,6 +33,8 @@ pallet-cf-flip = { path = '../cf-flip' }
 [features]
 default = ['std']
 std = [
+	'cf-chains/std',
+    'cf-traits/std',
 	'codec/std',
 	'frame-support/std',
 	'frame-system/std',
