@@ -378,7 +378,7 @@ mod tests {
                 .unwrap()],
                 data: web3::types::Bytes(hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
                 block_hash: None,
-                block_number: None,
+                block_number: Some(web3::types::U64::zero()),
                 transaction_hash: Some(transaction_hash),
                 transaction_index: None,
                 log_index: None,
