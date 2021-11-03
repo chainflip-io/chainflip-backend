@@ -1,6 +1,6 @@
-use std::{convert::TryInto, sync::Arc};
+use std::convert::TryInto;
 
-use chainflip_engine::{common::Mutex, state_chain::client::connect_to_state_chain};
+use chainflip_engine::state_chain::client::connect_to_state_chain;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use structopt::StructOpt;
@@ -95,10 +95,11 @@ async fn send_claim(
         tx_hash
     );
 
-    let block_stream = Arc::new(Mutex::new(block_stream));
+    let mut block_stream = Box::new(block_stream);
+    let block_stream = block_stream.as_mut();
 
     let events = state_chain_client
-        .watch_submitted_extrinsic(tx_hash, block_stream.clone())
+        .watch_submitted_extrinsic(tx_hash, block_stream)
         .await
         .expect("Failed to watch extrinsic");
 
@@ -108,7 +109,7 @@ async fn send_claim(
         ) = event
         {
             println!("Your claim request is on chain.\nWaiting for signed claim data...");
-            'outer: while let Some(block_header) = block_stream.lock().await.next().await {
+            'outer: while let Some(block_header) = block_stream.next().await {
                 let header = block_header.expect("Failed to get a valid block header");
                 let events = state_chain_client
                     .get_events(&header)
