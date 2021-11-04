@@ -194,11 +194,14 @@ impl Config for Test {
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
+/// Session pallet requires a set of validators at genesis.
+pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		session: SessionConfig {
-			keys: vec![(u64::MAX, u64::MAX, UintAuthorityId(u64::MAX).into())],
+			keys: DUMMY_GENESIS_VALIDATORS.iter().map(|&i| (i, i, UintAuthorityId(i).into())).collect(),
 		},
 		validator_pallet: ValidatorPalletConfig {
 			blocks_per_epoch: 0,

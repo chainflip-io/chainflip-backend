@@ -123,21 +123,20 @@ mod tests {
 			// Move forward 2 blocks
 			run_to_block(2);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// There are no validators as we are nice and fresh
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
-			assert!(<ValidatorPallet as EpochInfo>::next_validators().is_empty());
+			// Only the genesis dummy validators as we are nice and fresh
+			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), &DUMMY_GENESIS_VALIDATORS[..]);
+			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), &DUMMY_GENESIS_VALIDATORS[..]);
 			// Run to the epoch
 			run_to_block(10);
 			// We should have now completed an auction have a set of winners to pass as validators
 			let winners = assert_winners();
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
+			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), &DUMMY_GENESIS_VALIDATORS[..]);
 			// and the winners are
 			assert!(!<ValidatorPallet as EpochInfo>::next_validators().is_empty());
 			// run more block to make them validators
 			run_to_block(11);
-			// Continue with our current validator set, as we had none should be empty
-			// TODO add genesis validators to mock
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
+			// Continue with our current validator set, as we had none should still be the genesis set
+			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), &DUMMY_GENESIS_VALIDATORS[..]);
 			// We do now see our winners lined up to be the next set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Complete the cycle
