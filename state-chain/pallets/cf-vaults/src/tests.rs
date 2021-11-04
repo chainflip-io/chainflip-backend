@@ -215,7 +215,7 @@ mod tests {
 
 			assert_eq!(
 				block_height, 0,
-				"we should have the block height set for 14 days in ethereum blocks"
+				"we should have the block height of 0"
 			);
 
 			// The new epoch
@@ -227,7 +227,7 @@ mod tests {
 			} = Vaults::<MockRuntime>::get(new_epoch, ChainId::Ethereum)
 				.expect("Ethereum Vault should exist");
 
-			// The genesis vault is updated wiht with block height
+			// The genesis vault is updated with with block height
 			assert_eq!(
 				public_key, new_public_key,
 				"we should have the new public key in the new vault"
@@ -235,7 +235,7 @@ mod tests {
 
 			assert_eq!(
 				block_height, ROTATION_BLOCK_NUMBER,
-				"we should have set the starting block height for the new vault"
+				"we should have the end block height for the previous epoch"
 			);
 
 			// Status is complete.
