@@ -1,13 +1,14 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
+use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline, IsOutgoing};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnFinalize, OnInitialize},
 };
 
+use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -29,6 +30,7 @@ pub const MAX_VALIDATOR_SIZE: u32 = 3;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
+	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
 	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
@@ -63,7 +65,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = ValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -123,6 +125,13 @@ impl pallet_cf_auction::Config for Test {
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 }
 
+pub struct MockIsOutgoing;
+impl IsOutgoing for MockIsOutgoing {
+	type AccountId = ValidatorId;
+	type EpochInfo = ValidatorPallet;
+	type ChainflipAccount = MockChainflipAccount;
+}
+
 pub struct MockOnline;
 impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
@@ -161,10 +170,11 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
+		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
 		new_bond: Self::Amount,
 	) {
+		OUTGOING_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 	}
@@ -182,6 +192,7 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
+	type ChainflipAccount = MockChainflipAccount;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
@@ -213,6 +224,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
+
+pub fn outgoing_validators() -> Vec<u64> {
+	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
+}
+
 pub fn min_bid() -> u64 {
 	MIN_BID.with(|l| *l.borrow())
 }

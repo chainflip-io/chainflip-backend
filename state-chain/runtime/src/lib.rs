@@ -154,6 +154,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 }
 
 impl pallet_cf_environment::Config for Runtime {

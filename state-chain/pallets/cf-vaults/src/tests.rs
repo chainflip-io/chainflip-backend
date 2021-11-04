@@ -1,7 +1,7 @@
 mod tests {
 	use crate::{
-		mock::*, ActiveWindows, BlockHeightWindow, Error, Event as PalletEvent,
-		PendingVaultRotations, VaultRotationStatus, Vaults,
+		mock::*, Error, Event as PalletEvent, PendingVaultRotations, Vault, VaultRotationStatus,
+		Vaults,
 	};
 	use cf_chains::ChainId;
 	use cf_traits::{Chainflip, EpochInfo, VaultRotator};
@@ -198,12 +198,41 @@ mod tests {
 				Error::<MockRuntime>::InvalidRotationStatus
 			);
 
-			// Vault is updated.
+			// We have yet to move to the new epoch
+			let old_epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
+
+			let Vault {
+				public_key,
+				block_height,
+			} = Vaults::<MockRuntime>::get(old_epoch, ChainId::Ethereum)
+				.expect("Ethereum Vault should exists");
+
+			// The genesis vault is updated with the active window
 			assert_eq!(
-				Vaults::<MockRuntime>::get(ChainId::Ethereum)
-					.expect("Ethereum Vault should exists")
-					.public_key,
-				new_public_key,
+				public_key, GENESIS_ETHEREUM_AGG_PUB_KEY,
+				"we should have the old agg key in this vault"
+			);
+
+			assert_eq!(block_height, 0, "we should have the block height of 0");
+
+			// The new epoch
+			let new_epoch = old_epoch + 1;
+
+			let Vault {
+				public_key,
+				block_height,
+			} = Vaults::<MockRuntime>::get(new_epoch, ChainId::Ethereum)
+				.expect("Ethereum Vault should exist");
+
+			// The genesis vault is updated with with block height
+			assert_eq!(
+				public_key, new_public_key,
+				"we should have the new public key in the new vault"
+			);
+
+			assert_eq!(
+				block_height, ROTATION_BLOCK_NUMBER,
+				"we should have the end block height for the previous epoch"
 			);
 
 			// Status is complete.
@@ -212,23 +241,6 @@ mod tests {
 				Some(VaultRotationStatus::Complete {
 					tx_hash: TX_HASH.to_vec()
 				}),
-			);
-
-			// Active windows have been updated.
-			let epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
-			assert_eq!(
-				ActiveWindows::<MockRuntime>::get(epoch, ChainId::Ethereum),
-				BlockHeightWindow {
-					from: 0,
-					to: Some(ROTATION_BLOCK_NUMBER + crate::ETHEREUM_LEEWAY_IN_BLOCKS)
-				}
-			);
-			assert_eq!(
-				ActiveWindows::<MockRuntime>::get(epoch + 1, ChainId::Ethereum),
-				BlockHeightWindow {
-					from: ROTATION_BLOCK_NUMBER,
-					to: None
-				}
 			);
 		});
 	}

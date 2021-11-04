@@ -358,12 +358,14 @@ pub enum ChainflipAccountState {
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
+	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
 		ChainflipAccountData {
 			state: ChainflipAccountState::Passive,
+			last_active_epoch: None,
 		}
 	}
 }
@@ -373,6 +375,23 @@ pub trait ChainflipAccount {
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex);
+}
+
+/// An outgoing node
+pub trait IsOutgoing {
+	type AccountId;
+	type EpochInfo: EpochInfo;
+	type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
+
+	/// Returns true if this account is an out goer which by definition is a node that was in the
+	/// active set in the *last* epoch
+	fn is_outgoing(account_id: &Self::AccountId) -> bool {
+		if let Some(last_active_epoch) = Self::ChainflipAccount::get(account_id).last_active_epoch {
+			return last_active_epoch.saturating_add(1) == Self::EpochInfo::epoch_index();
+		}
+		false
+	}
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
@@ -389,6 +408,13 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
+		})
+		.expect("mutating account state")
+	}
+
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).last_active_epoch = Some(index);
 		})
 		.expect("mutating account state")
 	}
@@ -421,6 +447,8 @@ pub trait SignerNomination {
 pub trait KeyProvider<C: Chain> {
 	/// The type of the provided key_id.
 	type KeyId;
+	/// Information regarding the current epoch
+	type EpochInfo: EpochInfo;
 
 	/// Gets the key.
 	fn current_key() -> Self::KeyId;

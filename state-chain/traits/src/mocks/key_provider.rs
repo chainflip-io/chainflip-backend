@@ -1,3 +1,4 @@
+use crate::mocks::epoch_info::MockEpochInfo;
 use std::marker::PhantomData;
 
 /// A Mock that just returns KeyId::default().
@@ -10,6 +11,7 @@ impl<C: cf_chains::Chain, K: std::default::Default> crate::KeyProvider<C>
 	for MockKeyProvider<C, K>
 {
 	type KeyId = K;
+	type EpochInfo = MockEpochInfo;
 
 	fn current_key() -> Self::KeyId {
 		Default::default()

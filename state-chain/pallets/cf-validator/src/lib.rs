@@ -19,7 +19,8 @@ extern crate assert_matches;
 mod benchmarking;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	AuctionPhase, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
@@ -33,7 +34,6 @@ type SessionIndex = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::EpochIndex;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -64,6 +64,9 @@ pub mod pallet {
 
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Manipulate Chainflip accounts
+		type ChainflipAccount: ChainflipAccount<AccountId = Self::ValidatorId>;
 
 		/// Trigger an emergency rotation on falling below the percentage of online validators
 		#[pallet::constant]
@@ -382,9 +385,24 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					let old_validators = T::Auctioneer::auction_result()
 						.expect("from genesis we would expect a previous auction")
 						.winners;
+
+					// Determine who is outgoing
+					let outgoing_validators: Vec<_> = old_validators
+						.iter()
+						.filter(|old_validator| !winners.contains(old_validator))
+						.cloned()
+						.collect();
+
+					// Update the last active epoch for our winners
+					for winner in &winners {
+						T::ChainflipAccount::update_last_active_epoch(
+							&(winner.clone().into()),
+							new_epoch,
+						)
+					}
 					// Our trait callback
 					T::EpochTransitionHandler::on_new_epoch(
-						&old_validators,
+						&outgoing_validators,
 						&winners,
 						minimum_active_bid,
 					);

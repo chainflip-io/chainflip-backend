@@ -329,9 +329,11 @@ pub struct EthereumKeyProvider;
 
 impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
+	type EpochInfo = Validator;
 
 	fn current_key() -> Self::KeyId {
-		Vaults::vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
+		let current_epoch = Self::EpochInfo::epoch_index();
+		Vaults::vaults(current_epoch, <Ethereum as cf_chains::Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
 	}

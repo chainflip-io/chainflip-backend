@@ -34,10 +34,7 @@
     "minimum_active_bid": "Amount"
   },
   "Bid": "(ValidatorId, Amount)",
-  "BlockHeightWindow": {
-    "from": "u64",
-    "to": "Option<u64>"
-  },
+  "BlockHeight": "u64",
   "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
   "BroadcastStage": {
@@ -112,7 +109,8 @@
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "Vault": {
-    "public_key": "PublicKey"
+    "public_key": "PublicKey",
+    "block_height": "BlockHeight"
   },
   "ValidatorSize": "u32",
   "VaultRotationStatus": {

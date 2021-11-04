@@ -2,6 +2,7 @@ mod tests {
 	use crate::*;
 	use crate::{mock::*, Error};
 	use cf_traits::mocks::vault_rotation::clear_confirmation;
+	use cf_traits::IsOutgoing;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
@@ -174,6 +175,11 @@ mod tests {
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(16);
+
+			let outgoing_validators = outgoing_validators();
+			for out_goer in &outgoing_validators {
+				assert!(MockIsOutgoing::is_outgoing(out_goer));
+			}
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
