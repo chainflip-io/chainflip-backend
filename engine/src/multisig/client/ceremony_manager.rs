@@ -247,7 +247,7 @@ impl CeremonyManager {
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
-            self.keygen_states.remove(&ceremony_id);
+            self.signing_states.remove(&ceremony_id);
             match result {
                 Ok(schnorr_sig) => {
                     self.event_sender
