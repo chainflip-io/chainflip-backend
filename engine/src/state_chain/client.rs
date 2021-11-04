@@ -218,7 +218,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
         let mut events_for_extrinsic = Vec::new();
-        let mut found_event = false;
+        let mut found_extrinsic = false;
         while let Some(result_header) = block_stream.next().await {
             let header = result_header?;
             let block_hash = header.hash();
@@ -233,7 +233,9 @@ impl StateChainRpcApi for StateChainRpcClient {
                     let hash = BlakeTwo256::hash_of(ext);
                     hash == extrinsic_hash
                 });
-
+                if extrinsic_index_found.is_some() {
+                    found_extrinsic = true;
+                }
                 let events_for_block = self.get_events(&header).await?;
                 for (phase, event, _) in events_for_block {
                     if let Phase::ApplyExtrinsic(i) = phase {
@@ -241,13 +243,12 @@ impl StateChainRpcApi for StateChainRpcClient {
                             if i as usize != extrinsic_index {
                                 continue;
                             }
-                            found_event = true;
                             events_for_extrinsic.push(event);
                         }
                     }
                 }
             };
-            if found_event {
+            if found_extrinsic {
                 break;
             };
         }
