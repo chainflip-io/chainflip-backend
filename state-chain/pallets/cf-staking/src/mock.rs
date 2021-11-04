@@ -1,9 +1,6 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
-	eth::{
-		self, register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
-	},
-	ChainCrypto, Ethereum,
+	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance0, parameter_types};
@@ -21,7 +18,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
@@ -84,24 +81,21 @@ cf_traits::impl_mock_offline_conditions!(AccountId);
 
 pub struct MockKeyProvider;
 
-impl cf_traits::KeyProvider<Ethereum> for MockKeyProvider {
+impl cf_traits::KeyProvider<AlwaysVerifiesCoin> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
 		Default::default()
 	}
 
-	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
-		eth::AggKey {
-			pub_key_x: Default::default(),
-			pub_key_y_parity: eth::ParityBit::Even,
-		}
+	fn current_key() -> <AlwaysVerifiesCoin as ChainCrypto>::AggKey {
+		vec![]
 	}
 }
 
 impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 	type Event = Event;
-	type TargetChain = Ethereum;
+	type TargetChain = AlwaysVerifiesCoin;
 	type SigningContext = ClaimSigningContext;
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider;
@@ -141,6 +135,11 @@ impl NonceProvider<Ethereum> for Test {
 
 // Mock SigningContext
 
+pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents = eth::SchnorrVerificationComponents {
+	s: [0xcf; 32],
+	k_times_g_addr: [0xcf; 20],
+};
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct ClaimSigningContext(RegisterClaim);
 
@@ -151,17 +150,17 @@ impl From<RegisterClaim> for ClaimSigningContext {
 }
 
 impl SigningContext<Test> for ClaimSigningContext {
-	type Chain = Ethereum;
-	type Payload = cf_chains::eth::H256;
-	type Signature = SchnorrVerificationComponents;
+	type Chain = AlwaysVerifiesCoin;
+	type Payload = <AlwaysVerifiesCoin as ChainCrypto>::Payload;
+	type Signature = <AlwaysVerifiesCoin as ChainCrypto>::ThresholdSignature;
 	type Callback = pallet_cf_staking::Call<Test>;
 
 	fn get_payload(&self) -> Self::Payload {
-		ChainflipContractCall::signing_payload(&self.0)
+		vec![]
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
-		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), signature)
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), ETH_DUMMY_SIG)
 	}
 }
 

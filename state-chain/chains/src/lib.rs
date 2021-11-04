@@ -50,8 +50,17 @@ macro_rules! impl_chains {
 	};
 }
 
+#[cfg(not(feature = "mocks"))]
 impl_chains! {
 	Ethereum,
+}
+
+// Chain implementations used for testing.
+#[cfg(feature = "mocks")]
+impl_chains! {
+	Ethereum,
+	AlwaysVerifiesCoin,
+	UnverifiableCoin,
 }
 
 impl<C: Chain> From<C> for ChainId {
@@ -76,6 +85,39 @@ impl ChainCrypto for Ethereum {
 				frame_support::debug::debug!("Ethereum signature verification failed: {:?}.", e)
 			})
 			.is_ok()
+	}
+}
+
+#[cfg(feature = "mocks")]
+pub mod mock {
+	use super::*;
+
+	impl ChainCrypto for AlwaysVerifiesCoin {
+		type AggKey = Vec<u8>;
+		type Payload = Vec<u8>;
+		type ThresholdSignature = Vec<u8>;
+
+		fn verify_threshold_signature(
+			_agg_key: &Self::AggKey,
+			_payload: &Self::Payload,
+			_signature: &Self::ThresholdSignature,
+		) -> bool {
+			true
+		}
+	}
+
+	impl ChainCrypto for UnverifiableCoin {
+		type AggKey = Vec<u8>;
+		type Payload = Vec<u8>;
+		type ThresholdSignature = Vec<u8>;
+
+		fn verify_threshold_signature(
+			_agg_key: &Self::AggKey,
+			_payload: &Self::Payload,
+			_signature: &Self::ThresholdSignature,
+		) -> bool {
+			false
+		}
 	}
 }
 

@@ -1,4 +1,3 @@
-use frame_system::RawOrigin;
 use std::marker::PhantomData;
 
 pub struct NeverFailingOriginCheck<T>(PhantomData<T>);

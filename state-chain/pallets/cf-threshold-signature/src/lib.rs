@@ -172,7 +172,7 @@ pub mod pallet {
 
 			// Dispatch the callback.
 			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
-			// origin.
+			// origin. See #779.
 			context
 				.chain_signing_context
 				.dispatch_callback(origin, signature)
