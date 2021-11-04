@@ -44,14 +44,13 @@ pub struct DutyManager {
 }
 
 impl DutyManager {
-    // Called after we have the current epoch.
-    pub fn new(account_id: AccountId) -> DutyManager {
+    pub fn new(account_id: AccountId, current_epoch: EpochIndex) -> DutyManager {
         DutyManager {
             account_id,
             node_state: NodeState::Passive,
             _account_state: ChainflipAccountState::Passive,
             start_duties_at: HashMap::new(),
-            current_epoch: 0,
+            current_epoch,
         }
     }
 
@@ -97,12 +96,6 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
     let logger = logger.new(o!(COMPONENT_KEY => "DutyManager"));
     slog::info!(logger, "Starting");
 
-    let current_epoch = state_chain_client.epoch_at_block(None).await.unwrap();
-    {
-        let mut duty_manager = duty_manager.write().await;
-        duty_manager.current_epoch = current_epoch;
-    }
-
     // Get our node state from the block stream
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -116,26 +109,23 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
                     .unwrap();
 
                 if my_account_data.last_active_epoch.is_some()
-                    && my_account_data.last_active_epoch.unwrap() + 1 == current_epoch
+                    && my_account_data.last_active_epoch.unwrap() + 1
+                        == duty_manager.read().await.current_epoch
                 {
-                    let mut dm = duty_manager.write().await;
-                    dm.node_state = NodeState::Outgoing;
+                    duty_manager.write().await.node_state = NodeState::Outgoing;
 
                     // How do we get out of the Outgoing validator state?
-                    // NB: Even if we are a backup validator, we are Outgoing > Validator
+                    // NB: Even if we are a backup validator, we are Outgoing before we're anything else.
                 } else {
                     match my_account_data.state {
                         ChainflipAccountState::Validator => {
-                            let mut dm = duty_manager.write().await;
-                            dm.node_state = NodeState::RunningValidator;
+                            duty_manager.write().await.node_state = NodeState::RunningValidator;
                         }
                         ChainflipAccountState::Backup => {
-                            let mut dm = duty_manager.write().await;
-                            dm.node_state = NodeState::BackupValidator;
+                            duty_manager.write().await.node_state = NodeState::BackupValidator;
                         }
                         _ => {
-                            let mut dm = duty_manager.write().await;
-                            dm.node_state = NodeState::Passive;
+                            duty_manager.write().await.node_state = NodeState::Passive;
                         }
                     }
                 }

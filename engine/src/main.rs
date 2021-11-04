@@ -54,7 +54,15 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
-    let duty_manager = Arc::new(RwLock::new(DutyManager::new(account_id.clone())));
+    // get current epoch
+    let current_epoch = state_chain_client
+        .epoch_at_block(None)
+        .await
+        .expect("Could not get current epoch");
+    let duty_manager = Arc::new(RwLock::new(DutyManager::new(
+        account_id.clone(),
+        current_epoch,
+    )));
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
