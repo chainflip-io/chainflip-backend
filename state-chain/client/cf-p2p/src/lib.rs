@@ -104,12 +104,11 @@ pub enum P2PEvent {
 /// network.
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
 
-#[derive(Clone)]
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	/// Runs concurrently in the background and manages receiving (from the senders in "notification_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers
 	notification_rpc_subscription_manager: SubscriptionManager,
 	state: Arc<Mutex<P2PValidatorNetworkNodeState>>,
-	p2p_network_service: P2PNetworkService,
+	p2p_network_service: Arc<P2PNetworkService>,
 	_phantom: std::marker::PhantomData<MetaData>,
 }
 
@@ -142,7 +141,7 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 }
 
 /// An abstration of the underlying network of peers.
-pub trait PeerNetwork: Clone {
+pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn reserve_peer(&self, who: PeerId);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
@@ -154,7 +153,7 @@ pub trait PeerNetwork: Clone {
 }
 
 /// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
-impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
+impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	fn reserve_peer(&self, who: PeerId) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
@@ -178,11 +177,11 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
 	}
 
 	fn write_notification(&self, target: PeerId, message: Vec<u8>) {
-		NetworkService::write_notification(self, target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
+		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
 	}
 
 	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-chainflip"))
+		Box::pin(self.event_stream("network-chainflip"))
 	}
 }
 
@@ -228,7 +227,7 @@ pub fn new_p2p_validator_network_node<
 	MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
 	PN: PeerNetwork + Send + Sync + 'static,
 >(
-	p2p_network_service: PN,
+	p2p_network_service: Arc<PN>,
 	subscription_task_executor: impl Spawn + Send + Sync + 'static, 
 ) -> (
 	RpcRequestHandler<MetaData, PN>,
@@ -236,7 +235,7 @@ pub fn new_p2p_validator_network_node<
 ) {
 	/// Encodes the message using bincode and sends it over the p2p network
 	fn encode_and_send<'a, Network: PeerNetwork, Peers: Iterator<Item = &'a PeerId>>(
-		p2p_network_service: &Network,
+		p2p_network_service: &Arc<Network>,
 		message: P2PMessage,
 		peers: Peers,
 	) {
@@ -551,7 +550,6 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		}
 	}
 
-	#[derive(Clone)]
 	struct TestNetworkInterface {
 		peer_id: PeerId,
 		network: Arc<TestNetwork>,
@@ -643,7 +641,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 
 	fn new_node(peer_id: PeerId, network: Arc<TestNetwork>) -> P2PRpcClient {
 		let (rpc_request_handler, p2p_event_handler_fut) = new_p2p_validator_network_node(
-			TestNetworkInterface::new(peer_id, network),
+			Arc::new(TestNetworkInterface::new(peer_id, network)),
 			sc_rpc::testing::TaskExecutor,
 		);
 		let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(Arc::new({

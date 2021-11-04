@@ -217,11 +217,13 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	);
 
 	let rpc_extensions_builder = {
+		let mut io = MetaIoHandler::default();
+		io.extend_with(cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler));
+
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 		Box::new(move |deny_unsafe, _| {
-			let mut io = MetaIoHandler::default();
-			io.extend_with(cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler.clone()));
+			let mut io = io.clone();
 			io.extend_with(substrate_frame_rpc_system::SystemApi::to_delegate(
 				substrate_frame_rpc_system::FullSystem::new(
 					client.clone(),
