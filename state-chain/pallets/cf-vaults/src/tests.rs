@@ -213,10 +213,7 @@ mod tests {
 				"we should have the old agg key in this vault"
 			);
 
-			assert_eq!(
-				block_height, 0,
-				"we should have the block height of 0"
-			);
+			assert_eq!(block_height, 0, "we should have the block height of 0");
 
 			// The new epoch
 			let new_epoch = old_epoch + 1;
