@@ -85,6 +85,12 @@ impl_opaque_keys! {
 	}
 }
 
+impl From<UintAuthorityId> for MockSessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
+	}
+}
+
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
@@ -191,7 +197,9 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		session: Default::default(),
+		session: SessionConfig {
+			keys: vec![(u64::MAX, u64::MAX, UintAuthorityId(u64::MAX).into())],
+		},
 		validator_pallet: ValidatorPalletConfig {
 			blocks_per_epoch: 0,
 		},
