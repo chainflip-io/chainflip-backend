@@ -943,6 +943,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainflip-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chainflip-engine",
+ "config",
+ "futures 0.3.15",
+ "hex",
+ "pallet-cf-rewards",
+ "pallet-cf-staking",
+ "pallet-cf-threshold-signature",
+ "serde 1.0.126",
+ "slog",
+ "state-chain-runtime",
+ "structopt",
+ "tokio 1.11.0",
+]
+
+[[package]]
 name = "chainflip-engine"
 version = "0.1.0"
 dependencies = [

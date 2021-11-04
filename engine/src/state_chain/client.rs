@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -16,7 +16,9 @@ use sp_core::{
     Bytes, Pair,
 };
 use sp_runtime::generic::Era;
+use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
+use state_chain_runtime::SignedBlock;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -146,6 +148,7 @@ pub struct StateChainRpcClient {
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
+    chain_rpc_client: ChainRpcClient,
 }
 
 /// Wraps the substrate client library methods
@@ -166,6 +169,9 @@ pub trait StateChainRpcApi {
         block_header: &state_chain_runtime::Header,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
+
+    async fn get_block(&self, block_hash: state_chain_runtime::Hash)
+        -> Result<Option<SignedBlock>>;
 }
 
 #[async_trait]
@@ -194,6 +200,17 @@ impl StateChainRpcApi for StateChainRpcClient {
             ))
             .compat()
             .await
+    }
+
+    async fn get_block(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Option<SignedBlock>> {
+        self.chain_rpc_client
+            .block(Some(block_hash))
+            .compat()
+            .await
+            .map_err(|e| anyhow!(e))
     }
 
     async fn storage_events_at(
@@ -270,8 +287,50 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
+    /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
+    pub async fn watch_submitted_extrinsic<BlockStream>(
+        &self,
+        extrinsic_hash: state_chain_runtime::Hash,
+        block_stream: &mut BlockStream,
+    ) -> Result<Vec<state_chain_runtime::Event>>
+    where
+        BlockStream:
+            Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
+    {
+        let mut events_for_extrinsic = Vec::new();
+        let mut found_extrinsic = false;
+        while let Some(result_header) = block_stream.next().await {
+            let header = result_header?;
+            let block_hash = header.hash();
+            if let Some(signed_block) = self.state_chain_rpc_client.get_block(block_hash).await? {
+                let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
+                    let hash = BlakeTwo256::hash_of(ext);
+                    hash == extrinsic_hash
+                });
+                if extrinsic_index_found.is_some() {
+                    found_extrinsic = true;
+                }
+                let events_for_block = self.get_events(&header).await?;
+                for (phase, event, _) in events_for_block {
+                    if let Phase::ApplyExtrinsic(i) = phase {
+                        if let Some(extrinsic_index) = extrinsic_index_found {
+                            if i as usize != extrinsic_index {
+                                continue;
+                            }
+                            events_for_extrinsic.push(event);
+                        }
+                    }
+                }
+            };
+            if found_extrinsic {
+                break;
+            };
+        }
+        Ok(events_for_extrinsic)
+    }
+
     /// Get all the events from a particular block
-    pub async fn events(
+    pub async fn get_events(
         &self,
         block_header: &state_chain_runtime::Header,
     ) -> Result<Vec<EventInfo>> {
@@ -343,7 +402,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
-    settings: &settings::Settings,
+    state_chain_settings: &settings::StateChain,
 ) -> Result<(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
@@ -365,16 +424,14 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&settings.state_chain.signing_key_file)
-                    .context("Failed to read in state_chain.signing_key_file")?
-                    .replace("\"", ""),
+                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?.replace("\"", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
 
-    let rpc_server_url = &url::Url::parse(settings.state_chain.ws_endpoint.as_str())?;
+    let rpc_server_url = &url::Url::parse(state_chain_settings.ws_endpoint.as_str())?;
 
     // TODO connect only once (Using a single RpcChannel)
 
@@ -431,6 +488,7 @@ pub async fn connect_to_state_chain(
         signer: signer.clone(),
         author_rpc_client,
         state_rpc_client,
+        chain_rpc_client: chain_rpc_client.clone(),
     };
 
     let our_account_id = signer.account_id().to_owned();
@@ -493,7 +551,7 @@ mod tests {
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (state_chain_client, mut block_stream) =
-            connect_to_state_chain(&settings).await.unwrap();
+            connect_to_state_chain(&settings.state_chain).await.unwrap();
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
