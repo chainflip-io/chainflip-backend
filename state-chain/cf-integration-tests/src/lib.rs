@@ -43,6 +43,7 @@ mod tests {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::SchnorrVerificationComponents;
+		use cf_traits::EpochInfo;
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use state_chain_runtime::HeartbeatBlockInterval;
@@ -240,11 +241,22 @@ mod tests {
 		}
 
 		impl Network {
+			// Create a network which includes the validators in genesis of number of nodes
+			// and return a network and sorted list of nodes within
 			pub fn create(number_of_nodes: u8) -> (Self, Vec<NodeId>) {
 				let mut network: Network = Network::default();
 
+				// Add the genesis nodes to the test network
+				let mut genesis_validators = Validator::current_validators();
+				for validator in &genesis_validators {
+					network.add_node(validator.clone());
+				}
+
+				let remaining_nodes =
+					number_of_nodes.saturating_sub(genesis_validators.len() as u8);
+
 				let mut nodes = Vec::new();
-				for index in 1..=number_of_nodes {
+				for index in 1..=remaining_nodes {
 					let node_id: NodeId = [index; 32].into();
 					nodes.push(node_id.clone());
 					setup_account(&node_id);
@@ -253,7 +265,23 @@ mod tests {
 						.insert(node_id.clone(), Engine::new(node_id));
 				}
 
+				nodes.append(&mut genesis_validators);
+				nodes.sort();
 				(network, nodes)
+			}
+
+			pub fn filter_nodes(&self, state: ChainflipAccountState) -> Vec<NodeId> {
+				self.engines
+					.iter()
+					.filter_map(|(node_id, engine)| {
+						if engine.state() == state {
+							Some(node_id)
+						} else {
+							None
+						}
+					})
+					.cloned()
+					.collect()
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
@@ -338,7 +366,7 @@ mod tests {
 	}
 
 	pub struct ExtBuilder {
-		accounts: Vec<(AccountId, FlipBalance)>,
+		pub accounts: Vec<(AccountId, FlipBalance)>,
 		winners: Vec<AccountId>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
@@ -484,6 +512,7 @@ mod tests {
 		use super::*;
 		use cf_traits::{AuctionResult, Auctioneer, StakeTransfer};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
+		pub const NUMBER_OF_VALIDATORS: u32 = 3;
 
 		pub fn default() -> ExtBuilder {
 			ExtBuilder::default()
@@ -643,8 +672,7 @@ mod tests {
 		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
 		// - When the epoch is reached an auction is started and completed
-		// - New stakers that were above the genesis MAB are now validating the network with the
-		//   genesis validators
+		// - All nodes stake above the MAB
 		// - A new auction index has been generated
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
@@ -654,15 +682,12 @@ mod tests {
 				.execute_with(|| {
 					// A network with a set of passive nodes
 					let (mut testnet, mut nodes) = network::Network::create(5);
-					// Add the genesis nodes to the test network
-					for validator in Validator::current_validators() {
-						testnet.add_node(validator);
-					}
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
 						testnet
 							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+							.stake(node.clone(), stake_amount);
 					}
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
@@ -673,13 +698,6 @@ mod tests {
 						"this should be the first auction"
 					);
 
-					let genesis_validators: Vec<NodeId> = Validator::current_validators();
-
-					// We expect the following to become the next set of validators
-					let mut expected_validators = genesis_validators;
-					expected_validators.append(&mut nodes);
-					expected_validators.sort();
-
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
@@ -687,7 +705,7 @@ mod tests {
 						Auction::current_phase(),
 						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
 							candidates.sort();
-							assert_eq!(candidates, expected_validators);
+							assert_eq!(candidates, nodes);
 						},
 						"the new candidates should be those genesis validators and the new nodes created in test"
 					);
@@ -710,15 +728,14 @@ mod tests {
 					} = Auction::last_auction_result().expect("last auction result");
 
 					assert_eq!(
-						minimum_active_bid,
-						genesis::GENESIS_BALANCE,
-						"minimum active bid should be that set at genesis"
+						minimum_active_bid, stake_amount,
+						"minimum active bid should be that of the new stake"
 					);
 
 					winners.sort();
 					assert_eq!(
 						winners,
-						expected_validators,
+						nodes,
 						"the new winners should be those genesis validators and the new nodes created in test"
 					);
 
@@ -728,7 +745,7 @@ mod tests {
 					// This new set of winners should also be the validators of the network
 					assert_eq!(
 						new_validators,
-						expected_validators,
+						nodes,
 						"the new validators should be those genesis validators and the new nodes created in test"
 					);
 				});
@@ -829,7 +846,9 @@ mod tests {
 
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
-		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use cf_traits::{
+			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
+		};
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
 			Validator,
@@ -845,6 +864,7 @@ mod tests {
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_VALIDATORS: u32 = 10;
+			const BACKUP_VALDATORS: u32 = genesis::NUMBER_OF_VALIDATORS;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_validators(MAX_VALIDATORS)
@@ -853,17 +873,15 @@ mod tests {
 					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
 					// The result will be our newly created nodes will be validators and the
 					// genesis validators will become backup validators
-					let (mut testnet, mut nodes) = network::Network::create(MAX_VALIDATORS as u8);
-					// Add the genesis nodes to the test network
-					let mut genesis_validators = Validator::current_validators();
-					for validator in &genesis_validators {
-						testnet.add_node(validator.clone());
-					}
-
+					let (mut testnet, mut nodes) =
+						network::Network::create((MAX_VALIDATORS + BACKUP_VALDATORS) as u8);
+					let mut genesis_validators =
+						testnet.filter_nodes(ChainflipAccountState::Validator);
+					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
-					// Stake these nodes so that they are included in the next epoch
-					for node in &nodes {
+					// Stake these passive nodes so that they are included in the next epoch
+					for node in &passive_nodes {
 						testnet
 							.stake_manager_contract
 							.stake(node.clone(), INITIAL_STAKE);
@@ -889,11 +907,11 @@ mod tests {
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
 
 					current_validators.sort();
-					nodes.sort();
+					passive_nodes.sort();
 
 					assert_eq!(
-						nodes, current_validators,
-						"our new nodes should be the new validators"
+						passive_nodes, current_validators,
+						"our new testnet nodes should be the new validators"
 					);
 
 					// assert list of backup validators as being the genesis validators
@@ -942,12 +960,6 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
-					// Add the genesis nodes to the test network
-					let genesis_validators = Validator::current_validators();
-					for validator in &genesis_validators {
-						testnet.add_node(validator.clone());
-					}
-
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
