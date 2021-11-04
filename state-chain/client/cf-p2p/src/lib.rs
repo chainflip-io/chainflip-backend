@@ -763,6 +763,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		account_id: &AccountIdBs58,
 		other_account_ids: Iter,
 		network: Arc<TestNetwork>,
+		subscribe_barrier: &tokio::sync::Barrier,
 	) -> (
 		P2PRpcClient,
 		TypedSubscriptionStream<P2PEvent>,
@@ -771,6 +772,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		let mut stream = node
 			.subscribe_notifications()
 			.unwrap();
+		subscribe_barrier.wait().await;
 
 		node.self_identify(account_id.clone())
 			.await
@@ -801,6 +803,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 	#[tokio::test]
 	async fn send_and_broadcast_are_received() {
 		let network = TestNetwork::new();
+		let subscribe_barrier = Arc::new(tokio::sync::Barrier::new(3));
 
 		let node_0_sent_message = MessageBs58(Vec::from(&b"hello"[..]));
 		let node_2_broadcast_message = MessageBs58(Vec::from(&b"world"[..]));
@@ -818,6 +821,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						&node_0_account_id,
 						[node_1_account_id.clone(), node_2_account_id.clone()].iter(),
 						network.clone(),
+						&subscribe_barrier
 					)
 					.await;
 
@@ -845,6 +849,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						&node_1_account_id,
 						[node_0_account_id.clone(), node_2_account_id.clone()].iter(),
 						network.clone(),
+						&subscribe_barrier
 					)
 					.await;
 
@@ -873,6 +878,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						&node_2_account_id,
 						[node_0_account_id.clone(), node_1_account_id.clone()].iter(),
 						network.clone(),
+						&subscribe_barrier,
 					)
 					.await;
 
