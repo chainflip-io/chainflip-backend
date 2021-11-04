@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -10,6 +11,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
+use pallet_cf_vaults::Vault;
 use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
@@ -328,6 +330,45 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(events_for_extrinsic)
     }
 
+    // TODO: work out how to query with just one key
+    // .map() says that the format is invalid or something
+    pub async fn get_vaults(
+        &self,
+        block_header: &state_chain_runtime::Header,
+        epoch_index: EpochIndex,
+    ) -> Result<Vault> {
+        let vault_for_epoch_key = self
+            .get_metadata()
+            .module("Vaults")?
+            .storage("Vaults")?
+            .double_map()?
+            .key(&epoch_index, &ChainId::Ethereum);
+
+        let vault_updates_this_block: Vec<_> = self
+            .state_chain_rpc_client
+            .storage_events_at(Some(block_header.hash()), vault_for_epoch_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            println!("Here's the data: {:?}", data);
+                            Vault::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        Ok(vault_updates_this_block
+            .last()
+            .expect("Should be a vault")
+            .to_owned())
+    }
+
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
@@ -592,8 +633,10 @@ mod tests {
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
-            let my_state_for_this_block =
-                state_chain_client.node_status(&block_header).await.unwrap();
+            let my_state_for_this_block = state_chain_client
+                .get_vaults(&block_header, 0)
+                .await
+                .unwrap();
 
             println!(
                 "Returning ChainflipAccountStatus for this block: {:?}",

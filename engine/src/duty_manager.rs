@@ -114,6 +114,11 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
                 {
                     duty_manager.write().await.node_state = NodeState::Outgoing;
 
+                    // Only if we're outgoing do we care what the closing block heights are
+
+                    // We want to get both epochs, current and outgoing
+                    // let vault = stat.epoch_at_block(current_epoch).await;
+
                     // How do we get out of the Outgoing validator state?
                     // NB: Even if we are a backup validator, we are Outgoing before we're anything else.
                 } else {

@@ -54,12 +54,12 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
 
             // could this be updated incorrectly and cause a race condition.
             {
-                let duty_manager = duty_manager.read().await;
-                if duty_manager
-                    .is_active_validator_for_chain_at(ChainId::Ethereum, event.block_number)
-                {
-                    println!("We are NOT active. Time to chilllll");
-                }
+                // let duty_manager = duty_manager.read().await;
+                // if duty_manager
+                //     .is_active_validator_for_chain_at(ChainId::Ethereum, event.block_number)
+                // {
+                //     println!("We are NOT active. Time to chilllll");
+                // }
                 println!("We active. Let's gooooo");
             }
 
