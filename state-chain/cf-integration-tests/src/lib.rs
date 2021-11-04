@@ -24,8 +24,8 @@ mod tests {
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
-	use sp_runtime::AccountId32;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+	use sp_runtime::AccountId32;
 
 	type NodeId = AccountId32;
 	const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
@@ -739,14 +739,14 @@ mod tests {
 		use super::*;
 		use super::{genesis, network};
 		use cf_traits::EpochInfo;
-		use pallet_cf_staking::pallet::Error as Error;
+		use pallet_cf_staking::pallet::Error;
 		#[test]
 		// Stakers cannot unstake during the conclusion of the auction
 		// We have a set of nodes that are staked and that are included in the auction
 		// Moving block by block of an auction we shouldn't be able to claim stake
-		fn cannot_unstake_during_auction() {
+		fn cannot_claim_stake_during_auction() {
 			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_VALIDATORS: u32 = 10;
+			const MAX_VALIDATORS: u32 = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_validators(MAX_VALIDATORS)
@@ -754,34 +754,46 @@ mod tests {
 				.execute_with(|| {
 					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
-					// Add the genesis nodes to the test network
-					let genesis_validators = Validator::current_validators();
-					for validator in &genesis_validators {
-						testnet.add_node(validator.clone());
-					}
 					// Stake these nodes so that they are included in the next epoch
+					let mut stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet
 							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE);
+							.stake(node.clone(), stake_amount);
 					}
 
-					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
+					// Move forward one block to process events
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(
+						0,
+						Validator::epoch_index(),
+						"We should be in the genesis epoch"
+					);
+
+					// We should be able to claim stake out of an auction
+					for node in &nodes {
+						assert_ok!(Staking::claim(
+							Origin::signed(node.clone()),
+							1,
+							ETH_ZERO_ADDRESS
+						));
+					}
 
 					// Start an auction and confirm
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
 						"this should be the first auction"
 					);
 
-					// We will try to claim our stakes all of the nodes in the test network
+					// We will try to claim some stake
 					for node in &nodes {
 						assert_noop!(
 							Staking::claim(
 								Origin::signed(node.clone()),
-								genesis::GENESIS_BALANCE,
+								stake_amount,
 								ETH_ZERO_ADDRESS
 							),
 							Error::<Runtime>::NoClaimsDuringAuctionPhase
@@ -790,7 +802,13 @@ mod tests {
 
 					testnet.move_forward_blocks(1);
 
-					// We will try to claim our stakes all of the nodes in the test network
+					assert_eq!(
+						0,
+						Validator::epoch_index(),
+						"We should still be in the genesis epoch"
+					);
+
+					// We will try to claim stakes
 					for node in &nodes {
 						assert_noop!(
 							Staking::claim(
