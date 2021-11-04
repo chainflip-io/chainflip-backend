@@ -24,6 +24,7 @@ use frame_support::{
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use utilities::threshold_from_share_count;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -314,16 +315,7 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		}
 		NumValidators::<T>::set(total);
 
-		let calc_threshold = |total: u32| -> u32 {
-			let doubled = total * 2;
-			if doubled % 3 == 0 {
-				doubled / 3
-			} else {
-				doubled / 3 + 1
-			}
-		};
-
 		// Assume all validators are live at the start of an Epoch.
-		ConsensusThreshold::<T>::mutate(|thresh| *thresh = calc_threshold(total))
+		ConsensusThreshold::<T>::mutate(|thresh| *thresh = threshold_from_share_count(total) + 1)
 	}
 }

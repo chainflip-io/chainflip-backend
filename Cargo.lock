@@ -1015,6 +1015,7 @@ dependencies = [
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
+ "utilities",
  "web3",
  "websocket",
 ]
@@ -5166,6 +5167,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
@@ -10011,6 +10013,10 @@ dependencies = [
  "matches",
  "percent-encoding 2.1.0",
 ]
+
+[[package]]
+name = "utilities"
+version = "0.1.0"
 
 [[package]]
 name = "value-bag"
