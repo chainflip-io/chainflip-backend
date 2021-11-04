@@ -30,7 +30,7 @@ pub const MAX_VALIDATOR_SIZE: u32 = 3;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
-	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static OLD_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
 	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
@@ -174,9 +174,16 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 		new_validators: &[Self::ValidatorId],
 		new_bond: Self::Amount,
 	) {
-		OUTGOING_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
+		OLD_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
+
+		for validator in new_validators {
+			MockChainflipAccount::update_last_active_epoch(
+				&validator,
+				ValidatorPallet::epoch_index(),
+			);
+		}
 	}
 }
 
@@ -225,8 +232,16 @@ pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
+pub fn old_validators() -> Vec<u64> {
+	OLD_VALIDATORS.with(|l| l.borrow().to_vec())
+}
+
 pub fn outgoing_validators() -> Vec<u64> {
-	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
+	old_validators()
+		.iter()
+		.filter(|old_validator| !current_validators().contains(old_validator))
+		.cloned()
+		.collect()
 }
 
 pub fn min_bid() -> u64 {

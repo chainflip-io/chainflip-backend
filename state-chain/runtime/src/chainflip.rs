@@ -25,6 +25,7 @@ use sp_core::{H160, H256};
 use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
 use sp_runtime::RuntimeDebug;
 use sp_std::cmp::min;
+use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
@@ -62,7 +63,34 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			old_validators,
 			new_validators,
 			new_bond,
-		)
+		);
+
+		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
+			old_validators,
+			new_validators,
+			new_bond,
+		);
+	}
+}
+
+pub struct AccountStateManager<T>(PhantomData<T>);
+
+impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
+	type ValidatorId = AccountId;
+	type Amount = T::Amount;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		_new_bid: Self::Amount,
+	) {
+		// Update the last active epoch for the new validating set
+		for validator in new_validators {
+			ChainflipAccountStore::<Runtime>::update_last_active_epoch(
+				&validator,
+				Validator::epoch_index(),
+			);
+		}
 	}
 }
 
@@ -329,10 +357,9 @@ pub struct EthereumKeyProvider;
 
 impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
-	type EpochInfo = Validator;
 
 	fn current_key() -> Self::KeyId {
-		let current_epoch = Self::EpochInfo::epoch_index();
+		let current_epoch = <Validator as EpochInfo>::epoch_index();
 		Vaults::vaults(current_epoch, <Ethereum as cf_chains::Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
