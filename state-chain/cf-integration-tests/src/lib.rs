@@ -288,8 +288,8 @@ mod tests {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
+			// Adds a node which doesn't have its session keys set
 			pub fn add_node(&mut self, node_id: NodeId) {
-				setup_account(&node_id);
 				self.engines.insert(
 					node_id.clone(),
 					Engine {
