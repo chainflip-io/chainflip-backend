@@ -42,7 +42,7 @@ pub enum VaultRotationStatus<T: Config> {
 	},
 }
 
-type BlockHeight = u64;
+pub type BlockHeight = u64;
 
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

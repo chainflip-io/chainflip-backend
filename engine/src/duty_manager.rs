@@ -1,14 +1,15 @@
 use crate::p2p::AccountId;
 //use crate::state_chain::sc_event;
 use cf_chains::ChainId;
+use pallet_cf_vaults::BlockHeight;
 use slog::o;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 //use substrate_subxt::{Client, EventSubscription};
 
-use cf_traits::{ChainflipAccountData, ChainflipAccountState};
-use pallet_cf_vaults::BlockHeightWindow;
+use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
 //use sp_core::storage::StorageChangeSet;
 
 use crate::logging::COMPONENT_KEY;
@@ -21,7 +22,7 @@ pub enum NodeState {
     // On the Backup Validator list
     // Only submits heartbeats + monitors storage change events
     BackupValidator,
-    // Was/Is on the Active Validator list
+    // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
     RunningValidator,
 }
@@ -29,18 +30,22 @@ pub enum NodeState {
 pub struct DutyManager {
     account_id: AccountId,
     node_state: NodeState,
+    /// The epoch that the chain is currently in
+    current_epoch: EpochIndex,
     _account_state: ChainflipAccountState,
-    // TODO: Can't use Hashmap due to ChainId. Is Vec(,) the best for this?
-    active_windows: Vec<(ChainId, BlockHeightWindow)>,
+    /// Contains the block at which we start our validator duties for each respective chain
+    start_duties_at: HashMap<ChainId, BlockHeight>,
 }
 
 impl DutyManager {
-    pub fn new(account_id: AccountId) -> DutyManager {
+    // Called after we have the current epoch.
+    pub fn new(account_id: AccountId, current_epoch: EpochIndex) -> DutyManager {
         DutyManager {
             account_id,
             node_state: NodeState::Passive,
             _account_state: ChainflipAccountState::Passive,
-            active_windows: Vec::new(),
+            start_duties_at: HashMap::new(),
+            current_epoch,
         }
     }
 
@@ -52,7 +57,7 @@ impl DutyManager {
             account_id: AccountId(test_account_id),
             node_state: NodeState::RunningValidator,
             _account_state: ChainflipAccountState::Passive,
-            active_windows: Vec::new(),
+            start_duties_at: HashMap::new(),
         }
     }
 
@@ -78,10 +83,10 @@ impl DutyManager {
     }
 
     /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
-    pub fn is_active_validator_at(&self, chain_id: ChainId, block_number: u64) -> bool {
+    pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
         match self.node_state {
             NodeState::RunningValidator => {
-                match self.active_windows.iter().find(|(a, _)| a == &chain_id) {
+                match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
                     Some((_, active_window))
                         if active_validator_at(active_window, block_number) =>
                     {
@@ -107,18 +112,10 @@ impl DutyManager {
     // }
 }
 
-fn active_validator_at(active_window: &BlockHeightWindow, block_number: u64) -> bool {
-    let in_lower_window = active_window.from <= block_number;
-    let in_upper_window = match active_window.to {
-        Some(to_block) => to_block >= block_number,
-        None => true, // if no upper limit exists, then pass the check
-    };
-    in_lower_window && in_upper_window
-}
-
 use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
 use futures::{Stream, StreamExt};
 
+// This should be on its own task?
 pub async fn start_duty_manager<BlockStream, RpcClient>(
     duty_manager: Arc<RwLock<DutyManager>>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
