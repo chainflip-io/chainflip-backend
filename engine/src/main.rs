@@ -32,7 +32,7 @@ async fn main() {
         .await;
 
     let (state_chain_client, state_chain_block_stream) =
-        state_chain::client::connect_to_state_chain(&settings)
+        state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .unwrap();
 

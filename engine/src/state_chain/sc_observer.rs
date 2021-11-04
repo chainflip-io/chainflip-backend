@@ -62,7 +62,7 @@ pub async fn start<BlockStream, RpcClient>(
                 }
 
                 // Process this block's events
-                match state_chain_client.events(&block_header).await {
+                match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
@@ -335,10 +335,10 @@ pub async fn start<BlockStream, RpcClient>(
 //         let settings = settings::test_utils::new_test_settings().unwrap();
 //         let logger = logging::test_utils::new_test_logger();
 
-//         let (state_chain_client, block_stream) =
-//             crate::state_chain::client::connect_to_state_chain(&settings)
-//                 .await
-//                 .unwrap();
+        // let (state_chain_client, block_stream) =
+        //     crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+        //         .await
+        //         .unwrap();
 
 //         let (multisig_instruction_sender, _multisig_instruction_receiver) =
 //             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
