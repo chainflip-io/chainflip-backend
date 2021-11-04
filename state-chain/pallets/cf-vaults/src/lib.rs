@@ -42,20 +42,15 @@ pub enum VaultRotationStatus<T: Config> {
 	},
 }
 
-/// The bounds within which a public key for a vault should be used for witnessing.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct BlockHeightWindow {
-	pub from: u64,
-	pub to: Option<u64>,
-}
+type BlockHeight = u64;
 
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault {
 	/// The vault's public key.
 	pub public_key: Vec<u8>,
-	/// The active window for this vault
-	pub active_window: BlockHeightWindow,
+	/// At which block height this key was rotated to
+	pub block_height: BlockHeight,
 }
 
 #[frame_support::pallet]
@@ -332,32 +327,18 @@ pub mod pallet {
 				));
 			}
 
-			// We update the current epoch with an active window for the out goers
-			Vaults::<T>::try_mutate_exists(T::EpochInfo::epoch_index(), chain_id, |maybe_vault| {
-				if let Some(vault) = maybe_vault.as_mut() {
-					vault.active_window.to = Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
-					Ok(())
-				} else {
-					Err(Error::<T>::UnsupportedChain)
-				}
-			})?;
-
 			PendingVaultRotations::<T>::insert(
 				chain_id,
 				VaultRotationStatus::<T>::Complete { tx_hash },
 			);
 
-			// For the new epoch we create a new vault with the new public key and its active
-			// window at the reported block number
+			// For the new epoch we create a new vault with the new public key and the block height
 			Vaults::<T>::insert(
 				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
 				Vault {
 					public_key: new_public_key,
-					active_window: BlockHeightWindow {
-						from: block_number,
-						to: None,
-					},
+					block_height: block_number,
 				},
 			);
 
@@ -396,7 +377,7 @@ pub mod pallet {
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
-					active_window: BlockHeightWindow::default(),
+					block_height: BlockHeight::default(),
 				},
 			);
 		}

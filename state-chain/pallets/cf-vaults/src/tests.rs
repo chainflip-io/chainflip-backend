@@ -1,7 +1,7 @@
 mod tests {
 	use crate::{
-		mock::*, BlockHeightWindow, Error, Event as PalletEvent, PendingVaultRotations, Vault,
-		VaultRotationStatus, Vaults,
+		mock::*, Error, Event as PalletEvent, PendingVaultRotations, Vault, VaultRotationStatus,
+		Vaults,
 	};
 	use cf_chains::ChainId;
 	use cf_traits::{Chainflip, EpochInfo, VaultRotator};
@@ -203,7 +203,7 @@ mod tests {
 
 			let Vault {
 				public_key,
-				active_window,
+				block_height,
 			} = Vaults::<MockRuntime>::get(old_epoch, ChainId::Ethereum)
 				.expect("Ethereum Vault should exists");
 
@@ -214,11 +214,7 @@ mod tests {
 			);
 
 			assert_eq!(
-				active_window,
-				BlockHeightWindow {
-					from: 0,
-					to: Some(ROTATION_BLOCK_NUMBER + crate::ETHEREUM_LEEWAY_IN_BLOCKS)
-				},
+				block_height, 0,
 				"we should have the block height set for 14 days in ethereum blocks"
 			);
 
@@ -227,23 +223,19 @@ mod tests {
 
 			let Vault {
 				public_key,
-				active_window,
+				block_height,
 			} = Vaults::<MockRuntime>::get(new_epoch, ChainId::Ethereum)
 				.expect("Ethereum Vault should exist");
 
-			// The genesis vault is updated with the active window
+			// The genesis vault is updated wiht with block height
 			assert_eq!(
 				public_key, new_public_key,
 				"we should have the new public key in the new vault"
 			);
 
 			assert_eq!(
-				active_window,
-				BlockHeightWindow {
-					from: ROTATION_BLOCK_NUMBER,
-					to: None
-				},
-				"we should have set the starting point for the new vault's active window"
+				block_height, ROTATION_BLOCK_NUMBER,
+				"we should have set the starting block height for the new vault"
 			);
 
 			// Status is complete.

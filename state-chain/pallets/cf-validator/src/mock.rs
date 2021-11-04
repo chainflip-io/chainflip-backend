@@ -9,7 +9,6 @@ use frame_support::{
 };
 
 use cf_traits::mocks::chainflip_account::MockChainflipAccount;
-use cf_traits::mocks::epoch_info::MockEpochInfo;
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
