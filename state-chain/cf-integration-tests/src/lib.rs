@@ -687,6 +687,7 @@ mod tests {
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
 		// - A new auction index has been generated
+		// - We have two nodes that haven't registered their session keys
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -695,6 +696,8 @@ mod tests {
 				.execute_with(|| {
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) = network::Network::create(5);
+					// Add two nodes which don't have session keys
+					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
@@ -702,6 +705,13 @@ mod tests {
 							.stake_manager_contract
 							.stake(node.clone(), stake_amount);
 					}
+					// Our keyless nodes also stake
+					for keyless_node in &keyless_nodes {
+						testnet
+							.stake_manager_contract
+							.stake(keyless_node.clone(), stake_amount);
+					}
+
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					// We should be in auction 1
