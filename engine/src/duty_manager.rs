@@ -82,22 +82,22 @@ impl DutyManager {
         account_list.contains(&self.account_id)
     }
 
-    /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
-    pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
-        match self.node_state {
-            NodeState::RunningValidator => {
-                match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
-                    Some((_, active_window))
-                        if active_validator_at(active_window, block_number) =>
-                    {
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
+    // /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
+    // pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
+    //     match self.node_state {
+    //         NodeState::RunningValidator => {
+    //             match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
+    //                 Some((_, active_window))
+    //                     if active_validator_at(active_window, block_number) =>
+    //                 {
+    //                     true
+    //                 }
+    //                 _ => false,
+    //             }
+    //         }
+    //         _ => false,
+    //     }
+    // }
 
     // fn process_storage_change(&mut self, set: StorageChangeSet) {
     //     // use the StorageChangeSet to change the state and active windows

@@ -16,6 +16,8 @@ use web3::{
 pub struct Event<EventEnum: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
+    /// Block number the event occurred at
+    pub block_number: u64,
     /// The event specific parameters
     pub event_enum: EventEnum,
 }
@@ -37,6 +39,10 @@ impl<EventEnum: Debug> Event<EventEnum> {
         log: Log,
     ) -> Result<Self> {
         Ok(Event {
+            block_number: log
+                .block_number
+                .expect("Log should contain a block number")
+                .as_u64(),
             tx_hash: log
                 .transaction_hash
                 .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?

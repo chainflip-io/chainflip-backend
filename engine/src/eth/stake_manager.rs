@@ -50,6 +50,12 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
             let event = result_event.unwrap();
+
+            // could this be updated incorrectly and cause a race condition.
+            // if is_active_validator_at(event.block) {
+
+            // }
+
             match event.event_enum {
                 StakeManagerEvent::Staked {
                     account_id,
