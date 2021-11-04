@@ -96,14 +96,15 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
+	/// A map of previous vaults by chain
 	#[pallet::storage]
 	#[pallet::getter(fn current_vaults)]
 	pub(super) type CurrentVaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault>;
 
-	/// A map of vaults by epoch and chain
+	/// A map of previous vaults by epoch and chain
 	#[pallet::storage]
-	#[pallet::getter(fn vaults)]
-	pub(super) type Vaults<T: Config> =
+	#[pallet::getter(fn previous_vaults)]
+	pub(super) type PreviousVaults<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, EpochIndex, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
@@ -337,7 +338,7 @@ pub mod pallet {
 			);
 
 			// Keep a record of vaults by epoch
-			Vaults::<T>::insert(
+			PreviousVaults::<T>::insert(
 				T::EpochInfo::epoch_index(),
 				ChainId::Ethereum,
 				CurrentVaults::<T>::get(ChainId::Ethereum)

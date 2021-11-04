@@ -1,7 +1,7 @@
 mod tests {
 	use crate::{
-		mock::*, CurrentVaults, Error, Event as PalletEvent, PendingVaultRotations, Vault,
-		VaultRotationStatus, Vaults,
+		mock::*, CurrentVaults, Error, Event as PalletEvent, PendingVaultRotations, PreviousVaults,
+		Vault, VaultRotationStatus,
 	};
 	use cf_chains::ChainId;
 	use cf_traits::{Chainflip, VaultRotator};
@@ -222,7 +222,7 @@ mod tests {
 			let Vault {
 				public_key,
 				block_height,
-			} = Vaults::<MockRuntime>::get(genesis_epoch_index, ChainId::Ethereum)
+			} = PreviousVaults::<MockRuntime>::get(genesis_epoch_index, ChainId::Ethereum)
 				.expect("Ethereum Vault should exist");
 
 			// The genesis vault should have the genesis APK
