@@ -6,10 +6,10 @@ extern crate assert_matches;
 #[cfg(test)]
 mod tests {
 
-	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
 	use frame_support::traits::OnInitialize;
+	use frame_support::{assert_noop, assert_ok};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -18,15 +18,18 @@ mod tests {
 	use state_chain_runtime::opaque::SessionKeys;
 	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
-		Timestamp, Validator, Vaults,
+		Auction, Emissions, Flip, Governance, Online, Origin, Reputation, Rewards, Session,
+		Staking, Timestamp, Validator, Vaults,
 	};
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
 	use sp_runtime::AccountId32;
+	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 
 	type NodeId = AccountId32;
+	const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+	const TX_HASH: EthTransactionHash = [211u8; 32];
 
 	macro_rules! on_events {
 		($events:expr, $( $p:pat => $b:block ),*) => {
@@ -42,12 +45,9 @@ mod tests {
 		use cf_chains::eth::SchnorrVerificationComponents;
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
-		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 		use state_chain_runtime::HeartbeatBlockInterval;
 		use state_chain_runtime::{Event, Origin};
 		use std::collections::HashMap;
-		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-		const TX_HASH: EthTransactionHash = [211u8; 32];
 
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
@@ -731,6 +731,80 @@ mod tests {
 						expected_validators,
 						"the new validators should be those genesis validators and the new nodes created in test"
 					);
+				});
+		}
+	}
+
+	mod staking {
+		use super::*;
+		use super::{genesis, network};
+		use cf_traits::EpochInfo;
+		use pallet_cf_staking::pallet::Error as Error;
+		#[test]
+		// Stakers cannot unstake during the conclusion of the auction
+		// We have a set of nodes that are staked and that are included in the auction
+		// Moving block by block of an auction we shouldn't be able to claim stake
+		fn cannot_unstake_during_auction() {
+			const EPOCH_BLOCKS: u32 = 100;
+			const MAX_VALIDATORS: u32 = 10;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					// Create the test network with some fresh nodes and the genesis validators
+					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
+					// Add the genesis nodes to the test network
+					let genesis_validators = Validator::current_validators();
+					for validator in &genesis_validators {
+						testnet.add_node(validator.clone());
+					}
+					// Stake these nodes so that they are included in the next epoch
+					for node in &nodes {
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), genesis::GENESIS_BALANCE);
+					}
+
+					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
+
+					// Start an auction and confirm
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// We will try to claim our stakes all of the nodes in the test network
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(
+								Origin::signed(node.clone()),
+								genesis::GENESIS_BALANCE,
+								ETH_ZERO_ADDRESS
+							),
+							Error::<Runtime>::NoClaimsDuringAuctionPhase
+						);
+					}
+
+					testnet.move_forward_blocks(1);
+
+					// We will try to claim our stakes all of the nodes in the test network
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(
+								Origin::signed(node.clone()),
+								genesis::GENESIS_BALANCE,
+								ETH_ZERO_ADDRESS
+							),
+							Error::<Runtime>::NoClaimsDuringAuctionPhase
+						);
+					}
+
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(1, Validator::epoch_index(), "We should be in the new epoch");
 				});
 		}
 	}
