@@ -1,3 +1,4 @@
+#[cfg(feature = "runtime-benchmarks")]
 use frame_system::RawOrigin;
 use std::marker::PhantomData;
 

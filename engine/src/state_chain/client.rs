@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
-use futures::{Stream, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
@@ -223,9 +223,8 @@ impl StateChainRpcApi for StateChainRpcClient {
             if let Some(signed_block) = self
                 .chain_rpc_client
                 .block(Some(block_hash))
-                .compat()
                 .await
-                .map_err(|e| anyhow!(e))?
+                .map_err(into_anyhow_error)?
             {
                 let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);

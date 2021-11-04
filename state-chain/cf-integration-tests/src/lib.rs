@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-	use assert_matches::*;
 	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
@@ -678,7 +677,7 @@ mod tests {
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
 							candidates.sort();
@@ -693,7 +692,7 @@ mod tests {
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"
@@ -782,7 +781,7 @@ mod tests {
 
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"
@@ -901,7 +900,7 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"

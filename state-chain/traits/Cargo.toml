@@ -41,10 +41,11 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
-[dependencies.frame-benchmark]
+[dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
+optional = true
 
 [features]
 default = ['std']
