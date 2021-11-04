@@ -484,7 +484,7 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
+    use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
 
     use super::*;
 

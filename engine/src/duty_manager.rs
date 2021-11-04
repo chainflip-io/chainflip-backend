@@ -1,8 +1,7 @@
 use crate::p2p::AccountId;
 //use crate::state_chain::sc_event;
-use crate::types::chain::Chain;
+use cf_chains::ChainId;
 use slog::o;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -31,7 +30,8 @@ pub struct DutyManager {
     account_id: AccountId,
     node_state: NodeState,
     _account_state: ChainflipAccountState,
-    active_windows: HashMap<Chain, BlockHeightWindow>,
+    // TODO: Can't use Hashmap due to ChainId. Is Vec(,) the best for this?
+    active_windows: Vec<(ChainId, BlockHeightWindow)>,
 }
 
 impl DutyManager {
@@ -40,7 +40,7 @@ impl DutyManager {
             account_id,
             node_state: NodeState::Passive,
             _account_state: ChainflipAccountState::Passive,
-            active_windows: HashMap::new(),
+            active_windows: Vec::new(),
         }
     }
 
@@ -52,7 +52,7 @@ impl DutyManager {
             account_id: AccountId(test_account_id),
             node_state: NodeState::RunningValidator,
             _account_state: ChainflipAccountState::Passive,
-            active_windows: HashMap::new(),
+            active_windows: Vec::new(),
         }
     }
 
@@ -78,12 +78,18 @@ impl DutyManager {
     }
 
     /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
-    pub fn is_active_validator_at(&self, chain: Chain, block_number: u64) -> bool {
+    pub fn is_active_validator_at(&self, chain_id: ChainId, block_number: u64) -> bool {
         match self.node_state {
-            NodeState::RunningValidator => match self.active_windows.get(&chain) {
-                Some(active_window) if active_validator_at(active_window, block_number) => true,
-                _ => false,
-            },
+            NodeState::RunningValidator => {
+                match self.active_windows.iter().find(|(a, _)| a == &chain_id) {
+                    Some((_, active_window))
+                        if active_validator_at(active_window, block_number) =>
+                    {
+                        true
+                    }
+                    _ => false,
+                }
+            }
             _ => false,
         }
     }
@@ -167,7 +173,7 @@ mod tests {
     #[ignore = "depends on sc"]
     async fn debug() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let logger = logging::test_utils::create_test_logger();
+        let logger = logging::test_utils::new_test_logger();
 
         let (state_chain_client, block_stream) = connect_to_state_chain(&settings).await.unwrap();
 
@@ -180,15 +186,7 @@ mod tests {
             &logger,
         );
 
-        tokio::join!(
-            duty_manager_fut,
-            // heartbeat::start(
-            //     subxt_client.clone(),
-            //     pair_signer.clone(),
-            //     &logger,
-            //     duty_manager.clone()
-            // )
-        );
+        tokio::join!(duty_manager_fut,);
     }
 
     #[test]
@@ -208,5 +206,30 @@ mod tests {
         };
         assert!(!active_validator_at(&active_window, 50));
         assert!(active_validator_at(&active_window, 150));
+    }
+
+    #[tokio::test]
+    async fn test_is_active_validator_at() {
+        let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
+
+        let mut dm = duty_manager.write().await;
+        assert!(!dm.is_active_validator_at(ChainId::Ethereum, 0));
+        dm.active_windows
+            .push((ChainId::Ethereum, BlockHeightWindow { from: 0, to: None }));
+        assert!(dm.is_active_validator_at(ChainId::Ethereum, 0));
+        assert!(dm.is_active_validator_at(ChainId::Ethereum, 100000));
+
+        dm.active_windows.clear();
+        dm.active_windows.push((
+            ChainId::Ethereum,
+            BlockHeightWindow {
+                from: 10,
+                to: Some(20),
+            },
+        ));
+        assert!(!dm.is_active_validator_at(ChainId::Ethereum, 9));
+        assert!(dm.is_active_validator_at(ChainId::Ethereum, 10));
+        assert!(dm.is_active_validator_at(ChainId::Ethereum, 20));
+        assert!(!dm.is_active_validator_at(ChainId::Ethereum, 21));
     }
 }

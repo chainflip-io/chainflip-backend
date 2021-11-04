@@ -41,11 +41,6 @@ pub async fn start<BlockStream, RpcClient>(
         heartbeat_block_interval,
     );
 
-    state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-        .await
-        .expect("Should be able to submit first heartbeat");
-
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
@@ -54,14 +49,16 @@ pub async fn start<BlockStream, RpcClient>(
                 if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
                     == 0
                 {
-                    slog::info!(
-                        logger,
-                        "Sending heartbeat at block: {}",
-                        block_header.number
-                    );
-                    let _ = state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-                        .await;
+                    if duty_manager.read().await.is_heartbeat_enabled() {
+                        slog::info!(
+                            logger,
+                            "Sending heartbeat at block: {}",
+                            block_header.number
+                        );
+                        let _ = state_chain_client
+                            .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                            .await;
+                    }
                 }
 
                 // Process this block's events
