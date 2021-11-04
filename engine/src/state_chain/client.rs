@@ -3,7 +3,7 @@ use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
-use futures::Stream;
+use futures::{Stream, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
@@ -431,7 +431,6 @@ pub async fn connect_to_state_chain(
     let latest_block_hash = Some(try_unwrap_value(
         chain_rpc_client
             .block_hash(None)
-            .compat()
             .await
             .map_err(into_anyhow_error)?,
         anyhow::Error::msg("Failed to get latest block hash"),
@@ -454,7 +453,6 @@ pub async fn connect_to_state_chain(
         genesis_hash: try_unwrap_value(
             chain_rpc_client
                 .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                .compat()
                 .await
                 .map_err(into_anyhow_error)?,
             anyhow::Error::msg("Genesis block doesn't exist?"),
@@ -501,11 +499,8 @@ pub async fn connect_to_state_chain(
         }),
         chain_rpc_client
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
-            .compat()
-            .await
-            .map_err(anyhow::Error::msg)?
-            .compat()
-            .map(|result_header| result_header.map_err(anyhow::Error::msg)),
+            .map_err(into_anyhow_error)?
+            .map_err(into_anyhow_error),
     ))
 }
 
