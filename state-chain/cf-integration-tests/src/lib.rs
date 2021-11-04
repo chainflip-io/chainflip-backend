@@ -1,11 +1,6 @@
-#![feature(assert_matches)]
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 #[cfg(test)]
 mod tests {
-
+	use assert_matches::*;
 	use frame_support::assert_ok;
 	use frame_support::sp_io::TestExternalities;
 	use frame_support::traits::GenesisBuild;
@@ -139,7 +134,7 @@ mod tests {
 					// Handle events
 					on_events!(
 						events,
-						Event::pallet_cf_threshold_signature_Instance1(
+						Event::EthereumThresholdSigner(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 								ceremony_id,
@@ -162,7 +157,7 @@ mod tests {
 								).expect("should be able to ethereum signature for node");
 							}
 						},
-						Event::pallet_cf_threshold_signature_Instance1(
+						Event::EthereumThresholdSigner(
 							// A threshold has been met for this signature
 							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
 								_ceremony_id)) => {
@@ -179,7 +174,7 @@ mod tests {
 									tx_hash,
 								).expect("should be able to vault key rotation for node");
 						},
-						Event::pallet_cf_vaults(
+						Event::Vaults(
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
 								// Generate a public agg key, TODO refactor out

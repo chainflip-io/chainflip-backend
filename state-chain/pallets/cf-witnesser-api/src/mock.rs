@@ -7,8 +7,7 @@ use cf_chains::{
 	Ethereum,
 };
 use cf_traits::{
-	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types,
+	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider::MockKeyProvider},
 	Chainflip, NonceProvider, VaultRotationHandler,
 };

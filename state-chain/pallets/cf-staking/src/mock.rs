@@ -4,7 +4,7 @@ use cf_chains::{
 	Ethereum,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::Instance1, parameter_types, traits::EnsureOrigin};
+use frame_support::{instances::Instance1, parameter_types};
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
@@ -20,7 +20,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info, key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
