@@ -27,7 +27,7 @@ pub enum NodeState {
     // Only submits heartbeats, but was active in the previous epoch
     Outgoing,
 
-    /// THIS MUST TAKE PRECEDENCE, IT COULD CAPTURE OUTGOING TO
+    /// THIS MUST TAKE PRECEDENCE, IT COULD CAPTURE OUTGOING TOO
     // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
     RunningValidator,
@@ -71,63 +71,14 @@ impl DutyManager {
     /// Check if the heartbeat is enabled
     pub fn is_heartbeat_enabled(&self) -> bool {
         match self.node_state {
-            NodeState::BackupValidator | NodeState::RunningValidator => true,
+            NodeState::BackupValidator | NodeState::RunningValidator | NodeState::Outgoing => true,
             NodeState::Passive => false,
-            NodeState::Outgoing => todo!(),
         }
-    }
-
-    /// check if the sc observer is observing all events or just the KeygenRequestEvent
-    pub fn is_sc_observation_enabled(&self) -> bool {
-        match self.node_state {
-            NodeState::RunningValidator => true,
-            NodeState::BackupValidator | NodeState::Passive => false,
-            NodeState::Outgoing => todo!(),
-        }
-    }
-
-    /// check if our account id is in the provided list
-    pub fn account_list_contains_account_id(&self, account_list: &Vec<AccountId>) -> bool {
-        account_list.contains(&self.account_id)
-    }
-
-    // THIS METHOD DOES NOT WORK.
-    // /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
-    pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
-        match self.node_state {
-            NodeState::RunningValidator => todo!(),
-            _ => false,
-        }
-        // match self.node_state {
-        //     NodeState::RunningValidator => {
-        //         match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
-        //             Some((_, active_window))
-        //                 if active_validator_at(active_window, block_number) =>
-        //             {
-        //                 true
-        //             }
-        //             _ => false,
-        //         }
-        //     }
-        //     _ => false,
-        // }
     }
 
     pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
         self.current_epoch = epoch_index;
     }
-
-    // fn process_storage_change(&mut self, set: StorageChangeSet) {
-    //     // use the StorageChangeSet to change the state and active windows
-    //     for change in set.iter() {
-    //         match change {
-    //             // Some(key) => {
-
-    //             // }
-    //             _ => {}
-    //         }
-    //     }
-    // }
 }
 
 use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
@@ -146,7 +97,11 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
     let logger = logger.new(o!(COMPONENT_KEY => "DutyManager"));
     slog::info!(logger, "Starting");
 
-    // let current_epoch = state_chain_client.cur
+    let current_epoch = state_chain_client.epoch_at_block(None).await.unwrap();
+    {
+        let mut duty_manager = duty_manager.write().await;
+        duty_manager.current_epoch = current_epoch;
+    }
 
     // Get our node state from the block stream
     let mut sc_block_stream = Box::pin(sc_block_stream);
@@ -155,24 +110,33 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
             Ok(block_header) => {
                 // TODO: Optimise this so it's not run every block
 
-                // we have our account data
-                let my_state_for_this_block =
-                    state_chain_client.node_status(&block_header).await.unwrap();
+                let my_account_data = state_chain_client
+                    .get_account_data(&block_header)
+                    .await
+                    .unwrap();
 
-                // let if
+                if my_account_data.last_active_epoch.is_some()
+                    && my_account_data.last_active_epoch.unwrap() + 1 == current_epoch
+                {
+                    let mut dm = duty_manager.write().await;
+                    dm.node_state = NodeState::Outgoing;
 
-                match my_state_for_this_block {
-                    ChainflipAccountState::Validator => {
-                        let mut dm = duty_manager.write().await;
-                        dm.node_state = NodeState::RunningValidator;
-                    }
-                    ChainflipAccountState::Backup => {
-                        let mut dm = duty_manager.write().await;
-                        dm.node_state = NodeState::BackupValidator;
-                    }
-                    _ => {
-                        let mut dm = duty_manager.write().await;
-                        dm.node_state = NodeState::Passive;
+                    // How do we get out of the Outgoing validator state?
+                    // NB: Even if we are a backup validator, we are Outgoing > Validator
+                } else {
+                    match my_account_data.state {
+                        ChainflipAccountState::Validator => {
+                            let mut dm = duty_manager.write().await;
+                            dm.node_state = NodeState::RunningValidator;
+                        }
+                        ChainflipAccountState::Backup => {
+                            let mut dm = duty_manager.write().await;
+                            dm.node_state = NodeState::BackupValidator;
+                        }
+                        _ => {
+                            let mut dm = duty_manager.write().await;
+                            dm.node_state = NodeState::Passive;
+                        }
                     }
                 }
             }

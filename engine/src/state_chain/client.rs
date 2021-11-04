@@ -353,10 +353,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     /// Get the status of the node at a particular block
-    pub async fn node_status(
+    pub async fn get_account_data(
         &self,
         block_header: &state_chain_runtime::Header,
-    ) -> Result<ChainflipAccountState> {
+    ) -> Result<ChainflipAccountData> {
         let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events_at(Some(block_header.hash()), self.account_storage_key.clone())
@@ -379,7 +379,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(node_status_updates
             .last()
             .expect("Node must have a status")
-            .state)
+            .to_owned())
     }
 
     pub async fn epoch_at_block(
