@@ -1,5 +1,4 @@
 use crate::{self as pallet_cf_threshold_signature};
-use cf_traits::mocks::epoch_info::MockEpochInfo;
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -119,7 +118,6 @@ pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = Vec<u8>;
-	type EpochInfo = MockEpochInfo;
 	fn current_key() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
 	}

@@ -6,6 +6,7 @@ use cf_chains::Chain;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::traits::IsType;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
@@ -31,8 +32,8 @@ pub trait Chainflip: frame_system::Config {
 	type ValidatorId: Member
 		+ Default
 		+ Parameter
-		+ From<<Self as frame_system::Config>::AccountId>
-		+ Into<<Self as frame_system::Config>::AccountId>;
+		+ IsType<<Self as frame_system::Config>::AccountId>;
+
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
@@ -447,8 +448,6 @@ pub trait SignerNomination {
 pub trait KeyProvider<C: Chain> {
 	/// The type of the provided key_id.
 	type KeyId;
-	/// Information regarding the current epoch
-	type EpochInfo: EpochInfo;
 
 	/// Gets the key.
 	fn current_key() -> Self::KeyId;
