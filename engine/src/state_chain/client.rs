@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use cf_traits::{ChainflipAccountData, ChainflipAccountState};
+use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -218,12 +218,11 @@ impl StateChainRpcApi for StateChainRpcClient {
         block_header: &state_chain_runtime::Header,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
-        Ok(self
-            .state_rpc_client
+        self.state_rpc_client
             .query_storage_at(vec![storage_key], Some(block_header.hash()))
             .compat()
             .await
-            .map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)
     }
 }
 
@@ -381,6 +380,44 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .last()
             .expect("Node must have a status")
             .state)
+    }
+
+    pub async fn epoch_at_block(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<EpochIndex> {
+        let epoch_storage_key = self
+            .get_metadata()
+            .module("Validator")?
+            .storage("CurrentEpoch")?
+            .plain()?
+            .key();
+        let epoch_at_block_updates = self
+            .state_chain_rpc_client
+            .storage_events_at(block_header, epoch_storage_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            EpochIndex::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Vec<Result<_>>>();
+
+        Ok(epoch_at_block_updates
+            .last()
+            // if we don't have it, it means it's not initialised, which means the chain has started
+            // => the epoch index is 0
+            .unwrap_or_else(|| &Ok(0))
+            .as_ref()
+            .expect("Failed to get epoch index")
+            .to_owned())
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
