@@ -2,6 +2,7 @@
 //! the EthEventStreamer
 
 use crate::state_chain::client::StateChainClient;
+use cf_chains::ChainId;
 use std::{convert::TryInto, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -52,9 +53,15 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
             let event = result_event.unwrap();
 
             // could this be updated incorrectly and cause a race condition.
-            // if is_active_validator_at(event.block) {
-
-            // }
+            {
+                let duty_manager = duty_manager.read().await;
+                if duty_manager
+                    .is_active_validator_for_chain_at(ChainId::Ethereum, event.block_number)
+                {
+                    println!("We are NOT active. Time to chilllll");
+                }
+                println!("We active. Let's gooooo");
+            }
 
             match event.event_enum {
                 StakeManagerEvent::Staked {

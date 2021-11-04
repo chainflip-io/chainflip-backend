@@ -299,6 +299,11 @@ pub async fn start<BlockStream, RpcClient>(
                                         ).await;
                                     }
                                 }
+                                state_chain_runtime::Event::pallet_cf_validator(
+                                    pallet_cf_validator::Event::NewEpoch(epoch_index)) => {
+                                        let duty_manager = duty_manager.write().await;
+                                        duty_manager.set_current_epoch(epoch_index);
+                                    }
                                 ignored_event => {
                                     // ignore events we don't care about
                                     slog::trace!(logger, "Ignoring event at block {}: {:?}", block_header.number, ignored_event);
@@ -335,10 +340,10 @@ pub async fn start<BlockStream, RpcClient>(
 //         let settings = settings::test_utils::new_test_settings().unwrap();
 //         let logger = logging::test_utils::new_test_logger();
 
-        // let (state_chain_client, block_stream) =
-        //     crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
-        //         .await
-        //         .unwrap();
+// let (state_chain_client, block_stream) =
+//     crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+//         .await
+//         .unwrap();
 
 //         let (multisig_instruction_sender, _multisig_instruction_receiver) =
 //             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();

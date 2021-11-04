@@ -19,9 +19,15 @@ use crate::logging::COMPONENT_KEY;
 pub enum NodeState {
     // Only monitoring for storage change events
     Passive,
-    // On the Backup Validator list
+    // The node must be liave
     // Only submits heartbeats + monitors storage change events
     BackupValidator,
+
+    // For now we'll put
+    // Only submits heartbeats, but was active in the previous epoch
+    Outgoing,
+
+    /// THIS MUST TAKE PRECEDENCE, IT COULD CAPTURE OUTGOING TO
     // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
     RunningValidator,
@@ -83,22 +89,31 @@ impl DutyManager {
         account_list.contains(&self.account_id)
     }
 
+    // THIS METHOD DOES NOT WORK.
     // /// Check if we were an active validator at a specified block number and increments total_witnessed_events if true
-    // pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
-    //     match self.node_state {
-    //         NodeState::RunningValidator => {
-    //             match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
-    //                 Some((_, active_window))
-    //                     if active_validator_at(active_window, block_number) =>
-    //                 {
-    //                     true
-    //                 }
-    //                 _ => false,
-    //             }
-    //         }
-    //         _ => false,
-    //     }
-    // }
+    pub fn is_active_validator_for_chain_at(&self, chain_id: ChainId, block_number: u64) -> bool {
+        match self.node_state {
+            NodeState::RunningValidator => todo!(),
+            _ => false,
+        }
+        // match self.node_state {
+        //     NodeState::RunningValidator => {
+        //         match self.start_duties.iter().find(|(a, _)| a == &chain_id) {
+        //             Some((_, active_window))
+        //                 if active_validator_at(active_window, block_number) =>
+        //             {
+        //                 true
+        //             }
+        //             _ => false,
+        //         }
+        //     }
+        //     _ => false,
+        // }
+    }
+
+    pub fn set_current_epoch(&self, epoch_index: EpochIndex) {
+        self.current_epoch = epoch_index;
+    }
 
     // fn process_storage_change(&mut self, set: StorageChangeSet) {
     //     // use the StorageChangeSet to change the state and active windows
@@ -134,6 +149,8 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
+                // TODO: Update the current epoch on a new epoch event
+
                 let my_state_for_this_block = state_chain_client.node_status(&block_header).await;
 
                 // TODO: This is not complete. The correct logic will need to also use the active windows.
