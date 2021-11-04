@@ -681,7 +681,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, mut nodes) = network::Network::create(5);
+					let (mut testnet, nodes) = network::Network::create(5);
 					// All nodes stake to be included in the next epoch which are witnessed on the state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
@@ -772,7 +772,7 @@ mod tests {
 					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
 					// Stake these nodes so that they are included in the next epoch
-					let mut stake_amount = genesis::GENESIS_BALANCE;
+					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet
 							.stake_manager_contract
@@ -873,7 +873,7 @@ mod tests {
 					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
 					// The result will be our newly created nodes will be validators and the
 					// genesis validators will become backup validators
-					let (mut testnet, mut nodes) =
+					let (mut testnet, _) =
 						network::Network::create((MAX_VALIDATORS + BACKUP_VALDATORS) as u8);
 					let mut genesis_validators =
 						testnet.filter_nodes(ChainflipAccountState::Validator);
