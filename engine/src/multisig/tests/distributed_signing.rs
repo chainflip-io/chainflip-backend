@@ -29,7 +29,7 @@ pub struct FakeNode {
 }
 
 /// Number of parties participating in keygen
-const N_PARTIES: usize = 2;
+const N_PARTIES: usize = 3;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
     static ref VALIDATOR_IDS: Vec<AccountId> = SIGNERS
@@ -68,8 +68,10 @@ async fn coordinate_signing(
         result: Ok(pubkey),
     })) = nodes[0].multisig_event_rx.recv().await
     {
-        // if you remove this the test fails. Seems to prematurely cleanup signing states
-        let _ = nodes[1].multisig_event_rx.recv().await;
+        // drain all other channels
+        for i in 1..nodes.len() {
+            let _ = nodes[i].multisig_event_rx.recv().await;
+        }
         KeyId(pubkey.serialize().into())
     } else {
         panic!("Expecting a successful keygen result");
@@ -125,8 +127,7 @@ async fn coordinate_signing(
                     "Unexpected error: client stream returned early: {}",
                     i
                 ),
-                _ => { /* Ignore all other messages, just wait for the MessageSigningResult or timeout*/
-                }
+                Some(res) => slog::error!(logger, "Unexpected result: {:?} from {}", res, i),
             };
         }
         // stop the test when all of the MessageSigned have come in

@@ -193,17 +193,16 @@ pub struct DKGCommitment {
 
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
-    commitments: Vec<DKGUnverifiedCommitment>,
+    commitments: HashMap<usize, DKGUnverifiedCommitment>,
     context: &str,
-) -> Result<Vec<DKGCommitment>, Vec<usize>> {
+) -> Result<HashMap<usize, DKGCommitment>, Vec<usize>> {
     let invalid_idxs: Vec<_> = commitments
         .iter()
-        .enumerate()
         .filter_map(|(idx, c)| {
-            let challenge = generate_dkg_challenge(idx + 1, context, c.commitments.0[0], c.zkp.r);
+            let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
 
             if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
-                Some(idx + 1)
+                Some(*idx)
             } else {
                 None
             }
@@ -213,8 +212,13 @@ pub fn validate_commitments(
     if invalid_idxs.is_empty() {
         Ok(commitments
             .into_iter()
-            .map(|c| DKGCommitment {
-                commitments: c.commitments,
+            .map(|(idx, c)| {
+                (
+                    idx,
+                    DKGCommitment {
+                        commitments: c.commitments,
+                    },
+                )
             })
             .collect())
     } else {
@@ -230,10 +234,10 @@ pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
 }
 
 /// Derive aggregate pubkey from party commitments
-pub fn derive_aggregate_pubkey(commitments: &[DKGCommitment]) -> Point {
+pub fn derive_aggregate_pubkey(commitments: &HashMap<usize, DKGCommitment>) -> Point {
     commitments
         .iter()
-        .map(|c| c.commitments.0[0])
+        .map(|(_idx, c)| c.commitments.0[0])
         .reduce(|acc, x| acc + x)
         .unwrap()
 }
@@ -244,7 +248,7 @@ pub fn derive_local_pubkeys_for_parties(
         share_count: n,
         threshold: t,
     }: ThresholdParameters,
-    commitments: &[DKGCommitment],
+    commitments: &HashMap<usize, DKGCommitment>,
 ) -> Vec<Point> {
     // Recall that each party i's secret key share `s` is the sum
     // of secret shares they receive from all other parties, which
@@ -259,7 +263,7 @@ pub fn derive_local_pubkeys_for_parties(
         .map(|idx| {
             (1..=n)
                 .map(|j| {
-                    evaluate_polynomial((0..=t).map(|k| &commitments[j - 1].commitments.0[k]), idx)
+                    evaluate_polynomial((0..=t).map(|k| &commitments[&j].commitments.0[k]), idx)
                 })
                 .reduce(|acc, x| acc + x)
                 .unwrap()
@@ -293,18 +297,18 @@ mod tests {
 
         let context = generate_keygen_context(ceremony_id);
 
-        let (commitments, outgoing_shares): (Vec<_>, Vec<_>) = (1..=n)
-            .map(|index| {
+        let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
+            .map(|idx| {
                 let (secret, shares_commitments, shares) = generate_secret_and_shares(n, t);
                 // Zero-knowledge proof of `secret`
-                let zkp = generate_zkp_of_secret(secret, &context, index);
+                let zkp = generate_zkp_of_secret(secret, &context, idx);
 
                 let dkg_commitment = DKGUnverifiedCommitment {
                     commitments: shares_commitments,
                     zkp,
                 };
 
-                (dkg_commitment, shares)
+                ((idx, dkg_commitment), (idx, shares))
             })
             .unzip();
 
@@ -314,7 +318,7 @@ mod tests {
 
         let _agg_pubkey = coeff_commitments
             .iter()
-            .map(|c| c.commitments.0[0])
+            .map(|(_idx, c)| c.commitments.0[0])
             .reduce(|acc, x| acc + x)
             .unwrap();
 
@@ -323,14 +327,14 @@ mod tests {
         for receiver_idx in 1..=n {
             let received_shares: Vec<_> = outgoing_shares
                 .iter()
-                .map(|shares| shares[&receiver_idx].clone())
+                .map(|(idx, shares)| {
+                    let share = shares[&receiver_idx].clone();
+                    assert!(verify_share(&share, &coeff_commitments[idx]));
+                    share
+                })
                 .collect();
 
-            for (idx, share) in received_shares.iter().enumerate() {
-                assert!(verify_share(share, &coeff_commitments[idx]));
-            }
-
-            // (Roound 2, Step 3)
+            // (Round 2, Step 3)
             let secret_share = received_shares
                 .iter()
                 .map(|share| share.value)

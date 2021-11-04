@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BroadcastVerificationMessage<T: Clone> {
     /// Data is expected to be ordered by signer_idx
-    pub data: Vec<T>,
+    pub data: HashMap<usize, T>,
 }
 
 fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
@@ -35,7 +35,7 @@ fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
 pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
     signer_idxs: &[usize],
     verification_messages: &HashMap<usize, BroadcastVerificationMessage<T>>,
-) -> Result<Vec<T>, Vec<usize>> {
+) -> Result<HashMap<usize, T>, Vec<usize>> {
     let num_parties = signer_idxs.len();
 
     // Sanity check: we should have N messages, each containing N messages
@@ -52,16 +52,16 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
     // and delaying deserialization when we receive these over p2p would would make
     // our code more complicated than necessary.
 
-    let mut agreed_on_values: Vec<T> = Vec::with_capacity(num_parties);
+    let mut agreed_on_values = HashMap::<usize, T>::new();
 
     let mut blamed_parties = vec![];
 
-    for i in 0..num_parties {
+    for idx in signer_idxs {
         use itertools::Itertools;
 
         if let Some((data, _)) = verification_messages
             .values()
-            .map(|m| (m.data[i].clone(), hash::<T>(&m.data[i])))
+            .map(|m| (m.data[idx].clone(), hash::<T>(&m.data[idx])))
             .sorted_by_key(|(_, hash)| hash.clone())
             .group_by(|(_, hash)| hash.clone())
             .into_iter()
@@ -71,9 +71,9 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
             })
             .find(|(_, count)| *count > threshold)
         {
-            agreed_on_values.push(data);
+            agreed_on_values.insert(*idx, data);
         } else {
-            blamed_parties.push(i + 1);
+            blamed_parties.push(*idx);
         }
     }
 
@@ -93,18 +93,21 @@ fn check_correct_broadcast() {
     // even though some parties disagree on some values
 
     let all_messages = vec![
-        vec![1, 1, 1, 1], // "correct" message
+        vec![1, 1, 1, 1],
         vec![1, 2, 1, 1],
         vec![2, 1, 2, 1],
         vec![1, 1, 1, 2],
     ];
 
     for (i, m) in all_messages.into_iter().enumerate() {
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
+        let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
+
+        verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
     }
 
     assert_eq!(
-        verify_broadcasts(&[1, 2, 3, 4], &verification_messages),
+        verify_broadcasts(&[1, 2, 3, 4], &verification_messages)
+            .map(|x| x.values().cloned().collect()),
         Ok(vec![1, 1, 1, 1])
     );
 }
@@ -126,7 +129,9 @@ fn check_incorrect_broadcast() {
     ];
 
     for (i, m) in all_messages.into_iter().enumerate() {
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
+        let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
+
+        verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
     }
 
     assert_eq!(

@@ -127,13 +127,13 @@ impl From<SigningDataWrapped> for MultisigMessage {
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment(
-    signing_commitments: &[SigningCommitment],
+    signing_commitments: &HashMap<usize, SigningCommitment>,
     bindings: &HashMap<usize, Scalar>,
 ) -> Point {
     signing_commitments
         .iter()
-        .map(|comm| {
-            let rho_i = bindings[&comm.index];
+        .map(|(idx, comm)| {
+            let rho_i = bindings[idx];
             comm.d + comm.e * rho_i
         })
         .reduce(|a, b| a + b)
@@ -169,14 +169,22 @@ pub fn get_lagrange_coeff(
 }
 
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
-fn gen_rho_i(index: usize, msg: &[u8], signing_commitments: &[SigningCommitment]) -> Scalar {
+fn gen_rho_i(
+    index: usize,
+    msg: &[u8],
+    signing_commitments: &HashMap<usize, SigningCommitment>,
+    all_idxs: &[usize],
+) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
     hasher.update(index.to_be_bytes());
     hasher.update(msg);
 
-    for com in signing_commitments {
-        hasher.update(com.index.to_be_bytes());
+    // This needs to be processed in order!
+
+    for idx in all_idxs {
+        let com = &signing_commitments[idx];
+        hasher.update(idx.to_be_bytes());
         hasher.update(com.d.get_element().serialize());
         hasher.update(com.e.get_element().serialize());
     }
@@ -193,10 +201,17 @@ fn gen_rho_i(index: usize, msg: &[u8], signing_commitments: &[SigningCommitment]
 type SigningResponse = LocalSig3;
 
 /// Generate binding values for each party given their previously broadcast commitments
-fn generate_bindings(msg: &[u8], commitments: &[SigningCommitment]) -> HashMap<usize, Scalar> {
+fn generate_bindings(
+    msg: &[u8],
+    commitments: &HashMap<usize, SigningCommitment>,
+    all_idxs: &[usize],
+) -> HashMap<usize, Scalar> {
     commitments
         .iter()
-        .map(|c| (c.index, gen_rho_i(c.index, msg, commitments)))
+        .map(|(idx, c)| {
+            assert_eq!(c.index, *idx);
+            (*idx, gen_rho_i(*idx, msg, commitments, all_idxs))
+        })
         .collect()
 }
 
@@ -205,11 +220,11 @@ pub fn generate_local_sig(
     msg: &[u8],
     key: &KeyShare,
     nonces: &SecretNoncePair,
-    commitments: &[SigningCommitment],
+    commitments: &HashMap<usize, SigningCommitment>,
     own_idx: usize,
     all_idxs: &[usize],
 ) -> SigningResponse {
-    let bindings = generate_bindings(&msg, commitments);
+    let bindings = generate_bindings(&msg, commitments, all_idxs);
 
     // This is `R` in a Schnorr signature
     let group_commitment = gen_group_commitment(&commitments, &bindings);
@@ -249,7 +264,7 @@ fn generate_contract_schnorr_sig(
 
 /// Check the validity of a signature response share.
 /// (See step 7.b in Figure 3, page 15.)
-fn is_party_resonse_valid(
+fn is_party_response_valid(
     y_i: &Point,
     lambda_i: &Scalar,
     commitment: &Point,
@@ -261,17 +276,17 @@ fn is_party_resonse_valid(
 }
 
 /// Combine local signatures received from all parties into the final
-/// (aggregate) signature given that no party misbehavied. Otherwise
+/// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
     signer_idxs: &[usize],
     agg_pubkey: Point,
-    pubkeys: &[Point],
-    commitments: &[SigningCommitment],
-    responses: &[SigningResponse],
+    pubkeys: &HashMap<usize, Point>,
+    commitments: &HashMap<usize, SigningCommitment>,
+    responses: &HashMap<usize, SigningResponse>,
 ) -> Result<SchnorrSignature, Vec<usize>> {
-    let bindings = generate_bindings(&msg, commitments);
+    let bindings = generate_bindings(&msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -284,19 +299,17 @@ pub fn aggregate_signature(
     let mut invalid_idxs = vec![];
 
     for signer_idx in signer_idxs {
-        let array_index = signer_idx - 1;
-
         let rho_i = bindings[&signer_idx];
         let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
-        let commitment = &commitments[array_index];
+        let commitment = &commitments[signer_idx];
         let commitment_i = commitment.d + (commitment.e * rho_i);
 
-        let y_i = pubkeys[array_index];
+        let y_i = pubkeys[signer_idx];
 
-        let response = &responses[array_index];
+        let response = &responses[signer_idx];
 
-        if !is_party_resonse_valid(
+        if !is_party_response_valid(
             &y_i,
             &lambda_i,
             &commitment_i,
@@ -312,7 +325,7 @@ pub fn aggregate_signature(
         // add them together (see step 7.c in Figure 3, page 15).
         let z = responses
             .iter()
-            .fold(Scalar::zero(), |acc, x| acc + x.response);
+            .fold(Scalar::zero(), |acc, (_idx, sig)| acc + sig.response);
 
         Ok(SchnorrSignature {
             s: *z.get_element().as_ref(),
@@ -375,7 +388,7 @@ mod tests {
         // signing to work for a single party)
         let dummy_lambda = ECScalar::from(&BigInt::from(1));
 
-        assert!(is_party_resonse_valid(
+        assert!(is_party_response_valid(
             &public_key,
             &dummy_lambda,
             &commitment,
