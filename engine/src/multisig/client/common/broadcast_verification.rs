@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use super::super::utils::threshold_from_share_count;
 use serde::{Deserialize, Serialize};
+use utilities::threshold_from_share_count;
 
 /// Data received by a single party for a given
 /// stage from all parties (includes our own for
@@ -10,6 +10,22 @@ use serde::{Deserialize, Serialize};
 pub struct BroadcastVerificationMessage<T: Clone> {
     /// Data is expected to be ordered by signer_idx
     pub data: Vec<T>,
+}
+
+fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
+    use std::convert::TryInto;
+
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+
+    hasher.update(bincode::serialize(data).unwrap());
+
+    hasher
+        .finalize()
+        .as_slice()
+        .try_into()
+        .expect("Invalid hash size")
 }
 
 // This might result in an error if we don't get 2/3 of parties agreeing on the same value.
@@ -29,7 +45,7 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
         .iter()
         .all(|(_, m)| m.data.len() == num_parties));
 
-    let threshold = threshold_from_share_count(num_parties);
+    let threshold = threshold_from_share_count(num_parties as u32) as usize;
 
     // NOTE: ideally we wouldn't need to serialize the messages again here, but
     // we can't use T as key directly (in our case it holds third-party structs)
@@ -45,14 +61,16 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
 
         if let Some((data, _)) = verification_messages
             .values()
-            .map(|m| bincode::serialize(&m.data[i]).unwrap())
-            .sorted()
-            .group_by(|x| x.clone())
+            .map(|m| (m.data[i].clone(), hash::<T>(&m.data[i])))
+            .sorted_by_key(|(_, hash)| hash.clone())
+            .group_by(|(_, hash)| hash.clone())
             .into_iter()
-            .map(|(data, group)| (data, group.count()))
+            .map(|(_, mut group)| {
+                let first = group.next().expect("must have at least one element").0;
+                (first, group.count() + 1)
+            })
             .find(|(_, count)| *count > threshold)
         {
-            let data = bincode::deserialize(&data).unwrap();
             agreed_on_values.push(data);
         } else {
             blamed_parties.push(i + 1);

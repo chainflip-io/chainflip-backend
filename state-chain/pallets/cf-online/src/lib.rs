@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(test)]
 mod mock;
@@ -99,11 +100,10 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](frame_support::error::BadOrigin): This is not a staked node.
-		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat): This node has already
-		///   submitted the heartbeat for this interval.
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat)
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 
 			match Nodes::<T>::get(&validator_id) {

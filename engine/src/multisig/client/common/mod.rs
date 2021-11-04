@@ -6,18 +6,16 @@ pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, St
 
 pub use broadcast_verification::BroadcastVerificationMessage;
 
-use tokio::sync::mpsc::UnboundedSender;
-
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     multisig::crypto::{KeyShare, Point},
-    p2p::{AccountId, P2PMessageCommand},
+    p2p::P2PMessageCommand,
 };
 
-use super::{utils::ValidatorMaps, InnerEvent, ThresholdParameters};
+use super::{utils::PartyIdxMapping, EventSender, ThresholdParameters};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {
@@ -40,21 +38,8 @@ impl KeygenResult {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
-    pub validator_map: Arc<ValidatorMaps>,
+    pub validator_map: Arc<PartyIdxMapping>,
     pub params: ThresholdParameters,
-}
-
-impl KeygenResultInfo {
-    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
-        self.validator_map.get_idx(id)
-    }
-
-    pub fn get_id(&self, idx: usize) -> AccountId {
-        self.validator_map
-            .get_id(idx)
-            .expect("ProgrammerError, invalid index")
-            .clone()
-    }
 }
 
 /// Able to send `Data` to the party identified
@@ -69,12 +54,12 @@ pub trait P2PSender: Clone {
 /// (additionally mapping signer idx to account id)
 #[derive(Clone)]
 pub struct RawP2PSender {
-    validator_map: Arc<ValidatorMaps>,
-    sender: UnboundedSender<InnerEvent>,
+    validator_map: Arc<PartyIdxMapping>,
+    sender: EventSender,
 }
 
 impl RawP2PSender {
-    pub fn new(validator_map: Arc<ValidatorMaps>, sender: UnboundedSender<InnerEvent>) -> Self {
+    pub fn new(validator_map: Arc<PartyIdxMapping>, sender: EventSender) -> Self {
         RawP2PSender {
             validator_map,
             sender,

@@ -38,20 +38,6 @@ pub fn stake_manager_contract_address() -> [u8; 20] {
 	buffer
 }
 //--------------------------//
-
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumTransactionError {
-	InvalidRlp,
-	InvalidSignature,
-	InvalidRecoveryId,
-	WrongChainId,
-	WrongGasLimit,
-	WrongData,
-	WrongValue,
-	WrongContractAddress,
-	WrongAction,
-}
-
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;
 }
@@ -117,11 +103,16 @@ impl Tokenizable for SigData {
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AggKeyVerificationError {
+	/// The provided signature (aka. `s`) is not a valid private key.
 	InvalidSignature,
+	/// The agg_key is not a valid public key.
 	InvalidPubkey,
+	/// The recovered `k_times_g_address` does not match the expected value.
 	NoMatch,
 }
 
+/// A parity bit can be either odd or even, but can have different representations depending on its use. Ethereum
+/// generaly assumes `0` or `1` but the standard serialization format used in most libraries assumes `2` or `3`.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum ParityBit {
@@ -130,6 +121,7 @@ pub enum ParityBit {
 }
 
 impl ParityBit {
+	/// Returns `true` if the parity bit is odd, otherwise `false`.
 	pub fn is_odd(&self) -> bool {
 		match self {
 			Self::Odd => true,
@@ -137,11 +129,31 @@ impl ParityBit {
 		}
 	}
 
+	/// Returns `true` if the parity bit is even, otherwise `false`.
 	pub fn is_even(&self) -> bool {
 		match self {
 			Self::Even => true,
 			_ => false,
 		}
+	}
+
+	/// Converts this parity bit to a recovery id for the provided chain_id as per EIP-155.
+	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
+	///
+	/// Returns `None` if conversion was not possible for this chain id.
+	pub(super) fn to_eth_recovery_id(
+		&self,
+		chain_id: u64,
+	) -> Option<ethereum::TransactionRecoveryId> {
+		let offset = match self {
+			ParityBit::Odd => 36,
+			ParityBit::Even => 35,
+		};
+
+		chain_id
+			.checked_mul(2)
+			.and_then(|x| x.checked_add(offset))
+			.map(ethereum::TransactionRecoveryId)
 	}
 }
 
@@ -155,7 +167,7 @@ impl From<ParityBit> for Uint {
 	}
 }
 
-/// For encoding the `Key` type as defined in https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+/// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AggKey {
@@ -393,6 +405,42 @@ pub struct SchnorrVerificationComponents {
 	pub k_times_g_addr: [u8; 20],
 }
 
+/// Errors that can occur when verifying an Ethereum transaction.
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+pub enum TransactionVerificationError {
+	/// The transaction's chain id is invalid.
+	InvalidChainId,
+	/// The derived recovery id is invalid.
+	InvalidRecoveryId,
+	/// The signed payload was not valid rlp-encoded data.
+	InvalidRlp,
+	/// The transaction signature was invalid.
+	InvalidSignature,
+	/// The recovered address does not match the provided one.
+	NoMatch,
+	/// The signed transaction parameters do not all match those of the unsigned transaction.
+	InvalidParam(CheckedTransactionParameter),
+}
+
+/// Parameters that are checked as part of Ethereum transaction verification.
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+pub enum CheckedTransactionParameter {
+	ChainId,
+	GasLimit,
+	Data,
+	Value,
+	ContractAddress,
+	Action,
+	MaxFeePerGas,
+	MaxPriorityFeePerGas,
+}
+
+impl From<CheckedTransactionParameter> for TransactionVerificationError {
+	fn from(p: CheckedTransactionParameter) -> Self {
+		Self::InvalidParam(p)
+	}
+}
+
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
 /// with the following fields omitted: nonce,
 ///
@@ -412,49 +460,111 @@ pub struct UnsignedTransaction {
 }
 
 impl UnsignedTransaction {
-	/// Returns an error if any of the following items don't match the recovered message:
-	///
-	/// - chain_id
-	/// - gas_limit
-	/// - data
-	/// - value
-	/// - contract
-	///
-	/// OR if the the wrong `action` was not a call to the correct contract.
-	///
-	/// See [EthereumTransactionError].
-	pub fn match_against_recovered(
+	fn check_contract(
 		&self,
-		recovered: &ethereum::EIP1559TransactionMessage,
-	) -> Result<(), EthereumTransactionError> {
-		if self.chain_id != recovered.chain_id {
-			return Err(EthereumTransactionError::WrongChainId);
-		}
-
-		if let Some(x) = self.gas_limit {
-			if x.0 != recovered.gas_limit.0 {
-				return Err(EthereumTransactionError::WrongGasLimit);
-			}
-		}
-
-		if self.data != recovered.input {
-			return Err(EthereumTransactionError::WrongData);
-		}
-
-		if self.value.0 != recovered.value.0 {
-			return Err(EthereumTransactionError::WrongValue);
-		}
-
-		match recovered.action {
+		recovered: ethereum::TransactionAction,
+	) -> Result<(), CheckedTransactionParameter> {
+		match recovered {
 			ethereum::TransactionAction::Call(address) => {
 				if address.as_bytes() != self.contract.as_bytes() {
-					return Err(EthereumTransactionError::WrongContractAddress);
+					return Err(CheckedTransactionParameter::ContractAddress);
 				}
 			}
 			ethereum::TransactionAction::Create => {
-				return Err(EthereumTransactionError::WrongAction)
+				return Err(CheckedTransactionParameter::Action);
+			}
+		};
+		Ok(())
+	}
+
+	fn check_gas_limit(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+		if let Some(expected) = self.gas_limit {
+			if expected != recovered {
+				return Err(CheckedTransactionParameter::GasLimit);
 			}
 		}
+		Ok(())
+	}
+
+	fn check_chain_id(&self, recovered: u64) -> Result<(), CheckedTransactionParameter> {
+		if self.chain_id != recovered {
+			return Err(CheckedTransactionParameter::ChainId);
+		}
+		Ok(())
+	}
+
+	fn check_data(&self, recovered: Vec<u8>) -> Result<(), CheckedTransactionParameter> {
+		if self.data != recovered {
+			return Err(CheckedTransactionParameter::Data);
+		}
+		Ok(())
+	}
+
+	fn check_value(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+		if self.value != recovered {
+			return Err(CheckedTransactionParameter::Value);
+		}
+		Ok(())
+	}
+
+	fn check_max_fee_per_gas(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+		if let Some(expected) = self.max_fee_per_gas {
+			if expected != recovered {
+				return Err(CheckedTransactionParameter::MaxFeePerGas);
+			}
+		}
+		Ok(())
+	}
+
+	fn check_max_priority_fee_per_gas(
+		&self,
+		recovered: U256,
+	) -> Result<(), CheckedTransactionParameter> {
+		if let Some(expected) = self.max_priority_fee_per_gas {
+			if expected != recovered {
+				return Err(CheckedTransactionParameter::MaxPriorityFeePerGas);
+			}
+		}
+		Ok(())
+	}
+
+	/// Returns an error if any of the recovered transactoin parameters do not match those specified in the original
+	/// [UnsignedTransaction].
+	///
+	/// See [CheckedTransactionParameter].
+	pub fn match_against_recovered(
+		&self,
+		recovered: ethereum::TransactionV2,
+	) -> Result<(), TransactionVerificationError> {
+		match recovered {
+			ethereum::TransactionV2::Legacy(tx) => {
+				let msg: ethereum::LegacyTransactionMessage = tx.into();
+				let chain_id = msg.chain_id.ok_or(CheckedTransactionParameter::ChainId)?;
+				self.check_chain_id(chain_id)?;
+				self.check_gas_limit(msg.gas_limit)?;
+				self.check_data(msg.input)?;
+				self.check_value(msg.value)?;
+				self.check_contract(msg.action)?;
+			}
+			ethereum::TransactionV2::EIP2930(tx) => {
+				let msg: ethereum::EIP2930TransactionMessage = tx.into();
+				self.check_chain_id(msg.chain_id)?;
+				self.check_gas_limit(msg.gas_limit)?;
+				self.check_data(msg.input)?;
+				self.check_value(msg.value)?;
+				self.check_contract(msg.action)?;
+			}
+			ethereum::TransactionV2::EIP1559(tx) => {
+				let msg: ethereum::EIP1559TransactionMessage = tx.into();
+				self.check_chain_id(msg.chain_id)?;
+				self.check_gas_limit(msg.gas_limit)?;
+				self.check_max_fee_per_gas(msg.max_fee_per_gas)?;
+				self.check_max_priority_fee_per_gas(msg.max_priority_fee_per_gas)?;
+				self.check_data(msg.input)?;
+				self.check_value(msg.value)?;
+				self.check_contract(msg.action)?;
+			}
+		};
 
 		Ok(())
 	}
@@ -463,39 +573,70 @@ impl UnsignedTransaction {
 /// Raw bytes of an rlp-encoded Ethereum transaction.
 pub type RawSignedTransaction = Vec<u8>;
 
-/// Checks that the raw transaction is a valid rlp-encoded EIP1559 transaction.
+/// Checks that the raw transaction is a valid rlp-encoded transaction.
 ///
-/// See [here](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1559.md) for details.
 pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
 	signed: &RawSignedTransaction,
 	address: &Address,
-) -> Result<(), EthereumTransactionError> {
-	let decoded_tx: ethereum::EIP1559Transaction =
-		rlp::decode(&signed[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
+) -> Result<(), TransactionVerificationError> {
+	let decoded_tx: ethereum::TransactionV2 =
+		rlp::decode(&signed[..]).map_err(|_| TransactionVerificationError::InvalidRlp)?;
 
-	let message: ethereum::EIP1559TransactionMessage = decoded_tx.clone().into();
+	let message_hash = match decoded_tx {
+		ethereum::TransactionV2::Legacy(ref tx) => {
+			ethereum::LegacyTransactionMessage::from(tx.clone()).hash()
+		}
+		ethereum::TransactionV2::EIP2930(ref tx) => {
+			ethereum::EIP2930TransactionMessage::from(tx.clone()).hash()
+		}
+		ethereum::TransactionV2::EIP1559(ref tx) => {
+			ethereum::EIP1559TransactionMessage::from(tx.clone()).hash()
+		}
+	};
+
+	let parity_to_recovery_id = |odd: bool, chain_id: u64| {
+		let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
+		parity
+			.to_eth_recovery_id(chain_id)
+			.ok_or(TransactionVerificationError::InvalidChainId)
+	};
+	let (r, s, v) = match decoded_tx {
+		ethereum::TransactionV2::Legacy(ref tx) => (
+			tx.signature.r(),
+			tx.signature.s(),
+			tx.signature.standard_v(),
+		),
+		ethereum::TransactionV2::EIP2930(ref tx) => (
+			&tx.r,
+			&tx.s,
+			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard(),
+		),
+		ethereum::TransactionV2::EIP1559(ref tx) => (
+			&tx.r,
+			&tx.s,
+			parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard(),
+		),
+	};
 
 	let public_key = libsecp256k1::recover(
-		&libsecp256k1::Message::parse(message.hash().as_fixed_bytes()),
+		&libsecp256k1::Message::parse(message_hash.as_fixed_bytes()),
 		&libsecp256k1::Signature::parse_standard_slice(
-			[decoded_tx.r.as_bytes(), decoded_tx.s.as_bytes()]
-				.concat()
-				.as_slice(),
+			[r.as_bytes(), s.as_bytes()].concat().as_slice(),
 		)
-		.map_err(|_| EthereumTransactionError::InvalidSignature)?,
-		&libsecp256k1::RecoveryId::parse_rpc(if decoded_tx.odd_y_parity { 27 } else { 28 })
-			.map_err(|_| EthereumTransactionError::InvalidRecoveryId)?,
+		.map_err(|_| TransactionVerificationError::InvalidSignature)?,
+		&libsecp256k1::RecoveryId::parse(v)
+			.map_err(|_| TransactionVerificationError::InvalidRecoveryId)?,
 	)
-	.map_err(|_| EthereumTransactionError::InvalidSignature)?;
+	.map_err(|_| TransactionVerificationError::InvalidSignature)?;
 
 	let expected_address = &Keccak256::hash(&public_key.serialize()[1..])[12..];
 
 	if expected_address != address.as_bytes() {
-		return Err(EthereumTransactionError::InvalidSignature);
+		return Err(TransactionVerificationError::NoMatch);
 	}
 
-	unsigned.match_against_recovered(&message)
+	unsigned.match_against_recovered(decoded_tx)
 }
 
 /// Represents calls to Chainflip contracts requiring a threshold signature.
@@ -557,9 +698,13 @@ mod tests {
 #[cfg(test)]
 mod verification_tests {
 	use super::*;
-	use ethereum::{EIP1559Transaction, EIP1559TransactionMessage};
+	use ethereum::{
+		EIP1559Transaction, EIP1559TransactionMessage, LegacyTransaction, LegacyTransactionMessage,
+		TransactionV2,
+	};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
+	use rand::prelude::*;
 	use Keccak256;
 
 	#[test]
@@ -663,36 +808,102 @@ mod verification_tests {
 			access_list: vec![],
 		};
 
-		let key = secp256k1::SecretKey::from_slice(&rand::random::<[u8; 32]>()[..]).unwrap();
-		let key_ref = web3::signing::SecretKeyRef::new(&key);
+		for seed in 0..10 {
+			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
+			let key_ref = web3::signing::SecretKeyRef::new(&key);
 
-		use web3::signing::Key;
-		let sig = key_ref
-			.sign(msg.hash().as_bytes(), unsigned.chain_id.into())
-			.unwrap();
+			use web3::signing::Key;
+			let sig = key_ref
+				.sign(msg.hash().as_bytes(), unsigned.chain_id.into())
+				.unwrap();
 
-		let signed_tx = EIP1559Transaction {
-			r: H256(sig.r.0),
-			s: H256(sig.s.0),
-			chain_id: msg.chain_id,
-			nonce: msg.nonce,
-			max_priority_fee_per_gas: msg.max_priority_fee_per_gas,
-			max_fee_per_gas: msg.max_fee_per_gas,
-			gas_limit: msg.gas_limit,
-			action: msg.action,
-			value: msg.value,
-			input: msg.input,
-			access_list: msg.access_list,
-			// EIP-155: sig.v = y_parity + CHAIN_ID * 2 + 35
-			odd_y_parity: sig.v - msg.chain_id * 2 + 35 == 1,
+			let signed_tx = TransactionV2::EIP1559(EIP1559Transaction {
+				r: H256(sig.r.0),
+				s: H256(sig.s.0),
+				chain_id: msg.chain_id,
+				nonce: msg.nonce,
+				max_priority_fee_per_gas: msg.max_priority_fee_per_gas,
+				max_fee_per_gas: msg.max_fee_per_gas,
+				gas_limit: msg.gas_limit,
+				action: msg.action,
+				value: msg.value,
+				input: msg.input.clone(),
+				access_list: msg.access_list.clone(),
+				// EIP-155: sig.v = y_parity + CHAIN_ID * 2 + 35
+				odd_y_parity: sig.v - msg.chain_id * 2 - 35 == 1,
+			});
+
+			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+
+			let verificaton_result =
+				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
+			assert_eq!(
+				verificaton_result,
+				Ok(()),
+				"Unable to verify tx signed by key {:#x}",
+				key
+			);
+		}
+	}
+
+	#[test]
+	fn test_legacy_ethereum_signature_verification() {
+		let unsigned = UnsignedTransaction {
+			chain_id: 42,
+			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
+			gas_limit: U256::from(21_000u32).into(),
+			contract: [0xcf; 20].into(),
+			value: 0.into(),
+			data: b"do_something()".to_vec(),
+			..Default::default()
 		};
 
-		let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+		let msg = LegacyTransactionMessage {
+			chain_id: Some(unsigned.chain_id),
+			nonce: 0.into(),
+			gas_limit: unsigned.gas_limit.unwrap(),
+			gas_price: U256::from(1_000_000_000u32),
+			action: ethereum::TransactionAction::Call(unsigned.contract),
+			value: unsigned.value,
+			input: unsigned.data.clone(),
+		};
 
-		assert_ok!(verify_transaction(
-			&unsigned,
-			&signed_tx_bytes,
-			&key_ref.address().0.into()
-		));
+		for seed in 0..10 {
+			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
+			let key_ref = web3::signing::SecretKeyRef::new(&key);
+
+			use web3::signing::Key;
+			let sig = key_ref
+				.sign(msg.hash().as_bytes(), unsigned.chain_id.into())
+				.unwrap();
+
+			let signed_tx = TransactionV2::Legacy(LegacyTransaction {
+				nonce: msg.nonce,
+				gas_price: msg.gas_price,
+				gas_limit: msg.gas_limit,
+				action: msg.action,
+				value: msg.value,
+				input: msg.input.clone(),
+				signature: ethereum::TransactionSignature::new(
+					sig.v,
+					sig.r.0.into(),
+					sig.s.0.into(),
+				)
+				.unwrap(),
+			});
+
+			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+
+			let verificaton_result =
+				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
+			assert_eq!(
+				verificaton_result,
+				Ok(()),
+				"Unable to verify tx signed by key {:#x}",
+				key
+			);
+		}
 	}
 }

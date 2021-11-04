@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 use codec::Decode;
 use codec::Encode;
@@ -164,11 +165,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [Proposed](Event::Proposed): Successfully proposed the extrinsic to Governance Members.
+		/// - [Proposed](Event::Proposed)
 		///
 		/// ## Errors
 		///
-		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
+		/// - [NotMember](Error::NotMember)
 		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -196,7 +197,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](frame_support::error::BadOrigin): The caller is not the Governance Origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -214,13 +215,13 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [Approved](Event::Approved): The Proposal was successfully approved.
+		/// - [Approved](Event::Approved)
 		///
 		/// ## Errors
 		///
-		/// - [NotMember](Error::NotMember): The caller is not a Governance Member.
-		/// - [ProposalNotFound](Error::ProposalNotFound): There is no Proposal with this ID.
-		/// - [AlreadyApproved](Error::AlreadyApproved): This Governance Member has already approved this Proposal.
+		/// - [NotMember](Error::NotMember)
+		/// - [ProposalNotFound](Error::ProposalNotFound)
+		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -241,14 +242,14 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [Executed](Event::Executed): The Proposal was successfully executed.
+		/// - [Executed](Event::Executed)
 		///
 		/// ## Errors
 		///
-		/// - [NotMember](Error::NotMember): the caller is not a Governance Member.
-		/// - [ProposalNotFound](Error::ProposalNotFound): there is no Proposal with this `id`.
-		/// - [DecodeOfCallFailed](Error::DecodeOfCallFailed): the call is not a valid extrinsic submission.
-		/// - [MajorityNotReached](Error::MajorityNotReached): the Proposal has not achieved Quorum.
+		/// - [NotMember](Error::NotMember)
+		/// - [ProposalNotFound](Error::ProposalNotFound)
+		/// - [DecodeOfCallFailed](Error::DecodeOfCallFailed)
+		/// - [MajorityNotReached](Error::MajorityNotReached)
 		#[pallet::weight(10_000)]
 		pub fn execute(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -269,9 +270,13 @@ pub mod pallet {
 		///
 		/// Execute an extrinsic as root
 		///
+		/// ## Events
+		///
+		/// - None
+		///
 		/// ## Errors
 		///
-		/// - [BadOrigin](frame_support::error::BadOrigin): the caller is not the Governance Origin.
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,

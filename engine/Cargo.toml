@@ -89,6 +89,7 @@ pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+utilities = {path = "../utilities"}
 
 [dependencies.curv]
 features = ["rust-gmp-kzen"]

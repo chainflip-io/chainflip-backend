@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 pub use pallet::*;
 
@@ -23,6 +24,7 @@ use frame_support::{
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use utilities::threshold_from_share_count;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -133,16 +135,15 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [WitnessReceived](Event::WitnessReceived): A witness vote has been counted.
-		/// - [ThresholdReached](Event::ThresholdReached): We have collected enough votes to execute the call.
-		/// - [WitnessExecuted](Event::WitnessExecuted): We have executed the call, successfully or not.
+		/// - [WitnessReceived](Event::WitnessReceived)
+		/// - [ThresholdReached](Event::ThresholdReached)
+		/// - [WitnessExecuted](Event::WitnessExecuted)
 		///
 		/// ## Errors
 		///
-		/// - [UnauthorisedWitness](Error::UnauthorisedWitness): The Validator is not in the active set for this epoch.
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
-		///   outside of the range of our bitmask. Should be impossible?
-		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
+		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
+		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
@@ -314,16 +315,7 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		}
 		NumValidators::<T>::set(total);
 
-		let calc_threshold = |total: u32| -> u32 {
-			let doubled = total * 2;
-			if doubled % 3 == 0 {
-				doubled / 3
-			} else {
-				doubled / 3 + 1
-			}
-		};
-
 		// Assume all validators are live at the start of an Epoch.
-		ConsensusThreshold::<T>::mutate(|thresh| *thresh = calc_threshold(total))
+		ConsensusThreshold::<T>::mutate(|thresh| *thresh = threshold_from_share_count(total) + 1)
 	}
 }

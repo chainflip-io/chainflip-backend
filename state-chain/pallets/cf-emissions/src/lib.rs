@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
 use cf_traits::NonceProvider;
@@ -124,11 +125,11 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Emissions have been distributed. [block_number, amount_minted]
+		/// Emissions have been distributed. \[block_number, amount_minted\]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
-		/// Validator inflation emission has been updated [new]
+		/// Validator inflation emission has been updated \[new\]
 		ValidatorInflationEmissionsUpdated(BasisPoints),
-		/// Backup Validator inflation emission has been updated [new]
+		/// Backup Validator inflation emission has been updated \[new\]
 		BackupValidatorInflationEmissionsUpdated(BasisPoints),
 	}
 
@@ -158,6 +159,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Updates the emission rate to Validators.
+		///
+		/// Can only be called by the root origin.
+		///
+		/// ## Events
+		///
+		/// - [ValidatorInflationEmissionsUpdated](Event::ValidatorInflationEmissionsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
 		pub(super) fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
@@ -169,6 +181,15 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Updates the emission rate to Backup Validators.
+		///
+		/// ## Events
+		///
+		/// - [BackupValidatorInflationEmissionsUpdated](Event::BackupValidatorInflationEmissionsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
 		pub(super) fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
