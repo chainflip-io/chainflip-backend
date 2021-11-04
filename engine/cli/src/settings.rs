@@ -34,11 +34,11 @@ impl CLISettings {
         };
 
         // Override the settings with the cmd line options
-        if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
-            cli_config.state_chain.ws_endpoint = opt
+        if let Some(ws_endpoint) = opts.state_chain_opts.state_chain_ws_endpoint {
+            cli_config.state_chain.ws_endpoint = ws_endpoint
         };
-        if let Some(opt) = opts.state_chain_opts.state_chain_signing_key_file {
-            cli_config.state_chain.signing_key_file = opt
+        if let Some(signing_key_file) = opts.state_chain_opts.state_chain_signing_key_file {
+            cli_config.state_chain.signing_key_file = signing_key_file
         };
 
         Ok(cli_config)

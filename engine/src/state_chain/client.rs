@@ -219,8 +219,8 @@ impl StateChainRpcApi for StateChainRpcClient {
     {
         let mut events_for_extrinsic = Vec::new();
         let mut found_event = false;
-        while let Some(block_header) = block_stream.next().await {
-            let header = block_header?;
+        while let Some(result_header) = block_stream.next().await {
+            let header = result_header?;
             let block_hash = header.hash();
             if let Some(signed_block) = self
                 .chain_rpc_client
