@@ -73,6 +73,7 @@ impl DutyManager {
         match self.node_state {
             NodeState::BackupValidator | NodeState::RunningValidator => true,
             NodeState::Passive => false,
+            NodeState::Outgoing => todo!(),
         }
     }
 
@@ -81,6 +82,7 @@ impl DutyManager {
         match self.node_state {
             NodeState::RunningValidator => true,
             NodeState::BackupValidator | NodeState::Passive => false,
+            NodeState::Outgoing => todo!(),
         }
     }
 
@@ -111,7 +113,7 @@ impl DutyManager {
         // }
     }
 
-    pub fn set_current_epoch(&self, epoch_index: EpochIndex) {
+    pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
         self.current_epoch = epoch_index;
     }
 
@@ -144,22 +146,27 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
     let logger = logger.new(o!(COMPONENT_KEY => "DutyManager"));
     slog::info!(logger, "Starting");
 
+    // let current_epoch = state_chain_client.cur
+
     // Get our node state from the block stream
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
-                // TODO: Update the current epoch on a new epoch event
+                // TODO: Optimise this so it's not run every block
 
-                let my_state_for_this_block = state_chain_client.node_status(&block_header).await;
+                // we have our account data
+                let my_state_for_this_block =
+                    state_chain_client.node_status(&block_header).await.unwrap();
 
-                // TODO: This is not complete. The correct logic will need to also use the active windows.
+                // let if
+
                 match my_state_for_this_block {
-                    Ok(ChainflipAccountState::Validator) => {
+                    ChainflipAccountState::Validator => {
                         let mut dm = duty_manager.write().await;
                         dm.node_state = NodeState::RunningValidator;
                     }
-                    Ok(ChainflipAccountState::Backup) => {
+                    ChainflipAccountState::Backup => {
                         let mut dm = duty_manager.write().await;
                         dm.node_state = NodeState::BackupValidator;
                     }
