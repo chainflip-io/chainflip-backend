@@ -23,6 +23,9 @@ version = '2.0.0'
 cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
+# Local deps
+utilities = { path = '../../../utilities', default-features = false }
+
 # Non-substrate external deps
 bitvec = { default-features = false, version = '0.20', features = ["alloc"] }
 

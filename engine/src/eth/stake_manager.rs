@@ -22,7 +22,7 @@ use web3::{
     Web3,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use futures::{Future, Stream, StreamExt};
 use slog::o;
@@ -40,8 +40,7 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
     slog::info!(logger, "Starting StakeManager witness");
 
-    slog::info!(logger, "Load Contract ABI");
-    let stake_manager = StakeManager::new(&settings)?;
+    let stake_manager = StakeManager::new(&settings).context(here!())?;
 
     let mut event_stream = stake_manager
         .event_stream(&web3, settings.eth.from_block, &logger)

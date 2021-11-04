@@ -19,7 +19,8 @@ use web3::{
     Web3,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 use tokio::sync::RwLock;
@@ -38,8 +39,7 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
     slog::info!(logger, "Starting KeyManager witness");
 
-    slog::info!(logger, "Load Contract ABI");
-    let key_manager = KeyManager::new(&settings)?;
+    let key_manager = KeyManager::new(&settings).context(here!())?;
 
     let mut event_stream = key_manager
         .event_stream(&web3, settings.eth.from_block, &logger)

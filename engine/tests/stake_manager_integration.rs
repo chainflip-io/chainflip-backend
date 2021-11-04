@@ -21,7 +21,7 @@ mod common;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 

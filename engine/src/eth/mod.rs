@@ -5,7 +5,7 @@ pub mod eth_event_streamer;
 
 pub mod utils;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use secp256k1::SecretKey;
 use thiserror::Error;
@@ -53,7 +53,9 @@ pub async fn new_synced_web3_client(
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
     tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
-            web3::transports::WebSocket::new(node_endpoint).await?,
+            web3::transports::WebSocket::new(node_endpoint)
+                .await
+                .context("Failed to connect to Ethereum node")?,
         ))
     })
     // Flatten the Result<Result<>> returned by timeout()
@@ -61,11 +63,16 @@ pub async fn new_synced_web3_client(
     .and_then(|x| async { x })
     // Make sure the eth node is fully synced
     .and_then(|web3| async {
-        while let SyncState::Syncing(info) = web3.eth().syncing().await? {
+        while let SyncState::Syncing(info) = web3
+            .eth()
+            .syncing()
+            .await
+            .context("Failure while syncing web3 client")?
+        {
             slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
-        slog::info!(logger, "Eth node is synced.");
+        slog::info!(logger, "ETH node is synced.");
         Ok(web3)
     })
     .await
@@ -83,7 +90,8 @@ impl EthBroadcaster {
         settings: &settings::Settings,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let key = read_to_string(settings.eth.private_key_file.as_path())?;
+        let key = read_to_string(settings.eth.private_key_file.as_path())
+            .context("Failed to read eth.private_key_file")?;
         Ok(Self {
             web3,
             secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
@@ -113,7 +121,8 @@ impl EthBroadcaster {
             .web3
             .accounts()
             .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
-            .await?
+            .await
+            .context("Failed to sign ETH transaction")?
             .raw_transaction)
     }
 
@@ -123,7 +132,8 @@ impl EthBroadcaster {
             .web3
             .eth()
             .send_raw_transaction(raw_signed_tx.into())
-            .await?;
+            .await
+            .context("Failed to send raw signed ETH transaction")?;
 
         Ok(tx_hash)
     }

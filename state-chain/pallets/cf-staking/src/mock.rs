@@ -20,7 +20,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info, key_provider, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
@@ -94,16 +94,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-pub struct MockEnsureGovernance;
-
-impl EnsureOrigin<Origin> for MockEnsureGovernance {
-	type Success = ();
-
-	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
-		Ok(().into())
-	}
-}
-
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
@@ -112,7 +102,7 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();

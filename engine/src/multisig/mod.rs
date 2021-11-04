@@ -45,9 +45,15 @@ impl std::fmt::Display for MessageHash {
     }
 }
 
-/// Public key compressed (33 bytes - 32 bytes + a y parity byte)
+/// Public key compressed (33 bytes = 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct KeyId(pub Vec<u8>);
+pub struct KeyId(pub Vec<u8>); // TODO: Use [u8; 33] not a Vec
+
+impl std::fmt::Display for KeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {

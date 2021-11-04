@@ -41,12 +41,20 @@ pub struct Signing {
     pub db_file: PathBuf,
 }
 
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct Log {
+    pub whitelist: Vec<String>,
+    pub blacklist: Vec<String>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
     pub signing: Signing,
+    #[serde(default)]
+    pub log: Log,
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -54,6 +62,10 @@ pub struct CommandLineOptions {
     // Misc Options
     #[structopt(short = "c", long = "config-path")]
     config_path: Option<String>,
+    #[structopt(short = "w", long = "log-whitelist")]
+    log_whitelist: Option<Vec<String>>,
+    #[structopt(short = "b", long = "log-blacklist")]
+    log_blacklist: Option<Vec<String>>,
 
     // State Chain Settings
     #[structopt(long = "state_chain.ws_endpoint")]
@@ -89,6 +101,8 @@ impl CommandLineOptions {
     pub fn new() -> CommandLineOptions {
         CommandLineOptions {
             config_path: None,
+            log_whitelist: None,
+            log_blacklist: None,
             state_chain_ws_endpoint: None,
             state_chain_signing_key_file: None,
             eth_from_block: None,
@@ -181,6 +195,14 @@ impl Settings {
         // Signing
         if let Some(opt) = opts.signing_db_file {
             settings.signing.db_file = opt
+        };
+
+        // log
+        if let Some(opt) = opts.log_whitelist {
+            settings.log.whitelist = opt;
+        };
+        if let Some(opt) = opts.log_blacklist {
+            settings.log.blacklist = opt;
         };
 
         // Run the validation again
@@ -333,6 +355,8 @@ mod tests {
         // Leave the `config_path` option out, it is covered in a separate test.
         let opts = CommandLineOptions {
             config_path: None,
+            log_whitelist: Some(vec!["test1".to_owned()]),
+            log_blacklist: Some(vec!["test2".to_owned()]),
             state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
             state_chain_signing_key_file: Some("signing_key_file".to_owned()),
             eth_from_block: Some(1234),
@@ -384,5 +408,8 @@ mod tests {
         assert_eq!(opts.health_check_port.unwrap(), settings.health_check.port);
 
         assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
+
+        assert_eq!(opts.log_whitelist.unwrap(), settings.log.whitelist);
+        assert_eq!(opts.log_blacklist.unwrap(), settings.log.blacklist);
     }
 }

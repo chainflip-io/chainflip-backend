@@ -112,7 +112,6 @@ where
                 for (destination_idx, data) in messages {
                     if destination_idx == self.common.own_idx {
                         self.messages.insert(self.common.own_idx, data);
-                        continue;
                     } else {
                         self.common.p2p_sender.send(destination_idx, data.into());
                     }
@@ -131,7 +130,7 @@ where
                     self,
                     signer_idx
                 );
-                return ProcessMessageResult::Ignored;
+                return ProcessMessageResult::NotReady;
             }
         };
 
@@ -142,7 +141,7 @@ where
                 self,
                 signer_idx
             );
-            return ProcessMessageResult::Ignored;
+            return ProcessMessageResult::NotReady;
         }
 
         if !self.common.all_idxs.contains(&signer_idx) {
@@ -152,15 +151,15 @@ where
                 self,
                 signer_idx
             );
-            return ProcessMessageResult::Ignored;
+            return ProcessMessageResult::NotReady;
         }
 
         self.messages.insert(signer_idx, m);
 
         if self.messages.len() == self.common.all_idxs.len() {
-            ProcessMessageResult::CollectedAll
+            ProcessMessageResult::Ready
         } else {
-            ProcessMessageResult::Progress
+            ProcessMessageResult::NotReady
         }
     }
 

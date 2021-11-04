@@ -6,12 +6,12 @@ use chainflip_engine::{
     duty_manager::DutyManager,
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
+    logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
-use slog::{o, Drain};
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -20,13 +20,12 @@ async fn main() {
     let settings =
         Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
 
-    let drain = slog_json::Json::new(std::io::stdout())
-        .add_default_keys()
-        .build()
-        .fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    let root_logger = slog::Logger::root(drain, o!());
-    slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
+    let root_logger = logging::utils::new_json_logger_with_tag_filter(
+        settings.log.whitelist.clone(),
+        settings.log.blacklist.clone(),
+    );
+
+    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
     HealthMonitor::new(&settings.health_check, &root_logger)
         .run()
