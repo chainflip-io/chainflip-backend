@@ -23,7 +23,7 @@ use cf_traits::{
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, OpaqueKeys, Saturating,
+	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, Saturating,
 	UniqueSaturatedInto, Zero,
 };
 use sp_std::prelude::*;
@@ -261,20 +261,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn is_auction_phase() -> bool {
 		!T::Auctioneer::waiting_on_bids()
 	}
-}
-
-impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
-	/// TODO look at the key management
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
-	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
-	fn on_new_session<Ks: OpaqueKeys>(
-		_changed: bool,
-		_validators: &[(T::ValidatorId, Ks)],
-		_queued_validators: &[(T::ValidatorId, Ks)],
-	) {
-	}
-	fn on_before_session_ending() {}
-	fn on_disabled(_validator_index: usize) {}
 }
 
 /// Indicates to the session module if the session should be rotated.

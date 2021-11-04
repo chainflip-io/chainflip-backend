@@ -92,7 +92,7 @@ parameter_types! {
 impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorPallet;
 	type SessionManager = ValidatorPallet;
-	type SessionHandler = ValidatorPallet;
+	type SessionHandler = pallet_session::TestSessionHandler;
 	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
