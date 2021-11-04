@@ -238,9 +238,16 @@ mod tests {
 			engines: HashMap<NodeId, Engine>,
 			pub stake_manager_contract: StakingContract,
 			last_event: usize,
+			node_counter: u32,
 		}
 
 		impl Network {
+			pub fn next_node_id(&mut self) -> NodeId {
+				self.node_counter += 1;
+				// TODO improve this to not overflow
+				[self.node_counter as u8; 32].into()
+			}
+
 			// Create a network which includes the validators in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(number_of_nodes: u8) -> (Self, Vec<NodeId>) {
@@ -249,15 +256,15 @@ mod tests {
 				// Add the genesis nodes to the test network
 				let mut genesis_validators = Validator::current_validators();
 				for validator in &genesis_validators {
-					network.add_node(validator.clone());
+					network.add_node(validator);
 				}
 
 				let remaining_nodes =
 					number_of_nodes.saturating_sub(genesis_validators.len() as u8);
 
 				let mut nodes = Vec::new();
-				for index in 1..=remaining_nodes {
-					let node_id: NodeId = [index; 32].into();
+				for _ in 0..remaining_nodes {
+					let node_id = network.next_node_id();
 					nodes.push(node_id.clone());
 					setup_account(&node_id);
 					network
@@ -288,12 +295,18 @@ mod tests {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
+			pub fn create_node(&mut self) -> NodeId {
+				let node_id = self.next_node_id().into();
+				self.add_node(&node_id);
+				node_id
+			}
+
 			// Adds a node which doesn't have its session keys set
-			pub fn add_node(&mut self, node_id: NodeId) {
+			pub fn add_node(&mut self, node_id: &NodeId) {
 				self.engines.insert(
 					node_id.clone(),
 					Engine {
-						node_id,
+						node_id: node_id.clone(),
 						active: true,
 					},
 				);
