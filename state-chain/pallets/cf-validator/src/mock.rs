@@ -18,6 +18,8 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
+use cf_traits::mocks::epoch_info::MockEpochInfo;
+use cf_traits::ChainflipAccount;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -127,9 +129,14 @@ impl pallet_cf_auction::Config for Test {
 
 pub struct MockIsOutgoing;
 impl IsOutgoing for MockIsOutgoing {
-	type AccountId = ValidatorId;
-	type EpochInfo = ValidatorPallet;
-	type ChainflipAccount = MockChainflipAccount;
+	type AccountId = u64;
+
+	fn is_outgoing(account_id: &Self::AccountId) -> bool {
+		if let Some(last_active_epoch) = MockChainflipAccount::get(account_id).last_active_epoch {
+			return last_active_epoch.saturating_add(1) == MockEpochInfo::epoch_index();
+		}
+		false
+	}
 }
 
 pub struct MockOnline;
@@ -199,7 +206,6 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
-	type ChainflipAccount = MockChainflipAccount;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;

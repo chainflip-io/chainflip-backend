@@ -19,7 +19,7 @@ extern crate assert_matches;
 mod benchmarking;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
+	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -64,9 +64,6 @@ pub mod pallet {
 
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-
-		/// Manipulate Chainflip accounts
-		type ChainflipAccount: ChainflipAccount<AccountId = Self::ValidatorId>;
 
 		/// Trigger an emergency rotation on falling below the percentage of online validators
 		#[pallet::constant]

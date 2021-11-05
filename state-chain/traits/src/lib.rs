@@ -382,17 +382,10 @@ pub trait ChainflipAccount {
 /// An outgoing node
 pub trait IsOutgoing {
 	type AccountId;
-	type EpochInfo: EpochInfo;
-	type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 
-	/// Returns true if this account is an out goer which by definition is a node that was in the
+	/// Returns true if this account is an outgoer which by definition is a node that was in the
 	/// active set in the *last* epoch
-	fn is_outgoing(account_id: &Self::AccountId) -> bool {
-		if let Some(last_active_epoch) = Self::ChainflipAccount::get(account_id).last_active_epoch {
-			return last_active_epoch.saturating_add(1) == Self::EpochInfo::epoch_index();
-		}
-		false
-	}
+	fn is_outgoing(account_id: &Self::AccountId) -> bool;
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);

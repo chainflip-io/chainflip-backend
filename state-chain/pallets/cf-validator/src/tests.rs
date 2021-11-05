@@ -177,8 +177,8 @@ mod tests {
 			run_to_block(16);
 
 			let outgoing_validators = outgoing_validators();
-			for out_goer in &outgoing_validators {
-				assert!(MockIsOutgoing::is_outgoing(out_goer));
+			for outgoer in &outgoing_validators {
+				assert!(MockIsOutgoing::is_outgoing(outgoer));
 			}
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);

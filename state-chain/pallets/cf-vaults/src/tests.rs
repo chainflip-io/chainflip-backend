@@ -1,10 +1,10 @@
 mod tests {
 	use crate::{
-		mock::*, CurrentVaults, Error, Event as PalletEvent, PendingVaultRotations, PreviousVaults,
-		Vault, VaultRotationStatus,
+		mock::*, Error, Event as PalletEvent, PendingVaultRotations, Vault, VaultRotationStatus,
+		Vaults,
 	};
 	use cf_chains::ChainId;
-	use cf_traits::{Chainflip, VaultRotator};
+	use cf_traits::{Chainflip, EpochInfo, VaultRotator};
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> Event {
@@ -198,13 +198,33 @@ mod tests {
 				Error::<MockRuntime>::InvalidRotationStatus
 			);
 
-			// The new ethereum vault should be the current vault
+			// We have yet to move to the new epoch
+			let old_epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
+
 			let Vault {
 				public_key,
 				block_height,
-			} = CurrentVaults::<MockRuntime>::get(ChainId::Ethereum)
+			} = Vaults::<MockRuntime>::get(old_epoch, ChainId::Ethereum)
+				.expect("Ethereum Vault should exists");
+
+			// The genesis vault is updated with the active window
+			assert_eq!(
+				public_key, GENESIS_ETHEREUM_AGG_PUB_KEY,
+				"we should have the old agg key in this vault"
+			);
+
+			assert_eq!(block_height, 0, "we should have the block height of 0");
+
+			// The new epoch
+			let new_epoch = old_epoch + 1;
+
+			let Vault {
+				public_key,
+				block_height,
+			} = Vaults::<MockRuntime>::get(new_epoch, ChainId::Ethereum)
 				.expect("Ethereum Vault should exist");
 
+			// The genesis vault is updated with with block height
 			assert_eq!(
 				public_key, new_public_key,
 				"we should have the new public key in the new vault"
@@ -214,24 +234,6 @@ mod tests {
 				block_height, ROTATION_BLOCK_NUMBER,
 				"we should have the end block height for the previous epoch"
 			);
-
-			// The epoch index for genesis is 0
-			let genesis_epoch_index = 0;
-
-			// The vault for Ethereum for the genesis epoch
-			let Vault {
-				public_key,
-				block_height,
-			} = PreviousVaults::<MockRuntime>::get(genesis_epoch_index, ChainId::Ethereum)
-				.expect("Ethereum Vault should exist");
-
-			// The genesis vault should have the genesis APK
-			assert_eq!(
-				public_key, GENESIS_ETHEREUM_AGG_PUB_KEY,
-				"we should have the old agg key in this vault"
-			);
-
-			assert_eq!(block_height, 0, "we should have the block height of 0");
 
 			// Status is complete.
 			assert_eq!(

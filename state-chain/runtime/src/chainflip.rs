@@ -85,10 +85,11 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 		_new_bid: Self::Amount,
 	) {
 		// Update the last active epoch for the new validating set
+		let epoch_index = Validator::epoch_index();
 		for validator in new_validators {
 			ChainflipAccountStore::<Runtime>::update_last_active_epoch(
 				&validator,
-				Validator::epoch_index(),
+				epoch_index,
 			);
 		}
 	}

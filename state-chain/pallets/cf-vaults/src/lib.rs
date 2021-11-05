@@ -96,15 +96,10 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// A map of previous vaults by chain
+	/// A map of vaults by epoch and chain
 	#[pallet::storage]
-	#[pallet::getter(fn current_vaults)]
-	pub(super) type CurrentVaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault>;
-
-	/// A map of previous vaults by epoch and chain
-	#[pallet::storage]
-	#[pallet::getter(fn previous_vaults)]
-	pub(super) type PreviousVaults<T: Config> =
+	#[pallet::getter(fn vaults)]
+	pub(super) type Vaults<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, EpochIndex, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
@@ -337,16 +332,9 @@ pub mod pallet {
 				VaultRotationStatus::<T>::Complete { tx_hash },
 			);
 
-			// Keep a record of vaults by epoch
-			PreviousVaults::<T>::insert(
-				T::EpochInfo::epoch_index(),
-				ChainId::Ethereum,
-				CurrentVaults::<T>::get(ChainId::Ethereum)
-					.expect("the current vault should be present"),
-			);
-
 			// For the new epoch we create a new vault with the new public key and the block height
-			CurrentVaults::<T>::insert(
+			Vaults::<T>::insert(
+				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
 				Vault {
 					public_key: new_public_key,
@@ -384,7 +372,8 @@ pub mod pallet {
 			let _ = AggKey::try_from(&self.ethereum_vault_key[..])
 				.expect("Can't build genesis without a valid ethereum vault key.");
 
-			CurrentVaults::<T>::insert(
+			Vaults::<T>::insert(
+				0,
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
