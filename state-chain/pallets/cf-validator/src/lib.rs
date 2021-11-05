@@ -23,7 +23,7 @@ use cf_traits::{
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, Saturating, UniqueSaturatedInto,
+	AtLeast32BitUnsigned, One, Saturating, UniqueSaturatedInto,
 	Zero,
 };
 use sp_std::prelude::*;
@@ -381,33 +381,15 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	}
 
 	fn estimate_current_session_progress(
-		now: T::BlockNumber,
+		_now: T::BlockNumber,
 	) -> (Option<sp_runtime::Permill>, Weight) {
-		if Self::epoch_number_of_blocks().is_zero() {
-			return (None, T::DbWeight::get().reads(1))
-		}
-
-		(
-			now.checked_sub(&Self::current_epoch_started_at())
-				.and_then(|progress_blocks| {
-					progress_blocks.checked_div(&Self::epoch_number_of_blocks())
-				})
-				.map(|progress| sp_runtime::Permill::from_parts(progress.unique_saturated_into())),
-			T::DbWeight::get().reads(2),
-		)
+		// TODO
+		(None, 0)
 	}
 
-	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-		if Self::epoch_number_of_blocks().is_zero() {
-			return (None, T::DbWeight::get().reads(1))
-		}
-
-		(
-			now.checked_sub(&Self::current_epoch_started_at()).and_then(|progress_blocks| {
-				Self::epoch_number_of_blocks().checked_sub(&progress_blocks)
-			}),
-			T::DbWeight::get().reads(2),
-		)
+	fn estimate_next_session_rotation(_now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+		// TODO
+		(None, 0)
 	}
 }
 

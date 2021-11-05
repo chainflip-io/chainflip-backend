@@ -1,4 +1,3 @@
-use cf_chains::ChainId;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
