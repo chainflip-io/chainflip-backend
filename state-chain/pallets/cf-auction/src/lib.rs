@@ -281,6 +281,9 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			// we kill the last set of winners stored, set the bond to 0, store this set of
 			// bidders and change our state ready for an 'Auction' to be ran
 			AuctionPhase::WaitingForBids => {
+				// A new auction has started, store and emit the event
+				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
+				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				let mut bidders = T::BidderProvider::get_bidders();
 				// Rule #1 - They are not bad
 				bidders.retain(|(id, _)| !BadValidators::<T>::get().contains(id));
@@ -306,9 +309,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				let phase = AuctionPhase::BidsTaken(bidders);
 				CurrentPhase::<T>::put(phase.clone());
 
-				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
-
-				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				Ok(phase)
 			}
 			// We sort by bid and cut the size of the set based on auction size range

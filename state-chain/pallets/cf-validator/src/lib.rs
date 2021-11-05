@@ -298,10 +298,18 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_rotate(now)
-					&& T::Auctioneer::process()
-						.and(T::Auctioneer::process())
-						.is_ok()
+				if Self::should_rotate(now) {
+					let processed =
+						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
+					if processed {
+						CurrentEpochStartedAt::<T>::set(now);
+					} else {
+						Force::<T>::set(true);
+					}
+					return processed;
+				}
+
+				false
 			}
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
@@ -333,12 +341,8 @@ impl<T: Config> Pallet<T> {
 		}
 		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 		let diff = now.saturating_sub(current_epoch_started_at);
-		let end = diff >= blocks_per_epoch;
-		if end {
-			CurrentEpochStartedAt::<T>::set(now);
-		}
 
-		end
+		diff >= blocks_per_epoch
 	}
 
 	/// Generate our validator lookup list
