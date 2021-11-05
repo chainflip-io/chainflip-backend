@@ -716,6 +716,8 @@ mod tests {
 						testnet.set_active(node, true);
 					}
 
+					assert_eq!(0, Validator::epoch_index());
+
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
@@ -724,11 +726,7 @@ mod tests {
 						"we should have ran several auctions"
 					);
 
-					assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::ValidatorsSelected(..),
-						"we should now have a list of candidates"
-					);
+					assert_eq!(1, Validator::epoch_index());
 				});
 		}
 
