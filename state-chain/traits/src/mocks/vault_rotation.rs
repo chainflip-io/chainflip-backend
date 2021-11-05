@@ -38,7 +38,7 @@ impl VaultRotator for Mock {
 	) -> Result<(), Self::RotationError> {
 		if Self::error_on_start() {
 			Self::reset_error_on_start();
-			return Err(MockError);
+			return Err(MockError)
 		}
 
 		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(MockError));

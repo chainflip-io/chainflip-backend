@@ -1,9 +1,11 @@
 use crate::{self as pallet_cf_threshold_signature};
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
-use frame_support::parameter_types;
-use frame_support::traits::EnsureOrigin;
-use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{EnsureOrigin, UnfilteredDispatchable},
+};
 use frame_system;
 use sp_core::H256;
 use sp_runtime::{
@@ -21,8 +23,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -32,7 +34,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -54,6 +56,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -181,7 +184,7 @@ impl SigningContext<Test> for DogeThresholdSignerContext {
 	}
 }
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
 	type SigningContext = DogeThresholdSignerContext;
@@ -192,10 +195,8 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

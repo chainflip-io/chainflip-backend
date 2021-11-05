@@ -1,12 +1,9 @@
+use crate::common::into_anyhow_error;
 use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
 use anyhow::Result;
 use async_trait::async_trait;
 use cf_p2p::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
-use futures::{
-    compat::{Future01CompatExt, Stream01CompatExt},
-    stream::BoxStream,
-    TryStreamExt,
-};
+use futures::{stream::BoxStream, TryStreamExt};
 use jsonrpc_core_client::RpcError;
 use thiserror::Error;
 
@@ -21,16 +18,16 @@ pub enum RpcClientError {
 }
 
 pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
-    let client = crate::common::alt_jsonrpc_connect::connect::<P2PRpcClient>(url)
-        .compat()
+    let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(url)
         .await
-        .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
+        .map_err(|e| into_anyhow_error(RpcClientError::ConnectionError(url.clone(), e)))?;
 
     client
         .self_identify(AccountIdBs58(validator_id.0))
-        .compat()
         .await
-        .map_err(|e| RpcClientError::CallError(String::from("self_identify"), e))?;
+        .map_err(|e| {
+            into_anyhow_error(RpcClientError::CallError(String::from("self_identify"), e))
+        })?;
 
     Ok(client)
 }
@@ -41,26 +38,26 @@ impl P2PNetworkClient for P2PRpcClient {
 
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
         P2PRpcClient::broadcast(self, MessageBs58(data.into()))
-            .compat()
             .await
-            .map_err(|e| RpcClientError::CallError(String::from("broadcast"), e).into())
+            .map_err(|e| into_anyhow_error(RpcClientError::CallError(String::from("broadcast"), e)))
     }
 
     async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
         P2PRpcClient::send(self, AccountIdBs58(to.0), MessageBs58(data.into()))
-            .compat()
             .await
-            .map_err(|e| RpcClientError::CallError(String::from("send"), e).into())
+            .map_err(|e| into_anyhow_error(RpcClientError::CallError(String::from("send"), e)))
     }
 
     async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>> {
         let stream = self
             .subscribe_notifications()
-            .compat()
-            .await
-            .map_err(|e| RpcClientError::CallError(String::from("subscribe_notifications"), e))?
-            .compat()
-            .map_err(|e| RpcClientError::SubscriptionError(e).into());
+            .map_err(|e| {
+                into_anyhow_error(RpcClientError::CallError(
+                    String::from("subscribe_notifications"),
+                    e,
+                ))
+            })?
+            .map_err(|e| into_anyhow_error(RpcClientError::SubscriptionError(e)));
 
         Ok(Box::pin(stream))
     }
