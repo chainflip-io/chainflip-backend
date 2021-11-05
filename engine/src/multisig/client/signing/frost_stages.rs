@@ -100,18 +100,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     /// Simply report all data that we have received from
     /// other parties in the last stage
     fn init(&self) -> DataToSend<Self::Message> {
-        let data = self
-            .common
-            .all_idxs
-            .iter()
-            .map(|idx| {
-                // It is safe to unwrap as all indexes should be present at this point
-                self.commitments
-                    .get(&idx)
-                    .cloned()
-                    .expect("All indexes should be present here")
-            })
-            .collect();
+        let data = self.commitments.clone();
 
         DataToSend::Broadcast(VerifyComm2 { data })
     }
@@ -153,7 +142,7 @@ struct LocalSigStage3 {
     // Our nonce pair generated in the previous stage
     nonces: SecretNoncePair,
     // Public nonce commitments (verified)
-    commitments: Vec<Comm1>,
+    commitments: HashMap<usize, Comm1>,
 }
 
 derive_display_as_type_name!(LocalSigStage3);
@@ -204,7 +193,7 @@ struct VerifyLocalSigsBroadcastStage4 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
     /// Nonce commitments from all parties (verified to be correctly broadcast)
-    commitments: Vec<Comm1>,
+    commitments: HashMap<usize, Comm1>,
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
     local_sigs: HashMap<usize, LocalSig3>,
 }
@@ -216,17 +205,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
     /// Broadcast all signature shares sent to us
     fn init(&self) -> DataToSend<Self::Message> {
-        let data = self
-            .common
-            .all_idxs
-            .iter()
-            .map(|idx| {
-                self.local_sigs
-                    .get(&idx)
-                    .cloned()
-                    .expect("All indexes should be present here")
-            })
-            .collect();
+        let data = self.local_sigs.clone();
 
         DataToSend::Broadcast(VerifyLocalSig4 { data })
     }
@@ -253,9 +232,9 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
         let all_idxs = &self.common.all_idxs;
 
-        let pubkeys: Vec<_> = all_idxs
+        let pubkeys: HashMap<_, _> = all_idxs
             .iter()
-            .map(|idx| self.signing_common.key.party_public_keys[idx - 1])
+            .map(|idx| (*idx, self.signing_common.key.party_public_keys[idx - 1]))
             .collect();
 
         match frost::aggregate_signature(

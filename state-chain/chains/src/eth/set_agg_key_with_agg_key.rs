@@ -5,9 +5,10 @@ use super::{AggKey, ChainflipContractCall, SchnorrVerificationComponents, SigDat
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Uint};
 use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
+use sp_std::{prelude::*, vec};
 
-/// Represents all the arguments required to build the call to StakeManager's 'requestClaim' function.
+/// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
+/// function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.
@@ -34,13 +35,9 @@ impl ChainflipContractCall for SetAggKeyWithAggKey {
 
 impl SetAggKeyWithAggKey {
 	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(nonce: Nonce, new_key: Key) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce.into()),
-			new_key: new_key.into(),
-		};
-		calldata
-			.sig_data
-			.insert_msg_hash_from(calldata.abi_encoded().as_slice());
+		let mut calldata =
+			Self { sig_data: SigData::new_empty(nonce.into()), new_key: new_key.into() };
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -56,9 +53,9 @@ impl SetAggKeyWithAggKey {
 			)
 	}
 
-	/// Gets the function defintion for the `setAggKeyWithAggKey` smart contract call. Loading this from the json abi
-	/// definition is currently not supported in no-std, so instead we hard-code it here and verify against the abi
-	/// in a unit test.
+	/// Gets the function defintion for the `setAggKeyWithAggKey` smart contract call. Loading this
+	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
+	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
 		ethabi::Function::new(
 			"setAggKeyWithAggKey",
@@ -150,10 +147,7 @@ mod test_set_agg_key_with_agg_key {
 
 		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
 			NONCE,
-			AggKey {
-				pub_key_x: FAKE_NEW_KEY_X,
-				pub_key_y_parity: FAKE_NEW_KEY_Y,
-			},
+			AggKey { pub_key_x: FAKE_NEW_KEY_X, pub_key_y_parity: FAKE_NEW_KEY_Y },
 		);
 
 		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;

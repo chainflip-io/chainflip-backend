@@ -2,14 +2,13 @@
 #![feature(array_map)] // stable as of rust 1.55
 
 use eth::SchnorrVerificationComponents;
-use frame_support::pallet_prelude::Member;
-use frame_support::Parameter;
-use sp_std::convert::TryFrom;
-use sp_std::prelude::*;
+use frame_support::{pallet_prelude::Member, Parameter};
+use sp_std::{convert::TryFrom, prelude::*};
 
 pub mod eth;
 
-/// A trait representing all the types and constants that need to be implemented for supported blockchains.
+/// A trait representing all the types and constants that need to be implemented for supported
+/// blockchains.
 pub trait Chain {
 	/// The chain's `ChainId` - useful for serialization.
 	const CHAIN_ID: ChainId;
@@ -81,9 +80,7 @@ impl ChainCrypto for Ethereum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| {
-				frame_support::debug::debug!("Ethereum signature verification failed: {:?}.", e)
-			})
+			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 }

@@ -3,10 +3,10 @@ use cf_traits::mocks::time_source;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -20,8 +20,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 	}
 );
 
@@ -31,7 +31,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -53,6 +53,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl pallet_cf_governance::Config for Test {
@@ -74,11 +75,8 @@ pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_governance: Some(GovernanceConfig {
-			members: vec![ALICE, BOB, CHARLES],
-			expiry_span: 50,
-		}),
+		system: Default::default(),
+		governance: GovernanceConfig { members: vec![ALICE, BOB, CHARLES], expiry_span: 50 },
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

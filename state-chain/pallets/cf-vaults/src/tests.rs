@@ -115,10 +115,7 @@ mod tests {
 			));
 
 			// KeygenAborted event emitted.
-			assert_eq!(
-				last_event(),
-				PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into()
-			);
+			assert_eq!(last_event(), PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into());
 
 			// All rotations have been aborted.
 			assert!(VaultsPallet::no_active_chain_vault_rotations());
@@ -209,9 +206,7 @@ mod tests {
 			// Status is complete.
 			assert_eq!(
 				PendingVaultRotations::<MockRuntime>::get(ChainId::Ethereum),
-				Some(VaultRotationStatus::Complete {
-					tx_hash: TX_HASH.to_vec()
-				}),
+				Some(VaultRotationStatus::Complete { tx_hash: TX_HASH.to_vec() }),
 			);
 
 			// Active windows have been updated.
@@ -225,10 +220,7 @@ mod tests {
 			);
 			assert_eq!(
 				ActiveWindows::<MockRuntime>::get(epoch + 1, ChainId::Ethereum),
-				BlockHeightWindow {
-					from: ROTATION_BLOCK_NUMBER,
-					to: None
-				}
+				BlockHeightWindow { from: ROTATION_BLOCK_NUMBER, to: None }
 			);
 		});
 	}

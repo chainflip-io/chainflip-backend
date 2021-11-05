@@ -1,7 +1,5 @@
 use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
-use frame_support::instances::Instance0;
-use frame_support::traits::Hooks;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -24,7 +22,7 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_threshold_signature_Instance0(
+			Event::DogeThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 					req_id,
 					key_id,
@@ -43,14 +41,14 @@ impl MockCfe {
 							req_id,
 							VALID_SIGNATURE.to_string(),
 						));
-					}
+					},
 					Scenario::RetryPath => {
 						assert_ok!(DogeThresholdSigner::signature_failed(
 							Origin::root(),
 							req_id,
 							vec![RANDOM_NOMINEE],
 						));
-					}
+					},
 					Scenario::InvalidThresholdSignaturePath => {
 						assert_noop!(
 							DogeThresholdSigner::signature_success(
@@ -58,11 +56,11 @@ impl MockCfe {
 								req_id,
 								INVALID_SIGNATURE.to_string(),
 							),
-							Error::<Test, Instance0>::InvalidThresholdSignature
+							Error::<Test, Instance1>::InvalidThresholdSignature
 						);
-					}
+					},
 				};
-			}
+			},
 			_ => panic!("Unexpected event"),
 		};
 	}
@@ -86,7 +84,7 @@ fn happy_path() {
 				request_id + 1,
 				"MaliciousSignature".to_string()
 			),
-			Error::<Test, Instance0>::InvalidCeremonyId
+			Error::<Test, Instance1>::InvalidCeremonyId
 		);
 
 		// CFE responds
@@ -121,10 +119,7 @@ fn retry_path() {
 		assert!(DogeThresholdSigner::pending_request(request_id).is_none());
 
 		// Call back has *not* executed.
-		assert_eq!(
-			MockCallback::<DogeThresholdSignerContext>::get_stored_callback(),
-			None
-		);
+		assert_eq!(MockCallback::<DogeThresholdSignerContext>::get_stored_callback(), None);
 
 		// The offender has been reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
