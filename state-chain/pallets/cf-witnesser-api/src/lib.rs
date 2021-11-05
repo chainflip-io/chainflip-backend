@@ -74,7 +74,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		// #[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_success(id, signature).call_weight()))]
 		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_success(*id, signature.clone())
 		.get_dispatch_info()
 		.weight))]

@@ -257,13 +257,14 @@ impl<T: Config> Pallet<T> {
 
 		// Check if an overflow occurred during the multiplication
 		if reward_amount.is_none() {
-			// TODO: log an error here
-			frame_support::debug::error!("Failed to mint rewards at block {:?}", block_number);
+			frame_support::debug::error!(
+				"Overflow while trying to mint rewards at block {:?}.",
+				block_number
+			);
 			return;
 		}
 
-		// Save unwrap the result and shadow the variable
-		let reward_amount = reward_amount.expect("");
+		let reward_amount = reward_amount.expect("Checked for overflow already.");
 
 		if !reward_amount.is_zero() {
 			// Mint the rewards

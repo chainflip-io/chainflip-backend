@@ -20,28 +20,18 @@ benchmarks! {
 		Nodes::<T>::insert(&validator_id, 2);
 	} : _(RawOrigin::Signed(caller))
 	submit_network_state {
-		let x in 1 .. 1_000;
-		for i in 1 .. MAX_VALIDATOR_AMOUNT {
-			let caller: T::AccountId  = account("doogle", i, i);
+		for b in 1 .. MAX_VALIDATOR_AMOUNT {
+			let caller: T::AccountId  = account("doogle", b, b);
 			let validator_id: T::ValidatorId = caller.into();
 			Nodes::<T>::insert(&validator_id, 2);
 		}
 		// TODO: set the generated validators as active validators
 	} : {
-		for b in 1..x {
-			if b % HEART_BLOCK_INTERVAL == 0 {
-				Online::<T>::on_initialize((b as u32).into());
-			}
-		}
+		Online::<T>::on_initialize(HEART_BLOCK_INTERVAL.into());
 	}
 	on_initialize_no_action {
-		let x in 1 .. 1_000;
 	} : {
-		for b in 1..x {
-			if b % HEART_BLOCK_INTERVAL != 0 {
-				Online::<T>::on_initialize((b as u32).into());
-			}
-		}
+		Online::<T>::on_initialize((HEART_BLOCK_INTERVAL + 1).into());
 	}
 }
 

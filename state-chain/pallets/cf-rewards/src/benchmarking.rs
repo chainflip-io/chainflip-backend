@@ -14,11 +14,11 @@ use crate::Pallet as Rewards;
 benchmarks! {
 	redeem_rewards {
 		let caller = whitelisted_caller();
-		let balance: T::Balance = T::Balance::from(1000000000 as u32);
-		let balance_2: T::Balance = T::Balance::from(2 as u32);
+		let rewards_entitlement: T::Balance = T::Balance::from(1000000000 as u32);
+		let apportioned_rewards: T::Balance = T::Balance::from(2 as u32);
 		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, 4 as u32);
-		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, balance_2);
-		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, balance);
+		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, apportioned_rewards);
+		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, rewards_entitlement);
 	}: _(RawOrigin::Signed(caller))
 }
 
