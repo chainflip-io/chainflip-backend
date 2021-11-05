@@ -22,7 +22,7 @@ use cf_traits::{
 };
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating, UniqueSaturatedInto, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
 use sp_std::prelude::*;
 
 pub type ValidatorSize = u32;
