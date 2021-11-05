@@ -209,39 +209,43 @@ pub async fn start<BlockStream, RpcClient>(
                                         validator_id,
                                         unsigned_tx
                                     ),
-                                ) if validator_id == state_chain_client.our_account_id => {
+                                ) => {
                                     slog::debug!(
                                         logger,
-                                        "Received signing request {} for transaction: {:?}",
+                                        "Received signing request {} for transaction: {:?}. We are {}, therequest is for {}",
                                         attempt_id,
                                         unsigned_tx,
+                                        state_chain_client.our_account_id,
+                                        validator_id
                                     );
-                                    match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
-                                        Ok(raw_signed_tx) => {
-                                            let _ = state_chain_client.submit_extrinsic(
-                                                &logger,
-                                                state_chain_runtime::Call::EthereumBroadcaster(
-                                                    pallet_cf_broadcast::Call::transaction_ready_for_transmission(
-                                                        attempt_id,
-                                                        raw_signed_tx.0,
-                                                    ),
-                                                )
-                                            ).await;
-                                        },
-                                        Err(e) => {
-                                            // Note: this error case should only occur if there is a problem with the
-                                            // local ethereum node, which would mean the web3 lib is unable to fill in 
-                                            // the tranaction params, mainly the gas limit.
-                                            // In the long run all transaction parameters will be provided by the state
-                                            // chain and the above eth_broadcaster.sign_tx method can be made 
-                                            // infallible.
-                                            slog::error!(
-                                                logger,
-                                                "Transaction signing attempt {} failed: {:?}",
-                                                attempt_id,
-                                                e
-                                            );
-                                        },
+                                    if validator_id == state_chain_client.our_account_id {
+                                        match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
+                                            Ok(raw_signed_tx) => {
+                                                let _ = state_chain_client.submit_extrinsic(
+                                                    &logger,
+                                                    state_chain_runtime::Call::EthereumBroadcaster(
+                                                        pallet_cf_broadcast::Call::transaction_ready_for_transmission(
+                                                            attempt_id,
+                                                            raw_signed_tx.0,
+                                                        ),
+                                                    )
+                                                ).await;
+                                            },
+                                            Err(e) => {
+                                                // Note: this error case should only occur if there is a problem with the
+                                                // local ethereum node, which would mean the web3 lib is unable to fill in 
+                                                // the tranaction params, mainly the gas limit.
+                                                // In the long run all transaction parameters will be provided by the state
+                                                // chain and the above eth_broadcaster.sign_tx method can be made 
+                                                // infallible.
+                                                slog::error!(
+                                                    logger,
+                                                    "Transaction signing attempt {} failed: {:?}",
+                                                    attempt_id,
+                                                    e
+                                                );
+                                            },
+                                        }
                                     }
                                 }
                                 state_chain_runtime::Event::EthereumBroadcaster(
