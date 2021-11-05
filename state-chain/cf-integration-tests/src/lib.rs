@@ -645,7 +645,92 @@ mod tests {
 	mod epoch {
 		use super::*;
 		use cf_traits::{AuctionPhase, AuctionResult, EpochInfo};
-		use state_chain_runtime::{Auction, Validator};
+		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
+
+		#[test]
+		// We have a test network which goes into the first epoch
+		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
+		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from genesis
+		// and 5 new bidders).  We knock 4 of these nodes offline.
+		// A new auction is started
+		// This continues until we have a new set
+		fn auction_repeats_after_failure_because_of_liveness() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.min_validators(5)
+				.build()
+				.execute_with(|| {
+					// A network with a set of passive nodes
+					let (mut testnet, nodes) = network::Network::create(5);
+					// Add the genesis nodes to the test network
+					for validator in Validator::current_validators() {
+						testnet.add_node(validator);
+					}
+
+					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					for node in &nodes {
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+					}
+
+					// Set the first 4 nodes offline
+					let offline_nodes: Vec<_> = nodes.iter().take(4).cloned().collect();
+
+					for node in &offline_nodes {
+						testnet.set_active(node, false);
+					}
+
+					// Run to the next epoch to start the auction
+					testnet.move_forward_blocks(EPOCH_BLOCKS - System::block_number());
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"we should have ran an auction"
+					);
+
+					assert_eq!(
+						Auction::current_phase(),
+						AuctionPhase::default(),
+						"we should be back at the start"
+					);
+
+					// Next block, another auction
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						2,
+						"we should have ran another auction"
+					);
+
+					assert_eq!(
+						Auction::current_phase(),
+						AuctionPhase::default(),
+						"we should be back at the start"
+					);
+
+					for node in &offline_nodes {
+						testnet.set_active(node, true);
+					}
+
+					// Move forward heartbeat to get those missing nodes online
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					assert!(
+						Auction::current_auction_index() > 2,
+						"we should have ran several auctions"
+					);
+
+					assert_matches!(
+						Auction::current_phase(),
+						AuctionPhase::ValidatorsSelected(..),
+						"we should now have a list of candidates"
+					);
+				});
+		}
 
 		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
