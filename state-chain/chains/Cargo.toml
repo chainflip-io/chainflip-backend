@@ -44,7 +44,7 @@ tag = 'monthly-2021-09+1'
 
 
 [dev-dependencies]
-hex-literal = {version = "0.3"}
+hex-literal = {version = "0.3.1"}
 
 [features]
 default = ['std']

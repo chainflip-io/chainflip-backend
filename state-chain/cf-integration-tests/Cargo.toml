@@ -84,8 +84,7 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
-[dependencies.hex-literal]
-optional = true
+[dev-dependencies.hex-literal]
 version = '0.3.1'
 
 [dependencies.pallet-aura]
@@ -187,7 +186,6 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'frame-system-rpc-runtime-api/std',
-  'hex-literal',
   'pallet-aura/std',
   'pallet-grandpa/std',
   'pallet-randomness-collective-flip/std',
