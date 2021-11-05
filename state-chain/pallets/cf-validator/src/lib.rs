@@ -23,8 +23,8 @@ use cf_traits::{
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, Saturating,
-	UniqueSaturatedInto, Zero,
+	AtLeast32BitUnsigned, CheckedDiv, CheckedSub, Convert, One, Saturating, UniqueSaturatedInto,
+	Zero,
 };
 use sp_std::prelude::*;
 
@@ -403,8 +403,9 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 		}
 
 		(
-			now.checked_sub(&Self::current_epoch_started_at())
-				.and_then(|progress_blocks| Self::epoch_number_of_blocks().checked_sub(&progress_blocks)),
+			now.checked_sub(&Self::current_epoch_started_at()).and_then(|progress_blocks| {
+				Self::epoch_number_of_blocks().checked_sub(&progress_blocks)
+			}),
 			T::DbWeight::get().reads(2),
 		)
 	}

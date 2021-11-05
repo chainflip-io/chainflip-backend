@@ -2,17 +2,16 @@ use super::*;
 use crate as pallet_cf_online;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::impl_mock_stake_transfer;
-use cf_traits::{Chainflip, Heartbeat, NetworkState};
+use cf_traits::{impl_mock_stake_transfer, Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
 
@@ -120,9 +119,7 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-	};
+	let config = GenesisConfig { system: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

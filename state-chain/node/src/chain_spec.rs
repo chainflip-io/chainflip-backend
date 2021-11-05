@@ -76,7 +76,8 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 
 /// Start a single node development chain
 pub fn development_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	let wasm_binary =
+		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -119,7 +120,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 
 /// Start a single node development chain - using bashful as genesis node
 pub fn cf_development_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	let wasm_binary =
+		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
@@ -170,7 +172,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 
 /// Initialise a Chainflip testnet
 pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	let wasm_binary =
+		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let doc_sr25519 =
@@ -248,7 +251,8 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 
 /// Initialise a Chainflip testnet
 pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	let wasm_binary =
+		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let doc_sr25519 =
@@ -386,13 +390,8 @@ fn testnet_genesis(
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
-		governance: GovernanceConfig {
-			members: vec![root_key],
-			expiry_span: 80000,
-		},
-		reputation: ReputationConfig {
-			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-		},
+		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
+		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
 		vaults: VaultsConfig {
 			ethereum_vault_key: {

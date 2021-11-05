@@ -2,19 +2,20 @@ use super::*;
 use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
-use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Chainflip, Slashing};
+use cf_traits::{
+	mocks::{epoch_info, epoch_info::Mock},
+	Chainflip, Slashing,
+};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -64,10 +65,8 @@ impl frame_system::Config for Test {
 // A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 // Number of blocks being offline before you lose one point
-pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> = ReputationPenalty {
-	points: 1,
-	blocks: 10,
-};
+pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> =
+	ReputationPenalty { points: 1, blocks: 10 };
 // Number of blocks to be online to accrue a point
 pub const ACCRUAL_BLOCKS: u64 = 2500;
 // Number of accrual points

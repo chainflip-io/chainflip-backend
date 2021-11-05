@@ -5,10 +5,10 @@ use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Token
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
-use sp_std::vec;
+use sp_std::{prelude::*, vec};
 
-/// Represents all the arguments required to build the call to StakeManager's 'requestClaim' function.
+/// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
+/// function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct RegisterClaim {
 	/// The signature data for validation and replay protection.
@@ -54,9 +54,7 @@ impl RegisterClaim {
 			address: address.into(),
 			expiry: expiry.into(),
 		};
-		calldata
-			.sig_data
-			.insert_msg_hash_from(calldata.abi_encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -78,9 +76,9 @@ impl RegisterClaim {
 			)
 	}
 
-	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from the json abi
-	/// definition is currently not supported in no-std, so instead swe hard-code it here and verify against the abi
-	/// in a unit test.
+	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from
+	/// the json abi definition is currently not supported in no-std, so instead swe hard-code it
+	/// here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
 		ethabi::Function::new(
 			"registerClaim",

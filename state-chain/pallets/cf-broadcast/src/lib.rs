@@ -14,8 +14,7 @@ use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Parameter, Twox64Concat};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::marker::PhantomData;
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// The reasons for which a broadcast might fail.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -26,8 +25,8 @@ pub enum TransmissionFailure {
 	TransactionFailed,
 }
 
-/// The [BroadcastConfig] should contain all the state required to construct and process transactions for a given
-/// chain.
+/// The [BroadcastConfig] should contain all the state required to construct and process
+/// transactions for a given chain.
 pub trait BroadcastConfig<T: Chainflip> {
 	/// A chain identifier.
 	type Chain: Chain;
@@ -38,11 +37,12 @@ pub trait BroadcastConfig<T: Chainflip> {
 	/// The transaction hash type used to uniquely identify signed transactions.
 	type TransactionHash: Parameter;
 
-	/// Verify the signed transaction when it is submitted to the state chain by the nominated signer.
+	/// Verify the signed transaction when it is submitted to the state chain by the nominated
+	/// signer.
 	///
-	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the validaty of the
-	/// returned transaction for this `Chain` and can include verification of the byte encoding, the transaction
-	/// content, metadata, signer idenity, etc.
+	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the
+	/// validaty of the returned transaction for this `Chain` and can include verification of the
+	/// byte encoding, the transaction content, metadata, signer idenity, etc.
 	fn verify_transaction(
 		signer: &T::ValidatorId,
 		unsigned_tx: &Self::UnsignedTransaction,
@@ -86,7 +86,8 @@ pub mod pallet {
 		pub nominee: T::ValidatorId,
 	}
 
-	/// The second step in the process - the transaction is already signed, it needs to be broadcast.
+	/// The second step in the process - the transaction is already signed, it needs to be
+	/// broadcast.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct TransmissionAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
@@ -98,7 +99,8 @@ pub mod pallet {
 
 	/// A failed signing or broadcasting attempt.
 	///
-	/// Implements `From` for both [TransmissionAttempt] and [TransactionSigningAttempt] for easy conversion.
+	/// Implements `From` for both [TransmissionAttempt] and [TransactionSigningAttempt] for easy
+	/// conversion.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct FailedBroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
@@ -194,7 +196,8 @@ pub mod pallet {
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<FailedBroadcastAttempt<T, I>>, ValueQuery>;
 
-	/// A mapping from block number to a list of signing or broadcast attempts that expire at that block number.
+	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
+	/// block number.
 	#[pallet::storage]
 	pub type Expiries<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -207,13 +210,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A request to a specific validator to sign a transaction. \[broadcast_attempt_id, validator_id, unsigned_tx\]
-		TransactionSigningRequest(
-			BroadcastAttemptId,
-			T::ValidatorId,
-			UnsignedTransactionFor<T, I>,
-		),
-		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id, signed_tx\]
+		/// A request to a specific validator to sign a transaction. \[broadcast_attempt_id,
+		/// validator_id, unsigned_tx\]
+		TransactionSigningRequest(BroadcastAttemptId, T::ValidatorId, UnsignedTransactionFor<T, I>),
+		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id,
+		/// signed_tx\]
 		TransmissionRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
 		/// A broadcast has successfully been completed. \[broadcast_id\]
 		BroadcastComplete(BroadcastId),
@@ -221,7 +222,8 @@ pub mod pallet {
 		BroadcastRetryScheduled(BroadcastId, AttemptCount),
 		/// A broadcast has failed irrecoverably. \[broadcast_id, attempt, failed_transaction\]
 		BroadcastFailed(BroadcastId, AttemptCount, UnsignedTransactionFor<T, I>),
-		/// A broadcast attempt expired either at the transaction signing stage or the transmission stage. \[broadcast_attempt_id, stage\]
+		/// A broadcast attempt expired either at the transaction signing stage or the transmission
+		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 	}
 
@@ -260,20 +262,20 @@ pub mod pallet {
 						{
 							notify_and_retry(attempt.into());
 						}
-					}
+					},
 					BroadcastStage::Transmission => {
 						if let Some(attempt) = AwaitingTransmission::<T, I>::take(attempt_id) {
 							notify_and_retry(attempt.into());
 						}
-					}
+					},
 				}
 			}
 
 			// TODO: replace this with benchmark results.
-			retry_count as u64
-				* frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
-				+ expiries.len() as u64
-					* frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
+			retry_count as u64 *
+				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3) +
+				expiries.len() as u64 *
+					frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
 		}
 	}
 
@@ -281,7 +283,8 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Begin the process of broadcasting a transaction.
 		///
-		/// This triggers the first step - requesting a transaction signature from a nominated validator.
+		/// This triggers the first step - requesting a transaction signature from a nominated
+		/// validator.
 		///
 		/// ## Events
 		///
@@ -295,8 +298,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			// TODO: This doesn't necessarily have to be witnessed, but *should* be restricted such that it can only
-			// be called internally.
+			// TODO: This doesn't necessarily have to be witnessed, but *should* be restricted such
+			// that it can only be called internally.
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
@@ -309,9 +312,10 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Called by the nominated signer when they have completed and signed the transaction, and it is therefore ready
-		/// to be transmitted. The signed transaction is stored on-chain so that any node can potentially transmit it to
-		/// the target chain. Emits an event that will trigger the transmission to the target chain.
+		/// Called by the nominated signer when they have completed and signed the transaction, and
+		/// it is therefore ready to be transmitted. The signed transaction is stored on-chain so
+		/// that any node can potentially transmit it to the target chain. Emits an event that will
+		/// trigger the transmission to the target chain.
 		///
 		/// ## Events
 		///
@@ -333,10 +337,7 @@ pub mod pallet {
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			ensure!(
-				signing_attempt.nominee == signer.into(),
-				Error::<T, I>::InvalidSigner
-			);
+			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
 
 			AwaitingTransactionSignature::<T, I>::remove(attempt_id);
 
@@ -406,7 +407,8 @@ pub mod pallet {
 		}
 
 		/// Nodes have witnessed that something went wrong during transmission. See
-		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be reported.
+		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be
+		/// reported.
 		///
 		/// ## Events
 		///
@@ -433,14 +435,14 @@ pub mod pallet {
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
 					);
-				}
+				},
 				TransmissionFailure::TransactionFailed => {
 					Self::deposit_event(Event::<T, I>::BroadcastFailed(
 						failed_attempt.broadcast_id,
 						failed_attempt.attempt_count,
 						failed_attempt.unsigned_tx,
 					));
-				}
+				},
 			};
 
 			Ok(().into())

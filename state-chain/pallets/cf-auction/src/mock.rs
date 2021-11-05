@@ -1,17 +1,17 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
-use cf_traits::{Bid, ChainflipAccountData, EmergencyRotation};
-use frame_support::traits::ValidatorRegistration;
-use frame_support::{construct_runtime, parameter_types};
+use cf_traits::{
+	mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
+	Bid, ChainflipAccountData, EmergencyRotation,
+};
+use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -63,23 +63,14 @@ pub fn run_auction() {
 }
 
 pub fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events()
-		.pop()
-		.expect("Event expected")
-		.event
+	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 // The set we would expect
 pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();
 	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
-	(
-		bidders
-			.iter()
-			.map(|(validator_id, _)| *validator_id)
-			.collect(),
-		bidders.last().unwrap().1,
-	)
+	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
 }
 
 construct_runtime!(
@@ -171,8 +162,7 @@ impl ChainflipAccount for MockChainflipAccount {
 
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
-			cell.borrow_mut()
-				.insert(*account_id, ChainflipAccountData { state });
+			cell.borrow_mut().insert(*account_id, ChainflipAccountData { state });
 		})
 	}
 }

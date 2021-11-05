@@ -106,10 +106,7 @@ pub fn new_test_ext(
 	accounts: Vec<(AccountId, u128)>,
 ) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000u128);
-	let config = GenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance },
-	};
+	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 	ext.execute_with(|| {
 		let mut beneficiaries = vec![];

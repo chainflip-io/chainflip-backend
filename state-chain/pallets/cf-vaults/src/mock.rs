@@ -2,10 +2,10 @@ use std::cell::RefCell;
 
 use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 use crate as pallet_cf_vaults;

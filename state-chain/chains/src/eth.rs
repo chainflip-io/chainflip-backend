@@ -13,11 +13,10 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
-use sp_std::prelude::*;
 use sp_std::{
 	convert::{TryFrom, TryInto},
-	str,
-	vec,
+	prelude::*,
+	str, vec,
 };
 
 //------------------------//
@@ -52,24 +51,22 @@ pub struct SigData {
 	msg_hash: H256,
 	/// The Schnorr signature.
 	sig: Uint,
-	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to prevent replay
-	/// attacks.
+	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
+	/// prevent replay attacks.
 	nonce: Uint,
-	/// The address value derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
+	/// The address value derived from the random nonce value `k`. Also known as
+	/// `nonceTimesGeneratorAddress`.
 	///
-	/// Note this is unrelated to the `nonce` above. The nonce in the context of `nonceTimesGeneratorAddress`
-	/// is a generated as part of each signing round (ie. as part of the Schnorr signature) to prevent certain
-	/// classes of cryptographic attacks.
+	/// Note this is unrelated to the `nonce` above. The nonce in the context of
+	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
+	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
 	k_times_g_addr: Address,
 }
 
 impl SigData {
 	/// Initiate a new `SigData` with a given nonce value.
 	pub fn new_empty(nonce: Uint) -> Self {
-		Self {
-			nonce,
-			..Default::default()
-		}
+		Self { nonce, ..Default::default() }
 	}
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.
@@ -116,24 +113,22 @@ pub struct AggKey {
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
 	///
-	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to the required
-	/// 0 / 1 representation by subtracting 2 from the supplied values, so if the source format doesn't conform
-	/// to the expected 2/3 even/odd convention, bad things will happen.
+	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to
+	/// the required 0 / 1 representation by subtracting 2 from the supplied values, so if the
+	/// source format doesn't conform to the expected 2/3 even/odd convention, bad things will
+	/// happen.
 	#[cfg(feature = "std")]
 	fn from_pubkey_compressed(bytes: [u8; 33]) -> Self {
 		let [pub_key_y_parity, pub_key_x @ ..] = bytes;
 		let pub_key_y_parity = pub_key_y_parity - 2;
-		Self {
-			pub_key_x,
-			pub_key_y_parity,
-		}
+		Self { pub_key_x, pub_key_y_parity }
 	}
 }
 
 /// [TryFrom] implementation to convert some bytes to an [AggKey].
 ///
-/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the total
-/// length of the slice is 33 bytes.
+/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the
+/// total length of the slice is 33 bytes.
 impl TryFrom<&[u8]> for AggKey {
 	type Error = &'static str;
 
@@ -155,10 +150,7 @@ impl TryFrom<&[u8]> for AggKey {
 				Err("Invalid aggKey format: Leading byte should be 2 or 3")
 			}
 		} else {
-			log::error!(
-				"Invalid aggKey format: Should be 33 bytes total, got {}",
-				bytes.len()
-			);
+			log::error!("Invalid aggKey format: Should be 33 bytes total, got {}", bytes.len());
 			Err("Invalid aggKey format: Should be 33 bytes total.")
 		}
 	}
@@ -173,19 +165,13 @@ impl From<secp256k1::PublicKey> for AggKey {
 
 impl From<(u8, [u8; 32])> for AggKey {
 	fn from(tuple: (u8, [u8; 32])) -> Self {
-		Self {
-			pub_key_x: tuple.1,
-			pub_key_y_parity: tuple.0,
-		}
+		Self { pub_key_x: tuple.1, pub_key_y_parity: tuple.0 }
 	}
 }
 
 impl From<([u8; 32], u8)> for AggKey {
 	fn from(tuple: ([u8; 32], u8)) -> Self {
-		Self {
-			pub_key_x: tuple.0,
-			pub_key_y_parity: tuple.1,
-		}
+		Self { pub_key_x: tuple.0, pub_key_y_parity: tuple.1 }
 	}
 }
 
@@ -206,8 +192,8 @@ pub struct SchnorrVerificationComponents {
 	pub k_times_g_addr: [u8; 20],
 }
 
-/// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
-/// with the following fields omitted: nonce,
+/// Required information to construct and sign an ethereum transaction. Equivalet to
+/// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
 ///

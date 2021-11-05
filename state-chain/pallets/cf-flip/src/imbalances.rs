@@ -42,8 +42,9 @@ impl<AccountId> ImbalanceSource<AccountId> {
 	}
 }
 
-/// Opaque, move-only struct with private fields that serves as a token denoting that funds have been added from
-/// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Deficit].
+/// Opaque, move-only struct with private fields that serves as a token denoting that funds have
+/// been added from *somewhere*, and that we need to account for this by cancelling it against a
+/// corresponding [Deficit].
 #[must_use = "This surplus needs to be reconciled - if not any remaining imblance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Surplus<T: Config> {
@@ -57,11 +58,11 @@ impl<T: Config> Surplus<T> {
 		Surplus { amount, source }
 	}
 
-	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the mint will be
-	/// [reverted](RevertImbalance).
+	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the
+	/// mint will be [reverted](RevertImbalance).
 	pub(super) fn from_mint(mut amount: T::Balance) -> Self {
 		if amount.is_zero() {
-			return Self::new(Zero::zero(), ImbalanceSource::Emissions);
+			return Self::new(Zero::zero(), ImbalanceSource::Emissions)
 		}
 		Flip::TotalIssuance::<T>::mutate(|total| {
 			*total = total.checked_add(&amount).unwrap_or_else(|| {
@@ -72,7 +73,8 @@ impl<T: Config> Surplus<T> {
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has insufficient funds.
+	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
+	/// insufficient funds.
 	pub(super) fn try_from_acct(account_id: &T::AccountId, amount: T::Balance) -> Option<Self> {
 		Flip::Account::<T>::try_mutate_exists(account_id, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
@@ -80,10 +82,7 @@ impl<T: Config> Surplus<T> {
 					Err(())
 				} else {
 					account.stake = account.stake.saturating_sub(amount);
-					Ok(Self::new(
-						amount,
-						ImbalanceSource::from_acct(account_id.clone()),
-					))
+					Ok(Self::new(amount, ImbalanceSource::from_acct(account_id.clone())))
 				}
 			} else {
 				Err(())
@@ -92,10 +91,11 @@ impl<T: Config> Surplus<T> {
 		.ok()
 	}
 
-	/// Withdraw funds from an account. Deducts *up to* the requested amount, depending on available funds.
+	/// Withdraw funds from an account. Deducts *up to* the requested amount, depending on available
+	/// funds.
 	///
-	/// *Warning:* if the account entry does not exist, it will be created as a side effect. Do not expose this via
-	///  an extrinsic.
+	/// *Warning:* if the account entry does not exist, it will be created as a side effect. Do not
+	/// expose this via  an extrinsic.
 	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
@@ -104,7 +104,8 @@ impl<T: Config> Surplus<T> {
 		})
 	}
 
-	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has
+	/// insufficient funds.
 	pub(super) fn try_from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Option<Self> {
 		Flip::Reserve::<T>::try_mutate(reserve_id, |balance| {
 			if (*balance) < amount {
@@ -117,10 +118,11 @@ impl<T: Config> Surplus<T> {
 		.ok()
 	}
 
-	/// Withdraw funds from a reserve. Deducts *up to* the requested amount, depending on available funds.
+	/// Withdraw funds from a reserve. Deducts *up to* the requested amount, depending on available
+	/// funds.
 	///
-	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose this via
-	///  an extrinsic.
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose
+	/// this via  an extrinsic.
 	pub(super) fn from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Self {
 		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
 			let deducted = (*balance).min(amount);
@@ -131,7 +133,8 @@ impl<T: Config> Surplus<T> {
 
 	/// Funds surplus from offchain.
 	///
-	/// Means we have received funds from offchain; there will now be a surplus that needs to be allocated somewhere.
+	/// Means we have received funds from offchain; there will now be a surplus that needs to be
+	/// allocated somewhere.
 	pub(super) fn from_offchain(amount: T::Balance) -> Self {
 		Flip::OffchainFunds::<T>::mutate(|total| {
 			let deducted = (*total).min(amount);
@@ -141,8 +144,9 @@ impl<T: Config> Surplus<T> {
 	}
 }
 
-/// Opaque, move-only struct with private fields that serves as a token denoting that funds have been removed to
-/// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Surplus].
+/// Opaque, move-only struct with private fields that serves as a token denoting that funds have
+/// been removed to *somewhere*, and that we need to account for this by cancelling it against a
+/// corresponding [Surplus].
 #[must_use = "This deficit needs to be reconciled - if not any remaining imbalance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Deficit<T: Config> {
@@ -156,11 +160,11 @@ impl<T: Config> Deficit<T> {
 		Deficit { amount, source }
 	}
 
-	/// Burn funds, creating a corresponding deficit. The deficit needs to be applied somewhere or the burn will be
-	/// [reverted](RevertImbalance).
+	/// Burn funds, creating a corresponding deficit. The deficit needs to be applied somewhere or
+	/// the burn will be [reverted](RevertImbalance).
 	pub(super) fn from_burn(mut amount: T::Balance) -> Self {
 		if amount.is_zero() {
-			return Self::new(Zero::zero(), ImbalanceSource::Emissions);
+			return Self::new(Zero::zero(), ImbalanceSource::Emissions)
 		}
 		Flip::TotalIssuance::<T>::mutate(|issued| {
 			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
@@ -175,15 +179,15 @@ impl<T: Config> Deficit<T> {
 	///
 	/// In case of overflow, the returned imbalance is zero (meaning nothing will be credited).
 	///
-	/// *Warning:* if the accout does not exist, it will be created as a side effect. Do not expose this via
-	///  an extrinsic.
+	/// *Warning:* if the accout does not exist, it will be created as a side effect. Do not expose
+	/// this via  an extrinsic.
 	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let added = match account.stake.checked_add(&amount) {
 				Some(result) => {
 					account.stake = result;
 					amount
-				}
+				},
 				None => Zero::zero(),
 			};
 			Self::new(added, ImbalanceSource::from_acct(account_id.clone()))
@@ -194,15 +198,15 @@ impl<T: Config> Deficit<T> {
 	///
 	/// In case of overflow, the returned imbalance is zero (meaning nothing will be credited).
 	///
-	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose this via
-	///  an extrinsic.
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose
+	/// this via  an extrinsic.
 	pub(super) fn from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Self {
 		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
 			let added = match balance.checked_add(&amount) {
 				Some(result) => {
 					(*balance) = result;
 					amount
-				}
+				},
 				None => Zero::zero(),
 			};
 			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
@@ -217,7 +221,7 @@ impl<T: Config> Deficit<T> {
 			Some(result) => {
 				*total = result;
 				amount
-			}
+			},
 			None => Zero::zero(),
 		});
 		Self::new(added, ImbalanceSource::External)
@@ -234,10 +238,7 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	type Opposite = Deficit<T>;
 
 	fn zero() -> Self {
-		Self {
-			amount: Zero::zero(),
-			source: ImbalanceSource::Emissions,
-		}
+		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -292,10 +293,7 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	type Opposite = Surplus<T>;
 
 	fn zero() -> Self {
-		Self {
-			amount: Zero::zero(),
-			source: ImbalanceSource::Emissions,
-		}
+		Self { amount: Zero::zero(), source: ImbalanceSource::Emissions }
 	}
 	fn drop_zero(self) -> result::Result<(), Self> {
 		if self.amount.is_zero() {
@@ -361,36 +359,36 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 	fn revert(&mut self) {
 		match &self.source {
 			ImbalanceSource::External => {
-				// Some funds were bridged onto the chain but weren't be allocated to an account. For all intents and
-				// purposes they are still offchain.
+				// Some funds were bridged onto the chain but weren't be allocated to an account.
+				// For all intents and purposes they are still offchain.
 				// TODO: Allocate these to some 'error' account? Eg. for refunds.
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_add(self.amount)
 				});
-			}
+			},
 			ImbalanceSource::Emissions => {
-				// This means some Flip were minted without allocating them somewhere. We revert by burning
-				// them again.
+				// This means some Flip were minted without allocating them somewhere. We revert by
+				// burning them again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
-			}
+			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
-						// This means we took funds from an account but didn't put them anywhere. Add the funds back to
-						// the account again.
+						// This means we took funds from an account but didn't put them anywhere.
+						// Add the funds back to the account again.
 						Flip::Account::<T>::mutate(account_id, |acct| {
 							acct.stake = acct.stake.saturating_add(self.amount)
 						})
-					}
+					},
 					InternalSource::Reserve(reserve_id) => {
-						// This means we took funds from a reserve but didn't put them anywhere. Add the funds back to
-						// the reserve again.
+						// This means we took funds from a reserve but didn't put them anywhere. Add
+						// the funds back to the reserve again.
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_add(self.amount)
 						})
-					}
+					},
 				}
-			}
+			},
 		};
 	}
 }
@@ -403,28 +401,30 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_sub(self.amount)
 				});
-			}
+			},
 			ImbalanceSource::Emissions => {
-				// This means some funds were burned without specifying the source. If this happens, we
-				// add this back on to the total issuance again.
+				// This means some funds were burned without specifying the source. If this happens,
+				// we add this back on to the total issuance again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
-			}
+			},
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
-						// This means we added funds to an account without specifying a source. Deduct them again.
+						// This means we added funds to an account without specifying a source.
+						// Deduct them again.
 						Flip::Account::<T>::mutate(account_id, |acct| {
 							acct.stake = acct.stake.saturating_sub(self.amount)
 						})
-					}
+					},
 					InternalSource::Reserve(reserve_id) => {
-						// This means we added funds to a reserve without specifying a source. Deduct them again.
+						// This means we added funds to a reserve without specifying a source.
+						// Deduct them again.
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_sub(self.amount)
 						})
-					}
+					},
 				}
-			}
+			},
 		};
 	}
 }

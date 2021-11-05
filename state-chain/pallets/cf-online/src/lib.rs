@@ -51,7 +51,7 @@ pub mod pallet {
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return network_weight;
+				return network_weight
 			}
 
 			Zero::zero()
@@ -72,7 +72,6 @@ pub mod pallet {
 	/// The nodes in the network.  We are assuming here that an account staked with FLIP
 	/// is equivalent to an operational node and would appear in this map once they have submitted
 	/// a heartbeat.
-	///
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
@@ -108,13 +107,13 @@ pub mod pallet {
 			match Nodes::<T>::get(&validator_id) {
 				None => {
 					Nodes::<T>::insert(&validator_id, SUBMITTED);
-				}
+				},
 				Some(mut node) => {
 					ensure!(!node.has_submitted(), Error::<T>::AlreadySubmittedHeartbeat);
 					// Update this node
 					node.update_current_interval(true);
 					Nodes::<T>::insert(&validator_id, node);
-				}
+				},
 			}
 
 			T::Heartbeat::heartbeat_submitted(&validator_id);

@@ -1,4 +1,7 @@
-use crate::{mock::dummy::pallet as pallet_dummy, mock::*, Error, VoteMask, Votes};
+use crate::{
+	mock::{dummy::pallet as pallet_dummy, *},
+	Error, VoteMask, Votes,
+};
 use frame_support::{assert_noop, assert_ok};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -14,19 +17,14 @@ fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 }
 
 fn pop_last_event() -> Event {
-	frame_system::Pallet::<Test>::events()
-		.pop()
-		.expect("Expected an event")
-		.event
+	frame_system::Pallet::<Test>::events().pop().expect("Expected an event").event
 }
 
 #[test]
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
 		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(
-			answer,
-		)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -47,10 +45,7 @@ fn call_on_threshold() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Vote again, should count the vote but the call should not be dispatched again.
-		assert_ok!(Witnesser::witness(
-			Origin::signed(CHARLEMAGNE),
-			call.clone()
-		));
+		assert_ok!(Witnesser::witness(Origin::signed(CHARLEMAGNE), call.clone()));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Check the deposited event to get the vote count.
@@ -74,9 +69,7 @@ fn call_on_threshold() {
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
 		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(
-			answer,
-		)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -94,17 +87,12 @@ fn cannot_double_witness() {
 fn only_validators_can_witness() {
 	new_test_ext().execute_with(|| {
 		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(
-			answer,
-		)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
 
 		// Validators can witness
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
-		assert_ok!(Witnesser::witness(
-			Origin::signed(CHARLEMAGNE),
-			call.clone()
-		));
+		assert_ok!(Witnesser::witness(Origin::signed(CHARLEMAGNE), call.clone()));
 
 		// Other accounts can't witness
 		assert_noop!(

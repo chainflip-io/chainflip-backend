@@ -3,10 +3,10 @@ use cf_traits::mocks::time_source;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -76,10 +76,7 @@ pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		governance: GovernanceConfig {
-			members: vec![ALICE, BOB, CHARLES],
-			expiry_span: 50,
-		},
+		governance: GovernanceConfig { members: vec![ALICE, BOB, CHARLES], expiry_span: 50 },
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

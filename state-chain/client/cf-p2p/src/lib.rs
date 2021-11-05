@@ -100,12 +100,13 @@ pub enum P2PEvent {
 	ValidatorDisconnected(AccountIdBs58),
 }
 
-/// The identifier for our protocol, required to distinguish it from other protocols running on the substrate p2p
-/// network.
+/// The identifier for our protocol, required to distinguish it from other protocols running on the
+/// substrate p2p network.
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
 
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
-	/// Runs concurrently in the background and manages receiving (from the senders in "notification_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers
+	/// Runs concurrently in the background and manages receiving (from the senders in
+	/// "notification_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers
 	notification_rpc_subscription_manager: SubscriptionManager,
 	state: Arc<Mutex<P2PValidatorNetworkNodeState>>,
 	p2p_network_service: Arc<P2PNetworkService>,
@@ -228,11 +229,8 @@ pub fn new_p2p_validator_network_node<
 	PN: PeerNetwork + Send + Sync + 'static,
 >(
 	p2p_network_service: Arc<PN>,
-	subscription_task_executor: impl Spawn + Send + Sync + 'static, 
-) -> (
-	RpcRequestHandler<MetaData, PN>,
-	impl futures::Future<Output = ()>,
-) {
+	subscription_task_executor: impl Spawn + Send + Sync + 'static,
+) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>) {
 	/// Encodes the message using bincode and sends it over the p2p network
 	fn encode_and_send<'a, Network: PeerNetwork, Peers: Iterator<Item = &'a PeerId>>(
 		p2p_network_service: &Arc<Network>,
@@ -240,14 +238,13 @@ pub fn new_p2p_validator_network_node<
 		peers: Peers,
 	) {
 		match bincode::serialize(&message) {
-			Ok(bytes) => {
+			Ok(bytes) =>
 				for peer in peers {
 					p2p_network_service.write_notification(*peer, bytes.clone());
-				}
-			}
+				},
 			Err(err) => {
 				log::error!("Error while serializing p2p protocol message {}", err);
-			}
+			},
 		}
 	}
 
@@ -343,13 +340,19 @@ pub fn new_p2p_validator_network_node<
 					subscriber: Subscriber<P2PEvent>,
 				) {
 					let (sender, receiver) = unbounded();
-					let subscription_id =
-						self.notification_rpc_subscription_manager
-							.add(subscriber, move |sink| async move {
-								sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-									.send_all(&mut receiver.map(Ok::<_, jsonrpc_core::Error>).map(Ok::<_, ()>))
-									.map(|_| ()).await
-							});
+					let subscription_id = self.notification_rpc_subscription_manager.add(
+						subscriber,
+						move |sink| async move {
+							sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+								.send_all(
+									&mut receiver
+										.map(Ok::<_, jsonrpc_core::Error>)
+										.map(Ok::<_, ()>),
+								)
+								.map(|_| ())
+								.await
+						},
+					);
 					self.state
 						.lock()
 						.unwrap()
@@ -363,28 +366,23 @@ pub fn new_p2p_validator_network_node<
 					_metadata: Option<Self::Metadata>,
 					id: SubscriptionId,
 				) -> jsonrpc_core::Result<bool> {
-					Ok(
-						if self
-							.notification_rpc_subscription_manager
-							.cancel(id.clone())
-						{
-							self.state
-								.lock()
-								.unwrap()
-								.notification_rpc_subscribers
-								.remove(&id)
-								.unwrap();
-							true
-						} else {
-							assert!(!self
-								.state
-								.lock()
-								.unwrap()
-								.notification_rpc_subscribers
-								.contains_key(&id));
-							false
-						},
-					)
+					Ok(if self.notification_rpc_subscription_manager.cancel(id.clone()) {
+						self.state
+							.lock()
+							.unwrap()
+							.notification_rpc_subscribers
+							.remove(&id)
+							.unwrap();
+						true
+					} else {
+						assert!(!self
+							.state
+							.lock()
+							.unwrap()
+							.notification_rpc_subscribers
+							.contains_key(&id));
+						false
+					})
 				}
 			}
 
@@ -414,17 +412,17 @@ pub fn new_p2p_validator_network_node<
 					match event {
 						Event::SyncConnected { remote } => {
 							p2p_network_service.reserve_peer(remote);
-						}
+						},
 						Event::SyncDisconnected { remote } => {
 							p2p_network_service.remove_reserved_peer(remote);
-						}
-						/*A peer has connected to the p2p network*/
+						},
+						/* A peer has connected to the p2p network */
 						Event::NotificationStreamOpened {
 							remote,
 							protocol,
 							role: _,
 							negotiated_fallback: _,
-						} => {
+						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								let mut state = state.lock().unwrap();
 								state.peer_to_validator.insert(remote, None);
@@ -435,9 +433,8 @@ pub fn new_p2p_validator_network_node<
 										iter::once(&remote),
 									);
 								}
-							}
-						}
-						/*A peer has disconnected from the p2p network*/
+							},
+						/* A peer has disconnected from the p2p network */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 								let mut state = state.lock().unwrap();
@@ -451,8 +448,8 @@ pub fn new_p2p_validator_network_node<
 									);
 								}
 							}
-						}
-						/*Received p2p messages from a peer*/
+						},
+						/* Received p2p messages from a peer */
 						Event::NotificationsReceived { remote, messages } => {
 							let mut messages = messages
 								.into_iter()
@@ -475,7 +472,7 @@ pub fn new_p2p_validator_network_node<
 														"Received an identify before stream opened for peer {:?}",
 														remote
 													);
-												}
+												},
 												Entry::Occupied(mut entry) => {
 													if entry.get().is_some() {
 														log::warn!(
@@ -495,9 +492,9 @@ pub fn new_p2p_validator_network_node<
 															),
 														);
 													}
-												}
+												},
 											}
-										}
+										},
 										Ok(P2PMessage::Message(raw_message)) => {
 											match state.peer_to_validator.get(&remote) {
 												Some(Some(validator_id)) => {
@@ -508,21 +505,21 @@ pub fn new_p2p_validator_network_node<
 															raw_message.into(),
 														),
 													);
-												}
+												},
 												_ => log::error!(
 													"Dropping message from unidentified peer {:?}",
 													remote
 												),
 											}
-										}
+										},
 										Err(err) => {
 											log::error!("Error deserializing p2p message: {}", err);
-										}
+										},
 									}
 								}
 							}
-						}
-						Event::Dht(_) => {}
+						},
+						Event::Dht(_) => {},
 					}
 				}
 			}
@@ -535,7 +532,7 @@ mod tests {
 
 	use super::*;
 	use jsonrpc_core::MetaIoHandler;
-use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
+	use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 	use tokio;
 	use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -544,9 +541,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 	}
 	impl TestNetwork {
 		fn new() -> Arc<Self> {
-			Arc::new(Self {
-				validators: Default::default(),
-			})
+			Arc::new(Self { validators: Default::default() })
 		}
 	}
 
@@ -570,11 +565,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
 					})
 					.unwrap();
-				remote_sender
-					.send(Event::SyncDisconnected {
-						remote: self.peer_id,
-					})
-					.unwrap();
+				remote_sender.send(Event::SyncDisconnected { remote: self.peer_id }).unwrap();
 			}
 		}
 	}
@@ -601,11 +592,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 			for (remote_peer_id, remote_sender) in validators.iter() {
 				use sc_network::ObservedRole;
 
-				remote_sender
-					.send(Event::SyncConnected {
-						remote: self.peer_id,
-					})
-					.unwrap();
+				remote_sender.send(Event::SyncConnected { remote: self.peer_id }).unwrap();
 				remote_sender
 					.send(Event::NotificationStreamOpened {
 						remote: self.peer_id,
@@ -614,11 +601,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						negotiated_fallback: None,
 					})
 					.unwrap();
-				sender
-					.send(Event::SyncConnected {
-						remote: *remote_peer_id,
-					})
-					.unwrap();
+				sender.send(Event::SyncConnected { remote: *remote_peer_id }).unwrap();
 				sender
 					.send(Event::NotificationStreamOpened {
 						remote: *remote_peer_id,
@@ -667,10 +650,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		let matching_id = [1; 32];
 		assert!(matches!(try_self_identify(matching_id).await, Ok(200u64)));
 		assert!(matches!(try_self_identify(matching_id).await, Ok(200u64)));
-		assert!(matches!(
-			try_self_identify([2; 32]).await,
-			Err(RpcError::JsonRpcError(_))
-		));
+		assert!(matches!(try_self_identify([2; 32]).await, Err(RpcError::JsonRpcError(_))));
 	}
 
 	#[tokio::test]
@@ -679,15 +659,10 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		let node_0 = new_node(PeerId::random(), network.clone());
 		let node_1 = new_node(PeerId::random(), network.clone());
 
-		let mut node1_notification_stream = node_0
-			.subscribe_notifications()
-			.unwrap();
+		let mut node1_notification_stream = node_0.subscribe_notifications().unwrap();
 
 		let node_1_account_id = AccountIdBs58([5; 32]);
-		node_1
-			.self_identify(node_1_account_id.clone())
-			.await
-			.unwrap();
+		node_1.self_identify(node_1_account_id.clone()).await.unwrap();
 		assert_eq!(
 			node1_notification_stream.next().await.unwrap().unwrap(),
 			P2PEvent::ValidatorConnected(node_1_account_id.clone())
@@ -695,18 +670,12 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 
 		let try_send = || async {
 			node_0
-				.send(
-					node_1_account_id.clone(),
-					MessageBs58(Vec::from(&b"hello"[..])),
-				)
+				.send(node_1_account_id.clone(), MessageBs58(Vec::from(&b"hello"[..])))
 				.await
 		};
 
 		assert!(matches!(try_send().await, Err(RpcError::JsonRpcError(_))));
-		assert!(matches!(
-			node_0.self_identify(AccountIdBs58([1; 32])).await,
-			Ok(200u64)
-		));
+		assert!(matches!(node_0.self_identify(AccountIdBs58([1; 32])).await, Ok(200u64)));
 		assert!(matches!(try_send().await, Ok(200u64)));
 	}
 
@@ -715,20 +684,11 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		let network = TestNetwork::new();
 		let node_0 = new_node(PeerId::random(), network.clone());
 
-		let try_broadcast = || async {
-			node_0
-				.broadcast(MessageBs58(Vec::from(&b"hello"[..])))
-				.await
-		};
+		let try_broadcast =
+			|| async { node_0.broadcast(MessageBs58(Vec::from(&b"hello"[..]))).await };
 
-		assert!(matches!(
-			try_broadcast().await,
-			Err(RpcError::JsonRpcError(_))
-		));
-		assert!(matches!(
-			node_0.self_identify(AccountIdBs58([1; 32])).await,
-			Ok(200u64)
-		));
+		assert!(matches!(try_broadcast().await, Err(RpcError::JsonRpcError(_))));
+		assert!(matches!(node_0.self_identify(AccountIdBs58([1; 32])).await, Ok(200u64)));
 		assert!(matches!(try_broadcast().await, Ok(200u64)));
 	}
 
@@ -738,15 +698,10 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		let node_0 = new_node(PeerId::random(), network.clone());
 		let node_1 = new_node(PeerId::random(), network.clone());
 
-		let mut node1_notification_stream = node_0
-			.subscribe_notifications()
-			.unwrap();
+		let mut node1_notification_stream = node_0.subscribe_notifications().unwrap();
 
 		let account_id = AccountIdBs58([5; 32]);
-		node_1
-			.self_identify(account_id.clone())
-			.await
-			.unwrap();
+		node_1.self_identify(account_id.clone()).await.unwrap();
 		assert_eq!(
 			node1_notification_stream.next().await.unwrap().unwrap(),
 			P2PEvent::ValidatorConnected(account_id)
@@ -762,19 +717,12 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 		other_account_ids: Iter,
 		network: Arc<TestNetwork>,
 		subscribe_barrier: &tokio::sync::Barrier,
-	) -> (
-		P2PRpcClient,
-		TypedSubscriptionStream<P2PEvent>,
-	) {
+	) -> (P2PRpcClient, TypedSubscriptionStream<P2PEvent>) {
 		let node = new_node(peer_id, network.clone());
-		let mut stream = node
-			.subscribe_notifications()
-			.unwrap();
+		let mut stream = node.subscribe_notifications().unwrap();
 		subscribe_barrier.wait().await;
 
-		node.self_identify(account_id.clone())
-			.await
-			.unwrap();
+		node.self_identify(account_id.clone()).await.unwrap();
 
 		let mut messages = vec![];
 		for _ in other_account_ids.clone() {
@@ -819,13 +767,12 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						&node_0_account_id,
 						[node_1_account_id.clone(), node_2_account_id.clone()].iter(),
 						network.clone(),
-						&subscribe_barrier
+						&subscribe_barrier,
 					)
 					.await;
 
 				assert!(matches!(
-					node.send(node_1_account_id.clone(), node_0_sent_message.clone())
-						.await,
+					node.send(node_1_account_id.clone(), node_0_sent_message.clone()).await,
 					Ok(200u64)
 				));
 
@@ -847,7 +794,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 						&node_1_account_id,
 						[node_0_account_id.clone(), node_2_account_id.clone()].iter(),
 						network.clone(),
-						&subscribe_barrier
+						&subscribe_barrier,
 					)
 					.await;
 
@@ -881,8 +828,7 @@ use jsonrpc_core_client::{transports::local, RpcError, TypedSubscriptionStream};
 					.await;
 
 				assert!(matches!(
-					node.broadcast(node_2_broadcast_message.clone())
-						.await,
+					node.broadcast(node_2_broadcast_message.clone()).await,
 					Ok(200u64)
 				));
 

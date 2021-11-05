@@ -170,12 +170,8 @@ pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig {
-			total_issuance: 1_000,
-		},
-		staking: StakingConfig {
-			genesis_stakers: vec![],
-		},
+		flip: FlipConfig { total_issuance: 1_000 },
+		staking: StakingConfig { genesis_stakers: vec![] },
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

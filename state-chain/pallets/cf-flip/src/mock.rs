@@ -105,12 +105,8 @@ pub fn check_balance_integrity() {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig {
-			total_issuance: 1_000,
-		},
-	};
+	let config =
+		GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance: 1_000 } };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

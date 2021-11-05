@@ -78,12 +78,10 @@ pub mod pallet {
 					.expect("Stake manager address must be set at genesis."),
 			);
 			KeyManagerAddress::<T>::set(
-				self.key_manager_address
-					.expect("Key manager address must be set at genesis."),
+				self.key_manager_address.expect("Key manager address must be set at genesis."),
 			);
 			EthereumChainId::<T>::set(
-				self.ethereum_chain_id
-					.expect("Ethereum chain id must be set at genesis."),
+				self.ethereum_chain_id.expect("Ethereum chain id must be set at genesis."),
 			);
 		}
 	}

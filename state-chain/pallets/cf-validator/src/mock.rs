@@ -1,20 +1,19 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline};
-use frame_support::traits::ValidatorRegistration;
+use cf_traits::{
+	mocks::vault_rotation::Mock as MockHandler, Bid, BidderProvider, ChainflipAccountData, IsOnline,
+};
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{OnFinalize, OnInitialize},
+	traits::{OnFinalize, OnInitialize, ValidatorRegistration},
 };
 
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Perbill,
+	BuildStorage, Perbill,
 };
 use std::cell::RefCell;
 
@@ -201,11 +200,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		session: SessionConfig {
-			keys: DUMMY_GENESIS_VALIDATORS.iter().map(|&i| (i, i, UintAuthorityId(i).into())).collect(),
+			keys: DUMMY_GENESIS_VALIDATORS
+				.iter()
+				.map(|&i| (i, i, UintAuthorityId(i).into()))
+				.collect(),
 		},
-		validator_pallet: ValidatorPalletConfig {
-			blocks_per_epoch: 0,
-		},
+		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
 		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],

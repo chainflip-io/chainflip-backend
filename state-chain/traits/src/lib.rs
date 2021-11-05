@@ -4,17 +4,16 @@ pub mod mocks;
 
 use cf_chains::Chain;
 use codec::{Decode, Encode};
-use frame_support::pallet_prelude::Member;
-use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	pallet_prelude::Member,
+	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
 use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
-use sp_std::marker::PhantomData;
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -48,12 +47,12 @@ pub trait Witnesser {
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
 
-	/// Witness an event. The event is represented by a call, which is dispatched when a threshold number of witnesses
-	/// have been made.
+	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
+	/// number of witnesses have been made.
 	///
 	/// **IMPORTANT**
-	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should be enforced by adding
-	/// a salt or nonce to the function arguments.
+	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should
+	/// be enforced by adding a salt or nonce to the function arguments.
 	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
 }
@@ -191,8 +190,8 @@ pub trait EpochTransitionHandler {
 	type Amount: Copy;
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with a
-	/// `_new_bond`
+	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
+	/// a `_new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -242,8 +241,8 @@ pub trait StakeTransfer {
 
 	/// Reserves funds for a claim, if enough claimable funds are available.
 	///
-	/// Note this function makes no assumptions about how many claims may be pending simultaneously: if enough funds
-	/// are available, it succeeds. Otherwise, it fails.
+	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
+	/// if enough funds are available, it succeeds. Otherwise, it fails.
 	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
 
 	/// Performs any necessary settlement once a claim has been confirmed off-chain.
@@ -285,7 +284,8 @@ pub trait RewardsDistribution {
 
 pub trait RewardRollover {
 	type AccountId;
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
+	/// are available.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
@@ -315,7 +315,6 @@ pub trait IsOnline {
 /// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
 /// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
 /// interval are marked as awaiting.
-///
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
 	/// Those nodes that we are awaiting a heartbeat from
@@ -331,10 +330,7 @@ impl<ValidatorId: Default> NetworkState<ValidatorId> {
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
 
-		number_online
-			.saturating_mul(100)
-			.checked_div(self.number_of_nodes)
-			.unwrap_or(0)
+		number_online.saturating_mul(100).checked_div(self.number_of_nodes).unwrap_or(0)
 	}
 }
 
@@ -362,9 +358,7 @@ pub struct ChainflipAccountData {
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData {
-			state: ChainflipAccountState::Passive,
-		}
+		ChainflipAccountData { state: ChainflipAccountState::Passive }
 	}
 }
 
@@ -412,8 +406,8 @@ pub trait SignerNomination {
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	fn nomination_with_seed(seed: u64) -> Self::SignerId;
 
-	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
-	/// seed value is used as a source of randomness.
+	/// Returns a list of live signers where the number of signers is sufficient to author a
+	/// threshold signature. The seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
 }
 
@@ -465,8 +459,7 @@ pub trait SigningContext<T: Chainflip> {
 		origin: OriginFor<T>,
 		signature: Self::Signature,
 	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature)
-			.dispatch_bypass_filter(origin)
+		self.resolve_callback(signature).dispatch_bypass_filter(origin)
 	}
 }
 

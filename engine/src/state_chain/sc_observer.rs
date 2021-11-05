@@ -70,7 +70,7 @@ pub async fn start<BlockStream, RpcClient>(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
                                         chain_id,
-                                        validator_candidates
+                                        validator_candidates,
                                     ),
                                 ) => {
                                     let signers: Vec<_> = validator_candidates
@@ -130,10 +130,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .submit_extrinsic(
-                                            &logger,
-                                            response_extrinsic,
-                                        )
+                                        .submit_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 state_chain_runtime::Event::EthereumThresholdSigner(
@@ -197,17 +194,14 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .submit_extrinsic(
-                                            &logger,
-                                            response_extrinsic,
-                                        )
+                                        .submit_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 state_chain_runtime::Event::EthereumBroadcaster(
                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
                                         attempt_id,
                                         validator_id,
-                                        unsigned_tx
+                                        unsigned_tx,
                                     ),
                                 ) if validator_id == state_chain_client.our_account_id => {
                                     slog::debug!(
@@ -227,13 +221,13 @@ pub async fn start<BlockStream, RpcClient>(
                                                     ),
                                                 )
                                             ).await;
-                                        },
+                                        }
                                         Err(e) => {
                                             // Note: this error case should only occur if there is a problem with the
-                                            // local ethereum node, which would mean the web3 lib is unable to fill in 
+                                            // local ethereum node, which would mean the web3 lib is unable to fill in
                                             // the tranaction params, mainly the gas limit.
                                             // In the long run all transaction parameters will be provided by the state
-                                            // chain and the above eth_broadcaster.sign_tx method can be made 
+                                            // chain and the above eth_broadcaster.sign_tx method can be made
                                             // infallible.
                                             slog::error!(
                                                 logger,
@@ -241,7 +235,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 attempt_id,
                                                 e
                                             );
-                                        },
+                                        }
                                     }
                                 }
                                 state_chain_runtime::Event::EthereumBroadcaster(
@@ -256,7 +250,9 @@ pub async fn start<BlockStream, RpcClient>(
                                         attempt_id,
                                         hex::encode(&signed_tx),
                                     );
-                                    let response_extrinsic = match eth_broadcaster.send(signed_tx).await
+                                    let response_extrinsic = match eth_broadcaster
+                                        .send(signed_tx)
+                                        .await
                                     {
                                         Ok(tx_hash) => {
                                             slog::debug!(
@@ -282,14 +278,18 @@ pub async fn start<BlockStream, RpcClient>(
                                             )
                                         }
                                     };
-                                    let _ = state_chain_client.submit_extrinsic(
-                                        &logger,
-                                        response_extrinsic,
-                                    ).await;
+                                    let _ = state_chain_client
+                                        .submit_extrinsic(&logger, response_extrinsic)
+                                        .await;
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about
-                                    slog::trace!(logger, "Ignoring event at block {}: {:?}", block_header.number, ignored_event);
+                                    slog::trace!(
+                                        logger,
+                                        "Ignoring event at block {}: {:?}",
+                                        block_header.number,
+                                        ignored_event
+                                    );
                                 }
                             }
                         }

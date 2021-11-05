@@ -81,10 +81,8 @@ pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		// This is required to log events.
