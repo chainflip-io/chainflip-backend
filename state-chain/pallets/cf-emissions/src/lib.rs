@@ -52,7 +52,7 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
 			+ UniqueSaturatedFrom<Self::BlockNumber>
-			+ Into<cf_chains::eth::U256>;
+			+ Into<cf_chains::eth::Uint>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -81,7 +81,7 @@ pub mod pallet {
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
-		/// Top-level Ethereum signing context needs to support `RegisterClaim`.
+		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
 		type SigningContext: From<UpdateFlipSupply>
 			+ SigningContext<Self, Chain = cf_chains::Ethereum>;
 
@@ -150,7 +150,7 @@ pub mod pallet {
 			if should_mint {
 				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
 				let new_total_supply = T::Issuance::total_issuance();
-				Self::update_total_supply(new_total_supply, current_block);
+				Self::broadcast_update_total_supply(new_total_supply, current_block);
 			}
 
 			weight
@@ -251,13 +251,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Updates the total supply on the ETH blockchain
-	fn update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
+	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
 		// TODO: extend the BlockNumber type in a nice to avoid this parse here
 		let block_as_u32: u32 = block_number.saturated_into();
 		let transaction = UpdateFlipSupply::new_unsigned(
 			T::NonceProvider::next_nonce(),
-			total_supply.into(),
-			block_as_u32.into(),
+			total_supply,
+			block_as_u32,
 		);
 		// Emit a threshold signature request.
 		T::ThresholdSigner::request_transaction_signature(transaction.clone());

@@ -34,10 +34,10 @@ impl ChainflipContractCall for UpdateFlipSupply {
 }
 
 impl UpdateFlipSupply {
-	pub fn new_unsigned<Nonce: Into<Uint>>(
+	pub fn new_unsigned<Nonce: Into<Uint>, TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
 		nonce: Nonce,
-		new_total_supply: Uint,
-		state_chain_block_number: Uint,
+		new_total_supply: TotalSupply,
+		state_chain_block_number: BlockNumber,
 	) -> Self {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(nonce.into()),
