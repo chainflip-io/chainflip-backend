@@ -19,8 +19,7 @@ extern crate assert_matches;
 mod benchmarking;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler,
+	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};

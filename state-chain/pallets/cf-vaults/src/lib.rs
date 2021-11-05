@@ -42,24 +42,26 @@ pub enum VaultRotationStatus<T: Config> {
 	},
 }
 
-type BlockHeight = u64;
+/// The bounds within which a public key for a vault should be used for witnessing.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct BlockHeightWindow {
+	pub from: u64,
+	pub to: Option<u64>,
+}
 
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault {
 	/// The vault's public key.
 	pub public_key: Vec<u8>,
-	/// At which block height this key was rotated to
-	pub block_height: BlockHeight,
+	/// The active window for this vault
+	pub active_window: BlockHeightWindow,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
-
-	/// This is roughly the number of Ethereum blocks in 14 days.
-	pub const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -327,18 +329,32 @@ pub mod pallet {
 				));
 			}
 
+			// We update the current epoch with an active window for the outgoers
+			Vaults::<T>::try_mutate_exists(T::EpochInfo::epoch_index(), chain_id, |maybe_vault| {
+				if let Some(vault) = maybe_vault.as_mut() {
+					vault.active_window.to = Some(block_number);
+					Ok(())
+				} else {
+					Err(Error::<T>::UnsupportedChain)
+				}
+			})?;
+
 			PendingVaultRotations::<T>::insert(
 				chain_id,
 				VaultRotationStatus::<T>::Complete { tx_hash },
 			);
 
-			// For the new epoch we create a new vault with the new public key and the block height
+			// For the new epoch we create a new vault with the new public key and its active
+			// window at for the block after that reported
 			Vaults::<T>::insert(
 				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
 				Vault {
 					public_key: new_public_key,
-					block_height: block_number,
+					active_window: BlockHeightWindow {
+						from: block_number.saturating_add(1),
+						to: None,
+					},
 				},
 			);
 
@@ -377,7 +393,7 @@ pub mod pallet {
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
-					block_height: BlockHeight::default(),
+					active_window: BlockHeightWindow::default(),
 				},
 			);
 		}

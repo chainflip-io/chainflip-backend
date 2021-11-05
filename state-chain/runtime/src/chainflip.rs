@@ -87,10 +87,7 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 		// Update the last active epoch for the new validating set
 		let epoch_index = Validator::epoch_index();
 		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(
-				&validator,
-				epoch_index,
-			);
+			ChainflipAccountStore::<Runtime>::update_last_active_epoch(&validator, epoch_index);
 		}
 	}
 }
@@ -360,8 +357,11 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key() -> Self::KeyId {
-		Vaults::current_vaults(<Ethereum as cf_chains::Chain>::CHAIN_ID)
-			.expect("Ethereum is always supported.")
-			.public_key
+		Vaults::vaults(
+			Validator::epoch_index(),
+			<Ethereum as cf_chains::Chain>::CHAIN_ID,
+		)
+		.expect("Ethereum is always supported.")
+		.public_key
 	}
 }
