@@ -296,8 +296,9 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 		// If we are waiting on bids let's see if we want to start a new rotation
 		match T::Auctioneer::phase() {
 			AuctionPhase::WaitingForBids => {
-				// If the session should end, run through an auction
-				// two steps- validate and select winners
+				// If the session should end, start an auction.  We evaluate the first two steps
+				// of the auction, validate and select winners, as one.  If this fails we force a
+				// new rotation attempt.
 				if Self::should_rotate(now) {
 					let processed =
 						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
