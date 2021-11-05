@@ -242,7 +242,7 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
 		///
-		/// On success, the implementatation of [ThresholdSigner] should emit an event. The attached claim request needs
+		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached claim request needs
 		/// to be signed by a threshold of validators in order to produce valid data that can be submitted to the
 		/// StakeManager Smart Contract.
 		///
