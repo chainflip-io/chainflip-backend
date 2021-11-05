@@ -122,18 +122,12 @@ pub enum ParityBit {
 impl ParityBit {
 	/// Returns `true` if the parity bit is odd, otherwise `false`.
 	pub fn is_odd(&self) -> bool {
-		match self {
-			Self::Odd => true,
-			_ => false,
-		}
+		matches!(self, Self::Odd)
 	}
 
 	/// Returns `true` if the parity bit is even, otherwise `false`.
 	pub fn is_even(&self) -> bool {
-		match self {
-			Self::Even => true,
-			_ => false,
-		}
+		matches!(self, Self::Even)
 	}
 
 	/// Converts this parity bit to a recovery id for the provided chain_id as per EIP-155.
