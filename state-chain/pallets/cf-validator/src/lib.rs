@@ -24,6 +24,7 @@ use cf_traits::{
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
+use sp_runtime::offchain::storage_lock::BlockNumberProvider;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, OpaqueKeys};
 use sp_std::prelude::*;
 
@@ -302,9 +303,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				if Self::should_rotate(now) {
 					let processed =
 						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
-					if processed {
-						CurrentEpochStartedAt::<T>::set(now);
-					} else {
+					if !processed {
 						Force::<T>::set(true);
 					}
 					return processed;
@@ -380,6 +379,10 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 						*epoch = epoch.saturating_add(One::one());
 						*epoch
 					});
+					// Set the block this epoch starts at
+					CurrentEpochStartedAt::<T>::set(
+						frame_system::Pallet::<T>::current_block_number(),
+					);
 					// Emit an event
 					Self::deposit_event(Event::NewEpoch(new_epoch));
 					// Generate our lookup list of validators
