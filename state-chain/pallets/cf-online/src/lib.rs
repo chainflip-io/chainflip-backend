@@ -56,16 +56,15 @@ pub mod pallet {
 		/// On initializing each block we check network liveness on every heartbeat interval and
 		/// feedback the state of the network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let block = current_block.try_into().unwrap_or_default();
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				let network_state = Self::check_network_liveness();
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return T::WeightInfo::submit_network_state(block);
+				return T::WeightInfo::submit_network_state();
 			}
 
-			T::WeightInfo::on_initialize_no_action(block)
+			T::WeightInfo::on_initialize_no_action()
 		}
 	}
 
