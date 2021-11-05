@@ -9,6 +9,7 @@ use crate::{
     settings,
     state_chain::client::StateChainRpcApi,
 };
+use cf_chains::ChainId;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -31,7 +32,7 @@ use super::eth_event_streamer::Event;
 pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
-    _state_chain_client: Arc<StateChainClient<RPCCLient>>,
+    state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
@@ -47,29 +48,24 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
             let event = result_event.unwrap();
+            slog::info!(logger, "Event found: {}", &event);
             match event.event_enum {
-                KeyManagerEvent::KeyChange { .. } => {
-                    slog::info!(
-                        logger,
-                        "KeyChange event found: {}",
-                        hex::encode(event.tx_hash)
-                    );
+                KeyManagerEvent::KeyChange { new_key, .. } => {
+                    let _ = state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
+                                ChainId::Ethereum,
+                                new_key.serialize().to_vec(),
+                                event.block_number,
+                                event.tx_hash.to_vec(),
+                            ),
+                        )
+                        .await;
                 }
                 KeyManagerEvent::Shared(shared_event) => match shared_event {
-                    SharedEvent::Refunded { .. } => {
-                        slog::info!(
-                            logger,
-                            "Refunded event found: {}",
-                            hex::encode(event.tx_hash)
-                        );
-                    }
-                    SharedEvent::RefundFailed { .. } => {
-                        slog::info!(
-                            logger,
-                            "RefundFailed event found: {}",
-                            hex::encode(event.tx_hash)
-                        );
-                    }
+                    SharedEvent::Refunded { .. } => {}
+                    SharedEvent::RefundFailed { .. } => {}
                 },
             }
         }
@@ -99,6 +95,18 @@ impl ChainflipKey {
                 false => web3::types::U256::from_dec_str("0").unwrap(),
             },
         })
+    }
+
+    /// 1 byte of pub_key_y_parity followed by 32 bytes of pub_key_x
+    /// Equivalent to secp256k1::PublicKey.serialize()
+    pub fn serialize(&self) -> [u8; 33] {
+        let mut bytes: [u8; 33] = [0; 33];
+        self.pub_key_x.to_big_endian(&mut bytes[1..]);
+        bytes[0] = match self.pub_key_y_parity.is_zero() {
+            true => 02,
+            false => 03,
+        };
+        bytes
     }
 }
 
@@ -370,7 +378,7 @@ mod tests {
                 .unwrap()],
                 data: web3::types::Bytes(hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
                 block_hash: None,
-                block_number: None,
+                block_number: Some(web3::types::U64::zero()),
                 transaction_hash: Some(transaction_hash),
                 transaction_index: None,
                 log_index: None,
@@ -381,5 +389,27 @@ mod tests {
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash.to_fixed_bytes());
+    }
+
+    #[test]
+    fn test_chainflip_key_serialize() {
+        use secp256k1::PublicKey;
+
+        // Create a `ChainflipKey` and a `PublicKey` that are the same
+        let cf_key = ChainflipKey::from_dec_str(
+            "22479114112312168431982914496826057754130808976066989807481484372215659188398",
+            true,
+        )
+        .unwrap();
+
+        let sk = secp256k1::SecretKey::from_str(
+            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
+        )
+        .unwrap();
+
+        let secp_key = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
+
+        // Compare the serialize() values to make sure we serialize the same as secp256k1
+        assert_eq!(cf_key.serialize(), secp_key.serialize());
     }
 }
