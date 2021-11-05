@@ -152,8 +152,8 @@ workflows:
             - ghcr-credentials
             - github-credentials
       - cargo-build-and-test-validator-package:
-          requires:
-            - cargo-fmt-validator-package
+          #requires:
+          #  - cargo-fmt-validator-package
           context:
             - ghcr-credentials
             - github-credentials
