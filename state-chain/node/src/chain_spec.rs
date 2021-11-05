@@ -185,7 +185,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
 		"three-node-test",
-		ChainType::Live,
+		ChainType::Local,
 		move || {
 			testnet_genesis(
 				wasm_binary,
@@ -266,7 +266,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
 		"test",
-		ChainType::Live,
+		ChainType::Local,
 		move || {
 			testnet_genesis(
 				wasm_binary,
