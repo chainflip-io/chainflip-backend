@@ -16,7 +16,7 @@ use web3::{
 pub struct Event<EventEnum: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
-    /// Block number the event occurred at
+    /// Block number at which the event occurred
     pub block_number: u64,
     /// The event specific parameters
     pub event_enum: EventEnum,
@@ -26,8 +26,9 @@ impl<EventEnum: Debug> std::fmt::Display for Event<EventEnum> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EventEnum: {:?}; tx_hash: 0x{}",
+            "EventEnum: {:?}; block_number: {}; tx_hash: 0x{}",
             self.event_enum,
+            self.block_number,
             hex::encode(self.tx_hash)
         )
     }
@@ -159,7 +160,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
+    #[ignore = "Depends on a running hardhat instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_key_manager_events() {
         let logger = logging::test_utils::new_test_logger();
 
