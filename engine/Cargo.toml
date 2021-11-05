@@ -59,7 +59,7 @@ tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
-web3 = "0.17.0"
+web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -80,8 +80,8 @@ utilities = {path = "../utilities"}
 
 # substrate deps
 [dependencies.substrate-subxt]
-git = 'https://github.com/chainflip-io/substrate-subxt.git'
 branch = 'compat/substrate-monthly-2021-09'
+git = 'https://github.com/chainflip-io/substrate-subxt.git'
 
 [dependencies.codec]
 features = ['derive', 'full']
