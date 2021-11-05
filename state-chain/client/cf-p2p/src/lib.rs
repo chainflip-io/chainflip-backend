@@ -134,7 +134,7 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
 		},
 		fallback_names: Vec::new(),
 	}
