@@ -12,8 +12,8 @@ use state_chain_runtime::{
 use std::{convert::TryInto, env};
 
 const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = EnvironmentConfig {
-	stake_manager_address: Some(hex_literal::hex!["Ad1b70C965b6F25F61623B0AfB78F4704c3BD9A4"]),
-	key_manager_address: Some(hex_literal::hex!["7fCBE09AA0889E5A5f2B54B8Da84cbf9B4DB1407"]),
+	stake_manager_address: Some(hex_literal::hex!["1b3992164d914d53bb4F3EE69546b78335f01546"]),
+	key_manager_address: Some(hex_literal::hex!["49c4dE049594B8366b2D2e0B908ce499534F32C8"]),
 	ethereum_chain_id: Some(4),
 };
 
@@ -46,14 +46,14 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
 	let stake_manager_address: [u8; 20] = hex::decode(
 		env::var("STAKE_MANAGER_ADDRESS")
-			.unwrap_or(String::from("Ad1b70C965b6F25F61623B0AfB78F4704c3BD9A4")),
+			.unwrap_or(String::from("1b3992164d914d53bb4F3EE69546b78335f01546")),
 	)
 	.unwrap()
 	.try_into()
 	.expect("address cast failed");
 	let key_manager_address: [u8; 20] = hex::decode(
 		env::var("KEY_MANAGER_ADDRESS")
-			.unwrap_or(String::from("7fCBE09AA0889E5A5f2B54B8Da84cbf9B4DB1407")),
+			.unwrap_or(String::from("49c4dE049594B8366b2D2e0B908ce499534F32C8")),
 	)
 	.unwrap()
 	.try_into()
