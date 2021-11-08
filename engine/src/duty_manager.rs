@@ -16,21 +16,20 @@ use crate::logging::COMPONENT_KEY;
 // use crate::state_chain::pallets::validator::NewEpochEvent;
 // use crate::state_chain::runtime::StateChainRuntime;
 
+/// Represents the different "action" states the CFE can be in
+/// These only have rough mappings to the State Chain's idea of a node's state
 pub enum NodeState {
-    // Only monitoring for storage change events
+    // Only monitoring for storage change events - so we know when/if we should transition to another state
     Passive,
     // The node must be liave
     // Only submits heartbeats + monitors storage change events
-    BackupValidator,
+    // Backup Validators and Outgoing Validators (which may be Backup too) fall into this category
+    HeartbeatAndWatch,
 
-    // For now we'll put
-    // Only submits heartbeats, but was active in the previous epoch
-    Outgoing,
-
-    /// THIS MUST TAKE PRECEDENCE, IT COULD CAPTURE OUTGOING TOO
     // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
-    RunningValidator,
+    // Outgoing, until the last ETH block is done being witnessed - do we want to cache this somewhere? - or use a Last consensus block method
+    Running,
 }
 
 pub struct DutyManager {
@@ -60,7 +59,7 @@ impl DutyManager {
         let test_account_id: [u8; 32] = [0; 32];
         DutyManager {
             account_id: AccountId(test_account_id),
-            node_state: NodeState::RunningValidator,
+            node_state: NodeState::Running,
             _account_state: ChainflipAccountState::Passive,
             start_duties_at: HashMap::new(),
             current_epoch: 0,
@@ -69,10 +68,11 @@ impl DutyManager {
 
     /// Check if the heartbeat is enabled
     pub fn is_heartbeat_enabled(&self) -> bool {
-        match self.node_state {
-            NodeState::BackupValidator | NodeState::RunningValidator | NodeState::Outgoing => true,
-            NodeState::Passive => false,
-        }
+        // match self.node_state {
+        //     NodeState::BackupValidator | NodeState::RunningValidator | NodeState::Outgoing => true,
+        //     NodeState::Passive => false,
+        // }
+        return true;
     }
 
     pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
@@ -108,29 +108,31 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
                     .await
                     .unwrap();
 
-                if my_account_data.last_active_epoch.is_some()
-                    && my_account_data.last_active_epoch.unwrap() + 1
-                        == duty_manager.read().await.current_epoch
-                {
-                    duty_manager.write().await.node_state = NodeState::Outgoing;
+                let current_epoch = duty_manager.read().await.current_epoch;
+                println!("Current epoch is: {}", current_epoch);
+                println!("My account data: {:?}", my_account_data);
+                let outgoing_or_current_validator = my_account_data.last_active_epoch.is_some()
+                    && ((my_account_data.last_active_epoch.unwrap() + 1) == current_epoch
+                        || my_account_data.last_active_epoch.unwrap() == current_epoch);
+                if outgoing_or_current_validator {
+                    println!("We are outgoing or current validator");
+                    duty_manager.write().await.node_state = NodeState::Running;
 
-                    // Only if we're outgoing do we care what the closing block heights are
+                    let vaults = state_chain_client
+                        .get_vaults(&block_header, current_epoch)
+                        .await;
 
-                    // We want to get both epochs, current and outgoing
-                    // let vault = stat.epoch_at_block(current_epoch).await;
-
-                    // How do we get out of the Outgoing validator state?
-                    // NB: Even if we are a backup validator, we are Outgoing before we're anything else.
+                    println!("here are the vaults: {:?}", vaults);
                 } else {
                     match my_account_data.state {
-                        ChainflipAccountState::Validator => {
-                            duty_manager.write().await.node_state = NodeState::RunningValidator;
-                        }
                         ChainflipAccountState::Backup => {
-                            duty_manager.write().await.node_state = NodeState::BackupValidator;
+                            duty_manager.write().await.node_state = NodeState::HeartbeatAndWatch;
                         }
-                        _ => {
+                        ChainflipAccountState::Passive => {
                             duty_manager.write().await.node_state = NodeState::Passive;
+                        }
+                        ChainflipAccountState::Validator => {
+                            panic!("We should never get here, as this state should be captured in the above `if`");
                         }
                     }
                 }
@@ -142,75 +144,78 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::state_chain::client::connect_to_state_chain;
-//     use crate::{logging, settings};
-//     use std::sync::Arc;
+#[cfg(test)]
+mod tests {
+    use crate::settings::Settings;
+    use crate::state_chain::client::connect_to_state_chain;
+    use crate::{logging, settings};
+    use std::sync::Arc;
 
-//     use super::*;
+    use super::*;
 
-//     #[tokio::test]
-//     #[ignore = "depends on sc"]
-//     async fn debug() {
-//         let settings = settings::test_utils::new_test_settings().unwrap();
-//         let logger = logging::test_utils::new_test_logger();
+    #[tokio::test]
+    #[ignore = "depends on sc"]
+    async fn debug() {
+        // let settings = settings::test_utils::new_test_settings().unwrap();
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let logger = logging::test_utils::new_test_logger();
 
-//         let (state_chain_client, block_stream) = connect_to_state_chain(&settings).await.unwrap();
+        let (state_chain_client, block_stream) =
+            connect_to_state_chain(&settings.state_chain).await.unwrap();
 
-//         let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
+        let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
 
-//         let duty_manager_fut = start_duty_manager(
-//             duty_manager.clone(),
-//             state_chain_client,
-//             block_stream,
-//             &logger,
-//         );
+        let duty_manager_fut = start_duty_manager(
+            duty_manager.clone(),
+            state_chain_client,
+            block_stream,
+            &logger,
+        );
 
-//         tokio::join!(duty_manager_fut,);
-//     }
+        tokio::join!(duty_manager_fut,);
+    }
 
-//     #[test]
-//     fn test_active_validator_window() {
-//         let active_window = BlockHeightWindow {
-//             from: 10,
-//             to: Some(20),
-//         };
-//         assert!(active_validator_at(&active_window, 15));
-//         assert!(active_validator_at(&active_window, 20));
-//         assert!(active_validator_at(&active_window, 10));
-//         assert!(!active_validator_at(&active_window, 1));
-//         assert!(!active_validator_at(&active_window, 21));
-//         let active_window = BlockHeightWindow {
-//             from: 100,
-//             to: None,
-//         };
-//         assert!(!active_validator_at(&active_window, 50));
-//         assert!(active_validator_at(&active_window, 150));
-//     }
+    // #[test]
+    // fn test_active_validator_window() {
+    //     let active_window = BlockHeightWindow {
+    //         from: 10,
+    //         to: Some(20),
+    //     };
+    //     assert!(active_validator_at(&active_window, 15));
+    //     assert!(active_validator_at(&active_window, 20));
+    //     assert!(active_validator_at(&active_window, 10));
+    //     assert!(!active_validator_at(&active_window, 1));
+    //     assert!(!active_validator_at(&active_window, 21));
+    //     let active_window = BlockHeightWindow {
+    //         from: 100,
+    //         to: None,
+    //     };
+    //     assert!(!active_validator_at(&active_window, 50));
+    //     assert!(active_validator_at(&active_window, 150));
+    // }
 
-//     #[tokio::test]
-//     async fn test_is_active_validator_at() {
-//         let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
+    // #[tokio::test]
+    // async fn test_is_active_validator_at() {
+    //     let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
 
-//         let mut dm = duty_manager.write().await;
-//         assert!(!dm.is_active_validator_at(ChainId::Ethereum, 0));
-//         dm.active_windows
-//             .push((ChainId::Ethereum, BlockHeightWindow { from: 0, to: None }));
-//         assert!(dm.is_active_validator_at(ChainId::Ethereum, 0));
-//         assert!(dm.is_active_validator_at(ChainId::Ethereum, 100000));
+    //     let mut dm = duty_manager.write().await;
+    //     assert!(!dm.is_active_validator_at(ChainId::Ethereum, 0));
+    //     dm.active_windows
+    //         .push((ChainId::Ethereum, BlockHeightWindow { from: 0, to: None }));
+    //     assert!(dm.is_active_validator_at(ChainId::Ethereum, 0));
+    //     assert!(dm.is_active_validator_at(ChainId::Ethereum, 100000));
 
-//         dm.active_windows.clear();
-//         dm.active_windows.push((
-//             ChainId::Ethereum,
-//             BlockHeightWindow {
-//                 from: 10,
-//                 to: Some(20),
-//             },
-//         ));
-//         assert!(!dm.is_active_validator_at(ChainId::Ethereum, 9));
-//         assert!(dm.is_active_validator_at(ChainId::Ethereum, 10));
-//         assert!(dm.is_active_validator_at(ChainId::Ethereum, 20));
-//         assert!(!dm.is_active_validator_at(ChainId::Ethereum, 21));
-//     }
-// }
+    //     dm.active_windows.clear();
+    //     dm.active_windows.push((
+    //         ChainId::Ethereum,
+    //         BlockHeightWindow {
+    //             from: 10,
+    //             to: Some(20),
+    //         },
+    //     ));
+    //     assert!(!dm.is_active_validator_at(ChainId::Ethereum, 9));
+    //     assert!(dm.is_active_validator_at(ChainId::Ethereum, 10));
+    //     assert!(dm.is_active_validator_at(ChainId::Ethereum, 20));
+    //     assert!(!dm.is_active_validator_at(ChainId::Ethereum, 21));
+    // }
+}

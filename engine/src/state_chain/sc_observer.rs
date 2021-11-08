@@ -281,16 +281,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         .submit_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
-                                state_chain_runtime::Event::pallet_cf_validator(
-                                    pallet_cf_validator::Event::NewEpoch(epoch_index)) => {
-                                        let mut duty_manager = duty_manager.write().await;
-                                        duty_manager.set_current_epoch(epoch_index);
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::NewEpoch(epoch_index),
+                                ) => {
+                                    let mut duty_manager = duty_manager.write().await;
+                                    duty_manager.set_current_epoch(epoch_index);
 
-                                        // Are we still an active validator here?
-                                        // do we need to check this
-
-
-                                    }
+                                    // Are we still an active validator here?
+                                    // do we need to check this
+                                }
                                 ignored_event => {
                                     // ignore events we don't care about
                                     slog::trace!(
