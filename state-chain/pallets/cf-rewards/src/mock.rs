@@ -85,9 +85,8 @@ impl pallet_cf_rewards::Config for Test {
 }
 
 pub fn check_balance_integrity() {
-	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
-		.map(|account| account.total())
-		.sum::<u128>();
+	let accounts_total =
+		pallet_cf_flip::Account::<Test>::iter_values().map(|account| account.total()).sum::<u128>();
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<u128>();
 
 	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());

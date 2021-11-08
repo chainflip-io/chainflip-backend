@@ -1,7 +1,6 @@
 mod tests {
 	use crate::{mock::*, Error, *};
-	use cf_traits::mocks::vault_rotation::clear_confirmation;
-	use cf_traits::IsOutgoing;
+	use cf_traits::{mocks::vault_rotation::clear_confirmation, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 

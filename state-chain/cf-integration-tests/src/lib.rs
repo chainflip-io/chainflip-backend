@@ -592,89 +592,82 @@ mod tests {
 		// - A new auction index has been generated
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.build()
-				.execute_with(|| {
-					// A network with a set of passive nodes
-					let (mut testnet, mut nodes) = network::Network::create(5);
-					// Add the genesis nodes to the test network
-					for validator in Validator::current_validators() {
-						testnet.add_node(validator);
-					}
-					// All nodes stake to be included in the next epoch which are witnessed on the
-					// state chain
-					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
-					}
-					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					// We should be in auction 1
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
+			super::genesis::default().blocks_per_epoch(EPOCH_BLOCKS).build().execute_with(|| {
+				// A network with a set of passive nodes
+				let (mut testnet, mut nodes) = network::Network::create(5);
+				// Add the genesis nodes to the test network
+				for validator in Validator::current_validators() {
+					testnet.add_node(validator);
+				}
+				// All nodes stake to be included in the next epoch which are witnessed on the
+				// state chain
+				for node in &nodes {
+					testnet
+						.stake_manager_contract
+						.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+				}
+				// Run to the next epoch to start the auction
+				testnet.move_forward_blocks(EPOCH_BLOCKS);
+				// We should be in auction 1
+				assert_eq!(Auction::current_auction_index(), 1, "this should be the first auction");
 
-					let genesis_validators: Vec<NodeId> = Validator::current_validators();
+				let genesis_validators: Vec<NodeId> = Validator::current_validators();
 
-					// We expect the following to become the next set of validators
-					let mut expected_validators = genesis_validators;
-					expected_validators.append(&mut nodes);
-					expected_validators.sort();
+				// We expect the following to become the next set of validators
+				let mut expected_validators = genesis_validators;
+				expected_validators.append(&mut nodes);
+				expected_validators.sort();
 
-					// In this block we should have reached the state `ValidatorsSelected`
-					// and in this group we would have in this network the genesis validators and
-					// the nodes that have staked as well
-					assert_matches::assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
-							candidates.sort();
-							assert_eq!(candidates, expected_validators);
-						},
-						"the new candidates should be those genesis validators and the new nodes created in test"
-					);
-					// For each subsequent block the state chain will check if the vault has rotated
-					// until then we stay in the `ValidatorsSelected`
-					// Run things the amount needed for an auction
-					testnet.move_forward_blocks(2);
-					// The vault rotation should have proceeded and we should now be back
-					// at `WaitingForBids` with a new set of winners; the genesis validators and
-					// the new nodes we staked into the network
-					assert_matches::assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
-					);
+				// In this block we should have reached the state `ValidatorsSelected`
+				// and in this group we would have in this network the genesis validators and
+				// the nodes that have staked as well
+				assert_matches::assert_matches!(
+					Auction::current_phase(),
+					AuctionPhase::ValidatorsSelected(mut candidates, _) => {
+						candidates.sort();
+						assert_eq!(candidates, expected_validators);
+					},
+					"the new candidates should be those genesis validators and the new nodes created in test"
+				);
+				// For each subsequent block the state chain will check if the vault has rotated
+				// until then we stay in the `ValidatorsSelected`
+				// Run things the amount needed for an auction
+				testnet.move_forward_blocks(2);
+				// The vault rotation should have proceeded and we should now be back
+				// at `WaitingForBids` with a new set of winners; the genesis validators and
+				// the new nodes we staked into the network
+				assert_matches::assert_matches!(
+					Auction::current_phase(),
+					AuctionPhase::WaitingForBids,
+					"we should back waiting for bids after a successful auction and rotation"
+				);
 
-					let AuctionResult { mut winners, minimum_active_bid } =
-						Auction::last_auction_result().expect("last auction result");
+				let AuctionResult { mut winners, minimum_active_bid } =
+					Auction::last_auction_result().expect("last auction result");
 
-					assert_eq!(
-						minimum_active_bid,
-						genesis::GENESIS_BALANCE,
-						"minimum active bid should be that set at genesis"
-					);
+				assert_eq!(
+					minimum_active_bid,
+					genesis::GENESIS_BALANCE,
+					"minimum active bid should be that set at genesis"
+				);
 
-					winners.sort();
-					assert_eq!(
+				winners.sort();
+				assert_eq!(
 						winners,
 						expected_validators,
 						"the new winners should be those genesis validators and the new nodes created in test"
 					);
 
-					let mut new_validators = Validator::current_validators();
-					new_validators.sort();
+				let mut new_validators = Validator::current_validators();
+				new_validators.sort();
 
-					// This new set of winners should also be the validators of the network
-					assert_eq!(
+				// This new set of winners should also be the validators of the network
+				assert_eq!(
 						new_validators,
 						expected_validators,
 						"the new validators should be those genesis validators and the new nodes created in test"
 					);
-				});
+			});
 		}
 	}
 
