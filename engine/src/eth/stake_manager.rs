@@ -52,15 +52,12 @@ pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
             // TODO: Handle unwraps
             let event = result_event.unwrap();
 
-            // could this be updated incorrectly and cause a race condition.
+            if !duty_manager
+                .read()
+                .await
+                .is_running_validator_for_chain_at(ChainId::Ethereum, event.block_number)
             {
-                let duty_manager = duty_manager.read().await;
-                if duty_manager
-                    .is_running_validator_for_chain_at(ChainId::Ethereum, event.block_number)
-                {
-                    println!("We are NOT active. Time to chilllll");
-                }
-                println!("We active. Let's gooooo");
+                continue;
             }
 
             match event.event_enum {

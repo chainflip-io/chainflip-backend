@@ -1,5 +1,7 @@
+//! The DutyManager contains logic that allows for enabling and disabling of features
+//! within the CFE depending on its state and the block heights of each respective blockchain.
+
 use crate::p2p::AccountId;
-//use crate::state_chain::sc_event;
 use cf_chains::ChainId;
 use pallet_cf_vaults::{BlockHeight, BlockHeightWindow};
 use slog::o;
@@ -7,14 +9,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-//use substrate_subxt::{Client, EventSubscription};
-
 use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
-//use sp_core::storage::StorageChangeSet;
 
 use crate::logging::COMPONENT_KEY;
-// use crate::state_chain::pallets::validator::NewEpochEvent;
-// use crate::state_chain::runtime::StateChainRuntime;
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
@@ -22,7 +19,6 @@ use crate::logging::COMPONENT_KEY;
 pub enum NodeState {
     // Only monitoring for storage change events - so we know when/if we should transition to another state
     Passive,
-    // The node must be liave
     // Only submits heartbeats + monitors storage change events
     // Backup Validators and Outgoing Validators (which may be Backup too) fall into this category
     HeartbeatAndWatch,
@@ -39,7 +35,6 @@ pub struct DutyManager {
     node_state: NodeState,
     /// The epoch that the chain is currently in
     current_epoch: EpochIndex,
-    _account_state: ChainflipAccountState,
     /// Contains the block at which we start our validator duties for each respective chain
     active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
 }
@@ -49,7 +44,6 @@ impl DutyManager {
         DutyManager {
             account_id,
             node_state: NodeState::Passive,
-            _account_state: ChainflipAccountState::Passive,
             active_windows: None,
             current_epoch,
         }
@@ -62,7 +56,6 @@ impl DutyManager {
         DutyManager {
             account_id: AccountId(test_account_id),
             node_state: NodeState::Running,
-            _account_state: ChainflipAccountState::Passive,
             active_windows: None,
             current_epoch: 0,
         }

@@ -50,6 +50,15 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
             let event = result_event.unwrap();
+
+            if !duty_manager
+                .read()
+                .await
+                .is_running_validator_for_chain_at(ChainId::Ethereum, event.block_number)
+            {
+                continue;
+            }
+
             slog::info!(logger, "Event found: {}", &event);
             match event.event_enum {
                 KeyManagerEvent::KeyChange { new_key, .. } => {
