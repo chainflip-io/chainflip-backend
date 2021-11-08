@@ -121,7 +121,6 @@ pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = Vec<u8>;
-
 	fn current_key() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
 	}

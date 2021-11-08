@@ -1,6 +1,9 @@
 mod tests {
 	use crate::{mock::*, *};
-	use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
+	use cf_traits::mocks::{
+		chainflip_account::MockChainflipAccount,
+		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
+	};
 	use frame_support::{assert_noop, assert_ok};
 
 	#[test]

@@ -31,7 +31,6 @@ type SessionIndex = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::EpochIndex;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -350,6 +349,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					let old_validators = T::Auctioneer::auction_result()
 						.expect("from genesis we would expect a previous auction")
 						.winners;
+
 					// Our trait callback
 					T::EpochTransitionHandler::on_new_epoch(
 						&old_validators,
