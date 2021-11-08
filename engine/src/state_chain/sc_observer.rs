@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 
+use crate::duty_manager::NodeState;
 use crate::{
     duty_manager::DutyManager,
     eth::EthBroadcaster,
@@ -64,6 +65,32 @@ pub async fn start<BlockStream, RpcClient>(
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
+                            // All nodes check for these events
+                            match &event {
+                                // There are other events here that change shit. Or do we just subscribe to
+                                // storage updates???
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::NewEpoch(epoch_index),
+                                ) => {
+                                    let mut duty_manager = duty_manager.write().await;
+                                    duty_manager.set_current_epoch(*epoch_index);
+
+                                    // What do we do when the epoch updates?
+
+                                    // I think we call a duty manager function that gets the new shit
+                                }
+                                ignored_event => {
+                                    slog::trace!(logger, "Ignoring event: {:?}", ignored_event);
+                                }
+                            }
+
+                            // Only running nodes need to worry about the states below
+                            if !matches!(
+                                duty_manager.read().await.get_node_state(),
+                                NodeState::Running
+                            ) {
+                                continue;
+                            }
                             match event {
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
@@ -280,15 +307,6 @@ pub async fn start<BlockStream, RpcClient>(
                                     let _ = state_chain_client
                                         .submit_extrinsic(&logger, response_extrinsic)
                                         .await;
-                                }
-                                state_chain_runtime::Event::Validator(
-                                    pallet_cf_validator::Event::NewEpoch(epoch_index),
-                                ) => {
-                                    let mut duty_manager = duty_manager.write().await;
-                                    duty_manager.set_current_epoch(epoch_index);
-
-                                    // Are we still an active validator here?
-                                    // do we need to check this
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about

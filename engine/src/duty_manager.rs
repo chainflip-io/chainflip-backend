@@ -84,6 +84,10 @@ impl DutyManager {
         false
     }
 
+    pub fn get_node_state(&self) -> NodeState {
+        self.node_state
+    }
+
     pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
         self.current_epoch = epoch_index;
     }
