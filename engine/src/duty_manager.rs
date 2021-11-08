@@ -1,7 +1,7 @@
 use crate::p2p::AccountId;
 //use crate::state_chain::sc_event;
 use cf_chains::ChainId;
-use pallet_cf_vaults::BlockHeight;
+use pallet_cf_vaults::{BlockHeight, BlockHeightWindow};
 use slog::o;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,6 +18,7 @@ use crate::logging::COMPONENT_KEY;
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
+#[derive(Debug)]
 pub enum NodeState {
     // Only monitoring for storage change events - so we know when/if we should transition to another state
     Passive,
@@ -32,6 +33,7 @@ pub enum NodeState {
     Running,
 }
 
+#[derive(Debug)]
 pub struct DutyManager {
     account_id: AccountId,
     node_state: NodeState,
@@ -39,7 +41,7 @@ pub struct DutyManager {
     current_epoch: EpochIndex,
     _account_state: ChainflipAccountState,
     /// Contains the block at which we start our validator duties for each respective chain
-    start_duties_at: HashMap<ChainId, BlockHeight>,
+    active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
 }
 
 impl DutyManager {
@@ -48,7 +50,7 @@ impl DutyManager {
             account_id,
             node_state: NodeState::Passive,
             _account_state: ChainflipAccountState::Passive,
-            start_duties_at: HashMap::new(),
+            active_windows: None,
             current_epoch,
         }
     }
@@ -61,18 +63,32 @@ impl DutyManager {
             account_id: AccountId(test_account_id),
             node_state: NodeState::Running,
             _account_state: ChainflipAccountState::Passive,
-            start_duties_at: HashMap::new(),
+            active_windows: None,
             current_epoch: 0,
         }
     }
 
     /// Check if the heartbeat is enabled
     pub fn is_heartbeat_enabled(&self) -> bool {
-        // match self.node_state {
-        //     NodeState::BackupValidator | NodeState::RunningValidator | NodeState::Outgoing => true,
-        //     NodeState::Passive => false,
-        // }
-        return true;
+        match self.node_state {
+            NodeState::HeartbeatAndWatch | NodeState::Running => true,
+            NodeState::Passive => false,
+        }
+    }
+
+    pub fn is_running_validator_for_chain_at(&self, chain: ChainId, block: u64) -> bool {
+        if let Some(active_windows) = &self.active_windows {
+            let chain_window = active_windows.get(&chain);
+            if let Some(window) = chain_window {
+                if window.to.is_none() {
+                    return true;
+                } else {
+                    return window.from <= block
+                        && block <= window.to.expect("safe due to condition");
+                }
+            }
+        }
+        false
     }
 
     pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
@@ -111,18 +127,31 @@ pub async fn start_duty_manager<BlockStream, RpcClient>(
                 let current_epoch = duty_manager.read().await.current_epoch;
                 println!("Current epoch is: {}", current_epoch);
                 println!("My account data: {:?}", my_account_data);
-                let outgoing_or_current_validator = my_account_data.last_active_epoch.is_some()
-                    && ((my_account_data.last_active_epoch.unwrap() + 1) == current_epoch
-                        || my_account_data.last_active_epoch.unwrap() == current_epoch);
+                // let outgoing_or_current_validator = my_account_data.last_active_epoch.is_some()
+                //     && ((my_account_data.last_active_epoch.unwrap() + 1) == current_epoch
+                //         || my_account_data.last_active_epoch.unwrap() == current_epoch);
+
+                let outgoing_or_current_validator = true;
                 if outgoing_or_current_validator {
                     println!("We are outgoing or current validator");
-                    duty_manager.write().await.node_state = NodeState::Running;
 
-                    let vaults = state_chain_client
-                        .get_vaults(&block_header, current_epoch)
-                        .await;
+                    // TODO: use the actual last active epoch after this is in: https://github.com/chainflip-io/chainflip-backend/issues/796
+                    let last_active_epoch = 0;
 
-                    println!("here are the vaults: {:?}", vaults);
+                    // we currently only need the ETH vault
+                    let eth_vault = state_chain_client
+                        .get_vault(&block_header, last_active_epoch, ChainId::Ethereum)
+                        .await
+                        .unwrap();
+
+                    let mut active_windows = HashMap::new();
+                    active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
+
+                    {
+                        let mut w_duty_manager = duty_manager.write().await;
+                        w_duty_manager.node_state = NodeState::Running;
+                        w_duty_manager.active_windows = Some(active_windows);
+                    }
                 } else {
                     match my_account_data.state {
                         ChainflipAccountState::Backup => {

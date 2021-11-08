@@ -2,15 +2,16 @@ use anyhow::{anyhow, Context, Result};
 use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
 use codec::{Decode, Encode};
-use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
+use frame_support::Blake2_128;
+use frame_support::{metadata::RuntimeMetadataPrefixed, sp_io::hashing::twox_256};
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use pallet_cf_vaults::Vault;
-use sp_core::H256;
+use sp_core::{blake2_128, twox_128, H256};
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
@@ -326,19 +327,19 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(events_for_extrinsic)
     }
 
-    // TODO: work out how to query with just one key
-    // .map() says that the format is invalid or something
-    pub async fn get_vaults(
+    // TODO: work out how to get all vaults with a single query... not sure if possible
+    pub async fn get_vault(
         &self,
         block_header: &state_chain_runtime::Header,
         epoch_index: EpochIndex,
+        chain_id: ChainId,
     ) -> Result<Vault> {
         let vault_for_epoch_key = self
             .get_metadata()
             .module("Vaults")?
             .storage("Vaults")?
             .double_map()?
-            .key(&epoch_index, &ChainId::Ethereum);
+            .key(&epoch_index, &chain_id);
 
         let vault_updates_this_block: Vec<_> = self
             .state_chain_rpc_client
@@ -359,6 +360,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .flatten()
             .collect::<Result<_>>()?;
 
+        println!(
+            "Here there should be vaults: {:?}",
+            vault_updates_this_block
+        );
         Ok(vault_updates_this_block
             .last()
             .expect("Should be a vault")
@@ -619,7 +624,7 @@ mod tests {
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
             let my_state_for_this_block = state_chain_client
-                .get_vaults(&block_header, 0)
+                .get_vault(&block_header, 0, ChainId::Ethereum)
                 .await
                 .unwrap();
 
@@ -804,3 +809,10 @@ mod tests {
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
     }
 }
+
+// #[test]
+// fn test_keys() {
+//     let vaults = twox_128("Vaults".as_bytes());
+//     let scale_encoded_0 = scale_encode(0 as u32);
+//     println!("Vaults: {:?}", hex::encode(vaults));
+// }

@@ -11,7 +11,7 @@ macro_rules! impl_chains {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
-		#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+		#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, Hash)]
 		pub enum ChainId {
 			$(
 				$chain,
