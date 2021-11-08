@@ -8,7 +8,10 @@ mod tests {
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> Event {
-		frame_system::Pallet::<MockRuntime>::events().pop().expect("Event expected").event
+		frame_system::Pallet::<MockRuntime>::events()
+			.pop()
+			.expect("Event expected")
+			.event
 	}
 
 	const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];

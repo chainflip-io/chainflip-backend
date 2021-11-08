@@ -483,13 +483,21 @@ impl<T: Config> Pallet<T> {
 	fn current_backup_validators(
 		remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>],
 	) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
-		remaining_bidders.iter().take(BackupGroupSize::<T>::get() as usize).cloned().collect()
+		remaining_bidders
+			.iter()
+			.take(BackupGroupSize::<T>::get() as usize)
+			.cloned()
+			.collect()
 	}
 
 	fn current_passive_nodes(
 		remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>],
 	) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
-		remaining_bidders.iter().skip(BackupGroupSize::<T>::get() as usize).cloned().collect()
+		remaining_bidders
+			.iter()
+			.skip(BackupGroupSize::<T>::get() as usize)
+			.cloned()
+			.collect()
 	}
 
 	fn lowest_bid(remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>]) -> T::Amount {

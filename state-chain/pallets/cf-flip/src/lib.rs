@@ -239,7 +239,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id).total().saturating_sub(T::ExistentialDeposit::get())
+		Account::<T>::get(account_id)
+			.total()
+			.saturating_sub(T::ExistentialDeposit::get())
 	}
 
 	/// Debits an account's staked balance.

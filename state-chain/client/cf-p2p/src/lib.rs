@@ -669,7 +669,9 @@ mod tests {
 		);
 
 		let try_send = || async {
-			node_0.send(node_1_account_id.clone(), MessageBs58(Vec::from(&b"hello"[..]))).await
+			node_0
+				.send(node_1_account_id.clone(), MessageBs58(Vec::from(&b"hello"[..])))
+				.await
 		};
 
 		assert!(matches!(try_send().await, Err(RpcError::JsonRpcError(_))));

@@ -316,7 +316,9 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 	};
 
-	task_manager.spawn_essential_handle().spawn_blocking("cf-p2p", p2p_message_handler_future);
+	task_manager
+		.spawn_essential_handle()
+		.spawn_blocking("cf-p2p", p2p_message_handler_future);
 
 	if enable_grandpa {
 		// start the full GRANDPA voter

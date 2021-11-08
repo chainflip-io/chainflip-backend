@@ -74,7 +74,8 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			StakeManagerAddress::<T>::set(
-				self.stake_manager_address.expect("Stake manager address must be set at genesis."),
+				self.stake_manager_address
+					.expect("Stake manager address must be set at genesis."),
 			);
 			KeyManagerAddress::<T>::set(
 				self.key_manager_address.expect("Key manager address must be set at genesis."),
