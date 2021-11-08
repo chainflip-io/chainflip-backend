@@ -107,6 +107,12 @@ pub mod utils {
         slog::Logger::root(Fuse(PrintlnDrainVerbose), o!())
     }
 
+    /// Logger that discards everything, useful when typical logging isn't necessary
+    /// or is distracting e.g. in the CLI
+    pub fn new_discard_logger() -> slog::Logger {
+        slog::Logger::root(slog::Discard, o!())
+    }
+
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// ```sh
     /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}

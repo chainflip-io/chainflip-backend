@@ -8,10 +8,7 @@ mod tests {
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> Event {
-		frame_system::Pallet::<MockRuntime>::events()
-			.pop()
-			.expect("Event expected")
-			.event
+		frame_system::Pallet::<MockRuntime>::events().pop().expect("Event expected").event
 	}
 
 	const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
@@ -115,10 +112,7 @@ mod tests {
 			));
 
 			// KeygenAborted event emitted.
-			assert_eq!(
-				last_event(),
-				PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into()
-			);
+			assert_eq!(last_event(), PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into());
 
 			// All rotations have been aborted.
 			assert!(VaultsPallet::no_active_chain_vault_rotations());
@@ -201,11 +195,9 @@ mod tests {
 			// We have yet to move to the new epoch
 			let current_epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
 
-			let Vault {
-				public_key,
-				active_window,
-			} = Vaults::<MockRuntime>::get(current_epoch, ChainId::Ethereum)
-				.expect("Ethereum Vault should exist");
+			let Vault { public_key, active_window } =
+				Vaults::<MockRuntime>::get(current_epoch, ChainId::Ethereum)
+					.expect("Ethereum Vault should exist");
 
 			assert_eq!(
 				public_key, GENESIS_ETHEREUM_AGG_PUB_KEY,
@@ -214,21 +206,16 @@ mod tests {
 
 			assert_eq!(
 				active_window,
-				BlockHeightWindow {
-					from: 0,
-					to: Some(ROTATION_BLOCK_NUMBER)
-				},
+				BlockHeightWindow { from: 0, to: Some(ROTATION_BLOCK_NUMBER) },
 				"we should have the block height set for the genesis or current epoch"
 			);
 
 			// The next epoch
 			let next_epoch = current_epoch + 1;
 
-			let Vault {
-				public_key,
-				active_window,
-			} = Vaults::<MockRuntime>::get(next_epoch, ChainId::Ethereum)
-				.expect("Ethereum Vault should exist in the next epoch");
+			let Vault { public_key, active_window } =
+				Vaults::<MockRuntime>::get(next_epoch, ChainId::Ethereum)
+					.expect("Ethereum Vault should exist in the next epoch");
 
 			assert_eq!(
 				public_key, new_public_key,
@@ -248,9 +235,7 @@ mod tests {
 			// Status is complete.
 			assert_eq!(
 				PendingVaultRotations::<MockRuntime>::get(ChainId::Ethereum),
-				Some(VaultRotationStatus::Complete {
-					tx_hash: TX_HASH.to_vec()
-				}),
+				Some(VaultRotationStatus::Complete { tx_hash: TX_HASH.to_vec() }),
 			);
 		});
 	}

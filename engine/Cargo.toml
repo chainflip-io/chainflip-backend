@@ -33,19 +33,18 @@ itertools = "0.10"
 structopt = "0.3.23"
 
 # Same version of jsonrpc as substrate
-jsonrpc-core = {version = "15.1"}
-jsonrpc-core-client = {version = "15.1", default-features = false, features = ["http", "ws"]}
-jsonrpc-http-server = "15.1"
-jsonrpc-ws-server = "15.1"
+jsonrpc-core = {version = "18.0.0"}
+jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
+jsonrpc-http-server = "18.0.0"
+jsonrpc-ws-server = "18.0.0"
 websocket = "0.24"
 
 dyn-clone = "1.0.4"
 # kvdb-rocksdb is tied to substrate deps
-kvdb-rocksdb = "0.11.1"
+kvdb-rocksdb = "0.14.0"
 lazy_static = "1.4"
 num = "0.4.0"
 parking_lot = "0.11"
-rand = "0.7.3"
 regex = "1"
 reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
@@ -60,19 +59,7 @@ tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
-web3 = "0.17.0"
-
-# substrate deps
-codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
-frame-support = "3.0.0"
-frame-system = "3.0.0"
-sc-rpc-api = '0.9.0'
-sp-core = "3.0.0"
-sp-keyring = "3.0.0"
-sp-rpc = "3.0.0"
-sp-runtime = "3.0.0"
-sp-version = "3.0.0"
-substrate-subxt = "0.15"
+web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -89,6 +76,49 @@ pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+utilities = {path = "../utilities"}
+
+# substrate deps
+[dependencies.substrate-subxt]
+branch = 'compat/substrate-monthly-2021-09'
+git = 'https://github.com/chainflip-io/substrate-subxt.git'
+
+[dependencies.codec]
+features = ['derive', 'full']
+package = 'parity-scale-codec'
+version = '2.3.1'
+
+[dependencies.frame-support]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-system]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sc-rpc-api]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-core]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-keyring]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-rpc]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-runtime]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-version]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
 
 [dependencies.curv]
 features = ["rust-gmp-kzen"]
@@ -97,9 +127,9 @@ tag = "v0.7.0"
 
 [dev-dependencies]
 env_logger = "0.9.0"
-frame-support = "3.0.0"
-jsonrpc-pubsub = "15.1"
+jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
 mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
+rand = "0.8.4"

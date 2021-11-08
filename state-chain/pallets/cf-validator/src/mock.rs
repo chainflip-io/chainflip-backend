@@ -1,22 +1,21 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::{Bid, BidderProvider, ChainflipAccountData, IsOnline, IsOutgoing};
-use frame_support::traits::ValidatorRegistration;
+use cf_traits::{
+	mocks::vault_rotation::Mock as MockHandler, Bid, BidderProvider, ChainflipAccountData,
+	IsOnline, IsOutgoing,
+};
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{OnFinalize, OnInitialize},
+	traits::{OnFinalize, OnInitialize, ValidatorRegistration},
 };
 
-use cf_traits::mocks::chainflip_account::MockChainflipAccount;
-use cf_traits::ChainflipAccount;
+use cf_traits::{mocks::chainflip_account::MockChainflipAccount, ChainflipAccount};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Perbill,
+	BuildStorage, Perbill,
 };
 use std::cell::RefCell;
 
@@ -46,10 +45,10 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
+		ValidatorPallet: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -57,7 +56,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -79,11 +78,18 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub dummy: UintAuthorityId,
+	}
+}
+
+impl From<UintAuthorityId> for MockSessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
 	}
 }
 
@@ -94,7 +100,7 @@ parameter_types! {
 impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorPallet;
 	type SessionManager = ValidatorPallet;
-	type SessionHandler = ValidatorPallet;
+	type SessionHandler = pallet_session::TestSessionHandler;
 	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
@@ -118,7 +124,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type MinValidators = MinValidators;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Self>;
-	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type Handler = MockHandler;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
 	type EmergencyRotation = ValidatorPallet;
@@ -133,7 +139,7 @@ impl IsOutgoing for MockIsOutgoing {
 	fn is_outgoing(account_id: &Self::AccountId) -> bool {
 		if let Some(last_active_epoch) = MockChainflipAccount::get(account_id).last_active_epoch {
 			let current_epoch_index = ValidatorPallet::epoch_index();
-			return last_active_epoch.saturating_add(1) == current_epoch_index;
+			return last_active_epoch.saturating_add(1) == current_epoch_index
 		}
 		false
 	}
@@ -211,18 +217,24 @@ impl Config for Test {
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
+/// Session pallet requires a set of validators at genesis.
+pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_session: None,
-		pallet_cf_validator: Some(ValidatorPalletConfig {
-			blocks_per_epoch: 0,
-		}),
-		pallet_cf_auction: Some(AuctionPalletConfig {
+		system: Default::default(),
+		session: SessionConfig {
+			keys: DUMMY_GENESIS_VALIDATORS
+				.iter()
+				.map(|&i| (i, i, UintAuthorityId(i).into()))
+				.collect(),
+		},
+		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
+		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners: vec![],
 			minimum_active_bid: 0,
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

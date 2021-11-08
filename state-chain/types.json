@@ -104,7 +104,7 @@
     "s": "[u8; 32]",
     "k_times_g_addr": "[u8; 20]"
   },
-  "Signature": "H256",
+  "Signature": "SchnorrVerificationComponents",
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
