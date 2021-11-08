@@ -12,8 +12,8 @@ use state_chain_runtime::{
 use std::{convert::TryInto, env};
 
 const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = EnvironmentConfig {
-	stake_manager_address: Some(hex_literal::hex!["9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"]),
-	key_manager_address: Some(hex_literal::hex!["36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"]),
+	stake_manager_address: Some(hex_literal::hex!["Ad1b70C965b6F25F61623B0AfB78F4704c3BD9A4"]),
+	key_manager_address: Some(hex_literal::hex!["7fCBE09AA0889E5A5f2B54B8Da84cbf9B4DB1407"]),
 	ethereum_chain_id: Some(4),
 };
 
@@ -46,14 +46,14 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
 	let stake_manager_address: [u8; 20] = hex::decode(
 		env::var("STAKE_MANAGER_ADDRESS")
-			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
+			.unwrap_or(String::from("Ad1b70C965b6F25F61623B0AfB78F4704c3BD9A4")),
 	)
 	.unwrap()
 	.try_into()
 	.expect("address cast failed");
 	let key_manager_address: [u8; 20] = hex::decode(
 		env::var("KEY_MANAGER_ADDRESS")
-			.unwrap_or(String::from("36fB9E46D6cBC14600D9089FD7Ce95bCf664179f")),
+			.unwrap_or(String::from("7fCBE09AA0889E5A5f2B54B8Da84cbf9B4DB1407")),
 	)
 	.unwrap()
 	.try_into()
@@ -263,6 +263,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
 	let happy_sr25519 =
 		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
 		"test",
@@ -319,9 +321,11 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 				],
 				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
+					// Snow White the dictator
+					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -333,7 +337,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					// Happy
 					happy_sr25519.into(),
 				],
-				3,
+				4,
 				DEFAULT_ENVIRONMENT_CONFIG,
 			)
 		},
@@ -396,7 +400,7 @@ fn testnet_genesis(
 		vaults: VaultsConfig {
 			ethereum_vault_key: {
 				let key: [u8; 33] = hex_literal::hex![
-					"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+					"023fc6569bd5a88f685382b2e5821725d5f5ba2ff3336f6b17164292bdf4396884"
 				];
 				key.to_vec()
 			},
