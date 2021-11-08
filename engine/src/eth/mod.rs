@@ -114,6 +114,7 @@ impl EthBroadcaster {
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: web3::types::U256(unsigned_tx.value.0),
+            transaction_type: Some(web3::types::U64::from(2)),
             ..Default::default()
         };
 
