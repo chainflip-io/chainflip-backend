@@ -3,12 +3,9 @@
 
 use super::*;
 
-use frame_benchmarking::account;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
-use frame_support::traits::OnInitialize;
-use frame_system::Origin;
-use frame_system::RawOrigin;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
+use frame_system::{Origin, RawOrigin};
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;

@@ -1,6 +1,5 @@
 use crate::{ChainflipAccount, ChainflipAccountData, ChainflipAccountState, EpochIndex};
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 thread_local! {
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
 }
@@ -21,12 +20,9 @@ impl ChainflipAccount for MockChainflipAccount {
 				None => {
 					map.insert(
 						*account_id,
-						ChainflipAccountData {
-							state,
-							last_active_epoch: None,
-						},
+						ChainflipAccountData { state, last_active_epoch: None },
 					);
-				}
+				},
 				Some(item) => (*item).state = state,
 			}
 		});
@@ -44,7 +40,7 @@ impl ChainflipAccount for MockChainflipAccount {
 							last_active_epoch: Some(index),
 						},
 					);
-				}
+				},
 				Some(item) => (*item).last_active_epoch = Some(index),
 			}
 		});

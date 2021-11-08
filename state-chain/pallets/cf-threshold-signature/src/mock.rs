@@ -1,10 +1,13 @@
 use crate::{self as pallet_cf_threshold_signature};
-use cf_traits::mocks::epoch_info::MockEpochInfo;
-use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
+use cf_traits::{
+	mocks::epoch_info::MockEpochInfo, offline_conditions::*, Chainflip, EpochInfo, SigningContext,
+};
 use codec::{Decode, Encode};
-use frame_support::parameter_types;
-use frame_support::traits::EnsureOrigin;
-use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{EnsureOrigin, UnfilteredDispatchable},
+};
 use frame_system;
 use sp_core::H256;
 use sp_runtime::{
@@ -22,8 +25,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -33,7 +36,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -55,6 +58,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -118,8 +122,8 @@ pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
-	type KeyId = Vec<u8>;
 	type EpochInfo = MockEpochInfo;
+	type KeyId = Vec<u8>;
 	fn current_key() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
 	}
@@ -182,7 +186,7 @@ impl SigningContext<Test> for DogeThresholdSignerContext {
 	}
 }
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
 	type SigningContext = DogeThresholdSignerContext;
@@ -193,10 +197,8 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

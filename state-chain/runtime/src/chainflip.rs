@@ -18,14 +18,15 @@ use cf_traits::{
 	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{debug, weights::Weight};
+use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::{H160, H256};
-use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
-use sp_runtime::RuntimeDebug;
-use sp_std::cmp::min;
-use sp_std::prelude::*;
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
+	RuntimeDebug,
+};
+use sp_std::{cmp::min, marker::PhantomData, prelude::*};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -53,7 +54,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			debug::error!("Unable to process rewards rollover: {:?}!", err);
+			log::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
@@ -62,7 +63,32 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			old_validators,
 			new_validators,
 			new_bond,
-		)
+		);
+
+		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
+			old_validators,
+			new_validators,
+			new_bond,
+		);
+	}
+}
+
+pub struct AccountStateManager<T>(PhantomData<T>);
+
+impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
+	type ValidatorId = AccountId;
+	type Amount = T::Amount;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		_new_bid: Self::Amount,
+	) {
+		// Update the last active epoch for the new validating set
+		let epoch_index = Validator::epoch_index();
+		for validator in new_validators {
+			ChainflipAccountStore::<Runtime>::update_last_active_epoch(&validator, epoch_index);
+		}
 	}
 }
 
@@ -117,16 +143,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_emission_per_block()
-			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let emissions_cap = Emissions::backup_validator_emission_per_block() *
+			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
-		let validator_rewards = Emissions::validator_emission_per_block()
-			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let validator_rewards = Emissions::validator_emission_per_block() *
+			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// The average validator emission
-		let average_validator_reward: Self::FlipBalance = validator_rewards
-			/ Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
+		let average_validator_reward: Self::FlipBalance = validator_rewards /
+			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
 
 		let mut total_rewards = 0;
 
@@ -182,8 +208,8 @@ impl Heartbeat for ChainflipHeartbeat {
 			.online
 			.iter()
 			.filter(|account_id| {
-				ChainflipAccountStore::<Runtime>::get(*account_id).state
-					== ChainflipAccountState::Backup
+				ChainflipAccountStore::<Runtime>::get(*account_id).state ==
+					ChainflipAccountState::Backup
 			})
 			.collect();
 
@@ -203,7 +229,8 @@ impl Heartbeat for ChainflipHeartbeat {
 ///
 /// For a single signer, takes the first online validator in the validator lookup map.
 ///
-/// For multiple signers, takes the first N online validators where N is signing consensus threshold.
+/// For multiple signers, takes the first N online validators where N is signing consensus
+/// threshold.
 pub struct BasicSignerNomination;
 
 impl cf_traits::SignerNomination for BasicSignerNomination {
@@ -269,13 +296,12 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
 		match self {
-			Self::PostClaimSignature(claim) => {
+			Self::PostClaimSignature(claim) =>
 				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
 					claim.node_id.into(),
 					signature,
 				)
-				.into()
-			}
+				.into(),
 			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
 				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
 					call.clone(),
@@ -314,12 +340,7 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 		signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
 		eth::verify_raw(signed_tx, signer)
-			.map_err(|e| {
-				frame_support::debug::info!(
-					"Ethereum signed transaction verification failed: {:?}.",
-					e
-				)
-			})
+			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
 	}
 }
@@ -332,8 +353,7 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type EpochInfo = Validator;
 
 	fn current_key() -> Self::KeyId {
-		let current_epoch = Self::EpochInfo::epoch_index();
-		Vaults::vaults(current_epoch, <Ethereum as cf_chains::Chain>::CHAIN_ID)
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as cf_chains::Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
 	}

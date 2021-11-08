@@ -6,23 +6,45 @@ edition = "2018"
 description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [dependencies]
-# Substrate packages
-sp-std = { version = '3.0', default-features = false }
-frame-support = { default-features = false, version = '3.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-runtime = { default-features = false, version = '3.0.0' }
-
 # Ethereum
-ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '1279085'}
+ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
 ethereum = {default-features = false, version = "0.9"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 secp256k1 = {optional = true, version = "0.20"}
+log = { version = '0.4.14', default-features = false }
+
+# Substrate packages
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.3.1'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
 
 [dev-dependencies]
-hex-literal = {version = "0.3"}
+hex-literal = {version = "0.3.1"}
 
 [features]
 default = ['std']
@@ -33,6 +55,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'hex/std',
+    'log/std',
     'rlp/std',
     'serde',
     'sp-runtime/std',

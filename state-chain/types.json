@@ -110,7 +110,7 @@
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "PublicKey",
-    "block_height": "BlockHeight"
+    "active_window": "BlockHeightWindow"
   },
   "ValidatorSize": "u32",
   "VaultRotationStatus": {

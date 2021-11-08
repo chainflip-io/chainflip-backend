@@ -1,4 +1,4 @@
-# Chainflip Reputation Module
+# Chainflip Reputation Pallet
 
 A module to manage the reputation of our validators for the Chainflip State Chain
 

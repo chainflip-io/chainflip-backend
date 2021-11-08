@@ -1,19 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use codec::Decode;
-use codec::Encode;
-use frame_support::traits::EnsureOrigin;
-use frame_support::traits::UnfilteredDispatchable;
-use frame_support::traits::UnixTime;
+use codec::{Decode, Encode};
+use frame_support::traits::{EnsureOrigin, UnfilteredDispatchable, UnixTime};
 pub use pallet::*;
 use sp_runtime::DispatchError;
-use sp_std::boxed::Box;
-use sp_std::ops::Add;
-use sp_std::vec;
-use sp_std::vec::Vec;
+use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -36,8 +29,7 @@ pub mod pallet {
 
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
-	use sp_std::boxed::Box;
-	use sp_std::vec::Vec;
+	use sp_std::{boxed::Box, vec::Vec};
 
 	use crate::WeightInfo;
 
@@ -123,9 +115,9 @@ pub mod pallet {
 					let number_expired_proposals = expired.len() as u32;
 					Self::expire_proposals(expired);
 					<ActiveProposals<T>>::set(active);
-					T::WeightInfo::on_initialize(proposal_len as u32)
-						+ T::WeightInfo::expire_proposals(number_expired_proposals)
-				}
+					T::WeightInfo::on_initialize(proposal_len as u32) +
+						T::WeightInfo::expire_proposals(number_expired_proposals)
+				},
 				_ => T::WeightInfo::on_initialize_best_case(),
 			}
 		}
@@ -228,10 +220,7 @@ pub mod pallet {
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Ensure that the proposal exists
-			ensure!(
-				<Proposals<T>>::contains_key(id),
-				Error::<T>::ProposalNotFound
-			);
+			ensure!(<Proposals<T>>::contains_key(id), Error::<T>::ProposalNotFound);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
 			// Governance members don't pay transaction fees
@@ -256,10 +245,7 @@ pub mod pallet {
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Ensure that the proposal exists
-			ensure!(
-				<Proposals<T>>::contains_key(id),
-				Error::<T>::ProposalNotFound
-			);
+			ensure!(<Proposals<T>>::contains_key(id), Error::<T>::ProposalNotFound);
 			// Try to execute the proposal
 			Self::execute_proposal(id)?;
 			// Governance member don't pay fees
@@ -299,10 +285,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;
-			Self {
-				members: Default::default(),
-				expiry_span: FIVE_DAYS_IN_SECONDS,
-			}
+			Self { members: Default::default(), expiry_span: FIVE_DAYS_IN_SECONDS }
 		}
 	}
 
@@ -364,13 +347,7 @@ impl<T: Config> Pallet<T> {
 		// Generate the next proposal id
 		let id = Self::get_next_id();
 		// Insert a new proposal
-		<Proposals<T>>::insert(
-			id,
-			Proposal {
-				call: call.encode(),
-				approved: vec![],
-			},
-		);
+		<Proposals<T>>::insert(id, Proposal { call: call.encode(), approved: vec![] });
 		// Update the proposal counter
 		<ProposalCount<T>>::put(id);
 		// Add the proposal to the active proposals array
@@ -398,11 +375,8 @@ impl<T: Config> Pallet<T> {
 				<Proposals<T>>::remove(id);
 				// Remove the proposal from active proposals
 				let active_proposals = <ActiveProposals<T>>::get();
-				let new_active_proposals = active_proposals
-					.iter()
-					.filter(|x| x.0 != id)
-					.cloned()
-					.collect::<Vec<_>>();
+				let new_active_proposals =
+					active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
 				// Set the new active proposals
 				<ActiveProposals<T>>::set(new_active_proposals);
 				Ok(())
@@ -423,7 +397,7 @@ impl<T: Config> Pallet<T> {
 		<Proposals<T>>::mutate(id, |proposal| {
 			// Check already approved
 			if proposal.approved.contains(&account) {
-				return Err(Error::<T>::AlreadyApproved.into());
+				return Err(Error::<T>::AlreadyApproved.into())
 			}
 			// Add account to approved array
 			proposal.approved.push(account);

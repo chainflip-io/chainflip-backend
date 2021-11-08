@@ -1,4 +1,3 @@
-use frame_system::RawOrigin;
 use std::marker::PhantomData;
 
 pub struct NeverFailingOriginCheck<T>(PhantomData<T>);
@@ -14,6 +13,6 @@ impl<T: frame_system::Config> frame_support::traits::EnsureOrigin<T::Origin>
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> T::Origin {
-		RawOrigin::Root.into()
+		frame_system::RawOrigin::Root.into()
 	}
 }
