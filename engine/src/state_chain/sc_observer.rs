@@ -47,11 +47,12 @@ pub async fn start<BlockStream, RpcClient>(
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
+                let block_hash = block_header.hash();
                 // ==== DUTY MANAGER ====
                 if duty_manager.read().await.is_monitoring_status_per_block() {
                     // we want to check our account state every time
                     let my_account_data = state_chain_client
-                        .get_account_data(Some(block_header.hash()))
+                        .get_account_data(Some(block_hash))
                         .await
                         .unwrap();
 
@@ -61,7 +62,11 @@ pub async fn start<BlockStream, RpcClient>(
                         } else {
                             NodeState::Passive
                         };
-                    duty_manager.write().await.set_node_state(new_state);
+
+                    // TODO: Why is this variable "unusued"
+                    if !matches!(duty_manager.read().await.get_node_state(), new_state) {
+                        duty_manager.write().await.set_node_state(new_state);
+                    }
                 }
 
                 // ==== END DUTY MANAGER ====
@@ -82,11 +87,6 @@ pub async fn start<BlockStream, RpcClient>(
                         .await;
                 }
 
-                // can we just pass in the stuff we need to a method of the duty_manager
-                // rather than have the two streams
-
-                // Process this block's events
-                let block_hash = block_header.hash();
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
@@ -121,14 +121,6 @@ pub async fn start<BlockStream, RpcClient>(
                                         NodeState::Outgoing
                                     ));
 
-                                    let was_active_still_active = matches!(
-                                        duty_manager.read().await.get_node_state(),
-                                        NodeState::Active
-                                    ) && matches!(
-                                        account_data.state,
-                                        ChainflipAccountState::Validator
-                                    );
-
                                     let was_active_now_outgoing = matches!(
                                         duty_manager.read().await.get_node_state(),
                                         NodeState::Active
@@ -137,6 +129,14 @@ pub async fn start<BlockStream, RpcClient>(
                                         .expect("we were active")
                                         + 1
                                         == *epoch_index;
+
+                                    let was_active_still_active = matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Active
+                                    ) && matches!(
+                                        account_data.state,
+                                        ChainflipAccountState::Validator
+                                    );
 
                                     if was_inactive_now_active || was_active_now_outgoing {
                                         duty_manager
@@ -151,6 +151,16 @@ pub async fn start<BlockStream, RpcClient>(
                                     } else if was_active_still_active {
                                         // we want to combine the ranges of our previous epochs, by not doing anything.
                                         // we just keep going from our old epoch's block
+                                        // TODO: There is a bug here.
+                                        // Let's say we were a validator in epoch 0.
+                                        // ETH window (0, None)
+                                        // We rotate. This epoch ends at ETH block 20.
+                                        // Our ETH window at this point is (0, 20)
+                                        // We are also a validator in epoch 1.
+                                        // ETH window at this piont is (0, None)
+                                        // If we are outgoing until ETH block 20 and we are only at ETH block 18, then we crash
+                                        // and restart. We will set our active window `from` to the `from` of the *last* epoch we were in.
+                                        // that is, we will start from block 20, therefore missing block 19.
                                     }
                                 }
                                 ignored_event => {
