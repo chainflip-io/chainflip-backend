@@ -1,17 +1,16 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use cf_chains::ChainId;
-use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
+use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
+use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
-use frame_support::Blake2_128;
-use frame_support::{metadata::RuntimeMetadataPrefixed, sp_io::hashing::twox_256};
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use pallet_cf_vaults::Vault;
-use sp_core::{blake2_128, twox_128, H256};
+use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,

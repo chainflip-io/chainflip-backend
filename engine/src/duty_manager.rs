@@ -3,11 +3,8 @@
 
 use crate::p2p::AccountId;
 use cf_chains::ChainId;
-use pallet_cf_vaults::{BlockHeight, BlockHeightWindow};
-use slog::o;
+use pallet_cf_vaults::BlockHeightWindow;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use cf_traits::EpochIndex;
 

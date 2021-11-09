@@ -4,7 +4,6 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use chainflip_engine::{
-    common::Mutex,
     duty_manager::{DutyManager, NodeState},
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
