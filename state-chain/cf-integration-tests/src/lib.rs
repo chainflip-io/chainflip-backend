@@ -446,7 +446,9 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionResult, Auctioneer, StakeTransfer};
+		use cf_traits::{
+			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountStore, StakeTransfer,
+		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 		pub fn default() -> ExtBuilder {
@@ -481,6 +483,7 @@ mod tests {
 		// - There have been no proposals
 		// - Emission inflation for both validators and backup validators are set
 		// - No one has reputation
+		// - The genesis validators have last active epoch set
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
@@ -570,6 +573,15 @@ mod tests {
 						Reputation::reputation(account),
 						pallet_cf_reputation::Reputation::<BlockNumber>::default(),
 						"validator shouldn't have reputation points"
+					);
+				}
+
+				for account in accounts.iter() {
+					assert_eq!(
+						Some(0),
+						ChainflipAccountStore::<Runtime>::get(account)
+							.last_active_epoch
+						"validator should be active in the genesis epoch(0)"
 					);
 				}
 			});
