@@ -231,7 +231,7 @@ mod tests {
 
 				// Include any nodes already *created* to the test network
 				for node in nodes_to_include {
-					network.add_node(node.clone());
+					network.add_node(node);
 				}
 
 				let remaining_nodes = number_of_nodes.saturating_sub(nodes_to_include.len() as u8);
@@ -277,7 +277,8 @@ mod tests {
 
 			// Adds a node which doesn't have its session keys set
 			pub fn add_node(&mut self, node_id: &NodeId) {
-				self.engines.insert(node_id.clone(), Engine { node_id, active: true });
+				self.engines
+					.insert(node_id.clone(), Engine { node_id: node_id.clone(), active: true });
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -653,16 +654,15 @@ mod tests {
 						network::Network::create(5, &Validator::current_validators());
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
-					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					// All nodes stake to be included in the next epoch which are witnessed on the
+					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
 					}
 					// Our keyless nodes also stake
 					for keyless_node in &keyless_nodes {
-						testnet
-							.stake_manager_contract
-							.stake(keyless_node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
 					}
 
 					// Run to the next epoch to start the auction
