@@ -579,8 +579,7 @@ mod tests {
 				for account in accounts.iter() {
 					assert_eq!(
 						Some(0),
-						ChainflipAccountStore::<Runtime>::get(account)
-							.last_active_epoch
+						ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
 						"validator should be active in the genesis epoch(0)"
 					);
 				}
