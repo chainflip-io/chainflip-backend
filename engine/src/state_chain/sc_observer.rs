@@ -250,7 +250,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         validators,
                                         payload,
                                     ),
-                                ) => {
+                                ) if validators.contains(&state_chain_client.our_account_id) => {
                                     let signers: Vec<_> = validators
                                         .iter()
                                         .map(|v| p2p::AccountId(v.clone().into()))

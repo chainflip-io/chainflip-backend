@@ -50,7 +50,8 @@
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "ChainflipAccountData": {
-    "state": "ChainflipAccountState"
+    "state": "ChainflipAccountState",
+    "last_active_epoch": "Option<EpochIndex>"
   },
   "ChainflipAccountState": {
     "_enum": [
