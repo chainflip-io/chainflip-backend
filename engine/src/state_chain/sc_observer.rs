@@ -1,3 +1,4 @@
+use cf_chains::ChainId;
 use cf_traits::ChainflipAccountState;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
@@ -85,6 +86,7 @@ pub async fn start<BlockStream, RpcClient>(
                 // rather than have the two streams
 
                 // Process this block's events
+                let block_hash = block_header.hash();
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
@@ -95,30 +97,68 @@ pub async fn start<BlockStream, RpcClient>(
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(epoch_index),
                                 ) => {
-                                    let mut duty_manager = duty_manager.write().await;
-                                    duty_manager.set_current_epoch(*epoch_index);
+                                    // let mut duty_manager = duty_manager.write().await;
+                                    // duty_manager.set_current_epoch(*epoch_index);
 
                                     // we need to get our new node status
                                     let account_data = state_chain_client
-                                        .get_account_data(Some(block_header.hash()))
-                                        .await.unwrap();
+                                        .get_account_data(Some(block_hash))
+                                        .await
+                                        .unwrap();
 
-                                    // if we're a validator now, we must validate. But we can only update the windows *after* we have completed
-                                    // watching the previous epoch
-                                    if matches!(
+                                    // we don't have to worry about previous epochs if were only a passive/backup and now we're active.
+                                    // can just update the window and goooo
+                                    let was_inactive_now_active = matches!(
                                         account_data.state,
                                         ChainflipAccountState::Validator
-                                    ) {
-                                        // set window to latest
-                                    } else if matches!(duty_manager.read().await.node_state, )
+                                    ) && (matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Backup
+                                    ) || matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Passive
+                                    ) || matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Outgoing
+                                    ));
 
-                                    // What do we do when the epoch updates?
-                                    // We want to do what we do when start up?
+                                    // TODO: Check, I think we only want to care about the ranges of active validators
+                                    let was_active_still_active = matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Active
+                                    ) && matches!(
+                                        account_data.state,
+                                        ChainflipAccountState::Validator
+                                    );
 
-                                    // But what events are the cause of changes here?
-                                    // should we make a diff between a previous state and then our current one?
+                                    let was_active_now_outgoing = matches!(
+                                        duty_manager.read().await.get_node_state(),
+                                        NodeState::Active
+                                    ) && account_data
+                                        .last_active_epoch
+                                        .expect("we were active")
+                                        + 1
+                                        == *epoch_index;
 
-                                    // I think we call a duty manager function that gets the new shit
+                                    if was_inactive_now_active || was_active_now_outgoing {
+                                        let eth_vault = state_chain_client
+                                            .get_vault(
+                                                Some(block_hash),
+                                                account_data
+                                                    .last_active_epoch
+                                                    .expect("Validators are active this epoch"),
+                                                ChainId::Ethereum,
+                                            )
+                                            .await
+                                            .unwrap();
+                                        duty_manager.write().await.update_active_window_for_chain(
+                                            ChainId::Ethereum,
+                                            eth_vault.active_window,
+                                        );
+                                    } else if was_active_still_active {
+                                        // we want to combine the ranges of our previous epochs, by not doing anything.
+                                        // we just keep going from our old epoch's block
+                                    }
                                 }
                                 ignored_event => {
                                     slog::trace!(logger, "Ignoring event: {:?}", ignored_event);

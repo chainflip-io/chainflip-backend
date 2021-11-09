@@ -71,32 +71,31 @@ async fn main() {
     } else if my_account_data.last_active_epoch.is_some()
         && my_account_data.last_active_epoch.expect("guarded") + 1 == current_epoch
     {
-        NodeState::SoonOutgoing
+        NodeState::Outgoing
     } else if my_account_data.state == ChainflipAccountState::Backup {
         NodeState::Backup
     } else {
         NodeState::Passive
     };
 
-    let active_windows = if matches!(node_state, NodeState::Active)
-        || matches!(node_state, NodeState::SoonOutgoing)
-    {
-        // Get the latest eth vault
-        let eth_vault = state_chain_client
-            .get_vault(
-                None,
-                my_account_data.last_active_epoch.expect("guarded above"),
-                ChainId::Ethereum,
-            )
-            .await
-            .unwrap();
+    let active_windows =
+        if matches!(node_state, NodeState::Active) || matches!(node_state, NodeState::Outgoing) {
+            // Get the latest eth vault
+            let eth_vault = state_chain_client
+                .get_vault(
+                    None,
+                    my_account_data.last_active_epoch.expect("guarded above"),
+                    ChainId::Ethereum,
+                )
+                .await
+                .unwrap();
 
-        let mut active_windows = HashMap::new();
-        active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
-        Some(active_windows)
-    } else {
-        None
-    };
+            let mut active_windows = HashMap::new();
+            active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
+            Some(active_windows)
+        } else {
+            None
+        };
 
     let duty_manager = Arc::new(RwLock::new(DutyManager::new(
         account_id.clone(),

@@ -25,7 +25,7 @@ pub enum NodeState {
 
     // Represents a "running" state, but one that will be transitioned out of
     // once the chains are caught up to their end blocks
-    SoonOutgoing,
+    Outgoing,
 
     // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
@@ -73,7 +73,7 @@ impl DutyManager {
     /// Check if the heartbeat is enabled
     pub fn is_heartbeat_enabled(&self) -> bool {
         match self.node_state {
-            NodeState::Backup | NodeState::Active | NodeState::SoonOutgoing => true,
+            NodeState::Backup | NodeState::Active | NodeState::Outgoing => true,
             NodeState::Passive => false,
         }
     }
@@ -91,6 +91,16 @@ impl DutyManager {
             }
         }
         false
+    }
+
+    pub fn update_active_window_for_chain(
+        &mut self,
+        chain_id: ChainId,
+        active_window: BlockHeightWindow,
+    ) {
+        let mut active_windows = self.active_windows.unwrap_or_default();
+        active_windows.insert(chain_id, active_window);
+        self.active_windows = Some(active_windows);
     }
 
     /// Passive and Backup validators can change per block
