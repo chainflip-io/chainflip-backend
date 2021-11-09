@@ -4,7 +4,7 @@ use cf_chains::{
 	Ethereum,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::Instance0, parameter_types, traits::EnsureOrigin};
+use frame_support::{instances::Instance1, parameter_types};
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
@@ -20,7 +20,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info, key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
@@ -31,10 +31,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Signer: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Signer: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -46,7 +46,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -68,6 +68,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl Chainflip for Test {
@@ -81,7 +82,7 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(AccountId);
 cf_traits::impl_mock_offline_conditions!(AccountId);
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type SigningContext = ClaimSigningContext;
@@ -139,7 +140,7 @@ impl SigningContext<Test> for ClaimSigningContext {
 	type Callback = pallet_cf_staking::Call<Test>;
 
 	fn get_payload(&self) -> Self::Payload {
-		ChainflipContractCall::signing_payload(&self.0)
+		H256(ChainflipContractCall::signing_payload(&self.0).0)
 	}
 
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
@@ -168,13 +169,9 @@ pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig {
-			total_issuance: 1_000,
-		}),
-		pallet_cf_staking: Some(StakingConfig {
-			genesis_stakers: vec![],
-		}),
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000 },
+		staking: StakingConfig { genesis_stakers: vec![] },
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

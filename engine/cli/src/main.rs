@@ -107,7 +107,7 @@ async fn send_claim(
         .expect("Failed to watch extrinsic");
 
     for event in events {
-        if let state_chain_runtime::Event::pallet_cf_threshold_signature_Instance0(
+        if let state_chain_runtime::Event::EthereumThresholdSigner(
             pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(_, ..),
         ) = event
         {
@@ -123,7 +123,7 @@ async fn send_claim(
                     ));
                 for (_phase, event, _) in events {
                     match event {
-                        state_chain_runtime::Event::pallet_cf_staking(
+                        state_chain_runtime::Event::Staking(
                             pallet_cf_staking::Event::ClaimSignatureIssued(
                                 validator_id,
                                 signed_payload,
