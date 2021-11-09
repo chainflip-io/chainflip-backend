@@ -22,7 +22,9 @@ use cf_traits::{
 };
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
+use sp_runtime::traits::{
+	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
+};
 use sp_std::prelude::*;
 
 pub type ValidatorSize = u32;
@@ -265,10 +267,19 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 		// If we are waiting on bids let's see if we want to start a new rotation
 		match T::Auctioneer::phase() {
 			AuctionPhase::WaitingForBids => {
-				// If the session should end, run through an auction
-				// two steps- validate and select winners
-				Self::should_rotate(now) &&
-					T::Auctioneer::process().and(T::Auctioneer::process()).is_ok()
+				// If the session should end, start an auction.  We evaluate the first two steps
+				// of the auction, validate and select winners, as one.  If this fails we force a
+				// new rotation attempt.
+				if Self::should_rotate(now) {
+					let processed =
+						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
+					if !processed {
+						Force::<T>::set(true);
+					}
+					return processed
+				}
+
+				false
 			},
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
@@ -300,12 +311,8 @@ impl<T: Config> Pallet<T> {
 		}
 		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 		let diff = now.saturating_sub(current_epoch_started_at);
-		let end = diff >= blocks_per_epoch;
-		if end {
-			CurrentEpochStartedAt::<T>::set(now);
-		}
 
-		end
+		diff >= blocks_per_epoch
 	}
 
 	/// Generate our validator lookup list
@@ -342,6 +349,10 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 						*epoch = epoch.saturating_add(One::one());
 						*epoch
 					});
+					// Set the block this epoch starts at
+					CurrentEpochStartedAt::<T>::set(
+						frame_system::Pallet::<T>::current_block_number(),
+					);
 					// Emit an event
 					Self::deposit_event(Event::NewEpoch(new_epoch));
 					// Generate our lookup list of validators
