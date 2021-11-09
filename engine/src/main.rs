@@ -84,7 +84,6 @@ async fn main() {
 
     let duty_manager = Arc::new(RwLock::new(DutyManager::new(
         account_id.clone(),
-        current_epoch,
         node_state,
     )));
 

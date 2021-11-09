@@ -9,7 +9,7 @@ use cf_chains::ChainId;
 use pallet_cf_vaults::BlockHeightWindow;
 use std::{collections::HashMap, sync::Arc};
 
-use cf_traits::{ChainflipAccountData, EpochIndex};
+use cf_traits::ChainflipAccountData;
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
@@ -34,22 +34,15 @@ pub enum NodeState {
 #[derive(Debug)]
 pub struct DutyManager {
     account_id: AccountId,
-    /// The epoch that the chain is currently in
-    current_epoch: EpochIndex,
     node_state: NodeState,
     /// Contains the block at which we start our validator duties for each respective chain
     active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
 }
 
 impl DutyManager {
-    pub fn new(
-        account_id: AccountId,
-        current_epoch: EpochIndex,
-        node_state: NodeState,
-    ) -> DutyManager {
+    pub fn new(account_id: AccountId, node_state: NodeState) -> DutyManager {
         DutyManager {
             account_id,
-            current_epoch,
             node_state,
             active_windows: None,
         }
@@ -63,7 +56,6 @@ impl DutyManager {
             account_id: AccountId(test_account_id),
             node_state: NodeState::Active,
             active_windows: None,
-            current_epoch: 0,
         }
     }
 
@@ -126,10 +118,6 @@ impl DutyManager {
 
     pub fn get_node_state(&self) -> NodeState {
         self.node_state
-    }
-
-    pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
-        self.current_epoch = epoch_index;
     }
 }
 

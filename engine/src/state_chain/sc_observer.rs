@@ -96,8 +96,6 @@ pub async fn start<BlockStream, RpcClient>(
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(epoch_index),
                                 ) => {
-                                    duty_manager.write().await.set_current_epoch(*epoch_index);
-
                                     // we need to get our new node status
                                     let account_data = state_chain_client
                                         .get_account_data(block_hash)
