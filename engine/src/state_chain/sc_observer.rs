@@ -97,8 +97,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(epoch_index),
                                 ) => {
-                                    // let mut duty_manager = duty_manager.write().await;
-                                    // duty_manager.set_current_epoch(*epoch_index);
+                                    duty_manager.write().await.set_current_epoch(*epoch_index);
 
                                     // we need to get our new node status
                                     let account_data = state_chain_client
@@ -122,7 +121,6 @@ pub async fn start<BlockStream, RpcClient>(
                                         NodeState::Outgoing
                                     ));
 
-                                    // TODO: Check, I think we only want to care about the ranges of active validators
                                     let was_active_still_active = matches!(
                                         duty_manager.read().await.get_node_state(),
                                         NodeState::Active
@@ -141,6 +139,8 @@ pub async fn start<BlockStream, RpcClient>(
                                         == *epoch_index;
 
                                     if was_inactive_now_active || was_active_now_outgoing {
+                                        // update using our last_active_epoch, on a new epoch, the outgoing set will
+                                        // now have a "to" block
                                         let eth_vault = state_chain_client
                                             .get_vault(
                                                 Some(block_hash),
@@ -165,7 +165,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 }
                             }
 
-                            // Only running nodes need to worry about the states below
+                            // Only Active nodes need to worry about the states below this point
                             if !matches!(
                                 duty_manager.read().await.get_node_state(),
                                 NodeState::Active

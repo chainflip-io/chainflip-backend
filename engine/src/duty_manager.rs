@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use cf_traits::{ChainflipAccountData, ChainflipAccountState, EpochIndex};
-
-use crate::logging::COMPONENT_KEY;
+use cf_traits::EpochIndex;
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
@@ -98,9 +96,13 @@ impl DutyManager {
         chain_id: ChainId,
         active_window: BlockHeightWindow,
     ) {
-        let mut active_windows = self.active_windows.unwrap_or_default();
-        active_windows.insert(chain_id, active_window);
-        self.active_windows = Some(active_windows);
+        if let Some(active_windows) = self.active_windows.as_mut() {
+            active_windows.insert(chain_id, active_window);
+        } else {
+            let mut map = HashMap::new();
+            map.insert(chain_id, active_window);
+            self.active_windows = Some(map);
+        };
     }
 
     /// Passive and Backup validators can change per block
