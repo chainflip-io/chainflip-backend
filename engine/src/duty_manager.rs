@@ -46,7 +46,6 @@ impl DutyManager {
     /// Creates a Duty Manager in RunningValidator state with 0's account ID
     #[cfg(test)]
     pub fn new_test() -> DutyManager {
-        let test_account_id: [u8; 32] = [0; 32];
         DutyManager {
             node_state: NodeState::Active,
             active_windows: None,
@@ -65,11 +64,10 @@ impl DutyManager {
         if let Some(active_windows) = &self.active_windows {
             let chain_window = active_windows.get(&chain);
             if let Some(window) = chain_window {
-                if window.to.is_none() {
-                    return true;
+                if let Some(window_to) = window.to {
+                    return window.from <= block && block <= window_to;
                 } else {
-                    return window.from <= block
-                        && block <= window.to.expect("safe due to condition");
+                    return true;
                 }
             }
         }
