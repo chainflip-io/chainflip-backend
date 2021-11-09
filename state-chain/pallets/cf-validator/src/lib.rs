@@ -22,9 +22,9 @@ use cf_traits::{
 };
 use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Saturating, Zero};
-use sp_runtime::offchain::storage_lock::BlockNumberProvider;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, OpaqueKeys};
+use sp_runtime::traits::{
+	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
+};
 use sp_std::prelude::*;
 
 pub type ValidatorSize = u32;
@@ -276,11 +276,11 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 					if !processed {
 						Force::<T>::set(true);
 					}
-					return processed;
+					return processed
 				}
 
 				false
-			}
+			},
 			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait

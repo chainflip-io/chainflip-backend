@@ -594,8 +594,8 @@ mod tests {
 		#[test]
 		// We have a test network which goes into the first epoch
 		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
-		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from genesis
-		// and 5 new bidders).  We knock 4 of these nodes offline.
+		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from
+		// genesis and 5 new bidders).  We knock 4 of these nodes offline.
 		// A new auction is started
 		// This continues until we have a new set
 		fn auction_repeats_after_failure_because_of_liveness() {
@@ -612,7 +612,8 @@ mod tests {
 						testnet.add_node(validator);
 					}
 
-					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					// All nodes stake to be included in the next epoch which are witnessed on the
+					// state chain
 					for node in &nodes {
 						testnet
 							.stake_manager_contract
