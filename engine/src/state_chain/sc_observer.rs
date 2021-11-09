@@ -63,8 +63,7 @@ pub async fn start<BlockStream, RpcClient>(
                             NodeState::Passive
                         };
 
-                    // TODO: Why is this variable "unusued"
-                    if !matches!(duty_manager.read().await.get_node_state(), new_state) {
+                    if duty_manager.read().await.get_node_state() == new_state {
                         duty_manager.write().await.set_node_state(new_state);
                     }
                 }

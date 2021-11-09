@@ -13,7 +13,7 @@ use cf_traits::{ChainflipAccountData, EpochIndex};
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NodeState {
     // Only monitoring for storage change events - so we know when/if we should transition to another state
     Passive,

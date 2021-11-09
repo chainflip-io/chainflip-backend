@@ -1,6 +1,6 @@
 use cf_chains::ChainId;
 use cf_traits::ChainflipAccountState;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use chainflip_engine::{
@@ -11,7 +11,7 @@ use chainflip_engine::{
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
-    state_chain::{self, client::StateChainRpcApi},
+    state_chain,
 };
 use structopt::StructOpt;
 

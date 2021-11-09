@@ -822,10 +822,3 @@ mod tests {
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
     }
 }
-
-// #[test]
-// fn test_keys() {
-//     let vaults = twox_128("Vaults".as_bytes());
-//     let scale_encoded_0 = scale_encode(0 as u32);
-//     println!("Vaults: {:?}", hex::encode(vaults));
-// }
