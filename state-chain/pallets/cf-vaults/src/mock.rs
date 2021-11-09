@@ -2,10 +2,10 @@ use std::cell::RefCell;
 
 use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 use crate as pallet_cf_vaults;
@@ -29,8 +29,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -39,7 +39,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for MockRuntime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -61,6 +61,7 @@ impl frame_system::Config for MockRuntime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {}
@@ -149,10 +150,10 @@ pub const GENESIS_ETHEREUM_AGG_PUB_KEY: [u8; 33] = [0x02; 33];
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {
+		system: Default::default(),
+		vaults_pallet: VaultsPalletConfig {
 			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -22,14 +21,11 @@ use cf_traits::{
 	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid,
 	StakeHandler, VaultRotationHandler, VaultRotator,
 };
-use frame_support::pallet_prelude::*;
-use frame_support::sp_std::mem;
-use frame_support::traits::ValidatorRegistration;
+use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
-use sp_std::cmp::min;
-use sp_std::prelude::*;
+use sp_std::{cmp::min, prelude::*};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -180,7 +176,7 @@ pub mod pallet {
 		///
 		/// - [InvalidRange](Error::InvalidRange)
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
-		pub(super) fn set_active_validator_range(
+		pub fn set_active_validator_range(
 			origin: OriginFor<T>,
 			range: ActiveValidatorRange,
 		) -> DispatchResultWithPostInfo {
@@ -190,7 +186,7 @@ pub mod pallet {
 				Ok(old) => {
 					Self::deposit_event(Event::ActiveValidatorRangeChanged(old, range));
 					Ok(().into())
-				}
+				},
 				Err(_) => Err(Error::<T>::InvalidRange.into()),
 			}
 		}
@@ -248,12 +244,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let (low, high) = range;
 
 		if low >= high || low < T::MinValidators::get() {
-			return Err(AuctionError::InvalidRange);
+			return Err(AuctionError::InvalidRange)
 		}
 
 		let old = ActiveValidatorSizeRange::<T>::get();
 		if old == range {
-			return Err(AuctionError::InvalidRange);
+			return Err(AuctionError::InvalidRange)
 		}
 
 		ActiveValidatorSizeRange::<T>::put(range);
@@ -297,20 +293,19 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::error!(
+					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
 						bidders.len(),
 						ActiveValidatorSizeRange::<T>::get().0
 					);
-					return Err(AuctionError::MinValidatorSize);
+					return Err(AuctionError::MinValidatorSize)
 				};
 
 				let phase = AuctionPhase::BidsTaken(bidders);
 				CurrentPhase::<T>::put(phase.clone());
 
 				Ok(phase)
-			}
+			},
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
 			// 'winners' of this auction, change the state to 'Completed' and store the
@@ -331,10 +326,10 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
 						// of existing BVs in the validating set.  We ensure this by using the last
 						// MAB to understand who were BVs and ensure we only maintain the required
-						// amount under this level to avoid a superminority of low collateralised nodes.
-						if let Some(AuctionResult {
-							minimum_active_bid, ..
-						}) = LastAuctionResult::<T>::get()
+						// amount under this level to avoid a superminority of low collateralised
+						// nodes.
+						if let Some(AuctionResult { minimum_active_bid, .. }) =
+							LastAuctionResult::<T>::get()
 						{
 							if let Some(number_of_validators) = validating_set
 								.iter()
@@ -349,18 +344,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 										T::PercentageOfBackupValidatorsInEmergency::get(),
 									) / 100;
 
-								validator_group_size = number_of_validators
-									+ desired_number_of_backup_validators as usize;
+								validator_group_size = number_of_validators +
+									desired_number_of_backup_validators as usize;
 
 								validating_set.truncate(validator_group_size);
 							}
 						}
 					}
 
-					let minimum_active_bid = validating_set
-						.last()
-						.map(|(_, bid)| *bid)
-						.unwrap_or_default();
+					let minimum_active_bid =
+						validating_set.last().map(|(_, bid)| *bid).unwrap_or_default();
 
 					let validating_set: Vec<_> = validating_set
 						.iter()
@@ -392,11 +385,11 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					T::Handler::start_vault_rotation(validating_set)
 						.map_err(|_| AuctionError::Abort)?;
 
-					return Ok(phase);
+					return Ok(phase)
 				}
 
-				return Err(AuctionError::Empty);
-			}
+				return Err(AuctionError::Empty)
+			},
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
@@ -445,20 +438,17 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						));
 
 						Ok(phase)
-					}
+					},
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
-			}
+			},
 			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// Store the result
-				LastAuctionResult::<T>::put(AuctionResult {
-					winners,
-					minimum_active_bid,
-				});
+				LastAuctionResult::<T>::put(AuctionResult { winners, minimum_active_bid });
 				Self::deposit_event(Event::AwaitingBidders);
 				CurrentPhase::<T>::put(AuctionPhase::default());
 				Ok(AuctionPhase::default())
-			}
+			},
 		}
 		.map_err(|e| {
 			// Abort the process on error if not waiting for confirmation
@@ -511,17 +501,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn lowest_bid(remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>]) -> T::Amount {
-		remaining_bidders
-			.last()
-			.map(|(_, amount)| *amount)
-			.unwrap_or_default()
+		remaining_bidders.last().map(|(_, amount)| *amount).unwrap_or_default()
 	}
 
 	fn highest_bid(remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>]) -> T::Amount {
-		remaining_bidders
-			.first()
-			.map(|(_, amount)| *amount)
-			.unwrap_or_default()
+		remaining_bidders.first().map(|(_, amount)| *amount).unwrap_or_default()
 	}
 
 	fn update_stake_for_bidder(
@@ -552,11 +536,7 @@ impl<T: Config> Pallet<T> {
 	fn promote_or_demote(promote: bool, validator_id: &T::ValidatorId) {
 		T::ChainflipAccount::update_state(
 			&(validator_id.clone().into()),
-			if promote {
-				ChainflipAccountState::Backup
-			} else {
-				ChainflipAccountState::Passive
-			},
+			if promote { ChainflipAccountState::Backup } else { ChainflipAccountState::Passive },
 		);
 	}
 
@@ -586,7 +566,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 		if BackupGroupSize::<T>::get() == 0 {
-			return;
+			return
 		}
 
 		if Pallet::<T>::waiting_on_bids() {
@@ -609,8 +589,8 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 						);
 						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 					}
-				}
-				ChainflipAccountState::Backup => {
+				},
+				ChainflipAccountState::Backup =>
 					if amount != LowestBackupValidatorBid::<T>::get() {
 						let remaining_bidders = &mut RemainingBidders::<T>::get();
 						Pallet::<T>::update_stake_for_bidder(
@@ -625,9 +605,8 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 								&mut RemainingBidders::<T>::get(),
 							);
 						}
-					}
-				}
-				_ => {}
+					},
+				_ => {},
 			}
 		}
 	}

@@ -4,8 +4,10 @@ use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
 };
 use cf_traits::{BondRotation, Issuance, StakeTransfer};
-use frame_support::traits::{HandleLifetime, Imbalance};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{HandleLifetime, Imbalance},
+};
 
 #[test]
 fn account_to_account() {
@@ -30,7 +32,8 @@ fn test_try_debit() {
 		assert!(Flip::try_debit(&ALICE, 101).is_none());
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
 
-		// Charlie's balance is zero, trying to debit or checking the balance should not created the account.
+		// Charlie's balance is zero, trying to debit or checking the balance should not created the
+		// account.
 		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
 		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
 		assert!(!FlipAccount::<Test>::contains_key(&CHARLIE));
@@ -272,14 +275,8 @@ mod test_issuance {
 
 			// Mint to a reserve.
 			mint_to_reserve(TEST_RESERVE, DEPOSIT);
-			assert_eq!(
-				Flip::reserved_balance(TEST_RESERVE),
-				INIT_RESERVE_BALANCE + DEPOSIT
-			);
-			assert_eq!(
-				FlipIssuance::<Test>::total_issuance(),
-				INIT_TOTAL_ISSUANCE + DEPOSIT
-			);
+			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE + DEPOSIT);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_TOTAL_ISSUANCE + DEPOSIT);
 			check_balance_integrity();
 
 			// Burn some.
@@ -314,7 +311,8 @@ mod test_issuance {
 				50 - <Test as Config>::ExistentialDeposit::get()
 			);
 
-			// Force through a burn of all remaining burnable tokens, including the existential deposit.
+			// Force through a burn of all remaining burnable tokens, including the existential
+			// deposit.
 			burn_from_account(&ALICE, 1_000_000);
 
 			assert_eq!(Flip::total_balance_of(&ALICE), 0);
