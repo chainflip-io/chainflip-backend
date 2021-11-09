@@ -1,10 +1,7 @@
 //! The DutyManager contains logic that allows for enabling and disabling of features
 //! within the CFE depending on its state and the block heights of each respective blockchain.
 
-use crate::{
-    p2p::AccountId,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
-};
+use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
 use cf_chains::ChainId;
 use pallet_cf_vaults::BlockHeightWindow;
 use std::{collections::HashMap, sync::Arc};
@@ -33,16 +30,14 @@ pub enum NodeState {
 
 #[derive(Debug)]
 pub struct DutyManager {
-    account_id: AccountId,
     node_state: NodeState,
     /// Contains the block at which we start our validator duties for each respective chain
     active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
 }
 
 impl DutyManager {
-    pub fn new(account_id: AccountId, node_state: NodeState) -> DutyManager {
+    pub fn new(node_state: NodeState) -> DutyManager {
         DutyManager {
-            account_id,
             node_state,
             active_windows: None,
         }
@@ -53,7 +48,6 @@ impl DutyManager {
     pub fn new_test() -> DutyManager {
         let test_account_id: [u8; 32] = [0; 32];
         DutyManager {
-            account_id: AccountId(test_account_id),
             node_state: NodeState::Active,
             active_windows: None,
         }

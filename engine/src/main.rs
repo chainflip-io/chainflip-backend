@@ -82,10 +82,7 @@ async fn main() {
         NodeState::Passive
     };
 
-    let duty_manager = Arc::new(RwLock::new(DutyManager::new(
-        account_id.clone(),
-        node_state,
-    )));
+    let duty_manager = Arc::new(RwLock::new(DutyManager::new(node_state)));
 
     if matches!(node_state, NodeState::Active) || matches!(node_state, NodeState::Outgoing) {
         duty_manager
