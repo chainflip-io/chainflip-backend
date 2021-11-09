@@ -462,4 +462,44 @@ mod tests {
 			assert_matches!(AuctionPallet::process(), Err(..));
 		});
 	}
+
+	// An auction has failed with a set of bad validators being reported to the pallet
+	// The subsequent auction will not include these validators
+	#[test]
+	fn should_exclude_bad_validators_in_next_auction() {
+		new_test_ext().execute_with(|| {
+			// Generate bids with half of these being reported as bad validators
+			let number_of_bidders = 10;
+			generate_bids(number_of_bidders, BIDDER_GROUP_A);
+
+			// Split the good from the bad
+			let (good_bidders, bad_bidders): (Vec<ValidatorId>, Vec<ValidatorId>) =
+				MockBidderProvider::get_bidders()
+					.iter()
+					.map(|(id, _)| *id)
+					.partition(|id| *id % 2 == 0);
+
+			// The bad bidders have been reported
+			VaultRotationEventHandler::<Test>::penalise(&bad_bidders);
+
+			// Run through an auction
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(..)));
+			clear_confirmation();
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(..)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
+
+			// Confirm we just have the good bidders in our new auction result
+			assert_eq!(
+				AuctionPallet::auction_result()
+					.expect("we should have an auction result")
+					.winners,
+				good_bidders
+					.iter()
+					.take(MAX_VALIDATOR_SIZE as usize)
+					.cloned()
+					.collect::<Vec<_>>(),
+			);
+		});
+	}
 }
