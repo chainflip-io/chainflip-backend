@@ -52,7 +52,7 @@ pub async fn start<BlockStream, RpcClient>(
                 if duty_manager.read().await.is_monitoring_status_per_block() {
                     // we want to check our account state every time
                     let my_account_data = state_chain_client
-                        .get_account_data(Some(block_hash))
+                        .get_account_data(block_hash)
                         .await
                         .unwrap();
 
@@ -101,7 +101,7 @@ pub async fn start<BlockStream, RpcClient>(
 
                                     // we need to get our new node status
                                     let account_data = state_chain_client
-                                        .get_account_data(Some(block_hash))
+                                        .get_account_data(block_hash)
                                         .await
                                         .unwrap();
 

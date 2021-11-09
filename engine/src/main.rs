@@ -11,7 +11,7 @@ use chainflip_engine::{
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
-    state_chain,
+    state_chain::{self, client::StateChainRpcApi},
 };
 use structopt::StructOpt;
 
@@ -57,13 +57,18 @@ async fn main() {
 
     // ==== DUTY MANAGER SETUP ====
 
-    // TODO: do we want to get the current block height and feed this to all the method calls here
-    // so we have a consistent height
+    let latest_block_hash = state_chain_client
+        .latest_block_hash()
+        .await
+        .expect("Should get latest block hash");
     let current_epoch = state_chain_client
-        .epoch_at_block(None)
+        .epoch_at_block(latest_block_hash)
         .await
         .expect("Could not get current epoch");
-    let account_data = state_chain_client.get_account_data(None).await.unwrap();
+    let account_data = state_chain_client
+        .get_account_data(latest_block_hash)
+        .await
+        .unwrap();
 
     let node_state = if account_data.state == ChainflipAccountState::Validator {
         NodeState::Active

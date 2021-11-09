@@ -173,6 +173,8 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
+
+    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash>;
 }
 
 #[async_trait]
@@ -222,6 +224,16 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(into_anyhow_error)
     }
+
+    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+        try_unwrap_value(
+            self.chain_rpc_client
+                .block_hash(None)
+                .await
+                .map_err(into_anyhow_error)?,
+            anyhow::Error::msg("Failed to get latest block hash"),
+        )
+    }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
@@ -236,6 +248,11 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    /// Get the latest block hash at the time of the call
+    pub async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+        self.state_chain_rpc_client.latest_block_hash().await
+    }
+
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
@@ -396,11 +413,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Get the status of the node at a particular block
     pub async fn get_account_data(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
         let node_status_updates: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events_at(block_hash, self.account_storage_key.clone())
+            .storage_events_at(Some(block_hash), self.account_storage_key.clone())
             .await?
             .into_iter()
             .map(|storage_change_set| {
@@ -425,7 +442,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
     pub async fn epoch_at_block(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
         let epoch_storage_key = self
             .get_metadata()
@@ -435,7 +452,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .key();
         let epoch_at_block_updates = self
             .state_chain_rpc_client
-            .storage_events_at(block_hash, epoch_storage_key)
+            .storage_events_at(Some(block_hash), epoch_storage_key)
             .await?
             .into_iter()
             .map(|storage_change_set| {
@@ -478,6 +495,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
+fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
+    match lorv {
+        sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
+        _ => Err(error),
+    }
+}
+
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
@@ -485,16 +509,6 @@ pub async fn connect_to_state_chain(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
 )> {
-    fn try_unwrap_value<T, E>(
-        lorv: sp_rpc::list::ListOrValue<Option<T>>,
-        error: E,
-    ) -> Result<T, E> {
-        match lorv {
-            sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
-            _ => Err(error),
-        }
-    }
-
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,

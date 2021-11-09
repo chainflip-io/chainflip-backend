@@ -40,14 +40,14 @@ impl<EventEnum: Debug> Event<EventEnum> {
         log: Log,
     ) -> Result<Self> {
         Ok(Event {
-            block_number: log
-                .block_number
-                .expect("Log should contain a block number")
-                .as_u64(),
             tx_hash: log
                 .transaction_hash
                 .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?
                 .to_fixed_bytes(),
+            block_number: log
+                .block_number
+                .expect("Log should contain a block number")
+                .as_u64(),
             event_enum: decode_log(
                 *log.topics.first().ok_or_else(|| {
                     anyhow::Error::msg("Could not get event signature from ETH log")
@@ -110,8 +110,6 @@ pub async fn new_eth_event_stream<
     } else {
         (vec![], from_block)
     };
-
-    slog::debug!(logger, "past_logs: {}", past_logs.len());
 
     let future_logs =
         future_logs
