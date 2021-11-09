@@ -659,11 +659,8 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, nodes) = network::Network::create(5);
-					// Add the genesis nodes to the test network
-					for validator in Validator::current_validators() {
-						testnet.add_node(validator);
-					}
+					let (mut testnet, nodes) =
+						network::Network::create(8, &Validator::current_validators());
 
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
