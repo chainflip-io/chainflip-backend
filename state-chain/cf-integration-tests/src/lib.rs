@@ -1,21 +1,18 @@
 #[cfg(test)]
 mod tests {
 	use frame_support::{
-		assert_ok,
-		assert_noop,
+		assert_noop, assert_ok,
 		sp_io::TestExternalities,
 		traits::{GenesisBuild, OnInitialize},
 	};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
-	use sp_runtime::traits::Zero;
-	use sp_runtime::Storage;
-	use state_chain_runtime::opaque::SessionKeys;
-	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
+	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Online, Origin, Reputation, Rewards, Session,
-		Staking, Timestamp, Validator, Vaults,
+		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, Flip, Governance,
+		Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System, Timestamp,
+		Validator, Vaults,
 	};
 
 	use cf_chains::ChainId;
@@ -237,9 +234,7 @@ mod tests {
 					let node_id: NodeId = [index; 32].into();
 					nodes.push(node_id.clone());
 					setup_account(&node_id);
-					network
-						.engines
-						.insert(node_id.clone(), Engine::new(node_id));
+					network.engines.insert(node_id.clone(), Engine::new(node_id));
 				}
 
 				nodes.append(&mut nodes_to_include.to_vec());
@@ -250,13 +245,15 @@ mod tests {
 			pub fn filter_nodes(&self, state: ChainflipAccountState) -> Vec<NodeId> {
 				self.engines
 					.iter()
-					.filter_map(|(node_id, engine)| {
-						if engine.state() == state {
-							Some(node_id)
-						} else {
-							None
-						}
-					})
+					.filter_map(
+						|(node_id, engine)| {
+							if engine.state() == state {
+								Some(node_id)
+							} else {
+								None
+							}
+						},
+					)
 					.cloned()
 					.collect()
 			}
@@ -267,13 +264,7 @@ mod tests {
 
 			pub fn add_node(&mut self, node_id: NodeId) {
 				setup_account(&node_id);
-				self.engines.insert(
-					node_id.clone(),
-					Engine {
-						node_id,
-						active: true,
-					},
-				);
+				self.engines.insert(node_id.clone(), Engine { node_id, active: true });
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -646,12 +637,11 @@ mod tests {
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) =
 						network::Network::create(5, &Validator::current_validators());
-					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					// All nodes stake to be included in the next epoch which are witnessed on the
+					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
 					}
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
@@ -715,8 +705,7 @@ mod tests {
 	}
 
 	mod staking {
-		use super::*;
-		use super::{genesis, network};
+		use super::{genesis, network, *};
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
@@ -739,19 +728,13 @@ mod tests {
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
 					}
 
 					// Move forward one block to process events
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(
-						0,
-						Validator::epoch_index(),
-						"We should be in the genesis epoch"
-					);
+					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
@@ -860,9 +843,7 @@ mod tests {
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &passive_nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction and confirm
