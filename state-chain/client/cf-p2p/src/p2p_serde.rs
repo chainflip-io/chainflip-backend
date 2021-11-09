@@ -29,7 +29,7 @@ pub mod bs58_fixed_size {
 				"Decoded is {} bytes, but buffer len is {} bytes",
 				decoded,
 				buffer.len(),
-			)));
+			)))
 		}
 		Ok(buffer)
 	}

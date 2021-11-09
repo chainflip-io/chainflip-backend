@@ -1,5 +1,5 @@
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok, instances::Instance0};
+use frame_support::{assert_noop, assert_ok, instances::Instance1};
 
 #[cfg(test)]
 mod staking_witness_tests {
@@ -81,7 +81,7 @@ mod staking_witness_tests {
 
 			// The call we are witnessing.
 			let call: Call =
-				pallet_cf_threshold_signature::Call::<Test, Instance0>::signature_success(
+				pallet_cf_threshold_signature::Call::<Test, Instance1>::signature_success(
 					STAKER,
 					(),
 				)
@@ -99,7 +99,7 @@ mod staking_witness_tests {
 			// Second vote - fails because there is no pending request. Expected behaviour.
 			assert_noop!(
 				WitnessApi::witness_eth_signature_success(Origin::signed(WITNESS), STAKER, (),),
-				pallet_cf_threshold_signature::Error::<Test, Instance0>::InvalidCeremonyId
+				pallet_cf_threshold_signature::Error::<Test, Instance1>::InvalidCeremonyId
 			);
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);

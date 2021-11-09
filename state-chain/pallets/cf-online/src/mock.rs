@@ -2,17 +2,16 @@ use super::*;
 use crate as pallet_cf_online;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::impl_mock_stake_transfer;
-use cf_traits::{Chainflip, Heartbeat, NetworkState};
+use cf_traits::{impl_mock_stake_transfer, Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
 
@@ -36,8 +35,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -46,7 +45,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -68,6 +67,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 // A heartbeat interval in blocks
@@ -119,9 +119,7 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		frame_system: Default::default(),
-	};
+	let config = GenesisConfig { system: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

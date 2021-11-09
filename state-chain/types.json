@@ -49,7 +49,8 @@
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
   "ChainflipAccountData": {
-    "state": "ChainflipAccountState"
+    "state": "ChainflipAccountState",
+    "last_active_epoch": "Option<EpochIndex>"
   },
   "ChainflipAccountState": {
     "_enum": [
@@ -112,7 +113,8 @@
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "Vault": {
-    "public_key": "PublicKey"
+    "public_key": "PublicKey",
+    "active_window": "BlockHeightWindow"
   },
   "ValidatorSize": "u32",
   "VaultRotationStatus": {

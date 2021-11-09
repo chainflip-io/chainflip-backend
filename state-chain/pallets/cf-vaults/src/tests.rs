@@ -1,7 +1,7 @@
 mod tests {
 	use crate::{
-		mock::*, ActiveWindows, BlockHeightWindow, Error, Event as PalletEvent,
-		PendingVaultRotations, VaultRotationStatus, Vaults,
+		mock::*, BlockHeightWindow, Error, Event as PalletEvent, PendingVaultRotations, Vault,
+		VaultRotationStatus, Vaults,
 	};
 	use cf_chains::ChainId;
 	use cf_traits::{Chainflip, EpochInfo, VaultRotator};
@@ -115,10 +115,7 @@ mod tests {
 			));
 
 			// KeygenAborted event emitted.
-			assert_eq!(
-				last_event(),
-				PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into()
-			);
+			assert_eq!(last_event(), PalletEvent::KeygenAborted(vec![ChainId::Ethereum]).into());
 
 			// All rotations have been aborted.
 			assert!(VaultsPallet::no_active_chain_vault_rotations());
@@ -198,37 +195,50 @@ mod tests {
 				Error::<MockRuntime>::InvalidRotationStatus
 			);
 
-			// Vault is updated.
+			// We have yet to move to the new epoch
+			let current_epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
+
+			let Vault { public_key, active_window } =
+				Vaults::<MockRuntime>::get(current_epoch, ChainId::Ethereum)
+					.expect("Ethereum Vault should exist");
+
 			assert_eq!(
-				Vaults::<MockRuntime>::get(ChainId::Ethereum)
-					.expect("Ethereum Vault should exists")
-					.public_key,
-				new_public_key,
+				public_key, GENESIS_ETHEREUM_AGG_PUB_KEY,
+				"we should have the old agg key in the genesis vault"
+			);
+
+			assert_eq!(
+				active_window,
+				BlockHeightWindow { from: 0, to: Some(ROTATION_BLOCK_NUMBER) },
+				"we should have the block height set for the genesis or current epoch"
+			);
+
+			// The next epoch
+			let next_epoch = current_epoch + 1;
+
+			let Vault { public_key, active_window } =
+				Vaults::<MockRuntime>::get(next_epoch, ChainId::Ethereum)
+					.expect("Ethereum Vault should exist in the next epoch");
+
+			assert_eq!(
+				public_key, new_public_key,
+				"we should have the new public key in the new vault for the next epoch"
+			);
+
+			assert_eq!(
+				active_window,
+				BlockHeightWindow {
+					from: ROTATION_BLOCK_NUMBER.saturating_add(1),
+					to: None
+				},
+				"we should have set the starting point for the new vault's active window as the next
+				after the reported block number"
 			);
 
 			// Status is complete.
 			assert_eq!(
 				PendingVaultRotations::<MockRuntime>::get(ChainId::Ethereum),
-				Some(VaultRotationStatus::Complete {
-					tx_hash: TX_HASH.to_vec()
-				}),
-			);
-
-			// Active windows have been updated.
-			let epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
-			assert_eq!(
-				ActiveWindows::<MockRuntime>::get(epoch, ChainId::Ethereum),
-				BlockHeightWindow {
-					from: 0,
-					to: Some(ROTATION_BLOCK_NUMBER + crate::ETHEREUM_LEEWAY_IN_BLOCKS)
-				}
-			);
-			assert_eq!(
-				ActiveWindows::<MockRuntime>::get(epoch + 1, ChainId::Ethereum),
-				BlockHeightWindow {
-					from: ROTATION_BLOCK_NUMBER,
-					to: None
-				}
+				Some(VaultRotationStatus::Complete { tx_hash: TX_HASH.to_vec() }),
 			);
 		});
 	}

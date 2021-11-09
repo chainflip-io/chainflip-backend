@@ -1,11 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
-use futures::compat::{Future01CompatExt, Stream01CompatExt};
-use futures::Stream;
-use futures::StreamExt;
+use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
@@ -29,6 +27,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
+use crate::common::into_anyhow_error;
 use crate::settings;
 
 #[cfg(test)]
@@ -204,7 +203,6 @@ impl StateChainRpcApi for StateChainRpcClient {
                 .expect("Should be able to sign")
                 .encode(),
             ))
-            .compat()
             .await
     }
 
@@ -225,9 +223,8 @@ impl StateChainRpcApi for StateChainRpcClient {
             if let Some(signed_block) = self
                 .chain_rpc_client
                 .block(Some(block_hash))
-                .compat()
                 .await
-                .map_err(|e| anyhow!(e))?
+                .map_err(into_anyhow_error)?
             {
                 let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);
@@ -264,9 +261,8 @@ impl StateChainRpcApi for StateChainRpcClient {
                 vec![self.events_storage_key.clone()],
                 Some(block_header.hash()),
             )
-            .compat()
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(into_anyhow_error)?
             .into_iter()
             .map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
@@ -331,7 +327,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     err => {
                         slog::error!(logger, "Error: {}", err);
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(anyhow::Error::msg(err));
+                        return Err(into_anyhow_error(err));
                     }
                 },
             }
@@ -417,38 +413,33 @@ pub async fn connect_to_state_chain(
     // TODO connect only once (Using a single RpcChannel)
 
     let author_rpc_client =
-        crate::common::alt_jsonrpc_connect::connect::<AuthorRpcClient>(rpc_server_url)
-            .compat()
+        jsonrpc_core_client::transports::ws::connect::<AuthorRpcClient>(rpc_server_url)
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(into_anyhow_error)?;
 
     let chain_rpc_client =
-        crate::common::alt_jsonrpc_connect::connect::<ChainRpcClient>(rpc_server_url)
-            .compat()
+        jsonrpc_core_client::transports::ws::connect::<ChainRpcClient>(rpc_server_url)
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(into_anyhow_error)?;
 
     let state_rpc_client =
-        crate::common::alt_jsonrpc_connect::connect::<StateRpcClient>(rpc_server_url)
-            .compat()
+        jsonrpc_core_client::transports::ws::connect::<StateRpcClient>(rpc_server_url)
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(into_anyhow_error)?;
 
     let latest_block_hash = Some(try_unwrap_value(
         chain_rpc_client
             .block_hash(None)
-            .compat()
             .await
-            .map_err(anyhow::Error::msg)?,
+            .map_err(into_anyhow_error)?,
         anyhow::Error::msg("Failed to get latest block hash"),
     )?);
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_rpc_client
             .metadata(latest_block_hash)
-            .compat()
             .await
-            .map_err(anyhow::Error::msg)?[..],
+            .map_err(into_anyhow_error)?[..],
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?.clone();
@@ -456,15 +447,13 @@ pub async fn connect_to_state_chain(
         events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         runtime_version: state_rpc_client
             .runtime_version(latest_block_hash)
-            .compat()
             .await
-            .map_err(anyhow::Error::msg)?,
+            .map_err(into_anyhow_error)?,
         genesis_hash: try_unwrap_value(
             chain_rpc_client
                 .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                .compat()
                 .await
-                .map_err(anyhow::Error::msg)?,
+                .map_err(into_anyhow_error)?,
             anyhow::Error::msg("Genesis block doesn't exist?"),
         )?,
         signer: signer.clone(),
@@ -492,9 +481,8 @@ pub async fn connect_to_state_chain(
                                 .key(&our_account_id),
                             latest_block_hash,
                         )
-                        .compat()
                         .await
-                        .map_err(anyhow::Error::msg)?
+                        .map_err(into_anyhow_error)?
                         .ok_or_else(|| {
                             anyhow::format_err!(
                                 "AccountId {:?} doesn't exist on the state chain.",
@@ -510,11 +498,8 @@ pub async fn connect_to_state_chain(
         }),
         chain_rpc_client
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
-            .compat()
-            .await
-            .map_err(anyhow::Error::msg)?
-            .compat()
-            .map(|result_header| result_header.map_err(anyhow::Error::msg)),
+            .map_err(into_anyhow_error)?
+            .map_err(into_anyhow_error),
     ))
 }
 

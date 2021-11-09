@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -30,16 +29,16 @@ pub type CeremonyId = u64;
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VaultRotationStatus<T: Config> {
-	AwaitingKeygen {
-		keygen_ceremony_id: CeremonyId,
-		candidates: Vec<T::ValidatorId>,
-	},
-	AwaitingRotation {
-		new_public_key: Vec<u8>,
-	},
-	Complete {
-		tx_hash: Vec<u8>,
-	},
+	AwaitingKeygen { keygen_ceremony_id: CeremonyId, candidates: Vec<T::ValidatorId> },
+	AwaitingRotation { new_public_key: Vec<u8> },
+	Complete { tx_hash: Vec<u8> },
+}
+
+/// The bounds within which a public key for a vault should be used for witnessing.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct BlockHeightWindow {
+	pub from: u64,
+	pub to: Option<u64>,
 }
 
 /// A single vault.
@@ -47,22 +46,14 @@ pub enum VaultRotationStatus<T: Config> {
 pub struct Vault {
 	/// The vault's public key.
 	pub public_key: Vec<u8>,
+	/// The active window for this vault
+	pub active_window: BlockHeightWindow,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
-
-	/// This is roughly the number of Ethereum blocks in 14 days.
-	pub const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
-
-	/// The bounds within which a public key for a vault should be used for witnessing.
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-	pub struct BlockHeightWindow {
-		pub from: u64,
-		pub to: Option<u64>,
-	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -99,10 +90,11 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// The active vaults for the current epoch.
+	/// A map of vaults by epoch and chain
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
-	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault>;
+	pub(super) type Vaults<T: Config> =
+		StorageDoubleMap<_, Blake2_128Concat, EpochIndex, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -115,19 +107,6 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
 		StorageMap<_, Blake2_128Concat, ChainId, Nonce, ValueQuery>;
-
-	/// Active block height windows for each chain.
-	#[pallet::storage]
-	#[pallet::getter(fn active_windows)]
-	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		ChainId,
-		BlockHeightWindow,
-		ValueQuery,
-	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -166,8 +145,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A key generation succeeded. Update the state of the rotation and attempt to broadcast the setAggKey
-		/// transaction.
+		/// A key generation succeeded. Update the state of the rotation and attempt to broadcast
+		/// the setAggKey transaction.
 		///
 		/// ## Events
 		///
@@ -199,16 +178,9 @@ pub mod pallet {
 				rotation,
 				Error::<T>::InvalidRotationStatus,
 			);
-			ensure!(
-				pending_ceremony_id == ceremony_id,
-				Error::<T>::InvalidCeremonyId
-			);
+			ensure!(pending_ceremony_id == ceremony_id, Error::<T>::InvalidCeremonyId);
 			let agg_key = AggKey::try_from(&new_public_key[..]).map_err(|e| {
-				frame_support::debug::error!(
-					"Unable to decode new public key {:?}: {:?}",
-					new_public_key,
-					e
-				);
+				log::error!("Unable to decode new public key {:?}: {:?}", new_public_key, e);
 				Error::<T>::InvalidPublicKey
 			})?;
 
@@ -217,8 +189,8 @@ pub mod pallet {
 				VaultRotationStatus::<T>::AwaitingRotation { new_public_key },
 			);
 
-			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded so we might need an
-			//          intermediate VaultRotationStatus::AwaitingOtherKeygens.
+			// TODO: 1. We only want to do this once *all* of the keygen ceremonies have succeeded
+			// so we might need an          intermediate VaultRotationStatus::AwaitingOtherKeygens.
 			//       2. This also implicitly broadcasts the transaction - could be made clearer.
 			//       3. This is eth-specific, should be chain-agnostic.
 			T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
@@ -229,7 +201,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Key generation failed. We report the guilty parties and abort all pending keygen ceremonies.
+		/// Key generation failed. We report the guilty parties and abort all pending keygen
+		/// ceremonies.
 		///
 		/// If key generation fails for *any* chain we need to abort *all* chains.
 		///
@@ -263,10 +236,7 @@ pub mod pallet {
 				rotation,
 				Error::<T>::InvalidRotationStatus,
 			);
-			ensure!(
-				pending_ceremony_id == ceremony_id,
-				Error::<T>::InvalidCeremonyId
-			);
+			ensure!(pending_ceremony_id == ceremony_id, Error::<T>::InvalidCeremonyId);
 
 			// TODO:
 			// - Centralise penalty points.
@@ -279,7 +249,7 @@ pub mod pallet {
 					&offender,
 				)
 				.unwrap_or_else(|e| {
-					frame_support::debug::error!(
+					log::error!(
 						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
 						offender,
 						e
@@ -327,10 +297,10 @@ pub mod pallet {
 				Error::<T>::InvalidRotationStatus
 			);
 
-			// If the keys don't match, we don't have much choice but to trust the witnessed one over the one
-			// we expected, but we should log the issue nonetheless.
+			// If the keys don't match, we don't have much choice but to trust the witnessed one
+			// over the one we expected, but we should log the issue nonetheless.
 			if new_public_key != expected_new_key {
-				frame_support::debug::error!(
+				log::error!(
 					"Unexpected new agg key witnessed for {:?}. Expected {:?}, got {:?}.",
 					chain_id,
 					expected_new_key,
@@ -342,9 +312,10 @@ pub mod pallet {
 				));
 			}
 
-			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
-				if let Some(mut vault) = maybe_vault.as_mut() {
-					vault.public_key = new_public_key;
+			// We update the current epoch with an active window for the outgoers
+			Vaults::<T>::try_mutate_exists(T::EpochInfo::epoch_index(), chain_id, |maybe_vault| {
+				if let Some(vault) = maybe_vault.as_mut() {
+					vault.active_window.to = Some(block_number);
 					Ok(())
 				} else {
 					Err(Error::<T>::UnsupportedChain)
@@ -356,22 +327,17 @@ pub mod pallet {
 				VaultRotationStatus::<T>::Complete { tx_hash },
 			);
 
-			// Record this new incoming set for the next epoch.
-			ActiveWindows::<T>::insert(
+			// For the new epoch we create a new vault with the new public key and its active
+			// window at for the block after that reported
+			Vaults::<T>::insert(
 				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
-				BlockHeightWindow {
-					from: block_number,
-					to: None,
-				},
-			);
-
-			// Set the leaving block number for the outgoing set of the current epoch.
-			ActiveWindows::<T>::mutate(
-				T::EpochInfo::epoch_index(),
-				ChainId::Ethereum,
-				|block_height_window| {
-					block_height_window.to = Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+				Vault {
+					public_key: new_public_key,
+					active_window: BlockHeightWindow {
+						from: block_number.saturating_add(1),
+						to: None,
+					},
 				},
 			);
 
@@ -383,19 +349,18 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		/// The Vault key should be a 33-byte compressed key in `[y; x]` order, where is `2` (even) or `3` (odd).
+		/// The Vault key should be a 33-byte compressed key in `[y; x]` order, where is `2` (even)
+		/// or `3` (odd).
 		///
-		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise we could use
-		/// that instead of `Vec`...
+		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise
+		/// we could use that instead of `Vec`...
 		pub ethereum_vault_key: Vec<u8>,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				ethereum_vault_key: Default::default(),
-			}
+			Self { ethereum_vault_key: Default::default() }
 		}
 	}
 
@@ -406,9 +371,11 @@ pub mod pallet {
 				.expect("Can't build genesis without a valid ethereum vault key.");
 
 			Vaults::<T>::insert(
+				0,
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
+					active_window: BlockHeightWindow::default(),
 				},
 			);
 		}
@@ -426,23 +393,22 @@ impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Abort all pending rotations and notify the `VaultRotationHandler` trait of our decision to abort.
+	/// Abort all pending rotations and notify the `VaultRotationHandler` trait of our decision to
+	/// abort.
 	fn abort_rotation() {
 		// TODO: Should disallow aborting if we have passed the keygen stage.
 		// TODO: Should also notify of the ceremony id for each aborted ceremony.
 		Self::deposit_event(Event::KeygenAborted(
 			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
 		));
-		PendingVaultRotations::<T>::remove_all();
+		PendingVaultRotations::<T>::remove_all(None);
 		T::RotationHandler::vault_rotation_aborted();
 	}
 
 	fn no_active_chain_vault_rotations() -> bool {
 		// Returns true if the iterator is empty or if all rotations are complete.
-		PendingVaultRotations::<T>::iter().all(|(_, status)| match status {
-			VaultRotationStatus::Complete { .. } => true,
-			_ => false,
-		})
+		PendingVaultRotations::<T>::iter()
+			.all(|(_, status)| matches!(status, VaultRotationStatus::Complete { .. }))
 	}
 
 	fn start_vault_rotation_for_chain(
@@ -486,7 +452,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
 		if Pallet::<T>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotations::<T>::remove_all();
+			PendingVaultRotations::<T>::remove_all(None);
 			Self::deposit_event(Event::VaultsRotated);
 			Ok(())
 		} else {
@@ -498,15 +464,14 @@ impl<T: Config> VaultRotator for Pallet<T> {
 
 /// Takes three arguments: a pattern, a variable expression and an error literal.
 ///
-/// If the variable matches the pattern, returns it, otherwise returns an error. The pattern may optionally have an
-/// expression attached to process and return inner arguments.
+/// If the variable matches the pattern, returns it, otherwise returns an error. The pattern may
+/// optionally have an expression attached to process and return inner arguments.
 ///
 /// ## Example
 ///
 /// let x = ensure_variant!(Some(..), optional_value, Error::<T>::ValueIsNone);
 ///
 /// let 2x = ensure_variant!(Some(x) => { 2 * x }, optional_value, Error::<T>::ValueIsNone);
-///
 #[macro_export]
 macro_rules! ensure_variant {
 	( $variant:pat => $varexp:expr, $var:expr, $err:expr $(,)? ) => {
