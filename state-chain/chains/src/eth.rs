@@ -218,7 +218,7 @@ pub fn verify_raw<SignerId>(
 	tx: &RawSignedTransaction,
 	_signer: &SignerId,
 ) -> Result<(), EthereumTransactionError> {
-	let _decoded: ethereum::EIP1559Transaction =
+	let _decoded: ethereum::TransactionV2 =
 		rlp::decode(&tx[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
 	// TODO check contents, signature, etc.
 	Ok(())
