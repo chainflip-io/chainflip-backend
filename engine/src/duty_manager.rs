@@ -15,37 +15,46 @@ use crate::logging::COMPONENT_KEY;
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum NodeState {
     // Only monitoring for storage change events - so we know when/if we should transition to another state
     Passive,
     // Only submits heartbeats + monitors storage change events
     // Backup Validators and Outgoing Validators (which may be Backup too) fall into this category
-    HeartbeatAndWatch,
+    Backup,
+
+    // Represents a "running" state, but one that will be transitioned out of
+    // once the chains are caught up to their end blocks
+    SoonOutgoing,
 
     // Is on the Active Validator list
     // Uses the active_windows to filter witnessing.
     // Outgoing, until the last ETH block is done being witnessed - do we want to cache this somewhere? - or use a Last consensus block method
-    Running,
+    Active,
 }
 
 #[derive(Debug)]
 pub struct DutyManager {
     account_id: AccountId,
-    node_state: NodeState,
     /// The epoch that the chain is currently in
     current_epoch: EpochIndex,
+    node_state: NodeState,
     /// Contains the block at which we start our validator duties for each respective chain
     active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
 }
 
 impl DutyManager {
-    pub fn new(account_id: AccountId, current_epoch: EpochIndex) -> DutyManager {
+    pub fn new(
+        account_id: AccountId,
+        current_epoch: EpochIndex,
+        node_state: NodeState,
+        active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
+    ) -> DutyManager {
         DutyManager {
             account_id,
-            node_state: NodeState::Passive,
-            active_windows: None,
             current_epoch,
+            node_state,
+            active_windows,
         }
     }
 
@@ -55,7 +64,7 @@ impl DutyManager {
         let test_account_id: [u8; 32] = [0; 32];
         DutyManager {
             account_id: AccountId(test_account_id),
-            node_state: NodeState::Running,
+            node_state: NodeState::Active,
             active_windows: None,
             current_epoch: 0,
         }
@@ -64,7 +73,7 @@ impl DutyManager {
     /// Check if the heartbeat is enabled
     pub fn is_heartbeat_enabled(&self) -> bool {
         match self.node_state {
-            NodeState::HeartbeatAndWatch | NodeState::Running => true,
+            NodeState::Backup | NodeState::Active | NodeState::SoonOutgoing => true,
             NodeState::Passive => false,
         }
     }
@@ -84,89 +93,22 @@ impl DutyManager {
         false
     }
 
+    /// Passive and Backup validators can change per block
+    pub fn is_monitoring_status_per_block(&self) -> bool {
+        matches!(self.node_state, NodeState::Passive)
+            || matches!(self.node_state, NodeState::Backup)
+    }
+
+    pub fn set_node_state(&mut self, node_state: NodeState) {
+        self.node_state = node_state;
+    }
+
     pub fn get_node_state(&self) -> NodeState {
         self.node_state
     }
 
     pub fn set_current_epoch(&mut self, epoch_index: EpochIndex) {
         self.current_epoch = epoch_index;
-    }
-}
-
-use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
-use futures::{Stream, StreamExt};
-
-// This should be on its own task?
-pub async fn start_duty_manager<BlockStream, RpcClient>(
-    duty_manager: Arc<RwLock<DutyManager>>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    sc_block_stream: BlockStream,
-    logger: &slog::Logger,
-) where
-    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RpcClient: StateChainRpcApi,
-{
-    let logger = logger.new(o!(COMPONENT_KEY => "DutyManager"));
-    slog::info!(logger, "Starting");
-
-    // Get our node state from the block stream
-    let mut sc_block_stream = Box::pin(sc_block_stream);
-    while let Some(result_block_header) = sc_block_stream.next().await {
-        match result_block_header {
-            Ok(block_header) => {
-                // TODO: Optimise this so it's not run every block
-
-                let my_account_data = state_chain_client
-                    .get_account_data(&block_header)
-                    .await
-                    .unwrap();
-
-                let current_epoch = duty_manager.read().await.current_epoch;
-                println!("Current epoch is: {}", current_epoch);
-                println!("My account data: {:?}", my_account_data);
-                // let outgoing_or_current_validator = my_account_data.last_active_epoch.is_some()
-                //     && ((my_account_data.last_active_epoch.unwrap() + 1) == current_epoch
-                //         || my_account_data.last_active_epoch.unwrap() == current_epoch);
-
-                let outgoing_or_current_validator = true;
-                if outgoing_or_current_validator {
-                    println!("We are outgoing or current validator");
-
-                    // TODO: use the actual last active epoch after this is in: https://github.com/chainflip-io/chainflip-backend/issues/796
-                    let last_active_epoch = 0;
-
-                    // we currently only need the ETH vault
-                    let eth_vault = state_chain_client
-                        .get_vault(&block_header, last_active_epoch, ChainId::Ethereum)
-                        .await
-                        .unwrap();
-
-                    let mut active_windows = HashMap::new();
-                    active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
-
-                    {
-                        let mut w_duty_manager = duty_manager.write().await;
-                        w_duty_manager.node_state = NodeState::Running;
-                        w_duty_manager.active_windows = Some(active_windows);
-                    }
-                } else {
-                    match my_account_data.state {
-                        ChainflipAccountState::Backup => {
-                            duty_manager.write().await.node_state = NodeState::HeartbeatAndWatch;
-                        }
-                        ChainflipAccountState::Passive => {
-                            duty_manager.write().await.node_state = NodeState::Passive;
-                        }
-                        ChainflipAccountState::Validator => {
-                            panic!("We should never get here, as this state should be captured in the above `if`");
-                        }
-                    }
-                }
-            }
-            Err(error) => {
-                slog::error!(logger, "Failed to decode block header: {}", error,);
-            }
-        }
     }
 }
 
@@ -178,28 +120,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-
-    #[tokio::test]
-    #[ignore = "depends on sc"]
-    async fn debug() {
-        // let settings = settings::test_utils::new_test_settings().unwrap();
-        let settings = Settings::from_file("config/Local.toml").unwrap();
-        let logger = logging::test_utils::new_test_logger();
-
-        let (state_chain_client, block_stream) =
-            connect_to_state_chain(&settings.state_chain).await.unwrap();
-
-        let duty_manager = Arc::new(RwLock::new(DutyManager::new_test()));
-
-        let duty_manager_fut = start_duty_manager(
-            duty_manager.clone(),
-            state_chain_client,
-            block_stream,
-            &logger,
-        );
-
-        tokio::join!(duty_manager_fut,);
-    }
 
     // #[test]
     // fn test_active_validator_window() {

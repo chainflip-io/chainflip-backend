@@ -1,3 +1,4 @@
+use cf_traits::ChainflipAccountState;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
@@ -45,21 +46,43 @@ pub async fn start<BlockStream, RpcClient>(
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
-                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
-                    == 0
-                {
-                    if duty_manager.read().await.is_heartbeat_enabled() {
-                        slog::info!(
-                            logger,
-                            "Sending heartbeat at block: {}",
-                            block_header.number
-                        );
-                        let _ = state_chain_client
-                            .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-                            .await;
-                    }
+                // ==== DUTY MANAGER ====
+                if duty_manager.read().await.is_monitoring_status_per_block() {
+                    // we want to check our account state every time
+                    let my_account_data = state_chain_client
+                        .get_account_data(Some(block_header.hash()))
+                        .await
+                        .unwrap();
+
+                    let new_state =
+                        if matches!(my_account_data.state, ChainflipAccountState::Backup) {
+                            NodeState::Backup
+                        } else {
+                            NodeState::Passive
+                        };
+                    duty_manager.write().await.set_node_state(new_state);
                 }
+
+                // ==== END DUTY MANAGER ====
+
+                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
+                if duty_manager.read().await.is_heartbeat_enabled()
+                    && (block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0
+                {
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat at block: {}",
+                        block_header.number
+                    );
+                    let _ = state_chain_client
+                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .await;
+                }
+
+                // can we just pass in the stuff we need to a method of the duty_manager
+                // rather than have the two streams
 
                 // Process this block's events
                 match state_chain_client.get_events(&block_header).await {
@@ -75,7 +98,25 @@ pub async fn start<BlockStream, RpcClient>(
                                     let mut duty_manager = duty_manager.write().await;
                                     duty_manager.set_current_epoch(*epoch_index);
 
+                                    // we need to get our new node status
+                                    let account_data = state_chain_client
+                                        .get_account_data(Some(block_header.hash()))
+                                        .await.unwrap();
+
+                                    // if we're a validator now, we must validate. But we can only update the windows *after* we have completed
+                                    // watching the previous epoch
+                                    if matches!(
+                                        account_data.state,
+                                        ChainflipAccountState::Validator
+                                    ) {
+                                        // set window to latest
+                                    } else if matches!(duty_manager.read().await.node_state, )
+
                                     // What do we do when the epoch updates?
+                                    // We want to do what we do when start up?
+
+                                    // But what events are the cause of changes here?
+                                    // should we make a diff between a previous state and then our current one?
 
                                     // I think we call a duty manager function that gets the new shit
                                 }
@@ -87,7 +128,7 @@ pub async fn start<BlockStream, RpcClient>(
                             // Only running nodes need to worry about the states below
                             if !matches!(
                                 duty_manager.read().await.get_node_state(),
-                                NodeState::Running
+                                NodeState::Active
                             ) {
                                 continue;
                             }

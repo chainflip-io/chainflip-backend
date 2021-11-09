@@ -1,9 +1,11 @@
-use std::sync::Arc;
+use cf_chains::ChainId;
+use cf_traits::ChainflipAccountState;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use chainflip_engine::{
     common::Mutex,
-    duty_manager::DutyManager,
+    duty_manager::{DutyManager, NodeState},
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     logging,
@@ -54,15 +56,56 @@ async fn main() {
     let (p2p_message_command_sender, p2p_message_command_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
-    // get current epoch
+    // ==== DUTY MANAGER SETUP ====
+
+    // TODO: do we want to get the current block height and feed this to all the method calls here
+    // so we have a consistent height
     let current_epoch = state_chain_client
         .epoch_at_block(None)
         .await
         .expect("Could not get current epoch");
+    let my_account_data = state_chain_client.get_account_data(None).await.unwrap();
+
+    let node_state = if my_account_data.state == ChainflipAccountState::Validator {
+        NodeState::Active
+    } else if my_account_data.last_active_epoch.is_some()
+        && my_account_data.last_active_epoch.expect("guarded") + 1 == current_epoch
+    {
+        NodeState::SoonOutgoing
+    } else if my_account_data.state == ChainflipAccountState::Backup {
+        NodeState::Backup
+    } else {
+        NodeState::Passive
+    };
+
+    let active_windows = if matches!(node_state, NodeState::Active)
+        || matches!(node_state, NodeState::SoonOutgoing)
+    {
+        // Get the latest eth vault
+        let eth_vault = state_chain_client
+            .get_vault(
+                None,
+                my_account_data.last_active_epoch.expect("guarded above"),
+                ChainId::Ethereum,
+            )
+            .await
+            .unwrap();
+
+        let mut active_windows = HashMap::new();
+        active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
+        Some(active_windows)
+    } else {
+        None
+    };
+
     let duty_manager = Arc::new(RwLock::new(DutyManager::new(
         account_id.clone(),
         current_epoch,
+        node_state,
+        active_windows,
     )));
+
+    // ==== END DUTY MANAGER SETUP ====
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
