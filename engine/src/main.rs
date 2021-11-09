@@ -63,45 +63,37 @@ async fn main() {
         .epoch_at_block(None)
         .await
         .expect("Could not get current epoch");
-    let my_account_data = state_chain_client.get_account_data(None).await.unwrap();
+    let account_data = state_chain_client.get_account_data(None).await.unwrap();
 
-    let node_state = if my_account_data.state == ChainflipAccountState::Validator {
+    let node_state = if account_data.state == ChainflipAccountState::Validator {
         NodeState::Active
-    } else if my_account_data.last_active_epoch.is_some()
-        && my_account_data.last_active_epoch.expect("guarded") + 1 == current_epoch
+    } else if account_data.last_active_epoch.is_some()
+        && account_data.last_active_epoch.expect("guarded") + 1 == current_epoch
     {
         NodeState::Outgoing
-    } else if my_account_data.state == ChainflipAccountState::Backup {
+    } else if account_data.state == ChainflipAccountState::Backup {
         NodeState::Backup
     } else {
         NodeState::Passive
     };
 
-    let active_windows =
-        if matches!(node_state, NodeState::Active) || matches!(node_state, NodeState::Outgoing) {
-            // Get the latest eth vault
-            let eth_vault = state_chain_client
-                .get_vault(
-                    None,
-                    my_account_data.last_active_epoch.expect("guarded above"),
-                    ChainId::Ethereum,
-                )
-                .await
-                .unwrap();
-
-            let mut active_windows = HashMap::new();
-            active_windows.insert(ChainId::Ethereum, eth_vault.active_window);
-            Some(active_windows)
-        } else {
-            None
-        };
-
     let duty_manager = Arc::new(RwLock::new(DutyManager::new(
         account_id.clone(),
         current_epoch,
         node_state,
-        active_windows,
     )));
+
+    if matches!(node_state, NodeState::Active) || matches!(node_state, NodeState::Outgoing) {
+        duty_manager
+            .write()
+            .await
+            .update_active_window_for_chain(
+                ChainId::Ethereum,
+                account_data,
+                state_chain_client.clone(),
+            )
+            .await;
+    }
 
     // ==== END DUTY MANAGER SETUP ====
 

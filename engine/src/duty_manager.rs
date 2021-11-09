@@ -1,12 +1,15 @@
 //! The DutyManager contains logic that allows for enabling and disabling of features
 //! within the CFE depending on its state and the block heights of each respective blockchain.
 
-use crate::p2p::AccountId;
+use crate::{
+    p2p::AccountId,
+    state_chain::client::{StateChainClient, StateChainRpcApi},
+};
 use cf_chains::ChainId;
 use pallet_cf_vaults::BlockHeightWindow;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use cf_traits::EpochIndex;
+use cf_traits::{ChainflipAccountData, EpochIndex};
 
 /// Represents the different "action" states the CFE can be in
 /// These only have rough mappings to the State Chain's idea of a node's state
@@ -43,13 +46,12 @@ impl DutyManager {
         account_id: AccountId,
         current_epoch: EpochIndex,
         node_state: NodeState,
-        active_windows: Option<HashMap<ChainId, BlockHeightWindow>>,
     ) -> DutyManager {
         DutyManager {
             account_id,
             current_epoch,
             node_state,
-            active_windows,
+            active_windows: None,
         }
     }
 
@@ -88,16 +90,26 @@ impl DutyManager {
         false
     }
 
-    pub fn update_active_window_for_chain(
+    pub async fn update_active_window_for_chain<RpcClient: StateChainRpcApi>(
         &mut self,
         chain_id: ChainId,
-        active_window: BlockHeightWindow,
+        account_data: ChainflipAccountData,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
     ) {
+        let eth_vault = state_chain_client
+            .get_vault(
+                None,
+                account_data.last_active_epoch.expect("guarded above"),
+                ChainId::Ethereum,
+            )
+            .await
+            .expect("should pass");
+
         if let Some(active_windows) = self.active_windows.as_mut() {
-            active_windows.insert(chain_id, active_window);
+            active_windows.insert(chain_id, eth_vault.active_window);
         } else {
             let mut map = HashMap::new();
-            map.insert(chain_id, active_window);
+            map.insert(chain_id, eth_vault.active_window);
             self.active_windows = Some(map);
         };
     }

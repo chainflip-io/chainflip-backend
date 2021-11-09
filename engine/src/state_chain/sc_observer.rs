@@ -139,22 +139,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         == *epoch_index;
 
                                     if was_inactive_now_active || was_active_now_outgoing {
-                                        // update using our last_active_epoch, on a new epoch, the outgoing set will
-                                        // now have a "to" block
-                                        let eth_vault = state_chain_client
-                                            .get_vault(
-                                                Some(block_hash),
-                                                account_data
-                                                    .last_active_epoch
-                                                    .expect("Validators are active this epoch"),
-                                                ChainId::Ethereum,
-                                            )
+                                        duty_manager
+                                            .write()
                                             .await
-                                            .unwrap();
-                                        duty_manager.write().await.update_active_window_for_chain(
-                                            ChainId::Ethereum,
-                                            eth_vault.active_window,
-                                        );
+                                            .update_active_window_for_chain(
+                                                ChainId::Ethereum,
+                                                account_data,
+                                                state_chain_client.clone(),
+                                            )
+                                            .await;
                                     } else if was_active_still_active {
                                         // we want to combine the ranges of our previous epochs, by not doing anything.
                                         // we just keep going from our old epoch's block
