@@ -48,8 +48,15 @@ pub async fn start<BlockStream, RpcClient>(
         match result_block_header {
             Ok(block_header) => {
                 let block_hash = block_header.hash();
-                // ==== DUTY MANAGER ====
-                if duty_manager.read().await.is_monitoring_status_per_block() {
+
+                // ==== Transition between backup and passive, if we've changed positions ====
+                if matches!(
+                    duty_manager.read().await.get_node_state(),
+                    NodeState::Passive
+                ) || matches!(
+                    duty_manager.read().await.get_node_state(),
+                    NodeState::Backup
+                ) {
                     // we want to check our account state every time
                     let my_account_data = state_chain_client
                         .get_account_data(block_hash)
@@ -67,8 +74,6 @@ pub async fn start<BlockStream, RpcClient>(
                         duty_manager.write().await.set_node_state(new_state);
                     }
                 }
-
-                // ==== END DUTY MANAGER ====
 
                 // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
                 if duty_manager.read().await.is_heartbeat_enabled()
@@ -91,8 +96,7 @@ pub async fn start<BlockStream, RpcClient>(
                         for (_phase, event, _topics) in events {
                             // All nodes check for these events
                             match &event {
-                                // There are other events here that change shit. Or do we just subscribe to
-                                // storage updates???
+                                // On this event, we only really care about transitioning to Active or to Outgoing
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(epoch_index),
                                 ) => {
@@ -135,6 +139,18 @@ pub async fn start<BlockStream, RpcClient>(
                                         ChainflipAccountState::Validator
                                     );
 
+                                    if was_inactive_now_active {
+                                        duty_manager
+                                            .write()
+                                            .await
+                                            .set_node_state(NodeState::Active);
+                                    } else if was_active_now_outgoing {
+                                        duty_manager
+                                            .write()
+                                            .await
+                                            .set_node_state(NodeState::Outgoing);
+                                    };
+
                                     if was_inactive_now_active || was_active_now_outgoing {
                                         duty_manager
                                             .write()
@@ -148,6 +164,7 @@ pub async fn start<BlockStream, RpcClient>(
                                     } else if was_active_still_active {
                                         // we want to combine the ranges of our previous epochs, by not doing anything.
                                         // we just keep going from our old epoch's block
+
                                         // TODO: There is a bug here.
                                         // Let's say we were a validator in epoch 0.
                                         // ETH window (0, None)
@@ -165,7 +182,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 }
                             }
 
-                            // Only Active nodes need to worry about the states below this point
+                            // Only Active nodes need to worry about these events
                             if !matches!(
                                 duty_manager.read().await.get_node_state(),
                                 NodeState::Active

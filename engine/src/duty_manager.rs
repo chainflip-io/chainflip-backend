@@ -100,12 +100,6 @@ impl DutyManager {
         };
     }
 
-    /// Passive and Backup validators can change per block
-    pub fn is_monitoring_status_per_block(&self) -> bool {
-        matches!(self.node_state, NodeState::Passive)
-            || matches!(self.node_state, NodeState::Backup)
-    }
-
     pub fn set_node_state(&mut self, node_state: NodeState) {
         self.node_state = node_state;
     }
