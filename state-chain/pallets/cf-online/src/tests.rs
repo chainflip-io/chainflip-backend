@@ -1,6 +1,5 @@
 mod tests {
-	use crate::mock::*;
-	use crate::*;
+	use crate::{mock::*, *};
 	use cf_traits::{EpochInfo, IsOnline};
 	use frame_support::{assert_noop, assert_ok};
 
@@ -68,10 +67,7 @@ mod tests {
 	fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
-			assert!(
-				<OnlinePallet as IsOnline>::is_online(&ALICE),
-				"Alice should be online"
-			);
+			assert!(<OnlinePallet as IsOnline>::is_online(&ALICE), "Alice should be online");
 			go_to_interval(2);
 			assert_eq!(
 				MockHeartbeat::network_state().awaiting,
@@ -103,10 +99,7 @@ mod tests {
 				"Alice was missing last heartbeat interval"
 			);
 			go_to_interval(3);
-			assert!(
-				MockHeartbeat::network_state().online.is_empty(),
-				"Alice is not online"
-			);
+			assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is not online");
 			assert_eq!(
 				MockHeartbeat::network_state().number_of_nodes,
 				1,
@@ -121,23 +114,11 @@ mod tests {
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(BOB)));
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
 
-			assert_eq!(
-				false,
-				MockEpochInfo::is_validator(&BOB),
-				"Bob should not be a validator"
-			);
+			assert_eq!(false, MockEpochInfo::is_validator(&BOB), "Bob should not be a validator");
 
-			assert_eq!(
-				true,
-				MockEpochInfo::is_validator(&ALICE),
-				"Alice should be a validator"
-			);
+			assert_eq!(true, MockEpochInfo::is_validator(&ALICE), "Alice should be a validator");
 
-			assert_eq!(
-				<OnlinePallet as IsOnline>::is_online(&BOB),
-				true,
-				"Bob should be online"
-			);
+			assert_eq!(<OnlinePallet as IsOnline>::is_online(&BOB), true, "Bob should be online");
 
 			assert_eq!(
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
@@ -147,11 +128,7 @@ mod tests {
 
 			go_to_interval(3);
 
-			assert_eq!(
-				<OnlinePallet as IsOnline>::is_online(&BOB),
-				false,
-				"Bob should be offline"
-			);
+			assert_eq!(<OnlinePallet as IsOnline>::is_online(&BOB), false, "Bob should be offline");
 
 			assert_eq!(
 				<OnlinePallet as IsOnline>::is_online(&ALICE),
@@ -159,10 +136,7 @@ mod tests {
 				"Alice should be offline"
 			);
 
-			assert!(
-				MockHeartbeat::network_state().online.is_empty(),
-				"Alice is now not online"
-			);
+			assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is now not online");
 
 			assert_eq!(
 				MockHeartbeat::network_state().number_of_nodes,

@@ -31,7 +31,7 @@ use pallet_cf_vaults::CeremonyId;
 use key_store::KeyStore;
 use signing::SigningDataWrapped;
 
-use utils::threshold_from_share_count;
+use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
 
@@ -59,7 +59,7 @@ impl ThresholdParameters {
     pub fn from_share_count(share_count: usize) -> Self {
         ThresholdParameters {
             share_count,
-            threshold: threshold_from_share_count(share_count),
+            threshold: threshold_from_share_count(share_count as u32) as usize,
         }
     }
 }

@@ -26,7 +26,7 @@ pub async fn genesis_keys() {
     let dopey = AccountId(dopey);
     println!("dopey: {:?}", dopey);
 
-    let account_ids = vec![bashful.clone(), doc.clone(), dopey.clone()];
+    let account_ids = vec![doc.clone(), dopey.clone(), bashful.clone()];
     let mut keygen_context = KeygenContext::new_with_account_ids(account_ids);
     let result = keygen_context.generate().await;
 

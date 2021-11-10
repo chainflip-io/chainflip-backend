@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
@@ -20,8 +20,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		MockBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MockBroadcast: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -31,7 +31,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -53,6 +53,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -119,7 +120,7 @@ parameter_types! {
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
 }
 
-impl pallet_cf_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type BroadcastConfig = MockBroadcastConfig;
@@ -131,10 +132,8 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

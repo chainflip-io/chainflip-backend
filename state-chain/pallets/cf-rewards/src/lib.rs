@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -101,18 +100,15 @@ pub mod pallet {
 impl<T: Config> RewardRollover for Pallet<T> {
 	type AccountId = T::AccountId;
 
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
-	/// 1. Checks that all entitlements can be honoured, ie. there are enough reserves.
-	/// 2. Credits all current beneficiaries with any remaining reward entitlements.
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
+	/// are available. 1. Checks that all entitlements can be honoured, ie. there are enough
+	/// reserves. 2. Credits all current beneficiaries with any remaining reward entitlements.
 	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
 	/// 4. Resets the apportioned rewards counter to zero.
 	/// 5. Updates the list of beneficiaries.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError> {
 		// Sanity check in case we screwed up with the accounting.
-		ensure!(
-			Self::sufficient_reserves(),
-			Error::<T>::InsufficientReserves
-		);
+		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
 
 		// Credit each validator with their remaining due rewards.
 		for (account_id, already_received) in
@@ -151,7 +147,8 @@ impl<T: Config> Pallet<T> {
 		Self::settle_reward(account_id, reward);
 	}
 
-	/// Credits the full rewards entitlement to an account, if enough are available in reserves, otherwise errors.
+	/// Credits the full rewards entitlement to an account, if enough are available in reserves,
+	/// otherwise errors.
 	fn try_apportion_full_entitlement(account_id: &T::AccountId) -> Result<(), DispatchError> {
 		let entitlement = Self::rewards_due(account_id);
 		ensure!(!entitlement.is_zero(), Error::<T>::NoRewardEntitlement);
@@ -171,17 +168,14 @@ impl<T: Config> Pallet<T> {
 		ApportionedRewards::<T>::mutate(&VALIDATOR_REWARDS, account_id, |maybe_balance| {
 			*maybe_balance = maybe_balance.map(|balance| balance.saturating_add(reward_amount));
 		});
-		Self::deposit_event(Event::<T>::RewardsCredited(
-			account_id.clone(),
-			reward_amount,
-		));
+		Self::deposit_event(Event::<T>::RewardsCredited(account_id.clone(), reward_amount));
 	}
 
 	/// The total rewards due to each beneficiary.
 	pub fn rewards_due_each() -> T::Balance {
 		let num_beneficiaries = Beneficiaries::<T>::get(VALIDATOR_REWARDS);
 		if num_beneficiaries == 0 {
-			return Zero::zero();
+			return Zero::zero()
 		}
 		RewardsEntitlement::<T>::get(VALIDATOR_REWARDS) / T::Balance::from(num_beneficiaries)
 	}
@@ -197,8 +191,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// An implementation of [RewardsDistribution] that simply credits the rewards to an on-chain reserve so that it can be
-/// allocated at a later point.
+/// An implementation of [RewardsDistribution] that simply credits the rewards to an on-chain
+/// reserve so that it can be allocated at a later point.
 pub struct OnDemandRewardsDistribution<T>(PhantomData<T>);
 
 impl<T: Config> RewardsDistribution for OnDemandRewardsDistribution<T> {

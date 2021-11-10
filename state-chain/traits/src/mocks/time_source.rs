@@ -1,6 +1,4 @@
-use std::cell::RefCell;
-use std::ops::AddAssign;
-use std::time::Duration;
+use std::{cell::RefCell, ops::AddAssign, time::Duration};
 
 pub struct Mock;
 

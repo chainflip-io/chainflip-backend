@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 
 pub use pallet::*;
@@ -14,9 +13,10 @@ mod tests;
 pub mod pallet {
 	use cf_chains::{ChainId, Ethereum};
 	use cf_traits::{SigningContext, Witnesser};
-	use frame_support::dispatch::GetDispatchInfo;
 	use frame_support::{
-		dispatch::DispatchResultWithPostInfo, instances::Instance0, pallet_prelude::*,
+		dispatch::{DispatchResultWithPostInfo, GetDispatchInfo},
+		instances::Instance1,
+		pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};
@@ -36,15 +36,15 @@ pub mod pallet {
 		frame_system::Config
 		+ StakingConfig
 		+ VaultsConfig
-		+ SigningConfig<Instance0, TargetChain = Ethereum>
-		+ BroadcastConfig<Instance0, TargetChain = Ethereum>
+		+ SigningConfig<Instance1, TargetChain = Ethereum>
+		+ BroadcastConfig<Instance1, TargetChain = Ethereum>
 	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
 			+ From<VaultsCall<Self>>
-			+ From<SigningCall<Self, Instance0>>
-			+ From<BroadcastCall<Self, Instance0>>;
+			+ From<SigningCall<Self, Instance1>>
+			+ From<BroadcastCall<Self, Instance1>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
@@ -74,16 +74,16 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_success(*id, signature.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_success(*id, signature.clone())
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
-			signature: <<T as pallet_cf_threshold_signature::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
+			signature: <<T as pallet_cf_threshold_signature::Config<Instance1>>::SigningContext as SigningContext<T>>::Signature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance0>::signature_success(id, signature);
+			let call = SigningCall::<T, Instance1>::signature_success(id, signature);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -99,7 +99,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance0>::signature_failed(*id, offenders.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_failed(*id, offenders.clone())
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_signature_failed(
@@ -108,7 +108,7 @@ pub mod pallet {
 			offenders: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance0>::signature_failed(id, offenders);
+			let call = SigningCall::<T, Instance1>::signature_failed(id, offenders);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -126,16 +126,16 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance0>::transmission_success(*id, tx_hash.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, tx_hash.clone())
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::transmission_success(id, tx_hash);
+			let call = BroadcastCall::<T, Instance1>::transmission_success(id, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -151,17 +151,17 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance0>::transmission_failure(*id, failure.clone(), tx_hash.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), tx_hash.clone())
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
 			failure: pallet_cf_broadcast::TransmissionFailure,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::transmission_failure(id, failure, tx_hash);
+			let call = BroadcastCall::<T, Instance1>::transmission_failure(id, failure, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}

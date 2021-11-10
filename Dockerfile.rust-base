@@ -26,7 +26,7 @@ RUN curl -fsSLo /tmp/sccache.tgz \
  && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
  && rm -rf /tmp/*
 
-ARG NIGHTLY=nightly-2021-03-24
+ARG NIGHTLY=nightly-2021-07-05
 # Download and set nightly as the default Rust compiler
 RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \

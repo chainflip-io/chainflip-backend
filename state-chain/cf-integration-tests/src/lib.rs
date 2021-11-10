@@ -1,32 +1,28 @@
-#![feature(assert_matches)]
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 #[cfg(test)]
 mod tests {
-
-	use frame_support::assert_ok;
-	use frame_support::sp_io::TestExternalities;
-	use frame_support::traits::GenesisBuild;
-	use frame_support::traits::OnInitialize;
+	use frame_support::{
+		assert_noop, assert_ok,
+		sp_io::TestExternalities,
+		traits::{GenesisBuild, OnInitialize},
+	};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
-	use sp_runtime::traits::Zero;
-	use sp_runtime::Storage;
-	use state_chain_runtime::opaque::SessionKeys;
-	use state_chain_runtime::{constants::common::*, AccountId, Runtime, System};
+	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		Auction, Emissions, Flip, Governance, Online, Reputation, Rewards, Session, Staking,
-		Timestamp, Validator, Vaults,
+		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, Flip, Governance,
+		Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System, Timestamp,
+		Validator, Vaults,
 	};
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
+	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use sp_runtime::AccountId32;
 
 	type NodeId = AccountId32;
+	const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+	const TX_HASH: EthTransactionHash = [211u8; 32];
 
 	macro_rules! on_events {
 		($events:expr, $( $p:pat => $b:block ),*) => {
@@ -42,21 +38,13 @@ mod tests {
 		use cf_chains::eth::SchnorrVerificationComponents;
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
-		use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-		use state_chain_runtime::HeartbeatBlockInterval;
-		use state_chain_runtime::{Event, Origin};
+		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::collections::HashMap;
-		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-		const TX_HASH: EthTransactionHash = [211u8; 32];
 
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
 		pub enum ContractEvent {
-			Staked {
-				node_id: NodeId,
-				amount: FlipBalance,
-				total: FlipBalance,
-			},
+			Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance },
 		}
 
 		// A staking contract
@@ -75,11 +63,7 @@ mod tests {
 				let total = current_amount + amount;
 				self.stakes.insert(node_id.clone(), total);
 
-				self.events.push(ContractEvent::Staked {
-					node_id,
-					amount,
-					total,
-				});
+				self.events.push(ContractEvent::Staked { node_id, amount, total });
 			}
 			// Get events for this contract
 			fn events(&self) -> Vec<ContractEvent> {
@@ -99,10 +83,7 @@ mod tests {
 
 		impl Engine {
 			fn new(node_id: NodeId) -> Self {
-				Engine {
-					node_id,
-					active: true,
-				}
+				Engine { node_id, active: true }
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -113,11 +94,7 @@ mod tests {
 			fn on_contract_event(&self, event: &ContractEvent) {
 				if self.state() == ChainflipAccountState::Validator && self.active {
 					match event {
-						ContractEvent::Staked {
-							node_id: validator_id,
-							amount,
-							..
-						} => {
+						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
 							// Witness event -> send transaction to state chain
 							state_chain_runtime::WitnesserApi::witness_staked(
 								Origin::signed(self.node_id.clone()),
@@ -127,7 +104,7 @@ mod tests {
 								TX_HASH,
 							)
 							.expect("should be able to witness stake for node");
-						}
+						},
 					}
 				}
 			}
@@ -139,7 +116,7 @@ mod tests {
 					// Handle events
 					on_events!(
 						events,
-						Event::pallet_cf_threshold_signature_Instance0(
+						Event::EthereumThresholdSigner(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 								ceremony_id,
@@ -162,7 +139,7 @@ mod tests {
 								).expect("should be able to ethereum signature for node");
 							}
 						},
-						Event::pallet_cf_threshold_signature_Instance0(
+						Event::EthereumThresholdSigner(
 							// A threshold has been met for this signature
 							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
 								_ceremony_id)) => {
@@ -179,7 +156,7 @@ mod tests {
 									tx_hash,
 								).expect("should be able to vault key rotation for node");
 						},
-						Event::pallet_cf_vaults(
+						Event::Vaults(
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
 								// Generate a public agg key, TODO refactor out
@@ -237,38 +214,71 @@ mod tests {
 			engines: HashMap<NodeId, Engine>,
 			pub stake_manager_contract: StakingContract,
 			last_event: usize,
+			node_counter: u32,
 		}
 
 		impl Network {
-			pub fn create(number_of_nodes: u8) -> (Self, Vec<NodeId>) {
+			pub fn next_node_id(&mut self) -> NodeId {
+				self.node_counter += 1;
+				// TODO improve this to not overflow
+				[self.node_counter as u8; 32].into()
+			}
+
+			// Create a network which includes the validators in genesis of number of nodes
+			// and return a network and sorted list of nodes within
+			pub fn create(number_of_nodes: u8, nodes_to_include: &[NodeId]) -> (Self, Vec<NodeId>) {
 				let mut network: Network = Network::default();
 
-				let mut nodes = Vec::new();
-				for index in 1..=number_of_nodes {
-					let node_id: NodeId = [index; 32].into();
-					nodes.push(node_id.clone());
-					setup_account(&node_id);
-					network
-						.engines
-						.insert(node_id.clone(), Engine::new(node_id));
+				// Include any nodes already *created* to the test network
+				for node in nodes_to_include {
+					network.add_node(node);
 				}
 
+				let remaining_nodes = number_of_nodes.saturating_sub(nodes_to_include.len() as u8);
+
+				let mut nodes = Vec::new();
+				for _ in 0..remaining_nodes {
+					let node_id = network.next_node_id();
+					nodes.push(node_id.clone());
+					setup_account(&node_id);
+					network.engines.insert(node_id.clone(), Engine::new(node_id));
+				}
+
+				nodes.append(&mut nodes_to_include.to_vec());
+				nodes.sort();
 				(network, nodes)
+			}
+
+			pub fn filter_nodes(&self, state: ChainflipAccountState) -> Vec<NodeId> {
+				self.engines
+					.iter()
+					.filter_map(
+						|(node_id, engine)| {
+							if engine.state() == state {
+								Some(node_id)
+							} else {
+								None
+							}
+						},
+					)
+					.cloned()
+					.collect()
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
-			pub fn add_node(&mut self, node_id: NodeId) {
-				setup_account(&node_id);
-				self.engines.insert(
-					node_id.clone(),
-					Engine {
-						node_id,
-						active: true,
-					},
-				);
+			pub fn create_node(&mut self) -> NodeId {
+				let node_id = self.next_node_id().into();
+				self.add_node(&node_id);
+				node_id
+			}
+
+			// Adds a node which doesn't have its session keys set
+			pub fn add_node(&mut self, node_id: &NodeId) {
+				self.engines
+					.insert(node_id.clone(), Engine { node_id: node_id.clone(), active: true });
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -338,11 +348,12 @@ mod tests {
 	}
 
 	pub struct ExtBuilder {
-		accounts: Vec<(AccountId, FlipBalance)>,
+		pub accounts: Vec<(AccountId, FlipBalance)>,
 		winners: Vec<AccountId>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
 		max_validators: u32,
+		min_validators: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -353,6 +364,7 @@ mod tests {
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
 				max_validators: MAX_VALIDATORS,
+				min_validators: 1,
 			}
 		}
 	}
@@ -383,18 +395,19 @@ mod tests {
 			self
 		}
 
-		fn configure_storages(&self, storage: &mut Storage) {
-			pallet_cf_flip::GenesisConfig::<Runtime> {
-				total_issuance: TOTAL_ISSUANCE,
-			}
-			.assimilate_storage(storage)
-			.unwrap();
+		fn min_validators(mut self, min_validators: u32) -> Self {
+			self.min_validators = min_validators;
+			self
+		}
 
-			pallet_cf_staking::GenesisConfig::<Runtime> {
-				genesis_stakers: self.accounts.clone(),
-			}
-			.assimilate_storage(storage)
-			.unwrap();
+		fn configure_storages(&self, storage: &mut Storage) {
+			pallet_cf_flip::GenesisConfig::<Runtime> { total_issuance: TOTAL_ISSUANCE }
+				.assimilate_storage(storage)
+				.unwrap();
+
+			pallet_cf_staking::GenesisConfig::<Runtime> { genesis_stakers: self.accounts.clone() }
+				.assimilate_storage(storage)
+				.unwrap();
 
 			pallet_session::GenesisConfig::<Runtime> {
 				keys: self
@@ -416,7 +429,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_auction::GenesisConfig::<Runtime> {
-				validator_size_range: (1, self.max_validators),
+				validator_size_range: (self.min_validators, self.max_validators),
 				winners: self.winners.clone(),
 				minimum_active_bid: TOTAL_ISSUANCE / 100,
 			}
@@ -467,9 +480,8 @@ mod tests {
 
 		/// Default ext configuration with BlockNumber 1
 		pub fn build(&self) -> TestExternalities {
-			let mut storage = frame_system::GenesisConfig::default()
-				.build_storage::<Runtime>()
-				.unwrap();
+			let mut storage =
+				frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 			self.configure_storages(&mut storage);
 
@@ -482,8 +494,11 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_traits::{AuctionResult, Auctioneer, StakeTransfer};
+		use cf_traits::{
+			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountStore, StakeTransfer,
+		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
+		pub const NUMBER_OF_VALIDATORS: u32 = 3;
 
 		pub fn default() -> ExtBuilder {
 			ExtBuilder::default()
@@ -517,6 +532,7 @@ mod tests {
 		// - There have been no proposals
 		// - Emission inflation for both validators and backup validators are set
 		// - No one has reputation
+		// - The genesis validators have last active epoch set
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
@@ -526,11 +542,8 @@ mod tests {
 					"we have issued the total issuance"
 				);
 
-				let accounts = [
-					AccountId::from(ALICE),
-					AccountId::from(BOB),
-					AccountId::from(CHARLIE),
-				];
+				let accounts =
+					[AccountId::from(ALICE), AccountId::from(BOB), AccountId::from(CHARLIE)];
 
 				for account in accounts.iter() {
 					assert_eq!(
@@ -545,10 +558,8 @@ mod tests {
 					0,
 					"we should have had no auction yet"
 				);
-				let AuctionResult {
-					winners,
-					minimum_active_bid,
-				} = Auction::auction_result().expect("an auction result");
+				let AuctionResult { winners, minimum_active_bid } =
+					Auction::auction_result().expect("an auction result");
 				assert_eq!(minimum_active_bid, GENESIS_BALANCE);
 				assert_eq!(winners, accounts);
 
@@ -573,10 +584,7 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(
-						!Online::is_online(account),
-						"node should have not sent a heartbeat"
-					);
+					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
 				}
 
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
@@ -587,27 +595,15 @@ mod tests {
 					"no rewards"
 				);
 
-				assert_eq!(
-					Vaults::keygen_ceremony_id_counter(),
-					0,
-					"no key generation requests"
-				);
+				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
 
-				assert_eq!(
-					Vaults::chain_nonces(ChainId::Ethereum),
-					0,
-					"nonce not incremented"
-				);
+				assert_eq!(Vaults::chain_nonces(ChainId::Ethereum), 0, "nonce not incremented");
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"
 				);
-				assert_eq!(
-					Governance::number_of_proposals(),
-					0,
-					"no proposal for governance"
-				);
+				assert_eq!(Governance::number_of_proposals(), 0, "no proposal for governance");
 
 				assert_eq!(
 					Emissions::validator_emission_inflation(),
@@ -628,6 +624,14 @@ mod tests {
 						"validator shouldn't have reputation points"
 					);
 				}
+
+				for account in accounts.iter() {
+					assert_eq!(
+						Some(0),
+						ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
+						"validator should be active in the genesis epoch(0)"
+					);
+				}
 			});
 		}
 	}
@@ -638,14 +642,95 @@ mod tests {
 	mod epoch {
 		use super::*;
 		use cf_traits::{AuctionPhase, AuctionResult, EpochInfo};
-		use state_chain_runtime::{Auction, Validator};
+		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
+
+		#[test]
+		// We have a test network which goes into the first epoch
+		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
+		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from
+		// genesis and 5 new bidders).  We knock 4 of these nodes offline.
+		// A new auction is started
+		// This continues until we have a new set
+		fn auction_repeats_after_failure_because_of_liveness() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.min_validators(5)
+				.build()
+				.execute_with(|| {
+					// A network with a set of passive nodes
+					let (mut testnet, nodes) =
+						network::Network::create(8, &Validator::current_validators());
+
+					// All nodes stake to be included in the next epoch which are witnessed on the
+					// state chain
+					for node in &nodes {
+						testnet
+							.stake_manager_contract
+							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+					}
+
+					// Set the first 4 nodes offline
+					let offline_nodes: Vec<_> = nodes.iter().take(4).cloned().collect();
+
+					for node in &offline_nodes {
+						testnet.set_active(node, false);
+					}
+
+					// Run to the next epoch to start the auction
+					testnet.move_forward_blocks(EPOCH_BLOCKS - System::block_number());
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"we should have ran an auction"
+					);
+
+					assert_eq!(
+						Auction::current_phase(),
+						AuctionPhase::default(),
+						"we should be back at the start"
+					);
+
+					// Next block, another auction
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						2,
+						"we should have ran another auction"
+					);
+
+					assert_eq!(
+						Auction::current_phase(),
+						AuctionPhase::default(),
+						"we should be back at the start"
+					);
+
+					for node in &offline_nodes {
+						testnet.set_active(node, true);
+					}
+
+					assert_eq!(0, Validator::epoch_index());
+
+					// Move forward heartbeat to get those missing nodes online
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					assert!(
+						Auction::current_auction_index() > 2,
+						"we should have ran several auctions"
+					);
+
+					assert_eq!(1, Validator::epoch_index());
+				});
+		}
 
 		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
 		// - When the epoch is reached an auction is started and completed
-		// - New stakers that were above the genesis MAB are now validating the network with the
-		//   genesis validators
+		// - All nodes stake above the MAB
 		// - A new auction index has been generated
+		// - We have two nodes that haven't registered their session keys
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -653,17 +738,21 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, mut nodes) = network::Network::create(5);
-					// Add the genesis nodes to the test network
-					for validator in Validator::current_validators() {
-						testnet.add_node(validator);
-					}
-					// All nodes stake to be included in the next epoch which are witnessed on the state chain
+					let (mut testnet, nodes) =
+						network::Network::create(5, &Validator::current_validators());
+					// Add two nodes which don't have session keys
+					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
+					// All nodes stake to be included in the next epoch which are witnessed on the
+					// state chain
+					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
 					}
+					// Our keyless nodes also stake
+					for keyless_node in &keyless_nodes {
+						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
+					}
+
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					// We should be in auction 1
@@ -673,21 +762,14 @@ mod tests {
 						"this should be the first auction"
 					);
 
-					let genesis_validators: Vec<NodeId> = Validator::current_validators();
-
-					// We expect the following to become the next set of validators
-					let mut expected_validators = genesis_validators;
-					expected_validators.append(&mut nodes);
-					expected_validators.sort();
-
 					// In this block we should have reached the state `ValidatorsSelected`
 					// and in this group we would have in this network the genesis validators and
 					// the nodes that have staked as well
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::ValidatorsSelected(mut candidates, _) => {
 							candidates.sort();
-							assert_eq!(candidates, expected_validators);
+							assert_eq!(candidates, nodes);
 						},
 						"the new candidates should be those genesis validators and the new nodes created in test"
 					);
@@ -698,27 +780,24 @@ mod tests {
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"
 					);
 
-					let AuctionResult {
-						mut winners,
-						minimum_active_bid,
-					} = Auction::last_auction_result().expect("last auction result");
+					let AuctionResult { mut winners, minimum_active_bid } =
+						Auction::last_auction_result().expect("last auction result");
 
 					assert_eq!(
-						minimum_active_bid,
-						genesis::GENESIS_BALANCE,
-						"minimum active bid should be that set at genesis"
+						minimum_active_bid, stake_amount,
+						"minimum active bid should be that of the new stake"
 					);
 
 					winners.sort();
 					assert_eq!(
 						winners,
-						expected_validators,
+						nodes,
 						"the new winners should be those genesis validators and the new nodes created in test"
 					);
 
@@ -728,16 +807,117 @@ mod tests {
 					// This new set of winners should also be the validators of the network
 					assert_eq!(
 						new_validators,
-						expected_validators,
+						nodes,
 						"the new validators should be those genesis validators and the new nodes created in test"
 					);
 				});
 		}
 	}
 
+	mod staking {
+		use super::{genesis, network, *};
+		use cf_traits::EpochInfo;
+		use pallet_cf_staking::pallet::Error;
+		#[test]
+		// Stakers cannot unstake during the conclusion of the auction
+		// We have a set of nodes that are staked and that are included in the auction
+		// Moving block by block of an auction we shouldn't be able to claim stake
+		fn cannot_claim_stake_during_auction() {
+			const EPOCH_BLOCKS: u32 = 100;
+			const MAX_VALIDATORS: u32 = 3;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					// Create the test network with some fresh nodes and the genesis validators
+					let (mut testnet, nodes) = network::Network::create(
+						MAX_VALIDATORS as u8,
+						&Validator::current_validators(),
+					);
+					// Stake these nodes so that they are included in the next epoch
+					let stake_amount = genesis::GENESIS_BALANCE;
+					for node in &nodes {
+						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+					}
+
+					// Move forward one block to process events
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
+
+					// We should be able to claim stake out of an auction
+					for node in &nodes {
+						assert_ok!(Staking::claim(
+							Origin::signed(node.clone()),
+							1,
+							ETH_ZERO_ADDRESS
+						));
+					}
+
+					// Start an auction and confirm
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// We will try to claim some stake
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(
+								Origin::signed(node.clone()),
+								stake_amount,
+								ETH_ZERO_ADDRESS
+							),
+							Error::<Runtime>::NoClaimsDuringAuctionPhase
+						);
+					}
+
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(
+						0,
+						Validator::epoch_index(),
+						"We should still be in the genesis epoch"
+					);
+
+					// We will try to claim stakes
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(
+								Origin::signed(node.clone()),
+								genesis::GENESIS_BALANCE,
+								ETH_ZERO_ADDRESS
+							),
+							Error::<Runtime>::NoClaimsDuringAuctionPhase
+						);
+					}
+
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(1, Validator::epoch_index(), "We should be in the new epoch");
+
+					// We should be able to claim again outside of the auction
+					// At the moment we have a pending claim so we would expect an error here for
+					// this.
+					// TODO implement Claims in Contract/Network
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(Origin::signed(node.clone()), 1, ETH_ZERO_ADDRESS),
+							Error::<Runtime>::PendingClaim
+						);
+					}
+				});
+		}
+	}
+
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
-		use cf_traits::{AuctionPhase, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use cf_traits::{
+			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
+		};
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
 			Validator,
@@ -753,6 +933,7 @@ mod tests {
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_VALIDATORS: u32 = 10;
+			const BACKUP_VALDATORS: u32 = genesis::NUMBER_OF_VALIDATORS;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_validators(MAX_VALIDATORS)
@@ -761,20 +942,18 @@ mod tests {
 					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
 					// The result will be our newly created nodes will be validators and the
 					// genesis validators will become backup validators
-					let (mut testnet, mut nodes) = network::Network::create(MAX_VALIDATORS as u8);
-					// Add the genesis nodes to the test network
 					let mut genesis_validators = Validator::current_validators();
-					for validator in &genesis_validators {
-						testnet.add_node(validator.clone());
-					}
+					let (mut testnet, _) = network::Network::create(
+						(MAX_VALIDATORS + BACKUP_VALDATORS) as u8,
+						&genesis_validators.clone(),
+					);
 
+					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
-					// Stake these nodes so that they are included in the next epoch
-					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), INITIAL_STAKE);
+					// Stake these passive nodes so that they are included in the next epoch
+					for node in &passive_nodes {
+						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction and confirm
@@ -787,7 +966,7 @@ mod tests {
 
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"
@@ -797,11 +976,11 @@ mod tests {
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
 
 					current_validators.sort();
-					nodes.sort();
+					passive_nodes.sort();
 
 					assert_eq!(
-						nodes, current_validators,
-						"our new nodes should be the new validators"
+						passive_nodes, current_validators,
+						"our new testnet nodes should be the new validators"
 					);
 
 					// assert list of backup validators as being the genesis validators
@@ -834,7 +1013,8 @@ mod tests {
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
 		// with 20% going offline and forcing an emergency rotation in which a new set of validators
-		// start to validate the network which includes live validators and previous backup validators
+		// start to validate the network which includes live validators and previous backup
+		// validators
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 3 heartbeats
@@ -849,20 +1029,15 @@ mod tests {
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
-					let (mut testnet, nodes) = network::Network::create(MAX_VALIDATORS as u8);
-					// Add the genesis nodes to the test network
-					let genesis_validators = Validator::current_validators();
-					for validator in &genesis_validators {
-						testnet.add_node(validator.clone());
-					}
-
+					let (mut testnet, nodes) = network::Network::create(
+						MAX_VALIDATORS as u8,
+						&Validator::current_validators(),
+					);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction and confirm
@@ -906,7 +1081,7 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches!(
+					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
 						"we should back waiting for bids after a successful auction and rotation"

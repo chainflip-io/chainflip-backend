@@ -1,10 +1,10 @@
-# Chainflip Online Module
+# Chainflip Online Pallet
 
 A module to manage the liveness of our validators for the Chainflip State Chain
 
 - [`Config`]
 - [`Call`]
-- [`Module`]
+- [`Pallet`]
 
 ## Overview
 The module contains functionality to measure the liveness of staked nodes.  This is measured

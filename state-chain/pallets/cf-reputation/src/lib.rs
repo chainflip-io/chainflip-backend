@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -11,8 +10,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use frame_support::pallet_prelude::*;
-use frame_support::sp_std::convert::TryInto;
+use frame_support::{pallet_prelude::*, sp_std::convert::TryInto};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
 
@@ -84,14 +82,13 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	/// The ratio at which one accrues Reputation points in exchange for online credits
-	///
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
 	pub(super) type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
 
-	/// A map tracking our validators.  We record the number of reputation points that they may have.
-	///
+	/// A map tracking our validators.  We record the number of reputation points that they may
+	/// have.
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputations<T: Config> =
@@ -116,8 +113,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// The accrual ratio can be updated and would come into play in the current heartbeat interval
-		/// This is only available to sudo
+		/// The accrual ratio can be updated and would come into play in the current heartbeat
+		/// interval This is only available to sudo
 		///
 		/// ## Events
 		///
@@ -128,7 +125,7 @@ pub mod pallet {
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
 		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits)
 		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
-		pub(super) fn update_accrual_ratio(
+		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,
 			online_credits: OnlineCreditsFor<T>,
@@ -137,14 +134,8 @@ pub mod pallet {
 			let _ = ensure_root(origin)?;
 			// Some very basic validation here.  Should be improved in subsequent PR based on
 			// further definition of limits
-			ensure!(
-				points > Zero::zero(),
-				Error::<T>::InvalidAccrualReputationPoints
-			);
-			ensure!(
-				online_credits > Zero::zero(),
-				Error::<T>::InvalidAccrualOnlineCredits
-			);
+			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
+			ensure!(online_credits > Zero::zero(), Error::<T>::InvalidAccrualOnlineCredits);
 			// Online credits are equivalent to block time and hence should be less than our
 			// heartbeat interval
 			ensure!(
@@ -167,15 +158,12 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				accrual_ratio: (Zero::zero(), Zero::zero()),
-			}
+			Self { accrual_ratio: (Zero::zero(), Zero::zero()) }
 		}
 	}
 
 	/// On genesis, we are initializing the accrual ratio confirming that it is greater than the
 	/// heartbeat interval.
-	///
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
@@ -198,10 +186,7 @@ pub mod pallet {
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
-			ensure!(
-				Reputations::<T>::contains_key(validator_id),
-				ReportError::UnknownValidator
-			);
+			ensure!(Reputations::<T>::contains_key(validator_id), ReportError::UnknownValidator);
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
@@ -222,7 +207,8 @@ pub mod pallet {
 		fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
-				// Credit this validator with the blocks for this interval and set 0 reputation points
+				// Credit this validator with the blocks for this interval and set 0 reputation
+				// points
 				Reputations::<T>::insert(
 					validator_id,
 					Reputation {
@@ -236,10 +222,7 @@ pub mod pallet {
 				// Update reputation points for this validator
 				Reputations::<T>::mutate(
 					validator_id,
-					|Reputation {
-					     online_credits,
-					     reputation_points,
-					 }| {
+					|Reputation { online_credits, reputation_points }| {
 						// Accrue some online credits of `HeartbeatInterval` size
 						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
@@ -257,21 +240,18 @@ pub mod pallet {
 			}
 		}
 
-		/// For those that we are still *awaiting* on will be penalised reputation points and any online
-		/// credits earned will be set to zero.  In other words we expect continued liveness before we
-		/// earn points.
-		/// Once the reputation points fall below zero slashing comes into play and is delegated to the
-		/// `Slashing` trait.
+		/// For those that we are still *awaiting* on will be penalised reputation points and any
+		/// online credits earned will be set to zero.  In other words we expect continued liveness
+		/// before we earn points.
+		/// Once the reputation points fall below zero slashing comes into play and is delegated to
+		/// the `Slashing` trait.
 		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
 			// Penalise those that are missing this heartbeat
 			let mut weight = 0;
 			for validator_id in network_state.awaiting {
 				let reputation_points = Reputations::<T>::mutate(
 					&validator_id,
-					|Reputation {
-					     online_credits,
-					     reputation_points,
-					 }| {
+					|Reputation { online_credits, reputation_points }| {
 						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 							// Update reputation points
 							let ReputationPenalty { points, blocks } =
@@ -280,10 +260,9 @@ pub mod pallet {
 								T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
 							let blocks: u32 = blocks.try_into().unwrap_or(0);
 
-							let penalty = (points
-								.saturating_mul(interval as i32)
-								.checked_div(blocks as i32))
-							.expect("calculating offline penalty shouldn't fail");
+							let penalty =
+								(points.saturating_mul(interval as i32).checked_div(blocks as i32))
+									.expect("calculating offline penalty shouldn't fail");
 
 							*reputation_points = Pallet::<T>::clamp_reputation_points(
 								(*reputation_points).saturating_sub(penalty),
@@ -297,8 +276,8 @@ pub mod pallet {
 					},
 				);
 
-				if reputation_points < Zero::zero()
-					|| Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
+				if reputation_points < Zero::zero() ||
+					Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
 					weight += T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
@@ -311,29 +290,21 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Return number of online credits for reward
-		///
 		fn online_credit_reward() -> OnlineCreditsFor<T> {
 			// Equivalent to the number of blocks used for the heartbeat
 			T::HeartbeatBlockInterval::get()
 		}
 
 		/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
-		///
 		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
-			Reputations::<T>::mutate(
-				validator_id,
-				|Reputation {
-				     reputation_points, ..
-				 }| {
-					*reputation_points =
-						Pallet::<T>::clamp_reputation_points(*reputation_points + points);
-					T::DbWeight::get().reads_writes(1, 1)
-				},
-			)
+			Reputations::<T>::mutate(validator_id, |Reputation { reputation_points, .. }| {
+				*reputation_points =
+					Pallet::<T>::clamp_reputation_points(*reputation_points + points);
+				T::DbWeight::get().reads_writes(1, 1)
+			})
 		}
 
 		/// Clamp reputation points to bounds defined in the pallet
-		///
 		fn clamp_reputation_points(reputation_points: i32) -> i32 {
 			let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
 			reputation_points.clamp(floor, ceiling)

@@ -3,19 +3,20 @@ use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
 use frame_system::WeightInfo;
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
-use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Chainflip, Slashing};
+use cf_traits::{
+	mocks::{epoch_info, epoch_info::Mock},
+	Chainflip, Slashing,
+};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -27,8 +28,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ReputationPallet: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		ReputationPallet: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -37,7 +38,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -59,15 +60,14 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 // A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 // Number of blocks being offline before you lose one point
-pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> = ReputationPenalty {
-	points: 1,
-	blocks: 10,
-};
+pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> =
+	ReputationPenalty { points: 1, blocks: 10 };
 // Number of blocks to be online to accrue a point
 pub const ACCRUAL_BLOCKS: u64 = 2500;
 // Number of accrual points
@@ -120,10 +120,10 @@ impl Config for Test {
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_reputation: Some(ReputationPalletConfig {
+		system: Default::default(),
+		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-		}),
+		},
 	};
 
 	// We only expect Alice to be a validator at the moment
