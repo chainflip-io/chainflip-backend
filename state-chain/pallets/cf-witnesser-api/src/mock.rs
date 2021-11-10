@@ -11,7 +11,7 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider::MockKeyProvider},
 	Chainflip, NonceProvider, VaultRotationHandler,
 };
-use frame_support::{instances::Instance0, parameter_types, traits::IsType};
+use frame_support::{instances::Instance1, parameter_types, traits::IsType};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -29,12 +29,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
-		WitnessApi: pallet_cf_witness_api::{Module, Call},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Event<T>, Storage},
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Event<T>, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Pallet, Call, Event<T>, Config},
+		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Event<T>, Storage},
 	}
 );
 
@@ -48,7 +48,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -70,6 +70,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl_mock_stake_transfer!(u64, u128);
@@ -177,7 +178,7 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(u64);
 cf_traits::impl_mock_offline_conditions!(u64);
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type SigningContext = MockSigningContext;
@@ -209,7 +210,7 @@ parameter_types! {
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 }
 
-impl pallet_cf_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type BroadcastConfig = MockBroadcastConfig;
@@ -242,8 +243,5 @@ impl pallet_cf_witness_api::Config for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into()
+	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

@@ -21,9 +21,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		FlipRewards: pallet_cf_rewards::{Module, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
+		FlipRewards: pallet_cf_rewards::{Pallet, Storage, Event<T>},
 	}
 );
 
@@ -35,7 +35,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -57,6 +57,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -105,10 +106,7 @@ pub fn new_test_ext(
 	accounts: Vec<(AccountId, u128)>,
 ) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000u128);
-	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-	};
+	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 	ext.execute_with(|| {
 		let mut beneficiaries = vec![];

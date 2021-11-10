@@ -18,13 +18,14 @@ use cf_traits::{
 	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{debug, weights::Weight};
+use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_runtime::traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom};
-use sp_runtime::RuntimeDebug;
-use sp_std::prelude::*;
-use sp_std::{cmp::min, convert::TryInto};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
+	RuntimeDebug,
+};
+use sp_std::{cmp::min, convert::TryInto, prelude::*};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -52,7 +53,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			debug::error!("Unable to process rewards rollover: {:?}!", err);
+			log::error!("Unable to process rewards rollover: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
@@ -116,16 +117,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_emission_per_block()
-			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let emissions_cap = Emissions::backup_validator_emission_per_block() *
+			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
-		let validator_rewards = Emissions::validator_emission_per_block()
-			* Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let validator_rewards = Emissions::validator_emission_per_block() *
+			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// The average validator emission
-		let average_validator_reward: Self::FlipBalance = validator_rewards
-			/ Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
+		let average_validator_reward: Self::FlipBalance = validator_rewards /
+			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
 
 		let mut total_rewards = 0;
 
@@ -181,8 +182,8 @@ impl Heartbeat for ChainflipHeartbeat {
 			.online
 			.iter()
 			.filter(|account_id| {
-				ChainflipAccountStore::<Runtime>::get(*account_id).state
-					== ChainflipAccountState::Backup
+				ChainflipAccountStore::<Runtime>::get(*account_id).state ==
+					ChainflipAccountState::Backup
 			})
 			.collect();
 
@@ -202,7 +203,8 @@ impl Heartbeat for ChainflipHeartbeat {
 ///
 /// For a single signer, takes the first online validator in the validator lookup map.
 ///
-/// For multiple signers, takes the first N online validators where N is signing consensus threshold.
+/// For multiple signers, takes the first N online validators where N is signing consensus
+/// threshold.
 pub struct BasicSignerNomination;
 
 impl cf_traits::SignerNomination for BasicSignerNomination {
@@ -276,13 +278,12 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
 		match self {
-			Self::PostClaimSignature(claim) => {
+			Self::PostClaimSignature(claim) =>
 				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
 					claim.node_id.into(),
 					signature,
 				)
-				.into()
-			}
+				.into(),
 			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
 				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
 					call.clone(),
@@ -331,12 +332,7 @@ impl BroadcastConfig for EthereumBroadcastConfig {
 		address: &Self::SignerId,
 	) -> Option<()> {
 		eth::verify_transaction(unsigned_tx, signed_tx, address)
-			.map_err(|e| {
-				frame_support::debug::info!(
-					"Ethereum signed transaction verification failed: {:?}.",
-					e
-				)
-			})
+			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
 	}
 }

@@ -1,12 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
-use cf_traits::NonceProvider;
-use cf_traits::SigningContext;
-use cf_traits::ThresholdSigner;
+use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -21,11 +18,9 @@ use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution}
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::traits::CheckedDiv;
-use sp_runtime::SaturatedConversion;
 use sp_runtime::{
-	offchain::storage_lock::BlockNumberProvider,
-	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
+	SaturatedConversion,
 };
 
 type BasisPoints = u32;
@@ -34,8 +29,7 @@ type BasisPoints = u32;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::ensure_root;
-	use frame_system::pallet_prelude::OriginFor;
+	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -111,13 +105,15 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn validator_emission_inflation)]
-	/// Annual inflation set aside for *active* validators, expressed as basis points ie. hundredths of a percent.
+	/// Annual inflation set aside for *active* validators, expressed as basis points ie. hundredths
+	/// of a percent.
 	pub(super) type ValidatorEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_validator_emission_inflation)]
-	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths of a percent.
+	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths
+	/// of a percent.
 	pub(super) type BackupValidatorEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
@@ -171,7 +167,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
-		pub(super) fn update_validator_emission_inflation(
+		pub fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
@@ -185,21 +181,20 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BackupValidatorInflationEmissionsUpdated](Event::BackupValidatorInflationEmissionsUpdated)
+		/// - [BackupValidatorInflationEmissionsUpdated](Event::
+		///   BackupValidatorInflationEmissionsUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
-		pub(super) fn update_backup_validator_emission_inflation(
+		pub fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			BackupValidatorEmissionInflation::<T>::set(inflation);
-			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(
-				inflation,
-			));
+			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
 	}
@@ -213,15 +208,11 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				validator_emission_inflation: 0,
-				backup_validator_emission_inflation: 0,
-			}
+			Self { validator_emission_inflation: 0, backup_validator_emission_inflation: 0 }
 		}
 	}
 
 	/// At genesis we need to set the inflation rates for active and passive validators.
-	///
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
@@ -263,13 +254,13 @@ impl<T: Config> Pallet<T> {
 		T::ThresholdSigner::request_transaction_signature(transaction.clone());
 	}
 
-	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
-	/// minted and distributes this as a reward via [RewardsDistribution].
+	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
+	/// be minted and distributes this as a reward via [RewardsDistribution].
 	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		if blocks_elapsed == Zero::zero() {
-			return Ok(T::DbWeight::get().reads(1));
+			return Ok(T::DbWeight::get().reads(1))
 		}
 
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
@@ -316,12 +307,9 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
 			const DAYS_IN_YEAR: u32 = 365;
 
-			((T::Issuance::total_issuance() * inflation.into())
-				/ 10_000u32.into()
-				/ DAYS_IN_YEAR.into())
-			.checked_div(&T::FlipBalance::unique_saturated_from(
-				T::BlocksPerDay::get(),
-			))
+			((T::Issuance::total_issuance() * inflation.into()) /
+				10_000u32.into() / DAYS_IN_YEAR.into())
+			.checked_div(&T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()))
 			.expect("blocks per day should be greater than zero")
 		}
 
@@ -339,17 +327,13 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() -> Weight {
-		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		let current_block_number = frame_system::Pallet::<T>::block_number();
 		match Self::mint_rewards_for_block(current_block_number) {
 			Ok(weight) => weight,
 			Err(weight) => {
-				frame_support::debug::RuntimeLogger::init();
-				frame_support::debug::error!(
-					"Failed to mint rewards at block {:?}",
-					current_block_number
-				);
+				log::error!("Failed to mint rewards at block {:?}", current_block_number);
 				weight
-			}
+			},
 		}
 	}
 }

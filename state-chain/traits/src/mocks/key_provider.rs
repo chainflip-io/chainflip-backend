@@ -2,7 +2,8 @@ use std::marker::PhantomData;
 
 /// A Mock that just returns KeyId::default().
 ///
-/// Note: the `current_key()` method is unimplemented. If required, implement a custom mock for this trait.
+/// Note: the `current_key()` method is unimplemented. If required, implement a custom mock for this
+/// trait.
 #[derive(Default)]
 pub struct MockKeyProvider<Chain: cf_chains::Chain, KeyId: std::default::Default>(
 	PhantomData<(Chain, KeyId)>,

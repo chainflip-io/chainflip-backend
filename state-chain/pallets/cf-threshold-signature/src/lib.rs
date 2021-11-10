@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -19,8 +18,7 @@ use cf_traits::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::RuntimeDebug;
-use sp_std::marker::PhantomData;
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 pub type CeremonyId = u64;
 
@@ -28,8 +26,7 @@ pub type CeremonyId = u64;
 pub mod pallet {
 	use super::*;
 	use codec::FullCodec;
-	use frame_support::pallet_prelude::*;
-	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
+	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
 	/// Metadata for a pending threshold signature request.
@@ -114,7 +111,7 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let num_retries = RetryQueue::<T, I>::decode_len().unwrap_or(0);
 			if num_retries == 0 {
-				return 0;
+				return 0
 			}
 
 			// Process pending retries.
@@ -125,8 +122,8 @@ pub mod pallet {
 				);
 			}
 			// TODO: replace this with benchmark results.
-			num_retries as u64
-				* frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+			num_retries as u64 *
+				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
 		}
 	}
 
@@ -171,11 +168,9 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
 			// Dispatch the callback.
-			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
-			// origin.
-			context
-				.chain_signing_context
-				.dispatch_callback(origin, signature)
+			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through
+			// the witness origin. See #779.
+			context.chain_signing_context.dispatch_callback(origin, signature)
 		}
 
 		/// A threshold signature ceremony has failed.
@@ -204,7 +199,7 @@ pub mod pallet {
 					offender,
 				)
 				.unwrap_or_else(|e| {
-					frame_support::debug::error!(
+					log::error!(
 						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
 						offender,
 						e
@@ -245,7 +240,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let payload = context.get_payload();
 
 		// Select nominees for threshold signature.
-		// Q: does it matter if this is predictable? ie. does it matter if we use the `id` as a seed value?
+		// Q: does it matter if this is predictable? ie. does it matter if we use the `id` as a seed
+		// value?
 		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
 
 		// Store the context.

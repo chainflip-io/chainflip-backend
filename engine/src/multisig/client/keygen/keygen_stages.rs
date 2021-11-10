@@ -98,17 +98,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
     type Message = VerifyComm2;
 
     fn init(&self) -> DataToSend<Self::Message> {
-        let data = self
-            .common
-            .all_idxs
-            .iter()
-            .map(|idx| {
-                self.commitments
-                    .get(&idx)
-                    .cloned()
-                    .expect("all indexes should be present at this point")
-            })
-            .collect();
+        let data = self.commitments.clone();
 
         DataToSend::Broadcast(VerifyComm2 { data })
     }
@@ -155,7 +145,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
 struct SecretSharesStage3 {
     common: KeygenCeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: Vec<DKGCommitment>,
+    commitments: HashMap<usize, DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
 }
 
@@ -187,7 +177,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         let bad_parties: Vec<_> = shares
             .iter()
             .filter_map(|(sender_idx, share)| {
-                if verify_share(share, &self.commitments[sender_idx - 1]) {
+                if verify_share(share, &self.commitments[&sender_idx]) {
                     None
                 } else {
                     Some(*sender_idx)
@@ -216,7 +206,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
 struct ComplaintsStage4 {
     common: KeygenCeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: Vec<DKGCommitment>,
+    commitments: HashMap<usize, DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
     complaints: Vec<usize>,
 }
@@ -255,7 +245,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
 struct VerifyComplaintsBroadcastStage5 {
     common: KeygenCeremonyCommon,
     received_complaints: HashMap<usize, Complaints4>,
-    commitments: Vec<DKGCommitment>,
+    commitments: HashMap<usize, DKGCommitment>,
     shares: HashMap<usize, ShamirShare>,
 }
 
@@ -265,17 +255,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
     type Message = VerifyComplaints5;
 
     fn init(&self) -> DataToSend<Self::Message> {
-        let data = self
-            .common
-            .all_idxs
-            .iter()
-            .map(|idx| {
-                self.received_complaints
-                    .get(&idx)
-                    .cloned()
-                    .expect("all indexes should be present at this point")
-            })
-            .collect();
+        let data = self.received_complaints.clone();
 
         DataToSend::Broadcast(VerifyComplaints5 { data })
     }
@@ -296,7 +276,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
             }
         };
 
-        if verified_complaints.iter().any(|c| !c.0.is_empty()) {
+        if verified_complaints.iter().any(|(_idx, c)| !c.0.is_empty()) {
             todo!("Implement blaming stage");
         }
 

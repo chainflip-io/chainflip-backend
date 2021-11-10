@@ -34,9 +34,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Emissions: pallet_cf_emissions::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -46,7 +46,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -68,6 +68,7 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -196,14 +197,14 @@ impl pallet_cf_emissions::Config for Test {
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-		pallet_cf_emissions: Some({
+		system: Default::default(),
+		flip: FlipConfig { total_issuance },
+		emissions: {
 			EmissionsConfig {
 				validator_emission_inflation: 1000,       // 10%
 				backup_validator_emission_inflation: 100, // 1%
 			}
-		}),
+		},
 	};
 
 	for v in validators {
