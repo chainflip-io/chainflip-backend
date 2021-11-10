@@ -1,5 +1,5 @@
 use crate::{mock::*, ApportionedRewards, Error, OnDemandRewardsDistribution, VALIDATOR_REWARDS};
-use cf_traits::{Issuance, RewardsDistribution};
+use cf_traits::{Issuance, RewardRollover, RewardsDistribution};
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 use pallet_cf_flip::FlipIssuance;
@@ -15,8 +15,8 @@ macro_rules! assert_balances {
 
 /// Check the expected values for rewards received and rewards still due.
 ///
-/// For example, the following checks that Alice has received none of her 50 rewards, and that BOB has received 50 and
-/// no more are due to him:
+/// For example, the following checks that Alice has received none of her 50 rewards, and that BOB
+/// has received 50 and no more are due to him:
 ///
 /// ```
 /// assert_rewards!(ALICE => 0 / 50, BOB => 50 / 0);
@@ -238,7 +238,7 @@ fn test_rollover() {
 		check_balance_integrity();
 
 		// Do a rollover.
-		assert_ok!(FlipRewards::rollover(&vec![CHARLIE, ALICE]));
+		assert_ok!(<FlipRewards as RewardRollover>::rollover(&vec![CHARLIE, ALICE]));
 
 		// Rewards should be fully distributed and entitlements reset to zero
 		assert_eq!(Flip::total_issuance(), 1_051);

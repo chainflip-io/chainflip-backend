@@ -1,8 +1,8 @@
-# Chainflip Witness Api Pallet
+# Chainflip Witnesser Api Pallet
 
 This pallet exposes dedicated extrinsics for witnessing Chainflip events.
 
-## Purpose
+## Overview
 
 Provide dedicated extrinsics to abstract away the use of the Witnesser pallet.
 
@@ -39,7 +39,7 @@ Provide dedicated extrinsics to abstract away the use of the Witnesser pallet.
 
     ```rust
     use pallet_cf_staking::{EthTransactionHash, FlipBalance};
-    
+
     // ...
 
     pub fn witness_staked(
@@ -70,11 +70,3 @@ This pallet has explicit dependencies on the following Chainflip pallets:
 ### Genesis Configuration
 
 N/A
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open --document-private-items
-```

@@ -1,23 +1,26 @@
 use crate::{
-	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts, Pallet, PendingClaims,
+	WithdrawalAddresses,
 };
-use cf_traits::mocks::{epoch_info, time_source};
-use codec::Encode;
+use cf_chains::eth::{self, ChainflipContractCall};
+use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
-use sp_core::U256;
+use pallet_cf_threshold_signature::Instance1;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
+type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance1>;
 
-const ETH_DUMMY_SIG: U256 = U256::zero();
+const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
-/// Checks the deposited events, in reverse order (reverse order mainly because it makes the macro easier to write).
+/// Checks the deposited events, in reverse order (reverse order mainly because it makes the macro
+/// easier to write).
 macro_rules! assert_event_stack {
 	($($pat:pat $( => $test:block )? ),*) => {
 		let mut events = frame_system::Pallet::<Test>::events()
@@ -53,31 +56,13 @@ fn staked_amount_is_added_and_subtracted() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&BOB));
 
 		// Dispatch a signed extrinsic to stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE_A1,
-			ETH_ZERO_ADDRESS,
-			TX_HASH,
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A1, ETH_ZERO_ADDRESS, TX_HASH,));
 		// Read pallet storage and assert the balance was added.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1);
 
 		// Add some more
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE_A2,
-			ETH_ZERO_ADDRESS,
-			TX_HASH,
-		));
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			BOB,
-			STAKE_B,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A2, ETH_ZERO_ADDRESS, TX_HASH,));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE_B, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Both accounts should now be created.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -88,46 +73,39 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B);
 
 		// Now claim some FLIP.
-		assert_ok!(Staking::claim(
-			Origin::signed(ALICE),
-			CLAIM_A,
-			ETH_DUMMY_ADDR
-		));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), CLAIM_A, ETH_DUMMY_ADDR));
 		assert_ok!(Staking::claim(Origin::signed(BOB), CLAIM_B, ETH_DUMMY_ADDR));
 
 		// Make sure it was subtracted.
-		assert_eq!(
-			Flip::total_balance_of(&ALICE),
-			STAKE_A1 + STAKE_A2 - CLAIM_A
-		);
+		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2 - CLAIM_A);
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A);
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B);
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A.into());
+		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B.into());
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _payload)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from BOB
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
+			Event::Staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
 				assert_eq!(total, STAKE_B);
 			},
 			_, // stake credited to BOB
-			Event::frame_system(frame_system::Event::NewAccount(BOB)),
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
+			Event::System(frame_system::Event::NewAccount(BOB)),
+			Event::Staking(crate::Event::Staked(ALICE, staked, total)) => {
 				assert_eq!(staked, STAKE_A2);
 				assert_eq!(total, STAKE_A1 + STAKE_A2);
 			},
 			_, // stake credited to ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
+			Event::Staking(crate::Event::Staked(ALICE, staked, total)) => {
 				assert_eq!(staked, STAKE_A1);
 				assert_eq!(total, STAKE_A1);
 			},
 			_, // stake credited to ALICE
-			Event::frame_system(frame_system::Event::NewAccount(ALICE))
+			Event::System(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
@@ -147,13 +125,7 @@ fn claiming_unclaimable_is_err() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Claim FLIP from another account.
 		assert_noop!(
@@ -164,9 +136,7 @@ fn claiming_unclaimable_is_err() {
 		// Make sure storage hasn't been touched.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE);
 
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::Staked(
-			ALICE, STAKE, STAKE
-		)));
+		assert_event_stack!(Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)));
 	});
 }
 
@@ -185,11 +155,7 @@ fn cannot_double_claim() {
 		));
 
 		// Claim a portion.
-		assert_ok!(Staking::claim(
-			Origin::signed(ALICE),
-			stake_a1,
-			ETH_DUMMY_ADDR
-		));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a1, ETH_DUMMY_ADDR));
 
 		// Claiming the rest should not be possible yet.
 		assert_noop!(
@@ -201,11 +167,7 @@ fn cannot_double_claim() {
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a1, TX_HASH));
 
 		// Should now be able to claim the rest.
-		assert_ok!(Staking::claim(
-			Origin::signed(ALICE),
-			stake_a2,
-			ETH_DUMMY_ADDR
-		));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2, ETH_DUMMY_ADDR));
 
 		// Redeem the rest.
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a2, TX_HASH));
@@ -224,13 +186,7 @@ fn staked_and_claimed_events_must_match() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// The act of staking creates the account.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -263,18 +219,18 @@ fn staked_and_claimed_events_must_match() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
+			Event::Staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
 				assert_eq!(claimed_amount, STAKE);
 			},
-			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
+			Event::System(frame_system::Event::KilledAccount(ALICE)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // Claim debited from account
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => {
+			Event::Staking(crate::Event::Staked(ALICE, added, total)) => {
 				assert_eq!(added, STAKE);
 				assert_eq!(total, STAKE);
 			},
 			_, // stake credited to ALICE
-			Event::frame_system(frame_system::Event::NewAccount(ALICE))
+			Event::System(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
@@ -299,10 +255,7 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 			BadOrigin
 		);
 
-		assert_noop!(
-			Staking::claimed(Origin::none(), ALICE, STAKE, TX_HASH),
-			BadOrigin
-		);
+		assert_noop!(Staking::claimed(Origin::none(), ALICE, STAKE, TX_HASH), BadOrigin);
 		assert_noop!(
 			Staking::claimed(Origin::signed(Default::default()), ALICE, STAKE, TX_HASH),
 			BadOrigin
@@ -320,44 +273,28 @@ fn signature_is_inserted() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Claim it.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
 		// Check storage for the signature, should not be there.
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
-
-		// Nonce should be 1.
-		let claim = PendingClaims::<Test>::get(ALICE).unwrap();
-		assert_eq!(claim.nonce, START_TIME.as_nanos() as u64);
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature(), false);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
 				// Insert a signature.
-				assert_ok!(Staking::post_claim_signature(
+				assert_ok!(Signer::signature_success(
 					Origin::root(),
-					ALICE,
-					msg_hash.into(),
+					id,
 					ETH_DUMMY_SIG));
 			}
 		);
 
-		assert_event_stack!(Event::pallet_cf_staking(
-			crate::Event::ClaimSignatureIssued(..)
-		));
+		assert_event_stack!(Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)));
 
 		// Check storage for the signature.
-		assert_eq!(
-			PendingClaims::<Test>::get(ALICE).unwrap().signature,
-			Some(ETH_DUMMY_SIG)
-		);
+		assert!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature());
 	});
 }
 
@@ -366,24 +303,12 @@ fn cannot_claim_bond() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 200;
 		const BOND: u128 = 102;
-		epoch_info::Mock::set_bond(BOND);
-		epoch_info::Mock::add_validator(ALICE);
+		MockEpochInfo::set_bond(BOND);
+		MockEpochInfo::add_validator(ALICE);
 
 		// Alice and Bob stake the same amount.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			BOB,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice becomes a validator
 		Flip::set_validator_bond(&ALICE, BOND);
@@ -396,19 +321,10 @@ fn cannot_claim_bond() {
 		);
 
 		// Alice *can* withdraw 100
-		assert_ok!(Staking::claim(
-			Origin::signed(ALICE),
-			STAKE - BOND,
-			ETH_DUMMY_ADDR
-		));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE - BOND, ETH_DUMMY_ADDR));
 
 		// Even if she claims, the remaining 100 are blocked
-		assert_ok!(Staking::claimed(
-			Origin::root(),
-			ALICE,
-			STAKE - BOND,
-			TX_HASH
-		));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE - BOND, TX_HASH));
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), 1, ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
@@ -423,35 +339,23 @@ fn cannot_claim_bond() {
 #[test]
 fn test_retirement() {
 	new_test_ext().execute_with(|| {
-		epoch_info::Mock::add_validator(ALICE);
+		MockEpochInfo::add_validator(ALICE);
 
 		// Need to be staked in order to retire or activate.
-		assert_noop!(
-			Staking::retire_account(Origin::signed(ALICE)),
-			<Error<Test>>::UnknownAccount
-		);
+		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::UnknownAccount);
 		assert_noop!(
 			Staking::activate_account(Origin::signed(ALICE)),
 			<Error<Test>>::UnknownAccount
 		);
 
 		// Try again with some stake, should succeed this time.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			100,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, 100, ETH_ZERO_ADDRESS, TX_HASH));
 		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
 
 		assert!(Staking::is_retired(&ALICE).unwrap());
 
 		// Can't retire if already retired
-		assert_noop!(
-			Staking::retire_account(Origin::signed(ALICE)),
-			<Error<Test>>::AlreadyRetired
-		);
+		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
 
 		// Reactivate the account
 		assert_ok!(Staking::activate_account(Origin::signed(ALICE)));
@@ -463,8 +367,8 @@ fn test_retirement() {
 		);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::AccountActivated(_)),
-			Event::pallet_cf_staking(crate::Event::AccountRetired(_))
+			Event::Staking(crate::Event::AccountActivated(_)),
+			Event::Staking(crate::Event::AccountRetired(_))
 		);
 	});
 }
@@ -479,55 +383,36 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			BOB,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice claims immediately.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
 		// Bob claims a little later.
-		time_source::Mock::tick(Duration::from_millis(200));
+		time_source::Mock::tick(Duration::from_secs(3));
 		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
-
-		let msg_hash_alice = PendingClaims::<Test>::get(ALICE).unwrap().msg_hash.unwrap();
 
 		// We can't insert a sig if the claim has expired.
 		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_secs(1));
+		time_source::Mock::tick(Duration::from_secs(10));
 		assert_noop!(
-			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
+			Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
 		// We can't insert a sig if expiry is too close either.
 		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_millis(950));
+		time_source::Mock::tick(Duration::from_secs(8));
 		assert_noop!(
-			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
+			Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_millis(200));
-		assert_ok!(Staking::post_claim_signature(
-			Origin::root(),
-			ALICE,
-			msg_hash_alice,
-			ETH_DUMMY_SIG
-		));
+		time_source::Mock::tick(Duration::from_secs(4));
+		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG));
 
 		// Trigger expiry.
 		Pallet::<Test>::expire_pending_claims();
@@ -536,37 +421,37 @@ fn claim_expiry() {
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
 
-		// Tick the clock forward by 1 sec and expire.
-		time_source::Mock::tick(Duration::from_secs(1));
+		// Tick the clock forward and expire.
+		time_source::Mock::tick(Duration::from_secs(7));
 		Pallet::<Test>::expire_pending_claims();
 
 		// Alice should have expired but not Bob.
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
 		assert_event_stack!(
-			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
+			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
 				STAKE,
 				0
 			)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(ALICE, _, STAKE))
+			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE))
 		);
 
 		// Tick forward again and expire.
-		time_source::Mock::tick(Duration::from_secs(1));
+		time_source::Mock::tick(Duration::from_secs(10));
 		Pallet::<Test>::expire_pending_claims();
 
 		// Bob's (unsigned) claim should now be expired too.
 		assert!(!PendingClaims::<Test>::contains_key(BOB));
 		assert_event_stack!(
-			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
+			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
 				STAKE,
 				0
 			)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(BOB, _, STAKE))
+			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE))
 		);
 	});
 }
@@ -575,16 +460,10 @@ fn claim_expiry() {
 fn no_claims_during_auction() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
-		epoch_info::Mock::set_is_auction_phase(true);
+		MockEpochInfo::set_is_auction_phase(true);
 
 		// Staking during an auction is OK.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			stake,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Claiming during an auction isn't OK.
 		assert_noop!(
@@ -601,13 +480,7 @@ fn test_claim_all() {
 		const BOND: u128 = 55;
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice becomes a validator.
 		Flip::set_validator_bond(&ALICE, BOND);
@@ -617,72 +490,12 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _)),
+			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE
 		);
 	});
-}
-
-#[test]
-// There have been obtuse test failures due to the loading of the contract failing
-// It uses a different ethabi to the CFE, so we test separately
-fn just_load_the_contract() {
-	assert_ok!(ethabi::Contract::load(
-		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
-	));
-}
-
-#[test]
-fn test_claim_payload() {
-	use ethabi::{Address, Token};
-	const EXPIRY_SECS: u64 = 10;
-	const AMOUNT: u128 = 1234567890;
-
-	const NONCE: u64 = 6;
-
-	let stake_manager = ethabi::Contract::load(
-		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
-	)
-	.unwrap();
-	let register_claim = stake_manager.function("registerClaim").unwrap();
-
-	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
-		msg_hash: None,
-		amount: AMOUNT,
-		nonce: NONCE,
-		address: ETH_DUMMY_ADDR,
-		expiry: Duration::from_secs(EXPIRY_SECS),
-		signature: None,
-	};
-
-	let runtime_payload = Staking::try_encode_claim_request(&ALICE, &claim_details).unwrap();
-
-	assert_eq!(
-		// Our encoding:
-		runtime_payload,
-		// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
-		register_claim
-			.encode_input(&vec![
-				// sigData: SigData(uint, uint, uint)
-				Token::Tuple(vec![
-					Token::Uint(ethabi::Uint::zero()),
-					Token::Uint(ethabi::Uint::zero()),
-					Token::Uint(ethabi::Uint::from(NONCE)),
-					Token::Address(Address::from(ETH_DUMMY_ADDR)),
-				]),
-				// nodeId: bytes32
-				Token::FixedBytes(ALICE.using_encoded(|bytes| bytes.to_vec())),
-				// amount: uint
-				Token::Uint(ethabi::Uint::from(AMOUNT)),
-				// staker: address
-				Token::Address(Address::from(ETH_DUMMY_ADDR)),
-				// epiryTime: uint48
-				Token::Uint(ethabi::Uint::from(EXPIRY_SECS)),
-			])
-			.unwrap()
-	);
 }
 
 #[test]
@@ -695,11 +508,7 @@ fn test_check_withdrawal_address() {
 		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
 		assert!(!FailedStakeAttempts::<Test>::contains_key(ALICE));
 		// Case: No account and provided withdrawal address
-		assert_ok!(Pallet::<Test>::check_withdrawal_address(
-			&ALICE,
-			ETH_DUMMY_ADDR,
-			STAKE
-		));
+		assert_ok!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE));
 		let withdrawal_address = WithdrawalAddresses::<Test>::get(ALICE);
 		assert!(withdrawal_address.is_some());
 		assert_eq!(withdrawal_address.unwrap(), ETH_DUMMY_ADDR);
@@ -713,9 +522,7 @@ fn test_check_withdrawal_address() {
 		let stake_attempt = stake_attempts.get(0);
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
-			..
-		)));
+		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
 		// Case: User stakes again with the same address
 		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE).is_ok());
 	});
@@ -727,13 +534,7 @@ fn claim_with_withdrawal_address() {
 		const STAKE: u128 = 45;
 		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_DUMMY_ADDR,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Claim it - expect to fail cause the the address is different
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
@@ -750,26 +551,12 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		// Stake some FLIP with no withdrawal address
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		// Expect an Staked event to be fired
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::Staked(..)));
+		assert_event_stack!(Event::Staking(crate::Event::Staked(..)));
 		// Stake some FLIP again with an provided withdrawal address
-		assert_ok!(Staking::staked(
-			Origin::root(),
-			ALICE,
-			STAKE,
-			ETH_DUMMY_ADDR,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Expect an failed stake event to be fired but no stake event
-		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
-			..
-		)));
+		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
 	});
 }
