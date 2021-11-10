@@ -4,7 +4,7 @@
 use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
-    eth::{eth_event_streamer, utils, SignatureAndEvent},
+    eth::{utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::StateChainRpcApi,
@@ -21,12 +21,12 @@ use web3::{
 
 use anyhow::{Context, Result};
 
-use futures::{Future, Stream, StreamExt};
+use futures::{Future, StreamExt};
 
 use slog::o;
 
 use super::decode_shared_event_closure;
-use super::eth_event_streamer::Event;
+use super::EthWitnesser;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
@@ -159,39 +159,17 @@ pub enum KeyManagerEvent {
     Shared(SharedEvent),
 }
 
-impl KeyManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
-        Ok(Self {
-            deployed_address: settings.eth.key_manager_eth_address,
-            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
-        })
-    }
+impl EthWitnesser for KeyManager {
+    type ContractEvent = KeyManagerEvent;
 
-    // TODO: Maybe try to factor this out (See StakeManager)
-    pub async fn event_stream(
+    fn decode_log_closure(
         &self,
-        web3: &Web3<WebSocket>,
-        from_block: u64,
-        logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<Event<KeyManagerEvent>>>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.deployed_address,
-            self.decode_log_closure()?,
-            from_block,
-            logger,
-        )
-        .await
-    }
-
-    pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(
+        Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
                 if signature == key_change.signature {
                     let log = key_change.event.parse_log(raw_log)?;
@@ -206,7 +184,21 @@ impl KeyManager {
                     )?))
                 }
             },
-        )
+        ))
+    }
+
+    fn get_deployed_address(&self) -> H160 {
+        self.deployed_address
+    }
+}
+
+impl KeyManager {
+    /// Loads the contract abi to get event definitions
+    pub fn new(settings: &settings::Settings) -> Result<Self> {
+        Ok(Self {
+            deployed_address: settings.eth.key_manager_eth_address,
+            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
+        })
     }
 }
 

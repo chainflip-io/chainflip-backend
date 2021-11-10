@@ -5,7 +5,7 @@ use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
-    eth::{eth_event_streamer, utils, SignatureAndEvent},
+    eth::{utils, SignatureAndEvent},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::StateChainRpcApi,
@@ -22,10 +22,10 @@ use web3::{
 
 use anyhow::{Context, Result};
 
-use futures::{Future, Stream, StreamExt};
+use futures::{Future, StreamExt};
 use slog::o;
 
-use super::{decode_shared_event_closure, eth_event_streamer::Event, EthWitnesser, SharedEvent};
+use super::{decode_shared_event_closure, EthWitnesser, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(

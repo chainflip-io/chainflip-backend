@@ -25,7 +25,7 @@ use web3::{
 };
 
 // TODO: Should this be tokio??
-use futures::{Future, Stream, StreamExt};
+use futures::Stream;
 
 // TODO: Rename
 use eth_event_streamer::Event as CFEventType;
