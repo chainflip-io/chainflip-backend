@@ -71,31 +71,6 @@ mod tests {
 	}
 
 	#[test]
-	fn we_should_see_offline_nodes_when_not_having_submitted_for_two_intervals() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
-			go_to_interval(2);
-			assert_eq!(
-				<OnlinePallet as IsOnline>::is_online(&ALICE),
-				false,
-				"Alice should be offline"
-			);
-			assert_eq!(
-				MockHeartbeat::network_state().offline,
-				vec![ALICE],
-				"Alice was missing last heartbeat interval"
-			);
-			go_to_interval(3);
-			assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is not online");
-			assert_eq!(
-				MockHeartbeat::network_state().number_of_nodes,
-				1,
-				"We should have one node"
-			);
-		});
-	}
-
-	#[test]
 	fn non_validators_should_not_appear_in_network_state() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(BOB)));
