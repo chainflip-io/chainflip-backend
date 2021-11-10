@@ -1,3 +1,4 @@
+use cf_traits::ChainflipAccountState;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use slog::o;
@@ -46,9 +47,36 @@ pub async fn start<BlockStream, RpcClient>(
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
+                let block_hash = block_header.hash();
                 // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
-                    == 0
+
+                let account_data = state_chain_client
+                    .get_account_data(block_hash)
+                    .await
+                    .unwrap();
+
+                let current_epoch = state_chain_client
+                    .epoch_at_block(block_hash)
+                    .await
+                    .expect("Could not get current epoch");
+
+                let is_outgoing = if let Some(last_active_epoch) = account_data.last_active_epoch {
+                    last_active_epoch + 1 == current_epoch
+                } else {
+                    false
+                };
+
+                // We want to submit the heartbeat when we are:
+                // - active
+                // - outgoing
+                // - backup
+                // NOT Passive (unless we are outgoing + passive)
+                if (matches!(account_data.state, ChainflipAccountState::Validator)
+                    || matches!(account_data.state, ChainflipAccountState::Backup)
+                    || is_outgoing)
+                    && ((block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0)
                 {
                     slog::info!(
                         logger,
