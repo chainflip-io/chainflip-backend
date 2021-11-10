@@ -18,9 +18,18 @@ use std::time::Duration;
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
+    transports::WebSocket,
     types::{Bytes, SyncState, TransactionParameters, H256},
     Web3,
 };
+
+// TODO: Should this be tokio??
+use futures::{Future, Stream, StreamExt};
+
+// TODO: Rename
+use eth_event_streamer::Event as CFEventType;
+
+use async_trait::async_trait;
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
@@ -138,6 +147,18 @@ impl EthBroadcaster {
 
         Ok(tx_hash)
     }
+}
+
+#[async_trait]
+pub trait EthWitnesser<ContractEvent: std::fmt::Debug> {
+    async fn event_stream<EthEventStream>(
+        &self,
+        web3: &Web3<WebSocket>,
+        from_block: u64,
+        logger: &slog::Logger,
+    ) -> Result<EthEventStream>
+    where
+        EthEventStream: Stream<Item = Result<CFEventType<ContractEvent>>>;
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
