@@ -34,8 +34,8 @@ pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi>(
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
-    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
-    slog::info!(logger, "Starting StakeManager witness");
+    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
+    slog::info!(logger, "Starting");
 
     let stake_manager = StakeManager::new(&settings).context(here!())?;
 

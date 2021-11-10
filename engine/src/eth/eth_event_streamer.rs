@@ -155,7 +155,7 @@ pub async fn new_eth_event_stream<
 mod tests {
 
     use crate::{
-        eth::{key_manager::KeyManager, new_synced_web3_client},
+        eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver},
         logging, settings,
     };
 

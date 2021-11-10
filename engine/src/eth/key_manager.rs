@@ -35,8 +35,8 @@ pub async fn start_key_manager_observer<RPCCLient: StateChainRpcApi>(
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
-    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
-    slog::info!(logger, "Starting KeyManager witness");
+    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerObserver"));
+    slog::info!(logger, "Starting");
 
     let key_manager = KeyManager::new(&settings).context(here!())?;
 

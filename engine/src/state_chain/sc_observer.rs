@@ -88,6 +88,12 @@ pub async fn start<BlockStream, RpcClient>(
                         .await;
                 }
 
+                // If we are active or outgoing we want to spawn some shit
+                if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator) {
+                    // we want to start the observers, if they're not already started
+                    // send message to eth observers channel
+                }
+
                 // Process this block's events
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
