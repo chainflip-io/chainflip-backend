@@ -78,7 +78,6 @@ std = [
   'scale-info/std',
   'frame-support/std',
   'frame-system/std',
-  'frame-benchmarking/std',
   'log/std',
   'pallet-cf-threshold-signature/std',
   'sp-core/std',

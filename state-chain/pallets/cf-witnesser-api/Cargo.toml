@@ -81,7 +81,6 @@ std = [
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
-  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'pallet-cf-staking/std',

@@ -77,7 +77,6 @@ std = [
     'sp-runtime/std',
     'cf-traits/std',
     'pallet-cf-validator/std',
-    'frame-benchmarking/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

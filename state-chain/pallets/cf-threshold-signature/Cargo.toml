@@ -76,7 +76,6 @@ std = [
 	'scale-info/std',
 	'frame-support/std',
 	'frame-system/std',
-	'frame-benchmarking/std',
 	'log/std',
 	'sp-std/std',
 	'sp-runtime/std',

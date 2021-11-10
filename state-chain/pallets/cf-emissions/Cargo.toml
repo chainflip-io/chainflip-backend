@@ -86,7 +86,6 @@ std = [
 	'sp-std/std',
 	'sp-runtime/std',
 	'cf-traits/std',
-	'frame-benchmarking/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
