@@ -1,4 +1,6 @@
 use anyhow::Result;
+use cf_chains::ChainId;
+use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
@@ -7,6 +9,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
+use pallet_cf_vaults::Vault;
 use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
@@ -15,6 +18,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
+use state_chain_runtime::SignedBlock;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -139,7 +143,6 @@ pub type EventInfo = (
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
 pub struct StateChainRpcClient {
-    events_storage_key: StorageKey,
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
@@ -162,21 +165,16 @@ pub trait StateChainRpcApi {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send;
 
-    /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
-    async fn watch_submitted_extrinsic_rpc<BlockStream>(
+    async fn storage_events_at(
         &self,
-        ext_hash: state_chain_runtime::Hash,
-        block_stream: &mut BlockStream,
-    ) -> Result<Vec<state_chain_runtime::Event>>
-    where
-        BlockStream:
-            Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
+        block_hash: Option<state_chain_runtime::Hash>,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 
-    /// Get events for a particular block
-    async fn get_events(
-        &self,
-        block_header: &state_chain_runtime::Header,
-    ) -> Result<Vec<EventInfo>>;
+    async fn get_block(&self, block_hash: state_chain_runtime::Hash)
+        -> Result<Option<SignedBlock>>;
+
+    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash>;
 }
 
 #[async_trait]
@@ -206,82 +204,42 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
     }
 
-    async fn watch_submitted_extrinsic_rpc<BlockStream>(
+    async fn get_block(
         &self,
-        extrinsic_hash: state_chain_runtime::Hash,
-        block_stream: &mut BlockStream,
-    ) -> Result<Vec<state_chain_runtime::Event>>
-    where
-        BlockStream:
-            Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
-    {
-        let mut events_for_extrinsic = Vec::new();
-        let mut found_extrinsic = false;
-        while let Some(result_header) = block_stream.next().await {
-            let header = result_header?;
-            let block_hash = header.hash();
-            if let Some(signed_block) = self
-                .chain_rpc_client
-                .block(Some(block_hash))
-                .await
-                .map_err(into_anyhow_error)?
-            {
-                let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
-                    let hash = BlakeTwo256::hash_of(ext);
-                    hash == extrinsic_hash
-                });
-                if extrinsic_index_found.is_some() {
-                    found_extrinsic = true;
-                }
-                let events_for_block = self.get_events(&header).await?;
-                for (phase, event, _) in events_for_block {
-                    if let Phase::ApplyExtrinsic(i) = phase {
-                        if let Some(extrinsic_index) = extrinsic_index_found {
-                            if i as usize != extrinsic_index {
-                                continue;
-                            }
-                            events_for_extrinsic.push(event);
-                        }
-                    }
-                }
-            };
-            if found_extrinsic {
-                break;
-            };
-        }
-        Ok(events_for_extrinsic)
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Option<SignedBlock>> {
+        self.chain_rpc_client
+            .block(Some(block_hash))
+            .await
+            .map_err(into_anyhow_error)
     }
 
-    async fn get_events(
+    async fn storage_events_at(
         &self,
-        block_header: &state_chain_runtime::Header,
-    ) -> Result<Vec<EventInfo>> {
+        block_hash: Option<state_chain_runtime::Hash>,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.state_rpc_client
-            .query_storage_at(
-                vec![self.events_storage_key.clone()],
-                Some(block_header.hash()),
-            )
+            .query_storage_at(vec![storage_key], block_hash)
             .await
-            .map_err(into_anyhow_error)?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
-                    })
-                    .flatten_ok()
-            })
-            .flatten()
-            .collect::<Result<Vec<_>>>()
+            .map_err(into_anyhow_error)
+    }
+
+    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+        try_unwrap_value(
+            self.chain_rpc_client
+                .block_hash(None)
+                .await
+                .map_err(into_anyhow_error)?,
+            anyhow::Error::msg("Failed to get latest block hash"),
+        )
     }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     metadata: substrate_subxt::Metadata,
+    account_storage_key: StorageKey,
+    events_storage_key: StorageKey,
     nonce: AtomicU32,
     /// Our Node's AcccountId
     pub our_account_id: AccountId32,
@@ -290,6 +248,11 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    /// Get the latest block hash at the time of the call
+    pub async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+        self.state_chain_rpc_client.latest_block_hash().await
+    }
+
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
@@ -338,26 +301,181 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    /// Get all the events from a particular block
-    pub async fn get_events(
-        &self,
-        block_header: &state_chain_runtime::Header,
-    ) -> Result<Vec<EventInfo>> {
-        self.state_chain_rpc_client.get_events(block_header).await
-    }
-
+    /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
     pub async fn watch_submitted_extrinsic<BlockStream>(
         &self,
-        ext_hash: state_chain_runtime::Hash,
+        extrinsic_hash: state_chain_runtime::Hash,
         block_stream: &mut BlockStream,
     ) -> Result<Vec<state_chain_runtime::Event>>
     where
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
+        let mut events_for_extrinsic = Vec::new();
+        let mut found_extrinsic = false;
+        while let Some(result_header) = block_stream.next().await {
+            let header = result_header?;
+            let block_hash = header.hash();
+            if let Some(signed_block) = self.state_chain_rpc_client.get_block(block_hash).await? {
+                let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
+                    let hash = BlakeTwo256::hash_of(ext);
+                    hash == extrinsic_hash
+                });
+                if extrinsic_index_found.is_some() {
+                    found_extrinsic = true;
+                }
+                let events_for_block = self.get_events(&header).await?;
+                for (phase, event, _) in events_for_block {
+                    if let Phase::ApplyExtrinsic(i) = phase {
+                        if let Some(extrinsic_index) = extrinsic_index_found {
+                            if i as usize != extrinsic_index {
+                                continue;
+                            }
+                            events_for_extrinsic.push(event);
+                        }
+                    }
+                }
+            };
+            if found_extrinsic {
+                break;
+            };
+        }
+        Ok(events_for_extrinsic)
+    }
+
+    // TODO: work out how to get all vaults with a single query... not sure if possible
+    pub async fn get_vault(
+        &self,
+        block_hash: Option<state_chain_runtime::Hash>,
+        epoch_index: EpochIndex,
+        chain_id: ChainId,
+    ) -> Result<Vault> {
+        let vault_for_epoch_key = self
+            .get_metadata()
+            .module("Vaults")?
+            .storage("Vaults")?
+            .double_map()?
+            .key(&epoch_index, &chain_id);
+
+        let vault_updates_this_block: Vec<_> = self
+            .state_chain_rpc_client
+            .storage_events_at(block_hash, vault_for_epoch_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            println!("Here's the data: {:?}", data);
+                            Vault::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        println!(
+            "Here there should be vaults: {:?}",
+            vault_updates_this_block
+        );
+        Ok(vault_updates_this_block
+            .last()
+            .expect("Should be a vault")
+            .to_owned())
+    }
+
+    /// Get all the events from a particular block
+    pub async fn get_events(
+        &self,
+        block_header: &state_chain_runtime::Header,
+    ) -> Result<Vec<EventInfo>> {
         self.state_chain_rpc_client
-            .watch_submitted_extrinsic_rpc(ext_hash, block_stream)
-            .await
+            .storage_events_at(Some(block_header.hash()), self.events_storage_key.clone())
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+                    .flatten_ok()
+            })
+            .flatten()
+            .collect::<Result<Vec<_>>>()
+    }
+
+    /// Get the status of the node at a particular block
+    pub async fn get_account_data(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<ChainflipAccountData> {
+        let node_status_updates: Vec<_> = self
+            .state_chain_rpc_client
+            .storage_events_at(Some(block_hash), self.account_storage_key.clone())
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            ChainflipAccountData::decode(&mut &data.0[..])
+                                .map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        Ok(node_status_updates
+            .last()
+            .expect("Node must have a status")
+            .to_owned())
+    }
+
+    pub async fn epoch_at_block(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<EpochIndex> {
+        let epoch_storage_key = self
+            .get_metadata()
+            .module("Validator")?
+            .storage("CurrentEpoch")?
+            .plain()?
+            .key();
+        let epoch_at_block_updates = self
+            .state_chain_rpc_client
+            .storage_events_at(Some(block_hash), epoch_storage_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            EpochIndex::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Vec<Result<_>>>();
+
+        Ok(epoch_at_block_updates
+            .last()
+            // if we don't have it, it means it's not initialised, which means the chain has started
+            // => the epoch index is 0
+            .unwrap_or_else(|| &Ok(0))
+            .as_ref()
+            .expect("Failed to get epoch index")
+            .to_owned())
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -377,6 +495,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
+fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
+    match lorv {
+        sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
+        _ => Err(error),
+    }
+}
+
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
@@ -384,16 +509,6 @@ pub async fn connect_to_state_chain(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
 )> {
-    fn try_unwrap_value<T, E>(
-        lorv: sp_rpc::list::ListOrValue<Option<T>>,
-        error: E,
-    ) -> Result<T, E> {
-        match lorv {
-            sp_rpc::list::ListOrValue::Value(Some(value)) => Ok(value),
-            _ => Err(error),
-        }
-    }
-
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
@@ -444,7 +559,6 @@ pub async fn connect_to_state_chain(
 
     let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
-        events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         runtime_version: state_rpc_client
             .runtime_version(latest_block_hash)
             .await
@@ -464,6 +578,11 @@ pub async fn connect_to_state_chain(
 
     let our_account_id = signer.account_id().to_owned();
 
+    let account_storage_key = system_pallet_metadata
+        .storage("Account")?
+        .map()?
+        .key(&our_account_id);
+
     Ok((
         Arc::new(StateChainClient {
             metadata,
@@ -474,13 +593,7 @@ pub async fn connect_to_state_chain(
                 > = Decode::decode(
                     &mut &state_chain_rpc_client
                         .state_rpc_client
-                        .storage(
-                            system_pallet_metadata
-                                .storage("Account")?
-                                .map()?
-                                .key(&our_account_id),
-                            latest_block_hash,
-                        )
+                        .storage(account_storage_key.clone(), latest_block_hash)
                         .await
                         .map_err(into_anyhow_error)?
                         .ok_or_else(|| {
@@ -495,6 +608,8 @@ pub async fn connect_to_state_chain(
             }),
             state_chain_rpc_client,
             our_account_id,
+            account_storage_key,
+            events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
         }),
         chain_rpc_client
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
@@ -508,9 +623,30 @@ mod tests {
 
     use std::convert::TryInto;
 
-    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
+    use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
 
     use super::*;
+
+    // #[tokio::test]
+    // #[ignore = "depends on running state chain"]
+    // async fn test_finalised_storage_subs() {
+    //     let settings = Settings::from_file("config/Local.toml").unwrap();
+    //     let (state_chain_client, mut block_stream) =
+    //         connect_to_state_chain(&settings.state_chain).await.unwrap();
+
+    //     while let Some(block) = block_stream.next().await {
+    //         let block_header = block.unwrap();
+    //         let my_state_for_this_block = state_chain_client
+    //             .get_vault(&block_header, 0, ChainId::Ethereum)
+    //             .await
+    //             .unwrap();
+
+    //         println!(
+    //             "Returning ChainflipAccountStatus for this block: {:?}",
+    //             my_state_for_this_block
+    //         );
+    //     }
+    // }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {
@@ -530,6 +666,8 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -569,6 +707,8 @@ mod tests {
             });
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -603,6 +743,8 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             metadata: substrate_subxt::Metadata::default(),
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -657,6 +799,8 @@ mod tests {
             .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
