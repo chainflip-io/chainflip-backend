@@ -3,7 +3,7 @@ use futures::TryStreamExt;
 
 use tokio_stream::{Stream, StreamExt};
 
-use std::fmt::Debug;
+use std::{fmt::Debug, pin::Pin};
 use web3::{
     ethabi::RawLog,
     transports::WebSocket,
@@ -61,17 +61,19 @@ impl<EventEnum: Debug> Event<EventEnum> {
     }
 }
 
+// We need to remove the impl in the return. And use a generic instead
+
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
     EventEnum: Debug,
-    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>,
+    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum> + 'static,
 >(
     web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
     logger: &slog::Logger,
-) -> Result<impl Stream<Item = Result<Event<EventEnum>>>, anyhow::Error> {
+) -> Result<Pin<Box<dyn Stream<Item = Result<Event<EventEnum>>>>>, anyhow::Error> {
     slog::info!(
         logger,
         "Subscribing to Ethereum events from contract at address: {:?}",
@@ -130,21 +132,23 @@ pub async fn new_eth_event_stream<
 
     slog::info!(logger, "Future logs fetched");
     let logger = logger.clone();
-    Ok(tokio_stream::iter(past_logs)
-        .map(Ok)
-        .chain(future_logs)
-        .map(
-            move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
-                let result_event =
-                    result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
+    Ok(Box::pin(
+        tokio_stream::iter(past_logs)
+            .map(Ok)
+            .chain(future_logs)
+            .map(
+                move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
+                    let result_event =
+                        result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
-                if let Ok(ok_result) = &result_event {
-                    slog::debug!(logger, "Received ETH log {}", ok_result);
-                }
+                    if let Ok(ok_result) = &result_event {
+                        slog::debug!(logger, "Received ETH log {}", ok_result);
+                    }
 
-                result_event
-            },
-        ))
+                    result_event
+                },
+            ),
+    ))
 }
 
 #[cfg(test)]

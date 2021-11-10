@@ -8,13 +8,14 @@ pub mod utils;
 use anyhow::{Context, Result};
 
 use secp256k1::SecretKey;
+use sp_core::H160;
 use thiserror::Error;
 
 use crate::settings;
 use futures::TryFutureExt;
-use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{fs::read_to_string, pin::Pin};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
@@ -150,15 +151,31 @@ impl EthBroadcaster {
 }
 
 #[async_trait]
-pub trait EthWitnesser<ContractEvent: std::fmt::Debug> {
-    async fn event_stream<EthEventStream>(
+pub trait EthWitnesser {
+    type ContractEvent: std::fmt::Debug + 'static;
+
+    async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<EthEventStream>
-    where
-        EthEventStream: Stream<Item = Result<CFEventType<ContractEvent>>>;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<CFEventType<Self::ContractEvent>>>>>> {
+        slog::info!(logger, "Creating new event stream");
+        eth_event_streamer::new_eth_event_stream(
+            web3,
+            self.get_deployed_address(),
+            self.decode_log_closure()?,
+            from_block,
+            logger,
+        )
+        .await
+    }
+
+    fn decode_log_closure(
+        &self,
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>>;
+
+    fn get_deployed_address(&self) -> H160;
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
@@ -181,6 +198,7 @@ pub enum SharedEvent {
     },
 }
 
+// This needs to be type DecodeClosure too
 fn decode_shared_event_closure(
     contract: &Contract,
 ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<SharedEvent>> {

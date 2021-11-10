@@ -25,7 +25,7 @@ use anyhow::{Context, Result};
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 
-use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
+use super::{decode_shared_event_closure, eth_event_streamer::Event, EthWitnesser, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
@@ -157,38 +157,16 @@ pub enum StakeManagerEvent {
     Shared(SharedEvent),
 }
 
-impl StakeManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
-        let contract =
-            ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
-        Ok(Self {
-            deployed_address: settings.eth.stake_manager_eth_address,
-            contract,
-        })
+impl EthWitnesser for StakeManager {
+    type ContractEvent = StakeManagerEvent;
+
+    fn get_deployed_address(&self) -> H160 {
+        self.deployed_address
     }
 
-    // TODO: Maybe try to factor this out (See KeyManager)
-    pub async fn event_stream(
+    fn decode_log_closure(
         &self,
-        web3: &Web3<WebSocket>,
-        from_block: u64,
-        logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<Event<StakeManagerEvent>>>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.deployed_address,
-            self.decode_log_closure()?,
-            from_block,
-            logger,
-        )
-        .await
-    }
-
-    pub fn decode_log_closure(
-        &self,
-    ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
@@ -197,7 +175,7 @@ impl StakeManager {
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(
+        Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
@@ -260,7 +238,19 @@ impl StakeManager {
                     )?))
                 }
             },
-        )
+        ))
+    }
+}
+
+impl StakeManager {
+    /// Loads the contract abi to get event definitions
+    pub fn new(settings: &settings::Settings) -> Result<Self> {
+        let contract =
+            ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
+        Ok(Self {
+            deployed_address: settings.eth.stake_manager_eth_address,
+            contract,
+        })
     }
 }
 
