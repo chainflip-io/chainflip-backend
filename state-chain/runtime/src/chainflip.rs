@@ -291,15 +291,14 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 					Environment::key_manager_address().into(),
 				)),
 			),
-			Self::UpdateFlipSupply(call) => {
+			Self::UpdateFlipSupply(call) =>
 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
 					contract_call_to_unsigned_tx(
 						call.clone(),
 						&signature,
 						Environment::stake_manager_address().into(),
 					),
-				))
-			}
+				)),
 		}
 	}
 }

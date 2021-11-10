@@ -2,8 +2,7 @@ use crate::eth::Tokenizable;
 use codec::{Decode, Encode};
 use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Token, Uint};
 use frame_support::RuntimeDebug;
-use sp_std::vec;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData};
 
@@ -44,9 +43,7 @@ impl UpdateFlipSupply {
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 		};
-		calldata
-			.sig_data
-			.insert_msg_hash_from(calldata.abi_encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -66,9 +63,9 @@ impl UpdateFlipSupply {
 			)
 	}
 
-	/// Gets the function defintion for the `updateFlipSupply` smart contract call. Loading this from the json abi
-	/// definition is currently not supported in no-std, so instead we hard-code it here and verify against the abi
-	/// in a unit test.
+	/// Gets the function defintion for the `updateFlipSupply` smart contract call. Loading this
+	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
+	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
 		ethabi::Function::new(
 			"updateFlipSupply",
@@ -131,10 +128,7 @@ mod test_update_flip_supply {
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
 
-		assert_eq!(
-			update_flip_supply_runtime.signing_payload(),
-			expected_msg_hash
-		);
+		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
 
 		let runtime_payload =
 			update_flip_supply_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
@@ -143,10 +137,7 @@ mod test_update_flip_supply {
 			});
 
 		// Ensure signing payload isn't modified by signature.
-		assert_eq!(
-			update_flip_supply_runtime.signing_payload(),
-			expected_msg_hash
-		);
+		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
