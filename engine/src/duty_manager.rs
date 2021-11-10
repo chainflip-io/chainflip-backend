@@ -28,6 +28,7 @@ pub enum NodeState {
     Active,
 }
 
+// TODO: Change the name
 #[derive(Debug)]
 pub struct DutyManager {
     node_state: NodeState,

@@ -190,6 +190,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 continue;
                             }
                             match event {
+                                // TODO: This needs to be moved up into the above match
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,

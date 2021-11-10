@@ -51,6 +51,8 @@ pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
             // TODO: Handle unwraps
             let event = result_event.unwrap();
 
+            // We can miss blocks if we are are ahead when inactive e.g. block 902
+            // then are told to be active, and start at block 900. We are ded
             if !duty_manager
                 .read()
                 .await
