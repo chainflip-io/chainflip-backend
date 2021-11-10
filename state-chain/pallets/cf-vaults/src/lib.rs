@@ -34,27 +34,26 @@ pub enum VaultRotationStatus<T: Config> {
 	Complete { tx_hash: Vec<u8> },
 }
 
+/// The bounds within which a public key for a vault should be used for witnessing.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct BlockHeightWindow {
+	pub from: u64,
+	pub to: Option<u64>,
+}
+
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault {
 	/// The vault's public key.
 	pub public_key: Vec<u8>,
+	/// The active window for this vault
+	pub active_window: BlockHeightWindow,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
-
-	/// This is roughly the number of Ethereum blocks in 14 days.
-	pub const ETHEREUM_LEEWAY_IN_BLOCKS: u64 = 80_000;
-
-	/// The bounds within which a public key for a vault should be used for witnessing.
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-	pub struct BlockHeightWindow {
-		pub from: u64,
-		pub to: Option<u64>,
-	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -91,10 +90,11 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// The active vaults for the current epoch.
+	/// A map of vaults by epoch and chain
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
-	pub(super) type Vaults<T: Config> = StorageMap<_, Blake2_128Concat, ChainId, Vault>;
+	pub(super) type Vaults<T: Config> =
+		StorageDoubleMap<_, Blake2_128Concat, EpochIndex, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -107,19 +107,6 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
 		StorageMap<_, Blake2_128Concat, ChainId, Nonce, ValueQuery>;
-
-	/// Active block height windows for each chain.
-	#[pallet::storage]
-	#[pallet::getter(fn active_windows)]
-	pub(super) type ActiveWindows<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		ChainId,
-		BlockHeightWindow,
-		ValueQuery,
-	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -325,9 +312,10 @@ pub mod pallet {
 				));
 			}
 
-			Vaults::<T>::try_mutate_exists(chain_id, |maybe_vault| {
-				if let Some(mut vault) = maybe_vault.as_mut() {
-					vault.public_key = new_public_key;
+			// We update the current epoch with an active window for the outgoers
+			Vaults::<T>::try_mutate_exists(T::EpochInfo::epoch_index(), chain_id, |maybe_vault| {
+				if let Some(vault) = maybe_vault.as_mut() {
+					vault.active_window.to = Some(block_number);
 					Ok(())
 				} else {
 					Err(Error::<T>::UnsupportedChain)
@@ -339,19 +327,17 @@ pub mod pallet {
 				VaultRotationStatus::<T>::Complete { tx_hash },
 			);
 
-			// Record this new incoming set for the next epoch.
-			ActiveWindows::<T>::insert(
+			// For the new epoch we create a new vault with the new public key and its active
+			// window at for the block after that reported
+			Vaults::<T>::insert(
 				T::EpochInfo::epoch_index().saturating_add(1),
 				ChainId::Ethereum,
-				BlockHeightWindow { from: block_number, to: None },
-			);
-
-			// Set the leaving block number for the outgoing set of the current epoch.
-			ActiveWindows::<T>::mutate(
-				T::EpochInfo::epoch_index(),
-				ChainId::Ethereum,
-				|block_height_window| {
-					block_height_window.to = Some(block_number + ETHEREUM_LEEWAY_IN_BLOCKS);
+				Vault {
+					public_key: new_public_key,
+					active_window: BlockHeightWindow {
+						from: block_number.saturating_add(1),
+						to: None,
+					},
 				},
 			);
 
@@ -385,8 +371,12 @@ pub mod pallet {
 				.expect("Can't build genesis without a valid ethereum vault key.");
 
 			Vaults::<T>::insert(
+				0,
 				ChainId::Ethereum,
-				Vault { public_key: self.ethereum_vault_key.clone() },
+				Vault {
+					public_key: self.ethereum_vault_key.clone(),
+					active_window: BlockHeightWindow::default(),
+				},
 			);
 		}
 	}
@@ -417,10 +407,8 @@ impl<T: Config> Pallet<T> {
 
 	fn no_active_chain_vault_rotations() -> bool {
 		// Returns true if the iterator is empty or if all rotations are complete.
-		PendingVaultRotations::<T>::iter().all(|(_, status)| match status {
-			VaultRotationStatus::Complete { .. } => true,
-			_ => false,
-		})
+		PendingVaultRotations::<T>::iter()
+			.all(|(_, status)| matches!(status, VaultRotationStatus::Complete { .. }))
 	}
 
 	fn start_vault_rotation_for_chain(

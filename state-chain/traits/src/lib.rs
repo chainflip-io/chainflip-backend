@@ -32,6 +32,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Parameter
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
+
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
@@ -354,11 +355,12 @@ pub enum ChainflipAccountState {
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
+	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Passive }
+		ChainflipAccountData { state: ChainflipAccountState::Passive, last_active_epoch: None }
 	}
 }
 
@@ -367,6 +369,16 @@ pub trait ChainflipAccount {
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex);
+}
+
+/// An outgoing node
+pub trait IsOutgoing {
+	type AccountId;
+
+	/// Returns true if this account is an outgoer which by definition is a node that was in the
+	/// active set in the *last* epoch
+	fn is_outgoing(account_id: &Self::AccountId) -> bool;
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
@@ -383,6 +395,13 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
+		})
+		.expect("mutating account state")
+	}
+
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).last_active_epoch = Some(index);
 		})
 		.expect("mutating account state")
 	}

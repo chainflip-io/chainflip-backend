@@ -178,6 +178,7 @@ tag = 'monthly-2021-09+1'
 [features]
 default = ['std']
 std = [
+  'state-chain-runtime/std',
   'cf-traits/std',
   'cf-chains/std',
   'codec/std',
@@ -217,7 +218,4 @@ std = [
   'pallet-cf-threshold-signature/std',
   'pallet-cf-environment/std',
   'pallet-cf-online/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std'
 ]

@@ -1,6 +1,6 @@
 mod tests {
 	use crate::{mock::*, Error, *};
-	use cf_traits::mocks::vault_rotation::clear_confirmation;
+	use cf_traits::{mocks::vault_rotation::clear_confirmation, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
@@ -83,7 +83,8 @@ mod tests {
 			// This should be the same state
 			run_to_block(9);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			run_to_block(10);
+			let next_epoch = ValidatorPallet::current_epoch_started_at() + epoch;
+			run_to_block(next_epoch);
 			// We should have started another auction
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 			assert_noop!(
@@ -93,7 +94,7 @@ mod tests {
 			// Finally back to the start again
 			// Confirm the auction
 			clear_confirmation();
-			run_to_block(11);
+			run_to_block(next_epoch + 1);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 		});
 	}
@@ -174,6 +175,11 @@ mod tests {
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(16);
+
+			let outgoing_validators = outgoing_validators();
+			for outgoer in &outgoing_validators {
+				assert!(MockIsOutgoing::is_outgoing(outgoer));
+			}
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
