@@ -2,7 +2,7 @@
 //! the EthEventStreamer
 
 use crate::state_chain::client::StateChainClient;
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, pin::Pin, sync::Arc};
 
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -11,8 +11,10 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 
+use pallet_cf_vaults::BlockHeightWindow;
 use sp_runtime::AccountId32;
 
+use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
     ethabi::{self, RawLog},
     transports::WebSocket,
@@ -28,66 +30,76 @@ use slog::o;
 use super::{decode_shared_event_closure, EthObserver, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi>(
+pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi + Sync + Send>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
+    mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
-) -> Result<impl Future> {
+) {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
-    let stake_manager = StakeManager::new(&settings).context(here!())?;
+    // We set this to Some when we have a running task
+    let mut option_handle: Option<JoinHandle<()>> = None;
 
-    let mut event_stream = stake_manager
-        .event_stream(&web3, settings.eth.from_block, &logger)
-        .await?;
+    let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
-    Ok(async move {
-        while let Some(result_event) = event_stream.next().await {
-            // TODO: Handle unwraps
-            let event = result_event.unwrap();
-            match event.event_enum {
-                StakeManagerEvent::Staked {
-                    account_id,
-                    amount,
-                    staker: _,
-                    return_addr,
-                } => {
-                    let _ = state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_staked(
-                                account_id,
-                                amount,
-                                return_addr.0,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
+    while let Some(window) = window_receiver.recv().await {
+        if option_handle.is_none() {
+            Some(tokio::spawn(async move {
+                // pass the from into the event stream and then we want to cancel when we're done
+                let mut event_stream = stake_manager
+                    .event_stream(&web3, window.from, &logger)
+                    .await
+                    .unwrap();
+
+                while let Some(result_event) = event_stream.next().await {
+                    // TODO: Handle unwraps
+                    let event = result_event.unwrap();
+                    match event.event_enum {
+                        StakeManagerEvent::Staked {
+                            account_id,
+                            amount,
+                            staker: _,
+                            return_addr,
+                        } => {
+                            let _ = state_chain_client
+                                .submit_extrinsic(
+                                    &logger,
+                                    pallet_cf_witnesser_api::Call::witness_staked(
+                                        account_id,
+                                        amount,
+                                        return_addr.0,
+                                        event.tx_hash,
+                                    ),
+                                )
+                                .await;
+                        }
+                        StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                            let _ = state_chain_client
+                                .submit_extrinsic(
+                                    &logger,
+                                    pallet_cf_witnesser_api::Call::witness_claimed(
+                                        account_id,
+                                        amount,
+                                        event.tx_hash,
+                                    ),
+                                )
+                                .await;
+                        }
+                        event => {
+                            slog::warn!(
+                                logger,
+                                "{:?} is not to be submitted to the State Chain",
+                                event
+                            );
+                        }
+                    }
                 }
-                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                    let _ = state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id,
-                                amount,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
-                }
-                event => {
-                    slog::warn!(
-                        logger,
-                        "{:?} is not to be submitted to the State Chain",
-                        event
-                    );
-                }
-            }
+            }));
         }
-    })
+    }
 }
 
 /// A wrapper for the StakeManager Ethereum contract.
