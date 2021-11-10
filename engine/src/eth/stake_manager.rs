@@ -25,10 +25,10 @@ use anyhow::{Context, Result};
 use futures::{Future, StreamExt};
 use slog::o;
 
-use super::{decode_shared_event_closure, EthWitnesser, SharedEvent};
+use super::{decode_shared_event_closure, EthObserver, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_witness<RPCCLient: StateChainRpcApi>(
+pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
@@ -157,7 +157,7 @@ pub enum StakeManagerEvent {
     Shared(SharedEvent),
 }
 
-impl EthWitnesser for StakeManager {
+impl EthObserver for StakeManager {
     type ContractEvent = StakeManagerEvent;
 
     fn get_deployed_address(&self) -> H160 {

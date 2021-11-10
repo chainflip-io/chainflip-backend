@@ -95,7 +95,7 @@ async fn main() {
             &root_logger
         ),
         // Start eth components
-        stake_manager::start_stake_manager_witness(
+        stake_manager::start_stake_manager_observer(
             &web3,
             &settings,
             state_chain_client.clone(),
@@ -103,7 +103,7 @@ async fn main() {
         )
         .await
         .expect("Could not start StakeManager witness"),
-        key_manager::start_key_manager_witness(
+        key_manager::start_key_manager_observer(
             &web3,
             &settings,
             state_chain_client.clone(),

@@ -26,10 +26,10 @@ use futures::{Future, StreamExt};
 use slog::o;
 
 use super::decode_shared_event_closure;
-use super::EthWitnesser;
+use super::EthObserver;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
-pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
+pub async fn start_key_manager_observer<RPCCLient: StateChainRpcApi>(
     web3: &Web3<WebSocket>,
     settings: &settings::Settings,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
@@ -159,7 +159,7 @@ pub enum KeyManagerEvent {
     Shared(SharedEvent),
 }
 
-impl EthWitnesser for KeyManager {
+impl EthObserver for KeyManager {
     type ContractEvent = KeyManagerEvent;
 
     fn decode_log_closure(
