@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -352,13 +352,13 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
-		Vaults::vaults(<Ethereum as Chain>::CHAIN_ID)
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
 	}
 
 	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
-		Vaults::vaults(<Ethereum as Chain>::CHAIN_ID)
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
 			.try_into()
