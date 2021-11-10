@@ -318,8 +318,8 @@ pub trait IsOnline {
 /// interval are marked as awaiting.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
-	/// Those nodes that we are awaiting a heartbeat from
-	pub awaiting: Vec<ValidatorId>,
+	/// Those nodes that are considered offline
+	pub offline: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
 	/// Number of nodes
@@ -522,8 +522,9 @@ pub mod offline_conditions {
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId: Default;
+	type BlockNumber;
 	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) -> Weight;
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
 }

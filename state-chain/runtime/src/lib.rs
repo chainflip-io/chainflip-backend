@@ -399,7 +399,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const HeartbeatBlockInterval: BlockNumber = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
@@ -414,7 +414,6 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_online::Config for Runtime {
-	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
@@ -472,7 +471,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
-		Online: pallet_cf_online::{Pallet, Call, Storage, Event<T>,},
+		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
