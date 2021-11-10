@@ -27,8 +27,7 @@ use web3::{
 // TODO: Should this be tokio??
 use futures::Stream;
 
-// TODO: Rename
-use eth_event_streamer::Event as CFEventType;
+use eth_event_streamer::Event as EventStreamerEvent;
 
 use async_trait::async_trait;
 
@@ -159,7 +158,7 @@ pub trait EthObserver {
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<CFEventType<Self::ContractEvent>>>>>> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<EventStreamerEvent<Self::ContractEvent>>>>>> {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
