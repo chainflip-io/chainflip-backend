@@ -22,7 +22,10 @@ mod tests {
 	) {
 		for interval in 1..=intervals {
 			for validator_id in &validators {
-				<ReputationPallet as Heartbeat>::heartbeat_submitted(validator_id, interval * HEARTBEAT_BLOCK_INTERVAL);
+				<ReputationPallet as Heartbeat>::heartbeat_submitted(
+					validator_id,
+					interval * HEARTBEAT_BLOCK_INTERVAL,
+				);
 			}
 		}
 	}

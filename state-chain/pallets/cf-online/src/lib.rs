@@ -38,8 +38,8 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// On initializing each block we check network liveness on every heartbeat interval and
-		/// feedback the state of the network as `NetworkState`
+		/// We check network liveness on every heartbeat interval and feedback the state of the
+		/// network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				let (network_weight, network_state) = Self::check_network_liveness(current_block);
@@ -67,8 +67,8 @@ pub mod pallet {
 		}
 	}
 
-	/// The nodes in the network.  We are assuming here that an account staked with FLIP
-	/// is equivalent to an operational node and would appear in this map once they have submitted
+	/// The nodes in the network.  We are assuming here that an account staked with FLIP is
+	/// equivalent to an operational node and would appear in this map once they have submitted
 	/// a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
@@ -77,8 +77,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A heartbeat that is used to measure the liveness of a node it is measured in blocks.
+		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
 		/// For every interval we expect at least one heartbeat from all nodes of the network.
+		/// Failing this they would be considered offline.
 		///
 		/// ## Events
 		///
@@ -106,8 +107,7 @@ pub mod pallet {
 			(current_block_number - reported_block_number) < T::HeartbeatBlockInterval::get()
 		}
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
-		/// of the network for those nodes that are validators.  All nodes are then marked as having
-		/// not submitted a heartbeat for the next upcoming heartbeat interval.
+		/// of the network for those nodes that are validators.
 		fn check_network_liveness(
 			current_block_number: BlockNumberFor<T>,
 		) -> (Weight, NetworkState<T::ValidatorId>) {

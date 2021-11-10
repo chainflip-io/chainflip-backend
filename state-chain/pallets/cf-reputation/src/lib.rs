@@ -196,7 +196,10 @@ pub mod pallet {
 		/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
 		/// heartbeat interval.  These block credits are transformed to reputation points based on
 		/// the accrual ratio.
-		fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) -> Weight {
+		fn heartbeat_submitted(
+			validator_id: &Self::ValidatorId,
+			_block_number: Self::BlockNumber,
+		) -> Weight {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation

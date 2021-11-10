@@ -196,7 +196,10 @@ impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) -> Weight {
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		block_number: Self::BlockNumber,
+	) -> Weight {
 		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number)
 	}
 

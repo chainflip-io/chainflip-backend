@@ -11,7 +11,7 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{BlockNumber, Chainflip, Heartbeat, NetworkState, impl_mock_stake_transfer};
+use cf_traits::{impl_mock_stake_transfer, BlockNumber, Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
 
@@ -82,7 +82,10 @@ impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) -> Weight {
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		_block_number: Self::BlockNumber,
+	) -> Weight {
 		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
 		0
 	}
