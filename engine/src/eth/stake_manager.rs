@@ -2,7 +2,13 @@
 //! the EthEventStreamer
 
 use crate::{common::Mutex, state_chain::client::StateChainClient};
-use std::{convert::TryInto, sync::Arc};
+use std::{
+    convert::TryInto,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -40,27 +46,35 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
-    let mut option_handle_window: Option<(JoinHandle<()>, Arc<Mutex<BlockHeightWindow>>)> = None;
+    let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
 
     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
     while let Some(received_window) = window_receiver.recv().await {
-        if let Some((handle, our_window)) = option_handle_window.take() {
+        if let Some((handle, end_at_block)) = option_handle_end_block.take() {
             // if we already have a thread, we want to tell it when to stop and await on it
             if let Some(window_to) = received_window.to {
-                our_window.lock().await.to = Some(window_to);
-                handle.await.unwrap();
+                if let None = *end_at_block.lock().await {
+                    // we now have the block
+                    *end_at_block.lock().await = Some(window_to);
+                    handle.await.unwrap();
+                }
+            } else {
+                panic!("Received two 'end' events in a row. This should not occur.");
             }
         } else {
-            let our_window = Arc::new(Mutex::new(received_window.clone()));
+            // TODO: We may actually know the end block
+            // we might not know what task to end on if we know the block
+            let task_end_at_block = Arc::new(Mutex::new(None));
+
+            let task_end_at_block_c = task_end_at_block.clone();
 
             // clone for capture by tokio task
-            let our_window_c = our_window.clone();
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
             let state_chain_client = state_chain_client.clone();
-            option_handle_window = Some((
+            option_handle_end_block = Some((
                 tokio::spawn(async move {
                     let mut event_stream = stake_manager
                         .event_stream(&web3, received_window.from, &logger)
@@ -69,7 +83,7 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
 
                     while let Some(result_event) = event_stream.next().await {
                         let event = result_event.expect("should be valid event type");
-                        if let Some(window_to) = (*our_window.lock().await).to {
+                        if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
                                 // we have reached the block height we wanted to witness up to
                                 break;
@@ -117,7 +131,7 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                         }
                     }
                 }),
-                our_window_c,
+                task_end_at_block_c,
             ))
         }
     }
