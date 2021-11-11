@@ -30,6 +30,15 @@ use sp_std::prelude::*;
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct SemVer {
+	major: u8,
+	minor: u8,
+	patch: u8,
+}
+
+type Version = SemVer;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -80,6 +89,8 @@ pub mod pallet {
 		ForceRotationRequested(),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
+		/// An validator has send his current CFE version
+		ValidatorCFEVersionRecorded(T::AccountId, Version),
 	}
 
 	#[pallet::error]
@@ -169,6 +180,29 @@ pub mod pallet {
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
+
+		/// Allow a validator to send their current cfe version.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [ValidatorCFEVersionRecorded](Event::ValidatorCFEVersionRecorded)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		pub fn cfe_version(origin: OriginFor<T>, semver: Version) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ValidatorCFEVersion::<T>::insert(account_id.clone(), semver.clone());
+			Self::deposit_event(Event::ValidatorCFEVersionRecorded(account_id, semver));
+			Ok(().into())
+		}
 	}
 
 	/// Force auction on next block
@@ -200,6 +234,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
+
+	/// Validator CFE version
+	#[pallet::storage]
+	#[pallet::getter(fn validator_cfe_version)]
+	pub type ValidatorCFEVersion<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, Version>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
