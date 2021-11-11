@@ -45,13 +45,14 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
 
     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
-    let our_window: Arc<Mutex<BlockHeightWindow>>;
+    let our_window: Arc<Mutex<Option<BlockHeightWindow>>> = Arc::new(Mutex::new(None));
 
+    // we only need to update the thread if we receive a new window
     while let Some(window) = window_receiver.recv().await {
         // only one witnesser at a time
         if option_handle.is_none() {
-            // we don't have a window, so want to set it
-            our_window = Arc::new(Mutex::new(window));
+            let our_window = our_window.clone();
+            *our_window.lock().await = Some(window);
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
@@ -65,7 +66,10 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
 
                 while let Some(result_event) = event_stream.next().await {
                     let event = result_event.expect("should be valid event type");
-                    if let Some(window_to) = our_window.to {
+                    if let Some(window_to) = (*our_window.lock().await)
+                        .expect("must have window to start stream")
+                        .to
+                    {
                         if event.block_number > window_to {
                             // exit task
                         }
@@ -114,8 +118,12 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
             }));
         } else {
             // we already have a task running, we want to chat with it through the ArcMutex
-            if window.to.is_some() {
-                our_window.lock().to = window.to;
+            if let Some(window_to) = window.to {
+                our_window
+                    .lock()
+                    .await
+                    .expect("Must have a window to start thread")
+                    .to = Some(window_to);
             }
         }
     }
