@@ -120,11 +120,8 @@ mod test_update_flip_supply {
 
 		let stake_manager_reference = stake_manager.function("updateFlipSupply").unwrap();
 
-		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
-			NONCE,
-			NEW_TOTAL_SUPPLY.into(),
-			STATE_CHAIN_BLOCK_NUMBER.into(),
-		);
+		let update_flip_supply_runtime =
+			UpdateFlipSupply::new_unsigned(NONCE, NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER);
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
 
