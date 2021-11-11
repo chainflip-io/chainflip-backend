@@ -63,13 +63,10 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                 panic!("Received two 'end' events in a row. This should not occur.");
             }
         } else {
-            // TODO: We may actually know the end block
-            // we might not know what task to end on if we know the block
-            let task_end_at_block = Arc::new(Mutex::new(None));
-
-            let task_end_at_block_c = task_end_at_block.clone();
+            let task_end_at_block = Arc::new(Mutex::new(received_window.to));
 
             // clone for capture by tokio task
+            let task_end_at_block_c = task_end_at_block.clone();
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
