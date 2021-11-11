@@ -230,7 +230,6 @@ workflows:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
-          <<: *only_main_branches
       - cargo-integration-tests:
           context:
             - ghcr-credentials
