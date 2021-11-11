@@ -39,6 +39,8 @@ pub use common::KeygenResultInfo;
 
 use self::{ceremony_manager::CeremonyManager, signing::PendingSigningInfo};
 
+pub use keygen::KeygenOptions;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
     /// Scalar component
@@ -177,6 +179,7 @@ where
     inner_event_sender: EventSender,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
+    keygen_options: KeygenOptions,
     logger: slog::Logger,
 }
 
@@ -188,6 +191,7 @@ where
         my_account_id: AccountId,
         db: S,
         inner_event_sender: EventSender,
+        keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
@@ -200,6 +204,7 @@ where
             ),
             inner_event_sender,
             pending_requests_to_sign: Default::default(),
+            keygen_options,
             logger: logger.clone(),
         }
     }
@@ -241,7 +246,8 @@ where
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.ceremony_manager.on_keygen_request(keygen_info);
+                self.ceremony_manager
+                    .on_keygen_request(keygen_info, self.keygen_options);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
