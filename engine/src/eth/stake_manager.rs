@@ -1,7 +1,7 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use crate::state_chain::client::StateChainClient;
+use crate::{common::Mutex, state_chain::client::StateChainClient};
 use std::{convert::TryInto, pin::Pin, sync::Arc};
 
 use crate::{
@@ -45,13 +45,18 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
 
     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
+    let our_window: Arc<Mutex<BlockHeightWindow>>;
+
     while let Some(window) = window_receiver.recv().await {
+        // only one witnesser at a time
         if option_handle.is_none() {
+            // we don't have a window, so want to set it
+            our_window = Arc::new(Mutex::new(window));
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
             let state_chain_client = state_chain_client.clone();
-            Some(tokio::spawn(async move {
+            option_handle = Some(tokio::spawn(async move {
                 // pass the from into the event stream and then we want to cancel when we're done
                 let mut event_stream = stake_manager
                     .event_stream(&web3, window.from, &logger)
@@ -59,8 +64,13 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                     .unwrap();
 
                 while let Some(result_event) = event_stream.next().await {
-                    // TODO: Handle unwraps
-                    let event = result_event.unwrap();
+                    let event = result_event.expect("should be valid event type");
+                    if let Some(window_to) = our_window.to {
+                        if event.block_number > window_to {
+                            // exit task
+                        }
+                    }
+
                     match event.event_enum {
                         StakeManagerEvent::Staked {
                             account_id,
@@ -102,6 +112,11 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                     }
                 }
             }));
+        } else {
+            // we already have a task running, we want to chat with it through the ArcMutex
+            if window.to.is_some() {
+                our_window.lock().to = window.to;
+            }
         }
     }
 }
