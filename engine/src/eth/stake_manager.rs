@@ -119,11 +119,14 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
         } else {
             // we already have a task running, we want to chat with it through the ArcMutex
             if let Some(window_to) = window.to {
+                // end
                 our_window
                     .lock()
                     .await
                     .expect("Must have a window to start thread")
                     .to = Some(window_to);
+                option_handle.unwrap().await.unwrap();
+                option_handle = None;
             }
         }
     }
