@@ -341,14 +341,11 @@ jobs:
           export WS_ENDPOINT=$(echo "wss://bashful-$CIRCLE_BRANCH-node.chainflip.xyz" | tr \/ -)
           echo -n $SNOW_WHITE_SIGNING_KEY > signing_key_file
           echo -n $ETH_PRIVATE_KEY > private_key_file
+          cat engine/config/End2End.toml | envsubst > engine/config/SnowWhite.toml
           cargo test \
           --package chainflip-engine \
           --test rotation_end_to_end \
-          -- vault_rotation_end_to_end --exact --nocapture \
-          --eth.node_endpoint=$ETH__NODE_ENDPOINT \
-          --state_chain.ws_endpoint=$WS_ENDPOINT \
-          --eth.private_key_file=private_key_file \
-          --state_chain.signing_key_file=signing_key_file
+          -- vault_rotation_end_to_end --exact --nocapture
           sccache --show-stats
 
   cargo-build-and-test-validator-package:

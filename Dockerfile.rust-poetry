@@ -10,7 +10,8 @@ RUN apt-get update -y \
        libclang-dev \
        lld \
        python3-dev \
-       jq
+       jq \
+       gettext-base
 
 RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - && chown -R root:root /root
 ENV PATH="/root/.poetry/bin:${PATH}"

@@ -1,0 +1,26 @@
+# SnowWhite configurations for the CFE
+# Used in integration tests, as this is the governance sudo user
+# on the three-node-test chain spec
+
+[state_chain]
+# 32 byte hex secret key - associated with the node's public id (public key)
+signing_key_file = "signing_key_file"
+ws_endpoint = "$WS_ENDPOINT"
+
+[eth]
+from_block = 0
+node_endpoint = "$ETH__NODE_ENDPOINT"
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+private_key_file = "private_key_file"
+# Address used on the Hardhat/Brownie tests
+key_manager_eth_address = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+stake_manager_eth_address = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+
+# not used by SnowWhite
+[health_check]
+hostname = "127.0.0.1"
+port = 5555
+
+# not used by SnowWhite
+[signing]
+db_file = "data.db"
