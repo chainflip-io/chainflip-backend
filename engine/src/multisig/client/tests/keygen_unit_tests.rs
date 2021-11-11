@@ -85,7 +85,7 @@ async fn should_delay_comm1_before_keygen_request() {
 
     assert_stage1(&c1);
 
-    // Recieve the remaining stage1 messages. Provided that the first
+    // Receive the remaining stage1 messages. Provided that the first
     // message was properly delayed, this should advance us to the next stage
     receive_comm1!(c1, 2, keygen_states);
     receive_comm1!(c1, 3, keygen_states);

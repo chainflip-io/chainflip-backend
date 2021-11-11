@@ -27,7 +27,7 @@ use crate::p2p::P2PMessage;
 
 use client::InnerEvent;
 
-pub use client::{KeygenOutcome, MultisigClient, SchnorrSignature, SigningOutcome};
+pub use client::{KeygenOptions, KeygenOutcome, MultisigClient, SchnorrSignature, SigningOutcome};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
@@ -76,6 +76,7 @@ pub fn start_client<S>(
     mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
     p2p_message_command_sender: UnboundedSender<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    keygen_options: KeygenOptions,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
@@ -86,7 +87,13 @@ where
     slog::info!(logger, "Starting");
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
-    let mut client = MultisigClient::new(my_account_id, db, inner_event_sender, &logger);
+    let mut client = MultisigClient::new(
+        my_account_id,
+        db,
+        inner_event_sender,
+        keygen_options,
+        &logger,
+    );
 
     async move {
         // Stream outputs () approximately every ten seconds
