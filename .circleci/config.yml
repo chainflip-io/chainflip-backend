@@ -512,7 +512,9 @@ jobs:
             --url 'http://localhost:5555/health'
             -vv
       - store_artifacts:
-          path: target/release
+          path: target/release/chainflip-engine
+      - store_artifacts:
+          path: target/release/state-chain-node
 
   create-testnet:
     parameters:
