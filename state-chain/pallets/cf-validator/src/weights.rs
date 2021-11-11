@@ -39,20 +39,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Auction CurrentPhase (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
-		(30_000_000 as Weight)
+		(39_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Auction CurrentPhase (r:1 w:0)
 	// Storage: Validator Force (r:0 w:1)
 	fn force_rotation() -> Weight {
-		(26_000_000 as Weight)
+		(33_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Validator ValidatorCFEVersion (r:0 w:1)
 	fn cfe_version() -> Weight {
-		(5_000_000 as Weight)
+		(32_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 }
@@ -62,20 +62,20 @@ impl WeightInfo for () {
 	// Storage: Auction CurrentPhase (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
-		(30_000_000 as Weight)
+		(39_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Auction CurrentPhase (r:1 w:0)
 	// Storage: Validator Force (r:0 w:1)
 	fn force_rotation() -> Weight {
-		(26_000_000 as Weight)
+		(33_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Validator ValidatorCFEVersion (r:0 w:1)
 	fn cfe_version() -> Weight {
-		(5_000_000 as Weight)
+		(32_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 }

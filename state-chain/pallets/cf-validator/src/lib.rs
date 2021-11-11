@@ -89,6 +89,8 @@ pub mod pallet {
 		ForceRotationRequested(),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
+		/// An validator has send his current CFE version
+		ValidatorCFEVersionRecorded(T::AccountId, Version),
 	}
 
 	#[pallet::error]
@@ -179,11 +181,26 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Allow a validator to send their current cfe version.
 		///
-		#[pallet::weight(10_000)]
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - ValidatorCFEVersionRecorded
+		///
+		/// ## Errors
+		///
+		/// - BadOrigin
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, semver: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ValidatorCFEVersion::<T>::insert(account_id, semver);
+			ValidatorCFEVersion::<T>::insert(account_id.clone(), semver.clone());
+			Self::deposit_event(Event::ValidatorCFEVersionRecorded(account_id, semver));
 			Ok(().into())
 		}
 	}
