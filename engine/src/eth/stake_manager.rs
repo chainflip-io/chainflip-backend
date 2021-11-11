@@ -50,7 +50,17 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
     // we only need to update the thread if we receive a new window
     while let Some(window) = window_receiver.recv().await {
         // only one witnesser at a time
-        if option_handle.is_none() {
+        if let Some(handle) = option_handle.take() {
+            // we already have a task running, we want to chat with it through the ArcMutex
+            if let Some(window_to) = window.to {
+                our_window
+                    .lock()
+                    .await
+                    .expect("Must have a window to start thread")
+                    .to = Some(window_to);
+                handle.await.unwrap();
+            }
+        } else {
             let our_window = our_window.clone();
             *our_window.lock().await = Some(window);
             let stake_manager = stake_manager.clone();
@@ -116,18 +126,6 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                     }
                 }
             }));
-        } else {
-            // we already have a task running, we want to chat with it through the ArcMutex
-            if let Some(window_to) = window.to {
-                // end
-                our_window
-                    .lock()
-                    .await
-                    .expect("Must have a window to start thread")
-                    .to = Some(window_to);
-                option_handle.unwrap().await.unwrap();
-                option_handle = None;
-            }
         }
     }
 }
