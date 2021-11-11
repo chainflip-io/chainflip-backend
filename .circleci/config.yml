@@ -219,18 +219,18 @@ workflows:
       #            - ghcr-credentials
       #          <<: *only_main_branches
       - git-clone-contracts-repo
-      #      - create-testnet:
-      #          name: Create new testnet
-      #          extra_args: ""
-      #          tag: "48544689baa5204cebf93f211cfd5bb3a4fa6e03"
-      #          #          requires:
-      #          #            - docker-build-chainflip-engine
-      #          #            - docker-build-state-chain-node
-      #          context:
-      #            - ghcr-credentials
-      #            - do-credentials
-      #            - infura-endpoints
-      #          <<: *only_main_branches
+      - create-testnet:
+          name: Create new testnet
+          extra_args: ""
+          tag: "48544689baa5204cebf93f211cfd5bb3a4fa6e03"
+          #          requires:
+          #            - docker-build-chainflip-engine
+          #            - docker-build-state-chain-node
+          context:
+            - ghcr-credentials
+            - do-credentials
+            - infura-endpoints
+          <<: *only_main_branches
       - cargo-integration-tests:
           context:
             - ghcr-credentials
@@ -240,15 +240,15 @@ workflows:
             - git-clone-contracts-repo
       #            - docker-build-chainflip-engine
       #            - docker-build-state-chain-node
-#      - create-testnet:
-#          name: Destroy tesnet
-#          extra_args: "--destroy"
-#          requires:
-#            - cargo-integration-tests
-#          context:
-#            - ghcr-credentials
-#            - do-credentials
-#            - infura-endpoints
+      - create-testnet:
+          name: Destroy testnet
+          extra_args: "--destroy"
+          requires:
+            - cargo-integration-tests
+          context:
+            - ghcr-credentials
+            - do-credentials
+            - infura-endpoints
 
 ######################## /Workflows ########################
 
@@ -339,7 +339,17 @@ jobs:
             poetry install --quiet
             poetry run brownie run deploy_and --network hardhat
       - run: |
-          cargo test --package chainflip-engine --test rotation_end_to_end -- vault_rotation_end_to_end --exact --nocapture
+          export WS_ENDPOINT=$(echo "wss://bashful-$CIRCLE_BRANCH-node.chainflip.xyz" | tr \/ -)
+          echo -n $SNOW_WHITE_SIGNING_KEY > signing_key_file
+          echo -n $ETH_PRIVATE_KEY > private_key_file
+          cargo test \
+          --package chainflip-engine \
+          --test rotation_end_to_end \
+          -- vault_rotation_end_to_end --exact --nocapture \
+          --eth.node_endpoint=$ETH__NODE_ENDPOINT \
+          --state_chain.ws_endpoint=$WS_ENDPOINT \
+          --eth.private_key_file=private_key_file \
+          --state_chain.signing_key_file=signing_key_file
           sccache --show-stats
 
   cargo-build-and-test-validator-package:
