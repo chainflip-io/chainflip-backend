@@ -40,16 +40,10 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
-    // We set this to Some when we have a running task
-    // let mut option_handle: Option<JoinHandle<()>> = None;
-
     let mut option_handle_window: Option<(JoinHandle<()>, Arc<Mutex<BlockHeightWindow>>)> = None;
 
     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
-    // let our_window: Arc<Mutex<Option<BlockHeightWindow>>> = Arc::new(Mutex::new(None));
-
-    // we only need to update the thread if we receive a new window
     while let Some(received_window) = window_receiver.recv().await {
         if let Some((handle, our_window)) = option_handle_window.take() {
             // if we already have a thread, we want to tell it when to stop and await on it
@@ -59,14 +53,15 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
             }
         } else {
             let our_window = Arc::new(Mutex::new(received_window.clone()));
+
+            // clone for capture by tokio task
+            let our_window_c = our_window.clone();
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
             let state_chain_client = state_chain_client.clone();
-            let our_window_c = our_window.clone();
             option_handle_window = Some((
                 tokio::spawn(async move {
-                    // pass the from into the event stream and then we want to cancel when we're done
                     let mut event_stream = stake_manager
                         .event_stream(&web3, received_window.from, &logger)
                         .await
@@ -76,7 +71,8 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                         let event = result_event.expect("should be valid event type");
                         if let Some(window_to) = (*our_window.lock().await).to {
                             if event.block_number > window_to {
-                                // exit task
+                                // we have reached the block height we wanted to witness up to
+                                break;
                             }
                         }
 
@@ -134,8 +130,6 @@ pub struct StakeManager {
     contract: ethabi::Contract,
 }
 
-// TODO: ClaimRegistered, FlipSupplyUpdated, MinStakeChanged, not used
-// so they are just using the ethabi encoding atm
 /// Represents the events that are expected from the StakeManager contract.
 #[derive(Debug)]
 pub enum StakeManagerEvent {
