@@ -37,8 +37,8 @@ chainflip-engine:
     log: trace
   config:
     eth:
-      key_manager_eth_address: "0x36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"
-      stake_manager_eth_address: "0x9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"
+      key_manager_eth_address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      stake_manager_eth_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
   nodeSelector:
     type: validator
   resources: {}
