@@ -9,7 +9,12 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::{
     logging,
     multisig::{
-        client::{self, keygen::KeygenInfo, signing::SigningInfo, SigningOutcome},
+        client::{
+            self,
+            keygen::{KeygenInfo, KeygenOptions},
+            signing::SigningInfo,
+            SigningOutcome,
+        },
         KeyDBMock, KeyId, MessageHash, MultisigEvent, MultisigInstruction,
     },
     p2p::{
@@ -194,6 +199,7 @@ async fn distributed_signing() {
             mock_channel_event_handler_receiver,
             p2p_message_command_tx,
             shutdown_client_rx,
+            KeygenOptions::allowing_high_pubkey(),
             &logger,
         );
 

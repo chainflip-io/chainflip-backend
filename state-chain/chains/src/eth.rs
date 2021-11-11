@@ -163,7 +163,7 @@ impl From<ParityBit> for Uint {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AggKey {
-	/// The public key as a 32-byte array.
+	/// X coordinate of the public key as a 32-byte array.
 	pub pub_key_x: [u8; 32],
 	/// The parity bit can be odd or even.
 	pub pub_key_y_parity: ParityBit,
@@ -367,8 +367,8 @@ impl TryFrom<Vec<u8>> for AggKey {
 }
 
 #[cfg(feature = "std")]
-impl From<secp256k1::PublicKey> for AggKey {
-	fn from(key: secp256k1::PublicKey) -> Self {
+impl From<&secp256k1::PublicKey> for AggKey {
+	fn from(key: &secp256k1::PublicKey) -> Self {
 		AggKey::from_pubkey_compressed(key.serialize())
 	}
 }
@@ -417,6 +417,7 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	}
 }
 
+/// Required information to construct and sign an ethereum transaction. Equivalent to
 /// Required information to construct and sign an ethereum transaction. Equivalent to
 /// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
