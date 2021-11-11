@@ -151,7 +151,7 @@ impl EthBroadcaster {
 
 #[async_trait]
 pub trait EthObserver {
-    type ContractEvent: std::fmt::Debug + 'static;
+    type ContractEvent: std::fmt::Debug + 'static + Send;
 
     async fn event_stream(
         &self,

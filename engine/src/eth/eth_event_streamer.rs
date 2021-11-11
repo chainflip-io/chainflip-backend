@@ -34,7 +34,7 @@ impl<EventEnum: Debug> std::fmt::Display for Event<EventEnum> {
     }
 }
 
-impl<EventEnum: Debug> Event<EventEnum> {
+impl<EventEnum: Debug + Send> Event<EventEnum> {
     pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(
         decode_log: &LogDecoder,
         log: Log,
@@ -65,7 +65,7 @@ impl<EventEnum: Debug> Event<EventEnum> {
 
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
-    EventEnum: Debug,
+    EventEnum: Debug + Send,
     LogDecoder: Fn(H256, RawLog) -> Result<EventEnum> + 'static,
 >(
     web3: &Web3<WebSocket>,
