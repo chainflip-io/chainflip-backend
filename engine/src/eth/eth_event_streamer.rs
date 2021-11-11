@@ -13,7 +13,7 @@ use web3::{
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug)]
-pub struct Event<EventEnum: Debug> {
+pub struct Event<EventEnum: Debug + Send> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
     /// The block number at which the event occurred
@@ -22,7 +22,7 @@ pub struct Event<EventEnum: Debug> {
     pub event_enum: EventEnum,
 }
 
-impl<EventEnum: Debug> std::fmt::Display for Event<EventEnum> {
+impl<EventEnum: Debug + Send> std::fmt::Display for Event<EventEnum> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -65,15 +65,15 @@ impl<EventEnum: Debug + Send> Event<EventEnum> {
 
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
-    EventEnum: Debug + Send,
-    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum> + 'static,
+    EventEnum: Debug + Send + Sync,
+    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum> + 'static + Send,
 >(
     web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
     logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = Result<Event<EventEnum>>>>>, anyhow::Error> {
+) -> Result<Box<dyn Stream<Item = Result<Event<EventEnum>>> + Unpin + Send>, anyhow::Error> {
     slog::info!(
         logger,
         "Subscribing to Ethereum events from contract at address: {:?}",
@@ -132,7 +132,7 @@ pub async fn new_eth_event_stream<
 
     slog::info!(logger, "Future logs fetched");
     let logger = logger.clone();
-    Ok(Box::pin(
+    Ok(Box::new(
         tokio_stream::iter(past_logs)
             .map(Ok)
             .chain(future_logs)

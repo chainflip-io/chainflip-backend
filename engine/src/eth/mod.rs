@@ -151,14 +151,16 @@ impl EthBroadcaster {
 
 #[async_trait]
 pub trait EthObserver {
-    type ContractEvent: std::fmt::Debug + 'static + Send;
+    type ContractEvent: std::fmt::Debug + 'static + Send + Sync;
 
     async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<EventStreamerEvent<Self::ContractEvent>>>>>> {
+    ) -> Result<
+        Box<dyn Stream<Item = Result<EventStreamerEvent<Self::ContractEvent>>> + Unpin + Send>,
+    > {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,

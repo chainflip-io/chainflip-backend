@@ -21,7 +21,7 @@ use web3::{
 
 use anyhow::{Context, Result};
 
-use futures::{Future, StreamExt};
+use futures::{pin_mut, Future, StreamExt};
 
 use slog::o;
 
@@ -45,6 +45,7 @@ pub async fn start_key_manager_observer<RPCCLient: StateChainRpcApi>(
         .await?;
 
     Ok(async move {
+        tokio::pin!(event_stream);
         while let Some(result_event) = event_stream.next().await {
             // TODO: Handle unwraps
             let event = result_event.unwrap();

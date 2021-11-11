@@ -24,14 +24,14 @@ use web3::{
 
 use anyhow::{Context, Result};
 
-use futures::{Future, StreamExt};
+use futures::{pin_mut, Future, StreamExt};
 use slog::o;
 
 use super::{decode_shared_event_closure, EthObserver, SharedEvent};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi + Sync + Send>(
-    web3: &Web3<WebSocket>,
+pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi + Sync + Send>(
+    web3: Web3<WebSocket>,
     settings: &settings::Settings,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
@@ -47,6 +47,10 @@ pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi + Sync + S
 
     while let Some(window) = window_receiver.recv().await {
         if option_handle.is_none() {
+            let stake_manager = stake_manager.clone();
+            let web3 = web3.clone();
+            let logger = logger.clone();
+            let state_chain_client = state_chain_client.clone();
             Some(tokio::spawn(async move {
                 // pass the from into the event stream and then we want to cancel when we're done
                 let mut event_stream = stake_manager
@@ -103,6 +107,7 @@ pub async fn start_stake_manager_observer<RPCCLient: StateChainRpcApi + Sync + S
 }
 
 /// A wrapper for the StakeManager Ethereum contract.
+#[derive(Clone)]
 pub struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,

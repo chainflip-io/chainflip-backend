@@ -7,6 +7,7 @@ use chainflip_engine::{
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
+use pallet_cf_vaults::BlockHeightWindow;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -56,6 +57,12 @@ async fn main() {
     let eth_broadcaster =
         EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
 
+    // TODO: multi consumer, single producer?
+    let (sm_window_sender, sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -96,13 +103,12 @@ async fn main() {
         ),
         // Start eth components
         stake_manager::start_stake_manager_observer(
-            &web3,
+            web3.clone(),
             &settings,
+            sm_window_receiver,
             state_chain_client.clone(),
             &root_logger
-        )
-        .await
-        .expect("Could not start StakeManager witness"),
+        ),
         key_manager::start_key_manager_observer(
             &web3,
             &settings,
