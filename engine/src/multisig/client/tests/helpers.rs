@@ -763,6 +763,11 @@ impl KeygenContext {
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
             println!("Signing ceremony took: {:?}", instant.elapsed());
 
+            // Consume the Signing Outcomes so its clean for the unit tests
+            for idx in SIGNER_IDXS.iter() {
+                clear_channel(&mut rxs[idx.clone()]).await;
+            }
+
             ValidSigningStates {
                 sign_phase1,
                 sign_phase2,
