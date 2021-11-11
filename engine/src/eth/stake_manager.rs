@@ -41,91 +41,88 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
     slog::info!(logger, "Starting");
 
     // We set this to Some when we have a running task
-    let mut option_handle: Option<JoinHandle<()>> = None;
+    // let mut option_handle: Option<JoinHandle<()>> = None;
+
+    let mut option_handle_window: Option<(JoinHandle<()>, Arc<Mutex<BlockHeightWindow>>)> = None;
 
     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
-    let our_window: Arc<Mutex<Option<BlockHeightWindow>>> = Arc::new(Mutex::new(None));
+    // let our_window: Arc<Mutex<Option<BlockHeightWindow>>> = Arc::new(Mutex::new(None));
 
     // we only need to update the thread if we receive a new window
-    while let Some(window) = window_receiver.recv().await {
-        // only one witnesser at a time
-        if let Some(handle) = option_handle.take() {
-            // we already have a task running, we want to chat with it through the ArcMutex
-            if let Some(window_to) = window.to {
-                our_window
-                    .lock()
-                    .await
-                    .expect("Must have a window to start thread")
-                    .to = Some(window_to);
+    while let Some(received_window) = window_receiver.recv().await {
+        if let Some((handle, our_window)) = option_handle_window.take() {
+            // if we already have a thread, we want to tell it when to stop and await on it
+            if let Some(window_to) = received_window.to {
+                our_window.lock().await.to = Some(window_to);
                 handle.await.unwrap();
             }
         } else {
-            let our_window = our_window.clone();
-            *our_window.lock().await = Some(window);
+            let our_window = Arc::new(Mutex::new(received_window.clone()));
             let stake_manager = stake_manager.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
             let state_chain_client = state_chain_client.clone();
-            option_handle = Some(tokio::spawn(async move {
-                // pass the from into the event stream and then we want to cancel when we're done
-                let mut event_stream = stake_manager
-                    .event_stream(&web3, window.from, &logger)
-                    .await
-                    .unwrap();
+            let our_window_c = our_window.clone();
+            option_handle_window = Some((
+                tokio::spawn(async move {
+                    // pass the from into the event stream and then we want to cancel when we're done
+                    let mut event_stream = stake_manager
+                        .event_stream(&web3, received_window.from, &logger)
+                        .await
+                        .unwrap();
 
-                while let Some(result_event) = event_stream.next().await {
-                    let event = result_event.expect("should be valid event type");
-                    if let Some(window_to) = (*our_window.lock().await)
-                        .expect("must have window to start stream")
-                        .to
-                    {
-                        if event.block_number > window_to {
-                            // exit task
+                    while let Some(result_event) = event_stream.next().await {
+                        let event = result_event.expect("should be valid event type");
+                        if let Some(window_to) = (*our_window.lock().await).to {
+                            if event.block_number > window_to {
+                                // exit task
+                            }
+                        }
+
+                        match event.event_enum {
+                            StakeManagerEvent::Staked {
+                                account_id,
+                                amount,
+                                staker: _,
+                                return_addr,
+                            } => {
+                                let _ = state_chain_client
+                                    .submit_extrinsic(
+                                        &logger,
+                                        pallet_cf_witnesser_api::Call::witness_staked(
+                                            account_id,
+                                            amount,
+                                            return_addr.0,
+                                            event.tx_hash,
+                                        ),
+                                    )
+                                    .await;
+                            }
+                            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                                let _ = state_chain_client
+                                    .submit_extrinsic(
+                                        &logger,
+                                        pallet_cf_witnesser_api::Call::witness_claimed(
+                                            account_id,
+                                            amount,
+                                            event.tx_hash,
+                                        ),
+                                    )
+                                    .await;
+                            }
+                            event => {
+                                slog::warn!(
+                                    logger,
+                                    "{:?} is not to be submitted to the State Chain",
+                                    event
+                                );
+                            }
                         }
                     }
-
-                    match event.event_enum {
-                        StakeManagerEvent::Staked {
-                            account_id,
-                            amount,
-                            staker: _,
-                            return_addr,
-                        } => {
-                            let _ = state_chain_client
-                                .submit_extrinsic(
-                                    &logger,
-                                    pallet_cf_witnesser_api::Call::witness_staked(
-                                        account_id,
-                                        amount,
-                                        return_addr.0,
-                                        event.tx_hash,
-                                    ),
-                                )
-                                .await;
-                        }
-                        StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                            let _ = state_chain_client
-                                .submit_extrinsic(
-                                    &logger,
-                                    pallet_cf_witnesser_api::Call::witness_claimed(
-                                        account_id,
-                                        amount,
-                                        event.tx_hash,
-                                    ),
-                                )
-                                .await;
-                        }
-                        event => {
-                            slog::warn!(
-                                logger,
-                                "{:?} is not to be submitted to the State Chain",
-                                event
-                            );
-                        }
-                    }
-                }
-            }));
+                }),
+                our_window_c,
+            ))
         }
     }
 }
