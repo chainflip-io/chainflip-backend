@@ -231,10 +231,20 @@ workflows:
           type: approval
       - create-testnet:
           <<: *only_main_branches
-          name: Destroy testnet
+          name: Manually destroy testnet
           extra_args: "--destroy"
           requires:
             - hold
+          context:
+            - ghcr-credentials
+            - do-credentials
+            - infura-endpoints
+      - create-testnet:
+          <<: *only_main_branches
+          name: Destroy testnet
+          extra_args: "--destroy"
+          requires:
+            - cargo-integration-tests
           context:
             - ghcr-credentials
             - do-credentials
