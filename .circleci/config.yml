@@ -339,9 +339,11 @@ jobs:
             poetry run brownie run deploy_and --network hardhat
       - run: |
           export WS_ENDPOINT=$(echo "bashful-$CIRCLE_BRANCH-node.chainflip.xyz" | tr \/ -)
+          mkdir config
           echo -n $SNOW_WHITE_SIGNING_KEY > signing_key_file
           echo -n $ETH_PRIVATE_KEY > private_key_file
           cat engine/config/End2End.toml | envsubst > engine/config/SnowWhite.toml
+          cat engine/config/End2End.toml | envsubst > config/SnowWhite.toml
           cargo test \
           --package chainflip-engine \
           --test rotation_end_to_end \
