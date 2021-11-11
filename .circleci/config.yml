@@ -227,12 +227,14 @@ workflows:
             - git-clone-contracts-repo
             - docker-build-chainflip-engine
             - docker-build-state-chain-node
+      - hold:
+          type: approval
       - create-testnet:
           <<: *only_main_branches
           name: Destroy testnet
           extra_args: "--destroy"
           requires:
-            - cargo-integration-tests
+            - hold
           context:
             - ghcr-credentials
             - do-credentials
