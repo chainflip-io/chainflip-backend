@@ -191,7 +191,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - (BadOrigin)[frame_system::error::BadOrigin)
+		/// - [BadOrigin](frame_system::error::BadOrigin)
 		///
 		/// ## Dependencies
 		///
