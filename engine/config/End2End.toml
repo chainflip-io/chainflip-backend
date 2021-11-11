@@ -5,7 +5,7 @@
 [state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "signing_key_file"
-ws_endpoint = "$WS_ENDPOINT"
+ws_endpoint = "wss://$WS_ENDPOINT"
 
 [eth]
 from_block = 0

@@ -338,7 +338,7 @@ jobs:
             poetry install --quiet
             poetry run brownie run deploy_and --network hardhat
       - run: |
-          export WS_ENDPOINT=$(echo "wss://bashful-$CIRCLE_BRANCH-node.chainflip.xyz" | tr \/ -)
+          export WS_ENDPOINT=$(echo "bashful-$CIRCLE_BRANCH-node.chainflip.xyz" | tr \/ -)
           echo -n $SNOW_WHITE_SIGNING_KEY > signing_key_file
           echo -n $ETH_PRIVATE_KEY > private_key_file
           cat engine/config/End2End.toml | envsubst > engine/config/SnowWhite.toml
