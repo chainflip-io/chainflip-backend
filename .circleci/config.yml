@@ -7,7 +7,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-        - feature/ch2224-vault-rotations
+        - full-check
 ignore_main_branches: &ignore_main_branches
   filters:
     branches:
@@ -16,7 +16,7 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-        - feature/ch2224-vault-rotations
+        - full-check
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -143,7 +143,7 @@ workflows:
       - cargo-doc-validator-package:
           context:
             - ghcr-credentials
-              - github-credentials
+            - github-credentials
 
   chainflip-backend-checks:
     when:
