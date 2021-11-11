@@ -9,11 +9,9 @@ use chainflip_engine::{
 
 use futures::stream::StreamExt;
 
-mod common;
-
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
@@ -38,14 +36,17 @@ pub async fn test_all_key_manager_events() {
 
     assert!(
         !km_events.is_empty(),
-        "{}",
-        common::EVENT_STREAM_EMPTY_MESSAGE
+        r#"
+Event stream was empty.
+- Have you run the setup script to deploy/run the contracts?
+- Are you pointing to the correct contract address?
+"#
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -63,10 +64,16 @@ pub async fn test_all_key_manager_events() {
                     assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                     true
 
-                } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
+                } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap() && event.block_number==21{
 
                     assert_eq!(signed,&false);
                     assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                    true
+
+                 } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap() && event.block_number==19{
+
+                    assert_eq!(signed,&false);
+                    assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                     true
 
                  } else if new_key == &ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap(){
@@ -79,9 +86,8 @@ pub async fn test_all_key_manager_events() {
                     panic!("KeyChange event with unexpected key: {:?}", new_key);
                 }
             }
-            KeyManagerEvent::Refunded { .. } => {
+            KeyManagerEvent::Shared(_) => {
                 true
             },
-        }
-        ).unwrap();
+        }).unwrap();
 }

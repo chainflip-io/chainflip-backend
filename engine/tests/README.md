@@ -1,10 +1,10 @@
 # CFE Integration Tests
 
-This folder contains the "integration tests" (as Cargo calls them) for the CFE. This is treated as a separate module to the rest of the code. Thus code in these tests can only access public methods (and therefore should only test public methods).
+This folder contains the "integration tests" (as Cargo calls them) for the CFE.
 
 ## First time setup
 
-In order to run the integration there is setup required.
+In order to run the integration tests you must go through the following setup process.
 
 ### Linux
 
@@ -18,44 +18,33 @@ pip install eth-brownie
 pip install umbral
 ```
 
-### Install Node.js and Ganache
+### Install Node.js and Hardhat
 
 ```sh
+# These 3 steps install globally
 sudo apt install nodejs
 sudo apt-get update
 sudo apt install npm
-sudo npm install -g ganache-cli
-```
 
-### Install Docker
-
-```sh
-sudo apt install docker.io
-```
-
-### Install Nats
-
-First run docker and then download nats.
-
-```sh
-sudo dockerd
-docker pull nats:latest
+# Hardhat is used through a local install in your project. So navigate into the `eth-contracts` repo 
+npm install --save-dev hardhat
 ```
 
 ## Running the integration tests
 
-First get an instance of Docker, Nats and Ganache running
+First get an instance of Hardhat running
 
 ```sh
-sudo dockerd
-sudo docker run -p 4222:4222 -ti nats:latest
-ganache-cli --port 8545 --gasLimit 12000000 --accounts 10 --hardfork istanbul --mnemonic brownie
+npx hardhat node
 ```
 
 Then run the [setup script](scripts/setup.sh) that creates the events expected by the test. The script will create a a folder and pull the eth-contracts into it from git, so you may want to run the script from a temp folder somewhere. This script will also download and install [poetry](https://github.com/python-poetry/poetry) if you don't have it already.
 
+Finally, the script will deploy all the Chainflip contracts, and perform transactions that generate all possible events on the StakeManager and the KeyManager contracts. These events are what are asserted against within the integration tests.
+
 ```sh
-bash chainflip-backend/engine/tests/scripts/setup.sh
+cd `engine/tests`
+./scripts/setup.sh
 ```
 
 Now we can run the stake_manager_integration or key_manager_integration tests with cargo.
@@ -65,15 +54,9 @@ cargo test --package chainflip-engine --test stake_manager_integration -- test_a
 cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
 ```
 
-## How It Works
-
-The current tests work be checking that expected events arrive as expected from a particular expected subject on the message queue. This tests everything from message decoding, to the message routing.
-
-This is done using a message queue client spawned within the test function, that polls the queue for events. After events are received they can be deserialized and compared to the expected events.
-
 ## Running Subsets of Tests
 
-### Running All Tests
+### Running All Tests in the CFE
 
 ```sh
 cargo test -p chainflip-engine

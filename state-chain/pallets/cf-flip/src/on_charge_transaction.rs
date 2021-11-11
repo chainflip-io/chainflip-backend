@@ -1,7 +1,7 @@
 //! Chainflip transaction fees.
 //!
-//! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage 'good'
-//! behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
+//! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage
+//! 'good' behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
 use frame_support::{pallet_prelude::InvalidTransaction, traits::Imbalance};
@@ -48,8 +48,8 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
 		if let Some(surplus) = escrow {
-			// It's possible the account was deleted during extrinsic execution. If this is the case,
-			// we shouldn't refund anything, we can just burn all fees in escrow.
+			// It's possible the account was deleted during extrinsic execution. If this is the
+			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
 				corrected_fee
 			} else {

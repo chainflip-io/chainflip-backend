@@ -28,3 +28,8 @@ mod tests {
         assert_ok!(works());
     }
 }
+
+#[test]
+fn test_stuff() {
+    println!("Here's the file and line number: {} : {}", file!(), line!())
+}

@@ -17,11 +17,9 @@ use sp_runtime::AccountId32;
 
 use web3::types::U256;
 
-mod common;
-
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
@@ -46,14 +44,17 @@ pub async fn test_all_stake_manager_events() {
 
     assert!(
         !sm_events.is_empty(),
-        "{}",
-        common::EVENT_STREAM_EMPTY_MESSAGE
+        r#"
+Event stream was empty.
+- Have you run the setup script to deploy/run the contracts?
+- Are you pointing to the correct contract address?
+"#
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     sm_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -79,7 +80,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -108,7 +109,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             StakeManagerEvent::ClaimExecuted {
                 account_id, amount, ..
             } => {
@@ -126,7 +127,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -148,7 +149,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match event {
+        .find(|event| match &event.event_enum {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,

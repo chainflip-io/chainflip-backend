@@ -1,4 +1,4 @@
-use chainflip_engine::{logging::utils::create_cli_logger, settings::Settings, state_chain};
+use chainflip_engine::{logging::utils::new_cli_logger, settings::Settings, state_chain};
 use tokio_stream::StreamExt;
 
 /// Timeout the test if we don't get to the next step in this many blocks
@@ -9,14 +9,14 @@ const MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS: i32 = 12;
 /// This test should be run on a fresh network
 #[tokio::test]
 pub async fn vault_rotation_end_to_end() {
-    let root_logger = create_cli_logger();
+    let root_logger = new_cli_logger();
 
     // ensure this is pointing to snow white's settings
     let settings = Settings::from_file("config/SnowWhite.toml")
         .expect("Failed to read settings `config/SnowWhite.toml`");
 
     let (state_chain_client, mut state_chain_block_stream) =
-        state_chain::client::connect_to_state_chain(&settings)
+        state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .expect("Could not connect to state chain");
 
@@ -34,17 +34,20 @@ pub async fn vault_rotation_end_to_end() {
                 .into(),
             )),
         )
-        .await;
+        .await
+        .expect("Should submit sudo governance proposal");
 
     // approve(1)
     state_chain_client
         .submit_extrinsic(&root_logger, pallet_cf_governance::Call::approve(1))
-        .await;
+        .await
+        .expect("Should submit approve governance call");
 
     // execute(1)
     state_chain_client
         .submit_extrinsic(&root_logger, pallet_cf_governance::Call::execute(1))
-        .await;
+        .await
+        .expect("Should submit execute governance call");
 
     // ======= Rotation should begin now =======
 
@@ -61,27 +64,34 @@ pub async fn vault_rotation_end_to_end() {
     // now monitor for the events we expect
     'block_loop: while let Some(result_block_header) = state_chain_block_stream.next().await {
         let block_header = result_block_header.expect("Should be valid block header");
-        match state_chain_client.events(&block_header).await {
+        match state_chain_client.get_events(&block_header).await {
             Ok(events) => {
                 for (_phase, event, _topics) in events {
                     match event {
-                        state_chain_runtime::Event::pallet_cf_vaults(
-                            pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _keygen_request),
+                        state_chain_runtime::Event::Vaults(
+                            pallet_cf_vaults::Event::KeygenRequest(
+                                ceremony_id,
+                                _keygen_request,
+                                validator_candidates,
+                            ),
                         ) => {
                             slog::info!(
                                 root_logger,
                                 "KeygenRequest emitted for ceremony_id: {:?}",
                                 1
                             );
+                            assert!(validator_candidates.len() > 1);
                             assert_eq!(order_counter, 1);
                             assert_eq!(ceremony_id, 1);
                             order_counter += 1;
                             block_counter = 0;
                         }
-                        state_chain_runtime::Event::pallet_cf_vaults(
-                            pallet_cf_vaults::Event::ThresholdSignatureRequest(
+                        state_chain_runtime::Event::EthereumThresholdSigner(
+                            pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
                                 ceremony_id,
-                                _signature_request,
+                                _key_id,
+                                _validators,
+                                _payload,
                             ),
                         ) => {
                             slog::info!(
@@ -94,7 +104,7 @@ pub async fn vault_rotation_end_to_end() {
                             order_counter += 1;
                             block_counter = 0;
                         }
-                        state_chain_runtime::Event::pallet_cf_validator(
+                        state_chain_runtime::Event::Validator(
                             pallet_cf_validator::Event::NewEpoch(epoch_index),
                         ) => {
                             slog::info!(

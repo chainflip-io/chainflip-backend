@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(test)]
 mod mock;
@@ -8,10 +8,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 mod imbalances;
 mod on_charge_transaction;
 
-use cf_traits::Slashing;
+pub mod weights;
+pub use weights::WeightInfo;
+
+use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -35,6 +41,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::StakeHandler;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -65,6 +72,12 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
+
+		/// Providing updates on staking activity
+		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -101,7 +114,8 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some imbalance could not be settled and the remainder will be reverted. [reverted_to, amount]
+		/// Some imbalance could not be settled and the remainder will be reverted. [reverted_to,
+		/// amount]
 		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
 
 		/// An imbalance has been settled. [source, dest, amount_settled, amount_reverted]
@@ -126,7 +140,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
 			slashing_rate: T::Balance,
@@ -147,9 +161,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				total_issuance: Zero::zero(),
-			}
+			Self { total_issuance: Zero::zero() }
 		}
 	}
 
@@ -165,8 +177,8 @@ pub mod pallet {
 /// All balance information for a Flip account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct FlipAccount<Amount> {
-	/// Amount that has been staked and is considered as a bid in the validator auction. Includes any bonded
-	/// and vesting funds. Excludes any funds in the process of being claimed.
+	/// Amount that has been staked and is considered as a bid in the validator auction. Includes
+	/// any bonded and vesting funds. Excludes any funds in the process of being claimed.
 	stake: Amount,
 
 	/// Amount that is bonded due to validator status and cannot be withdrawn.
@@ -218,9 +230,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Sets the validator bond for an account.
 	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
-		Account::<T>::mutate_exists(account_id, |maybe_account| match maybe_account.as_mut() {
-			Some(account) => account.validator_bond = amount,
-			None => {}
+		Account::<T>::mutate_exists(account_id, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				account.validator_bond = amount
+			}
 		})
 	}
 
@@ -233,8 +246,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Debits an account's staked balance.
 	///
-	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level
-	/// account exists so should only be used with accounts that are known to exist.
+	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that
+	/// the `System`-level account exists so should only be used with accounts that are known to
+	/// exist.
 	///
 	/// Use [try_debit](Self::try_debit) instead when the existence of the account is unsure.
 	///
@@ -243,22 +257,24 @@ impl<T: Config> Pallet<T> {
 		Surplus::from_acct(account_id, amount)
 	}
 
-	/// Debits an account's staked balance, if the account exists and sufficient funds are available, otherwise returns `None`.
-	/// Unlike [debit](Self::debit), does not create the account if it doesn't exist.
+	/// Debits an account's staked balance, if the account exists and sufficient funds are
+	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
+	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
 		Surplus::try_from_acct(account_id, amount)
 	}
 
-	/// Credits an account with some staked funds. If the amount provided would result in overflow, does nothing.
+	/// Credits an account with some staked funds. If the amount provided would result in overflow,
+	/// does nothing.
 	///
-	/// Crediting an account creates a deficit since we need to take the credited funds from somewhere. In a sense we
-	/// have spent money we don't have.
+	/// Crediting an account creates a deficit since we need to take the credited funds from
+	/// somewhere. In a sense we have spent money we don't have.
 	pub fn credit(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_acct(account_id, amount)
 	}
 
-	/// Tries to settle an imbalance against an account. Returns `Ok(())` if the whole amount was settled, otherwise
-	/// an `Err` containing any remaining imbalance.
+	/// Tries to settle an imbalance against an account. Returns `Ok(())` if the whole amount was
+	/// settled, otherwise an `Err` containing any remaining imbalance.
 	fn try_settle(
 		account_id: &T::AccountId,
 		imbalance: FlipImbalance<T>,
@@ -268,31 +284,31 @@ impl<T: Config> Pallet<T> {
 				let amount = surplus.peek();
 				surplus
 					.offset(Self::credit(account_id, amount))
+					.same()
 					.map(SignedImbalance::Positive)
 					.unwrap_or_else(SignedImbalance::Negative)
-			}
+			},
 			SignedImbalance::Negative(deficit) => {
 				let amount = deficit.peek();
 				deficit
 					.offset(Self::debit(account_id, amount))
+					.same()
 					.map(SignedImbalance::Negative)
 					.unwrap_or_else(SignedImbalance::Positive)
-			}
+			},
 		}
 		.drop_zero()
 	}
 
-	/// Settles an imbalance against an account. Any excess is reverted to source according to the rules defined in
-	/// RevertImbalance.
+	/// Settles an imbalance against an account. Any excess is reverted to source according to the
+	/// rules defined in RevertImbalance.
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
 		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
 		let (from, to, amount) = match &imbalance {
-			SignedImbalance::Positive(surplus) => {
-				(surplus.source.clone(), settlement_source, surplus.peek())
-			}
-			SignedImbalance::Negative(deficit) => {
-				(settlement_source, deficit.source.clone(), deficit.peek())
-			}
+			SignedImbalance::Positive(surplus) =>
+				(surplus.source.clone(), settlement_source, surplus.peek()),
+			SignedImbalance::Negative(deficit) =>
+				(settlement_source, deficit.source.clone(), deficit.peek()),
 		};
 
 		let (settled, reverted) = Self::try_settle(account_id, imbalance)
@@ -300,7 +316,8 @@ impl<T: Config> Pallet<T> {
 			.map(|_| (amount, Zero::zero()))
 			// In case of failure, calculate the remainder.
 			.unwrap_or_else(|remaining| {
-				// Note `remaining` will be dropped and automatically reverted at the end of this block.
+				// Note `remaining` will be dropped and automatically reverted at the end of this
+				// block.
 				let (source, remainder) = match remaining {
 					SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
 					SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
@@ -343,15 +360,18 @@ impl<T: Config> Pallet<T> {
 		Surplus::from_reserve(reserve_id, amount)
 	}
 
-	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has
+	/// insufficient funds.
 	pub fn try_withdraw_reserves(
 		reserve_id: ReserveId,
 		amount: T::Balance,
 	) -> Result<Surplus<T>, DispatchError> {
-		Surplus::try_from_reserve(reserve_id, amount).ok_or(Error::<T>::InsufficientReserves.into())
+		Surplus::try_from_reserve(reserve_id, amount)
+			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
-	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.
+	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it
+	/// doesn't exist already.
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
@@ -380,7 +400,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
-	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
+	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
 		Account::<T>::iter().for_each(|(account, _)| {
 			if new_validators.contains(&account) {
 				Self::set_validator_bond(&account, new_bond);
@@ -394,6 +414,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
+	type Handler = T::StakeHandler;
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -406,6 +427,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -416,6 +438,8 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		);
 
 		Self::settle(account_id, Self::bridge_out(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
+
 		Ok(())
 	}
 
@@ -425,13 +449,15 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 		Self::settle(account_id, Self::bridge_in(amount).into());
+		T::StakeHandler::stake_updated(account_id, Self::stakeable_balance(account_id));
 		// claim reverts automatically when dropped
 	}
 }
 
 pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
 
-/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
+/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the
+/// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		let dust = Pallet::<T>::total_balance_of(account_id);
@@ -454,19 +480,19 @@ where
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get the slashing rate
-		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
+		let slashing_rate: T::Balance = SlashingRate::<T>::get();
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
 		// slash per day = n % of MBA
-		let slash_per_day = (bond / T::Balance::from(100 as u32)).saturating_mul(slashing_rate);
+		let slash_per_day = (bond / T::Balance::from(100_u32)).saturating_mul(slashing_rate);
 		// Burn per block
 		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
 		// Total amount of burn
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		// Calc the weight for the operation - assume 1r for slashing rate
-		// + 1r get bond + 1w update bond + 1w update balance
+		// TODO: remove weight calculation and delegate it to benchmarking of the calling pallets
+		// also remove the return type and change the function to void
 		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
 	}
 }

@@ -3,13 +3,13 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
-  "AggKeySignature": "U256",
-  "AuctionRange": "(u32,u32)",
   "Address": "MultiAddress",
   "Amount": "u128",
+  "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
       "Empty",
@@ -22,33 +22,47 @@
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "WaitingForBids": "",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)",
+      "ConfirmedValidators": "(Vec<ValidatorId>, Amount)"
     }
   },
+  "AuctionRange": "(u32,u32)",
+  "AuctionResult": {
+    "winners": "Vec<ValidatorId>",
+    "minimum_active_bid": "Amount"
+  },
   "Bid": "(ValidatorId, Amount)",
+  "BlockHeightWindow": {
+    "from": "u64",
+    "to": "Option<u64>"
+  },
   "BlockNumber": "u32",
+  "BroadcastAttemptId": "u64",
+  "BroadcastStage": {
+    "_enum": [
+      "TransactionSigning",
+      "Transmission"
+    ]
+  },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
-  "Chain": {
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState",
+    "last_active_epoch": "Option<EpochIndex>"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
+    ]
+  },
+  "ChainId": {
     "_enum": [
       "Ethereum"
     ]
-  },
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
-  },
-  "ClaimDetailsFor": {
-    "msg_hash": "Option<AggKeySignature>",
-    "amount": "FlipBalance",
-    "nonce": "Nonce",
-    "address": "EthereumAddress",
-    "expiry": "Duration",
-    "signature": "Option<Signature>"
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
@@ -66,16 +80,7 @@
       "Emissions"
     ]
   },
-  "KeygenRequest": {
-    "chain": "Chain",
-    "validator_candidates": "Vec<ValidatorId>"
-  },
-  "KeygenResponse": {
-    "_enum": {
-      "Success": "(PublicKey)",
-      "Failure": "(Vec<ValidatorId>)"
-    }
-  },
+  "KeyId": "Vec<u8>",
   "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
@@ -83,16 +88,11 @@
     "offline": "u32"
   },
   "Nonce": "u64",
-  "NonceIdentifier": {
-    "_enum": [
-      "Ethereum",
-      "Bitcoin",
-      "Dot"
-    ]
-  },
   "OnlineCreditsFor": "BlockNumber",
-  "PublicKey": "Vec<u8>",
+  "PayloadFor": "Vec<u8>",
   "ProposalId": "u32",
+  "PublicKey": "Vec<u8>",
+  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
@@ -101,31 +101,35 @@
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSigTruncPubkey": {
-    "s": "[u8;32]",
-    "k_times_g_address": "[u8; 20]"
+  "SchnorrVerificationComponents": {
+    "s": "[u8; 32]",
+    "k_times_g_addr": "[u8; 20]"
   },
+  "Signature": "SchnorrVerificationComponents",
+  "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
-  "ValidatorId": "AccountId",
   "TransactionHash": "Vec<u8>",
+  "UnsignedTransactionFor": "Vec<u8>",
+  "ValidatorId": "AccountId",
   "Vault": {
-    "previous_key": "PublicKey",
-    "current_key": "PublicKey",
-    "tx_hash": "TransactionHash"
-  },
-  "VaultRotation": {
-    "new_public_key": "PublicKey",
-    "keygen_request": "KeygenRequest"
-  },
-  "VaultRotationResponse": {
-    "_enum": {
-      "Success": {
-        "tx_hash": "TransactionHash"
-      },
-      "Error": ""
-    }
+    "public_key": "PublicKey",
+    "active_window": "BlockHeightWindow"
   },
   "ValidatorSize": "u32",
+  "VaultRotationStatus": {
+    "_enum": {
+      "AwaitingKeygen": {
+        "ceremony_id": "CeremonyId", 
+        "candidates": "Vec<ValidatorId>"
+      },
+      "AwaitingRotation": {
+        "new_public_key": "Vec<u8>"
+      },
+      "Complete": {
+        "tx_hash": "Vec<u8>"
+      }
+    }
+  },
   "VoteCount": "u32"
 }

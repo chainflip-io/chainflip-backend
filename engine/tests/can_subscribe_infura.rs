@@ -8,12 +8,10 @@ use anyhow::Result;
 use config::{Config, Environment, File};
 use futures::stream::StreamExt;
 
-mod common;
-
 /// Simply runs a test against infura to ensure we can subscribe to infura
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = test_settings_from_file_and_env().unwrap();
 
