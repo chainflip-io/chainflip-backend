@@ -7,6 +7,7 @@ use std::{
 use pallet_cf_vaults::CeremonyId;
 
 use crate::{
+    logging::CEREMONY_IGNORED,
     multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
@@ -67,7 +68,8 @@ where
         if self.inner.is_some() {
             slog::warn!(
                 self.logger,
-                "Request to sign ignored: duplicate ceremony_id"
+                #CEREMONY_IGNORED,
+                "Ceremony ignored: duplicate ceremony_id"
             );
             return;
         }
@@ -113,12 +115,7 @@ where
                     "The value is only None for a brief period of time, when we swap states, below",
                 );
 
-                if stage.should_delay(&data) {
-                    self.add_delayed(sender_id, data);
-                    return None;
-                }
-
-                // Check that the sender is a participant in the ceremony
+                // Check that the sender is a possible participant in the ceremony
                 let sender_idx = match authorised_state.idx_mapping.get_idx(&sender_id) {
                     Some(idx) => idx,
                     None => {
@@ -130,6 +127,12 @@ where
                         return None;
                     }
                 };
+
+                // Check if we should delay this message for the next stage to use
+                if stage.should_delay(&data) {
+                    self.add_delayed(sender_id, data);
+                    return None;
+                }
 
                 if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
                     let stage = authorised_state.stage.take().unwrap();
@@ -226,7 +229,7 @@ where
 
                     slog::warn!(
                         self.logger,
-                        "Keygen ceremony expired before a request to sign, blaming parties: {:?}",
+                        "Ceremony expired before being authorized, blaming parties: {:?}",
                         blamed_ids
                     );
 
@@ -244,7 +247,7 @@ where
 
                     slog::warn!(
                         self.logger,
-                        "Keygen ceremony expired, blaming parties: {:?}",
+                        "Ceremony expired, blaming parties: {:?}",
                         blamed_ids,
                     );
 

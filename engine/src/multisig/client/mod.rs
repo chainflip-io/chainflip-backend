@@ -19,7 +19,7 @@ use std::{collections::HashMap, time::Instant};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
-    logging::CEREMONY_ID_KEY,
+    logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
 };
@@ -216,6 +216,7 @@ where
                     if pending.should_expire_at < Instant::now() {
                         slog::warn!(
                             logger,
+                            #REQUEST_TO_SIGN_EXPIRED,
                             "Request to sign expired waiting for key id: {:?}",
                             key_id;
                             CEREMONY_ID_KEY => pending.signing_info.ceremony_id,
