@@ -2,7 +2,7 @@
 //! the EthEventStreamer
 
 use crate::{common::Mutex, state_chain::client::StateChainClient};
-use std::{convert::TryInto, pin::Pin, sync::Arc};
+use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -24,7 +24,7 @@ use web3::{
 
 use anyhow::{Context, Result};
 
-use futures::{pin_mut, Future, StreamExt};
+use futures::StreamExt;
 use slog::o;
 
 use super::{decode_shared_event_closure, EthObserver, SharedEvent};

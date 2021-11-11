@@ -13,9 +13,9 @@ use thiserror::Error;
 
 use crate::settings;
 use futures::TryFutureExt;
+use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
-use std::{fs::read_to_string, pin::Pin};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,

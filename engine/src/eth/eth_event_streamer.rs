@@ -3,7 +3,7 @@ use futures::TryStreamExt;
 
 use tokio_stream::{Stream, StreamExt};
 
-use std::{fmt::Debug, pin::Pin};
+use std::fmt::Debug;
 use web3::{
     ethabi::RawLog,
     transports::WebSocket,
