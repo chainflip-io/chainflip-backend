@@ -187,11 +187,11 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - ValidatorCFEVersionRecorded
+		/// - [ValidatorCFEVersionRecorded](Event::ValidatorCFEVersionRecorded)
 		///
 		/// ## Errors
 		///
-		/// - BadOrigin
+		/// - (BadOrigin)[frame_system::error::BadOrigin)
 		///
 		/// ## Dependencies
 		///
