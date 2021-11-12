@@ -118,6 +118,9 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     // Instruct (1) to send an invalid secret share to (2)
     ctx.use_invalid_secret_share(1, 2);
 
+    // TODO: test a blame responses sent by nodes not blamed
+    // earlier are ignored
+
     let keygen_states = ctx.generate().await;
 
     // Check that nodes had to go through a blaming stage
@@ -136,15 +139,14 @@ async fn should_report_on_invalid_blame_response() {
 
     let bad_node_idx = 1;
 
-    // Instruct (bad_node_idx) to send an invalid secret share to (2)
+    // Node (bad_node_idx) sends an invalid secret share to (2) and
+    // also sends an invalid blame response later on
     ctx.use_invalid_secret_share(bad_node_idx, 2);
-
-    // TODO: also test invalid shares sent to *different*
-    // parties in *different* stages
-
-    // Instruct (bad_node_idx) to broadcast an invalid secret share at
-    // index (2) during the blaming stage
     ctx.use_invalid_blame_response(bad_node_idx, 2);
+
+    // Node (bad_node_idx + 1) sends an invalid secret share to (3),
+    // but later sends a valid blame response (sent by default)
+    ctx.use_invalid_secret_share(bad_node_idx + 1, 3);
 
     let keygen_states = ctx.generate().await;
 
@@ -156,6 +158,8 @@ async fn should_report_on_invalid_blame_response() {
     let (reason, reported) = keygen_states.key_ready.unwrap_err();
 
     assert_eq!(reason, CeremonyAbortReason::Invalid);
+
+    // Only (bad_node_idx) should be reported
     assert_eq!(
         reported.as_slice(),
         &[AccountId([bad_node_idx as u8 + 1; 32])]
