@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
 use itertools::Itertools;
+use jsonrpc_core::Error;
 use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -794,7 +795,20 @@ async fn check_and_get_signing_outcome(
     let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
         if let Some(outcome) = check_sig_outcome(&mut rxs[idx.clone()]).await {
-            outcomes.push(outcome.clone());
+            // sort the vec of blamed_parties so that we can compare the SigningOutcome's later
+            let sorted_outcome = match &outcome.result {
+                Ok(_) => outcome.clone(),
+                Err((reason, blamed_parties)) => {
+                    let sorted_blamed_parties: Vec<AccountId> =
+                        blamed_parties.iter().sorted().cloned().collect();
+                    SigningOutcome {
+                        id: outcome.id,
+                        result: Err((reason.clone(), sorted_blamed_parties)),
+                    }
+                }
+            };
+
+            outcomes.push(sorted_outcome);
         }
     }
 
@@ -806,8 +820,6 @@ async fn check_and_get_signing_outcome(
         );
 
         for outcome in outcomes.iter() {
-            // TODO: not sure if the list of reported parties is guaranteed to be the
-            // same for all nodes, we might need to add sorting and convert them to sets, then compare.
             assert_eq!(outcome, &outcomes[0], "Outcome different between signers");
         }
 
