@@ -763,9 +763,9 @@ impl KeygenContext {
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
             println!("Signing ceremony took: {:?}", instant.elapsed());
 
-            // Consume the Signing Outcomes so its clean for the unit tests
+            // Make sure the channel is clean for the unit tests
             for idx in SIGNER_IDXS.iter() {
-                clear_channel(&mut rxs[idx.clone()]).await;
+                assert_channel_empty(&mut rxs[idx.clone()]).await;
             }
 
             ValidSigningStates {
@@ -784,8 +784,8 @@ impl KeygenContext {
 // Checks that all signers got the same outcome and returns it
 async fn check_and_get_signing_outcome(
     rxs: &mut Vec<InnerEventReceiver>,
-) -> Option<CeremonyOutcome<u64, SchnorrSignature>> {
-    let mut outcomes: Vec<CeremonyOutcome<u64, SchnorrSignature>> = Vec::new();
+) -> Option<SigningOutcome> {
+    let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
         if let Some(outcome) = check_sig_outcome(&mut rxs[idx.clone()]).await {
             outcomes.push(outcome.clone());
@@ -793,16 +793,22 @@ async fn check_and_get_signing_outcome(
     }
 
     if !outcomes.is_empty() {
-        for outcome in outcomes.iter() {
-            for other_outcome in outcomes.iter() {
-                assert_eq!(outcome, other_outcome, "Outcome different between signers");
-            }
-        }
         assert_eq!(
             outcomes.len(),
             SIGNER_IDXS.len(),
             "Not all signers got an outcome"
         );
+
+        for outcome in outcomes.iter() {
+            // TODO: not sure if the list of reported parties is guaranteed to be the
+            // same for all nodes, we might need to add sorting and convert them to sets, then compare.
+            assert_eq!(outcome, &outcomes[0], "Outcome different between signers");
+        }
+
+        // Consume the outcome message if its all good
+        for idx in SIGNER_IDXS.iter() {
+            recv_next_inner_event_opt(&mut rxs[idx.clone()]).await;
+        }
 
         return Some(outcomes[0].clone());
     }
@@ -823,7 +829,7 @@ pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
 
 /// Consume all messages in the channel, then times out
 pub async fn clear_channel(rx: &mut InnerEventReceiver) {
-    while recv_next_inner_event_opt(rx).await != None {}
+    while let Some(_) = recv_next_inner_event_opt(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
@@ -997,10 +1003,10 @@ impl MultisigClientNoDB {
         let stage = get_stage_for_signing_ceremony(self);
         match stage_number {
             0 => stage == None,
-            1 => stage == Some("BroadcastStage<AwaitCommitments1>".to_string()),
-            2 => stage == Some("BroadcastStage<VerifyCommitmentsBroadcast2>".to_string()),
-            3 => stage == Some("BroadcastStage<LocalSigStage3>".to_string()),
-            4 => stage == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>".to_string()),
+            1 => stage.as_deref().unwrap() == "BroadcastStage<AwaitCommitments1>",
+            2 => stage.as_deref().unwrap() == "BroadcastStage<VerifyCommitmentsBroadcast2>",
+            3 => stage.as_deref().unwrap() == "BroadcastStage<LocalSigStage3>",
+            4 => stage.as_deref().unwrap() == "BroadcastStage<VerifyLocalSigsBroadcastStage4>",
             _ => false,
         }
     }
@@ -1012,11 +1018,11 @@ impl MultisigClientNoDB {
         let stage = get_stage_for_keygen_ceremony(self);
         match stage_number {
             0 => stage == None,
-            1 => stage == Some("BroadcastStage<AwaitCommitments1>".to_string()),
-            2 => stage == Some("BroadcastStage<VerifyCommitmentsBroadcast2>".to_string()),
-            3 => stage == Some("BroadcastStage<SecretSharesStage3>".to_string()),
-            4 => stage == Some("BroadcastStage<ComplaintsStage4>".to_string()),
-            5 => stage == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>".to_string()),
+            1 => stage.as_deref().unwrap() == "BroadcastStage<AwaitCommitments1>",
+            2 => stage.as_deref().unwrap() == "BroadcastStage<VerifyCommitmentsBroadcast2>",
+            3 => stage.as_deref().unwrap() == "BroadcastStage<SecretSharesStage3>",
+            4 => stage.as_deref().unwrap() == "BroadcastStage<ComplaintsStage4>",
+            5 => stage.as_deref().unwrap() == "BroadcastStage<VerifyComplaintsBroadcastStage5>",
             _ => false,
         }
     }
