@@ -7,15 +7,22 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
+use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
+use slog::o;
 use sp_core::H160;
 use thiserror::Error;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::task::JoinHandle;
 
+use crate::common::Mutex;
+use crate::logging::COMPONENT_KEY;
 use crate::settings;
+use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
 use futures::TryFutureExt;
-use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{fs::read_to_string, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
@@ -25,7 +32,7 @@ use web3::{
 };
 
 // TODO: Should this be tokio??
-use futures::Stream;
+use futures::{Stream, StreamExt};
 
 use eth_event_streamer::Event as EventStreamerEvent;
 
@@ -51,6 +58,69 @@ impl SignatureAndEvent {
             signature: event.signature(),
             event: event.clone(),
         })
+    }
+}
+
+pub async fn start_contract_observer<ContractObserver, RPCCLient>(
+    contract_observer: ContractObserver,
+    logger: &slog::Logger,
+    settings: &settings::Settings,
+    web3: Web3<WebSocket>,
+    mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
+    state_chain_client: Arc<StateChainClient<RPCCLient>>,
+) where
+    ContractObserver: 'static + EthObserver + Clone + Sync + Send,
+    RPCCLient: 'static + StateChainRpcApi + Sync + Send,
+{
+    println!("Starting the observer");
+    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
+    slog::info!(logger, "Starting");
+
+    let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
+
+    // let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
+
+    while let Some(received_window) = window_receiver.recv().await {
+        if let Some((handle, end_at_block)) = option_handle_end_block.take() {
+            // if we already have a thread, we want to tell it when to stop and await on it
+            if let Some(window_to) = received_window.to {
+                if let None = *end_at_block.lock().await {
+                    // we now have the block
+                    *end_at_block.lock().await = Some(window_to);
+                    handle.await.unwrap();
+                }
+            } else {
+                panic!("Received two 'end' events in a row. This should not occur.");
+            }
+        } else {
+            let task_end_at_block = Arc::new(Mutex::new(received_window.to));
+
+            // clone for capture by tokio task
+            let task_end_at_block_c = task_end_at_block.clone();
+            let contract_observer = contract_observer.clone();
+            let web3 = web3.clone();
+            let logger = logger.clone();
+            let state_chain_client = state_chain_client.clone();
+            option_handle_end_block = Some((
+                tokio::spawn(async move {
+                    let mut event_stream = contract_observer
+                        .event_stream(&web3, received_window.from, &logger)
+                        .await
+                        .unwrap();
+
+                    while let Some(result_event) = event_stream.next().await {
+                        let event = result_event.expect("should be valid event type");
+                        if let Some(window_to) = *task_end_at_block.lock().await {
+                            if event.block_number > window_to {
+                                // we have reached the block height we wanted to witness up to
+                                break;
+                            }
+                        }
+                    }
+                }),
+                task_end_at_block_c,
+            ))
+        }
     }
 }
 
@@ -175,6 +245,8 @@ pub trait EthObserver {
     fn decode_log_closure(
         &self,
     ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>>;
+
+    async fn handle_event(&self, event: EventEnum);
 
     fn get_deployed_address(&self) -> H160;
 }

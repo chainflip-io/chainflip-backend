@@ -28,6 +28,8 @@ use web3::{
     Web3,
 };
 
+use async_trait::async_trait;
+
 use anyhow::{Context, Result};
 
 use futures::StreamExt;
@@ -84,46 +86,6 @@ pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi 
                             if event.block_number > window_to {
                                 // we have reached the block height we wanted to witness up to
                                 break;
-                            }
-                        }
-
-                        match event.event_enum {
-                            StakeManagerEvent::Staked {
-                                account_id,
-                                amount,
-                                staker: _,
-                                return_addr,
-                            } => {
-                                let _ = state_chain_client
-                                    .submit_extrinsic(
-                                        &logger,
-                                        pallet_cf_witnesser_api::Call::witness_staked(
-                                            account_id,
-                                            amount,
-                                            return_addr.0,
-                                            event.tx_hash,
-                                        ),
-                                    )
-                                    .await;
-                            }
-                            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                                let _ = state_chain_client
-                                    .submit_extrinsic(
-                                        &logger,
-                                        pallet_cf_witnesser_api::Call::witness_claimed(
-                                            account_id,
-                                            amount,
-                                            event.tx_hash,
-                                        ),
-                                    )
-                                    .await;
-                            }
-                            event => {
-                                slog::warn!(
-                                    logger,
-                                    "{:?} is not to be submitted to the State Chain",
-                                    event
-                                );
                             }
                         }
                     }
@@ -200,8 +162,51 @@ pub enum StakeManagerEvent {
     Shared(SharedEvent),
 }
 
+#[async_trait]
 impl EthObserver for StakeManager {
     type ContractEvent = StakeManagerEvent;
+
+    async fn handle_event(&self, event: EventEnum) {
+        match event.event_enum {
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                staker: _,
+                return_addr,
+            } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        &logger,
+                        pallet_cf_witnesser_api::Call::witness_staked(
+                            account_id,
+                            amount,
+                            return_addr.0,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        &logger,
+                        pallet_cf_witnesser_api::Call::witness_claimed(
+                            account_id,
+                            amount,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            event => {
+                slog::warn!(
+                    logger,
+                    "{:?} is not to be submitted to the State Chain",
+                    event
+                );
+            }
+        }
+    }
 
     fn get_deployed_address(&self) -> H160 {
         self.deployed_address
