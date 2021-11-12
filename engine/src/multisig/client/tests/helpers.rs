@@ -12,7 +12,10 @@ use pallet_cf_vaults::CeremonyId;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::multisig::{
-    client::{keygen::{SecretShare3, KeygenOptions}, signing, CeremonyAbortReason},
+    client::{
+        keygen::{KeygenOptions, SecretShare3},
+        signing, CeremonyAbortReason,
+    },
     KeyId, MultisigInstruction,
 };
 

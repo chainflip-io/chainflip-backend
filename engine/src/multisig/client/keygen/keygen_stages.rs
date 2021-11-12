@@ -27,8 +27,8 @@ use keygen::{
     KeygenP2PSender,
 };
 
-use super::KeygenOptions;
 use super::keygen_data::VerifyBlameResponses7;
+use super::KeygenOptions;
 
 type KeygenCeremonyCommon = CeremonyCommon<KeygenData, KeygenP2PSender>;
 
