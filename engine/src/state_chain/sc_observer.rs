@@ -1,5 +1,5 @@
 use cf_chains::ChainId;
-use cf_traits::ChainflipAccountState;
+use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_vaults::BlockHeightWindow;
@@ -49,22 +49,39 @@ pub async fn start<BlockStream, RpcClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
+    // on the first block we get, we want to check our state
+    let mut check_account_state = true;
+    let mut option_account_data_epoch: Option<(ChainflipAccountData, u32)> = None;
+
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
                 let block_hash = block_header.hash();
-                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
 
-                let account_data = state_chain_client
-                    .get_account_data(block_hash)
-                    .await
-                    .unwrap();
+                if check_account_state == true || option_account_data_epoch.is_none() {
+                    let account_data = state_chain_client
+                        .get_account_data(block_hash)
+                        .await
+                        .expect("Could not get account data");
 
-                let current_epoch = state_chain_client
-                    .epoch_at_block(block_hash)
-                    .await
-                    .expect("Could not get current epoch");
+                    let current_epoch = state_chain_client
+                        .epoch_at_block(block_hash)
+                        .await
+                        .expect("Could not get current epoch");
+
+                    option_account_data_epoch = Some((account_data, current_epoch));
+                    if matches!(account_data.state, ChainflipAccountState::Backup)
+                        || matches!(account_data.state, ChainflipAccountState::Passive)
+                    {
+                        check_account_state = true;
+                    } else {
+                        // if we're a validator, we know what state we will be in until the next epoch
+                        check_account_state = false;
+                    }
+                }
+                let (account_data, current_epoch) =
+                    option_account_data_epoch.expect("always initialised on first iteration");
 
                 let is_outgoing = if let Some(last_active_epoch) = account_data.last_active_epoch {
                     last_active_epoch + 1 == current_epoch
@@ -72,29 +89,12 @@ pub async fn start<BlockStream, RpcClient>(
                     false
                 };
 
-                // TODO: we need to do this at the start then just listen for updates, not every time
-                // we want to start witnessing if we're active or outgoing
-                if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator) {
-                    // get the vaults
-                    let eth_vault = state_chain_client
-                        .get_vault(
-                            block_hash,
-                            account_data
-                                .last_active_epoch
-                                .expect("we are active our outgoing"),
-                            ChainId::Ethereum,
-                        )
-                        .await
-                        .unwrap();
-                    sm_window_sender.send(eth_vault.active_window).unwrap();
-                    km_window_sender.send(eth_vault.active_window).unwrap();
-                }
-
                 // We want to submit the heartbeat when we are:
                 // - active
                 // - outgoing
                 // - backup
                 // NOT Passive (unless we are outgoing + passive)
+                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
                 if (matches!(account_data.state, ChainflipAccountState::Validator)
                     || matches!(account_data.state, ChainflipAccountState::Backup)
                     || is_outgoing)
@@ -112,17 +112,36 @@ pub async fn start<BlockStream, RpcClient>(
                         .await;
                 }
 
-                // If we are active or outgoing we want to spawn some shit
-                if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator) {
-                    // we want to start the observers, if they're not already started
-                    // send message to eth observers channel
-                }
-
                 // Process this block's events
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::NewEpoch(_),
+                                ) => {
+                                    if is_outgoing
+                                        || matches!(
+                                            account_data.state,
+                                            ChainflipAccountState::Validator
+                                        )
+                                    {
+                                        let eth_vault = state_chain_client
+                                            .get_vault(
+                                                block_hash,
+                                                account_data
+                                                    .last_active_epoch
+                                                    .expect("we are active our outgoing"),
+                                                ChainId::Ethereum,
+                                            )
+                                            .await
+                                            .unwrap();
+                                        sm_window_sender.send(eth_vault.active_window).unwrap();
+                                        km_window_sender.send(eth_vault.active_window).unwrap();
+                                    }
+                                    // now that we have entered a new epoch, we want to check our state again
+                                    check_account_state = true;
+                                }
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
