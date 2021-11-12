@@ -43,10 +43,17 @@ fn test_simple_polynomial() {
 /// as per Shamir Secret Sharing scheme
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ShamirShare {
-    /// index at which sharing polynomial was evaluated
-    index: usize,
     /// the result of polynomial evaluation
     pub value: Scalar,
+}
+
+#[cfg(test)]
+impl ShamirShare {
+    pub fn create_random() -> Self {
+        ShamirShare {
+            value: Scalar::new_random(),
+        }
+    }
 }
 
 /// Test-only helper function used to sanity check our sharing polynomial
@@ -56,12 +63,11 @@ fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
 
     let all_idxs: Vec<usize> = shares.keys().into_iter().cloned().collect();
 
-    shares.iter().fold(
-        Scalar::zero(),
-        |acc, (index, ShamirShare { index: _, value })| {
+    shares
+        .iter()
+        .fold(Scalar::zero(), |acc, (index, ShamirShare { value })| {
             acc + frost::get_lagrange_coeff(*index, &all_idxs).unwrap() * value
-        },
-    )
+        })
 }
 
 /// Generate challenge against which a ZKP of our secret will be generated
@@ -99,6 +105,12 @@ fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSig
     }
 }
 
+#[derive(Clone)]
+pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
+
+#[derive(Clone)]
+pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
+
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
@@ -106,7 +118,7 @@ pub fn generate_shares_and_commitment(
     context: &str,
     index: usize,
     params: ThresholdParameters,
-) -> (HashMap<usize, ShamirShare>, DKGUnverifiedCommitment) {
+) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
         generate_secret_and_shares(params.share_count, params.threshold);
 
@@ -115,7 +127,10 @@ pub fn generate_shares_and_commitment(
 
     // TODO: zeroize secret here
 
-    (shares, DKGUnverifiedCommitment { commitments, zkp })
+    (
+        OutgoingShares(shares),
+        DKGUnverifiedCommitment { commitments, zkp },
+    )
 }
 
 // NOTE: shares should be sent after participants have exchanged commitments
@@ -144,7 +159,6 @@ fn generate_secret_and_shares(
             (
                 index,
                 ShamirShare {
-                    index,
                     value: evaluate_polynomial([secret].iter().chain(coefficients.iter()), index),
                 },
             )
@@ -160,8 +174,8 @@ fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitm
 }
 
 // (Figure 1: Round 2, Step 2)
-pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
-    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), share.index)
+pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: usize) -> bool {
+    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), index)
 }
 
 /// Commitments to the sharing polynomial coefficient
@@ -329,7 +343,7 @@ mod tests {
                 .iter()
                 .map(|(idx, shares)| {
                     let share = shares[&receiver_idx].clone();
-                    assert!(verify_share(&share, &coeff_commitments[idx]));
+                    assert!(verify_share(&share, &coeff_commitments[idx], receiver_idx));
                     share
                 })
                 .collect();

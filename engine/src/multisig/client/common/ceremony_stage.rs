@@ -64,3 +64,12 @@ where
     pub p2p_sender: Sender,
     pub logger: slog::Logger,
 }
+
+impl<D, Sender> CeremonyCommon<D, Sender>
+where
+    Sender: P2PSender<Data = D>,
+{
+    pub fn is_idx_valid(&self, idx: usize) -> bool {
+        self.all_idxs.contains(&idx)
+    }
+}
