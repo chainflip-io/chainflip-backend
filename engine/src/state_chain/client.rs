@@ -346,7 +346,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     // TODO: work out how to get all vaults with a single query... not sure if possible
     pub async fn get_vault(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
         epoch_index: EpochIndex,
         chain_id: ChainId,
     ) -> Result<Vault> {
@@ -359,7 +359,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         let vault_updates_this_block: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events_at(block_hash, vault_for_epoch_key)
+            .storage_events_at(Some(block_hash), vault_for_epoch_key)
             .await?
             .into_iter()
             .map(|storage_change_set| {

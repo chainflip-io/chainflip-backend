@@ -5,7 +5,6 @@ use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
-    logging::COMPONENT_KEY,
     settings,
     state_chain::client::StateChainRpcApi,
 };
@@ -15,7 +14,6 @@ use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
     types::{H160, H256},
-    Web3,
 };
 
 use anyhow::Result;

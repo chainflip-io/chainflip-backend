@@ -1,3 +1,4 @@
+use cf_chains::ChainId;
 use cf_traits::ChainflipAccountState;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
@@ -70,6 +71,24 @@ pub async fn start<BlockStream, RpcClient>(
                 } else {
                     false
                 };
+
+                // TODO: we need to do this at the start then just listen for updates, not every time
+                // we want to start witnessing if we're active or outgoing
+                if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator) {
+                    // get the vaults
+                    let eth_vault = state_chain_client
+                        .get_vault(
+                            block_hash,
+                            account_data
+                                .last_active_epoch
+                                .expect("we are active our outgoing"),
+                            ChainId::Ethereum,
+                        )
+                        .await
+                        .unwrap();
+                    sm_window_sender.send(eth_vault.active_window).unwrap();
+                    km_window_sender.send(eth_vault.active_window).unwrap();
+                }
 
                 // We want to submit the heartbeat when we are:
                 // - active

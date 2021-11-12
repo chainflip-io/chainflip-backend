@@ -109,7 +109,7 @@ async fn main() {
             km_window_sender,
             &root_logger
         ),
-        // Start eth components
+        // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
             &web3,
