@@ -1,107 +1,32 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use crate::{common::Mutex, state_chain::client::StateChainClient};
-use std::{
-    convert::TryInto,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-};
+use crate::state_chain::client::StateChainClient;
+use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{utils, SignatureAndEvent},
-    logging::COMPONENT_KEY,
     settings,
     state_chain::client::StateChainRpcApi,
 };
 
-use pallet_cf_vaults::BlockHeightWindow;
 use sp_runtime::AccountId32;
 
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
     ethabi::{self, RawLog},
-    transports::WebSocket,
     types::{H160, H256},
-    Web3,
 };
 
 use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use anyhow::{Context, Result};
-
-use futures::StreamExt;
-use slog::o;
+use anyhow::Result;
 
 use super::{
     decode_shared_event_closure, eth_event_streamer::Event, CFContractEvent, EthObserver,
     SharedEvent,
 };
-
-/// Set up the eth event streamer for the StakeManager contract, and start it
-// pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi + Sync + Send>(
-//     web3: Web3<WebSocket>,
-//     settings: &settings::Settings,
-//     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
-//     state_chain_client: Arc<StateChainClient<RPCCLient>>,
-//     logger: &slog::Logger,
-// ) {
-//     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
-//     slog::info!(logger, "Starting");
-
-//     let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
-
-//     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
-
-//     while let Some(received_window) = window_receiver.recv().await {
-//         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
-//             // if we already have a thread, we want to tell it when to stop and await on it
-//             if let Some(window_to) = received_window.to {
-//                 if let None = *end_at_block.lock().await {
-//                     // we now have the block
-//                     *end_at_block.lock().await = Some(window_to);
-//                     handle.await.unwrap();
-//                 }
-//             } else {
-//                 panic!("Received two 'end' events in a row. This should not occur.");
-//             }
-//         } else {
-//             let task_end_at_block = Arc::new(Mutex::new(received_window.to));
-
-//             // clone for capture by tokio task
-//             let task_end_at_block_c = task_end_at_block.clone();
-//             let stake_manager = stake_manager.clone();
-//             let web3 = web3.clone();
-//             let logger = logger.clone();
-//             let state_chain_client = state_chain_client.clone();
-//             option_handle_end_block = Some((
-//                 tokio::spawn(async move {
-//                     let mut event_stream = stake_manager
-//                         .event_stream(&web3, received_window.from, &logger)
-//                         .await
-//                         .unwrap();
-
-//                     while let Some(result_event) = event_stream.next().await {
-//                         let event = result_event.expect("should be valid event type");
-//                         if let Some(window_to) = *task_end_at_block.lock().await {
-//                             if event.block_number > window_to {
-//                                 // we have reached the block height we wanted to witness up to
-//                                 break;
-//                             }
-//                         }
-//                         // handle event
-//                         self.handle_ev
-//                     }
-//                 }),
-//                 task_end_at_block_c,
-//             ))
-//         }
-//     }
-// }
 
 /// A wrapper for the StakeManager Ethereum contract.
 #[derive(Clone)]
@@ -213,18 +138,15 @@ impl EthObserver for StakeManager {
                         .await;
                 }
                 ignored_event => {
-                    // ignore these ones
+                    slog::warn!(
+                        logger,
+                        "{:?} is not to be submitted to the State Chain",
+                        ignored_event
+                    );
                 }
             },
-            ignored_event => {
+            _ => {
                 panic!("We never have events other than StakeManager events here.")
-            }
-            event => {
-                slog::warn!(
-                    logger,
-                    "{:?} is not to be submitted to the State Chain",
-                    event
-                );
             }
         }
     }

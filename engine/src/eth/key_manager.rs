@@ -14,16 +14,11 @@ use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    transports::WebSocket,
     types::{H160, H256},
     Web3,
 };
 
-use anyhow::{Context, Result};
-
-use futures::{Future, StreamExt};
-
-use slog::o;
+use anyhow::Result;
 
 use std::fmt::Debug;
 

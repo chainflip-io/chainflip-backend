@@ -1,6 +1,7 @@
 use cf_traits::ChainflipAccountState;
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
+use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_runtime::AccountId32;
 use std::sync::Arc;
@@ -23,6 +24,10 @@ pub async fn start<BlockStream, RpcClient>(
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
+
+    // TODO: we should be able to factor this out into a single ETH window sender
+    sm_window_sender: UnboundedSender<BlockHeightWindow>,
+    km_window_sender: UnboundedSender<BlockHeightWindow>,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,

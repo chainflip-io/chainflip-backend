@@ -1,10 +1,5 @@
 use chainflip_engine::{
-    eth::{
-        self,
-        key_manager::{self, KeyManager},
-        stake_manager::{self, StakeManager},
-        EthBroadcaster,
-    },
+    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
@@ -109,21 +104,22 @@ async fn main() {
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
+            // send messages to these channels to start witnessing
+            sm_window_sender,
+            km_window_sender,
             &root_logger
         ),
         // Start eth components
         eth::start_contract_observer(
-            &settings,
             stake_manager_contract,
-            web3.clone(),
+            &web3,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
-            &settings,
             key_manager_contract,
-            web3.clone(),
+            &web3,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,

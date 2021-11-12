@@ -66,17 +66,16 @@ impl SignatureAndEvent {
     }
 }
 
+// TODO: Should be able to factor our SharedEvent and have it here
 #[derive(Debug)]
 pub enum CFContractEvent {
     StakeManagerEvent(StakeManagerEvent),
     KeyManagerEvent(KeyManagerEvent),
-    Shared(SharedEvent),
 }
 
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
-    settings: &settings::Settings,
     contract_observer: ContractObserver,
-    web3: Web3<WebSocket>,
+    web3: &Web3<WebSocket>,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
@@ -90,14 +89,12 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 
     let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
 
-    // let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
-
     while let Some(received_window) = window_receiver.recv().await {
         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
             // if we already have a thread, we want to tell it when to stop and await on it
             if let Some(window_to) = received_window.to {
                 if let None = *end_at_block.lock().await {
-                    // we now have the block
+                    // we now have the block we want to end at
                     *end_at_block.lock().await = Some(window_to);
                     handle.await.unwrap();
                 }
@@ -125,6 +122,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                         if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
                                 // we have reached the block height we wanted to witness up to
+                                // so can stop the witness process
                                 break;
                             }
                         }
