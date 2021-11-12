@@ -127,7 +127,6 @@ pub async fn vault_rotation_end_to_end() {
                 panic!("Error getting events: {:?}", e);
             }
         }
-        assert_eq!(order_counter, 3);
         block_counter += 1;
         if block_counter > MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS {
             panic!(
