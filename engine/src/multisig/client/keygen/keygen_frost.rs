@@ -60,8 +60,9 @@ impl ShamirShare {
 #[cfg(test)]
 fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     use crate::multisig::client::signing::frost;
+    use std::collections::BTreeSet;
 
-    let all_idxs: Vec<usize> = shares.keys().into_iter().cloned().collect();
+    let all_idxs: BTreeSet<usize> = shares.keys().into_iter().cloned().collect();
 
     shares
         .iter()

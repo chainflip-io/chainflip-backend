@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client;
@@ -90,7 +90,7 @@ impl CeremonyManager {
         &self,
         participants: &[AccountId],
         validator_map: &PartyIdxMapping,
-    ) -> Result<(usize, Vec<usize>), &'static str> {
+    ) -> Result<(usize, BTreeSet<usize>), &'static str> {
         if !participants.contains(&self.my_account_id) {
             return Err("we are not among participants");
         }

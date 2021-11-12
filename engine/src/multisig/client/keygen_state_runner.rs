@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use pallet_cf_vaults::CeremonyId;
 
@@ -34,7 +34,7 @@ impl KeygenStateRunner {
         event_sender: EventSender,
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,
-        all_idxs: Vec<usize>,
+        all_idxs: BTreeSet<usize>,
         keygen_options: KeygenOptions,
     ) {
         self.idx_mapping = Some(idx_mapping.clone());
