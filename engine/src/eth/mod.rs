@@ -31,12 +31,17 @@ use web3::{
     Web3,
 };
 
+use std::fmt::Debug;
+
 // TODO: Should this be tokio??
 use futures::{Stream, StreamExt};
 
 use eth_event_streamer::Event as EventStreamerEvent;
 
 use async_trait::async_trait;
+
+use self::key_manager::KeyManagerEvent;
+use self::stake_manager::StakeManagerEvent;
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
@@ -61,13 +66,20 @@ impl SignatureAndEvent {
     }
 }
 
+#[derive(Debug)]
+pub enum CFContractEvent {
+    StakeManagerEvent(StakeManagerEvent),
+    KeyManagerEvent(KeyManagerEvent),
+    Shared(SharedEvent),
+}
+
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
-    contract_observer: ContractObserver,
-    logger: &slog::Logger,
     settings: &settings::Settings,
+    contract_observer: ContractObserver,
     web3: Web3<WebSocket>,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
+    logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Clone + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
@@ -116,6 +128,9 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                                 break;
                             }
                         }
+                        contract_observer
+                            .handle_event(event, state_chain_client.clone(), &logger)
+                            .await;
                     }
                 }),
                 task_end_at_block_c,
@@ -221,16 +236,12 @@ impl EthBroadcaster {
 
 #[async_trait]
 pub trait EthObserver {
-    type ContractEvent: std::fmt::Debug + 'static + Send + Sync;
-
     async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<
-        Box<dyn Stream<Item = Result<EventStreamerEvent<Self::ContractEvent>>> + Unpin + Send>,
-    > {
+    ) -> Result<Box<dyn Stream<Item = Result<EventStreamerEvent>> + Unpin + Send>> {
         slog::info!(logger, "Creating new event stream");
         eth_event_streamer::new_eth_event_stream(
             web3,
@@ -244,9 +255,15 @@ pub trait EthObserver {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>>;
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<CFContractEvent> + Send>>;
 
-    async fn handle_event(&self, event: EventEnum);
+    async fn handle_event<RPCClient>(
+        &self,
+        event: EventStreamerEvent,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        logger: &slog::Logger,
+    ) where
+        RPCClient: 'static + StateChainRpcApi + Sync + Send;
 
     fn get_deployed_address(&self) -> H160;
 }

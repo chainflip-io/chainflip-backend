@@ -1,5 +1,10 @@
 use chainflip_engine::{
-    eth::{self, key_manager, stake_manager, EthBroadcaster},
+    eth::{
+        self,
+        key_manager::{self, KeyManager},
+        stake_manager::{self, StakeManager},
+        EthBroadcaster,
+    },
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
@@ -63,6 +68,11 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    let stake_manager_contract =
+        StakeManager::new(&settings).expect("Should create StakeManager contract");
+    let key_manager_contract =
+        KeyManager::new(&settings).expect("Should create KeyManager contract");
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -102,20 +112,21 @@ async fn main() {
             &root_logger
         ),
         // Start eth components
-        stake_manager::start_stake_manager_observer(
-            web3.clone(),
+        eth::start_contract_observer(
             &settings,
+            stake_manager_contract,
+            web3.clone(),
             sm_window_receiver,
             state_chain_client.clone(),
-            &root_logger
+            &root_logger,
         ),
-        key_manager::start_key_manager_observer(
-            &web3,
+        eth::start_contract_observer(
             &settings,
+            key_manager_contract,
+            web3.clone(),
+            km_window_receiver,
             state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start KeyManager witness"),
+            &root_logger,
+        ),
     );
 }

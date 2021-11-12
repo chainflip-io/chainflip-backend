@@ -11,31 +11,33 @@ use web3::{
     Web3,
 };
 
+use super::CFContractEvent;
+
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug)]
-pub struct Event<EventEnum: Debug + Send> {
+pub struct Event {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
     /// The block number at which the event occurred
     pub block_number: u64,
     /// The event specific parameters
-    pub event_enum: EventEnum,
+    pub inner_event: CFContractEvent,
 }
 
-impl<EventEnum: Debug + Send> std::fmt::Display for Event<EventEnum> {
+impl std::fmt::Display for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EventEnum: {:?}; block_number: {}; tx_hash: 0x{}",
-            self.event_enum,
+            "InnerEvent: {:?}; block_number: {}; tx_hash: 0x{}",
+            self.inner_event,
             self.block_number,
             hex::encode(self.tx_hash)
         )
     }
 }
 
-impl<EventEnum: Debug + Send> Event<EventEnum> {
-    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventEnum>>(
+impl Event {
+    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<CFContractEvent>>(
         decode_log: &LogDecoder,
         log: Log,
     ) -> Result<Self> {
@@ -48,7 +50,7 @@ impl<EventEnum: Debug + Send> Event<EventEnum> {
                 .block_number
                 .expect("Should have a block number")
                 .as_u64(),
-            event_enum: decode_log(
+            inner_event: decode_log(
                 *log.topics.first().ok_or_else(|| {
                     anyhow::Error::msg("Could not get event signature from ETH log")
                 })?,
@@ -65,15 +67,14 @@ impl<EventEnum: Debug + Send> Event<EventEnum> {
 
 /// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
-    EventEnum: Debug + Send + Sync,
-    LogDecoder: Fn(H256, RawLog) -> Result<EventEnum> + 'static + Send,
+    LogDecoder: Fn(H256, RawLog) -> Result<CFContractEvent> + 'static + Send,
 >(
     web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
     logger: &slog::Logger,
-) -> Result<Box<dyn Stream<Item = Result<Event<EventEnum>>> + Unpin + Send>, anyhow::Error> {
+) -> Result<Box<dyn Stream<Item = Result<Event>> + Unpin + Send>, anyhow::Error> {
     slog::info!(
         logger,
         "Subscribing to Ethereum events from contract at address: {:?}",
@@ -136,18 +137,16 @@ pub async fn new_eth_event_stream<
         tokio_stream::iter(past_logs)
             .map(Ok)
             .chain(future_logs)
-            .map(
-                move |result_unparsed_log| -> Result<Event<EventEnum>, anyhow::Error> {
-                    let result_event =
-                        result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
+            .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
+                let result_event =
+                    result_unparsed_log.and_then(|log| Event::decode(&decode_log, log));
 
-                    if let Ok(ok_result) = &result_event {
-                        slog::debug!(logger, "Received ETH log {}", ok_result);
-                    }
+                if let Ok(ok_result) = &result_event {
+                    slog::debug!(logger, "Received ETH log {}", ok_result);
+                }
 
-                    result_event
-                },
-            ),
+                result_event
+            }),
     ))
 }
 

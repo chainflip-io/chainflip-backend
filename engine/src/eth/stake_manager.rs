@@ -28,6 +28,8 @@ use web3::{
     Web3,
 };
 
+use std::fmt::Debug;
+
 use async_trait::async_trait;
 
 use anyhow::{Context, Result};
@@ -35,66 +37,71 @@ use anyhow::{Context, Result};
 use futures::StreamExt;
 use slog::o;
 
-use super::{decode_shared_event_closure, EthObserver, SharedEvent};
+use super::{
+    decode_shared_event_closure, eth_event_streamer::Event, CFContractEvent, EthObserver,
+    SharedEvent,
+};
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi + Sync + Send>(
-    web3: Web3<WebSocket>,
-    settings: &settings::Settings,
-    mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
-    state_chain_client: Arc<StateChainClient<RPCCLient>>,
-    logger: &slog::Logger,
-) {
-    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
-    slog::info!(logger, "Starting");
+// pub async fn start_stake_manager_observer<RPCCLient: 'static + StateChainRpcApi + Sync + Send>(
+//     web3: Web3<WebSocket>,
+//     settings: &settings::Settings,
+//     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
+//     state_chain_client: Arc<StateChainClient<RPCCLient>>,
+//     logger: &slog::Logger,
+// ) {
+//     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
+//     slog::info!(logger, "Starting");
 
-    let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
+//     let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
 
-    let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
+//     let stake_manager = StakeManager::new(&settings).context(here!()).unwrap();
 
-    while let Some(received_window) = window_receiver.recv().await {
-        if let Some((handle, end_at_block)) = option_handle_end_block.take() {
-            // if we already have a thread, we want to tell it when to stop and await on it
-            if let Some(window_to) = received_window.to {
-                if let None = *end_at_block.lock().await {
-                    // we now have the block
-                    *end_at_block.lock().await = Some(window_to);
-                    handle.await.unwrap();
-                }
-            } else {
-                panic!("Received two 'end' events in a row. This should not occur.");
-            }
-        } else {
-            let task_end_at_block = Arc::new(Mutex::new(received_window.to));
+//     while let Some(received_window) = window_receiver.recv().await {
+//         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
+//             // if we already have a thread, we want to tell it when to stop and await on it
+//             if let Some(window_to) = received_window.to {
+//                 if let None = *end_at_block.lock().await {
+//                     // we now have the block
+//                     *end_at_block.lock().await = Some(window_to);
+//                     handle.await.unwrap();
+//                 }
+//             } else {
+//                 panic!("Received two 'end' events in a row. This should not occur.");
+//             }
+//         } else {
+//             let task_end_at_block = Arc::new(Mutex::new(received_window.to));
 
-            // clone for capture by tokio task
-            let task_end_at_block_c = task_end_at_block.clone();
-            let stake_manager = stake_manager.clone();
-            let web3 = web3.clone();
-            let logger = logger.clone();
-            let state_chain_client = state_chain_client.clone();
-            option_handle_end_block = Some((
-                tokio::spawn(async move {
-                    let mut event_stream = stake_manager
-                        .event_stream(&web3, received_window.from, &logger)
-                        .await
-                        .unwrap();
+//             // clone for capture by tokio task
+//             let task_end_at_block_c = task_end_at_block.clone();
+//             let stake_manager = stake_manager.clone();
+//             let web3 = web3.clone();
+//             let logger = logger.clone();
+//             let state_chain_client = state_chain_client.clone();
+//             option_handle_end_block = Some((
+//                 tokio::spawn(async move {
+//                     let mut event_stream = stake_manager
+//                         .event_stream(&web3, received_window.from, &logger)
+//                         .await
+//                         .unwrap();
 
-                    while let Some(result_event) = event_stream.next().await {
-                        let event = result_event.expect("should be valid event type");
-                        if let Some(window_to) = *task_end_at_block.lock().await {
-                            if event.block_number > window_to {
-                                // we have reached the block height we wanted to witness up to
-                                break;
-                            }
-                        }
-                    }
-                }),
-                task_end_at_block_c,
-            ))
-        }
-    }
-}
+//                     while let Some(result_event) = event_stream.next().await {
+//                         let event = result_event.expect("should be valid event type");
+//                         if let Some(window_to) = *task_end_at_block.lock().await {
+//                             if event.block_number > window_to {
+//                                 // we have reached the block height we wanted to witness up to
+//                                 break;
+//                             }
+//                         }
+//                         // handle event
+//                         self.handle_ev
+//                     }
+//                 }),
+//                 task_end_at_block_c,
+//             ))
+//         }
+//     }
+// }
 
 /// A wrapper for the StakeManager Ethereum contract.
 #[derive(Clone)]
@@ -158,45 +165,59 @@ pub enum StakeManagerEvent {
         new_min_stake: ethabi::Uint,
     },
 
+    // TODO: Should be able to remove shared from here
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
     Shared(SharedEvent),
 }
 
 #[async_trait]
 impl EthObserver for StakeManager {
-    type ContractEvent = StakeManagerEvent;
-
-    async fn handle_event(&self, event: EventEnum) {
-        match event.event_enum {
-            StakeManagerEvent::Staked {
-                account_id,
-                amount,
-                staker: _,
-                return_addr,
-            } => {
-                let _ = state_chain_client
-                    .submit_extrinsic(
-                        &logger,
-                        pallet_cf_witnesser_api::Call::witness_staked(
-                            account_id,
-                            amount,
-                            return_addr.0,
-                            event.tx_hash,
-                        ),
-                    )
-                    .await;
-            }
-            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let _ = state_chain_client
-                    .submit_extrinsic(
-                        &logger,
-                        pallet_cf_witnesser_api::Call::witness_claimed(
-                            account_id,
-                            amount,
-                            event.tx_hash,
-                        ),
-                    )
-                    .await;
+    async fn handle_event<RPCClient>(
+        &self,
+        event: Event,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        logger: &slog::Logger,
+    ) where
+        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+    {
+        match event.inner_event {
+            CFContractEvent::StakeManagerEvent(sm_event) => match sm_event {
+                StakeManagerEvent::Staked {
+                    account_id,
+                    amount,
+                    staker: _,
+                    return_addr,
+                } => {
+                    let _ = state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_staked(
+                                account_id,
+                                amount,
+                                return_addr.0,
+                                event.tx_hash,
+                            ),
+                        )
+                        .await;
+                }
+                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                    let _ = state_chain_client
+                        .submit_extrinsic(
+                            &logger,
+                            pallet_cf_witnesser_api::Call::witness_claimed(
+                                account_id,
+                                amount,
+                                event.tx_hash,
+                            ),
+                        )
+                        .await;
+                }
+                ignored_event => {
+                    // ignore these ones
+                }
+            },
+            ignored_event => {
+                panic!("We never have events other than StakeManager events here.")
             }
             event => {
                 slog::warn!(
@@ -214,7 +235,7 @@ impl EthObserver for StakeManager {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::ContractEvent> + Send>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<CFContractEvent> + Send>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
@@ -224,7 +245,7 @@ impl EthObserver for StakeManager {
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(Box::new(
-            move |signature: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
+            move |signature: H256, raw_log: RawLog| -> Result<CFContractEvent> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -236,55 +257,49 @@ impl EthObserver for StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                if signature == staked.signature {
+                let sm_event = if signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::Staked {
+                    StakeManagerEvent::Staked {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                         staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == claim_registered.signature {
                     let log = claim_registered.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::ClaimRegistered {
+                    StakeManagerEvent::ClaimRegistered {
                         account_id,
                         amount: utils::decode_log_param(&log, "amount")?,
                         staker: utils::decode_log_param(&log, "staker")?,
                         start_time: utils::decode_log_param(&log, "startTime")?,
                         expiry_time: utils::decode_log_param(&log, "expiryTime")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == claim_executed.signature {
                     let log = claim_executed.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::ClaimExecuted {
+                    StakeManagerEvent::ClaimExecuted {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    };
-                    Ok(event)
+                    }
                 } else if signature == flip_supply_updated.signature {
                     let log = flip_supply_updated.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::FlipSupplyUpdated {
+                    StakeManagerEvent::FlipSupplyUpdated {
                         old_supply: utils::decode_log_param(&log, "oldSupply")?,
                         new_supply: utils::decode_log_param(&log, "newSupply")?,
                         block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == min_stake_changed.signature {
                     let log = min_stake_changed.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::MinStakeChanged {
+                    StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
-                    };
-                    Ok(event)
+                    }
                 } else {
-                    Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
-                        signature, raw_log,
-                    )?))
-                }
+                    StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                };
+                Ok(CFContractEvent::StakeManagerEvent(sm_event))
             },
         ))
     }
