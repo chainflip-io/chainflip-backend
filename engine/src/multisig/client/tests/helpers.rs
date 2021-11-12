@@ -1021,10 +1021,10 @@ impl MultisigClientNoDB {
         let stage = get_stage_for_signing_ceremony(self);
         match stage_number {
             0 => stage == None,
-            1 => stage.as_deref().unwrap() == "BroadcastStage<AwaitCommitments1>",
-            2 => stage.as_deref().unwrap() == "BroadcastStage<VerifyCommitmentsBroadcast2>",
-            3 => stage.as_deref().unwrap() == "BroadcastStage<LocalSigStage3>",
-            4 => stage.as_deref().unwrap() == "BroadcastStage<VerifyLocalSigsBroadcastStage4>",
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
             _ => false,
         }
     }
@@ -1036,11 +1036,11 @@ impl MultisigClientNoDB {
         let stage = get_stage_for_keygen_ceremony(self);
         match stage_number {
             0 => stage == None,
-            1 => stage.as_deref().unwrap() == "BroadcastStage<AwaitCommitments1>",
-            2 => stage.as_deref().unwrap() == "BroadcastStage<VerifyCommitmentsBroadcast2>",
-            3 => stage.as_deref().unwrap() == "BroadcastStage<SecretSharesStage3>",
-            4 => stage.as_deref().unwrap() == "BroadcastStage<ComplaintsStage4>",
-            5 => stage.as_deref().unwrap() == "BroadcastStage<VerifyComplaintsBroadcastStage5>",
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
             _ => false,
         }
     }
