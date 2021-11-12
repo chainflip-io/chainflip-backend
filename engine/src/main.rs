@@ -66,6 +66,7 @@ async fn main() {
             p2p_message_receiver,
             p2p_message_command_sender,
             shutdown_client_rx,
+            multisig::KeygenOptions::default(),
             &root_logger,
         ),
         p2p::conductor::start(

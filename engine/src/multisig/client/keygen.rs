@@ -30,6 +30,34 @@ pub struct KeygenInfo {
     pub signers: Vec<AccountId>,
 }
 
+#[derive(Clone, Copy)]
+pub struct KeygenOptions {
+    /// This is intentionally private to ensure that the only
+    /// way to unset this flag with via test-only constructor
+    low_pubkey_only: bool,
+}
+
+impl Default for KeygenOptions {
+    fn default() -> Self {
+        Self {
+            low_pubkey_only: true,
+        }
+    }
+}
+
+impl KeygenOptions {
+    /// This should not be used in production as it could
+    /// result in pubkeys incompatible with the KeyManager
+    /// contract, but it is useful in tests that need to be
+    /// deterministic and don't interact with the contract
+    #[cfg(test)]
+    pub fn allowing_high_pubkey() -> Self {
+        Self {
+            low_pubkey_only: false,
+        }
+    }
+}
+
 impl KeygenInfo {
     pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
         KeygenInfo {

@@ -22,6 +22,8 @@ use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, Signin
 
 use crate::p2p::AccountId;
 
+use super::keygen::KeygenOptions;
+
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
@@ -111,7 +113,7 @@ impl CeremonyManager {
     }
 
     /// Process a keygen request
-    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
+    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
         let KeygenInfo {
             ceremony_id,
             mut signers,
@@ -144,6 +146,7 @@ impl CeremonyManager {
             validator_map,
             our_idx,
             signer_idxs,
+            keygen_options,
         );
     }
 

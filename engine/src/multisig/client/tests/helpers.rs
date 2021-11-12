@@ -7,8 +7,8 @@ use pallet_cf_vaults::CeremonyId;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::multisig::{
-    client::{signing, CeremonyOutcome},
-    KeyId, MultisigInstruction, SchnorrSignature,
+    client::{keygen::KeygenOptions, signing},
+    KeyId, MultisigInstruction,
 };
 
 use signing::frost::{
@@ -421,7 +421,13 @@ impl KeygenContext {
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-                let c = MultisigClient::new(id.clone(), KeyDBMock::new(), tx, &logger);
+                let c = MultisigClient::new(
+                    id.clone(),
+                    KeyDBMock::new(),
+                    tx,
+                    KeygenOptions::allowing_high_pubkey(),
+                    &logger,
+                );
                 (c, Box::pin(UnboundedReceiverStream::new(rx).peekable()))
             })
             .unzip();

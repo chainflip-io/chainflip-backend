@@ -200,4 +200,20 @@ mod tests {
 			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
 		});
 	}
+
+	#[test]
+	fn send_cfe_version() {
+		new_test_ext().execute_with(|| {
+			let version = SemVer { major: 1, minor: 2, patch: 3 };
+			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(ALICE), version.clone()));
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::ValidatorCFEVersionRecorded(
+					ALICE,
+					version.clone()
+				)),
+			);
+			assert_eq!(ValidatorPallet::validator_cfe_version(ALICE), Some(version));
+		});
+	}
 }
