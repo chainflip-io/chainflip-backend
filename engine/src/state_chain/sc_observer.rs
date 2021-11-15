@@ -136,7 +136,9 @@ pub async fn start<BlockStream, RpcClient>(
                                             )
                                             .await
                                             .unwrap();
-                                        sm_window_sender.send(eth_vault.active_window).unwrap();
+                                        sm_window_sender
+                                            .send(eth_vault.active_window.clone())
+                                            .unwrap();
                                         km_window_sender.send(eth_vault.active_window).unwrap();
                                     }
                                     // now that we have entered a new epoch, we want to check our state again

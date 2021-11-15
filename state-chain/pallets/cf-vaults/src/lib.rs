@@ -35,7 +35,7 @@ pub enum VaultRotationStatus<T: Config> {
 }
 
 /// The bounds within which a public key for a vault should be used for witnessing.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct BlockHeightWindow {
 	pub from: u64,
 	pub to: Option<u64>,
