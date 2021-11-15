@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use super::{
-    decode_shared_event_closure, event_common::EventWithCommon, CFContractEvent, EthObserver,
+    decode_shared_event_closure, event_common::EventWithCommon, EthObserver,
     SharedEvent,
 };
 
@@ -97,56 +97,53 @@ pub enum StakeManagerEvent {
 
 #[async_trait]
 impl EthObserver for StakeManager {
+    type EventParameters = StakeManagerEvent;
+
     async fn handle_event<RPCClient>(
         &self,
-        event: EventWithCommon,
+        event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
     {
-        match event.inner_event {
-            CFContractEvent::StakeManagerEvent(sm_event) => match sm_event {
-                StakeManagerEvent::Staked {
-                    account_id,
-                    amount,
-                    staker: _,
-                    return_addr,
-                } => {
-                    let _ = state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_staked(
-                                account_id,
-                                amount,
-                                return_addr.0,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
-                }
-                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                    let _ = state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id,
-                                amount,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
-                }
-                ignored_event => {
-                    slog::warn!(
-                        logger,
-                        "{:?} is not to be submitted to the State Chain",
-                        ignored_event
-                    );
-                }
-            },
-            _ => {
-                panic!("We never have events other than StakeManager events here.")
+        match event.event_parameters {
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                staker: _,
+                return_addr,
+            } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        &logger,
+                        pallet_cf_witnesser_api::Call::witness_staked(
+                            account_id,
+                            amount,
+                            return_addr.0,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        &logger,
+                        pallet_cf_witnesser_api::Call::witness_claimed(
+                            account_id,
+                            amount,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            ignored_event => {
+                slog::warn!(
+                    logger,
+                    "{:?} is not to be submitted to the State Chain",
+                    ignored_event
+                );
             }
         }
     }
@@ -157,7 +154,7 @@ impl EthObserver for StakeManager {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<CFContractEvent> + Send>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
@@ -167,7 +164,7 @@ impl EthObserver for StakeManager {
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(Box::new(
-            move |signature: H256, raw_log: RawLog| -> Result<CFContractEvent> {
+            move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -179,7 +176,7 @@ impl EthObserver for StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                let sm_event = if signature == staked.signature {
+                Ok(if signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
                     StakeManagerEvent::Staked {
@@ -220,8 +217,7 @@ impl EthObserver for StakeManager {
                     }
                 } else {
                     StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
-                };
-                Ok(CFContractEvent::StakeManagerEvent(sm_event))
+                })
             },
         ))
     }

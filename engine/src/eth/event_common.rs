@@ -6,33 +6,31 @@ use web3::{
     types::{Log, H256},
 };
 
-use super::CFContractEvent;
-
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug)]
-pub struct EventWithCommon {
+pub struct EventWithCommon<EventParameters : Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
     /// The block number at which the event occurred
     pub block_number: u64,
     /// The event specific parameters
-    pub inner_event: CFContractEvent,
+    pub event_parameters: EventParameters,
 }
 
-impl std::fmt::Display for EventWithCommon {
+impl<EventParameters : Debug> std::fmt::Display for EventWithCommon<EventParameters> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "InnerEvent: {:?}; block_number: {}; tx_hash: 0x{}",
-            self.inner_event,
+            self.event_parameters,
             self.block_number,
             hex::encode(self.tx_hash)
         )
     }
 }
 
-impl EventWithCommon {
-    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<CFContractEvent>>(
+impl<EventParameters : Debug> EventWithCommon<EventParameters> {
+    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>>(
         decode_log: &LogDecoder,
         log: Log,
     ) -> Result<Self> {
@@ -45,7 +43,7 @@ impl EventWithCommon {
                 .block_number
                 .expect("Should have a block number")
                 .as_u64(),
-            inner_event: decode_log(
+            event_parameters: decode_log(
                 *log.topics.first().ok_or_else(|| {
                     anyhow::Error::msg("Could not get event signature from ETH log")
                 })?,
