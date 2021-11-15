@@ -34,7 +34,6 @@ async fn main() {
 
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
-    // submit our version to the state chain on start up
     state_chain_client
         .submit_extrinsic(
             &root_logger,
