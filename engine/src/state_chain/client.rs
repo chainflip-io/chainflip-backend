@@ -440,6 +440,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .to_owned())
     }
 
+    /// Get the epoch number of the latest block
     pub async fn epoch_at_block(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -470,7 +471,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         Ok(epoch_at_block_updates
             .last()
-            // if we don't have it, it means it's not initialised, which means the chain has started
+            // if we don't have it, it means it's not initialised, which means the chain is in its genesis epoch
             // => the epoch index is 0
             .unwrap_or_else(|| &Ok(0))
             .as_ref()

@@ -226,14 +226,15 @@ impl EthBroadcaster {
 
 #[async_trait]
 pub trait EthObserver {
-    type EventParameters : Debug + Send + Sync + 'static;
+    type EventParameters: Debug + Send + Sync + 'static;
 
     async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>> {
+    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
+    {
         let deployed_address = self.get_deployed_address();
         let decode_log = self.decode_log_closure()?;
         slog::info!(
@@ -348,7 +349,6 @@ pub enum SharedEvent {
     },
 }
 
-// This needs to be type DecodeClosure too
 fn decode_shared_event_closure(
     contract: &Contract,
 ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<SharedEvent>> {
