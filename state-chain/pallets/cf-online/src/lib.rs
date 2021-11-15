@@ -67,9 +67,7 @@ pub mod pallet {
 		}
 	}
 
-	/// The nodes in the network.  We are assuming here that an account staked with FLIP is
-	/// equivalent to an operational node and would appear in this map once they have submitted
-	/// a heartbeat.
+	/// A map linking a node's validator id with the last block number at which they submitted a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
