@@ -47,9 +47,9 @@ tag = 'monthly-2021-09+1'
 
 
 [dev-dependencies]
-hex-literal = {version = "0.3"}
-web3 = {version = "0.17"}
-rand = {version="0.8.4"}
+hex-literal = {version = '0.3'}
+web3 = {git = 'https://github.com/tomusdrw/rust-web3', rev = '861cfcd', features = ['test']}
+rand = {version='0.8.4'}
 
 [features]
 default = ['std']

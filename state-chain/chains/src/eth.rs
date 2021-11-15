@@ -383,7 +383,7 @@ pub struct SchnorrVerificationComponents {
 }
 
 /// Errors that can occur when verifying an Ethereum transaction.
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
 	/// The transaction's chain id is invalid.
 	InvalidChainId,
@@ -418,7 +418,6 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	}
 }
 
-/// Required information to construct and sign an ethereum transaction. Equivalent to
 /// Required information to construct and sign an ethereum transaction. Equivalent to
 /// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
@@ -555,8 +554,12 @@ pub fn verify_transaction(
 	signed: &RawSignedTransaction,
 	address: &Address,
 ) -> Result<(), TransactionVerificationError> {
-	let decoded_tx: ethereum::TransactionV2 =
-		rlp::decode(&signed[..]).map_err(|_| TransactionVerificationError::InvalidRlp)?;
+	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
+		Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
+		Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
+		_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),
+	}
+	.map_err(|_| TransactionVerificationError::InvalidRlp)?;
 
 	let message_hash = match decoded_tx {
 		ethereum::TransactionV2::Legacy(ref tx) =>
@@ -661,10 +664,7 @@ mod tests {
 #[cfg(test)]
 mod verification_tests {
 	use super::*;
-	use ethereum::{
-		EIP1559Transaction, EIP1559TransactionMessage, LegacyTransaction, LegacyTransactionMessage,
-		TransactionV2,
-	};
+	use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
 	use rand::prelude::*;
@@ -750,16 +750,18 @@ mod verification_tests {
 			..Default::default()
 		};
 
-		let msg = EIP1559TransactionMessage {
-			chain_id: unsigned.chain_id,
-			nonce: 0.into(),
-			max_priority_fee_per_gas: 0.into(),
-			max_fee_per_gas: unsigned.max_fee_per_gas.unwrap().into(),
-			gas_limit: unsigned.gas_limit.unwrap(),
-			action: ethereum::TransactionAction::Call(unsigned.contract),
+		let web3_tx = web3::types::TransactionParameters {
+			nonce: Some(0.into()),
+			to: Some(unsigned.contract),
+			gas: unsigned.gas_limit.unwrap(),
+			gas_price: Default::default(),
 			value: unsigned.value,
-			input: unsigned.data.clone(),
-			access_list: vec![],
+			data: unsigned.data.clone().into(),
+			chain_id: Some(unsigned.chain_id),
+			transaction_type: Some(ethabi::ethereum_types::U64::from(2)),
+			access_list: Some(Vec::new()),
+			max_fee_per_gas: unsigned.max_fee_per_gas,
+			max_priority_fee_per_gas: unsigned.max_priority_fee_per_gas,
 		};
 
 		for seed in 0..10 {
@@ -768,28 +770,16 @@ mod verification_tests {
 			let key_ref = web3::signing::SecretKeyRef::new(&key);
 
 			use web3::signing::Key;
-			let sig = key_ref.sign(msg.hash().as_bytes(), unsigned.chain_id.into()).unwrap();
+			let web3_api = web3::Web3::new(web3::transports::test::TestTransport::default());
+			let signed_tx =
+				web3::block_on(web3_api.accounts().sign_transaction(web3_tx.clone(), &key))
+					.expect("web tx signing failed");
 
-			let signed_tx = TransactionV2::EIP1559(EIP1559Transaction {
-				r: H256(sig.r.0),
-				s: H256(sig.s.0),
-				chain_id: msg.chain_id,
-				nonce: msg.nonce,
-				max_priority_fee_per_gas: msg.max_priority_fee_per_gas,
-				max_fee_per_gas: msg.max_fee_per_gas,
-				gas_limit: msg.gas_limit,
-				action: msg.action,
-				value: msg.value,
-				input: msg.input.clone(),
-				access_list: msg.access_list.clone(),
-				// EIP-155: sig.v = y_parity + CHAIN_ID * 2 + 35
-				odd_y_parity: sig.v - msg.chain_id * 2 - 35 == 1,
-			});
-
-			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+			// let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
+			let signed_tx_bytes = signed_tx.raw_transaction;
 
 			let verificaton_result =
-				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
+				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
 			assert_eq!(verificaton_result, Ok(()), "Unable to verify tx signed by key {:#x}", key);
 		}
 	}
