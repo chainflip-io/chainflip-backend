@@ -42,9 +42,6 @@ use event_common::EventWithCommon;
 
 use async_trait::async_trait;
 
-use self::key_manager::KeyManagerEvent;
-use self::stake_manager::StakeManagerEvent;
-
 #[derive(Error, Debug)]
 pub enum EventParseError {
     #[error("Unexpected event signature in log subscription: {0:?}")]
@@ -66,13 +63,6 @@ impl SignatureAndEvent {
             event: event.clone(),
         })
     }
-}
-
-// TODO: Should be able to factor our SharedEvent and have it here
-#[derive(Debug)]
-pub enum CFContractEvent {
-    StakeManagerEvent(StakeManagerEvent),
-    KeyManagerEvent(KeyManagerEvent),
 }
 
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
@@ -236,12 +226,14 @@ impl EthBroadcaster {
 
 #[async_trait]
 pub trait EthObserver {
+    type EventParameters : Debug + Send + Sync + 'static;
+
     async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon>> + Unpin + Send>> {
+    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>> {
         let deployed_address = self.get_deployed_address();
         let decode_log = self.decode_log_closure()?;
         slog::info!(
@@ -307,9 +299,9 @@ pub trait EthObserver {
                 .map(Ok)
                 .chain(future_logs)
                 .map(
-                    move |result_unparsed_log| -> Result<EventWithCommon, anyhow::Error> {
+                    move |result_unparsed_log| -> Result<EventWithCommon<Self::EventParameters>, anyhow::Error> {
                         let result_event = result_unparsed_log
-                            .and_then(|log| EventWithCommon::decode(&decode_log, log));
+                            .and_then(|log| EventWithCommon::<Self::EventParameters>::decode(&decode_log, log));
 
                         if let Ok(ok_result) = &result_event {
                             slog::debug!(logger, "Received ETH log {}", ok_result);
@@ -323,11 +315,11 @@ pub trait EthObserver {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<CFContractEvent> + Send>>;
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>>;
 
     async fn handle_event<RPCClient>(
         &self,
-        event: EventWithCommon,
+        event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where
