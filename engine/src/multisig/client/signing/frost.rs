@@ -405,9 +405,6 @@ fn build_challenge(
     message: &[u8],
 ) -> Scalar {
     use crate::eth::utils::pubkey_to_eth_addr;
-    // The contract expects a 32-byte hash.
-    debug_assert!(message.len() == 32);
-
     let msg_hash: [u8; 32] = message
         .try_into()
         .expect("Should never fail, the `message` argument should always be a valid hash");
