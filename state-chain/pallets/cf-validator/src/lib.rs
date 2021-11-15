@@ -32,9 +32,9 @@ type SessionIndex = u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct SemVer {
-	major: u8,
-	minor: u8,
-	patch: u8,
+	pub major: u8,
+	pub minor: u8,
+	pub patch: u8,
 }
 
 type Version = SemVer;
