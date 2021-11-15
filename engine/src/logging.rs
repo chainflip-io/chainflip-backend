@@ -3,10 +3,10 @@ pub const COMPONENT_KEY: &str = "component";
 pub const CEREMONY_ID_KEY: &str = "ceremony_id";
 
 // ==== Logging Error/Warning Tag constants ====
-pub const REQUEST_TO_SIGN_IGNORED: &str = "0";
-
-// ==== Logging Trace Tag constants ====
-pub const PROCESS_SIGNING_DATA: &str = "T0";
+pub const REQUEST_TO_SIGN_IGNORED: &str = "E0";
+pub const REQUEST_TO_SIGN_EXPIRED: &str = "E1";
+pub const SIGNING_CEREMONY_FAILED: &str = "E2";
+pub const CEREMONY_IGNORED: &str = "E3";
 
 pub mod utils {
 
