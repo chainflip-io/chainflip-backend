@@ -627,26 +627,28 @@ mod tests {
 
     use super::*;
 
-    // #[tokio::test]
-    // #[ignore = "depends on running state chain"]
-    // async fn test_finalised_storage_subs() {
-    //     let settings = Settings::from_file("config/Local.toml").unwrap();
-    //     let (state_chain_client, mut block_stream) =
-    //         connect_to_state_chain(&settings.state_chain).await.unwrap();
+    #[tokio::main]
+    #[test]
+    async fn test_finalised_storage_subs() {
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let (state_chain_client, mut block_stream) =
+            connect_to_state_chain(&settings.state_chain).await.unwrap();
 
-    //     while let Some(block) = block_stream.next().await {
-    //         let block_header = block.unwrap();
-    //         let my_state_for_this_block = state_chain_client
-    //             .get_vault(&block_header, 0, ChainId::Ethereum)
-    //             .await
-    //             .unwrap();
+        println!("My account id is: {}", state_chain_client.our_account_id);
 
-    //         println!(
-    //             "Returning ChainflipAccountStatus for this block: {:?}",
-    //             my_state_for_this_block
-    //         );
-    //     }
-    // }
+        while let Some(block) = block_stream.next().await {
+            let block_header = block.unwrap();
+            let my_state_for_this_block = state_chain_client
+                .get_account_data(block_header.hash())
+                .await
+                .unwrap();
+
+            println!(
+                "Returning AccountData for this block: {:?}",
+                my_state_for_this_block
+            );
+        }
+    }
 
     #[tokio::test]
     async fn nonce_increments_on_success() {

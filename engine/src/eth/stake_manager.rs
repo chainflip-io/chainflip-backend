@@ -253,241 +253,241 @@ mod tests {
         assert_ok!(StakeManager::new(&settings));
     }
 
-    #[test]
-    fn test_staked_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn test_staked_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let staked_event_signature =
-            H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
-                .unwrap();
-        match decode_log(
-            staked_event_signature,
-            RawLog {
-                topics : vec![
-                    staked_event_signature,
-                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
-                ],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000001").unwrap()
-            }
-        ).unwrap() {
-            StakeManagerEvent::Staked {
-                account_id,
-                amount,
-                staker,
-                return_addr,
-            } => {
-                let expected_account_id =
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap();
-                assert_eq!(account_id, expected_account_id);
-                assert_eq!(amount, 40000000000000000000000u128);
-                assert_eq!(staker,
-                    web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
-                    .unwrap()
-                );
-                assert_eq!(
-                    return_addr,
-                    web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
-                        .unwrap()
-                );
-            }
-            _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
-        }
-    }
+    //     let staked_event_signature =
+    //         H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
+    //             .unwrap();
+    //     match decode_log(
+    //         staked_event_signature,
+    //         RawLog {
+    //             topics : vec![
+    //                 staked_event_signature,
+    //                 H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
+    //             ],
+    //             data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000001").unwrap()
+    //         }
+    //     ).unwrap() {
+    //         StakeManagerEvent::Staked {
+    //             account_id,
+    //             amount,
+    //             staker,
+    //             return_addr,
+    //         } => {
+    //             let expected_account_id =
+    //                 AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+    //                     .unwrap();
+    //             assert_eq!(account_id, expected_account_id);
+    //             assert_eq!(amount, 40000000000000000000000u128);
+    //             assert_eq!(staker,
+    //                 web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
+    //                 .unwrap()
+    //             );
+    //             assert_eq!(
+    //                 return_addr,
+    //                 web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
+    //                     .unwrap()
+    //             );
+    //         }
+    //         _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
+    //     }
+    // }
 
-    #[test]
-    fn test_claim_registered_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn test_claim_registered_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let claimed_register_event_signature =
-            H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
-                .unwrap();
-        match decode_log(
-            claimed_register_event_signature,
-            RawLog {
-                topics : vec![
-                    claimed_register_event_signature,
-                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
-                ],
-                data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a39860000000000000000000000000000073d669c173d88ccb01f6daab3a3304af7a1b22c10000000000000000000000000000000000000000000000000000000060d4910f0000000000000000000000000000000000000000000000000000000060d73402").unwrap()
-            }
-        ).unwrap() {
-            StakeManagerEvent::ClaimRegistered {
-                account_id,
-                amount,
-                staker,
-                start_time,
-                expiry_time,
-            } => {
-                assert_eq!(
-                    account_id,
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap()
-                );
-                assert_eq!(
-                    amount,
-                    web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
-                );
-                assert_eq!(
-                    staker,
-                    web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1")
-                        .unwrap()
-                );
-                assert_eq!(
-                    start_time,
-                    web3::types::U256::from_dec_str("1624543503").unwrap()
-                );
-                assert_eq!(
-                    expiry_time,
-                    web3::types::U256::from_dec_str("1624716290").unwrap()
-                );
-            }
-            _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
-        }
-    }
+    //     let claimed_register_event_signature =
+    //         H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
+    //             .unwrap();
+    //     match decode_log(
+    //         claimed_register_event_signature,
+    //         RawLog {
+    //             topics : vec![
+    //                 claimed_register_event_signature,
+    //                 H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
+    //             ],
+    //             data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a39860000000000000000000000000000073d669c173d88ccb01f6daab3a3304af7a1b22c10000000000000000000000000000000000000000000000000000000060d4910f0000000000000000000000000000000000000000000000000000000060d73402").unwrap()
+    //         }
+    //     ).unwrap() {
+    //         StakeManagerEvent::ClaimRegistered {
+    //             account_id,
+    //             amount,
+    //             staker,
+    //             start_time,
+    //             expiry_time,
+    //         } => {
+    //             assert_eq!(
+    //                 account_id,
+    //                 AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+    //                     .unwrap()
+    //             );
+    //             assert_eq!(
+    //                 amount,
+    //                 web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
+    //             );
+    //             assert_eq!(
+    //                 staker,
+    //                 web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1")
+    //                     .unwrap()
+    //             );
+    //             assert_eq!(
+    //                 start_time,
+    //                 web3::types::U256::from_dec_str("1624543503").unwrap()
+    //             );
+    //             assert_eq!(
+    //                 expiry_time,
+    //                 web3::types::U256::from_dec_str("1624716290").unwrap()
+    //             );
+    //         }
+    //         _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
+    //     }
+    // }
 
-    #[test]
-    fn test_claim_executed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn test_claim_executed_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let claimed_executed_event_signature =
-            H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
-                .unwrap();
-        match decode_log(
-            claimed_executed_event_signature,
-            RawLog {
-                topics: vec![
-                    claimed_executed_event_signature,
-                    H256::from_str(
-                        "0x0000000000000000000000000000000000000000000000000000000000003039",
-                    )
-                    .unwrap(),
-                ],
-                data: hex::decode(
-                    "0000000000000000000000000000000000000000000002d2cd2bb7a398600000",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let expected_node_id =
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap();
-                assert_eq!(account_id, expected_node_id);
-                assert_eq!(amount, 13333333333333334032384);
-            }
-            _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
-        }
-    }
+    //     let claimed_executed_event_signature =
+    //         H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
+    //             .unwrap();
+    //     match decode_log(
+    //         claimed_executed_event_signature,
+    //         RawLog {
+    //             topics: vec![
+    //                 claimed_executed_event_signature,
+    //                 H256::from_str(
+    //                     "0x0000000000000000000000000000000000000000000000000000000000003039",
+    //                 )
+    //                 .unwrap(),
+    //             ],
+    //             data: hex::decode(
+    //                 "0000000000000000000000000000000000000000000002d2cd2bb7a398600000",
+    //             )
+    //             .unwrap(),
+    //         },
+    //     )
+    //     .unwrap()
+    //     {
+    //         StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+    //             let expected_node_id =
+    //                 AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+    //                     .unwrap();
+    //             assert_eq!(account_id, expected_node_id);
+    //             assert_eq!(amount, 13333333333333334032384);
+    //         }
+    //         _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
+    //     }
+    // }
 
-    #[test]
-    fn flip_supply_updated_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn flip_supply_updated_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let flip_supply_updated_event_signature =
-            H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
-                .unwrap();
-        match decode_log(
-            flip_supply_updated_event_signature,
-            RawLog {
-                topics : vec![flip_supply_updated_event_signature],
-                data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
-            }
-        ).unwrap() {
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-            } => {
-                assert_eq!(
-                    old_supply,
-                    U256::from_dec_str("90000000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_supply,
-                    U256::from_dec_str("100000000000000000000000000").unwrap()
-                );
-                assert_eq!(block_number, U256::from_dec_str("100").unwrap());
-            }
-            _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
-        }
-    }
+    //     let flip_supply_updated_event_signature =
+    //         H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
+    //             .unwrap();
+    //     match decode_log(
+    //         flip_supply_updated_event_signature,
+    //         RawLog {
+    //             topics : vec![flip_supply_updated_event_signature],
+    //             data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
+    //         }
+    //     ).unwrap() {
+    //         StakeManagerEvent::FlipSupplyUpdated {
+    //             old_supply,
+    //             new_supply,
+    //             block_number,
+    //         } => {
+    //             assert_eq!(
+    //                 old_supply,
+    //                 U256::from_dec_str("90000000000000000000000000").unwrap()
+    //             );
+    //             assert_eq!(
+    //                 new_supply,
+    //                 U256::from_dec_str("100000000000000000000000000").unwrap()
+    //             );
+    //             assert_eq!(block_number, U256::from_dec_str("100").unwrap());
+    //         }
+    //         _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
+    //     }
+    // }
 
-    #[test]
-    fn min_stake_changed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn min_stake_changed_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let min_stake_changed_event_signature =
-            H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
-                .unwrap();
-        match decode_log(
-            min_stake_changed_event_signature,
-            RawLog {
-                topics : vec![min_stake_changed_event_signature],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
-            }
-        ).unwrap() {
-            StakeManagerEvent::MinStakeChanged {
-                old_min_stake,
-                new_min_stake,
-            } => {
-                assert_eq!(
-                    old_min_stake,
-                    U256::from_dec_str("40000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_min_stake,
-                    U256::from_dec_str("13333333333333334032384").unwrap()
-                );
-            }
-            _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
-        }
-    }
+    //     let min_stake_changed_event_signature =
+    //         H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
+    //             .unwrap();
+    //     match decode_log(
+    //         min_stake_changed_event_signature,
+    //         RawLog {
+    //             topics : vec![min_stake_changed_event_signature],
+    //             data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
+    //         }
+    //     ).unwrap() {
+    //         StakeManagerEvent::MinStakeChanged {
+    //             old_min_stake,
+    //             new_min_stake,
+    //         } => {
+    //             assert_eq!(
+    //                 old_min_stake,
+    //                 U256::from_dec_str("40000000000000000000000").unwrap()
+    //             );
+    //             assert_eq!(
+    //                 new_min_stake,
+    //                 U256::from_dec_str("13333333333333334032384").unwrap()
+    //             );
+    //         }
+    //         _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
+    //     }
+    // }
 
-    #[test]
-    fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn refunded_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
+    //     let stake_manager = StakeManager::new(&settings).unwrap();
+    //     let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let refunded_event_signature =
-            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
-                .unwrap();
+    //     let refunded_event_signature =
+    //         H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
+    //             .unwrap();
 
-        match decode_log(
-            refunded_event_signature,
-            RawLog {
-                topics: vec![refunded_event_signature],
-                data: hex::decode(
-                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
-                assert_eq!(11126819398980, amount);
-            }
-            _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
-        }
-    }
+    //     match decode_log(
+    //         refunded_event_signature,
+    //         RawLog {
+    //             topics: vec![refunded_event_signature],
+    //             data: hex::decode(
+    //                 "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
+    //             )
+    //             .unwrap(),
+    //         },
+    //     )
+    //     .unwrap()
+    //     {
+    //         StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
+    //             assert_eq!(11126819398980, amount);
+    //         }
+    //         _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
+    //     }
+    // }
 }

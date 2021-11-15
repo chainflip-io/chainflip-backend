@@ -399,7 +399,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const HeartbeatBlockInterval: u32 = 5;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }

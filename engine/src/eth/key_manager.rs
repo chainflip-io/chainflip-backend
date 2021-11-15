@@ -199,145 +199,145 @@ mod tests {
     use std::str::FromStr;
     use web3::types::H256;
 
-    #[test]
-    fn test_key_change_parsing() {
-        // All log data for these tests was obtained from the events in the `deploy_and` script:
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
+    // #[test]
+    // fn test_key_change_parsing() {
+    //     // All log data for these tests was obtained from the events in the `deploy_and` script:
+    //     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
 
-        // All the key strings in this test are decimal versions of the hex strings in the consts.py script
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-        // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
+    //     // All the key strings in this test are decimal versions of the hex strings in the consts.py script
+    //     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+    //     // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let key_manager = KeyManager::new(&settings).unwrap();
+    //     let key_manager = KeyManager::new(&settings).unwrap();
 
-        let decode_log = key_manager.decode_log_closure().unwrap();
+    //     let decode_log = key_manager.decode_log_closure().unwrap();
 
-        let key_change_event_signature =
-            H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
-                .unwrap();
+    //     let key_change_event_signature =
+    //         H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
+    //             .unwrap();
 
-        // 🔑 Aggregate Key sets the new Aggregate Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
-                RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
-                }
-            ).expect("Failed parsing AGG_SET_AGG_LOG event") {
-                KeyManagerEvent::KeyChange {
-                    signed,
-                    old_key,
-                    new_key,
-                } => {
-                    assert_eq!(signed, true);
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
-            }
-        }
+    //     // 🔑 Aggregate Key sets the new Aggregate Key 🔑
+    //     {
+    //         match decode_log(
+    //             key_change_event_signature,
+    //             RawLog {
+    //                 topics : vec![key_change_event_signature],
+    //                 data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+    //             }
+    //         ).expect("Failed parsing AGG_SET_AGG_LOG event") {
+    //             KeyManagerEvent::KeyChange {
+    //                 signed,
+    //                 old_key,
+    //                 new_key,
+    //             } => {
+    //                 assert_eq!(signed, true);
+    //                 assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+    //                 assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+    //             }
+    //             _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+    //         }
+    //     }
 
-        // 🔑 Governance Key sets the new Aggregate Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
-                RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
-                }
-            ).expect("Failed parsing GOV_SET_AGG_LOG event")
-            {
-                KeyManagerEvent::KeyChange {
-                    signed,
-                    old_key,
-                    new_key,
-                } => {
-                    assert_eq!(signed, false);
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
-            }
-        }
+    //     // 🔑 Governance Key sets the new Aggregate Key 🔑
+    //     {
+    //         match decode_log(
+    //             key_change_event_signature,
+    //             RawLog {
+    //                 topics : vec![key_change_event_signature],
+    //                 data : hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+    //             }
+    //         ).expect("Failed parsing GOV_SET_AGG_LOG event")
+    //         {
+    //             KeyManagerEvent::KeyChange {
+    //                 signed,
+    //                 old_key,
+    //                 new_key,
+    //             } => {
+    //                 assert_eq!(signed, false);
+    //                 assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+    //                 assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+    //             }
+    //             _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+    //         }
+    //     }
 
-        // 🔑 Governance Key sets the new Governance Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
-                RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
-                }
-            ).expect("Failed parsing GOV_SET_GOV_LOG event")
-            {
-                KeyManagerEvent::KeyChange {
-                    signed,
-                    old_key,
-                    new_key,
-                } => {
-                    assert_eq!(signed, false);
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
-                }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
-            }
-        }
+    //     // 🔑 Governance Key sets the new Governance Key 🔑
+    //     {
+    //         match decode_log(
+    //             key_change_event_signature,
+    //             RawLog {
+    //                 topics : vec![key_change_event_signature],
+    //                 data : hex::decode("0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
+    //             }
+    //         ).expect("Failed parsing GOV_SET_GOV_LOG event")
+    //         {
+    //             KeyManagerEvent::KeyChange {
+    //                 signed,
+    //                 old_key,
+    //                 new_key,
+    //             } => {
+    //                 assert_eq!(signed, false);
+    //                 assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
+    //                 assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
+    //             }
+    //             _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+    //         }
+    //     }
 
-        // Invalid sig test
-        {
-            let invalid_signature = H256::from_str(
-                "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
-            )
-            .unwrap();
-            let res = decode_log(
-                invalid_signature,
-                RawLog {
-                    topics : vec![invalid_signature],
-                    data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
-                }
-            )
-            .map_err(|e| match e.downcast_ref::<EventParseError>() {
-                Some(EventParseError::UnexpectedEvent(_)) => {}
-                _ => {
-                    panic!("Incorrect error parsing INVALID_SIG_LOG");
-                }
-            });
-            assert!(res.is_err());
-        }
-    }
+    //     // Invalid sig test
+    //     {
+    //         let invalid_signature = H256::from_str(
+    //             "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
+    //         )
+    //         .unwrap();
+    //         let res = decode_log(
+    //             invalid_signature,
+    //             RawLog {
+    //                 topics : vec![invalid_signature],
+    //                 data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+    //             }
+    //         )
+    //         .map_err(|e| match e.downcast_ref::<EventParseError>() {
+    //             Some(EventParseError::UnexpectedEvent(_)) => {}
+    //             _ => {
+    //                 panic!("Incorrect error parsing INVALID_SIG_LOG");
+    //             }
+    //         });
+    //         assert!(res.is_err());
+    //     }
+    // }
 
-    #[test]
-    fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn refunded_log_parsing() {
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let key_manager = KeyManager::new(&settings).unwrap();
-        let decode_log = key_manager.decode_log_closure().unwrap();
+    //     let key_manager = KeyManager::new(&settings).unwrap();
+    //     let decode_log = key_manager.decode_log_closure().unwrap();
 
-        let refunded_event_signature =
-            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
-                .unwrap();
+    //     let refunded_event_signature =
+    //         H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
+    //             .unwrap();
 
-        match decode_log(
-            refunded_event_signature,
-            RawLog {
-                topics: vec![refunded_event_signature],
-                data: hex::decode(
-                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            KeyManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
-                assert_eq!(11126819398980, amount);
-            }
-            _ => panic!("Expected KeyManager::Refunded, got a different variant"),
-        }
-    }
+    //     match decode_log(
+    //         refunded_event_signature,
+    //         RawLog {
+    //             topics: vec![refunded_event_signature],
+    //             data: hex::decode(
+    //                 "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
+    //             )
+    //             .unwrap(),
+    //         },
+    //     )
+    //     .unwrap()
+    //     {
+    //         KeyManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
+    //             assert_eq!(11126819398980, amount);
+    //         }
+    //         _ => panic!("Expected KeyManager::Refunded, got a different variant"),
+    //     }
+    // }
 
     // #[tokio::test]
     // async fn common_event_info_decoded_correctly() {
