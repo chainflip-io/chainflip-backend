@@ -94,10 +94,10 @@ pub async fn start<BlockStream, RpcClient>(
                 // - outgoing
                 // - backup
                 // NOT Passive (unless we are outgoing + passive)
-                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
                 if (matches!(account_data.state, ChainflipAccountState::Validator)
                     || matches!(account_data.state, ChainflipAccountState::Backup)
                     || is_outgoing)
+                    // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
                     && ((block_header.number + (heartbeat_block_interval / 2))
                         % heartbeat_block_interval
                         == 0)
