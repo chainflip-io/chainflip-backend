@@ -72,7 +72,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) where
-    ContractObserver: 'static + EthObserver + Clone + Sync + Send,
+    ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
 {
     println!("Starting the observer");
@@ -80,6 +80,8 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     slog::info!(logger, "Starting");
 
     let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
+
+    let contract_observer = Arc::new(contract_observer);
 
     while let Some(received_window) = window_receiver.recv().await {
         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
@@ -98,9 +100,10 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 
             // clone for capture by tokio task
             let task_end_at_block_c = task_end_at_block.clone();
-            let contract_observer = contract_observer.clone();
+            // let contract_observer = contract_observer.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
+            let contract_observer = contract_observer.clone();
             let state_chain_client = state_chain_client.clone();
             option_handle_end_block = Some((
                 tokio::spawn(async move {

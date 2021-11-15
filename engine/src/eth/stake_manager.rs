@@ -23,13 +23,9 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 
-use super::{
-    decode_shared_event_closure, event_common::EventWithCommon, EthObserver,
-    SharedEvent,
-};
+use super::{decode_shared_event_closure, event_common::EventWithCommon, EthObserver, SharedEvent};
 
 /// A wrapper for the StakeManager Ethereum contract.
-#[derive(Clone)]
 pub struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,

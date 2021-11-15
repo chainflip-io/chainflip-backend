@@ -59,7 +59,7 @@ pub async fn start<BlockStream, RpcClient>(
             Ok(block_header) => {
                 let block_hash = block_header.hash();
 
-                if check_account_state == true || option_account_data_epoch.is_none() {
+                if check_account_state || option_account_data_epoch.is_none() {
                     let account_data = state_chain_client
                         .get_account_data(block_hash)
                         .await

@@ -22,12 +22,11 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
+use super::decode_shared_event_closure;
 use super::event_common::EventWithCommon;
 use super::EthObserver;
-use super::decode_shared_event_closure;
 
 /// A wrapper for the KeyManager Ethereum contract.
-#[derive(Clone)]
 pub struct KeyManager {
     pub deployed_address: H160,
     pub contract: ethabi::Contract,
