@@ -14,7 +14,6 @@ pub use weights::WeightInfo;
 
 pub mod liveness;
 
-use core::convert::TryInto;
 use frame_support::pallet_prelude::*;
 use liveness::*;
 pub use pallet::*;

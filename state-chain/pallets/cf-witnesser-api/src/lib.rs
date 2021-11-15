@@ -14,9 +14,7 @@ pub mod pallet {
 	use cf_chains::{ChainId, Ethereum};
 	use cf_traits::{SigningContext, Witnesser};
 	use frame_support::{
-		dispatch::{DispatchResultWithPostInfo, GetDispatchInfo},
-		instances::Instance1,
-		pallet_prelude::*,
+		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};

@@ -1,7 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
-use frame_system::WeightInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
