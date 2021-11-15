@@ -38,7 +38,7 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// We check network liveness on every heartbeat interval and feedback the state of the
+		/// We check network liveness on every heartbeat interval and feed back the state of the
 		/// network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
