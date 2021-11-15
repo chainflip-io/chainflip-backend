@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use super::{
-    decode_shared_event_closure, eth_event_decoder::EventWithCommon, CFContractEvent, EthObserver,
+    decode_shared_event_closure, event_common::EventWithCommon, CFContractEvent, EthObserver,
     SharedEvent,
 };
 

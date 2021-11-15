@@ -1,7 +1,7 @@
 pub mod key_manager;
 pub mod stake_manager;
 
-pub mod eth_event_decoder;
+pub mod event_common;
 
 pub mod utils;
 
@@ -38,7 +38,7 @@ use tokio_stream::{Stream, StreamExt};
 
 use std::fmt::Debug;
 
-use eth_event_decoder::EventWithCommon;
+use event_common::EventWithCommon;
 
 use async_trait::async_trait;
 

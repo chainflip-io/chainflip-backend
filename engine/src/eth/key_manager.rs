@@ -22,7 +22,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::eth_event_decoder::EventWithCommon;
+use super::event_common::EventWithCommon;
 use super::EthObserver;
 use super::{decode_shared_event_closure, CFContractEvent};
 
