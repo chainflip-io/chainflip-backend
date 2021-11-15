@@ -1,5 +1,6 @@
 global:
-  chain: three-node-test
+  chain: test
+  existingSecret: "testnet-p2p-secrets"
 state-chain-node:
   nodeType: validator
 
