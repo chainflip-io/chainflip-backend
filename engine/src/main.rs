@@ -38,18 +38,9 @@ async fn main() {
         .submit_extrinsic(
             &root_logger,
             pallet_cf_validator::Call::cfe_version(SemVer {
-                major: option_env!("CARGO_PKG_VERSION_MAJOR")
-                    .unwrap()
-                    .parse::<u8>()
-                    .unwrap(),
-                minor: option_env!("CARGO_PKG_VERSION_MINOR")
-                    .unwrap()
-                    .parse::<u8>()
-                    .unwrap(),
-                patch: option_env!("CARGO_PKG_VERSION_PATCH")
-                    .unwrap()
-                    .parse::<u8>()
-                    .unwrap(),
+                major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+                minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+                patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
             }),
         )
         .await
