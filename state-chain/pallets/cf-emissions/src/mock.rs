@@ -11,10 +11,13 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+use cf_traits::GovernanceRestriction;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
+	impl_mock_restriction_handler,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
 	RewardsDistribution,
 };
@@ -75,6 +78,9 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+// Implement mock for RestrictionHandler
+impl_mock_restriction_handler!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
@@ -83,6 +89,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
+	type RestrictionHandler = RestrictionHandlerMock;
 }
 
 pub const MINT_INTERVAL: u64 = 5;

@@ -1,6 +1,7 @@
 use crate as pallet_cf_rewards;
 use cf_traits::{
-	mocks::ensure_origin_mock::NeverFailingOriginCheck, RewardRollover, StakeTransfer,
+	impl_mock_restriction_handler, mocks::ensure_origin_mock::NeverFailingOriginCheck,
+	RewardRollover, StakeTransfer,
 };
 use frame_support::{assert_ok, parameter_types};
 use frame_system as system;
@@ -10,6 +11,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
+use cf_traits::GovernanceRestriction;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -70,6 +73,9 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+// Implement mock for RestrictionHandler
+impl_mock_restriction_handler!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
@@ -78,6 +84,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
+	type RestrictionHandler = RestrictionHandlerMock;
 }
 
 impl pallet_cf_rewards::Config for Test {

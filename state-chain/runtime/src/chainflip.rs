@@ -359,6 +359,8 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	}
 }
 
+/// Restriction handler which checks if an account is member of the governance
+/// and the called extrinsic is a governance extrinsic.
 pub struct RestrictionHandler;
 
 impl cf_traits::GovernanceRestriction for RestrictionHandler {

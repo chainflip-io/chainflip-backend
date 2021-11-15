@@ -79,7 +79,7 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
-		/// Handles the access to functionalities of the governance pallet
+		/// Handles the access of governance extrinsic
 		type RestrictionHandler: GovernanceRestriction<
 			AccountId = Self::AccountId,
 			Call = Self::Call,

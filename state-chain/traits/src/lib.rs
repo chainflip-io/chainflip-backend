@@ -11,7 +11,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
-use frame_system::{pallet_prelude::OriginFor, Config};
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
