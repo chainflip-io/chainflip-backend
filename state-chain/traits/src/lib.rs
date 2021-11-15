@@ -11,7 +11,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::{pallet_prelude::OriginFor, Config};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -537,4 +537,12 @@ pub trait BlockEmissions {
 	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
 	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
+}
+
+/// TODO: A nice description what this thing is doing
+pub trait GovernanceRestriction {
+	type AccountId;
+	type Call;
+	/// Checks if account id is allowed to call the current extrinsic
+	fn is_whitelisted(call: &Self::Call, account_id: &Self::AccountId) -> bool;
 }

@@ -19,6 +19,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::weights::Weight;
+use frame_system::Config;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::{H160, H256};
@@ -355,5 +356,20 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 		Vaults::vaults(Validator::epoch_index(), <Ethereum as cf_chains::Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
+	}
+}
+
+pub struct RestrictionHandler;
+
+impl cf_traits::GovernanceRestriction for RestrictionHandler {
+	type AccountId = AccountId;
+	type Call = Call;
+
+	fn is_whitelisted(call: &Self::Call, account_id: &Self::AccountId) -> bool {
+		let is_gov_call = match call {
+			Call::Governance(_) => true,
+			_ => false,
+		};
+		is_gov_call && super::Governance::members().contains(account_id)
 	}
 }

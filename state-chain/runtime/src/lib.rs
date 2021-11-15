@@ -322,6 +322,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
+	type RestrictionHandler = chainflip::RestrictionHandler;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

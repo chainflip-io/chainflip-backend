@@ -4,6 +4,7 @@
 //! 'good' behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
+use cf_traits::GovernanceRestriction;
 use frame_support::{pallet_prelude::InvalidTransaction, traits::Imbalance};
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
@@ -23,11 +24,14 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 
 	fn withdraw_fee(
 		who: &T::AccountId,
-		_call: &T::Call,
+		call: &T::Call,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
 		fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
+		if T::RestrictionHandler::is_whitelisted(call, who) {
+			return Ok(None)
+		}
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			if surplus.peek().is_zero() {
 				Ok(None)
