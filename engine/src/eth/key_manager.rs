@@ -22,7 +22,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::eth_event_streamer::Event;
+use super::eth_event_decoder::EventWithCommon;
 use super::EthObserver;
 use super::{decode_shared_event_closure, CFContractEvent};
 
@@ -118,7 +118,7 @@ pub enum KeyManagerEvent {
 impl EthObserver for KeyManager {
     async fn handle_event<RPCClient>(
         &self,
-        event: Event,
+        event: EventWithCommon,
         state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where
@@ -349,7 +349,7 @@ mod tests {
     //         H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52")
     //             .unwrap();
 
-    //     let event = Event::decode(
+    //     let event = EventWithCommon::decode(
     //         &key_manager.decode_log_closure().unwrap(),
     //          web3::types::Log {
     //             address: H160::zero(),

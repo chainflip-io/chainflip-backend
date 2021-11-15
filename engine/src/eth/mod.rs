@@ -1,7 +1,7 @@
 pub mod key_manager;
 pub mod stake_manager;
 
-pub mod eth_event_streamer;
+pub mod eth_event_decoder;
 
 pub mod utils;
 
@@ -14,6 +14,7 @@ use sp_core::H160;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
+use web3::types::U64;
 
 use crate::common::Mutex;
 use crate::logging::COMPONENT_KEY;
@@ -27,16 +28,17 @@ use web3::{
     ethabi::{self, Contract, Event},
     signing::SecretKeyRef,
     transports::WebSocket,
-    types::{Bytes, SyncState, TransactionParameters, H256},
+    types::{BlockNumber, Bytes, FilterBuilder, Log, SyncState, TransactionParameters, H256},
     Web3,
 };
 
+use futures::TryStreamExt;
+
+use tokio_stream::{Stream, StreamExt};
+
 use std::fmt::Debug;
 
-// TODO: Should this be tokio??
-use futures::{Stream, StreamExt};
-
-use eth_event_streamer::Event as EventStreamerEvent;
+use eth_event_decoder::EventWithCommon;
 
 use async_trait::async_trait;
 
@@ -239,16 +241,84 @@ pub trait EthObserver {
         web3: &Web3<WebSocket>,
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Box<dyn Stream<Item = Result<EventStreamerEvent>> + Unpin + Send>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.get_deployed_address(),
-            self.decode_log_closure()?,
-            from_block,
+    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon>> + Unpin + Send>> {
+        let deployed_address = self.get_deployed_address();
+        let decode_log = self.decode_log_closure()?;
+        slog::info!(
             logger,
-        )
-        .await
+            "Subscribing to Ethereum events from contract at address: {:?}",
+            hex::encode(deployed_address)
+        );
+        // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
+        let future_logs = web3
+            .eth_subscribe()
+            .subscribe_logs(
+                FilterBuilder::default()
+                    .from_block(BlockNumber::Latest)
+                    .address(vec![deployed_address])
+                    .build(),
+            )
+            .await
+            .context("Error subscribing to ETH logs")?;
+        let from_block = U64::from(from_block);
+        let current_block = web3.eth().block_number().await?;
+
+        // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
+        // request past block via http and prepend them to the stream manually.
+        let (past_logs, exclude_future_logs_before) = if from_block <= current_block {
+            (
+                web3.eth()
+                    .logs(
+                        FilterBuilder::default()
+                            .from_block(BlockNumber::Number(from_block))
+                            .to_block(BlockNumber::Number(current_block))
+                            .address(vec![deployed_address])
+                            .build(),
+                    )
+                    .await
+                    .context("Failed to fetch past ETH logs")?,
+                current_block + 1,
+            )
+        } else {
+            (vec![], from_block)
+        };
+
+        let future_logs =
+            future_logs
+                .map_err(anyhow::Error::new)
+                .filter_map(move |result_unparsed_log| {
+                    // Need to remove logs that have already been included in past_logs or are before from_block
+                    match result_unparsed_log {
+                        Ok(Log {
+                            block_number: None, ..
+                        }) => Some(Err(anyhow::Error::msg("Found log without block number"))),
+                        Ok(Log {
+                            block_number: Some(block_number),
+                            ..
+                        }) if block_number < exclude_future_logs_before => None,
+                        _ => Some(result_unparsed_log),
+                    }
+                });
+
+        slog::info!(logger, "Future logs fetched");
+        let logger = logger.clone();
+        Ok(Box::new(
+            tokio_stream::iter(past_logs)
+                .map(Ok)
+                .chain(future_logs)
+                .map(
+                    move |result_unparsed_log| -> Result<EventWithCommon, anyhow::Error> {
+                        let result_event = result_unparsed_log
+                            .and_then(|log| EventWithCommon::decode(&decode_log, log));
+
+                        if let Ok(ok_result) = &result_event {
+                            slog::debug!(logger, "Received ETH log {}", ok_result);
+                        }
+
+                        result_event
+                    },
+                ),
+        ))
     }
 
     fn decode_log_closure(
@@ -257,7 +327,7 @@ pub trait EthObserver {
 
     async fn handle_event<RPCClient>(
         &self,
-        event: EventStreamerEvent,
+        event: EventWithCommon,
         state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where

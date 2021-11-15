@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use super::{
-    decode_shared_event_closure, eth_event_streamer::Event, CFContractEvent, EthObserver,
+    decode_shared_event_closure, eth_event_decoder::EventWithCommon, CFContractEvent, EthObserver,
     SharedEvent,
 };
 
@@ -99,7 +99,7 @@ pub enum StakeManagerEvent {
 impl EthObserver for StakeManager {
     async fn handle_event<RPCClient>(
         &self,
-        event: Event,
+        event: EventWithCommon,
         state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where
