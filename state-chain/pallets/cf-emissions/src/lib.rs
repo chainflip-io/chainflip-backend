@@ -2,6 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
+use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -16,7 +18,10 @@ use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution}
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
+	SaturatedConversion,
+};
 
 type BasisPoints = u32;
 
@@ -28,7 +33,8 @@ pub mod pallet {
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: cf_traits::Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -39,7 +45,8 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>;
+			+ UniqueSaturatedFrom<Self::BlockNumber>
+			+ Into<cf_chains::eth::Uint>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -64,6 +71,16 @@ pub mod pallet {
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
+
+		/// Something that can provide a nonce for the threshold signature.
+		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
+
+		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
+		type SigningContext: From<UpdateFlipSupply>
+			+ SigningContext<Self, Chain = cf_chains::Ethereum>;
+
+		/// Threshold signer.
+		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 	}
 
 	#[pallet::pallet]
@@ -128,6 +145,8 @@ pub mod pallet {
 
 			if should_mint {
 				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
+				let new_total_supply = T::Issuance::total_issuance();
+				Self::broadcast_update_total_supply(new_total_supply, current_block);
 			}
 
 			weight
@@ -220,6 +239,19 @@ impl<T: Config> Pallet<T> {
 		mint_interval: T::BlockNumber,
 	) -> bool {
 		blocks_elapsed_since_last_mint >= mint_interval
+	}
+
+	/// Updates the total supply on the ETH blockchain
+	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
+		// TODO: extend the BlockNumber type in a nice to avoid this parse here
+		let block_as_u32: u32 = block_number.saturated_into();
+		let transaction = UpdateFlipSupply::new_unsigned(
+			T::NonceProvider::next_nonce(),
+			total_supply,
+			block_as_u32,
+		);
+		// Emit a threshold signature request.
+		T::ThresholdSigner::request_transaction_signature(transaction.clone());
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to

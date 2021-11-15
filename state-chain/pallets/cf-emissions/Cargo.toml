@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+cf-chains = {path = '../../chains', default-features = false}
 
 log = { version = '0.4.14', default-features = false }
 
@@ -71,6 +72,8 @@ tag = 'monthly-2021-09+1'
 [features]
 default = ['std']
 std = [
+	'cf-chains/std',
+    'cf-traits/std',
 	'codec/std',
 	'scale-info/std',
 	'frame-support/std',
