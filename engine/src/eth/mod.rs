@@ -65,6 +65,7 @@ impl SignatureAndEvent {
     }
 }
 
+// NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     contract_observer: ContractObserver,
     web3: &Web3<WebSocket>,
@@ -112,6 +113,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                         .await
                         .unwrap();
 
+                    // TOOD: Handle None on stream, and result event being an error
                     while let Some(result_event) = event_stream.next().await {
                         let event = result_event.expect("should be valid event type");
                         if let Some(window_to) = *task_end_at_block.lock().await {
