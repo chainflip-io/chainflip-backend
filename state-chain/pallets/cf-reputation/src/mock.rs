@@ -114,6 +114,7 @@ impl Config for Test {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

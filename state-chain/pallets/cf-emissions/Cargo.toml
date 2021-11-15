@@ -45,6 +45,12 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-09+1'
+
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
@@ -80,5 +86,10 @@ std = [
 	'sp-std/std',
 	'sp-runtime/std',
 	'cf-traits/std',
+]
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime'] 
