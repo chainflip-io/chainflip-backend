@@ -377,6 +377,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
         chain_id: ChainId,
     ) -> Result<Vault> {
+        println!("Getting vault");
         let vault_for_epoch_key = self
             .get_metadata()
             .module("Vaults")?
@@ -394,6 +395,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<EventInfo>> {
+        println!("Getting events");
         self.get_from_storage_with_key::<Vec<EventInfo>>(
             block_hash,
             self.events_storage_key.clone(),
@@ -406,6 +408,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
+        println!("Getting account data");
         let account_info = self
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
@@ -421,6 +424,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
+        println!("getting epoch at block");
         let epoch_storage_key = self
             .get_metadata()
             .module("Validator")?
