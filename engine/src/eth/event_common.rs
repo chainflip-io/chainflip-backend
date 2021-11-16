@@ -8,7 +8,7 @@ use web3::{
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug)]
-pub struct EventWithCommon<EventParameters : Debug> {
+pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: [u8; 32],
     /// The block number at which the event occurred
@@ -17,7 +17,7 @@ pub struct EventWithCommon<EventParameters : Debug> {
     pub event_parameters: EventParameters,
 }
 
-impl<EventParameters : Debug> std::fmt::Display for EventWithCommon<EventParameters> {
+impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParameters> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -29,7 +29,7 @@ impl<EventParameters : Debug> std::fmt::Display for EventWithCommon<EventParamet
     }
 }
 
-impl<EventParameters : Debug> EventWithCommon<EventParameters> {
+impl<EventParameters: Debug> EventWithCommon<EventParameters> {
     pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>>(
         decode_log: &LogDecoder,
         log: Log,
