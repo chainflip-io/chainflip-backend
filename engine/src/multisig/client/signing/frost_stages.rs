@@ -109,7 +109,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     /// Verify that all values have been broadcast correctly during stage 1
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
-        let verified_commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let verified_commitments = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(blamed_parties);
@@ -218,7 +218,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     /// Verify that signature shares have been broadcast correctly, and if so,
     /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
-        let local_sigs = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let local_sigs = match verify_broadcasts(&messages) {
             Ok(sigs) => sigs,
             Err(blamed_parties) => {
                 return StageResult::Error(blamed_parties);

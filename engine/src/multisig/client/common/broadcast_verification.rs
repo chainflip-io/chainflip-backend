@@ -27,13 +27,9 @@ fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
 // 1/3 of parties colluded to slash the broadcasting party. (Should we reduce the threshold to 50%
 // for symmetry?)
 pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
-    signer_idxs: &BTreeSet<usize>,
     verification_messages: &HashMap<usize, BroadcastVerificationMessage<T>>,
 ) -> Result<HashMap<usize, T>, Vec<usize>> {
-    let num_parties = signer_idxs.len();
-
-    // Sanity check: we should have N messages, each containing N messages
-    assert_eq!(verification_messages.len(), num_parties);
+    let num_parties = verification_messages.len();
 
     assert!(verification_messages
         .iter()
@@ -50,7 +46,7 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
 
     let mut blamed_parties = vec![];
 
-    for idx in signer_idxs {
+    for idx in verification_messages.keys() {
         use itertools::Itertools;
 
         if let Some((data, _)) = verification_messages
@@ -100,11 +96,7 @@ fn check_correct_broadcast() {
     }
 
     assert_eq!(
-        verify_broadcasts(
-            &[1, 2, 3, 4].iter().copied().collect(),
-            &verification_messages
-        )
-        .map(|x| x.values().cloned().collect()),
+        verify_broadcasts(&verification_messages).map(|x| x.values().copied().collect()),
         Ok(vec![1, 1, 1, 1])
     );
 }
@@ -132,10 +124,9 @@ fn check_incorrect_broadcast() {
     }
 
     assert_eq!(
-        verify_broadcasts(
-            &[1, 2, 3, 4].iter().copied().collect(),
-            &verification_messages
-        ),
-        Err(vec![2, 4])
+        verify_broadcasts(&verification_messages).map_err(|reported_idxs| {
+            reported_idxs.iter().copied().collect::<BTreeSet<usize>>()
+        }),
+        Err([2, 4].iter().copied().collect())
     );
 }

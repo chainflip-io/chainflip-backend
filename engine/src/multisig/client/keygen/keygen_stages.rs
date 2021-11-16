@@ -136,7 +136,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
         self,
         messages: std::collections::HashMap<usize, Self::Message>,
     ) -> StageResult<KeygenData, KeygenResult> {
-        let commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let commitments = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => return StageResult::Error(blamed_parties),
         };
@@ -321,7 +321,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
         self,
         messages: HashMap<usize, Self::Message>,
     ) -> StageResult<KeygenData, KeygenResult> {
-        let verified_complaints = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let verified_complaints = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(blamed_parties);
@@ -530,7 +530,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
             "Processing verifications for blame responses"
         );
 
-        let verified_responses = match verify_broadcasts(&self.common.all_idxs, &messages) {
+        let verified_responses = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(blamed_parties);

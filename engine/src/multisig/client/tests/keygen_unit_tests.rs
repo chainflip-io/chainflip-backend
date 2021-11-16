@@ -118,9 +118,6 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     // Instruct (1) to send an invalid secret share to (2)
     ctx.use_invalid_secret_share(1, 2);
 
-    // TODO: test a blame responses sent by nodes not blamed
-    // earlier are ignored
-
     let keygen_states = ctx.generate().await;
 
     // Check that nodes had to go through a blaming stage
@@ -184,5 +181,8 @@ async fn should_abort_on_blames_at_invalid_indexes() {
         &[AccountId([bad_node_idx as u8 + 1; 32])]
     );
 }
+
+// TODO: test that blame responses sent by nodes not blamed
+// earlier are ignored
 
 // TODO: more tests (see https://github.com/chainflip-io/chainflip-backend/issues/677)
