@@ -200,11 +200,15 @@ pub mod pallet {
 
 	impl<T: Config> Heartbeat for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
+		type BlockNumber = T::BlockNumber;
 
 		/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
 		/// heartbeat interval.  These block credits are transformed to reputation points based on
 		/// the accrual ratio.
-		fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
+		fn heartbeat_submitted(
+			validator_id: &Self::ValidatorId,
+			_block_number: Self::BlockNumber,
+		) -> Weight {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation
@@ -248,7 +252,7 @@ pub mod pallet {
 		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
 			// Penalise those that are missing this heartbeat
 			let mut weight = 0;
-			for validator_id in network_state.awaiting {
+			for validator_id in network_state.offline {
 				let reputation_points = Reputations::<T>::mutate(
 					&validator_id,
 					|Reputation { online_credits, reputation_points }| {

@@ -182,7 +182,7 @@ mod tests {
 				if self.active {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
-						// Online pallet, ignore error
+						// Online pallet
 						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
@@ -1057,10 +1057,10 @@ mod tests {
 		// validators
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
-			// In order to do this we would want to have missed 3 heartbeats
+			// In order to do this we would want to have missed 1 heartbeat interval
 			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
-			// Blocks for our epoch
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 4;
+			// Blocks for our epoch, something larger than one heartbeat
+			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
 			const MAX_VALIDATORS: u32 = 10;
@@ -1095,8 +1095,8 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					// We need to move forward three heartbeats to be regarded as offline
-					testnet.move_forward_blocks(3 * HeartbeatBlockInterval::get());
+					// We need to move forward one heartbeats to be regarded as offline
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {

@@ -20,9 +20,12 @@ mod tests {
 		validators: Vec<<Test as frame_system::Config>::AccountId>,
 		intervals: u64,
 	) {
-		for _ in 1..=intervals {
+		for interval in 1..=intervals {
 			for validator_id in &validators {
-				<ReputationPallet as Heartbeat>::heartbeat_submitted(validator_id);
+				<ReputationPallet as Heartbeat>::heartbeat_submitted(
+					validator_id,
+					interval * HEARTBEAT_BLOCK_INTERVAL,
+				);
 			}
 		}
 	}
@@ -38,7 +41,7 @@ mod tests {
 
 	type MockNetworkState = NetworkState<<Test as frame_system::Config>::AccountId>;
 	fn dead_network() -> MockNetworkState {
-		MockNetworkState { awaiting: Mock::current_validators(), ..MockNetworkState::default() }
+		MockNetworkState { offline: Mock::current_validators(), ..MockNetworkState::default() }
 	}
 
 	fn live_network() -> MockNetworkState {
@@ -244,7 +247,7 @@ mod tests {
 	#[test]
 	fn reporting_participate_in_signing_offline_condition_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
-			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE);
+			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
 			assert_ok!(ReputationPallet::report(
