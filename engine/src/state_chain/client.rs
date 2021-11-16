@@ -4,7 +4,7 @@ use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
-use frame_system::Phase;
+use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
@@ -241,7 +241,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     account_storage_key: StorageKey,
     events_storage_key: StorageKey,
     nonce: AtomicU32,
-    /// Our Node's AcccountId
+    /// Our Node's AccountId
     pub our_account_id: AccountId32,
 
     state_chain_rpc_client: RpcClient,
@@ -369,10 +369,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 changes
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            println!("Here's the data: {:?}", data);
-                            Vault::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
+                        option_data
+                            .map(|data| Vault::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
                     })
             })
             .flatten()
@@ -417,7 +415,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        let node_status_updates: Vec<_> = self
+        let account_info_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), self.account_storage_key.clone())
             .await?
@@ -428,7 +426,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
                         option_data.map(|data| {
-                            ChainflipAccountData::decode(&mut &data.0[..])
+                            // println!("The data is: {}", data);
+                            AccountInfo::<u32, ChainflipAccountData>::decode(&mut &data.0[..])
                                 .map_err(anyhow::Error::msg)
                         })
                     })
@@ -436,9 +435,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .flatten()
             .collect::<Result<_>>()?;
 
-        Ok(node_status_updates
+        Ok(account_info_updates
             .last()
-            .expect("Node must have a status")
+            .expect("Node must have account_info")
+            .data
             .to_owned())
     }
 
