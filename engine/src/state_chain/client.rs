@@ -349,6 +349,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<StorageType> {
+        println!("get from storage with the storage key: {:?}", storage_key);
         let storage_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), storage_key)
@@ -377,7 +378,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
         chain_id: ChainId,
     ) -> Result<Vault> {
-        println!("Getting vault");
         let vault_for_epoch_key = self
             .get_metadata()
             .module("Vaults")?
@@ -385,6 +385,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .double_map()?
             .key(&epoch_index, &chain_id);
 
+        println!("Getting vault: {:?}", vault_for_epoch_key);
         Ok(self
             .get_from_storage_with_key::<Vault>(block_hash, vault_for_epoch_key)
             .await?)
@@ -395,7 +396,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<EventInfo>> {
-        println!("Getting events");
+        println!("Getting events: {:?}", self.events_storage_key);
         self.get_from_storage_with_key::<Vec<EventInfo>>(
             block_hash,
             self.events_storage_key.clone(),
@@ -408,7 +409,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        println!("Getting account data");
+        println!("Getting account_data: {:?}", self.account_storage_key);
         let account_info = self
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
@@ -424,13 +425,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
-        println!("getting epoch at block");
         let epoch_storage_key = self
             .get_metadata()
             .module("Validator")?
             .storage("CurrentEpoch")?
             .plain()?
             .key();
+        println!("getting epoch at block: {:?}", epoch_storage_key);
         Ok(self
             .get_from_storage_with_key::<EpochIndex>(block_hash, epoch_storage_key)
             .await?)
