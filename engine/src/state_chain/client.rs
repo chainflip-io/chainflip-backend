@@ -311,7 +311,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         BlockStream:
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
-        let mut events_for_extrinsic = Vec::new();
         while let Some(result_header) = block_stream.next().await {
             let header = result_header?;
             let block_hash = header.hash();
@@ -322,21 +321,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 }) {
                     Some(extrinsic_index_found) => {
                         let events_for_block = self.get_events(&header).await?;
-                        for (phase, event, _) in events_for_block {
-                            if let Phase::ApplyExtrinsic(i) = phase {
-                                if i as usize != extrinsic_index_found {
-                                    continue;
+                        return Ok(events_for_block
+                            .into_iter()
+                            .filter_map(|(phase, event, _)| {
+                                if let Phase::ApplyExtrinsic(i) = phase {
+                                    if i as usize != extrinsic_index_found {
+                                        None
+                                    } else {
+                                        Some(event)
+                                    }
+                                } else {
+                                    None
                                 }
-                                events_for_extrinsic.push(event);
-                            }
-                        }
-                        break;
+                            })
+                            .collect::<Vec<_>>());
                     }
                     None => continue,
                 }
             };
         }
-        Ok(events_for_extrinsic)
+        Err(anyhow::Error::msg(
+            "Block stream loop exited, no event found",
+        ))
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
