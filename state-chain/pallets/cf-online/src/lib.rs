@@ -115,7 +115,9 @@ pub mod pallet {
 		}
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
 		/// of the network for those nodes that are validators.
-		fn check_network_liveness(current_block_number: BlockNumberFor<T>) -> NetworkState<T::ValidatorId> {
+		fn check_network_liveness(
+			current_block_number: BlockNumberFor<T>,
+		) -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
 			for (validator_id, block_number) in Nodes::<T>::iter() {
@@ -129,7 +131,6 @@ pub mod pallet {
 				}
 			}
 
-			// Weight will be treated when we have benchmarks
 			network_state
 		}
 	}
