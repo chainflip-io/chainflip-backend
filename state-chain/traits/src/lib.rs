@@ -543,6 +543,8 @@ pub trait BlockEmissions {
 pub trait GovernanceRestriction {
 	type AccountId;
 	type Call;
-	/// Checks if account id is allowed to call the current extrinsic
-	fn is_whitelisted(call: &Self::Call, account_id: &Self::AccountId) -> bool;
+	/// Checks if the account_id is part of the governance
+	fn is_member(account_id: &Self::AccountId) -> bool;
+	/// Checks if the call is an extrinsic of the gov pallet
+	fn is_gov_call(call: &Self::Call) -> bool;
 }

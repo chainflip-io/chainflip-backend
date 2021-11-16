@@ -29,8 +29,14 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
-		if T::RestrictionHandler::is_whitelisted(call, who) {
-			return Ok(None)
+		// Check if the current caller is gov member
+		if T::RestrictionHandler::is_member(who) {
+			// Gov members can only call gov extrinsic.
+			if T::RestrictionHandler::is_gov_call(call) {
+				return Ok(None)
+			} else {
+				return Err(InvalidTransaction::Payment.into())
+			}
 		}
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			if surplus.peek().is_zero() {

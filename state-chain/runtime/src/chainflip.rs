@@ -366,11 +366,13 @@ impl cf_traits::GovernanceRestriction for RestrictionHandler {
 	type AccountId = AccountId;
 	type Call = Call;
 
-	fn is_whitelisted(call: &Self::Call, account_id: &Self::AccountId) -> bool {
-		let is_gov_call = match call {
+	fn is_member(account_id: &Self::AccountId) -> bool {
+		super::Governance::members().contains(account_id)
+	}
+	fn is_gov_call(call: &Self::Call) -> bool {
+		match call {
 			Call::Governance(_) => true,
 			_ => false,
-		};
-		is_gov_call && super::Governance::members().contains(account_id)
+		}
 	}
 }

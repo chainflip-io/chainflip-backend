@@ -6,8 +6,10 @@ macro_rules! impl_mock_restriction_handler {
 		impl GovernanceRestriction for RestrictionHandlerMock {
 			type AccountId = $account_id;
 			type Call = $call;
-
-			fn is_whitelisted(_call: &Self::Call, _account_id: &Self::AccountId) -> bool {
+			fn is_member(account_id: &Self::AccountId) -> bool {
+				false
+			}
+			fn is_gov_call(call: &Self::Call) -> bool {
 				false
 			}
 		}

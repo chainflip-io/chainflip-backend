@@ -915,12 +915,10 @@ mod tests {
 	}
 
 	mod runtime {
-		use super::{genesis, network, *};
-		use crate::tests::{ALICE, ETH_ZERO_ADDRESS};
-		use pallet_cf_validator::SemVer;
-		// use frame_support::assert_ok;
-		use pallet_cf_staking::pallet::Error;
-		use state_chain_runtime::Staking;
+		use super::*;
+		use frame_support::dispatch::GetDispatchInfo;
+		use pallet_cf_flip::FlipTransactionPayment;
+		use pallet_transaction_payment::OnChargeTransaction;
 
 		#[test]
 		// We have two types of accounts. One set of accounts which is part
@@ -934,18 +932,38 @@ mod tests {
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
-					// Expect a successfully gov call
-					let call = Box::new(frame_system::Call::remark(vec![]).into());
-					assert_ok!(Governance::propose_governance_extrinsic(
-						Origin::signed(ERIN.into()),
-						call
-					));
-					// Expect a call from a gov member to a normal extrinsic to fail
-					let version = SemVer { major: 1, minor: 2, patch: 3 };
-					assert_noop!(
-						Validator::cfe_version(Origin::signed(ERIN.into()), version),
-						Error::<Runtime>::NoClaimsDuringAuctionPhase
+					let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+					let gov_call: state_chain_runtime::Call =
+						pallet_cf_governance::Call::approve(1).into();
+					// Expect a successful normal call to work
+					let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ALICE.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5,
+						0,
 					);
+					assert!(ordinary.is_ok());
+					assert!(ordinary.unwrap().is_some());
+					// Expect a successful gov call to work
+					let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&gov_call,
+						&gov_call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov.is_ok());
+					assert!(gov.unwrap().is_none());
+					// Expect a non gov call to fail when it's executed by gov member
+					let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov_err.is_err());
 				});
 		}
 	}
