@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
         key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-        new_synced_web3_client,
+        new_synced_web3_client, EthObserver,
     },
     logging::utils,
     settings::Settings,
@@ -45,7 +45,7 @@ pub async fn test_all_key_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
