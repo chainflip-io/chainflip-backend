@@ -67,6 +67,7 @@ tag = 'monthly-2021-09+1'
 
 # Dev dependencies
 [dev-dependencies]
+cf-chains = {path = '../../chains', features = ['mocks']}
 pallet-cf-flip = {path = '../cf-flip'}
 
 [dev-dependencies.sp-io]
