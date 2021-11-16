@@ -641,7 +641,10 @@ mod tests {
 
 	mod epoch {
 		use super::*;
-		use cf_traits::{AuctionPhase, AuctionResult, EpochInfo};
+		use cf_traits::{
+			AuctionPhase, AuctionResult, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, EpochInfo,
+		};
 		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
 
 		#[test]
@@ -733,6 +736,8 @@ mod tests {
 		// - All nodes stake above the MAB
 		// - A new auction index has been generated
 		// - We have two nodes that haven't registered their session keys
+		// - New validators have the state of Validator with the last active epoch stored
+		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -812,6 +817,33 @@ mod tests {
 						nodes,
 						"the new validators should be those genesis validators and the new nodes created in test"
 					);
+
+					for account in keyless_nodes.iter() {
+						assert_eq!(
+							None,
+							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
+							"this node should have never been active"
+						);
+						assert_eq!(
+							ChainflipAccountState::Passive,
+							ChainflipAccountStore::<Runtime>::get(account).state,
+							"should be a passive node"
+						);
+					}
+
+					let current_epoch = Validator::epoch_index();
+					for account in new_validators.iter() {
+						assert_eq!(
+							Some(current_epoch),
+							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
+							"validator should have been active in current epoch"
+						);
+						assert_eq!(
+							ChainflipAccountState::Validator,
+							ChainflipAccountStore::<Runtime>::get(account).state,
+							"should be validator"
+						);
+					}
 				});
 		}
 	}
