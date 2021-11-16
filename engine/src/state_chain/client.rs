@@ -312,32 +312,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
     {
         let mut events_for_extrinsic = Vec::new();
-        let mut found_extrinsic = false;
         while let Some(result_header) = block_stream.next().await {
             let header = result_header?;
             let block_hash = header.hash();
             if let Some(signed_block) = self.state_chain_rpc_client.get_block(block_hash).await? {
-                let extrinsic_index_found = signed_block.block.extrinsics.iter().position(|ext| {
+                match signed_block.block.extrinsics.iter().position(|ext| {
                     let hash = BlakeTwo256::hash_of(ext);
                     hash == extrinsic_hash
-                });
-                if extrinsic_index_found.is_some() {
-                    found_extrinsic = true;
-                }
-                let events_for_block = self.get_events(&header).await?;
-                for (phase, event, _) in events_for_block {
-                    if let Phase::ApplyExtrinsic(i) = phase {
-                        if let Some(extrinsic_index) = extrinsic_index_found {
-                            if i as usize != extrinsic_index {
-                                continue;
+                }) {
+                    Some(extrinsic_index_found) => {
+                        let events_for_block = self.get_events(&header).await?;
+                        for (phase, event, _) in events_for_block {
+                            if let Phase::ApplyExtrinsic(i) = phase {
+                                if i as usize != extrinsic_index_found {
+                                    continue;
+                                }
+                                events_for_extrinsic.push(event);
                             }
-                            events_for_extrinsic.push(event);
                         }
+                        break;
                     }
+                    None => continue,
                 }
-            };
-            if found_extrinsic {
-                break;
             };
         }
         Ok(events_for_extrinsic)
