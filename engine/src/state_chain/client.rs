@@ -630,8 +630,8 @@ mod tests {
 
     use super::*;
 
-    #[tokio::main]
-    #[test]
+    #[ignore = "depends on running state chain, and a configured Local.toml file"]
+    #[tokio::test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (state_chain_client, mut block_stream) =
