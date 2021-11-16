@@ -57,6 +57,9 @@ optional = true
 tag = 'monthly-2021-09+1'
 
 # Dev dependencies
+[dev-dependencies]
+hex-literal = { version = "0.3" }
+
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'

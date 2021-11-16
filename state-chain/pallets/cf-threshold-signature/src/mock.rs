@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_threshold_signature};
+use cf_chains::{eth, ChainCrypto};
 use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -121,8 +122,15 @@ pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = Vec<u8>;
-	fn current_key() -> Self::KeyId {
+
+	fn current_key_id() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
+	}
+
+	fn current_key() -> <Doge as ChainCrypto>::AggKey {
+		eth::AggKey::from_pubkey_compressed(hex_literal::hex!(
+			"0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae"
+		))
 	}
 }
 
@@ -160,6 +168,19 @@ pub struct Doge;
 impl cf_chains::Chain for Doge {
 	const CHAIN_ID: cf_chains::ChainId = cf_chains::ChainId::Ethereum;
 }
+impl ChainCrypto for Doge {
+	type AggKey = eth::AggKey;
+	type Payload = [u8; 4];
+	type ThresholdSignature = String;
+
+	fn verify_threshold_signature(
+		_agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
+	) -> bool {
+		*payload == DOGE_PAYLOAD && signature == "Wow!"
+	}
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct DogeThresholdSignerContext {
@@ -167,6 +188,8 @@ pub struct DogeThresholdSignerContext {
 }
 
 pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
+pub const VALID_SIGNATURE: &'static str = "Wow!";
+pub const INVALID_SIGNATURE: &'static str = "Pow!";
 
 impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;
