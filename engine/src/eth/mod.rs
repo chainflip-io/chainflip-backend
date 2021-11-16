@@ -12,31 +12,26 @@ use secp256k1::SecretKey;
 use slog::o;
 use sp_core::H160;
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::task::JoinHandle;
-use web3::types::U64;
+use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use web3::{ethabi::Address, types::U64};
 
-use crate::common::Mutex;
-use crate::logging::COMPONENT_KEY;
-use crate::settings;
-use crate::state_chain::client::{StateChainClient, StateChainRpcApi};
-use futures::TryFutureExt;
-use std::str::FromStr;
-use std::time::Duration;
-use std::{fs::read_to_string, sync::Arc};
+use crate::{
+    common::Mutex,
+    logging::COMPONENT_KEY,
+    settings,
+    state_chain::client::{StateChainClient, StateChainRpcApi},
+};
+use futures::{TryFutureExt, TryStreamExt};
+use std::{fmt::Debug, fs::read_to_string, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
-    signing::SecretKeyRef,
+    signing::{Key, SecretKeyRef},
     transports::WebSocket,
     types::{BlockNumber, Bytes, FilterBuilder, Log, SyncState, TransactionParameters, H256},
     Web3,
 };
 
-use futures::TryStreamExt;
-
 use tokio_stream::{Stream, StreamExt};
-
-use std::fmt::Debug;
 
 use event_common::EventWithCommon;
 
@@ -50,7 +45,7 @@ pub enum EventParseError {
     MissingParam(String),
 }
 
-// The signature is recalculated on each Event::signature() call, so we use this structure to cache the signture-
+// The signature is recalculated on each Event::signature() call, so we use this structure to cache the signture
 pub struct SignatureAndEvent {
     pub signature: H256,
     pub event: Event,
@@ -101,7 +96,6 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 
             // clone for capture by tokio task
             let task_end_at_block_c = task_end_at_block.clone();
-            // let contract_observer = contract_observer.clone();
             let web3 = web3.clone();
             let logger = logger.clone();
             let contract_observer = contract_observer.clone();
@@ -111,7 +105,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     let mut event_stream = contract_observer
                         .event_stream(&web3, received_window.from, &logger)
                         .await
-                        .unwrap();
+                        .expect("Failed to initialise event stream");
 
                     // TOOD: Handle None on stream, and result event being an error
                     while let Some(result_event) = event_stream.next().await {
@@ -144,7 +138,7 @@ pub async fn new_synced_web3_client(
         Ok(web3::Web3::new(
             web3::transports::WebSocket::new(node_endpoint)
                 .await
-                .context("Failed to connect to Ethereum node")?,
+                .context(here!())?,
         ))
     })
     // Flatten the Result<Result<>> returned by timeout()
@@ -172,6 +166,7 @@ pub async fn new_synced_web3_client(
 pub struct EthBroadcaster {
     web3: Web3<web3::transports::WebSocket>,
     secret_key: SecretKey,
+    pub address: Address,
 }
 
 impl EthBroadcaster {
@@ -181,15 +176,17 @@ impl EthBroadcaster {
     ) -> Result<Self> {
         let key = read_to_string(settings.eth.private_key_file.as_path())
             .context("Failed to read eth.private_key_file")?;
+        let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
+            panic!(
+                "Should read in secret key from: {}: {}",
+                settings.eth.private_key_file.display(),
+                e,
+            )
+        });
         Ok(Self {
             web3,
-            secret_key: SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
-                panic!(
-                    "Should read in secret key from: {}: {}",
-                    settings.eth.private_key_file.display(),
-                    e,
-                )
-            }),
+            secret_key,
+            address: SecretKeyRef::new(&secret_key).address(),
         })
     }
 
@@ -199,10 +196,10 @@ impl EthBroadcaster {
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
         let tx_params = TransactionParameters {
-            to: Some(web3::types::H160(unsigned_tx.contract.0)),
+            to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
-            value: web3::types::U256(unsigned_tx.value.0),
+            value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
             ..Default::default()
         };

@@ -78,12 +78,13 @@ impl MockCfe {
 		scenario: Scenario,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
-		// Invalid signer refused.
+		// Only the nominee can return the signed tx.
 		assert_noop!(
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
 				MockSignedTx::Valid,
+				()
 			),
 			Error::<Test, Instance1>::InvalidSigner
 		);
@@ -95,6 +96,7 @@ impl MockCfe {
 				Scenario::BadSigner => MockSignedTx::Invalid,
 				_ => MockSignedTx::Valid,
 			},
+			()
 		));
 	}
 
@@ -256,7 +258,8 @@ fn test_invalid_id_is_noop() {
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
 				0,
-				MockSignedTx::Valid
+				MockSignedTx::Valid,
+				()
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
