@@ -16,7 +16,7 @@ pub trait Chain {
 
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
-	type AggKey: Into<Vec<u8>> + TryFrom<Vec<u8>> + Member + Parameter;
+	type AggKey: TryFrom<Vec<u8>> + Member + Parameter;
 	type Payload: Member + Parameter;
 	type ThresholdSignature: Member + Parameter;
 
