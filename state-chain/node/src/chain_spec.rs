@@ -145,7 +145,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
-				// Sudo account - Bashful
+				// Sudo account - Snow White
 				snow_white.into(),
 				// Pre-funded accounts
 				vec![
