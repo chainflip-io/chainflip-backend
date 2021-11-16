@@ -71,14 +71,9 @@ pub async fn start<BlockStream, RpcClient>(
                         .expect("Could not get current epoch");
 
                     option_account_data_epoch = Some((account_data, current_epoch));
-                    if matches!(account_data.state, ChainflipAccountState::Backup)
-                        || matches!(account_data.state, ChainflipAccountState::Passive)
-                    {
-                        check_account_state = true;
-                    } else {
-                        // if we're a validator, we know what state we will be in until the next epoch
-                        check_account_state = false;
-                    }
+                    check_account_state =
+                        matches!(account_data.state, ChainflipAccountState::Backup)
+                            || matches!(account_data.state, ChainflipAccountState::Passive);
                 }
                 let (account_data, current_epoch) =
                     option_account_data_epoch.expect("always initialised on first iteration");
@@ -389,41 +384,48 @@ pub async fn start<BlockStream, RpcClient>(
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::{eth, logging, settings};
+#[cfg(test)]
+mod tests {
+    use crate::{eth, logging, settings};
 
-//     use super::*;
+    use super::*;
 
-//     #[tokio::test]
-//     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
-//     async fn run_the_sc_observer() {
-//         let settings = settings::test_utils::new_test_settings().unwrap();
-//         let logger = logging::test_utils::new_test_logger();
+    #[tokio::test]
+    #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
+    async fn run_the_sc_observer() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let logger = logging::test_utils::new_test_logger();
 
-//         let (state_chain_client, block_stream) =
-//             crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
-//                 .await
-//                 .unwrap();
+        let (state_chain_client, block_stream) =
+            crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+                .await
+                .unwrap();
 
-//         let (multisig_instruction_sender, _multisig_instruction_receiver) =
-//             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-//         let (_multisig_event_sender, multisig_event_receiver) =
-//             tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+        let (multisig_instruction_sender, _multisig_instruction_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (_multisig_event_sender, multisig_event_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
-//         let web3 = eth::new_synced_web3_client(&settings, &logger)
-//             .await
-//             .unwrap();
-//         let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+        let web3 = eth::new_synced_web3_client(&settings, &logger)
+            .await
+            .unwrap();
+        let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
 
-//         start(
-//             state_chain_client,
-//             block_stream,
-//             eth_broadcaster,
-//             multisig_instruction_sender,
-//             multisig_event_receiver,
-//             &logger,
-//         )
-//         .await;
-//     }
-// }
+        let (sm_window_sender, _sm_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+        let (km_window_sender, _km_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
+        start(
+            state_chain_client,
+            block_stream,
+            eth_broadcaster,
+            multisig_instruction_sender,
+            multisig_event_receiver,
+            sm_window_sender,
+            km_window_sender,
+            &logger,
+        )
+        .await;
+    }
+}
