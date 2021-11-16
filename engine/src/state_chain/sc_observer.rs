@@ -59,54 +59,6 @@ pub async fn start<BlockStream, RpcClient>(
             Ok(block_header) => {
                 let block_hash = block_header.hash();
 
-                if check_account_state || option_account_data_epoch.is_none() {
-                    let account_data = state_chain_client
-                        .get_account_data(block_hash)
-                        .await
-                        .expect("Could not get account data");
-
-                    let current_epoch = state_chain_client
-                        .epoch_at_block(block_hash)
-                        .await
-                        .expect("Could not get current epoch");
-
-                    option_account_data_epoch = Some((account_data, current_epoch));
-                    check_account_state =
-                        matches!(account_data.state, ChainflipAccountState::Backup)
-                            || matches!(account_data.state, ChainflipAccountState::Passive);
-                }
-                let (account_data, current_epoch) =
-                    option_account_data_epoch.expect("always initialised on first iteration");
-
-                let is_outgoing = if let Some(last_active_epoch) = account_data.last_active_epoch {
-                    last_active_epoch + 1 == current_epoch
-                } else {
-                    false
-                };
-
-                // We want to submit the heartbeat when we are:
-                // - active
-                // - outgoing
-                // - backup
-                // NOT Passive (unless we are outgoing + passive)
-                if (matches!(account_data.state, ChainflipAccountState::Validator)
-                    || matches!(account_data.state, ChainflipAccountState::Backup)
-                    || is_outgoing)
-                    // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                    && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
-                        == 0)
-                {
-                    slog::info!(
-                        logger,
-                        "Sending heartbeat at block: {}",
-                        block_header.number
-                    );
-                    let _ = state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-                        .await;
-                }
-
                 // Process this block's events
                 match state_chain_client.get_events(&block_header).await {
                     Ok(events) => {
@@ -376,6 +328,54 @@ pub async fn start<BlockStream, RpcClient>(
                             error,
                         );
                     }
+                }
+
+                if check_account_state || option_account_data_epoch.is_none() {
+                    let account_data = state_chain_client
+                        .get_account_data(block_hash)
+                        .await
+                        .expect("Could not get account data");
+
+                    let current_epoch = state_chain_client
+                        .epoch_at_block(block_hash)
+                        .await
+                        .expect("Could not get current epoch");
+
+                    option_account_data_epoch = Some((account_data, current_epoch));
+                    check_account_state =
+                        matches!(account_data.state, ChainflipAccountState::Backup)
+                            || matches!(account_data.state, ChainflipAccountState::Passive);
+                }
+                let (account_data, current_epoch) =
+                    option_account_data_epoch.expect("always initialised on first iteration");
+
+                let is_outgoing = if let Some(last_active_epoch) = account_data.last_active_epoch {
+                    last_active_epoch + 1 == current_epoch
+                } else {
+                    false
+                };
+
+                // We want to submit the heartbeat when we are:
+                // - active
+                // - outgoing
+                // - backup
+                // NOT Passive (unless we are outgoing + passive)
+                if (matches!(account_data.state, ChainflipAccountState::Validator)
+                    || matches!(account_data.state, ChainflipAccountState::Backup)
+                    || is_outgoing)
+                    // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
+                    && ((block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0)
+                {
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat at block: {}",
+                        block_header.number
+                    );
+                    let _ = state_chain_client
+                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .await;
                 }
             }
             Err(error) => {
