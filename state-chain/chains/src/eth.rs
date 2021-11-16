@@ -229,7 +229,7 @@ impl AggKey {
 	}
 
 	/// Verify a signature against a given message hash for this public key.
-	/// 
+	///
 	/// **TODO: In-depth review to ensure correctness.**
 	pub fn verify(
 		&self,
@@ -551,7 +551,7 @@ impl UnsignedTransaction {
 pub type RawSignedTransaction = Vec<u8>;
 
 /// Checks that the raw transaction is a valid rlp-encoded transaction.
-/// 
+///
 /// **TODO: In-depth review to ensure correctness.**
 pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
