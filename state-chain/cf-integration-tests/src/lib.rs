@@ -495,7 +495,8 @@ mod tests {
 	mod genesis {
 		use super::*;
 		use cf_traits::{
-			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountStore, StakeTransfer,
+			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 		pub const NUMBER_OF_VALIDATORS: u32 = 3;
@@ -626,11 +627,13 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
+					let account_data = ChainflipAccountStore::<Runtime>::get(account);
 					assert_eq!(
 						Some(0),
-						ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
+						account_data.last_active_epoch,
 						"validator should be active in the genesis epoch(0)"
 					);
+					assert_eq!(ChainflipAccountState::Validator, account_data.state);
 				}
 			});
 		}

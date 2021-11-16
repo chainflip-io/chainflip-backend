@@ -122,6 +122,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
@@ -142,8 +145,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
-				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				// Sudo account - Snow White
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
 					// Bashful

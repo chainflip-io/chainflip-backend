@@ -7,6 +7,7 @@ use chainflip_engine::{
     eth::{
         new_synced_web3_client,
         stake_manager::{StakeManager, StakeManagerEvent},
+        EthObserver,
     },
     logging::utils,
     settings::Settings,
@@ -53,7 +54,7 @@ pub async fn test_all_stake_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -79,7 +80,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -108,7 +109,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::ClaimExecuted {
                 account_id, amount, ..
             } => {
@@ -126,7 +127,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -148,7 +149,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,

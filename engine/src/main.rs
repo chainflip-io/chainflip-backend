@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{self, key_manager, stake_manager, EthBroadcaster},
+    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
@@ -8,6 +8,7 @@ use chainflip_engine::{
     state_chain,
 };
 use pallet_cf_validator::SemVer;
+use pallet_cf_vaults::BlockHeightWindow;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -69,6 +70,17 @@ async fn main() {
     let eth_broadcaster =
         EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
 
+    // TODO: multi consumer, single producer?
+    let (sm_window_sender, sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
+    let stake_manager_contract =
+        StakeManager::new(&settings).expect("Should create StakeManager contract");
+    let key_manager_contract =
+        KeyManager::new(&settings).expect("Should create KeyManager contract");
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -106,24 +118,25 @@ async fn main() {
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
+            // send messages to these channels to start witnessing
+            sm_window_sender,
+            km_window_sender,
             &root_logger
         ),
-        // Start eth components
-        stake_manager::start_stake_manager_witness(
+        // Start eth observors
+        eth::start_contract_observer(
+            stake_manager_contract,
             &web3,
-            &settings,
+            sm_window_receiver,
             state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start StakeManager witness"),
-        key_manager::start_key_manager_witness(
+            &root_logger,
+        ),
+        eth::start_contract_observer(
+            key_manager_contract,
             &web3,
-            &settings,
+            km_window_receiver,
             state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start KeyManager witness"),
+            &root_logger,
+        ),
     );
 }
