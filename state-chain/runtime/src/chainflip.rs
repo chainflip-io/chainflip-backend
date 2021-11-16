@@ -19,7 +19,6 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::weights::Weight;
-use frame_system::Config;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use sp_core::{H160, H256};

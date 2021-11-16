@@ -337,6 +337,7 @@ mod tests {
 	pub const ALICE: [u8; 32] = [0xff; 32];
 	pub const BOB: [u8; 32] = [0xfe; 32];
 	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	// Root and Gov member
 	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
@@ -909,6 +910,42 @@ mod tests {
 							Error::<Runtime>::PendingClaim
 						);
 					}
+				});
+		}
+	}
+
+	mod runtime {
+		use super::{genesis, network, *};
+		use crate::tests::{ALICE, ETH_ZERO_ADDRESS};
+		use pallet_cf_validator::SemVer;
+		// use frame_support::assert_ok;
+		use pallet_cf_staking::pallet::Error;
+		use state_chain_runtime::Staking;
+
+		#[test]
+		// We have two types of accounts. One set of accounts which is part
+		// of the governance and is allowed to make free calls to governance extrinsic.
+		// All other accounts are normally charged and can call any extrinsic.
+		fn restriction_handling() {
+			const EPOCH_BLOCKS: u32 = 100;
+			const MAX_VALIDATORS: u32 = 3;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					// Expect a successfully gov call
+					let call = Box::new(frame_system::Call::remark(vec![]).into());
+					assert_ok!(Governance::propose_governance_extrinsic(
+						Origin::signed(ERIN.into()),
+						call
+					));
+					// Expect a call from a gov member to a normal extrinsic to fail
+					let version = SemVer { major: 1, minor: 2, patch: 3 };
+					assert_noop!(
+						Validator::cfe_version(Origin::signed(ERIN.into()), version),
+						Error::<Runtime>::NoClaimsDuringAuctionPhase
+					);
 				});
 		}
 	}
