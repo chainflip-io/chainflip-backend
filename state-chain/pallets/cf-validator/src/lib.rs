@@ -32,9 +32,9 @@ type SessionIndex = u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct SemVer {
-	major: u8,
-	minor: u8,
-	patch: u8,
+	pub major: u8,
+	pub minor: u8,
+	pub patch: u8,
 }
 
 type Version = SemVer;
@@ -148,7 +148,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [AuctionInProgress](Error::AuctionInProgress)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
@@ -171,7 +171,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Session Pallet](pallet_session::Config)
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
+		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
 		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,

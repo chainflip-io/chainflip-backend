@@ -233,11 +233,13 @@ impl pallet_cf_vaults::Config for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 }
 
 impl pallet_cf_witness_api::Config for Test {
 	type Call = Call;
 	type Witnesser = MockWitnesser;
+	type WeightInfoWitnesser = ();
 }
 
 // Build genesis storage according to the mock runtime.

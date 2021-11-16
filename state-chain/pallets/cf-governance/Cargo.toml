@@ -72,11 +72,9 @@ std = [
     'scale-info/std',
     'frame-support/std',
     'frame-system/std',
-    'frame-benchmarking/std',
     'sp-core/std',
     'sp-std/std',
     'sp-runtime/std',
-    'frame-benchmarking/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

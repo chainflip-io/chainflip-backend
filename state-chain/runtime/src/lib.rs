@@ -160,6 +160,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -332,6 +333,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
+	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -377,10 +379,12 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
+	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
 	type Event = Event;
+	type WeightInfoRewards = pallet_cf_rewards::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -397,6 +401,7 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
+	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -412,6 +417,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_online::Config for Runtime {
@@ -419,6 +425,7 @@ impl pallet_cf_online::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
 use frame_support::instances::Instance1;
@@ -689,6 +696,13 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_staking, Staking);
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
+			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
+			add_benchmark!(params, batches, pallet_cf_online, Online);
+			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
+			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
+			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
+			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
+			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
