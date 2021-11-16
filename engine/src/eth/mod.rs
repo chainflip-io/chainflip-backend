@@ -113,7 +113,7 @@ impl EthBroadcaster {
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
         let tx_params = TransactionParameters {
-            to: Some(unsigned_tx.contract.0.into()),
+            to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: web3::types::U256(unsigned_tx.value.0),
