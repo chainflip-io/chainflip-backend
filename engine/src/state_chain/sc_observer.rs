@@ -150,7 +150,7 @@ pub async fn start<BlockStream, RpcClient>(
                 }
 
                 // Process this block's events
-                match state_chain_client.get_events(&block_header).await {
+                match state_chain_client.get_events(block_hash).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
