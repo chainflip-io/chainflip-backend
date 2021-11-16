@@ -133,6 +133,8 @@ impl CeremonyManager {
         };
 
         let logger = &self.logger;
+
+        // TODO: Make sure that we don't process past (already removed) ceremonies
         let state = self
             .keygen_states
             .entry(ceremony_id)
