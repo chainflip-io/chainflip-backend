@@ -191,6 +191,7 @@ impl pallet_cf_emissions::Config for Test {
 	type NonceProvider = Self;
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

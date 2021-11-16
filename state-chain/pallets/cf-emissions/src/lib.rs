@@ -8,6 +8,9 @@ use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 
@@ -16,6 +19,7 @@ mod tests;
 
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
+use core::convert::TryInto;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -23,10 +27,14 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 type BasisPoints = u32;
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
@@ -81,6 +89,9 @@ pub mod pallet {
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -141,15 +152,15 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let (should_mint, mut weight) = Self::should_mint_at(current_block);
+			let should_mint = Self::should_mint_at(current_block);
 
 			if should_mint {
-				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
-				let new_total_supply = T::Issuance::total_issuance();
-				Self::broadcast_update_total_supply(new_total_supply, current_block);
+				Self::mint_rewards_for_block(current_block);
+				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+				T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
+			} else {
+				T::WeightInfo::no_rewards_minted()
 			}
-
-			weight
 		}
 	}
 
@@ -166,7 +177,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation(1))]
 		pub fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -187,7 +198,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation(1))]
 		pub fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -224,13 +235,12 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Determines if we should mint at block number `block_number`.
-	fn should_mint_at(block_number: T::BlockNumber) -> (bool, Weight) {
+	fn should_mint_at(block_number: T::BlockNumber) -> bool {
 		let mint_interval = T::MintInterval::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
-		let weight = T::DbWeight::get().reads(2);
 
-		(should_mint, weight)
+		should_mint
 	}
 
 	/// Checks if we should mint.
@@ -256,37 +266,37 @@ impl<T: Config> Pallet<T> {
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
 	/// be minted and distributes this as a reward via [RewardsDistribution].
-	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
+	fn mint_rewards_for_block(block_number: T::BlockNumber) {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		if blocks_elapsed == Zero::zero() {
-			return Ok(T::DbWeight::get().reads(1))
+			return
 		}
 
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = ValidatorEmissionPerBlock::<T>::get()
-			.checked_mul(&blocks_elapsed)
-			.ok_or_else(|| T::DbWeight::get().reads(2))?;
+		let reward_amount = ValidatorEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
 
-		let exec_weight = if reward_amount.is_zero() {
-			0
-		} else {
+		// Check if an overflow occurred during the multiplication
+		if reward_amount.is_none() {
+			log::error!("Overflow while trying to mint rewards at block {:?}.", block_number);
+			return
+		}
+
+		let reward_amount = reward_amount.expect("Checked for overflow already.");
+
+		if !reward_amount.is_zero() {
 			// Mint the rewards
 			let reward = T::Issuance::mint(reward_amount);
 
 			// Delegate the distribution.
 			T::RewardsDistribution::distribute(reward);
-			T::RewardsDistribution::execution_weight()
-		};
+		}
 
 		// Update this pallet's state.
 		LastMintBlock::<T>::set(block_number);
 
 		Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
-
-		let weight = exec_weight + T::DbWeight::get().reads_writes(2, 1);
-		Ok(weight)
 	}
 }
 
@@ -326,14 +336,10 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
+	// TODO: remove weight and delegate benchmarking to the calling components
 	fn trigger_emissions() -> Weight {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
-		match Self::mint_rewards_for_block(current_block_number) {
-			Ok(weight) => weight,
-			Err(weight) => {
-				log::error!("Failed to mint rewards at block {:?}", current_block_number);
-				weight
-			},
-		}
+		Self::mint_rewards_for_block(current_block_number);
+		0
 	}
 }

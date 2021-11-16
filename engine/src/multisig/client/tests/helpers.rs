@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
 use itertools::Itertools;
+use jsonrpc_core::Error;
 use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -523,12 +524,9 @@ impl KeygenContext {
 
         println!("Distributed all comm1");
 
-        for c in clients.iter() {
-            assert_eq!(
-                get_stage_for_keygen_ceremony(&c).as_deref(),
-                Some("BroadcastStage<VerifyCommitmentsBroadcast2>")
-            );
-        }
+        clients
+            .iter()
+            .for_each(|c| assert!(c.is_at_keygen_stage(2)));
 
         let ver2_vec = recv_all_data_keygen!(rxs, KeygenData::Verify2);
 
@@ -540,6 +538,10 @@ impl KeygenContext {
         // *** Distribute VerifyComm2s, so we can advance and generate Secret3 ***
 
         distribute_data_keygen!(clients, self.account_ids, ver2_vec);
+
+        clients
+            .iter()
+            .for_each(|c| assert!(c.is_at_keygen_stage(3)));
 
         // *** Collect all Secret3
 
@@ -687,16 +689,13 @@ impl KeygenContext {
 
         // *** Send a request to sign and generate BC1 to be distributed ***
 
-        // NOTE: only parties 1 and 2 will participate in signing (SIGNER_IDXS)
+        // NOTE: only parties 0, 1 and 2 will participate in signing (SIGNER_IDXS)
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
 
             c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
-            assert_eq!(
-                get_stage_for_signing_ceremony(&c),
-                Some("BroadcastStage<AwaitCommitments1>".to_string())
-            );
+            assert!(c.is_at_signing_stage(1));
         }
 
         let comm1_vec = collect_all_comm1(rxs).await;
@@ -709,7 +708,11 @@ impl KeygenContext {
         // *** Broadcast Comm1 messages to advance to Stage2 ***
         broadcast_all_comm1(&mut clients, &comm1_vec, &mut self.comm1_to_send).await;
 
-        // TODO: check stage
+        for idx in SIGNER_IDXS.iter() {
+            let c = &mut clients[*idx];
+            assert!(c.is_at_signing_stage(2));
+        }
+
         // *** Collect Ver2 messages ***
 
         let ver2_vec = collect_all_ver2(rxs).await;
@@ -724,24 +727,20 @@ impl KeygenContext {
         broadcast_all_ver2(&mut clients, &ver2_vec).await;
 
         // Check if the ceremony was aborted at this stage
-        if let Some(outcome) = check_sig_outcome(&mut rxs[0]).await {
-            // TODO: check that the outcome is the same for all parties
+        if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
+            // The ceremony was aborted early,
             return ValidSigningStates {
                 sign_phase1,
                 sign_phase2,
                 sign_phase3: None,
                 sign_phase4: None,
-                outcome: outcome.clone(),
+                outcome: outcome,
             };
         }
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-
-            assert_eq!(
-                get_stage_for_signing_ceremony(&c),
-                Some("BroadcastStage<LocalSigStage3>".to_string())
-            );
+            assert!(c.is_at_signing_stage(3));
         }
 
         // *** Collect local sigs ***
@@ -768,26 +767,75 @@ impl KeygenContext {
 
         broadcast_all_ver4(&mut clients, &ver4_vec).await;
 
-        let outcome = match recv_next_inner_event(&mut rxs[0]).await {
-            InnerEvent::SigningResult(outcome) => outcome,
-            _ => panic!("Unexpected event"),
-        };
+        if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
+            println!("Signing ceremony took: {:?}", instant.elapsed());
 
-        println!("Signing ceremony took: {:?}", instant.elapsed());
+            // Make sure the channel is clean for the unit tests
+            for idx in SIGNER_IDXS.iter() {
+                assert_channel_empty(&mut rxs[idx.clone()]).await;
+            }
 
-        ValidSigningStates {
-            sign_phase1,
-            sign_phase2,
-            sign_phase3: Some(sign_phase3),
-            sign_phase4: Some(sign_phase4),
-            outcome,
+            ValidSigningStates {
+                sign_phase1,
+                sign_phase2,
+                sign_phase3: Some(sign_phase3),
+                sign_phase4: Some(sign_phase4),
+                outcome: outcome,
+            }
+        } else {
+            panic!("No Signing Outcome")
         }
     }
 }
 
+// Checks that all signers got the same outcome and returns it
+async fn check_and_get_signing_outcome(
+    rxs: &mut Vec<InnerEventReceiver>,
+) -> Option<SigningOutcome> {
+    let mut outcomes: Vec<SigningOutcome> = Vec::new();
+    for idx in SIGNER_IDXS.iter() {
+        if let Some(outcome) = check_sig_outcome(&mut rxs[idx.clone()]).await {
+            // sort the vec of blamed_parties so that we can compare the SigningOutcome's later
+            let sorted_outcome = match &outcome.result {
+                Ok(_) => outcome.clone(),
+                Err((reason, blamed_parties)) => {
+                    let sorted_blamed_parties: Vec<AccountId> =
+                        blamed_parties.iter().sorted().cloned().collect();
+                    SigningOutcome {
+                        id: outcome.id,
+                        result: Err((reason.clone(), sorted_blamed_parties)),
+                    }
+                }
+            };
+
+            outcomes.push(sorted_outcome);
+        }
+    }
+
+    if !outcomes.is_empty() {
+        assert_eq!(
+            outcomes.len(),
+            SIGNER_IDXS.len(),
+            "Not all signers got an outcome"
+        );
+
+        for outcome in outcomes.iter() {
+            assert_eq!(outcome, &outcomes[0], "Outcome different between signers");
+        }
+
+        // Consume the outcome message if its all good
+        for idx in SIGNER_IDXS.iter() {
+            recv_next_inner_event_opt(&mut rxs[idx.clone()]).await;
+        }
+
+        return Some(outcomes[0].clone());
+    }
+    None
+}
+
 const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
-// If we timeout, the channel is empty at the time of retrieval
+/// If we timeout, the channel is empty at the time of retrieval
 pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
     match recv_next_inner_event_opt(rx).await {
         None => {}
@@ -795,6 +843,11 @@ pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
             panic!("Channel is not empty: {:?}", event);
         }
     }
+}
+
+/// Consume all messages in the channel, then times out
+pub async fn clear_channel(rx: &mut InnerEventReceiver) {
+    while let Some(_) = recv_next_inner_event_opt(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
@@ -959,6 +1012,37 @@ impl MultisigClientNoDB {
     pub fn send_request_to_sign_default(&mut self, key_id: KeyId, signers: Vec<AccountId>) {
         let sign_info = SigningInfo::new(SIGN_CEREMONY_ID, key_id, MESSAGE_HASH.clone(), signers);
         self.process_multisig_instruction(MultisigInstruction::Sign(sign_info));
+    }
+
+    /// Check is the client is at the specified signing BroadcastStage (0-4).
+    /// 0 = No Stage
+    /// 1 = AwaitCommitments1 ... and so on
+    pub fn is_at_signing_stage(&self, stage_number: u32) -> bool {
+        let stage = get_stage_for_signing_ceremony(self);
+        match stage_number {
+            0 => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
+            _ => false,
+        }
+    }
+
+    /// Check is the client is at the specified keygen BroadcastStage (0-5).
+    /// 0 = No Stage
+    /// 1 = AwaitCommitments1 ... and so on
+    pub fn is_at_keygen_stage(&self, stage_number: u32) -> bool {
+        let stage = get_stage_for_keygen_ceremony(self);
+        match stage_number {
+            0 => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
+            _ => false,
+        }
     }
 }
 
