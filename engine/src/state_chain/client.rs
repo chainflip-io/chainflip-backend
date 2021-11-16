@@ -349,7 +349,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<StorageType> {
-        println!("get from storage with the storage key: {:?}", storage_key);
         let storage_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), storage_key)
@@ -368,6 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .flatten()
             .collect::<Result<_>>()?;
 
+        println!("get from storage with the storage key: {:?}", storage_key);
         Ok(storage_updates.last().unwrap().to_owned())
     }
 
