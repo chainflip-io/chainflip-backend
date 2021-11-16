@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{self, key_manager, stake_manager, EthBroadcaster},
+    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
@@ -7,6 +7,8 @@ use chainflip_engine::{
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
+use pallet_cf_validator::SemVer;
+use pallet_cf_vaults::BlockHeightWindow;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -33,6 +35,18 @@ async fn main() {
 
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
+    state_chain_client
+        .submit_extrinsic(
+            &root_logger,
+            pallet_cf_validator::Call::cfe_version(SemVer {
+                major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+                minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+                patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+            }),
+        )
+        .await
+        .expect("Should submit version to state chain");
+
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
 
@@ -56,6 +70,17 @@ async fn main() {
     let eth_broadcaster =
         EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
 
+    // TODO: multi consumer, single producer?
+    let (sm_window_sender, sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
+    let stake_manager_contract =
+        StakeManager::new(&settings).expect("Should create StakeManager contract");
+    let key_manager_contract =
+        KeyManager::new(&settings).expect("Should create KeyManager contract");
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -66,6 +91,7 @@ async fn main() {
             p2p_message_receiver,
             p2p_message_command_sender,
             shutdown_client_rx,
+            multisig::KeygenOptions::default(),
             &root_logger,
         ),
         p2p::conductor::start(
@@ -92,24 +118,25 @@ async fn main() {
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
+            // send messages to these channels to start witnessing
+            sm_window_sender,
+            km_window_sender,
             &root_logger
         ),
-        // Start eth components
-        stake_manager::start_stake_manager_witness(
+        // Start eth observors
+        eth::start_contract_observer(
+            stake_manager_contract,
             &web3,
-            &settings,
+            sm_window_receiver,
             state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start StakeManager witness"),
-        key_manager::start_key_manager_witness(
+            &root_logger,
+        ),
+        eth::start_contract_observer(
+            key_manager_contract,
             &web3,
-            &settings,
+            km_window_receiver,
             state_chain_client.clone(),
-            &root_logger
-        )
-        .await
-        .expect("Could not start KeyManager witness"),
+            &root_logger,
+        ),
     );
 }

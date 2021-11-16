@@ -404,23 +404,14 @@ fn build_challenge(
     nonce_commitment: secp256k1::PublicKey,
     message: &[u8],
 ) -> Scalar {
-    use sp_core::Hasher;
-    use sp_runtime::traits::Keccak256;
+    use crate::eth::utils::pubkey_to_eth_addr;
+    let msg_hash: [u8; 32] = message
+        .try_into()
+        .expect("Should never fail, the `message` argument should always be a valid hash");
 
-    let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
+    let e =
+        AggKey::from(&pubkey).message_challenge(&msg_hash, &pubkey_to_eth_addr(nonce_commitment));
 
-    let agg_key = AggKey::from(pubkey);
-
-    // Assemble the challenge in correct order according to this contract:
-    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-    let e_bytes: Vec<_> = [
-        &agg_key.pub_key_x[..],
-        &[agg_key.pub_key_y_parity],
-        message,
-        &eth_addr[..],
-    ]
-    .concat();
-
-    let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
+    let e_bn = BigInt::from_bytes(&e[..]);
     ECScalar::from(&e_bn)
 }

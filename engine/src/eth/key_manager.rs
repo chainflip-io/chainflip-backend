@@ -4,8 +4,7 @@
 use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
-    eth::{eth_event_streamer, utils, SignatureAndEvent},
-    logging::COMPONENT_KEY,
+    eth::{utils, SignatureAndEvent},
     settings,
     state_chain::client::StateChainRpcApi,
 };
@@ -14,63 +13,18 @@ use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    transports::WebSocket,
     types::{H160, H256},
-    Web3,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use futures::{Future, Stream, StreamExt};
+use std::fmt::Debug;
 
-use slog::o;
+use async_trait::async_trait;
 
 use super::decode_shared_event_closure;
-use super::eth_event_streamer::Event;
-
-/// Set up the eth event streamer for the KeyManager contract, and start it
-pub async fn start_key_manager_witness<RPCCLient: StateChainRpcApi>(
-    web3: &Web3<WebSocket>,
-    settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient<RPCCLient>>,
-    logger: &slog::Logger,
-) -> Result<impl Future> {
-    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
-    slog::info!(logger, "Starting KeyManager witness");
-
-    let key_manager = KeyManager::new(&settings).context(here!())?;
-
-    let mut event_stream = key_manager
-        .event_stream(&web3, settings.eth.from_block, &logger)
-        .await?;
-
-    Ok(async move {
-        while let Some(result_event) = event_stream.next().await {
-            // TODO: Handle unwraps
-            let event = result_event.unwrap();
-            slog::info!(logger, "Event found: {}", &event);
-            match event.event_enum {
-                KeyManagerEvent::KeyChange { new_key, .. } => {
-                    let _ = state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                                ChainId::Ethereum,
-                                new_key.serialize().to_vec(),
-                                event.block_number,
-                                event.tx_hash.to_vec(),
-                            ),
-                        )
-                        .await;
-                }
-                KeyManagerEvent::Shared(shared_event) => match shared_event {
-                    SharedEvent::Refunded { .. } => {}
-                    SharedEvent::RefundFailed { .. } => {}
-                },
-            }
-        }
-    })
-}
+use super::event_common::EventWithCommon;
+use super::EthObserver;
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -159,6 +113,67 @@ pub enum KeyManagerEvent {
     Shared(SharedEvent),
 }
 
+#[async_trait]
+impl EthObserver for KeyManager {
+    type EventParameters = KeyManagerEvent;
+
+    async fn handle_event<RPCClient>(
+        &self,
+        event: EventWithCommon<Self::EventParameters>,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        logger: &slog::Logger,
+    ) where
+        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+    {
+        match event.event_parameters {
+            KeyManagerEvent::KeyChange { new_key, .. } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        &logger,
+                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
+                            ChainId::Ethereum,
+                            new_key.serialize().to_vec(),
+                            event.block_number,
+                            event.tx_hash.to_vec(),
+                        ),
+                    )
+                    .await;
+            }
+            KeyManagerEvent::Shared(shared_event) => match shared_event {
+                SharedEvent::Refunded { .. } => {}
+                SharedEvent::RefundFailed { .. } => {}
+            },
+        }
+    }
+
+    fn decode_log_closure(
+        &self,
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
+        let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
+
+        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
+
+        Ok(Box::new(
+            move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
+                Ok(if signature == key_change.signature {
+                    let log = key_change.event.parse_log(raw_log)?;
+                    KeyManagerEvent::KeyChange {
+                        signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
+                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
+                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                    }
+                } else {
+                    KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                })
+            },
+        ))
+    }
+
+    fn get_deployed_address(&self) -> H160 {
+        self.deployed_address
+    }
+}
+
 impl KeyManager {
     /// Loads the contract abi to get event definitions
     pub fn new(settings: &settings::Settings) -> Result<Self> {
@@ -166,47 +181,6 @@ impl KeyManager {
             deployed_address: settings.eth.key_manager_eth_address,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
-    }
-
-    // TODO: Maybe try to factor this out (See StakeManager)
-    pub async fn event_stream(
-        &self,
-        web3: &Web3<WebSocket>,
-        from_block: u64,
-        logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<Event<KeyManagerEvent>>>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.deployed_address,
-            self.decode_log_closure()?,
-            from_block,
-            logger,
-        )
-        .await
-    }
-
-    pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
-        let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
-
-        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
-
-        Ok(
-            move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                if signature == key_change.signature {
-                    let log = key_change.event.parse_log(raw_log)?;
-                    Ok(KeyManagerEvent::KeyChange {
-                        signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
-                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    })
-                } else {
-                    Ok(KeyManagerEvent::Shared(decode_shared_event_closure(
-                        signature, raw_log,
-                    )?))
-                }
-            },
-        )
     }
 }
 
@@ -370,7 +344,7 @@ mod tests {
             H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52")
                 .unwrap();
 
-        let event = Event::decode(
+        let event = EventWithCommon::decode(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),

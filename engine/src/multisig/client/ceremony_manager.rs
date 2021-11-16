@@ -12,13 +12,17 @@ use client::{
 };
 use pallet_cf_vaults::CeremonyId;
 
-use crate::logging::CEREMONY_ID_KEY;
+use crate::logging::{
+    CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+};
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
 use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use crate::p2p::AccountId;
+
+use super::keygen::KeygenOptions;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -53,7 +57,7 @@ impl CeremonyManager {
         let logger = &self.logger;
         self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
-                slog::warn!(logger, "Signing state expired and will be abandoned");
+                slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
                 let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
 
                 events_to_send.push(InnerEvent::SigningResult(outcome));
@@ -109,7 +113,7 @@ impl CeremonyManager {
     }
 
     /// Process a keygen request
-    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo) {
+    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
         let KeygenInfo {
             ceremony_id,
             mut signers,
@@ -142,6 +146,7 @@ impl CeremonyManager {
             validator_map,
             our_idx,
             signer_idxs,
+            keygen_options,
         );
     }
 
@@ -150,43 +155,34 @@ impl CeremonyManager {
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
-        mut signers: Vec<AccountId>,
+        signers: Vec<AccountId>,
         ceremony_id: CeremonyId,
     ) {
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger, "Processing a request to sign");
 
+        // Check that the number of signers is correct
         let signers_expected = key_info.params.threshold + 1;
-
-        // Hack to truncate the signers (sorting is also done at a later point
-        // but we don't care about duplicating it as this is temporary code)
-        signers.sort();
-        if signers.len() > signers_expected {
+        if signers.len() != signers_expected {
             slog::warn!(
                 logger,
-                "Request to sign contains more signers than necessary, truncating the list",
-            );
-            signers.truncate(signers_expected);
-        } else if signers.len() < signers_expected {
-            slog::warn!(
-                logger,
-                "Request to sign ignored: incorrect number of signers"
+                #REQUEST_TO_SIGN_IGNORED,
+                "Request to sign ignored: incorrect number of signers {}/{}",
+                signers.len(), signers_expected
             );
             return;
         }
 
-        // NOTE: truncation above might remove us (but it should never be applied anyway)
-
-        let (own_idx, signer_idxs) =
-            match self.map_ceremony_parties(&signers, &key_info.validator_map) {
-                Ok(res) => res,
-                Err(reason) => {
-                    // TODO: alert
-                    slog::warn!(logger, "Request to sign ignored: {}", reason);
-                    return;
-                }
-            };
+        let (own_idx, signer_idxs) = match self
+            .map_ceremony_parties(&signers, &key_info.validator_map)
+        {
+            Ok(res) => res,
+            Err(reason) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                return;
+            }
+        };
 
         // We have the key and have received a request to sign
         let logger = &self.logger;
@@ -260,6 +256,7 @@ impl CeremonyManager {
                 Err(blamed_parties) => {
                     slog::warn!(
                         self.logger,
+                        #SIGNING_CEREMONY_FAILED,
                         "Signing ceremony failed, blaming parties: {:?}",
                         &blamed_parties; CEREMONY_ID_KEY => ceremony_id
                     );

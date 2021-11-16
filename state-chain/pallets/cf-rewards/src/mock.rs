@@ -82,6 +82,7 @@ impl pallet_cf_flip::Config for Test {
 
 impl pallet_cf_rewards::Config for Test {
 	type Event = Event;
+	type WeightInfoRewards = ();
 }
 
 pub fn check_balance_integrity() {

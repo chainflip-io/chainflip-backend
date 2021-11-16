@@ -7,6 +7,12 @@ pub use pallet::*;
 #[cfg(test)]
 mod mock;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod tests;
 
@@ -44,6 +50,7 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Member
 			+ FullCodec
+			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
 
@@ -55,6 +62,9 @@ pub mod pallet {
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// A hash to index the call by.
@@ -144,7 +154,7 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,

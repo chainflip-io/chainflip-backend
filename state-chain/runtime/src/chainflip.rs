@@ -7,9 +7,9 @@ use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInter
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		ChainflipContractCall,
+		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
 	},
-	Ethereum,
+	Chain, ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
@@ -21,12 +21,11 @@ use codec::{Decode, Encode};
 use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_core::{H160, H256};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -271,6 +270,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
 	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
+	UpdateFlipSupply(UpdateFlipSupply),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
@@ -285,9 +285,15 @@ impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
 	}
 }
 
+impl From<UpdateFlipSupply> for EthereumSigningContext {
+	fn from(call: UpdateFlipSupply) -> Self {
+		EthereumSigningContext::UpdateFlipSupply(call)
+	}
+}
+
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
-	type Payload = H256;
+	type Payload = eth::H256;
 	type Signature = eth::SchnorrVerificationComponents;
 	type Callback = Call;
 
@@ -295,6 +301,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
 			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
+			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -313,6 +320,14 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 					Environment::key_manager_address().into(),
 				)),
 			),
+			Self::UpdateFlipSupply(call) =>
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					contract_call_to_unsigned_tx(
+						call.clone(),
+						&signature,
+						Environment::stake_manager_address().into(),
+					),
+				)),
 		}
 	}
 }
@@ -320,7 +335,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	call: C,
 	signature: &eth::SchnorrVerificationComponents,
-	contract_address: H160,
+	contract_address: Address,
 ) -> eth::UnsignedTransaction {
 	eth::UnsignedTransaction {
 		chain_id: Environment::ethereum_chain_id(),
@@ -332,18 +347,19 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 
 pub struct EthereumBroadcastConfig;
 
-impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
+impl BroadcastConfig for EthereumBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
 	type TransactionHash = [u8; 32];
+	type SignerId = eth::Address;
 
 	fn verify_transaction(
-		signer: &<Runtime as Chainflip>::ValidatorId,
-		_unsigned_tx: &Self::UnsignedTransaction,
+		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		address: &Self::SignerId,
 	) -> Option<()> {
-		eth::verify_raw(signed_tx, signer)
+		eth::verify_transaction(unsigned_tx, signed_tx, address)
 			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
 	}
@@ -355,9 +371,17 @@ pub struct EthereumKeyProvider;
 impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
 
-	fn current_key() -> Self::KeyId {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as cf_chains::Chain>::CHAIN_ID)
+	fn current_key_id() -> Self::KeyId {
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
+	}
+
+	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
+			.expect("Ethereum is always supported.")
+			.public_key
+			.try_into()
+			.expect("TODO: make it so this call can't fail.")
 	}
 }

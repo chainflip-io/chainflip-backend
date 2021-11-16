@@ -3,6 +3,7 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
+    "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
   "ActiveValidatorRange": "(u32,u32)",

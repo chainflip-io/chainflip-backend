@@ -2,10 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -33,6 +38,9 @@ pub mod pallet {
 
 		/// Epoch info
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -42,14 +50,14 @@ pub mod pallet {
 		/// network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				let (network_weight, network_state) = Self::check_network_liveness(current_block);
+				let network_state = Self::check_network_liveness(current_block);
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return network_weight
+				return T::WeightInfo::submit_network_state()
 			}
 
-			Zero::zero()
+			T::WeightInfo::on_initialize_no_action()
 		}
 	}
 
@@ -86,7 +94,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
@@ -106,9 +114,7 @@ pub mod pallet {
 		}
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
 		/// of the network for those nodes that are validators.
-		fn check_network_liveness(
-			current_block_number: BlockNumberFor<T>,
-		) -> (Weight, NetworkState<T::ValidatorId>) {
+		fn check_network_liveness() -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
 			for (validator_id, block_number) in Nodes::<T>::iter() {
@@ -123,7 +129,7 @@ pub mod pallet {
 			}
 
 			// Weight will be treated when we have benchmarks
-			(Zero::zero(), network_state)
+			network_state
 		}
 	}
 }
