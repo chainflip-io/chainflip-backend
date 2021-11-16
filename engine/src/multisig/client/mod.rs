@@ -19,7 +19,7 @@ use std::{collections::HashMap, time::Instant};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
-    logging::CEREMONY_ID_KEY,
+    logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
 };
@@ -38,6 +38,8 @@ use keygen::KeygenData;
 pub use common::KeygenResultInfo;
 
 use self::{ceremony_manager::CeremonyManager, signing::PendingSigningInfo};
+
+pub use keygen::KeygenOptions;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -177,6 +179,7 @@ where
     inner_event_sender: EventSender,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
+    keygen_options: KeygenOptions,
     logger: slog::Logger,
 }
 
@@ -188,6 +191,7 @@ where
         my_account_id: AccountId,
         db: S,
         inner_event_sender: EventSender,
+        keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
@@ -200,6 +204,7 @@ where
             ),
             inner_event_sender,
             pending_requests_to_sign: Default::default(),
+            keygen_options,
             logger: logger.clone(),
         }
     }
@@ -216,6 +221,7 @@ where
                     if pending.should_expire_at < Instant::now() {
                         slog::warn!(
                             logger,
+                            #REQUEST_TO_SIGN_EXPIRED,
                             "Request to sign expired waiting for key id: {:?}",
                             key_id;
                             CEREMONY_ID_KEY => pending.signing_info.ceremony_id,
@@ -241,7 +247,8 @@ where
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.ceremony_manager.on_keygen_request(keygen_info);
+                self.ceremony_manager
+                    .on_keygen_request(keygen_info, self.keygen_options);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;

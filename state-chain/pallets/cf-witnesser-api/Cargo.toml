@@ -20,6 +20,7 @@ pallet-cf-staking = {path = '../cf-staking', default-features = false}
 pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
 pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
 pallet-cf-broadcast = {path = '../cf-broadcast', default-features = false}
+pallet-cf-witnesser = {path = '../cf-witnesser', default-features = false}
 
 # External dependencies
 ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
@@ -80,7 +81,6 @@ std = [
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
-  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'pallet-cf-staking/std',

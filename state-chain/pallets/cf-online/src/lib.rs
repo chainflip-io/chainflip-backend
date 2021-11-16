@@ -2,10 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 pub mod liveness;
 
@@ -38,6 +43,9 @@ pub mod pallet {
 
 		/// Epoch info
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -47,14 +55,14 @@ pub mod pallet {
 		/// feedback the state of the network as `NetworkState`
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				let (network_weight, network_state) = Self::check_network_liveness();
+				let network_state = Self::check_network_liveness();
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				return network_weight
+				return T::WeightInfo::submit_network_state()
 			}
 
-			Zero::zero()
+			T::WeightInfo::on_initialize_no_action()
 		}
 	}
 
@@ -100,7 +108,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [AlreadySubmittedHeartbeat](Error::AlreadySubmittedHeartbeat)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 
@@ -126,7 +134,7 @@ pub mod pallet {
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
 		/// of the network for those nodes that are validators.  All nodes are then marked as having
 		/// not submitted a heartbeat for the next upcoming heartbeat interval.
-		fn check_network_liveness() -> (Weight, NetworkState<T::ValidatorId>) {
+		fn check_network_liveness() -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
 			Nodes::<T>::translate(|validator_id, mut node: Liveness| {
@@ -146,7 +154,7 @@ pub mod pallet {
 			});
 
 			// Weight will be treated when we have benchmarks
-			(Zero::zero(), network_state)
+			network_state
 		}
 	}
 }

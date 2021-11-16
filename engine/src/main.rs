@@ -7,6 +7,7 @@ use chainflip_engine::{
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
+use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
 use structopt::StructOpt;
 
@@ -33,6 +34,18 @@ async fn main() {
             .unwrap();
 
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
+
+    state_chain_client
+        .submit_extrinsic(
+            &root_logger,
+            pallet_cf_validator::Call::cfe_version(SemVer {
+                major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+                minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+                patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+            }),
+        )
+        .await
+        .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
@@ -78,6 +91,7 @@ async fn main() {
             p2p_message_receiver,
             p2p_message_command_sender,
             shutdown_client_rx,
+            multisig::KeygenOptions::default(),
             &root_logger,
         ),
         p2p::conductor::start(

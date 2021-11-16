@@ -116,6 +116,7 @@ impl Config for Test {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = MockHeartbeat;
 	type EpochInfo = MockEpochInfo;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

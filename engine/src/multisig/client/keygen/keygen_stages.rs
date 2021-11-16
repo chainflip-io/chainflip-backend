@@ -12,7 +12,7 @@ use client::{
     keygen, ThresholdParameters,
 };
 
-use crate::multisig::crypto::KeyShare;
+use crate::multisig::crypto::{BigInt, BigIntConverter, ECPoint, KeyShare};
 
 use keygen::{
     keygen_data::{Comm1, Complaints4, KeygenData, SecretShare3, VerifyComm2, VerifyComplaints5},
@@ -24,6 +24,8 @@ use keygen::{
     KeygenP2PSender,
 };
 
+use super::KeygenOptions;
+
 type KeygenCeremonyCommon = CeremonyCommon<KeygenData, KeygenP2PSender>;
 
 /// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
@@ -33,10 +35,15 @@ pub struct AwaitCommitments1 {
     common: KeygenCeremonyCommon,
     own_commitment: DKGUnverifiedCommitment,
     shares: HashMap<usize, ShamirShare>,
+    keygen_options: KeygenOptions,
 }
 
 impl AwaitCommitments1 {
-    pub fn new(ceremony_id: CeremonyId, common: KeygenCeremonyCommon) -> Self {
+    pub fn new(
+        ceremony_id: CeremonyId,
+        common: KeygenCeremonyCommon,
+        keygen_options: KeygenOptions,
+    ) -> Self {
         let params = ThresholdParameters::from_share_count(common.all_idxs.len());
 
         let context = generate_keygen_context(ceremony_id);
@@ -48,6 +55,7 @@ impl AwaitCommitments1 {
             common,
             own_commitment,
             shares,
+            keygen_options,
         }
     }
 }
@@ -76,6 +84,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
             common: self.common.clone(),
             commitments: messages,
             shares_to_send: self.shares,
+            keygen_options: self.keygen_options,
         };
 
         let stage = BroadcastStage::new(processor, self.common);
@@ -90,9 +99,21 @@ struct VerifyCommitmentsBroadcast2 {
     common: KeygenCeremonyCommon,
     commitments: HashMap<usize, Comm1>,
     shares_to_send: HashMap<usize, ShamirShare>,
+    keygen_options: KeygenOptions,
 }
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
+
+/// Check if the public key's x coordinate is smaller than "half secp256k1's order",
+/// which is a requirement imposed by the Key Manager contract
+fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
+    let pubkey = cf_chains::eth::AggKey::from(pk);
+
+    let x = BigInt::from_bytes(&pubkey.pub_key_x);
+    let half_order = BigInt::from_bytes(&secp256k1::constants::CURVE_ORDER) / 2 + 1;
+
+    x < half_order
+}
 
 impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
@@ -128,15 +149,37 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             "Initial commitments have been correctly broadcast"
         );
 
-        let processor = SecretSharesStage3 {
-            common: self.common.clone(),
-            commitments,
-            shares: self.shares_to_send,
-        };
+        // At this point we know everyone's commitments, which can already be
+        // used to derive the resulting aggregate public key. Before proceeding
+        // with the ceremony, we need to make sure that the key is compatible
+        // with the Key Manager contract, aborting if it isn't.
 
-        let stage = BroadcastStage::new(processor, self.common);
+        let agg_pubkey = derive_aggregate_pubkey(&commitments);
 
-        StageResult::NextStage(Box::new(stage))
+        // Note that we skip this check in tests as it would make them
+        // non-deterministic (in the future, we could address this by
+        // making the signer use deterministic randomness everywhere)
+        if !self.keygen_options.low_pubkey_only || is_contract_compatible(&agg_pubkey.get_element())
+        {
+            let processor = SecretSharesStage3 {
+                common: self.common.clone(),
+                commitments,
+                shares: self.shares_to_send,
+            };
+
+            let stage = BroadcastStage::new(processor, self.common);
+
+            StageResult::NextStage(Box::new(stage))
+        } else {
+            slog::debug!(
+                self.common.logger,
+                "The key is not contract compatible, aborting..."
+            );
+            // It is nobody's fault that the key is not compatible,
+            // so we abort with an empty list of responsible nodes
+            // to let the State Chain restart the ceremony
+            StageResult::Error(vec![])
+        }
     }
 }
 

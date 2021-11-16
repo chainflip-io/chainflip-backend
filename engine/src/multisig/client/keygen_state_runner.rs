@@ -6,7 +6,7 @@ use crate::{multisig::client::ThresholdParameters, p2p::AccountId};
 
 use super::{
     common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
-    keygen::{AwaitCommitments1, KeygenData, KeygenP2PSender},
+    keygen::{AwaitCommitments1, KeygenData, KeygenOptions, KeygenP2PSender},
     state_runner::StateRunner,
     utils::PartyIdxMapping,
     EventSender, KeygenResultInfo,
@@ -35,6 +35,7 @@ impl KeygenStateRunner {
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,
         all_idxs: Vec<usize>,
+        keygen_options: KeygenOptions,
     ) {
         self.idx_mapping = Some(idx_mapping.clone());
 
@@ -50,7 +51,7 @@ impl KeygenStateRunner {
             logger: self.logger.clone(),
         };
 
-        let processor = AwaitCommitments1::new(ceremony_id, common.clone());
+        let processor = AwaitCommitments1::new(ceremony_id, common.clone(), keygen_options);
 
         let stage = Box::new(BroadcastStage::new(processor, common));
 

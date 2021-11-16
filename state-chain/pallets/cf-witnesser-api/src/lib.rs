@@ -24,6 +24,7 @@ pub mod pallet {
 	};
 	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_vaults::{Call as VaultsCall, CeremonyId, Config as VaultsConfig};
+	use pallet_cf_witnesser::WeightInfo;
 	use sp_std::prelude::*;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -45,6 +46,9 @@ pub mod pallet {
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
+
+		/// Benchmark stuff
+		type WeightInfoWitnesser: pallet_cf_witnesser::WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -68,7 +72,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_success(*id, signature.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -91,7 +97,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_failed(*id, offenders.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
@@ -116,7 +124,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -139,7 +149,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
@@ -165,7 +177,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::staked(staker_account_id.clone(), *amount, *withdrawal_address, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_staked(
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
@@ -189,7 +203,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::claimed(account_id.clone(), *claimed_amount, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_claimed(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -214,7 +230,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_success(*ceremony_id, *chain_id, new_public_key.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -235,7 +253,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_failure(*ceremony_id, *chain_id, guilty_validators.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -258,7 +278,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::vault_key_rotated(*chain_id, new_public_key.clone(), *block_number, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,

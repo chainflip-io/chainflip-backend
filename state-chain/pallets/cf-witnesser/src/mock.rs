@@ -65,6 +65,7 @@ impl pallet_cf_witness::Config for Test {
 	type ValidatorId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;
 	type Amount = u64;
+	type WeightInfo = ();
 }
 
 impl dummy::Config for Test {
