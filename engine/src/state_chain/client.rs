@@ -351,7 +351,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     ) -> Result<StorageType> {
         let storage_updates: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), storage_key)
+            .storage_events_at(Some(block_hash), storage_key.clone())
             .await?
             .into_iter()
             .map(|storage_change_set| {
