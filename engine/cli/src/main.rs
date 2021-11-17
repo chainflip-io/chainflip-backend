@@ -23,7 +23,7 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::from_args();
-    let cli_settings = CLISettings::new(command_line_opts.clone()).expect("Could not read config");
+    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|_| "Please ensure your config file path is configured correctly. Or set all required command line arguments.")?;
 
     println!(
         "Connecting to state chain node at: `{}` and using private key located at: `{}`",
