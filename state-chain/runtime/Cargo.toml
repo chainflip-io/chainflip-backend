@@ -203,7 +203,7 @@ runtime-benchmarks = [
   'pallet-cf-rewards/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
-  # 'pallet-cf-broadcast/runtime-benchmarks',
+  'pallet-cf-broadcast/runtime-benchmarks',
 ]
 std = [
   'cf-traits/std',
@@ -246,7 +246,5 @@ std = [
   'pallet-cf-threshold-signature/std',
   'pallet-cf-environment/std',
   'pallet-cf-online/std',
-  'pallet-cf-broadcast/std',
   'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std'
 ]

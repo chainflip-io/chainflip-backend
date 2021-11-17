@@ -79,14 +79,16 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'log/std',
+  'frame-benchmarking/std',
   'pallet-cf-threshold-signature/std',
   'sp-core/std',
   'sp-runtime/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [
-	'frame-benchmarking',
-	'frame-support/runtime-benchmarks',
-	'frame-system/runtime-benchmarks',
+	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ['frame-support/try-runtime'] 
