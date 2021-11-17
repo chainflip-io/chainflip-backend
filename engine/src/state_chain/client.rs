@@ -344,7 +344,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    async fn get_from_storage_with_key<StorageType: Decode + Clone>(
+    async fn get_from_storage_with_key<StorageType: Decode + Clone + Debug>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
@@ -368,6 +368,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect::<Result<_>>()?;
 
         println!("get from storage with the storage key: {:?}", storage_key);
+        println!("Here are the storage updates: {:?}", storage_updates);
         Ok(storage_updates.last().unwrap().to_owned())
     }
 
