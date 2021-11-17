@@ -57,6 +57,7 @@ mod tests {
 		#[derive(Debug, Clone)]
 		pub enum ContractEvent {
 			Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance },
+			KeyChanged,
 		}
 
 		// A staking contract
@@ -77,6 +78,12 @@ mod tests {
 
 				self.events.push(ContractEvent::Staked { node_id, amount, total });
 			}
+
+			// Keys are rotated
+			pub fn rotate(&mut self) {
+				self.events.push(ContractEvent::KeyChanged);
+			}
+
 			// Get events for this contract
 			fn events(&self) -> Vec<ContractEvent> {
 				self.events.clone()
@@ -154,6 +161,22 @@ mod tests {
 							)
 							.expect("should be able to witness stake for node");
 						},
+						ContractEvent::KeyChanged => {
+							let ethereum_block_number: u64 = 100;
+							let tx_hash = vec![1u8; 32];
+
+							let (_, public_key) = generate_keypair(NEW_KEY);
+							let compressed_public_key = public_key.serialize_compressed().to_vec();
+
+							state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+								Origin::signed(self.node_id.clone()),
+								ChainId::Ethereum,
+								compressed_public_key,
+								ethereum_block_number,
+								tx_hash,
+							);
+							//.expect("should be able to vault key rotation for node");
+						}
 					}
 				}
 			}
@@ -165,6 +188,24 @@ mod tests {
 					// Handle events
 					on_events!(
 						events,
+						Event::Vaults(
+							// A keygen request has been made
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+								let (_, public_key) = generate_keypair(NEW_KEY);
+								let compressed_public_key = public_key.serialize_compressed().to_vec();
+
+								println!("{:?} - keygen request [{:?}]", self.node_id, ceremony_id);
+
+								state_chain_runtime::WitnesserApi::witness_keygen_success(
+									Origin::signed(self.node_id.clone()),
+									*ceremony_id,
+									ChainId::Ethereum,
+									compressed_public_key,
+								).expect(&format!(
+									"should be able to witness keygen request from node: {:?}",
+									self.node_id)
+								);
+						},
 						Event::EthereumThresholdSigner(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -182,41 +223,6 @@ mod tests {
 									verification_components,
 								).expect("should be able to ethereum signature for node");
 							}
-						},
-						Event::EthereumThresholdSigner(
-							// A threshold has been met for this signature
-							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
-								_ceremony_id)) => {
-								// Witness a vault rotation?
-								let ethereum_block_number: u64 = 100;
-								let tx_hash = vec![1u8; 32];
-
-								let (_, public_key) = generate_keypair(NEW_KEY);
-								let compressed_public_key = public_key.serialize_compressed().to_vec();
-
-								state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
-									Origin::signed(self.node_id.clone()),
-									ChainId::Ethereum,
-									compressed_public_key,
-									ethereum_block_number,
-									tx_hash,
-								).expect("should be able to vault key rotation for node");
-						},
-						Event::Vaults(
-							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								let (_, public_key) = generate_keypair(NEW_KEY);
-								let compressed_public_key = public_key.serialize_compressed().to_vec();
-
-								state_chain_runtime::WitnesserApi::witness_keygen_success(
-									Origin::signed(self.node_id.clone()),
-									*ceremony_id,
-									ChainId::Ethereum,
-									compressed_public_key,
-								).expect(&format!(
-									"should be able to witness keygen request from node: {:?}",
-									self.node_id)
-								);
 						}
 					);
 				}
@@ -768,6 +774,11 @@ mod tests {
 
 					assert_eq!(0, Validator::epoch_index());
 
+					// Witness rotation of keys
+					for node in &nodes {
+						testnet.stake_manager_contract.rotate();
+					}
+
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
@@ -831,6 +842,12 @@ mod tests {
 						},
 						"the new candidates should be those genesis validators and the new nodes created in test"
 					);
+
+					// Witness rotation of keys
+					for node in &nodes {
+						testnet.stake_manager_contract.rotate();
+					}
+
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
 					// Run things the amount needed for an auction
