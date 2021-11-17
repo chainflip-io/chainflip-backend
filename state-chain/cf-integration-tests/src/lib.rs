@@ -208,7 +208,7 @@ mod tests {
 								let (_, public_key) = generate_keypair(NEW_KEY);
 								let compressed_public_key = public_key.serialize_compressed().to_vec();
 
-							state_chain_runtime::WitnesserApi::witness_keygen_success(
+								state_chain_runtime::WitnesserApi::witness_keygen_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
 									ChainId::Ethereum,
