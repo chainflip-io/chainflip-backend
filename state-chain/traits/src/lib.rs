@@ -542,8 +542,7 @@ pub trait BlockEmissions {
 	fn calculate_block_emissions() -> Weight;
 }
 
-/// Checks if the caller is member of the governance and the extrinsic is part
-/// of the governance pallet
+/// Checks if the caller can execute free transactions
 pub trait WaivedFees {
 	type AccountId;
 	type Call;

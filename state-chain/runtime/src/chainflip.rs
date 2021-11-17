@@ -382,8 +382,7 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	}
 }
 
-/// Restriction handler which checks if an account is member of the governance
-/// and the called extrinsic is a governance extrinsic.
+/// Checks if the caller can execute free transactions
 pub struct WaivedFees;
 
 impl cf_traits::WaivedFees for WaivedFees {
