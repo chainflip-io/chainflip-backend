@@ -191,10 +191,13 @@ mod tests {
 								let ethereum_block_number: u64 = 100;
 								let tx_hash = vec![1u8; 32];
 
+								let (_, public_key) = generate_keypair(NEW_KEY);
+								let compressed_public_key = public_key.serialize_compressed().to_vec();
+
 								state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
 									Origin::signed(self.node_id.clone()),
 									ChainId::Ethereum,
-									self.signer.borrow().agg_public_key.serialize().to_vec(),
+									compressed_public_key,
 									ethereum_block_number,
 									tx_hash,
 								).expect("should be able to vault key rotation for node");
@@ -204,7 +207,8 @@ mod tests {
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
 								let (_, public_key) = generate_keypair(NEW_KEY);
 								let compressed_public_key = public_key.serialize_compressed().to_vec();
-								state_chain_runtime::WitnesserApi::witness_keygen_success(
+
+							state_chain_runtime::WitnesserApi::witness_keygen_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
 									ChainId::Ethereum,
