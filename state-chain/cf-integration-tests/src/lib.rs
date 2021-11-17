@@ -112,7 +112,8 @@ mod tests {
 						SchnorrVerificationComponents { s: *signature, k_times_g_addr },
 					None => {
 						println!("signing with key: {:?}", self.agg_public_key);
-						let agg_key = AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
+						let agg_key =
+							AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
 						let signature = agg_key.sign(&(*message).into(), &self.agg_secret_key, &k);
 
 						self.signatures.insert(*message, signature);
@@ -204,7 +205,7 @@ mod tests {
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
 								let (_, public_key) = generate_keypair(NEW_KEY);
-								let compressed_public_key = public_key.serialize().to_vec();
+								let compressed_public_key = public_key.serialize_compressed().to_vec();
 								state_chain_runtime::WitnesserApi::witness_keygen_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
@@ -506,10 +507,7 @@ mod tests {
 			.unwrap();
 
 			let (_, public_key) = generate_keypair(GENESIS_KEY);
-			let ethereum_vault_key = public_key.serialize().to_vec();
-
-			println!("ethereum vault key: {:?}", public_key);
-			println!("ethereum vault key: {:?}", ethereum_vault_key);
+			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			// hex_literal::hex![
 			// 				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
@@ -700,7 +698,6 @@ mod tests {
 		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
 
 		#[test]
-		#[ignore = "TODO: Broken until we can mock signature verification OR generate dummy signatures."]
 		// We have a test network which goes into the first epoch
 		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
 		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from
@@ -782,8 +779,7 @@ mod tests {
 		}
 
 		#[test]
-		// #[ignore = "TODO: Broken until we can mock signature verification OR generate dummy
-		// signatures."] An epoch has completed.  We have a genesis where the blocks per epoch are
+		// An epoch has completed.  We have a genesis where the blocks per epoch are
 		// set to 100
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
@@ -906,8 +902,7 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		// #[ignore = "Broken until we can mock signature verification OR generate dummy
-		// signatures."] Stakers cannot unstake during the conclusion of the auction
+		// Stakers cannot unstake during the conclusion of the auction
 		// We have a set of nodes that are staked and that are included in the auction
 		// Moving block by block of an auction we shouldn't be able to claim stake
 		fn cannot_claim_stake_during_auction() {
@@ -1012,7 +1007,6 @@ mod tests {
 		};
 
 		#[test]
-		#[ignore = "TODO: Broken until we can mock signature verification OR generate dummy signatures."]
 		// We have a set of backup validators who receive rewards
 		// A network is created where we have a validating set with a set of backup validators
 		// The backup validators would receive emissions on each heartbeat
@@ -1099,7 +1093,6 @@ mod tests {
 		}
 
 		#[test]
-		#[ignore = "TODO: Broken until we can mock signature verification OR generate dummy signatures."]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
 		// with 20% going offline and forcing an emergency rotation in which a new set of validators
