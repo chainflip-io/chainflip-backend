@@ -39,9 +39,12 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
+use zeroize::Zeroize;
+
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
+#[zeroize(drop)]
 pub struct ShamirShare {
     /// the result of polynomial evaluation
     pub value: Scalar,
@@ -106,7 +109,7 @@ fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSig
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
 
 #[derive(Clone)]
