@@ -544,3 +544,10 @@ pub trait BlockEmissions {
 	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
 }
+
+/// Checks if the caller can execute free transactions
+pub trait WaivedFees {
+	type AccountId;
+	type Call;
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+}

@@ -6,7 +6,6 @@ use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
-use itertools::Itertools;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use pallet_cf_vaults::Vault;
@@ -18,7 +17,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
-use state_chain_runtime::SignedBlock;
+use state_chain_runtime::{Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -320,7 +319,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     hash == extrinsic_hash
                 }) {
                     Some(extrinsic_index_found) => {
-                        let events_for_block = self.get_events(&header).await?;
+                        let events_for_block = self.get_events(block_hash).await?;
                         return Ok(events_for_block
                             .into_iter()
                             .filter_map(|(phase, event, _)| {
@@ -345,6 +344,32 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
+    async fn get_from_storage_with_key<StorageType: Decode + Debug>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageType>> {
+        let storage_updates: Vec<_> = self
+            .state_chain_rpc_client
+            .storage_events_at(Some(block_hash), storage_key)
+            .await?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            StorageType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        Ok(storage_updates)
+    }
+
     // TODO: work out how to get all vaults with a single query... not sure if possible
     pub async fn get_vault(
         &self,
@@ -359,55 +384,29 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .double_map()?
             .key(&epoch_index, &chain_id);
 
-        let vault_updates_this_block: Vec<_> = self
-            .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), vault_for_epoch_key)
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data
-                            .map(|data| Vault::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
-                    })
-            })
-            .flatten()
-            .collect::<Result<_>>()?;
+        let vaults = self
+            .get_from_storage_with_key::<Vault>(block_hash, vault_for_epoch_key)
+            .await?;
 
-        println!(
-            "Here there should be vaults: {:?}",
-            vault_updates_this_block
-        );
-        Ok(vault_updates_this_block
-            .last()
-            .expect("Should be a vault")
-            .to_owned())
+        Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
-        block_header: &state_chain_runtime::Header,
+        block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<EventInfo>> {
-        self.state_chain_rpc_client
-            .storage_events_at(Some(block_header.hash()), self.events_storage_key.clone())
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            Vec::<EventInfo>::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
-                    })
-                    .flatten_ok()
-            })
-            .flatten()
-            .collect::<Result<Vec<_>>>()
+        let events = self
+            .get_from_storage_with_key::<Vec<EventInfo>>(
+                block_hash,
+                self.events_storage_key.clone(),
+            )
+            .await?;
+        if let Some(events) = events.last() {
+            Ok(events.to_owned())
+        } else {
+            Ok(vec![])
+        }
     }
 
     /// Get the status of the node at a particular block
@@ -415,31 +414,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        let account_info_updates: Vec<_> = self
-            .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), self.account_storage_key.clone())
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            // println!("The data is: {}", data);
-                            AccountInfo::<u32, ChainflipAccountData>::decode(&mut &data.0[..])
-                                .map_err(anyhow::Error::msg)
-                        })
-                    })
-            })
-            .flatten()
-            .collect::<Result<_>>()?;
+        let account_info = self
+            .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
+                block_hash,
+                self.account_storage_key.clone(),
+            )
+            .await?;
 
-        Ok(account_info_updates
+        Ok(account_info
             .last()
-            .expect("Node must have account_info")
-            .data
-            .to_owned())
+            .expect("should have account data")
+            .to_owned()
+            .data)
     }
 
     /// Get the epoch number of the latest block
@@ -453,32 +439,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage("CurrentEpoch")?
             .plain()?
             .key();
-        let epoch_at_block_updates = self
-            .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), epoch_storage_key)
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            EpochIndex::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
-                    })
-            })
-            .flatten()
-            .collect::<Vec<Result<_>>>();
+        let epoch = self
+            .get_from_storage_with_key::<EpochIndex>(block_hash, epoch_storage_key)
+            .await?;
 
-        Ok(epoch_at_block_updates
-            .last()
-            // if we don't have it, it means it's not initialised, which means the chain is in its genesis epoch
-            // => the epoch index is 0
-            .unwrap_or_else(|| &Ok(0))
-            .as_ref()
-            .expect("Failed to get epoch index")
-            .to_owned())
+        Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -631,7 +596,8 @@ mod tests {
     use super::*;
 
     #[ignore = "depends on running state chain, and a configured Local.toml file"]
-    #[tokio::test]
+    #[tokio::main]
+    #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (state_chain_client, mut block_stream) =
@@ -641,10 +607,13 @@ mod tests {
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
-            let my_state_for_this_block = state_chain_client
-                .get_account_data(block_header.hash())
-                .await
-                .unwrap();
+            let block_hash = block_header.hash();
+            let block_number = block_header.number;
+            println!(
+                "Getting events from block {} with block_hash: {:?}",
+                block_number, block_hash
+            );
+            let my_state_for_this_block = state_chain_client.get_events(block_hash).await.unwrap();
 
             println!(
                 "Returning AccountData for this block: {:?}",

@@ -264,6 +264,7 @@ pub mod pallet {
 					auction_result.minimum_active_bid,
 				);
 			}
+			CurrentEpoch::<T>::set(0);
 			Pallet::<T>::generate_lookup();
 		}
 	}
