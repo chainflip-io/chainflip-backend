@@ -225,7 +225,7 @@ impl StakeManager {
         let contract =
             ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
         Ok(Self {
-            deployed_address: settings.eth.stake_manager_eth_address,
+            deployed_address: todo!(),
             contract,
         })
     }

@@ -178,7 +178,7 @@ impl KeyManager {
     /// Loads the contract abi to get event definitions
     pub fn new(settings: &settings::Settings) -> Result<Self> {
         Ok(Self {
-            deployed_address: settings.eth.key_manager_eth_address,
+            deployed_address: todo!(), // settings.eth.key_manager_eth_address,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }

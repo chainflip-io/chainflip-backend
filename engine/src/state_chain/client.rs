@@ -9,11 +9,11 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use pallet_cf_vaults::Vault;
-use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
 };
+use sp_core::{H160, H256};
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
@@ -391,6 +391,46 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
+    pub async fn get_stake_manager_address(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<H160> {
+        let sm_key = self
+            .get_metadata()
+            .module("Environment")?
+            .storage("StakeManagerAddress")?
+            .plain()?
+            .key();
+        let address = self
+            .get_from_storage_with_key::<H160>(block_hash, sm_key)
+            .await?;
+
+        Ok(address
+            .last()
+            .expect("should have StakeManager address from genesis")
+            .to_owned())
+    }
+
+    pub async fn get_key_manager_address(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<H160> {
+        let km_key = self
+            .get_metadata()
+            .module("Environment")?
+            .storage("KeyManagerAddress")?
+            .plain()?
+            .key();
+        let address = self
+            .get_from_storage_with_key::<H160>(block_hash, km_key)
+            .await?;
+
+        Ok(address
+            .last()
+            .expect("should have KeyManager address from genesis")
+            .to_owned())
+    }
+
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
@@ -613,7 +653,10 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client.get_events(block_hash).await.unwrap();
+            let my_state_for_this_block = state_chain_client
+                .get_key_manager_address(block_hash)
+                .await
+                .unwrap();
 
             println!(
                 "Returning AccountData for this block: {:?}",
