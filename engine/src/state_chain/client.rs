@@ -348,7 +348,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<StorageType> {
+    ) -> Result<Vec<StorageType>> {
         let storage_updates: Vec<_> = self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), storage_key.clone())
@@ -367,9 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .flatten()
             .collect::<Result<_>>()?;
 
-        println!("get from storage with the storage key: {:?}", storage_key);
-        println!("Here are the storage updates: {:?}", storage_updates);
-        Ok(storage_updates.last().unwrap().to_owned())
+        Ok(storage_updates)
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
@@ -386,10 +384,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .double_map()?
             .key(&epoch_index, &chain_id);
 
-        println!("Getting vault: {:?}", vault_for_epoch_key);
-        Ok(self
+        let vaults = self
             .get_from_storage_with_key::<Vault>(block_hash, vault_for_epoch_key)
-            .await?)
+            .await?;
+
+        Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
     /// Get all the events from a particular block
@@ -397,12 +396,17 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<EventInfo>> {
-        println!("Getting events: {:?}", self.events_storage_key);
-        self.get_from_storage_with_key::<Vec<EventInfo>>(
-            block_hash,
-            self.events_storage_key.clone(),
-        )
-        .await
+        let events = self
+            .get_from_storage_with_key::<Vec<EventInfo>>(
+                block_hash,
+                self.events_storage_key.clone(),
+            )
+            .await?;
+        if let Some(events) = events.last() {
+            Ok(events.to_owned())
+        } else {
+            Ok(vec![])
+        }
     }
 
     /// Get the status of the node at a particular block
@@ -410,7 +414,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        println!("Getting account_data: {:?}", self.account_storage_key);
         let account_info = self
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
@@ -418,7 +421,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             )
             .await?;
 
-        Ok(account_info.data)
+        Ok(account_info
+            .last()
+            .expect("should have account data")
+            .to_owned()
+            .data)
     }
 
     /// Get the epoch number of the latest block
@@ -432,10 +439,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage("CurrentEpoch")?
             .plain()?
             .key();
-        println!("getting epoch at block: {:?}", epoch_storage_key);
-        Ok(self
+        let epoch = self
             .get_from_storage_with_key::<EpochIndex>(block_hash, epoch_storage_key)
-            .await?)
+            .await?;
+
+        Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
     pub fn get_metadata(&self) -> substrate_subxt::Metadata {
@@ -588,7 +596,8 @@ mod tests {
     use super::*;
 
     #[ignore = "depends on running state chain, and a configured Local.toml file"]
-    #[tokio::test]
+    #[tokio::main]
+    #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (state_chain_client, mut block_stream) =
@@ -598,10 +607,13 @@ mod tests {
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
-            let my_state_for_this_block = state_chain_client
-                .get_account_data(block_header.hash())
-                .await
-                .unwrap();
+            let block_hash = block_header.hash();
+            let block_number = block_header.number;
+            println!(
+                "Getting events from block {} with block_hash: {:?}",
+                block_number, block_hash
+            );
+            let my_state_for_this_block = state_chain_client.get_events(block_hash).await.unwrap();
 
             println!(
                 "Returning AccountData for this block: {:?}",
