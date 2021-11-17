@@ -465,7 +465,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Call, Event<T>, Config},
+		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Pallet, Call, Event<T>},
