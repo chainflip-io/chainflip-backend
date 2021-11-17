@@ -23,7 +23,7 @@ use sp_std::{
 	prelude::*,
 	str, vec,
 };
-
+use std::ops::Neg;
 //------------------------//
 // TODO: these should be on-chain constants or config items. See github issue #520.
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -170,6 +170,14 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
+pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
+	let [_, k_times_g @ ..] = pubkey.serialize();
+	let h = Keccak256::hash(&k_times_g[..]);
+	let mut res = [0u8; 20];
+	res.copy_from_slice(&h.0[12..]);
+	res
+}
+
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
 	///
@@ -226,6 +234,25 @@ impl AggKey {
 				.as_ref(),
 		)
 		.into()
+	}
+
+	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
+		// Compute s = (k - d * e) % Q
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&nonce));
+		let e = {
+			let challenge = self.message_challenge(&msg_hash, &k_times_g_addr);
+			let mut s = Scalar::default();
+			let mut bytes = [0u8; 32];
+			bytes.copy_from_slice(&challenge);
+			let _ = s.set_b32(&bytes);
+			s
+		};
+
+		let d: Scalar = (*secret).into();
+		let k: Scalar = (*nonce).into();
+		let signature: Scalar = k + (e * d).neg();
+
+		signature.b32()
 	}
 
 	/// Verify a signature against a given message hash for this public key.
@@ -671,8 +698,39 @@ mod verification_tests {
 	use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
-	use rand::prelude::*;
+	use rand::{prelude::*, SeedableRng};
 	use Keccak256;
+
+	#[test]
+	fn test_signature() {
+		// Message to sign over
+		let msg: [u8; 32] = Keccak256::hash(b"Whats it going to be then, eh?")
+			.as_bytes()
+			.try_into()
+			.unwrap();
+
+		// Create an agg key
+		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(100).gen();
+		let agg_key_secret_key = SecretKey::parse(&agg_key_priv).unwrap();
+
+		// Signature nonce
+		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
+		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
+
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+
+		// Public agg key
+		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
+
+		// Sign over message
+		let signature = agg_key.sign(&msg, &agg_key_secret_key, &sig_nonce);
+
+		// Construct components for verification
+		let sig = SchnorrVerificationComponents { s: signature, k_times_g_addr };
+
+		// Verify signature
+		assert_ok!(agg_key.verify(&msg, &sig));
+	}
 
 	#[test]
 	fn test_schnorr_signature_verification() {
@@ -697,14 +755,7 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let [_, k_times_g @ ..] = PublicKey::from_secret_key(&k).serialize();
-		let k_times_g_addr = {
-			let h = Keccak256::hash(&k_times_g[..]);
-			let mut res = [0u8; 20];
-			res.copy_from_slice(&h.0[12..]);
-			res
-		};
-
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&k));
 		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_addr };
 
 		// This should pass.
