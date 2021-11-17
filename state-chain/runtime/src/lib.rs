@@ -43,8 +43,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
-use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
+use cf_traits::{ChainflipAccountData, WaivedFees};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
@@ -323,7 +323,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
-	type RestrictionHandler = chainflip::RestrictionHandler;
+	type WaivedFees = chainflip::WaivedFees;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

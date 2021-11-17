@@ -2,7 +2,7 @@ use crate as pallet_cf_staking;
 use cf_chains::{
 	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
 };
-use cf_traits::{impl_mock_restriction_handler, GovernanceRestriction};
+use cf_traits::{impl_mock_waived_fees, WaivedFees};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
 use pallet_cf_flip;
@@ -113,7 +113,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_restriction_handler!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, Call);
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
@@ -123,7 +123,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
-	type RestrictionHandler = RestrictionHandlerMock;
+	type WaivedFees = WaivedFeesMock;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);

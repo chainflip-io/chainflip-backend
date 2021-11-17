@@ -384,19 +384,20 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 
 /// Restriction handler which checks if an account is member of the governance
 /// and the called extrinsic is a governance extrinsic.
-pub struct RestrictionHandler;
+pub struct WaivedFees;
 
-impl cf_traits::GovernanceRestriction for RestrictionHandler {
+impl cf_traits::WaivedFees for WaivedFees {
 	type AccountId = AccountId;
 	type Call = Call;
 
-	fn is_member(account_id: &Self::AccountId) -> bool {
-		super::Governance::members().contains(account_id)
-	}
-	fn is_gov_call(call: &Self::Call) -> bool {
-		match call {
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
+		let is_gov_call = match call {
 			Call::Governance(_) => true,
 			_ => false,
+		};
+		if is_gov_call {
+			return super::Governance::members().contains(caller)
 		}
+		return false
 	}
 }

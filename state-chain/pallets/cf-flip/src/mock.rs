@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::{
-	impl_mock_restriction_handler, mocks::ensure_origin_mock::NeverFailingOriginCheck,
-	GovernanceRestriction, StakeTransfer,
+	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
+	WaivedFees,
 };
 use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
@@ -71,8 +71,8 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
-// Implement mock for RestrictionHandler
-impl_mock_restriction_handler!(AccountId, Call);
+// Implement mock for WaivedFees
+impl_mock_waived_fees!(AccountId, Call);
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
@@ -82,7 +82,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
-	type RestrictionHandler = RestrictionHandlerMock;
+	type WaivedFees = WaivedFeesMock;
 }
 
 parameter_types! {

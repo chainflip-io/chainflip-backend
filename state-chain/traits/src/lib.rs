@@ -542,12 +542,10 @@ pub trait BlockEmissions {
 	fn calculate_block_emissions() -> Weight;
 }
 
-/// TODO: A nice description what this thing is doing
-pub trait GovernanceRestriction {
+/// Checks if the caller is member of the governance and the extrinsic is part
+/// of the governance pallet
+pub trait WaivedFees {
 	type AccountId;
 	type Call;
-	/// Checks if the account_id is part of the governance
-	fn is_member(account_id: &Self::AccountId) -> bool;
-	/// Checks if the call is an extrinsic of the gov pallet
-	fn is_gov_call(call: &Self::Call) -> bool;
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }

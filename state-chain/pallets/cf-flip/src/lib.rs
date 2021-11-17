@@ -41,7 +41,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{GovernanceRestriction, StakeHandler};
+	use cf_traits::{StakeHandler, WaivedFees};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -80,10 +80,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Handles the access of governance extrinsic
-		type RestrictionHandler: GovernanceRestriction<
-			AccountId = Self::AccountId,
-			Call = Self::Call,
-		>;
+		type WaivedFees: WaivedFees<AccountId = Self::AccountId, Call = Self::Call>;
 	}
 
 	#[pallet::pallet]

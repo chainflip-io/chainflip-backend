@@ -15,13 +15,13 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::GovernanceRestriction;
+use cf_traits::WaivedFees;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
-	impl_mock_restriction_handler,
+	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
 	Chainflip, NonceProvider, RewardsDistribution, SigningContext, ThresholdSigner,
 };
@@ -140,7 +140,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_restriction_handler!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, Call);
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
@@ -150,7 +150,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
-	type RestrictionHandler = RestrictionHandlerMock;
+	type WaivedFees = WaivedFeesMock;
 }
 
 pub const NONCE: u64 = 42;
