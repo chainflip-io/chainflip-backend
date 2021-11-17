@@ -3,10 +3,9 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec, vec::Vec};
 
 const MINT_INTERVAL: u32 = 100;
 
@@ -33,4 +32,8 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::new_test_ext(Default::default(), Default::default()),
+	crate::mock::Test,
+);
