@@ -123,16 +123,22 @@ mod tests {
 			}
 		}
 
+		pub enum EngineState {
+			None,
+			Rotation,
+		}
+
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
 			pub active: bool,
 			pub signer: Rc<RefCell<Signer>>,
+			pub engine_state: EngineState,
 		}
 
 		impl Engine {
 			fn new(node_id: NodeId, signer: Rc<RefCell<Signer>>) -> Self {
-				Engine { node_id, active: true, signer }
+				Engine { node_id, active: true, signer, engine_state: EngineState::None }
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -160,11 +166,34 @@ mod tests {
 
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
-			fn handle_state_chain_events(&self, events: &[Event]) {
+			fn handle_state_chain_events(&mut self, events: &[Event]) {
 				if self.state() == ChainflipAccountState::Validator && self.active {
 					// Handle events
 					on_events!(
 						events,
+						Event::Vaults(
+							// A keygen request has been made
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
+								match self.engine_state {
+									EngineState::None => {
+										let (_, public_key) = generate_keypair(NEW_KEY);
+										let compressed_public_key = public_key.serialize_compressed().to_vec();
+
+										state_chain_runtime::WitnesserApi::witness_keygen_success(
+											Origin::signed(self.node_id.clone()),
+											*ceremony_id,
+											ChainId::Ethereum,
+											compressed_public_key,
+										).expect(&format!(
+											"should be able to witness keygen request from node: {:?}",
+											self.node_id)
+										);
+
+										self.engine_state = EngineState::Rotation;
+									},
+									_ => {}
+								}
+						},
 						Event::EthereumThresholdSigner(
 							// A signature request
 							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -194,29 +223,19 @@ mod tests {
 								let (_, public_key) = generate_keypair(NEW_KEY);
 								let compressed_public_key = public_key.serialize_compressed().to_vec();
 
-								state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
-									Origin::signed(self.node_id.clone()),
-									ChainId::Ethereum,
-									compressed_public_key,
-									ethereum_block_number,
-									tx_hash,
-								).expect("should be able to vault key rotation for node");
-						},
-						Event::Vaults(
-							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								let (_, public_key) = generate_keypair(NEW_KEY);
-								let compressed_public_key = public_key.serialize_compressed().to_vec();
-
-								state_chain_runtime::WitnesserApi::witness_keygen_success(
-									Origin::signed(self.node_id.clone()),
-									*ceremony_id,
-									ChainId::Ethereum,
-									compressed_public_key,
-								).expect(&format!(
-									"should be able to witness keygen request from node: {:?}",
-									self.node_id)
-								);
+								match self.engine_state {
+									EngineState::Rotation => {
+										self.engine_state = EngineState::None;
+										state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+											Origin::signed(self.node_id.clone()),
+											ChainId::Ethereum,
+											compressed_public_key,
+											ethereum_block_number,
+											tx_hash,
+										).expect("should be able to vault key rotation for node");
+									},
+									_ => {}
+								}
 						}
 					);
 				}
@@ -327,7 +346,12 @@ mod tests {
 			pub fn add_node(&mut self, node_id: &NodeId) {
 				self.engines.insert(
 					node_id.clone(),
-					Engine { node_id: node_id.clone(), active: true, signer: self.signer.clone() },
+					Engine {
+						node_id: node_id.clone(),
+						active: true,
+						signer: self.signer.clone(),
+						engine_state: EngineState::None,
+					},
 				);
 			}
 
@@ -370,7 +394,7 @@ mod tests {
 					self.last_event += events.len();
 
 					// State chain events
-					for (_, engine) in &self.engines {
+					for (_, engine) in self.engines.iter_mut() {
 						engine.handle_state_chain_events(&events);
 					}
 
