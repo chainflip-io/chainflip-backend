@@ -365,9 +365,12 @@ jobs:
       - checkout
       - merge_target
       - run: sccache --show-stats
-      - run: |
-          cargo check --all-targets --all-features --locked --release
-          sccache --show-stats
+      - run: 
+          environment:
+              RUSTFLAGS: -D warnings
+          command: |
+            cargo check --all-targets --all-features --locked --release
+            sccache --show-stats
   cargo-test-validator-package:
     <<: *cargo-base-job
     steps:
