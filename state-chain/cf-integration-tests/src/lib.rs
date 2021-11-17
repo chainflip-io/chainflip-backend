@@ -17,7 +17,9 @@ mod tests {
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
+	use libsecp256k1::{PublicKey, SecretKey};
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+	use rand::{prelude::*, SeedableRng};
 	use sp_runtime::AccountId32;
 
 	type NodeId = AccountId32;
@@ -32,14 +34,24 @@ mod tests {
 		}
 	}
 
+	pub const GENESIS_KEY: u64 = 42;
+	pub const NEW_KEY: u64 = 101;
+
+	pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey) {
+		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+		let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
+		(secret_key, PublicKey::from_secret_key(&secret_key))
+	}
+
 	mod network {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
-		use cf_chains::eth::SchnorrVerificationComponents;
+		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
+		use libsecp256k1::PublicKey;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
-		use std::collections::HashMap;
+		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
@@ -75,15 +87,52 @@ mod tests {
 			}
 		}
 
+		pub struct Signer {
+			pub agg_secret_key: SecretKey,
+			pub agg_public_key: PublicKey,
+			pub signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
+		}
+
+		impl Default for Signer {
+			fn default() -> Self {
+				let (agg_secret_key, agg_public_key) = generate_keypair(GENESIS_KEY);
+				Signer { agg_secret_key, agg_public_key, signatures: HashMap::new() }
+			}
+		}
+
+		impl Signer {
+			pub fn sign(
+				&mut self,
+				message: &cf_chains::eth::H256,
+			) -> SchnorrVerificationComponents {
+				let (k, k_times_g) = generate_keypair(1);
+				let k_times_g_addr = to_ethereum_address(k_times_g);
+				return match self.signatures.get(message) {
+					Some(signature) =>
+						SchnorrVerificationComponents { s: *signature, k_times_g_addr },
+					None => {
+						println!("signing with key: {:?}", self.agg_public_key);
+						let agg_key = AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
+						let signature = agg_key.sign(&(*message).into(), &self.agg_secret_key, &k);
+
+						self.signatures.insert(*message, signature);
+
+						SchnorrVerificationComponents { s: signature, k_times_g_addr }
+					},
+				}
+			}
+		}
+
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
 			pub active: bool,
+			pub signer: Rc<RefCell<Signer>>,
 		}
 
 		impl Engine {
-			fn new(node_id: NodeId) -> Self {
-				Engine { node_id, active: true }
+			fn new(node_id: NodeId, signer: Rc<RefCell<Signer>>) -> Self {
+				Engine { node_id, active: true, signer }
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -122,20 +171,16 @@ mod tests {
 								ceremony_id,
 								_,
 								ref signers,
-								_)) => {
+								payload)) => {
 
 							// Participate in signing ceremony if requested
 							if signers.contains(&self.node_id) {
-								// TODO signature generation, will fail when we have verification implemented
-								let signature = SchnorrVerificationComponents {
-									s: [0u8; 32],
-									k_times_g_addr: [0u8; 20],
-								};
-
+								let verification_components = self.signer.borrow_mut().sign(payload);
+								println!("{:?}", verification_components);
 								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
-									signature,
+									verification_components,
 								).expect("should be able to ethereum signature for node");
 							}
 						},
@@ -145,13 +190,12 @@ mod tests {
 								_ceremony_id)) => {
 								// Witness a vault rotation?
 								let ethereum_block_number: u64 = 100;
-								let mut new_public_key = vec![0u8; 33];
-								new_public_key[0] = 2;
 								let tx_hash = vec![1u8; 32];
+
 								state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
 									Origin::signed(self.node_id.clone()),
 									ChainId::Ethereum,
-									new_public_key,
+									self.signer.borrow().agg_public_key.serialize().to_vec(),
 									ethereum_block_number,
 									tx_hash,
 								).expect("should be able to vault key rotation for node");
@@ -159,15 +203,13 @@ mod tests {
 						Event::Vaults(
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								// Generate a public agg key, TODO refactor out
-								let mut public_key = vec![0u8; 33];
-								public_key[0] = 2;
-
+								let (_, public_key) = generate_keypair(NEW_KEY);
+								let compressed_public_key = public_key.serialize().to_vec();
 								state_chain_runtime::WitnesserApi::witness_keygen_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
 									ChainId::Ethereum,
-									public_key
+									compressed_public_key,
 								).expect(&format!(
 									"should be able to witness keygen request from node: {:?}",
 									self.node_id)
@@ -215,6 +257,7 @@ mod tests {
 			pub stake_manager_contract: StakingContract,
 			last_event: usize,
 			node_counter: u32,
+			pub signer: Rc<RefCell<Signer>>,
 		}
 
 		impl Network {
@@ -227,7 +270,7 @@ mod tests {
 			// Create a network which includes the validators in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(number_of_nodes: u8, nodes_to_include: &[NodeId]) -> (Self, Vec<NodeId>) {
-				let mut network: Network = Network::default();
+				let mut network: Network = Default::default();
 
 				// Include any nodes already *created* to the test network
 				for node in nodes_to_include {
@@ -241,7 +284,9 @@ mod tests {
 					let node_id = network.next_node_id();
 					nodes.push(node_id.clone());
 					setup_account(&node_id);
-					network.engines.insert(node_id.clone(), Engine::new(node_id));
+					network
+						.engines
+						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
 				}
 
 				nodes.append(&mut nodes_to_include.to_vec());
@@ -277,8 +322,10 @@ mod tests {
 
 			// Adds a node which doesn't have its session keys set
 			pub fn add_node(&mut self, node_id: &NodeId) {
-				self.engines
-					.insert(node_id.clone(), Engine { node_id: node_id.clone(), active: true });
+				self.engines.insert(
+					node_id.clone(),
+					Engine { node_id: node_id.clone(), active: true, signer: self.signer.clone() },
+				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -458,15 +505,17 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
+			let (_, public_key) = generate_keypair(GENESIS_KEY);
+			let ethereum_vault_key = public_key.serialize().to_vec();
+
+			println!("ethereum vault key: {:?}", public_key);
+			println!("ethereum vault key: {:?}", ethereum_vault_key);
+
+			// hex_literal::hex![
+			// 				"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+			// 			];
 			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_vaults::GenesisConfig {
-					ethereum_vault_key: {
-						let key: [u8; 33] = hex_literal::hex![
-							"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
-						];
-						key.to_vec()
-					},
-				},
+				&pallet_cf_vaults::GenesisConfig { ethereum_vault_key },
 				storage,
 			)
 			.unwrap();
@@ -733,8 +782,9 @@ mod tests {
 		}
 
 		#[test]
-		#[ignore = "TODO: Broken until we can mock signature verification OR generate dummy signatures."]
-		// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
+		// #[ignore = "TODO: Broken until we can mock signature verification OR generate dummy
+		// signatures."] An epoch has completed.  We have a genesis where the blocks per epoch are
+		// set to 100
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
 		// - A new auction index has been generated
@@ -856,8 +906,8 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		#[ignore = "TODO: Broken until we can mock signature verification OR generate dummy signatures."]
-		// Stakers cannot unstake during the conclusion of the auction
+		// #[ignore = "Broken until we can mock signature verification OR generate dummy
+		// signatures."] Stakers cannot unstake during the conclusion of the auction
 		// We have a set of nodes that are staked and that are included in the auction
 		// Moving block by block of an auction we shouldn't be able to claim stake
 		fn cannot_claim_stake_during_auction() {
