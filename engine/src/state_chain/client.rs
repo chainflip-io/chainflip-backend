@@ -484,7 +484,10 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?.replace("\"", ""),
+                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?
+                    .replace("\"", "")
+                    // allow inserting the private key with or without the 0x
+                    .replace("0x", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
