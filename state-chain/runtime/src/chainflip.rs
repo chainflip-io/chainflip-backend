@@ -385,3 +385,22 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 			.expect("TODO: make it so this call can't fail.")
 	}
 }
+
+/// Checks if the caller can execute free transactions
+pub struct WaivedFees;
+
+impl cf_traits::WaivedFees for WaivedFees {
+	type AccountId = AccountId;
+	type Call = Call;
+
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
+		let is_gov_call = match call {
+			Call::Governance(_) => true,
+			_ => false,
+		};
+		if is_gov_call {
+			return super::Governance::members().contains(caller)
+		}
+		return false
+	}
+}

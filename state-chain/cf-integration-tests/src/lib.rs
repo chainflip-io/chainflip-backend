@@ -337,6 +337,7 @@ mod tests {
 	pub const ALICE: [u8; 32] = [0xff; 32];
 	pub const BOB: [u8; 32] = [0xfe; 32];
 	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	// Root and Gov member
 	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
@@ -947,6 +948,60 @@ mod tests {
 							Error::<Runtime>::PendingClaim
 						);
 					}
+				});
+		}
+	}
+
+	mod runtime {
+		use super::*;
+		use frame_support::dispatch::GetDispatchInfo;
+		use pallet_cf_flip::FlipTransactionPayment;
+		use pallet_transaction_payment::OnChargeTransaction;
+
+		#[test]
+		// We have two types of accounts. One set of accounts which is part
+		// of the governance and is allowed to make free calls to governance extrinsic.
+		// All other accounts are normally charged and can call any extrinsic.
+		fn restriction_handling() {
+			const EPOCH_BLOCKS: u32 = 100;
+			const MAX_VALIDATORS: u32 = 3;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+					let gov_call: state_chain_runtime::Call =
+						pallet_cf_governance::Call::approve(1).into();
+					// Expect a successful normal call to work
+					let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ALICE.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5,
+						0,
+					);
+					assert!(ordinary.is_ok());
+					assert!(ordinary.unwrap().is_some());
+					// Expect a successful gov call to work
+					let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&gov_call,
+						&gov_call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov.is_ok());
+					assert!(gov.unwrap().is_none());
+					// Expect a non gov call to fail when it's executed by gov member
+					let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov_err.is_err());
 				});
 		}
 	}
