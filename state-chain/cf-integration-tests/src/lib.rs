@@ -984,29 +984,19 @@ mod tests {
 						);
 					}
 
-					testnet.move_forward_blocks(1);
-
 					assert_eq!(
 						0,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
 
-					// We will try to claim stakes
-					for node in &nodes {
-						assert_noop!(
-							Staking::claim(
-								Origin::signed(node.clone()),
-								genesis::GENESIS_BALANCE,
-								ETH_ZERO_ADDRESS
-							),
-							Error::<Runtime>::NoClaimsDuringAuctionPhase
-						);
-					}
-
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the new epoch");
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should still be in the new epoch"
+					);
 
 					// We should be able to claim again outside of the auction
 					// At the moment we have a pending claim so we would expect an error here for
