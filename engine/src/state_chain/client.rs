@@ -344,14 +344,14 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    async fn get_from_storage_with_key<StorageType: Decode + Clone + Debug>(
+    async fn get_from_storage_with_key<StorageType: Decode + Debug>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageType>> {
         let storage_updates: Vec<_> = self
             .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), storage_key.clone())
+            .storage_events_at(Some(block_hash), storage_key)
             .await?
             .into_iter()
             .map(|storage_change_set| {
