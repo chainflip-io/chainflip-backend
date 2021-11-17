@@ -111,7 +111,6 @@ mod tests {
 					Some(signature) =>
 						SchnorrVerificationComponents { s: *signature, k_times_g_addr },
 					None => {
-						println!("signing with key: {:?}", self.agg_public_key);
 						let agg_key =
 							AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
 						let signature = agg_key.sign(&(*message).into(), &self.agg_secret_key, &k);
@@ -177,7 +176,6 @@ mod tests {
 							// Participate in signing ceremony if requested
 							if signers.contains(&self.node_id) {
 								let verification_components = self.signer.borrow_mut().sign(payload);
-								println!("{:?}", verification_components);
 								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
