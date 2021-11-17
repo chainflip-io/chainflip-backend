@@ -20,10 +20,10 @@ use sp_runtime::{
 };
 use sp_std::{
 	convert::{TryFrom, TryInto},
+	ops::Neg,
 	prelude::*,
 	str, vec,
 };
-use std::ops::Neg;
 //------------------------//
 // TODO: these should be on-chain constants or config items. See github issue #520.
 pub const CHAIN_ID_MAINNET: u64 = 1;
