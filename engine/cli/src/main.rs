@@ -112,10 +112,10 @@ async fn send_claim(
         ) = event
         {
             println!("Your claim request is on chain.\nWaiting for signed claim data...");
-            'outer: while let Some(block_header) = block_stream.next().await {
-                let header = block_header.expect("Failed to get a valid block header");
+            'outer: while let Some(result_header) = block_stream.next().await {
+                let header = result_header.expect("Failed to get a valid block header");
                 let events = state_chain_client
-                    .get_events(&header)
+                    .get_events(header.hash())
                     .await
                     .expect(&format!(
                         "Failed to fetch events for block: {}",
