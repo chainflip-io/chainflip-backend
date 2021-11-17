@@ -3,13 +3,11 @@
 
 use super::*;
 
-use core::convert::TryInto;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{boxed::Box, vec};
 
-use crate as pallet_cf_governance;
 #[allow(unused)]
 use crate::Pallet as Governance;
 

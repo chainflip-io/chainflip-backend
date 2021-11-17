@@ -5,8 +5,6 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
-use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{boxed::Box, vec, vec::Vec};
 
 #[allow(unused)]
 use crate::Pallet as Rewards;
@@ -22,4 +20,8 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::new_test_ext(Default::default(), Default::default()),
+	crate::mock::Test,
+);

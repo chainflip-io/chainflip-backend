@@ -3,9 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
-use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use frame_benchmarking::benchmarks;
 
 #[allow(unused)]
 use crate::Pallet as Auction;
@@ -23,4 +21,6 @@ benchmarks! {
 	transmission_failure {} : {}
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+// TODO: Figure out how to make this work with instantiable pallets.
+//
+// impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

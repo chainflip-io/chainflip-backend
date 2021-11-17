@@ -87,5 +87,6 @@ runtime-benchmarks = [
 	'frame-benchmarking',
 	'frame-support/runtime-benchmarks',
 	'frame-system/runtime-benchmarks',
+	'cf-traits/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime'] 

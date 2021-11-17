@@ -5,8 +5,7 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
-use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::vec;
 
 #[allow(unused)]
 use crate::Pallet;
@@ -54,4 +53,4 @@ benchmarks! {
 	} : { call.dispatch_bypass_filter(origin)? }
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
