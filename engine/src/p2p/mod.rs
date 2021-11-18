@@ -99,14 +99,6 @@ impl P2PMessageCommand {
     }
 }
 
-/// A command to the conductor to send message `data` to
-/// validator `destination`
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct CommandSendMessage {
-    destination: AccountId,
-    data: Vec<u8>,
-}
-
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
