@@ -16,10 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{
-    logging::COMPONENT_KEY,
-    p2p::{AccountId},
-};
+use crate::{logging::COMPONENT_KEY, p2p::AccountId};
 use futures::StreamExt;
 use slog::o;
 
@@ -91,6 +88,7 @@ where
         my_account_id,
         db,
         inner_event_sender,
+        outgoing_p2p_message_sender,
         keygen_options,
         &logger,
     );
@@ -115,9 +113,6 @@ where
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
-                        InnerEvent::P2PMessage(p2p_message) => {
-                            outgoing_p2p_message_sender.send(p2p_message).map_err(|_| "Receiver dropped").unwrap();
-                        }
                         InnerEvent::SigningResult(res) => {
                             multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
                         }

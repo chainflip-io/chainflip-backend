@@ -10,9 +10,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    multisig::crypto::{KeyShare, Point},
-};
+use crate::multisig::crypto::{KeyShare, Point};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 

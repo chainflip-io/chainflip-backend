@@ -4,7 +4,7 @@ use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::multisig::client::{InnerEvent, utils::PartyIdxMapping};
+use crate::{multisig::client::utils::PartyIdxMapping, p2p::P2PMessage};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result> {
@@ -54,14 +54,13 @@ pub trait CeremonyStage: DynClone + std::fmt::Display {
 
 /// Data useful during any stage of a ceremony
 #[derive(Clone)]
-pub struct CeremonyCommon
-{
+pub struct CeremonyCommon {
     pub ceremony_id: CeremonyId,
     /// Our own signer index
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
     pub all_idxs: BTreeSet<usize>,
-    pub outgoing_p2p_message_sender: UnboundedSender<InnerEvent>,
+    pub outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     pub validator_mapping: Arc<PartyIdxMapping>,
     pub logger: slog::Logger,
 }

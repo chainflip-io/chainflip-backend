@@ -20,9 +20,7 @@ use crate::p2p::AccountId;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
 
-use super::{
-    common::{CeremonyStage, KeygenResult},
-};
+use super::common::{CeremonyStage, KeygenResult};
 
 /// Information necessary for the multisig client to start a new keygen ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]

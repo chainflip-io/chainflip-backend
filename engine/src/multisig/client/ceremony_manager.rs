@@ -8,6 +8,7 @@ use client::{
     utils::PartyIdxMapping, CeremonyAbortReason, EventSender, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::logging::{
     CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_EXPIRED, KEYGEN_REQUEST_IGNORED,
@@ -18,7 +19,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
-use crate::p2p::AccountId;
+use crate::p2p::{AccountId, P2PMessage};
 
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
 
@@ -30,16 +31,23 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 pub struct CeremonyManager {
     my_account_id: AccountId,
     event_sender: EventSender,
+    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
 }
 
 impl CeremonyManager {
-    pub fn new(my_account_id: AccountId, event_sender: EventSender, logger: &slog::Logger) -> Self {
+    pub fn new(
+        my_account_id: AccountId,
+        event_sender: EventSender,
+        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        logger: &slog::Logger,
+    ) -> Self {
         CeremonyManager {
             my_account_id,
             event_sender,
+            outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
@@ -146,6 +154,7 @@ impl CeremonyManager {
         state.on_keygen_request(
             ceremony_id,
             self.event_sender.clone(),
+            self.outgoing_p2p_message_sender.clone(),
             validator_map,
             our_idx,
             signer_idxs,
@@ -200,7 +209,7 @@ impl CeremonyManager {
 
             let common = CeremonyCommon {
                 ceremony_id,
-                outgoing_p2p_message_sender: self.event_sender.clone(),
+                outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
                 validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,

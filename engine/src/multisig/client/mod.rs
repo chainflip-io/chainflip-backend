@@ -30,6 +30,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
 
+use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
@@ -84,13 +85,13 @@ pub enum MultisigData {
 }
 
 impl From<SigningData> for MultisigData {
-    fn from(data : SigningData) -> Self {
+    fn from(data: SigningData) -> Self {
         MultisigData::Signing(data)
     }
 }
 
 impl From<KeygenData> for MultisigData {
-    fn from(data : KeygenData) -> Self {
+    fn from(data: KeygenData) -> Self {
         MultisigData::Keygen(data)
     }
 }
@@ -149,18 +150,11 @@ pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
-    P2PMessage(P2PMessage),
     SigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
 
 pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
-
-impl From<P2PMessage> for InnerEvent {
-    fn from(m: P2PMessage) -> Self {
-        InnerEvent::P2PMessage(m)
-    }
-}
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
@@ -173,6 +167,7 @@ where
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
     inner_event_sender: EventSender,
+    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -187,6 +182,7 @@ where
         my_account_id: AccountId,
         db: S,
         inner_event_sender: EventSender,
+        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
@@ -196,9 +192,11 @@ where
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
-                logger,
+                outgoing_p2p_message_sender.clone(),
+                &logger,
             ),
             inner_event_sender,
+            outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
             logger: logger.clone(),
@@ -335,7 +333,10 @@ where
 
     /// Process message from another validator
     pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
-        let P2PMessage { account_id: sender_id, data } = p2p_message;
+        let P2PMessage {
+            account_id: sender_id,
+            data,
+        } = p2p_message;
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {

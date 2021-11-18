@@ -20,7 +20,8 @@ use crate::{
 use self::frost::SigningData;
 
 use super::{
-    common::{CeremonyStage, KeygenResult}, SchnorrSignature,
+    common::{CeremonyStage, KeygenResult},
+    SchnorrSignature,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
