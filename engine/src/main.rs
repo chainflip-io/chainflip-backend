@@ -58,9 +58,9 @@ async fn main() {
     let (multisig_event_sender, multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-    let (p2p_message_sender, p2p_message_receiver) =
+    let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
-    let (p2p_message_command_sender, p2p_message_command_receiver) =
+    let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
@@ -97,8 +97,8 @@ async fn main() {
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
-            p2p_message_receiver,
-            p2p_message_command_sender,
+            incoming_p2p_message_receiver,
+            outgoing_p2p_message_sender,
             shutdown_client_rx,
             multisig::KeygenOptions::default(),
             &root_logger,
@@ -115,8 +115,8 @@ async fn main() {
             )
             .await
             .expect("unable to connect p2p rpc client"),
-            p2p_message_sender,
-            p2p_message_command_receiver,
+            incoming_p2p_message_sender,
+            outgoing_p2p_message_receiver,
             p2p_shutdown_rx,
             &root_logger
         ),

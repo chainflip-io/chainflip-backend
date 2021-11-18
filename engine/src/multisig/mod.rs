@@ -73,8 +73,8 @@ pub fn start_client<S>(
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigOutcome>,
-    mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
-    p2p_message_command_sender: UnboundedSender<P2PMessage>,
+    mut incoming_p2p_message_receiver: UnboundedReceiver<P2PMessage>,
+    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
@@ -103,7 +103,7 @@ where
 
         loop {
             tokio::select! {
-                Some(p2p_message) = p2p_message_receiver.recv() => {
+                Some(p2p_message) = incoming_p2p_message_receiver.recv() => {
                     client.process_p2p_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
@@ -115,8 +115,8 @@ where
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
-                        InnerEvent::P2PMessage(p2p_message_command) => {
-                            p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
+                        InnerEvent::P2PMessage(p2p_message) => {
+                            outgoing_p2p_message_sender.send(p2p_message).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::SigningResult(res) => {
                             multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
