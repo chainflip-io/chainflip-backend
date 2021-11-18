@@ -26,7 +26,7 @@ use crate::{
         client::{
             common::KeygenResultInfo,
             keygen::{self, KeygenData},
-            KeygenOutcome, MultisigClient, MultisigMessage, MultisigResult, SigningOutcome,
+            KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome, SigningOutcome,
         },
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
@@ -115,8 +115,10 @@ macro_rules! distribute_data_keygen {
     }};
 }
 
-pub(super) type MultisigResultReceiver = Pin<
-    Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<MultisigResult>>>,
+pub(super) type MultisigOutcomeReceiver = Pin<
+    Box<
+        futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<MultisigOutcome>>,
+    >,
 >;
 
 pub(super) type P2PMessageReceiver = Pin<
@@ -307,7 +309,7 @@ pub struct KeygenContext {
     /// malicious nodes). Such tests can put non-standard
     /// data here before the ceremony is run.
     custom_data: CustomDataToSend,
-    pub rxs: Vec<MultisigResultReceiver>,
+    pub rxs: Vec<MultisigOutcomeReceiver>,
     pub p2p_rxs: Vec<P2PMessageReceiver>,
     /// This clients will match the ones in `key_ready`,
     /// but stored separately so we could substitute
@@ -914,9 +916,9 @@ impl KeygenContext {
         {
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_multisig_result(&mut r).await {
-                    MultisigResult::Keygen(KeygenOutcome { result, .. }) => result,
-                    _ => panic!("Unexpected multisig result"),
+                let result = match recv_next_multisig_outcome(&mut r).await {
+                    MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
+                    _ => panic!("Unexpected multisig outcome"),
                 };
                 results.push(result);
             }
@@ -991,7 +993,7 @@ impl KeygenContext {
         &mut self,
         idx: usize,
         client: MultisigClientNoDB,
-        rx: MultisigResultReceiver,
+        rx: MultisigOutcomeReceiver,
         p2p_rx: P2PMessageReceiver,
     ) {
         self.clients[idx] = client;
@@ -1142,7 +1144,7 @@ fn check_reported_nodes_consistency(
 
 // Checks that all signers got the same outcome and returns it
 async fn check_and_get_signing_outcome(
-    rxs: &mut Vec<MultisigResultReceiver>,
+    rxs: &mut Vec<MultisigOutcomeReceiver>,
 ) -> Option<SigningOutcome> {
     let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
@@ -1177,7 +1179,7 @@ async fn check_and_get_signing_outcome(
 
         // Consume the outcome message if its all good
         for idx in SIGNER_IDXS.iter() {
-            recv_next_multisig_result_opt(&mut rxs[idx.clone()]).await;
+            recv_next_multisig_outcome_opt(&mut rxs[idx.clone()]).await;
         }
 
         return Some(outcomes[0].clone());
@@ -1199,31 +1201,31 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
 }
 
 /// Consume all messages in the channel, then times out
-pub async fn clear_channel(rx: &mut MultisigResultReceiver) {
-    while let Some(_) = recv_next_multisig_result_opt(rx).await {}
+pub async fn clear_channel(rx: &mut MultisigOutcomeReceiver) {
+    while let Some(_) = recv_next_multisig_outcome_opt(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
-pub async fn check_sig_outcome(rx: &mut MultisigResultReceiver) -> Option<&SigningOutcome> {
-    let event: &MultisigResult = check_multisig_result(rx).await?;
+pub async fn check_sig_outcome(rx: &mut MultisigOutcomeReceiver) -> Option<&SigningOutcome> {
+    let event: &MultisigOutcome = check_multisig_outcome(rx).await?;
 
-    if let MultisigResult::Signing(outcome) = event {
+    if let MultisigOutcome::Signing(outcome) = event {
         Some(outcome)
     } else {
         None
     }
 }
 
-/// Check the next multisig result without consuming
-pub async fn check_multisig_result(rx: &mut MultisigResultReceiver) -> Option<&MultisigResult> {
+/// Check the next multisig outcome without consuming
+pub async fn check_multisig_outcome(rx: &mut MultisigOutcomeReceiver) -> Option<&MultisigOutcome> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
         .ok()?
 }
 
-/// Asserts that MultisigResult is in the queue and returns it
-pub async fn recv_next_multisig_result(rx: &mut MultisigResultReceiver) -> MultisigResult {
-    let res = recv_next_multisig_result_opt(rx).await;
+/// Asserts that MultisigOutcome is in the queue and returns it
+pub async fn recv_next_multisig_outcome(rx: &mut MultisigOutcomeReceiver) -> MultisigOutcome {
+    let res = recv_next_multisig_outcome_opt(rx).await;
 
     if let Some(event) = res {
         return event;
@@ -1231,10 +1233,10 @@ pub async fn recv_next_multisig_result(rx: &mut MultisigResultReceiver) -> Multi
     panic!("Expected Multisig Result");
 }
 
-/// checks for an MultisigResult in the queue with a short timeout, returns the MultisigResult if there is one.
-pub async fn recv_next_multisig_result_opt(
-    rx: &mut MultisigResultReceiver,
-) -> Option<MultisigResult> {
+/// checks for an MultisigOutcome in the queue with a short timeout, returns the MultisigOutcome if there is one.
+pub async fn recv_next_multisig_outcome_opt(
+    rx: &mut MultisigOutcomeReceiver,
+) -> Option<MultisigOutcome> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()?
@@ -1496,14 +1498,14 @@ impl MultisigClientNoDB {
     }
 }
 
-pub async fn check_blamed_paries(rx: &mut MultisigResultReceiver, expected: &[usize]) {
-    let blamed_parties = match check_multisig_result(rx)
+pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[usize]) {
+    let blamed_parties = match check_multisig_outcome(rx)
         .await
         .as_ref()
-        .expect("expected multisig_result")
+        .expect("expected multisig_outcome")
     {
-        MultisigResult::Signing(outcome) => &outcome.result.as_ref().unwrap_err().1,
-        MultisigResult::Keygen(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        MultisigOutcome::Signing(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        MultisigOutcome::Keygen(outcome) => &outcome.result.as_ref().unwrap_err().1,
     };
 
     assert_eq!(

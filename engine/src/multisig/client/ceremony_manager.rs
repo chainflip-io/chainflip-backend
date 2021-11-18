@@ -1,11 +1,11 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use crate::multisig::client;
+use crate::multisig::client::{self, MultisigOutcome};
 
 use client::{
     keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
-    utils::PartyIdxMapping, CeremonyAbortReason, MultisigResultSender, SchnorrSignature,
+    utils::PartyIdxMapping, CeremonyAbortReason, MultisigOutcomeSender, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
@@ -17,7 +17,7 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, MultisigResult, SigningOutcome};
+use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use crate::p2p::{AccountId, P2PMessage};
 
@@ -30,7 +30,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
-    event_sender: MultisigResultSender,
+    event_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
@@ -40,7 +40,7 @@ pub struct CeremonyManager {
 impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
-        event_sender: MultisigResultSender,
+        event_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         logger: &slog::Logger,
     ) -> Self {
@@ -66,7 +66,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
                 let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
 
-                events_to_send.push(MultisigResult::Signing(outcome));
+                events_to_send.push(MultisigOutcome::Signing(outcome));
 
                 false
             } else {
@@ -79,7 +79,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
                 let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
 
-                events_to_send.push(MultisigResult::Keygen(outcome));
+                events_to_send.push(MultisigOutcome::Keygen(outcome));
 
                 false
             } else {
@@ -258,7 +258,7 @@ impl CeremonyManager {
             match result {
                 Ok(schnorr_sig) => {
                     self.event_sender
-                        .send(MultisigResult::Signing(SigningOutcome {
+                        .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Ok(schnorr_sig),
                         }))
@@ -273,7 +273,7 @@ impl CeremonyManager {
                     );
 
                     self.event_sender
-                        .send(MultisigResult::Signing(SigningOutcome {
+                        .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
                         }))
@@ -315,7 +315,7 @@ impl CeremonyManager {
                     );
 
                     self.event_sender
-                        .send(MultisigResult::Keygen(KeygenOutcome {
+                        .send(MultisigOutcome::Keygen(KeygenOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
                         }))

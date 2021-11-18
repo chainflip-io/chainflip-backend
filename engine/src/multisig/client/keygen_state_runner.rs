@@ -13,7 +13,7 @@ use super::{
     keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions},
     state_runner::StateRunner,
     utils::PartyIdxMapping,
-    KeygenResultInfo, MultisigResultSender,
+    KeygenResultInfo, MultisigOutcomeSender,
 };
 
 #[derive(Clone)]
@@ -35,7 +35,7 @@ impl KeygenStateRunner {
     pub fn on_keygen_request(
         &mut self,
         ceremony_id: CeremonyId,
-        event_sender: MultisigResultSender,
+        event_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,

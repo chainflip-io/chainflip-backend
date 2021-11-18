@@ -10,7 +10,7 @@ mod db;
 #[cfg(test)]
 mod tests;
 
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,9 +22,9 @@ use slog::o;
 
 use crate::p2p::P2PMessage;
 
-use client::MultisigResult;
-
-pub use client::{KeygenOptions, KeygenOutcome, MultisigClient, SchnorrSignature, SigningOutcome};
+pub use client::{
+    KeygenOptions, KeygenOutcome, MultisigClient, MultisigOutcome, SchnorrSignature, SigningOutcome,
+};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
@@ -58,18 +58,12 @@ pub enum MultisigInstruction {
     Sign(SigningInfo),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum MultisigOutcome {
-    Signing(SigningOutcome),
-    Keygen(KeygenOutcome),
-}
-
 /// Start the multisig client, which listens for p2p messages and instructions from the SC
 pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
-    multisig_event_sender: UnboundedSender<MultisigOutcome>,
+    multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<P2PMessage>,
     outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
@@ -83,11 +77,10 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (multisig_result_sender, mut multisig_result_receiver) = mpsc::unbounded_channel();
     let mut client = MultisigClient::new(
         my_account_id,
         db,
-        multisig_result_sender,
+        multisig_outcome_sender,
         outgoing_p2p_message_sender,
         keygen_options,
         &logger,
@@ -110,16 +103,6 @@ where
                 Some(()) = cleanup_stream.next() => {
                     slog::trace!(logger, "Cleaning up multisig states");
                     client.cleanup();
-                }
-                Some(event) = multisig_result_receiver.recv() => { // TODO: This will be removed entirely in the future
-                    match event {
-                        MultisigResult::Signing(res) => {
-                            multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
-                        }
-                        MultisigResult::Keygen(res) => {
-                            multisig_event_sender.send(MultisigOutcome::Keygen(res)).map_err(|_| "Receiver dropped").unwrap();
-                        }
-                    }
                 }
                 Ok(()) = &mut shutdown_rx => {
                     slog::info!(logger, "MultisigClient stopped due to shutdown request!");

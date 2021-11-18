@@ -148,13 +148,13 @@ pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
 pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
-#[derive(Debug, PartialEq)]
-pub enum MultisigResult {
+pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutcome>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MultisigOutcome {
     Signing(SigningOutcome),
     Keygen(KeygenOutcome),
 }
-
-pub type MultisigResultSender = tokio::sync::mpsc::UnboundedSender<MultisigResult>;
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
@@ -166,7 +166,7 @@ where
     my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
-    multisig_result_sender: MultisigResultSender,
+    multisig_outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
@@ -181,7 +181,7 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        multisig_result_sender: MultisigResultSender,
+        multisig_outcome_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
@@ -191,11 +191,11 @@ where
             key_store: KeyStore::new(db),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
-                multisig_result_sender.clone(),
+                multisig_outcome_sender.clone(),
                 outgoing_p2p_message_sender.clone(),
                 &logger,
             ),
-            multisig_result_sender,
+            multisig_outcome_sender,
             outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
@@ -316,8 +316,8 @@ where
         // NOTE: we only notify the SC after we have successfully saved the key
 
         if let Err(err) =
-            self.multisig_result_sender
-                .send(MultisigResult::Keygen(KeygenOutcome::success(
+            self.multisig_outcome_sender
+                .send(MultisigOutcome::Keygen(KeygenOutcome::success(
                     ceremony_id,
                     key_info.key.get_public_key().get_element(),
                 )))
