@@ -16,6 +16,7 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -54,7 +55,7 @@ pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
 	.try_into()
 	.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(String::from("4"))
+		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("chain id is no unsigned int");
 	(stake_manager_address, key_manager_address, ethereum_chain_id)
