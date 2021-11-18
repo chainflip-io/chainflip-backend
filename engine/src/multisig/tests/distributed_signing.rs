@@ -51,10 +51,10 @@ async fn coordinate_signing(
     // get a keygen request ready with all of the VALIDATOR_IDS
     let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 
-    // publish the MultisigInstruction::KeyGen to all the clients
+    // publish the MultisigInstruction::Keygen to all the clients
     for node in &nodes {
         node.multisig_instruction_tx
-            .send(MultisigInstruction::KeyGen(keygen_request_info.clone()))
+            .send(MultisigInstruction::Keygen(keygen_request_info.clone()))
             .map_err(|_| "Receiver dropped")
             .unwrap();
     }

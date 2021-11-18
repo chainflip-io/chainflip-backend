@@ -48,7 +48,7 @@ macro_rules! recv_data_keygen {
         let (_, m) = recv_multisig_message($rx).await;
 
         match m {
-            MultisigMessage::KeyGenMessage(KeygenDataWrapped {
+            MultisigMessage::KeygenMessage(KeygenDataWrapped {
                 data: $variant(data),
                 ..
             }) => data,
@@ -609,7 +609,7 @@ impl KeygenContext {
         };
 
         for c in clients.iter_mut() {
-            c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
+            c.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info.clone()));
         }
 
         let comm1_vec = recv_all_data_keygen!(rxs, KeygenData::Comm1);
@@ -1131,7 +1131,7 @@ async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
 async fn recv_secret3_keygen(rx: &mut InnerEventReceiver) -> (AccountId, keygen::SecretShare3) {
     let (dest, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::KeyGenMessage(wrapped) = m {
+    if let MultisigMessage::KeygenMessage(wrapped) = m {
         let KeygenDataWrapped { data: message, .. } = wrapped;
 
         if let KeygenData::SecretShares3(sec3) = message {

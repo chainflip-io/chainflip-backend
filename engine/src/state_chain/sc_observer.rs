@@ -188,7 +188,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .map(|v| p2p::AccountId(v.clone().into()))
                                         .collect();
 
-                                    let gen_new_key_event = MultisigInstruction::KeyGen(
+                                    let gen_new_key_event = MultisigInstruction::Keygen(
                                         KeygenInfo::new(ceremony_id, signers),
                                     );
 
