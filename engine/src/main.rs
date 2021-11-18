@@ -28,7 +28,7 @@ async fn main() {
         .run()
         .await;
 
-    let (state_chain_client, state_chain_block_stream) =
+    let (state_chain_client, state_chain_block_stream, latest_block_hash) =
         state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .unwrap();
@@ -76,10 +76,19 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    let stake_manager_address = state_chain_client
+        .get_environment_value(latest_block_hash, "StakeManagerAddress")
+        .await
+        .expect("Should get StakeManager address from SC");
     let stake_manager_contract =
-        StakeManager::new(&settings).expect("Should create StakeManager contract");
+        StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
+
+    let key_manager_address = state_chain_client
+        .get_environment_value(latest_block_hash, "KeyManagerAddress")
+        .await
+        .expect("Should get KeyManager address from SC");
     let key_manager_contract =
-        KeyManager::new(&settings).expect("Should create KeyManager contract");
+        KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
     tokio::join!(
         // Start signing components

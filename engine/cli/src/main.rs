@@ -69,7 +69,7 @@ async fn send_claim(
     settings: &CLISettings,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (state_chain_client, block_stream, _) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     println!(
         "Submitting claim with amount `{}` to ETH address `0x{}`",
