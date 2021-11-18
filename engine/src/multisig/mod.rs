@@ -57,14 +57,14 @@ impl std::fmt::Display for KeyId {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
-    KeyGen(KeygenInfo),
+    Keygen(KeygenInfo),
     Sign(SigningInfo),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum MultisigEvent {
-    MessageSigningResult(SigningOutcome),
-    KeygenResult(KeygenOutcome),
+pub enum MultisigOutcome {
+    Signing(SigningOutcome),
+    Keygen(KeygenOutcome),
 }
 
 /// Start the multisig client, which listens for p2p messages and instructions from the SC
@@ -72,7 +72,7 @@ pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
-    multisig_event_sender: UnboundedSender<MultisigEvent>,
+    multisig_event_sender: UnboundedSender<MultisigOutcome>,
     mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
     p2p_message_command_sender: UnboundedSender<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
@@ -119,10 +119,10 @@ where
                             p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::SigningResult(res) => {
-                            multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver dropped").unwrap();
+                            multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
-                            multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver dropped").unwrap();
+                            multisig_event_sender.send(MultisigOutcome::Keygen(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }
                 }

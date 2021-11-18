@@ -96,7 +96,7 @@ async fn should_delay_comm1_before_keygen_request() {
 
     assert_no_stage(&c1);
 
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(KEYGEN_INFO.clone()));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
 
     assert_stage1(&c1);
 
