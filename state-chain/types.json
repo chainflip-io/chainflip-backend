@@ -82,7 +82,6 @@
     ]
   },
   "KeyId": "Vec<u8>",
-  "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",

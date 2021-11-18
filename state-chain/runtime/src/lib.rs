@@ -43,8 +43,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler,
 };
-use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
+use cf_traits::{ChainflipAccountData, WaivedFees};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
@@ -323,6 +323,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
+	type WaivedFees = chainflip::WaivedFees;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -407,7 +408,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const HeartbeatBlockInterval: BlockNumber = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
@@ -423,7 +424,6 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_online::Config for Runtime {
-	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
@@ -465,7 +465,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Call, Event<T>, Config},
+		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Pallet, Call, Event<T>},
@@ -482,7 +482,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
-		Online: pallet_cf_online::{Pallet, Call, Storage, Event<T>,},
+		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},

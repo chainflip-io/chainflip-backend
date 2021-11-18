@@ -1,14 +1,21 @@
-use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    pin::Pin,
+    time::Duration,
+};
 
 use futures::StreamExt;
 use itertools::Itertools;
-use jsonrpc_core::Error;
 use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::multisig::{
-    client::{keygen::KeygenOptions, signing},
+    client::{
+        keygen::{KeygenOptions, SecretShare3},
+        signing, CeremonyAbortReason,
+    },
     KeyId, MultisigInstruction,
 };
 
@@ -72,6 +79,28 @@ macro_rules! recv_all_data_keygen {
     }};
 }
 
+macro_rules! distribute_data_keygen_custom {
+    ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr) => {{
+        for sender_idx in 0..$account_ids.len() {
+            let valid_message = $messages[sender_idx].clone();
+
+            let message = $custom_messages
+                .remove(&sender_idx)
+                .unwrap_or(valid_message);
+
+            let id = &$account_ids[sender_idx];
+
+            let m = keygen_data_to_p2p(message, id, KEYGEN_CEREMONY_ID);
+
+            for receiver_idx in 0..$account_ids.len() {
+                if receiver_idx != sender_idx {
+                    $clients[receiver_idx].process_p2p_message(m.clone());
+                }
+            }
+        }
+    }};
+}
+
 macro_rules! distribute_data_keygen {
     ($clients:expr, $account_ids: expr, $messages: expr) => {{
         for sender_idx in 0..$account_ids.len() {
@@ -130,6 +159,18 @@ pub struct VerCompStage5Data {
     pub ver5: Vec<keygen::VerifyComplaints5>,
 }
 
+pub struct BlameResponses6Data {
+    pub clients: Vec<MultisigClientNoDB>,
+    /// The key in the map is the index of the destination node
+    pub resp6: Vec<keygen::BlameResponse6>,
+}
+
+pub struct VerBlameResponses7Data {
+    pub clients: Vec<MultisigClientNoDB>,
+    /// The key in the map is the index of the destination node
+    pub ver7: Vec<keygen::VerifyBlameResponses7>,
+}
+
 pub struct KeyReadyData {
     pub clients: Vec<MultisigClientNoDB>,
     pub pubkey: secp256k1::PublicKey,
@@ -143,6 +184,27 @@ impl Debug for KeyReadyData {
         f.debug_struct("KeyReadyData")
             .field("pubkey", &self.pubkey)
             .finish()
+    }
+}
+
+pub struct ValidKeygenStates {
+    pub stage0: Stage0Data,
+    pub comm_stage1: CommStage1Data,
+    pub ver_com_stage2: CommVerStage2Data,
+    pub sec_stage3: SecStage3Data,
+    pub comp_stage4: CompStage4Data,
+    pub ver_comp_stage5: VerCompStage5Data,
+    pub blame_responses6: Option<BlameResponses6Data>,
+    pub ver_blame_responses7: Option<VerBlameResponses7Data>,
+    /// Either a valid keygen result or a list of blamed parties
+    pub key_ready: Result<KeyReadyData, (CeremonyAbortReason, Vec<AccountId>)>,
+}
+
+impl ValidKeygenStates {
+    /// Get the key and associated data asserting
+    /// that the ceremony has been successful
+    pub fn key_ready_data(&self) -> &KeyReadyData {
+        self.key_ready.as_ref().expect("successful keygen")
     }
 }
 
@@ -170,16 +232,6 @@ pub struct SigningPhase4Data {
     pub ver4_vec: Vec<frost::VerifyLocalSig4>,
 }
 
-pub struct ValidKeygenStates {
-    pub stage0: Stage0Data,
-    pub comm_stage1: CommStage1Data,
-    pub ver_com_stage2: CommVerStage2Data,
-    pub sec_stage3: SecStage3Data,
-    pub comp_stage4: CompStage4Data,
-    pub ver_comp_stage5: VerCompStage5Data,
-    pub key_ready: KeyReadyData,
-}
-
 pub struct ValidSigningStates {
     pub sign_phase1: SigningPhase1Data,
     pub sign_phase2: SigningPhase2Data,
@@ -194,29 +246,45 @@ pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<Stri
         .get_keygen_stage_for(KEYGEN_CEREMONY_ID)
 }
 
-/// Contains the states at different points of key generation
-/// including the final state, where the key is created
-pub struct KeygenContext {
-    account_ids: Vec<AccountId>,
-
-    pub rxs: Vec<InnerEventReceiver>,
-    /// This clients will match the ones in `key_ready`,
-    /// but stored separately so we could substitute
-    /// them in more advanced tests
-    clients: Vec<MultisigClientNoDB>,
+#[derive(Default)]
+struct CustomDataToSend {
     /// If a test requires a local sig different from
     /// the one that would be normally generated, it
     /// will be stored here.  This is different from
     // `sig3_to_send` in that these signatures are
     // treated as having been broadcast consistently
-    custom_local_sigs: HashMap<usize, frost::LocalSig3>,
+    local_sigs: HashMap<usize, frost::LocalSig3>,
     /// Maps a (sender, receiver) pair to the data that will be
     /// sent (in case it needs to be invalid/different from what
     /// is expected normally)
-    comm1_to_send: HashMap<(usize, usize), SigningCommitment>,
-    // TODO: Sig3 to send between (sender, receiver) in case they
-    // needs to be different from the regular, valid ones
-    sig3_to_send: HashMap<(usize, usize), LocalSig3>,
+    comm1_signing: HashMap<(usize, usize), SigningCommitment>,
+    // Sig3 to send between (sender, receiver) in case it
+    // needs to be different from the regular (valid) one
+    sig3s: HashMap<(usize, usize), LocalSig3>,
+    // Secret shares to send between (sender, receiver) in case it
+    // need to be different from the regular (valid) one
+    secret_shares: HashMap<(usize, usize), SecretShare3>,
+    // Secret shares to be broadcast during blaming stage
+    secret_shares_blaming: HashMap<usize, keygen::BlameResponse6>,
+    // Complaints to be broadcast
+    complaints: HashMap<usize, keygen::Complaints4>,
+}
+
+/// Contains the states at different points of key generation
+/// including the final state, where the key is created
+pub struct KeygenContext {
+    account_ids: Vec<AccountId>,
+    /// Some tests require data sent between some parties
+    /// to deviate from the protocol (e.g. for testing
+    /// malicious nodes). Such tests can put non-standard
+    /// data here before the ceremony is run.
+    custom_data: CustomDataToSend,
+    pub rxs: Vec<InnerEventReceiver>,
+    /// This clients will match the ones in `key_ready`,
+    /// but stored separately so we could substitute
+    /// them in more advanced tests
+    clients: Vec<MultisigClientNoDB>,
+
     /// The key that was generated
     key_id: Option<KeyId>,
     // Cache of all tags that used in log calls
@@ -330,11 +398,11 @@ async fn broadcast_all_comm1(
     for sender_idx in SIGNER_IDXS.iter() {
         for receiver_idx in SIGNER_IDXS.iter() {
             if receiver_idx != sender_idx {
-                let valid_comm1 = comm1_vec[*sender_idx].clone();
+                let valid_comm1 = &comm1_vec[*sender_idx];
 
                 let comm1 = custom_comm1s
                     .remove(&(*sender_idx, *receiver_idx))
-                    .unwrap_or(valid_comm1);
+                    .unwrap_or(valid_comm1.clone());
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
 
@@ -437,9 +505,7 @@ impl KeygenContext {
             account_ids,
             rxs,
             clients,
-            custom_local_sigs: HashMap::new(),
-            comm1_to_send: HashMap::new(),
-            sig3_to_send: HashMap::new(),
+            custom_data: Default::default(),
             key_id: None,
             tag_cache,
         }
@@ -454,8 +520,41 @@ impl KeygenContext {
     }
 
     pub fn use_invalid_local_sig(&mut self, signer_idx: usize) {
-        self.custom_local_sigs
+        self.custom_data
+            .local_sigs
             .insert(signer_idx, gen_invalid_local_sig());
+    }
+
+    pub fn use_invalid_secret_share(&mut self, sender_idx: usize, receiver_idx: usize) {
+        assert_ne!(sender_idx, receiver_idx);
+
+        let invalid_share = SecretShare3::create_random();
+
+        self.custom_data
+            .secret_shares
+            .insert((sender_idx, receiver_idx), invalid_share);
+    }
+
+    pub fn use_invalid_complaint(&mut self, sender_idx: usize) {
+        // This complaint is invalid because it contains an invalid index
+        let complaint = keygen::Complaints4(vec![1, usize::MAX]);
+
+        self.custom_data.complaints.insert(sender_idx, complaint);
+    }
+
+    pub fn use_invalid_blame_response(&mut self, sender_idx: usize, receiver_idx: usize) {
+        assert_ne!(sender_idx, receiver_idx);
+
+        // It does not matter whether this invalid share is the same
+        // as the invalid share sent earlier (prior to blaming)
+        let invalid_share = SecretShare3::create_random();
+
+        self.custom_data
+            .secret_shares_blaming
+            .entry(sender_idx)
+            .or_insert(keygen::BlameResponse6(Default::default()))
+            .0
+            .insert(receiver_idx, invalid_share);
     }
 
     pub fn use_inconsistent_broadcast_for_comm1(&mut self, sender_idx: usize, receiver_idx: usize) {
@@ -470,7 +569,8 @@ impl KeygenContext {
             e: Point::random_point(),
         };
 
-        self.comm1_to_send
+        self.custom_data
+            .comm1_signing
             .insert((sender_idx, receiver_idx), fake_comm1);
     }
 
@@ -482,7 +582,8 @@ impl KeygenContext {
         // send to all other parties
         let fake_sig3 = gen_invalid_local_sig();
 
-        self.sig3_to_send
+        self.custom_data
+            .sig3s
             .insert((sender_idx, receiver_idx), fake_sig3);
     }
 
@@ -570,10 +671,16 @@ impl KeygenContext {
         for sender_idx in 0..self.account_ids.len() {
             for receiver_idx in 0..self.account_ids.len() {
                 if sender_idx != receiver_idx {
-                    let r_id = &account_ids[receiver_idx];
+                    let valid_sec3 = {
+                        let r_id = &account_ids[receiver_idx];
+                        sec3_vec[sender_idx].get(r_id).unwrap()
+                    };
 
-                    let sec3_map = &sec3_vec[sender_idx];
-                    let sec3 = sec3_map.get(r_id).unwrap();
+                    let sec3 = self
+                        .custom_data
+                        .secret_shares
+                        .remove(&(sender_idx, receiver_idx))
+                        .unwrap_or(valid_sec3.clone());
 
                     let s_id = &account_ids[sender_idx];
                     let m = keygen_data_to_p2p(sec3.clone(), s_id, KEYGEN_CEREMONY_ID);
@@ -594,7 +701,12 @@ impl KeygenContext {
 
         println!("Collected all complaints");
 
-        distribute_data_keygen!(clients, self.account_ids, complaints);
+        distribute_data_keygen_custom!(
+            clients,
+            self.account_ids,
+            complaints,
+            self.custom_data.complaints
+        );
 
         println!("Distributed all complaints");
 
@@ -611,51 +723,126 @@ impl KeygenContext {
 
         println!("Distributed all verify complaints");
 
-        let mut pubkeys = vec![];
-        for mut r in rxs.iter_mut() {
-            let pubkey = match recv_next_inner_event(&mut r).await {
-                InnerEvent::KeygenResult(KeygenOutcome {
-                    result: Ok(key), ..
-                }) => key,
-                _ => panic!("Unexpected inner event"),
+        // Now we are either done or have to enter the blaming stage
+        let nodes_entered_blaming = clients.iter().all(|c| {
+            get_stage_for_keygen_ceremony(&c).as_deref()
+                == Some("BroadcastStage<BlameResponsesStage6>")
+        });
+
+        let (mut blame_responses6, mut ver_blame_responses7) = (None, None);
+
+        if nodes_entered_blaming {
+            println!("All clients entered blaming phase!");
+
+            let responses6 = recv_all_data_keygen!(rxs, KeygenData::BlameResponse6);
+            blame_responses6 = Some(BlameResponses6Data {
+                clients: clients.clone(),
+                resp6: responses6.clone(),
+            });
+
+            println!("Collected all blame responses");
+
+            distribute_data_keygen_custom!(
+                clients,
+                self.account_ids,
+                responses6,
+                &mut self.custom_data.secret_shares_blaming
+            );
+
+            println!("Distributed all blame responses");
+
+            let ver7 = recv_all_data_keygen!(rxs, KeygenData::VerifyBlameResponses7);
+            ver_blame_responses7 = Some(VerBlameResponses7Data {
+                clients: clients.clone(),
+                ver7: ver7.clone(),
+            });
+
+            println!("Collected all blame responses verification");
+
+            distribute_data_keygen!(clients, self.account_ids, ver7);
+
+            println!("Distributed all blame responses verification");
+        }
+
+        {
+            let mut results = vec![];
+            for mut r in rxs.iter_mut() {
+                let result = match recv_next_inner_event(&mut r).await {
+                    InnerEvent::KeygenResult(KeygenOutcome { result, .. }) => result,
+                    _ => panic!("Unexpected inner event"),
+                };
+                results.push(result);
+            }
+
+            // Check if ceremony is successful for all parties
+            let all_successful = results.iter().all(|res| res.is_ok());
+
+            let key_ready = if all_successful {
+                let pubkeys: Vec<_> = results.iter().map(|res| res.clone().unwrap()).collect();
+
+                // ensure all participants have the same public key
+                assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
+                assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
+
+                let mut sec_keys = vec![];
+
+                let key_id = KeyId(pubkeys[0].serialize().into());
+                self.key_id = Some(key_id.clone());
+
+                for c in clients.iter() {
+                    let key = c.get_key(&key_id).expect("key must be present");
+                    sec_keys.push(key.clone());
+                }
+
+                Ok(KeyReadyData {
+                    clients: clients.clone(),
+                    pubkey: pubkeys[0],
+                    sec_keys,
+                })
+            } else {
+                // Check that the results from all parties are consistent
+                assert!(
+                    results.iter().all(|res| res.is_err()),
+                    "Ceremony didn't result in an error for all parties"
+                );
+
+                let reported_nodes: Vec<_> = results
+                    .iter()
+                    .map(|res| res.as_ref().unwrap_err())
+                    .collect();
+
+                for i in 0..(reported_nodes.len() - 1) {
+                    let lhs = &reported_nodes[i];
+                    let rhs = &reported_nodes[i + 1];
+
+                    assert_eq!(lhs.0, rhs.0);
+
+                    let nodes_lhs: HashSet<_> = lhs.1.iter().cloned().collect();
+                    let nodes_rhs: HashSet<_> = rhs.1.iter().cloned().collect();
+
+                    assert_eq!(nodes_lhs, nodes_rhs);
+                }
+
+                Err(reported_nodes[0].clone())
             };
-            pubkeys.push(pubkey);
-        }
 
-        // ensure all participants have the same idea of the public key
-        assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
-        assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
+            for rx in rxs.iter_mut() {
+                assert_channel_empty(rx).await;
+            }
 
-        let mut sec_keys = vec![];
+            println!("Keygen ceremony took: {:?}", instant.elapsed());
 
-        let key_id = KeyId(pubkeys[0].serialize().into());
-        self.key_id = Some(key_id.clone());
-
-        for c in clients.iter() {
-            let key = c.get_key(&key_id).expect("key must be present");
-            sec_keys.push(key.clone());
-        }
-
-        let key_ready = KeyReadyData {
-            clients: clients.clone(),
-            pubkey: pubkeys[0],
-            sec_keys,
-        };
-
-        println!("Keygen ceremony took: {:?}", instant.elapsed());
-
-        for rx in rxs.iter_mut() {
-            assert_channel_empty(rx).await;
-        }
-
-        ValidKeygenStates {
-            stage0,
-            comm_stage1: com_stage1,
-            ver_com_stage2,
-            sec_stage3,
-            comp_stage4,
-            ver_comp_stage5,
-            key_ready,
+            ValidKeygenStates {
+                stage0,
+                comm_stage1: com_stage1,
+                ver_com_stage2,
+                sec_stage3,
+                comp_stage4,
+                ver_comp_stage5,
+                blame_responses6,
+                ver_blame_responses7,
+                key_ready,
+            }
         }
     }
 
@@ -706,7 +893,12 @@ impl KeygenContext {
         };
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
-        broadcast_all_comm1(&mut clients, &comm1_vec, &mut self.comm1_to_send).await;
+        broadcast_all_comm1(
+            &mut clients,
+            &comm1_vec,
+            &mut self.custom_data.comm1_signing,
+        )
+        .await;
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
@@ -745,7 +937,7 @@ impl KeygenContext {
 
         // *** Collect local sigs ***
 
-        let local_sigs = collect_all_local_sigs3(rxs, &mut self.custom_local_sigs).await;
+        let local_sigs = collect_all_local_sigs3(rxs, &mut self.custom_data.local_sigs).await;
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -753,7 +945,7 @@ impl KeygenContext {
         };
 
         // *** Distribute local sigs ***
-        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.sig3_to_send).await;
+        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.custom_data.sig3s).await;
 
         // *** Collect Ver4 messages ***
         let ver4_vec = collect_all_ver4(rxs).await;

@@ -3,7 +3,11 @@
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
 
-use std::{collections::HashMap, convert::TryInto, fmt::Display};
+use std::{
+    collections::{BTreeSet, HashMap},
+    convert::TryInto,
+    fmt::Display,
+};
 
 use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
@@ -144,7 +148,7 @@ fn gen_group_commitment(
 /// according to Section 4 (page 9)
 pub fn get_lagrange_coeff(
     signer_index: usize,
-    all_signer_indices: &[usize],
+    all_signer_indices: &BTreeSet<usize>,
 ) -> Result<Scalar, &'static str> {
     let mut num: Scalar = ECScalar::from(&BigInt::from(1));
     let mut den: Scalar = ECScalar::from(&BigInt::from(1));
@@ -173,7 +177,7 @@ fn gen_rho_i(
     index: usize,
     msg: &[u8],
     signing_commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
@@ -204,7 +208,7 @@ type SigningResponse = LocalSig3;
 fn generate_bindings(
     msg: &[u8],
     commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> HashMap<usize, Scalar> {
     commitments
         .iter()
@@ -222,7 +226,7 @@ pub fn generate_local_sig(
     nonces: &SecretNoncePair,
     commitments: &HashMap<usize, SigningCommitment>,
     own_idx: usize,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> SigningResponse {
     let bindings = generate_bindings(&msg, commitments, all_idxs);
 
@@ -280,7 +284,7 @@ fn is_party_response_valid(
 /// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
-    signer_idxs: &[usize],
+    signer_idxs: &BTreeSet<usize>,
     agg_pubkey: Point,
     pubkeys: &HashMap<usize, Point>,
     commitments: &HashMap<usize, SigningCommitment>,

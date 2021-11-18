@@ -313,16 +313,15 @@ pub trait IsOnline {
 }
 
 /// A representation of the current network state for this heartbeat interval.
-/// A node is regarded online if we have received a heartbeat from them in the last two heartbeat
-/// intervals.  Those that are online but yet to submit a heartbeat in the current heartbeat
-/// interval are marked as awaiting.
+/// A node is regarded online if we have received a heartbeat during the last heartbeat interval
+/// otherwise they are considered offline.  
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
-	/// Those nodes that we are awaiting a heartbeat from
-	pub awaiting: Vec<ValidatorId>,
+	/// Those nodes that are considered offline
+	pub offline: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// Number of nodes
+	/// Number of nodes with the Validator state
 	pub number_of_nodes: u32,
 }
 
@@ -525,8 +524,12 @@ pub mod offline_conditions {
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId: Default;
+	type BlockNumber;
 	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		block_number: Self::BlockNumber,
+	) -> Weight;
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
 }
@@ -540,4 +543,11 @@ pub trait BlockEmissions {
 	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
 	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
+}
+
+/// Checks if the caller can execute free transactions
+pub trait WaivedFees {
+	type AccountId;
+	type Call;
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }

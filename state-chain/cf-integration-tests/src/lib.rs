@@ -182,7 +182,7 @@ mod tests {
 				if self.active {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
-						// Online pallet, ignore error
+						// Online pallet
 						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
@@ -337,6 +337,7 @@ mod tests {
 	pub const ALICE: [u8; 32] = [0xff; 32];
 	pub const BOB: [u8; 32] = [0xfe; 32];
 	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	// Root and Gov member
 	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
@@ -495,7 +496,8 @@ mod tests {
 	mod genesis {
 		use super::*;
 		use cf_traits::{
-			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountStore, StakeTransfer,
+			AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 		pub const NUMBER_OF_VALIDATORS: u32 = 3;
@@ -626,11 +628,13 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
+					let account_data = ChainflipAccountStore::<Runtime>::get(account);
 					assert_eq!(
 						Some(0),
-						ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
+						account_data.last_active_epoch,
 						"validator should be active in the genesis epoch(0)"
 					);
+					assert_eq!(ChainflipAccountState::Validator, account_data.state);
 				}
 			});
 		}
@@ -948,6 +952,60 @@ mod tests {
 		}
 	}
 
+	mod runtime {
+		use super::*;
+		use frame_support::dispatch::GetDispatchInfo;
+		use pallet_cf_flip::FlipTransactionPayment;
+		use pallet_transaction_payment::OnChargeTransaction;
+
+		#[test]
+		// We have two types of accounts. One set of accounts which is part
+		// of the governance and is allowed to make free calls to governance extrinsic.
+		// All other accounts are normally charged and can call any extrinsic.
+		fn restriction_handling() {
+			const EPOCH_BLOCKS: u32 = 100;
+			const MAX_VALIDATORS: u32 = 3;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(MAX_VALIDATORS)
+				.build()
+				.execute_with(|| {
+					let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+					let gov_call: state_chain_runtime::Call =
+						pallet_cf_governance::Call::approve(1).into();
+					// Expect a successful normal call to work
+					let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ALICE.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5,
+						0,
+					);
+					assert!(ordinary.is_ok());
+					assert!(ordinary.unwrap().is_some());
+					// Expect a successful gov call to work
+					let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&gov_call,
+						&gov_call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov.is_ok());
+					assert!(gov.unwrap().is_none());
+					// Expect a non gov call to fail when it's executed by gov member
+					let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
+						&ERIN.into(),
+						&call,
+						&call.get_dispatch_info(),
+						5000,
+						0,
+					);
+					assert!(gov_err.is_err());
+				});
+		}
+	}
+
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
 		use cf_traits::{
@@ -1054,10 +1112,10 @@ mod tests {
 		// validators
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
-			// In order to do this we would want to have missed 3 heartbeats
+			// In order to do this we would want to have missed 1 heartbeat interval
 			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
-			// Blocks for our epoch
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 4;
+			// Blocks for our epoch, something larger than one heartbeat
+			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
 			const MAX_VALIDATORS: u32 = 10;
@@ -1092,8 +1150,8 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					// We need to move forward three heartbeats to be regarded as offline
-					testnet.move_forward_blocks(3 * HeartbeatBlockInterval::get());
+					// We need to move forward one heartbeats to be regarded as offline
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {

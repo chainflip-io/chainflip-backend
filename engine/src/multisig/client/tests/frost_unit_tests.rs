@@ -51,14 +51,14 @@ async fn should_delay_comm1_before_rts() {
 
     let sign_states = ctx.sign().await;
 
-    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
 
     // "Slow" client c1 receives a message before a request to sign, it should be delayed
     receive_comm1!(c1, 1, sign_states);
 
     assert!(c1.is_at_signing_stage(0));
 
-    let key = keygen_states.key_ready.sec_keys[0].clone();
+    let key = keygen_states.key_ready_data().sec_keys[0].clone();
 
     // when c1 receives a request to sign, it processes the delayed message
     c1.ceremony_manager.on_request_to_sign(
@@ -240,7 +240,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
     let sign_states = ctx.sign().await;
     ctx.tag_cache.clear();
 
-    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
 
     assert!(c1.is_at_signing_stage(0));
 
@@ -439,7 +439,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let keygen_states = ctx.generate().await;
     ctx.tag_cache.clear();
 
-    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
 
     // Get an id that was not in the keygen and substitute it in the signer list
@@ -462,7 +462,7 @@ async fn should_ignore_rts_if_not_participating() {
     let keygen_states = ctx.generate().await;
     ctx.tag_cache.clear();
 
-    let mut c1 = keygen_states.key_ready.clients[3].clone();
+    let mut c1 = keygen_states.key_ready_data().clients[3].clone();
     assert!(c1.is_at_signing_stage(0));
 
     // Make sure our id is not in the signers list
@@ -482,7 +482,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     let keygen_states = ctx.generate().await;
     ctx.tag_cache.clear();
 
-    let mut c1 = keygen_states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
 
     // Send the request to sign with not enough signers

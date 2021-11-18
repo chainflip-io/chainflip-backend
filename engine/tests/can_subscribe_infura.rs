@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, new_synced_web3_client},
+    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver},
     logging::utils,
     settings::Settings,
 };

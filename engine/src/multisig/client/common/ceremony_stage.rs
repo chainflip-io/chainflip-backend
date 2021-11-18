@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 
@@ -59,8 +61,17 @@ where
     /// Our own signer index
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
-    pub all_idxs: Vec<usize>,
+    pub all_idxs: BTreeSet<usize>,
     /// Sending end of the channel used for p2p communication
     pub p2p_sender: Sender,
     pub logger: slog::Logger,
+}
+
+impl<D, Sender> CeremonyCommon<D, Sender>
+where
+    Sender: P2PSender<Data = D>,
+{
+    pub fn is_idx_valid(&self, idx: usize) -> bool {
+        self.all_idxs.contains(&idx)
+    }
 }

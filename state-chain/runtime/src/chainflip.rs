@@ -193,9 +193,13 @@ pub struct ChainflipHeartbeat;
 
 impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
+	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
-		<Reputation as Heartbeat>::heartbeat_submitted(validator_id)
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		block_number: Self::BlockNumber,
+	) -> Weight {
+		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number)
 	}
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
@@ -379,5 +383,24 @@ impl KeyProvider<Ethereum> for EthereumKeyProvider {
 			.public_key
 			.try_into()
 			.expect("TODO: make it so this call can't fail.")
+	}
+}
+
+/// Checks if the caller can execute free transactions
+pub struct WaivedFees;
+
+impl cf_traits::WaivedFees for WaivedFees {
+	type AccountId = AccountId;
+	type Call = Call;
+
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
+		let is_gov_call = match call {
+			Call::Governance(_) => true,
+			_ => false,
+		};
+		if is_gov_call {
+			return super::Governance::members().contains(caller)
+		}
+		return false
 	}
 }

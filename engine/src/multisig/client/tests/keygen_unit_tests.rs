@@ -1,3 +1,4 @@
+use crate::multisig::client::CeremonyAbortReason;
 use crate::multisig::MultisigInstruction;
 
 use super::helpers::check_blamed_paries;
@@ -27,6 +28,20 @@ fn assert_stage2(c: &helpers::MultisigClientNoDB) {
         helpers::get_stage_for_keygen_ceremony(&c).as_deref(),
         Some("BroadcastStage<VerifyCommitmentsBroadcast2>")
     );
+}
+
+/// If all nodes are honest and behave as expected we should
+/// generate a key without entering a blaming stage
+#[tokio::test]
+async fn happy_path_results_in_valid_key() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    // No blaming stage
+    assert!(keygen_states.blame_responses6.is_none());
+
+    // Able to generate a valid signature
+    assert!(ctx.sign().await.outcome.result.is_ok());
 }
 
 /// If keygen state expires before a formal request to keygen
@@ -76,7 +91,7 @@ async fn should_delay_comm1_before_keygen_request() {
 
     let mut c1 = keygen_states.stage0.clients[0].clone();
 
-    // Recieve an early stage1 message, should be delayed
+    // Receive an early stage1 message, should be delayed
     receive_comm1!(c1, 1, keygen_states);
 
     assert_no_stage(&c1);
@@ -92,5 +107,82 @@ async fn should_delay_comm1_before_keygen_request() {
 
     assert_stage2(&c1);
 }
+
+/// If at least one party is blamed during the "Complaints" stage, we
+/// should enter a blaming stage, where the blamed party sends a valid
+/// share, so the ceremony should be successful in the end
+#[tokio::test]
+async fn should_enter_blaming_stage_on_invalid_secret_shares() {
+    let mut ctx = helpers::KeygenContext::new();
+
+    // Instruct (1) to send an invalid secret share to (2)
+    ctx.use_invalid_secret_share(1, 2);
+
+    let keygen_states = ctx.generate().await;
+
+    // Check that nodes had to go through a blaming stage
+    assert!(keygen_states.blame_responses6.is_some());
+
+    // Check that we are still able to sign
+    assert!(ctx.sign().await.outcome.result.is_ok());
+}
+
+/// If one or more parties send an invalid secret share both the first
+/// time and during the blaming stage, the ceremony is aborted with these
+/// parties reported
+#[tokio::test]
+async fn should_report_on_invalid_blame_response() {
+    let mut ctx = helpers::KeygenContext::new();
+
+    let bad_node_idx = 1;
+
+    // Node (bad_node_idx) sends an invalid secret share to (2) and
+    // also sends an invalid blame response later on
+    ctx.use_invalid_secret_share(bad_node_idx, 2);
+    ctx.use_invalid_blame_response(bad_node_idx, 2);
+
+    // Node (bad_node_idx + 1) sends an invalid secret share to (3),
+    // but later sends a valid blame response (sent by default)
+    ctx.use_invalid_secret_share(bad_node_idx + 1, 3);
+
+    let keygen_states = ctx.generate().await;
+
+    // Check that nodes had to go through a blaming stage
+    assert!(keygen_states.blame_responses6.is_some());
+
+    assert!(keygen_states.key_ready.is_err());
+
+    let (reason, reported) = keygen_states.key_ready.unwrap_err();
+
+    assert_eq!(reason, CeremonyAbortReason::Invalid);
+
+    // Only (bad_node_idx) should be reported
+    assert_eq!(
+        reported.as_slice(),
+        &[AccountId([bad_node_idx as u8 + 1; 32])]
+    );
+}
+
+#[tokio::test]
+async fn should_abort_on_blames_at_invalid_indexes() {
+    let mut ctx = helpers::KeygenContext::new();
+
+    let bad_node_idx = 1;
+
+    ctx.use_invalid_complaint(bad_node_idx);
+
+    let keygen_states = ctx.generate().await;
+
+    let (reason, reported) = keygen_states.key_ready.unwrap_err();
+
+    assert_eq!(reason, CeremonyAbortReason::Invalid);
+    assert_eq!(
+        reported.as_slice(),
+        &[AccountId([bad_node_idx as u8 + 1; 32])]
+    );
+}
+
+// TODO: test that blame responses sent by nodes not blamed
+// earlier are ignored
 
 // TODO: more tests (see https://github.com/chainflip-io/chainflip-backend/issues/677)
