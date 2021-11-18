@@ -3,7 +3,7 @@ use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation, Rewards,
 	Runtime, Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
+use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -26,6 +26,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+use pallet_cf_validator::PercentageRange;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -218,9 +219,11 @@ impl Heartbeat for ChainflipHeartbeat {
 
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
-		// Check the state of the network and if we are below the emergency rotation trigger
+		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
-		if network_state.percentage_online() <= EmergencyRotationPercentageTrigger::get() as u32 {
+		let PercentageRange{ top, bottom } = EmergencyRotationPercentageRange::get();
+		let percent_online = network_state.percentage_online() as u8;
+		if percent_online >= bottom && percent_online <= top {
 			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
 		}
 
