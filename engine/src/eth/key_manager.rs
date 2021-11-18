@@ -57,8 +57,8 @@ impl ChainflipKey {
         let mut bytes: [u8; 33] = [0; 33];
         self.pub_key_x.to_big_endian(&mut bytes[1..]);
         bytes[0] = match self.pub_key_y_parity.is_zero() {
-            true => 0o2,
-            false => 0o3,
+            true => 2,
+            false => 3,
         };
         bytes
     }
