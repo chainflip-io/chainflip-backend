@@ -3,7 +3,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
+    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -61,7 +61,7 @@ async fn main() {
     let (p2p_message_sender, p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
     let (p2p_message_command_sender, p2p_message_command_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
+        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await

@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use crate::{
     logging::COMPONENT_KEY,
-    p2p::{AccountId, P2PMessageCommand},
+    p2p::{AccountId},
 };
 use futures::StreamExt;
 use slog::o;
@@ -74,7 +74,7 @@ pub fn start_client<S>(
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigOutcome>,
     mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
-    p2p_message_command_sender: UnboundedSender<P2PMessageCommand>,
+    p2p_message_command_sender: UnboundedSender<P2PMessage>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
@@ -115,7 +115,7 @@ where
                 }
                 Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
-                        InnerEvent::P2PMessageCommand(p2p_message_command) => {
+                        InnerEvent::P2PMessage(p2p_message_command) => {
                             p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::SigningResult(res) => {

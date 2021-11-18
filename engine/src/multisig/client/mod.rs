@@ -21,7 +21,7 @@ use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
-    p2p::{AccountId, P2PMessage, P2PMessageCommand},
+    p2p::{AccountId, P2PMessage},
 };
 
 use serde::{Deserialize, Serialize};
@@ -149,16 +149,16 @@ pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
-    P2PMessageCommand(P2PMessageCommand),
+    P2PMessage(P2PMessage),
     SigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
 
 pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
 
-impl From<P2PMessageCommand> for InnerEvent {
-    fn from(m: P2PMessageCommand) -> Self {
-        InnerEvent::P2PMessageCommand(m)
+impl From<P2PMessage> for InnerEvent {
+    fn from(m: P2PMessage) -> Self {
+        InnerEvent::P2PMessage(m)
     }
 }
 
@@ -335,7 +335,7 @@ where
 
     /// Process message from another validator
     pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
-        let P2PMessage { sender_id, data } = p2p_message;
+        let P2PMessage { account_id: sender_id, data } = p2p_message;
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {

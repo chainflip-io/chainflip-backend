@@ -31,7 +31,7 @@ use crate::{
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
     },
-    p2p::{AccountId, P2PMessage, P2PMessageCommand},
+    p2p::{AccountId, P2PMessage},
 };
 
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
@@ -1217,7 +1217,7 @@ pub async fn recv_next_inner_event_opt(rx: &mut InnerEventReceiver) -> Option<In
         .ok()?
 }
 
-pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessageCommand {
+pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessage {
     let res = tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()
@@ -1225,7 +1225,7 @@ pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessageCommand 
         .unwrap();
 
     match res {
-        InnerEvent::P2PMessageCommand(m) => m,
+        InnerEvent::P2PMessage(m) => m,
         e => {
             eprintln!("Unexpected InnerEvent: {:?}", e);
             panic!();
@@ -1237,7 +1237,7 @@ async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (AccountId, Multi
     let m = recv_p2p_message(rx).await;
 
     (
-        m.destination,
+        m.account_id,
         bincode::deserialize(&m.data).expect("Invalid Multisig Message"),
     )
 }
@@ -1327,7 +1327,7 @@ async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig
 
 pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> P2PMessage {
     P2PMessage {
-        sender_id: sender_id.clone(),
+        account_id: sender_id.clone(),
         data: bincode::serialize(&MultisigMessage {
             ceremony_id: SIGN_CEREMONY_ID,
             data: MultisigData::Signing(data.into()),
@@ -1342,7 +1342,7 @@ pub fn keygen_data_to_p2p(
     ceremony_id: CeremonyId,
 ) -> P2PMessage {
     P2PMessage {
-        sender_id: sender_id.clone(),
+        account_id: sender_id.clone(),
         data: bincode::serialize(&MultisigMessage {
             ceremony_id,
             data: MultisigData::Keygen(data.into()),

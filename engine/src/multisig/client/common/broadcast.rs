@@ -4,7 +4,7 @@ use std::{
     fmt::Display,
 };
 
-use crate::{multisig::client::{InnerEvent, MultisigData, MultisigMessage}, p2p::P2PMessageCommand};
+use crate::{multisig::client::{InnerEvent, MultisigData, MultisigMessage}, p2p::P2PMessage};
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
@@ -97,8 +97,8 @@ where
                         self.messages.insert(self.common.own_idx, data.clone());
                     } else {
                         let data: D = data.clone().into();
-                        self.common.outgoing_p2p_message_sender.send(InnerEvent::P2PMessageCommand(P2PMessageCommand{
-                            destination: self.common.validator_mapping.get_id(*destination_idx).unwrap().clone(),
+                        self.common.outgoing_p2p_message_sender.send(InnerEvent::P2PMessage(P2PMessage{
+                            account_id: self.common.validator_mapping.get_id(*destination_idx).unwrap().clone(),
                             data: bincode::serialize(&MultisigMessage {
                                 ceremony_id: self.common.ceremony_id,
                                 data: data.into()
@@ -113,8 +113,8 @@ where
                         self.messages.insert(self.common.own_idx, data);
                     } else {
                         let data: D = data.clone().into();
-                        self.common.outgoing_p2p_message_sender.send(InnerEvent::P2PMessageCommand(P2PMessageCommand{
-                            destination: self.common.validator_mapping.get_id(destination_idx).unwrap().clone(),
+                        self.common.outgoing_p2p_message_sender.send(InnerEvent::P2PMessage(P2PMessage{
+                            account_id: self.common.validator_mapping.get_id(destination_idx).unwrap().clone(),
                             data: bincode::serialize(&MultisigMessage {
                                 ceremony_id: self.common.ceremony_id,
                                 data: data.into()

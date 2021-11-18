@@ -48,7 +48,7 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
                 P2PEvent::MessageReceived(sender, message) => {
                     self.p2p_message_sender
                         .send(P2PMessage {
-                            sender_id: AccountId(sender.0),
+                            account_id: AccountId(sender.0),
                             data: message.0,
                         })
                         .map_err(|_| "Receiver dropped")
@@ -83,20 +83,8 @@ impl std::fmt::Debug for AccountId {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
-    pub sender_id: AccountId,
+    pub account_id: AccountId, // TODO rename
     pub data: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct P2PMessageCommand {
-    pub destination: AccountId,
-    pub data: Vec<u8>,
-}
-
-impl P2PMessageCommand {
-    pub fn new(destination: AccountId, data: Vec<u8>) -> Self {
-        P2PMessageCommand { destination, data }
-    }
 }
 
 #[cfg(test)]
@@ -136,7 +124,7 @@ mod tests {
         assert_eq!(
             receive_with_timeout(stream_1).await,
             Some(P2PMessage {
-                sender_id: validator_ids[0].clone(),
+                account_id: validator_ids[0].clone(),
                 data: data.clone()
             })
         );
@@ -165,7 +153,7 @@ mod tests {
         assert_eq!(
             receive_with_timeout(stream_0).await,
             Some(P2PMessage {
-                sender_id: validator_ids[1].clone(),
+                account_id: validator_ids[1].clone(),
                 data: data.clone()
             })
         );
@@ -175,7 +163,7 @@ mod tests {
         assert_eq!(
             receive_with_timeout(stream_2).await,
             Some(P2PMessage {
-                sender_id: validator_ids[1].clone(),
+                account_id: validator_ids[1].clone(),
                 data: data.clone()
             })
         );
