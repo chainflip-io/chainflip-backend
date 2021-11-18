@@ -14,8 +14,8 @@ use std::{convert::TryInto, env};
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
-const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
-const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "3CcfF76Ac568e837da675e3027C6E566b49ed973";
+const KEY_MANAGER_ADDRESS_DEFAULT: &str = "E9E635642E20638F7c575D1672729F6eBd90B86c";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 
 /// Generate a crypto pair from seed.
