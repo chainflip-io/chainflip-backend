@@ -82,14 +82,14 @@ async fn main() {
         .expect("should get latest block hash");
 
     let stake_manager_address = state_chain_client
-        .get_stake_manager_address(latest_block_hash)
+        .get_environment_value(latest_block_hash, "StakeManagerAddress")
         .await
         .expect("Should get StakeManager address from SC");
     let stake_manager_contract =
         StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_key_manager_address(latest_block_hash)
+        .get_environment_value(latest_block_hash, "KeyManagerAddress")
         .await
         .expect("Should get KeyManager address from SC");
     let key_manager_contract =

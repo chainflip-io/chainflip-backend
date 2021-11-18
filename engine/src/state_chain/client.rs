@@ -9,11 +9,11 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::RpcError;
 use pallet_cf_vaults::Vault;
+use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
     Bytes, Pair,
 };
-use sp_core::{H160, H256};
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
@@ -391,43 +391,24 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
-    pub async fn get_stake_manager_address(
+    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<H160> {
-        let sm_key = self
+        value: &'static str,
+    ) -> Result<ValueType> {
+        let value_key = self
             .get_metadata()
             .module("Environment")?
-            .storage("StakeManagerAddress")?
+            .storage(value)?
             .plain()?
             .key();
-        let address_changes = self
-            .get_from_storage_with_key::<H160>(block_hash, sm_key)
+        let value_changes = self
+            .get_from_storage_with_key::<ValueType>(block_hash, value_key)
             .await?;
 
-        Ok(address_changes
+        Ok(value_changes
             .last()
-            .expect("should have StakeManager address from genesis")
-            .to_owned())
-    }
-
-    pub async fn get_key_manager_address(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<H160> {
-        let km_key = self
-            .get_metadata()
-            .module("Environment")?
-            .storage("KeyManagerAddress")?
-            .plain()?
-            .key();
-        let address_changes = self
-            .get_from_storage_with_key::<H160>(block_hash, km_key)
-            .await?;
-
-        Ok(address_changes
-            .last()
-            .expect("should have KeyManager address from genesis")
+            .expect("Failed to find value in environment storage")
             .to_owned())
     }
 
@@ -631,6 +612,8 @@ mod tests {
 
     use std::convert::TryInto;
 
+    use sp_core::H160;
+
     use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
 
     use super::*;
@@ -654,7 +637,7 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_stake_manager_address(block_hash)
+                .get_environment_value::<H160>(block_hash, "KeyManagerAddress")
                 .await
                 .unwrap();
 
