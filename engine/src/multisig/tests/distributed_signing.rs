@@ -15,7 +15,7 @@ use crate::{
             signing::SigningInfo,
             SigningOutcome,
         },
-        KeyDBMock, KeyId, MessageHash, MultisigEvent, MultisigInstruction,
+        KeyDBMock, KeyId, MessageHash, MultisigOutcome, MultisigInstruction,
     },
     p2p::{
         self,
@@ -30,7 +30,7 @@ use lazy_static::lazy_static;
 #[derive(Debug)]
 pub struct FakeNode {
     multisig_instruction_tx: UnboundedSender<MultisigInstruction>,
-    multisig_event_rx: UnboundedReceiver<MultisigEvent>,
+    multisig_event_rx: UnboundedReceiver<MultisigOutcome>,
 }
 
 /// Number of parties participating in keygen
@@ -68,7 +68,7 @@ async fn coordinate_signing(
         .collect_vec();
 
     // wait on the keygen ceremony so we can use the correct KeyId to sign with
-    let key_id = if let Some(MultisigEvent::KeygenResult(KeygenOutcome {
+    let key_id = if let Some(MultisigOutcome::KeygenResult(KeygenOutcome {
         id: _,
         result: Ok(pubkey),
     })) = nodes[0].multisig_event_rx.recv().await
@@ -117,13 +117,13 @@ async fn coordinate_signing(
             let multisig_events = &mut nodes[*i].multisig_event_rx;
 
             match multisig_events.recv().await {
-                Some(MultisigEvent::MessageSigningResult(SigningOutcome {
+                Some(MultisigOutcome::MessageSigningResult(SigningOutcome {
                     result: Ok(_), ..
                 })) => {
                     slog::info!(logger, "Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }
-                Some(MultisigEvent::MessageSigningResult(_)) => {
+                Some(MultisigOutcome::MessageSigningResult(_)) => {
                     slog::error!(logger, "Messaging signing result failed :(");
                     return Err(());
                 }

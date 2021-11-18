@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
+    multisig::{self, MultisigOutcome, MultisigInstruction, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -56,7 +56,7 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
 
     let (multisig_event_sender, multisig_event_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (p2p_message_sender, p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
