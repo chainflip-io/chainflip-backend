@@ -202,7 +202,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::KeygenResult(KeygenOutcome {
+                                        MultisigOutcome::Keygen(KeygenOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -230,7 +230,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigOutcome::MessageSigningResult(
+                                        MultisigOutcome::Signing(
                                             message_signing_result,
                                         ) => {
                                             panic!(
@@ -274,7 +274,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::MessageSigningResult(SigningOutcome {
+                                        MultisigOutcome::Signing(SigningOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -296,7 +296,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigOutcome::KeygenResult(keygen_result) => {
+                                        MultisigOutcome::Keygen(keygen_result) => {
                                             panic!(
                                                 "Expecting MessageSigningResult, got: {:?}",
                                                 keygen_result

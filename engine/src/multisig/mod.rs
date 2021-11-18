@@ -63,8 +63,8 @@ pub enum MultisigInstruction {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigOutcome {
-    MessageSigningResult(SigningOutcome),
-    KeygenResult(KeygenOutcome),
+    Signing(SigningOutcome),
+    Keygen(KeygenOutcome),
 }
 
 /// Start the multisig client, which listens for p2p messages and instructions from the SC
@@ -119,10 +119,10 @@ where
                             p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::SigningResult(res) => {
-                            multisig_event_sender.send(MultisigOutcome::MessageSigningResult(res)).map_err(|_| "Receiver dropped").unwrap();
+                            multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
-                            multisig_event_sender.send(MultisigOutcome::KeygenResult(res)).map_err(|_| "Receiver dropped").unwrap();
+                            multisig_event_sender.send(MultisigOutcome::Keygen(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }
                 }
