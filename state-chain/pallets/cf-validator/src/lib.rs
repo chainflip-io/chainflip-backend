@@ -39,6 +39,13 @@ pub struct SemVer {
 
 type Version = SemVer;
 
+/// A percentage range
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct PercentageRange {
+	pub top: u8,
+	pub bottom: u8,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -73,9 +80,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
-		/// Trigger an emergency rotation on falling below the percentage of online validators
+		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
-		type EmergencyRotationPercentageTrigger: Get<u8>;
+		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 	}
 
 	#[pallet::event]
