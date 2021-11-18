@@ -248,7 +248,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Get the latest block hash at the time of the call
-    pub async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+    pub async fn get_latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
         self.state_chain_rpc_client.latest_block_hash().await
     }
 
@@ -654,7 +654,7 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_key_manager_address(block_hash)
+                .get_stake_manager_address(block_hash)
                 .await
                 .unwrap();
 

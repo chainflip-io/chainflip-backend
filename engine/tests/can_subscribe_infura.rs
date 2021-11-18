@@ -7,6 +7,7 @@ use chainflip_engine::{
 use anyhow::Result;
 use config::{Config, Environment, File};
 use futures::stream::StreamExt;
+use sp_core::H160;
 
 mod common;
 
@@ -21,7 +22,8 @@ pub async fn test_all_key_manager_events() {
         .await
         .unwrap();
 
-    let key_manager = KeyManager::new(&settings).unwrap();
+    // TODO: Get the address from environment variables, so we don't need to start the SC
+    let key_manager = KeyManager::new(H160::default()).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
