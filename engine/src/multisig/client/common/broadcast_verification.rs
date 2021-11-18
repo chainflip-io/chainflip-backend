@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
