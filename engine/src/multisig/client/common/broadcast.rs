@@ -88,6 +88,7 @@ where
     type Result = Result;
 
     fn init(&mut self) {
+        // TODO Cleanup my mess (Alastair Holmes 18.11.2021)
         match self.processor.init() {
             DataToSend::Broadcast(data) => {
                 for destination_idx in &self.common.all_idxs {
