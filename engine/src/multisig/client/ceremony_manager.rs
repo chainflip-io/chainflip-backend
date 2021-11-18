@@ -22,7 +22,7 @@ use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, Signin
 
 use crate::p2p::AccountId;
 
-use super::keygen::KeygenOptions;
+use super::keygen::{HashContext, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -140,6 +140,8 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
+        let context = generate_keygen_context(ceremony_id, signers.clone());
+
         state.on_keygen_request(
             ceremony_id,
             self.event_sender.clone(),
@@ -147,6 +149,7 @@ impl CeremonyManager {
             our_idx,
             signer_idxs,
             keygen_options,
+            context,
         );
     }
 
@@ -339,4 +342,28 @@ impl CeremonyManager {
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
+}
+
+/// Create unique deterministic context used for generating a ZKP to prevent replay attacks
+pub fn generate_keygen_context(
+    ceremony_id: CeremonyId,
+    mut signers: Vec<AccountId>,
+) -> HashContext {
+    use sha2::{Digest, Sha256};
+
+    // We don't care if sorting is stable as all account ids are meant to be unique
+    signers.sort_unstable();
+
+    let mut hasher = Sha256::new();
+
+    hasher.update(ceremony_id.to_be_bytes());
+
+    // NOTE: it should be sufficient to use ceremony_id as context as
+    // we never reuse the same id for different ceremonies, but lets
+    // put the signers in to make the context hard to predict as well
+    for id in signers {
+        hasher.update(id.0);
+    }
+
+    HashContext(*hasher.finalize().as_ref())
 }
