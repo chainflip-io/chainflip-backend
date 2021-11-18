@@ -8,7 +8,8 @@ use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 pub use keygen_data::{
-    Comm1, Complaints4, KeygenData, SecretShare3, VerifyComm2, VerifyComplaints5,
+    BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
+    VerifyComm2, VerifyComplaints5,
 };
 
 pub use keygen_stages::AwaitCommitments1;
