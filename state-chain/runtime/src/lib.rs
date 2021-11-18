@@ -44,7 +44,7 @@ use crate::chainflip::{
 	ChainflipVaultRotationHandler,
 };
 pub use cf_traits::{BlockNumber, FlipBalance};
-use cf_traits::{ChainflipAccountData, WaivedFees};
+use cf_traits::ChainflipAccountData;
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
