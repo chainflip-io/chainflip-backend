@@ -15,7 +15,7 @@ use crate::{
             signing::SigningInfo,
             SigningOutcome,
         },
-        KeyDBMock, KeyId, MessageHash, MultisigOutcome, MultisigInstruction,
+        KeyDBMock, KeyId, MessageHash, MultisigInstruction, MultisigOutcome,
     },
     p2p::{
         self,
@@ -117,9 +117,7 @@ async fn coordinate_signing(
             let multisig_events = &mut nodes[*i].multisig_event_rx;
 
             match multisig_events.recv().await {
-                Some(MultisigOutcome::Signing(SigningOutcome {
-                    result: Ok(_), ..
-                })) => {
+                Some(MultisigOutcome::Signing(SigningOutcome { result: Ok(_), .. })) => {
                     slog::info!(logger, "Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }

@@ -13,7 +13,7 @@ use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     multisig::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigOutcome, MultisigInstruction,
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
     p2p,

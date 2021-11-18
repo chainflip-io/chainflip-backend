@@ -120,7 +120,6 @@ pub enum P2PEvent {
 	ValidatorDisconnected(AccountIdBs58),
 }
 
-
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	/// Runs concurrently in the background and manages receiving (from the senders in
 	/// "notification_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers

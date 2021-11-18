@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigOutcome, MultisigInstruction, PersistentKeyDB},
+    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::{CommandLineOptions, Settings},
     state_chain,
