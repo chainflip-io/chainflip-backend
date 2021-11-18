@@ -401,11 +401,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage("StakeManagerAddress")?
             .plain()?
             .key();
-        let address = self
+        let address_changes = self
             .get_from_storage_with_key::<H160>(block_hash, sm_key)
             .await?;
 
-        Ok(address
+        Ok(address_changes
             .last()
             .expect("should have StakeManager address from genesis")
             .to_owned())
@@ -421,11 +421,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage("KeyManagerAddress")?
             .plain()?
             .key();
-        let address = self
+        let address_changes = self
             .get_from_storage_with_key::<H160>(block_hash, km_key)
             .await?;
 
-        Ok(address
+        Ok(address_changes
             .last()
             .expect("should have KeyManager address from genesis")
             .to_owned())
