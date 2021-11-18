@@ -8,6 +8,9 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
