@@ -17,7 +17,7 @@ mod tests {
 
 	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
-	use libsecp256k1::{PublicKey, SecretKey};
+	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
 	use sp_runtime::AccountId32;
@@ -35,7 +35,6 @@ mod tests {
 	}
 
 	pub const GENESIS_KEY: u64 = 42;
-	pub const NEW_KEY: u64 = 101;
 
 	mod network {
 		use super::*;
@@ -46,7 +45,6 @@ mod tests {
 		use libsecp256k1::PublicKey;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
-		use std::borrow::BorrowMut;
 
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
@@ -84,7 +82,6 @@ mod tests {
 
 		pub struct Signer {
 			agg_secret_key: SecretKey,
-			agg_public_key: PublicKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
 			proposals: i32,
@@ -93,8 +90,8 @@ mod tests {
 		impl Default for Signer {
 			fn default() -> Self {
 				let key_seed = GENESIS_KEY;
-				let (agg_secret_key, agg_public_key) = Self::generate_keypair(key_seed);
-				Signer { agg_secret_key, agg_public_key, signatures: HashMap::new(), key_seed, proposals: 0 }
+				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
+				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposals: 0 }
 			}
 		}
 
@@ -152,8 +149,7 @@ mod tests {
 				self.proposals -= 1;
 				if self.proposals == 0 {
 					self.key_seed = self.next_key();
-					let (secret, public) = Self::generate_keypair(self.key_seed);
-					self.agg_public_key = public;
+					let (secret, _) = Self::generate_keypair(self.key_seed);
 					self.agg_secret_key = secret;
 					self.signatures.clear();
 					self.proposals = 0;
@@ -235,7 +231,7 @@ mod tests {
 						},
 						Event::Validator(
 							// A new epoch
-							pallet_cf_validator::Event::NewEpoch(epoch_index)) => {
+							pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
 								(&*self.signer).borrow_mut().rotate_keys();
 						},
 						Event::EthereumThresholdSigner(
@@ -910,11 +906,7 @@ mod tests {
 						"we should back waiting for bids after a successful auction and rotation"
 					);
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
 					let AuctionResult { mut winners, minimum_active_bid } =
 						Auction::last_auction_result().expect("last auction result");
@@ -971,11 +963,7 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(2);
-					assert_eq!(
-						2,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
+					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 				});
 		}
 	}
@@ -1049,11 +1037,7 @@ mod tests {
 
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should still be in the new epoch"
-					);
+					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
 
 					// We should be able to claim again outside of the auction
 					// At the moment we have a pending claim so we would expect an error here for
@@ -1071,9 +1055,7 @@ mod tests {
 
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
-		use cf_traits::{
-			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
-		};
+		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
 			Validator,
@@ -1129,11 +1111,7 @@ mod tests {
 
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should still be in the next epoch"
-					);
+					assert_eq!(1, Validator::epoch_index(), "We should still be in the next epoch");
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
@@ -1171,7 +1149,7 @@ mod tests {
 					}
 				});
 		}
-		use cf_traits::Auctioneer;
+
 		#[test]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
@@ -1215,11 +1193,7 @@ mod tests {
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
 					// Set PERCENTAGE_OFFLINE of the validators inactive
 					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
@@ -1257,11 +1231,7 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_eq!(
-						2,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
+					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 				});
 		}
 	}
