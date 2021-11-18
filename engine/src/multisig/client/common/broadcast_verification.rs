@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
@@ -52,8 +52,8 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
         if let Some((data, _)) = verification_messages
             .values()
             .map(|m| (m.data[idx].clone(), hash::<T>(&m.data[idx])))
-            .sorted_by_key(|(_, hash)| hash.clone())
-            .group_by(|(_, hash)| hash.clone())
+            .sorted_by_key(|(_, hash)| *hash)
+            .group_by(|(_, hash)| *hash)
             .into_iter()
             .map(|(_, mut group)| {
                 let first = group.next().expect("must have at least one element").0;
@@ -104,6 +104,8 @@ fn check_correct_broadcast() {
 #[cfg(test)]
 #[test]
 fn check_incorrect_broadcast() {
+    use std::collections::BTreeSet;
+
     let mut verification_messages = HashMap::new();
 
     // We can't achieve consensus on values from parties

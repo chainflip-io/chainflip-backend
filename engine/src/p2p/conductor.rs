@@ -26,7 +26,7 @@ pub fn start(
         p2p,
         p2p_message_command_receiver,
         shutdown_rx,
-        &logger,
+        logger,
     )
 }
 

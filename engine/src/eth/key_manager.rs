@@ -57,8 +57,8 @@ impl ChainflipKey {
         let mut bytes: [u8; 33] = [0; 33];
         self.pub_key_x.to_big_endian(&mut bytes[1..]);
         bytes[0] = match self.pub_key_y_parity.is_zero() {
-            true => 02,
-            false => 03,
+            true => 0o2,
+            false => 0o3,
         };
         bytes
     }
@@ -129,7 +129,7 @@ impl EthObserver for KeyManager {
             KeyManagerEvent::KeyChange { new_key, .. } => {
                 let _ = state_chain_client
                     .submit_extrinsic(
-                        &logger,
+                        logger,
                         pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
                             ChainId::Ethereum,
                             new_key.serialize().to_vec(),

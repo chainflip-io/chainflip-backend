@@ -60,6 +60,6 @@ impl CLISettings {
     }
 
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        Ok(self.state_chain.validate_settings()?)
+        self.state_chain.validate_settings()
     }
 }

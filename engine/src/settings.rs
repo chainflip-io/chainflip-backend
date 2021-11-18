@@ -254,7 +254,7 @@ impl Settings {
 
 /// Parse the URL and check that it is a valid websocket url
 pub fn parse_websocket_url(url: &str) -> Result<Url> {
-    let issue_list_url = Url::parse(&url)?;
+    let issue_list_url = Url::parse(url)?;
     if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
         return Err(anyhow::Error::msg("Wrong scheme"));
     }

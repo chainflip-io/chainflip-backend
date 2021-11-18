@@ -106,7 +106,7 @@ impl CeremonyManager {
 
         // Check that signer ids are known for this key
         let signer_idxs = validator_map
-            .get_all_idxs(&participants)
+            .get_all_idxs(participants)
             .map_err(|_| "invalid participants")?;
 
         Ok((our_idx, signer_idxs))
