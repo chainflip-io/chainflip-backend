@@ -1,6 +1,9 @@
 mod keygen_data;
-pub mod keygen_frost;
+mod keygen_frost;
 mod keygen_stages;
+
+#[cfg(test)]
+pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use std::sync::Arc;
 

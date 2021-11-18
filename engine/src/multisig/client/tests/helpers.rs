@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    pin::Pin,
-    time::Duration,
-};
+use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use futures::StreamExt;
 use itertools::Itertools;
@@ -24,7 +19,7 @@ use signing::frost::{
     VerifyLocalSig4,
 };
 
-use keygen::keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
+use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use crate::{
     logging::{self, test_utils::TagCache},
@@ -212,7 +207,7 @@ impl ValidKeygenStates {
     }
 
     /// Get a clone of the client at index 0 from the specified stage
-    pub fn get_client_at_stage(&self, stage: usize) -> MultisigClient<KeyDBMock> {
+    pub fn get_client_at_stage(&self, stage: usize) -> MultisigClientNoDB {
         match stage {
             0 => self.stage0.clients[0].clone(),
             1 => self.comm_stage1.clients[0].clone(),
@@ -326,6 +321,18 @@ fn gen_invalid_local_sig() -> LocalSig3 {
     frost::LocalSig3 {
         response: Scalar::new_random(),
     }
+}
+
+fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
+    let (_, fake_comm1) = generate_shares_and_commitment(
+        "",
+        0,
+        ThresholdParameters {
+            share_count: VALIDATOR_IDS.len(),
+            threshold: VALIDATOR_IDS.len(),
+        },
+    );
+    fake_comm1
 }
 
 async fn collect_all_comm1(rxs: &mut Vec<InnerEventReceiver>) -> Vec<SigningCommitment> {
@@ -644,31 +651,15 @@ impl KeygenContext {
         // It doesn't matter what kind of commitment we create here,
         // the main idea is that the commitment doesn't match what we
         // send to all other parties
-        let (_, fake_comm1) = generate_shares_and_commitment(
-            "",
-            0,
-            ThresholdParameters {
-                share_count: VALIDATOR_IDS.len(),
-                threshold: VALIDATOR_IDS.len(),
-            },
-        );
-
         self.custom_data
             .comm1_keygen
-            .insert((sender_idx, receiver_idx), fake_comm1);
+            .insert((sender_idx, receiver_idx), gen_invalid_keygen_comm1());
     }
 
     pub fn use_invalid_keygen_comm1(&mut self, sender_idx: usize, receiver_idxs: Vec<usize>) {
         // It doesn't matter what kind of commitment we create here,
         // the main idea is that the commitment will fail validation
-        let (_, fake_comm1) = generate_shares_and_commitment(
-            "",
-            0,
-            ThresholdParameters {
-                share_count: VALIDATOR_IDS.len(),
-                threshold: VALIDATOR_IDS.len(),
-            },
-        );
+        let fake_comm1 = gen_invalid_keygen_comm1();
 
         receiver_idxs.iter().for_each(|receiver_idx| {
             if &sender_idx != receiver_idx {
@@ -766,6 +757,11 @@ impl KeygenContext {
                 .iter()
                 .map(|res| res.as_ref().unwrap_err())
                 .collect();
+
+            assert!(
+                check_reported_nodes_consistency(&reported_nodes),
+                "Not all nodes reported the same parties"
+            );
 
             return ValidKeygenStates {
                 stage0,
@@ -951,17 +947,10 @@ impl KeygenContext {
                     .map(|res| res.as_ref().unwrap_err())
                     .collect();
 
-                for i in 0..(reported_nodes.len() - 1) {
-                    let lhs = &reported_nodes[i];
-                    let rhs = &reported_nodes[i + 1];
-
-                    assert_eq!(lhs.0, rhs.0);
-
-                    let nodes_lhs: HashSet<_> = lhs.1.iter().cloned().collect();
-                    let nodes_rhs: HashSet<_> = rhs.1.iter().cloned().collect();
-
-                    assert_eq!(nodes_lhs, nodes_rhs);
-                }
+                assert!(
+                    check_reported_nodes_consistency(&reported_nodes),
+                    "Not all nodes reported the same parties"
+                );
 
                 Err(reported_nodes[0].clone())
             };
@@ -1103,7 +1092,7 @@ impl KeygenContext {
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
             println!("Signing ceremony took: {:?}", instant.elapsed());
 
-            // Make sure the channel and is clean for the unit tests
+            // Make sure the channel is clean for the unit tests
             for idx in SIGNER_IDXS.iter() {
                 assert_channel_empty(&mut rxs[idx.clone()]).await;
             }
@@ -1119,6 +1108,22 @@ impl KeygenContext {
             panic!("No Signing Outcome")
         }
     }
+}
+
+// Returns true if all of the nodes reported the same parties.
+fn check_reported_nodes_consistency(
+    reported_nodes: &Vec<&(CeremonyAbortReason, Vec<AccountId>)>,
+) -> bool {
+    for (_, reported_parties) in reported_nodes.iter() {
+        let sorted_reported_parties: Vec<AccountId> =
+            reported_parties.iter().sorted().cloned().collect();
+        let other_sorted_reported_parties: Vec<AccountId> =
+            reported_nodes[0].1.iter().sorted().cloned().collect();
+        if sorted_reported_parties != other_sorted_reported_parties {
+            return false;
+        }
+    }
+    true
 }
 
 // Checks that all signers got the same outcome and returns it
