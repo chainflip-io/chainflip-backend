@@ -37,12 +37,6 @@ mod tests {
 	pub const GENESIS_KEY: u64 = 42;
 	pub const NEW_KEY: u64 = 101;
 
-	pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey) {
-		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-		let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
-		(secret_key, PublicKey::from_secret_key(&secret_key))
-	}
-
 	mod network {
 		use super::*;
 		use crate::tests::BLOCK_TIME;
@@ -52,6 +46,7 @@ mod tests {
 		use libsecp256k1::PublicKey;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
+		use std::borrow::BorrowMut;
 
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
@@ -88,25 +83,32 @@ mod tests {
 		}
 
 		pub struct Signer {
-			pub agg_secret_key: SecretKey,
-			pub agg_public_key: PublicKey,
-			pub signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
+			agg_secret_key: SecretKey,
+			agg_public_key: PublicKey,
+			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
+			key_seed: u64,
+			proposals: i32,
 		}
 
 		impl Default for Signer {
 			fn default() -> Self {
-				let (agg_secret_key, agg_public_key) = generate_keypair(GENESIS_KEY);
-				Signer { agg_secret_key, agg_public_key, signatures: HashMap::new() }
+				let key_seed = GENESIS_KEY;
+				let (agg_secret_key, agg_public_key) = Self::generate_keypair(key_seed);
+				Signer { agg_secret_key, agg_public_key, signatures: HashMap::new(), key_seed, proposals: 0 }
 			}
 		}
 
 		impl Signer {
+			// Sign message with current key, caches signatures
 			pub fn sign(
 				&mut self,
 				message: &cf_chains::eth::H256,
 			) -> SchnorrVerificationComponents {
-				let (k, k_times_g) = generate_keypair(1);
+				// A nonce, k
+				let (k, k_times_g) = Self::generate_keypair(self.key_seed * 2);
+				// k.G
 				let k_times_g_addr = to_ethereum_address(k_times_g);
+				// If this message has been signed before return from cache else sign and cache
 				return match self.signatures.get(message) {
 					Some(signature) =>
 						SchnorrVerificationComponents { s: *signature, k_times_g_addr },
@@ -119,6 +121,42 @@ mod tests {
 
 						SchnorrVerificationComponents { s: signature, k_times_g_addr }
 					},
+				}
+			}
+
+			// Generate a keypair with seed
+			pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey) {
+				let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+				let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
+				(secret_key, PublicKey::from_secret_key(&secret_key))
+			}
+
+			fn next_key(&self) -> u64 {
+				self.key_seed + 1
+			}
+
+			// The public key proposed
+			pub fn proposed_public_key(&mut self) -> Vec<u8> {
+				let (_, public) = Self::generate_keypair(self.next_key());
+				public.serialize_compressed().to_vec()
+			}
+
+			// Propose a new public key
+			pub fn propose_new_public_key(&mut self) -> Vec<u8> {
+				self.proposals += 1;
+				self.proposed_public_key()
+			}
+
+			// Rotate to the current proposed key and clear cache
+			pub fn rotate_keys(&mut self) {
+				self.proposals -= 1;
+				if self.proposals == 0 {
+					self.key_seed = self.next_key();
+					let (secret, public) = Self::generate_keypair(self.key_seed);
+					self.agg_public_key = public;
+					self.agg_secret_key = secret;
+					self.signatures.clear();
+					self.proposals = 0;
 				}
 			}
 		}
@@ -176,23 +214,29 @@ mod tests {
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
 								match self.engine_state {
 									EngineState::None => {
-										let (_, public_key) = generate_keypair(NEW_KEY);
-										let compressed_public_key = public_key.serialize_compressed().to_vec();
+										// Propose a new key
+										let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
 
 										state_chain_runtime::WitnesserApi::witness_keygen_success(
 											Origin::signed(self.node_id.clone()),
 											*ceremony_id,
 											ChainId::Ethereum,
-											compressed_public_key,
+											public_key,
 										).expect(&format!(
 											"should be able to witness keygen request from node: {:?}",
 											self.node_id)
 										);
 
+										// Engine is now in rotation state
 										self.engine_state = EngineState::Rotation;
 									},
 									_ => {}
 								}
+						},
+						Event::Validator(
+							// A new epoch
+							pallet_cf_validator::Event::NewEpoch(epoch_index)) => {
+								(&*self.signer).borrow_mut().rotate_keys();
 						},
 						Event::EthereumThresholdSigner(
 							// A signature request
@@ -204,7 +248,8 @@ mod tests {
 
 							// Participate in signing ceremony if requested
 							if signers.contains(&self.node_id) {
-								let verification_components = self.signer.borrow_mut().sign(payload);
+								// Sign with current key
+								let verification_components = (&*self.signer).borrow_mut().sign(payload);
 								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
 									Origin::signed(self.node_id.clone()),
 									*ceremony_id,
@@ -216,20 +261,20 @@ mod tests {
 							// A threshold has been met for this signature
 							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
 								_ceremony_id)) => {
-								// Witness a vault rotation?
-								let ethereum_block_number: u64 = 100;
-								let tx_hash = vec![1u8; 32];
-
-								let (_, public_key) = generate_keypair(NEW_KEY);
-								let compressed_public_key = public_key.serialize_compressed().to_vec();
-
 								match self.engine_state {
+									// If we rotating let's witness the keys being rotated on the contract
 									EngineState::Rotation => {
 										self.engine_state = EngineState::None;
+
+										let ethereum_block_number: u64 = 100;
+										let tx_hash = vec![1u8; 32];
+
+										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
+
 										state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
 											Origin::signed(self.node_id.clone()),
 											ChainId::Ethereum,
-											compressed_public_key,
+											public_key,
 											ethereum_block_number,
 											tx_hash,
 										).expect("should be able to vault key rotation for node");
@@ -532,7 +577,7 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			let (_, public_key) = generate_keypair(GENESIS_KEY);
+			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime>::assimilate_storage(
@@ -865,6 +910,12 @@ mod tests {
 						"we should back waiting for bids after a successful auction and rotation"
 					);
 
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
+
 					let AuctionResult { mut winners, minimum_active_bid } =
 						Auction::last_auction_result().expect("last auction result");
 
@@ -916,6 +967,15 @@ mod tests {
 							"should be validator"
 						);
 					}
+
+					// Run to the next epoch to start the auction
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(2);
+					assert_eq!(
+						2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 				});
 		}
 	}
@@ -1052,8 +1112,15 @@ mod tests {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
-					// Start an auction and confirm
+					// Start an auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+					assert_eq!(
+						0,
+						Validator::epoch_index(),
+						"We should still be in the genesis epoch"
+					);
+
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
@@ -1062,10 +1129,10 @@ mod tests {
 
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches::assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should still be in the next epoch"
 					);
 
 					// assert list of validators as being the new nodes
@@ -1104,7 +1171,7 @@ mod tests {
 					}
 				});
 		}
-
+		use cf_traits::Auctioneer;
 		#[test]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
@@ -1136,10 +1203,23 @@ mod tests {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
+					assert_eq!(
+						0,
+						Validator::epoch_index(),
+						"We should still be in the genesis epoch"
+					);
+
 					// Start an auction and confirm
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
+
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					// Set PERCENTAGE_OFFLINE of the validators inactive
 					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
@@ -1151,7 +1231,7 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					// We need to move forward one heartbeats to be regarded as offline
+					// We need to move forward one heartbeat interval to be regarded as offline
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We should have a set of nodes offline
@@ -1177,10 +1257,10 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches::assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
+					assert_eq!(
+						2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
 					);
 				});
 		}
