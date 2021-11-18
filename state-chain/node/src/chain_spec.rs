@@ -93,11 +93,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -148,11 +144,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -232,11 +224,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -338,11 +326,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
