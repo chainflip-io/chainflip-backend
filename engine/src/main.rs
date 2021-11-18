@@ -28,7 +28,7 @@ async fn main() {
         .run()
         .await;
 
-    let (state_chain_client, state_chain_block_stream) =
+    let (state_chain_client, state_chain_block_stream, latest_block_hash) =
         state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .unwrap();
@@ -75,11 +75,6 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-    let latest_block_hash = state_chain_client
-        .get_latest_block_hash()
-        .await
-        .expect("should get latest block hash");
 
     let stake_manager_address = state_chain_client
         .get_environment_value(latest_block_hash, "StakeManagerAddress")

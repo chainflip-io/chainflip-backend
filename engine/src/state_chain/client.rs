@@ -497,6 +497,7 @@ pub async fn connect_to_state_chain(
 ) -> Result<(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
+    H256,
 )> {
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
@@ -531,17 +532,17 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(into_anyhow_error)?;
 
-    let latest_block_hash = Some(try_unwrap_value(
+    let latest_block_hash = try_unwrap_value(
         chain_rpc_client
             .block_hash(None)
             .await
             .map_err(into_anyhow_error)?,
         anyhow::Error::msg("Failed to get latest block hash"),
-    )?);
+    )?;
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_rpc_client
-            .metadata(latest_block_hash)
+            .metadata(Some(latest_block_hash))
             .await
             .map_err(into_anyhow_error)?[..],
     )?)?;
@@ -549,7 +550,7 @@ pub async fn connect_to_state_chain(
     let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
         runtime_version: state_rpc_client
-            .runtime_version(latest_block_hash)
+            .runtime_version(Some(latest_block_hash))
             .await
             .map_err(into_anyhow_error)?,
         genesis_hash: try_unwrap_value(
@@ -582,7 +583,7 @@ pub async fn connect_to_state_chain(
                 > = Decode::decode(
                     &mut &state_chain_rpc_client
                         .state_rpc_client
-                        .storage(account_storage_key.clone(), latest_block_hash)
+                        .storage(account_storage_key.clone(), Some(latest_block_hash))
                         .await
                         .map_err(into_anyhow_error)?
                         .ok_or_else(|| {
@@ -604,6 +605,7 @@ pub async fn connect_to_state_chain(
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
             .map_err(into_anyhow_error)?
             .map_err(into_anyhow_error),
+        latest_block_hash,
     ))
 }
 
@@ -623,7 +625,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
-        let (state_chain_client, mut block_stream) =
+        let (state_chain_client, mut block_stream, _) =
             connect_to_state_chain(&settings.state_chain).await.unwrap();
 
         println!("My account id is: {}", state_chain_client.our_account_id);
