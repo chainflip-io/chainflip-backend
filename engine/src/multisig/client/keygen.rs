@@ -1,5 +1,5 @@
 mod keygen_data;
-mod keygen_frost;
+pub mod keygen_frost;
 mod keygen_stages;
 
 use std::sync::Arc;
