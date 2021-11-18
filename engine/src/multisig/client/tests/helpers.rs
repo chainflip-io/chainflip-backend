@@ -9,14 +9,13 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use crate::multisig::{
     client::{
         keygen::{HashContext, KeygenOptions, SecretShare3},
-        signing, CeremonyAbortReason, ThresholdParameters,
+        signing, CeremonyAbortReason, MultisigData,
     },
     KeyId, MultisigInstruction,
 };
 
 use signing::frost::{
-    self, LocalSig3, SigningCommitment, SigningData, SigningDataWrapped, VerifyComm2,
-    VerifyLocalSig4,
+    self, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
@@ -27,8 +26,7 @@ use crate::{
         client::{
             common::KeygenResultInfo,
             keygen::{self, KeygenData},
-            InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
-            {KeygenDataWrapped, MultisigMessage},
+            InnerEvent, KeygenOutcome, MultisigClient, MultisigMessage, SigningOutcome,
         },
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
@@ -47,10 +45,10 @@ macro_rules! recv_data_keygen {
         let (_, m) = recv_multisig_message($rx).await;
 
         match m {
-            MultisigMessage::KeygenMessage(KeygenDataWrapped {
-                data: $variant(data),
+            MultisigMessage {
+                data: MultisigData::Keygen($variant(inner)),
                 ..
-            }) => data,
+            } => inner,
             _ => {
                 panic!("Received message is not {}", stringify!($variant));
             }
@@ -1247,7 +1245,11 @@ async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (AccountId, Multi
 async fn recv_comm1_signing(rx: &mut InnerEventReceiver) -> frost::Comm1 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::CommStage1(comm1) = data {
             return comm1;
         }
@@ -1260,7 +1262,11 @@ async fn recv_comm1_signing(rx: &mut InnerEventReceiver) -> frost::Comm1 {
 async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::LocalSigStage3(sig) = data {
             return sig;
         }
@@ -1271,23 +1277,28 @@ async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
 }
 
 async fn recv_secret3_keygen(rx: &mut InnerEventReceiver) -> (AccountId, keygen::SecretShare3) {
-    let (dest, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage::KeygenMessage(wrapped) = m {
-        let KeygenDataWrapped { data: message, .. } = wrapped;
-
-        if let KeygenData::SecretShares3(sec3) = message {
-            return (dest, sec3);
-        }
+    if let (
+        dest,
+        MultisigMessage {
+            data: MultisigData::Keygen(KeygenData::SecretShares3(sec3)),
+            ..
+        },
+    ) = recv_multisig_message(rx).await
+    {
+        return (dest, sec3);
+    } else {
+        panic!("Received message is not Secret3 (keygen)");
     }
-
-    panic!("Received message is not Secret3 (keygen)");
 }
 
 async fn recv_ver2_signing(rx: &mut InnerEventReceiver) -> frost::VerifyComm2 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::BroadcastVerificationStage2(ver2) = data {
             return ver2;
         }
@@ -1300,7 +1311,11 @@ async fn recv_ver2_signing(rx: &mut InnerEventReceiver) -> frost::VerifyComm2 {
 async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig4 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::VerifyLocalSigsStage4(ver4) = data {
             return ver4;
         }
@@ -1311,13 +1326,13 @@ async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig
 }
 
 pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> P2PMessage {
-    let wrapped = SigningDataWrapped::new(data, SIGN_CEREMONY_ID);
-
-    let data = MultisigMessage::from(wrapped);
-    let data = bincode::serialize(&data).unwrap();
     P2PMessage {
         sender_id: sender_id.clone(),
-        data,
+        data: bincode::serialize(&MultisigMessage {
+            ceremony_id: SIGN_CEREMONY_ID,
+            data: MultisigData::Signing(data.into()),
+        })
+        .unwrap(),
     }
 }
 
@@ -1326,14 +1341,13 @@ pub fn keygen_data_to_p2p(
     sender_id: &AccountId,
     ceremony_id: CeremonyId,
 ) -> P2PMessage {
-    let wrapped = KeygenDataWrapped::new(ceremony_id, data);
-
-    let data = MultisigMessage::from(wrapped);
-    let data = bincode::serialize(&data).unwrap();
-
     P2PMessage {
         sender_id: sender_id.clone(),
-        data,
+        data: bincode::serialize(&MultisigMessage {
+            ceremony_id,
+            data: MultisigData::Keygen(data.into()),
+        })
+        .unwrap(),
     }
 }
 

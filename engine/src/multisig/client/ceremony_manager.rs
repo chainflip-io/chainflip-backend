@@ -4,11 +4,8 @@ use std::sync::Arc;
 use crate::multisig::client;
 
 use client::{
-    keygen_state_runner::KeygenStateRunner,
-    signing::frost::{SigningData, SigningDataWrapped},
-    state_runner::StateRunner,
-    utils::PartyIdxMapping,
-    CeremonyAbortReason, EventSender, KeygenDataWrapped, SchnorrSignature,
+    keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
+    utils::PartyIdxMapping, CeremonyAbortReason, EventSender, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
 
@@ -23,7 +20,7 @@ use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, Signin
 
 use crate::p2p::AccountId;
 
-use super::keygen::{HashContext, KeygenOptions};
+use super::keygen::{HashContext, KeygenData, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -235,11 +232,14 @@ impl CeremonyManager {
     }
 
     /// Process data for a signing ceremony arriving from a peer
-    pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
+    pub fn process_signing_data(
+        &mut self,
+        sender_id: AccountId,
+        ceremony_id: u64,
+        data: SigningData,
+    ) {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
-
-        let SigningDataWrapped { data, ceremony_id } = wdata;
 
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
@@ -283,10 +283,9 @@ impl CeremonyManager {
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
-        msg: KeygenDataWrapped,
+        ceremony_id: u64,
+        data: KeygenData,
     ) -> Option<KeygenResultInfo> {
-        let KeygenDataWrapped { ceremony_id, data } = msg;
-
         let logger = &self.logger;
         let state = self
             .keygen_states

@@ -9,13 +9,12 @@ use std::{
     fmt::Display,
 };
 
-use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;
 
 use crate::multisig::{
-    client::{common::BroadcastVerificationMessage, MultisigMessage},
+    client::common::BroadcastVerificationMessage,
     crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar},
     SchnorrSignature,
 };
@@ -103,32 +102,6 @@ impl Display for SigningData {
             SigningData::VerifyLocalSigsStage4(x) => x.to_string(),
         };
         write!(f, "SigningData({})", inner)
-    }
-}
-
-/// Helps identify data as used for
-/// a specific signing ceremony
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SigningDataWrapped {
-    pub data: SigningData,
-    pub ceremony_id: CeremonyId,
-}
-
-impl SigningDataWrapped {
-    pub fn new<S>(data: S, ceremony_id: CeremonyId) -> Self
-    where
-        S: Into<SigningData>,
-    {
-        SigningDataWrapped {
-            data: data.into(),
-            ceremony_id,
-        }
-    }
-}
-
-impl From<SigningDataWrapped> for MultisigMessage {
-    fn from(wrapped: SigningDataWrapped) -> Self {
-        MultisigMessage::SigningMessage(wrapped)
     }
 }
 

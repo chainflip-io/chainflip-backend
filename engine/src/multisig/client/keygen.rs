@@ -19,14 +19,14 @@ pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
 
-use crate::p2p::AccountId;
+use crate::{multisig::client::MultisigData, p2p::AccountId};
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
 
 use super::{
     common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
     utils::PartyIdxMapping,
-    EventSender, KeygenDataWrapped, MultisigMessage,
+    EventSender, MultisigMessage,
 };
 
 /// Information necessary for the multisig client to start a new keygen ceremony
@@ -98,8 +98,13 @@ impl P2PSender for KeygenP2PSender {
     type Data = KeygenData;
 
     fn send(&self, receiver_idx: usize, data: Self::Data) {
-        let msg: MultisigMessage = KeygenDataWrapped::new(self.ceremony_id, data).into();
-        let data = bincode::serialize(&msg).unwrap();
-        self.sender.send(receiver_idx, data);
+        self.sender.send(
+            receiver_idx,
+            bincode::serialize(&MultisigMessage {
+                ceremony_id: self.ceremony_id,
+                data: MultisigData::Keygen(data),
+            })
+            .unwrap(),
+        );
     }
 }

@@ -8,7 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub use frost::SigningDataWrapped;
 use pallet_cf_vaults::CeremonyId;
 
 use serde::{Deserialize, Serialize};
@@ -23,7 +22,7 @@ use self::frost::SigningData;
 use super::{
     common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
     utils::PartyIdxMapping,
-    EventSender, SchnorrSignature,
+    EventSender, MultisigData, SchnorrSignature,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -98,10 +97,14 @@ impl P2PSender for SigningP2PSender {
     type Data = SigningData;
 
     fn send(&self, receiver_idx: usize, data: Self::Data) {
-        let msg: MultisigMessage = SigningDataWrapped::new(data, self.ceremony_id).into();
-        let data = bincode::serialize(&msg)
-            .unwrap_or_else(|e| panic!("Could not serialise MultisigMessage: {:?}: {}", msg, e));
-        self.sender.send(receiver_idx, data);
+        self.sender.send(
+            receiver_idx,
+            bincode::serialize(&MultisigMessage {
+                ceremony_id: self.ceremony_id,
+                data: MultisigData::Signing(data),
+            })
+            .unwrap(),
+        );
     }
 }
 

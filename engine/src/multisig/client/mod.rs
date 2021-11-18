@@ -29,7 +29,6 @@ use serde::{Deserialize, Serialize};
 use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
-use signing::SigningDataWrapped;
 
 use utilities::threshold_from_share_count;
 
@@ -37,7 +36,10 @@ use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
 
-use self::{ceremony_manager::CeremonyManager, signing::PendingSigningInfo};
+use self::{
+    ceremony_manager::CeremonyManager,
+    signing::{frost::SigningData, PendingSigningInfo},
+};
 
 pub use keygen::KeygenOptions;
 
@@ -76,33 +78,15 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum MultisigMessage {
-    KeygenMessage(KeygenDataWrapped),
-    SigningMessage(SigningDataWrapped),
+pub enum MultisigData {
+    Keygen(KeygenData),
+    Signing(SigningData),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeygenDataWrapped {
-    pub ceremony_id: CeremonyId,
-    pub data: KeygenData,
-}
-
-impl KeygenDataWrapped {
-    pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
-    where
-        M: Into<KeygenData>,
-    {
-        KeygenDataWrapped {
-            ceremony_id,
-            data: m.into(),
-        }
-    }
-}
-
-impl From<KeygenDataWrapped> for MultisigMessage {
-    fn from(wrapped: KeygenDataWrapped) -> Self {
-        MultisigMessage::KeygenMessage(wrapped)
-    }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MultisigMessage {
+    ceremony_id: CeremonyId,
+    data: MultisigData,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -343,29 +327,33 @@ where
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
-            Ok(MultisigMessage::KeygenMessage(keygen_message)) => {
+            Ok(MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Keygen(data),
+            }) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let ceremony_id = keygen_message.ceremony_id;
-
-                if let Some(key) = self
-                    .ceremony_manager
-                    .process_keygen_data(sender_id, keygen_message)
+                if let Some(key) =
+                    self.ceremony_manager
+                        .process_keygen_data(sender_id, ceremony_id, data)
                 {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(signing_message)) => {
+            Ok(MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Signing(data),
+            }) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
                 self.ceremony_manager
-                    .process_signing_data(sender_id, signing_message);
+                    .process_signing_data(sender_id, ceremony_id, data);
             }
             Err(_) => {
                 slog::warn!(
