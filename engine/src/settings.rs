@@ -13,7 +13,7 @@ use url::Url;
 
 use structopt::StructOpt;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct StateChain {
     pub ws_endpoint: String,
     pub signing_key_file: String,
