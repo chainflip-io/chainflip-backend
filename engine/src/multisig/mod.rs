@@ -22,7 +22,7 @@ use slog::o;
 
 use crate::p2p::P2PMessage;
 
-use client::InnerEvent;
+use client::MultisigResult;
 
 pub use client::{KeygenOptions, KeygenOutcome, MultisigClient, SchnorrSignature, SigningOutcome};
 
@@ -83,11 +83,11 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
+    let (multisig_result_sender, mut multisig_result_receiver) = mpsc::unbounded_channel();
     let mut client = MultisigClient::new(
         my_account_id,
         db,
-        inner_event_sender,
+        multisig_result_sender,
         outgoing_p2p_message_sender,
         keygen_options,
         &logger,
@@ -111,12 +111,12 @@ where
                     slog::trace!(logger, "Cleaning up multisig states");
                     client.cleanup();
                 }
-                Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
+                Some(event) = multisig_result_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
-                        InnerEvent::SigningResult(res) => {
+                        MultisigResult::Signing(res) => {
                             multisig_event_sender.send(MultisigOutcome::Signing(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
-                        InnerEvent::KeygenResult(res) => {
+                        MultisigResult::Keygen(res) => {
                             multisig_event_sender.send(MultisigOutcome::Keygen(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }

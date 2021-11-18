@@ -133,7 +133,7 @@ async fn should_delay_sig3() {
 
 #[tokio::test]
 async fn should_delay_ver4() {
-    use crate::multisig::client::InnerEvent;
+    use crate::multisig::client::MultisigResult;
 
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
@@ -162,8 +162,8 @@ async fn should_delay_ver4() {
     assert!(c1.is_at_signing_stage(0));
 
     // Check that we've created a signature!
-    let outcome = match helpers::recv_next_inner_event(&mut ctx.rxs[0]).await {
-        InnerEvent::SigningResult(outcome) => outcome,
+    let outcome = match helpers::recv_next_multisig_result(&mut ctx.rxs[0]).await {
+        MultisigResult::Signing(outcome) => outcome,
         e => panic!("Unexpected event {:?}", e),
     };
     assert!(outcome.result.is_ok());

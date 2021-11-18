@@ -149,12 +149,12 @@ pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
-pub enum InnerEvent {
-    SigningResult(SigningOutcome),
-    KeygenResult(KeygenOutcome),
+pub enum MultisigResult {
+    Signing(SigningOutcome),
+    Keygen(KeygenOutcome),
 }
 
-pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
+pub type MultisigResultSender = tokio::sync::mpsc::UnboundedSender<MultisigResult>;
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
@@ -166,7 +166,7 @@ where
     my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
-    inner_event_sender: EventSender,
+    multisig_result_sender: MultisigResultSender,
     outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
@@ -181,7 +181,7 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        inner_event_sender: EventSender,
+        multisig_result_sender: MultisigResultSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
@@ -191,11 +191,11 @@ where
             key_store: KeyStore::new(db),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
-                inner_event_sender.clone(),
+                multisig_result_sender.clone(),
                 outgoing_p2p_message_sender.clone(),
                 &logger,
             ),
-            inner_event_sender,
+            multisig_result_sender,
             outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
@@ -316,8 +316,8 @@ where
         // NOTE: we only notify the SC after we have successfully saved the key
 
         if let Err(err) =
-            self.inner_event_sender
-                .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+            self.multisig_result_sender
+                .send(MultisigResult::Keygen(KeygenOutcome::success(
                     ceremony_id,
                     key_info.key.get_public_key().get_element(),
                 )))

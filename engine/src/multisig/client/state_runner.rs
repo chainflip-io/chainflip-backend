@@ -13,7 +13,7 @@ use crate::{
     p2p::AccountId,
 };
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, EventSender};
+use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigResultSender};
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
 
@@ -24,7 +24,7 @@ where
 {
     pub ceremony_id: CeremonyId,
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: EventSender,
+    pub result_sender: MultisigResultSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
@@ -66,7 +66,7 @@ where
         ceremony_id: CeremonyId,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: EventSender,
+        result_sender: MultisigResultSender,
     ) {
         if self.inner.is_some() {
             // TODO: Use a more specific tag (keygen/signing)
