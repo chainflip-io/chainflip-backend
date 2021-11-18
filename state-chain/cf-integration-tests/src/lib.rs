@@ -1011,8 +1011,9 @@ mod tests {
 		use cf_traits::{
 			AuctionPhase, ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
+		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
-			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
+			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
 			Validator,
 		};
 
@@ -1113,7 +1114,6 @@ mod tests {
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
-			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
 			// Blocks for our epoch, something larger than one heartbeat
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -1140,8 +1140,9 @@ mod tests {
 					// Complete auction over AUCTION_BLOCKS
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 
-					// Set PERCENTAGE_OFFLINE of the validators inactive
-					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
+					let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
+					let percentage_top_offline = 100 - top as u32;
+					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
@@ -1176,10 +1177,37 @@ mod tests {
 
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
-					assert_matches::assert_matches!(
-						Auction::current_phase(),
-						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
+
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
+
+					// Take our bottom percentage + 1 offline
+					let percentage_bottom_offline = 100 - bottom as u32;
+					let number_offline = 1 + (MAX_VALIDATORS * percentage_bottom_offline / 100) as usize;
+
+					let offline_nodes: Vec<_> =
+						nodes.iter().take(number_offline).cloned().collect();
+
+					for node in &offline_nodes {
+						testnet.set_active(node, false);
+					}
+
+					// We need to move forward one heartbeats to be regarded as offline
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					// We should have a set of nodes offline
+					for node in &offline_nodes {
+						assert_eq!(false, Online::is_online(node), "the node should be offline");
+					}
+
+					// The network state is now greater than 33% of our validators are offline
+					// and hence we don't want to run an emergency rotation as we would fail
+					assert!(
+						!Validator::emergency_rotation_requested(),
+						"we should *not* have requested an emergency rotation"
 					);
 				});
 		}
