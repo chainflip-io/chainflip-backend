@@ -809,8 +809,9 @@ mod tests {
 					}
 
 					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS - System::block_number());
-
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Move to start of auction
+					testnet.move_forward_blocks(1);
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
