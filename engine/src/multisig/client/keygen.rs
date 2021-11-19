@@ -2,9 +2,6 @@ mod keygen_data;
 mod keygen_frost;
 mod keygen_stages;
 
-#[cfg(test)]
-pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
-
 use std::sync::Arc;
 
 use pallet_cf_vaults::CeremonyId;
@@ -19,14 +16,12 @@ pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
 
-use crate::{multisig::client::MultisigData, p2p::AccountId};
+use crate::p2p::AccountId;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
 
 use super::{
-    common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
-    utils::PartyIdxMapping,
-    EventSender, MultisigMessage,
+    common::{CeremonyStage, KeygenResult},
 };
 
 /// Information necessary for the multisig client to start a new keygen ceremony
@@ -70,41 +65,5 @@ impl KeygenInfo {
             ceremony_id,
             signers,
         }
-    }
-}
-
-/// Sending half of the channel that additionally maps signer_idx -> accountId
-/// and wraps the binary data into the appropriate for keygen type
-#[derive(Clone)]
-pub struct KeygenP2PSender {
-    ceremony_id: CeremonyId,
-    sender: RawP2PSender,
-}
-
-impl KeygenP2PSender {
-    pub fn new(
-        validator_map: Arc<PartyIdxMapping>,
-        sender: EventSender,
-        ceremony_id: CeremonyId,
-    ) -> Self {
-        KeygenP2PSender {
-            ceremony_id,
-            sender: RawP2PSender::new(validator_map, sender),
-        }
-    }
-}
-
-impl P2PSender for KeygenP2PSender {
-    type Data = KeygenData;
-
-    fn send(&self, receiver_idx: usize, data: Self::Data) {
-        self.sender.send(
-            receiver_idx,
-            bincode::serialize(&MultisigMessage {
-                ceremony_id: self.ceremony_id,
-                data: MultisigData::Keygen(data),
-            })
-            .unwrap(),
-        );
     }
 }

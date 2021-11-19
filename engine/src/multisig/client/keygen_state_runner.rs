@@ -6,7 +6,7 @@ use crate::{multisig::client::ThresholdParameters, p2p::AccountId};
 
 use super::{
     common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
-    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions, KeygenP2PSender},
+    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions},
     state_runner::StateRunner,
     utils::PartyIdxMapping,
     EventSender, KeygenResultInfo,
@@ -42,11 +42,8 @@ impl KeygenStateRunner {
 
         let common = CeremonyCommon {
             ceremony_id,
-            p2p_sender: KeygenP2PSender::new(
-                idx_mapping.clone(),
-                event_sender.clone(),
-                ceremony_id,
-            ),
+            outgoing_p2p_message_sender: event_sender.clone(),
+            validator_mapping: idx_mapping.clone(),
             own_idx,
             all_idxs,
             logger: self.logger.clone(),

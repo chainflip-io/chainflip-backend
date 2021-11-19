@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc::UnboundedSender;
 
-use super::P2PSender;
+use crate::multisig::client::{InnerEvent, utils::PartyIdxMapping};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result> {
@@ -53,24 +54,19 @@ pub trait CeremonyStage: DynClone + std::fmt::Display {
 
 /// Data useful during any stage of a ceremony
 #[derive(Clone)]
-pub struct CeremonyCommon<D, Sender>
-where
-    Sender: P2PSender<Data = D>,
+pub struct CeremonyCommon
 {
     pub ceremony_id: CeremonyId,
     /// Our own signer index
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
     pub all_idxs: BTreeSet<usize>,
-    /// Sending end of the channel used for p2p communication
-    pub p2p_sender: Sender,
+    pub outgoing_p2p_message_sender: UnboundedSender<InnerEvent>,
+    pub validator_mapping: Arc<PartyIdxMapping>,
     pub logger: slog::Logger,
 }
 
-impl<D, Sender> CeremonyCommon<D, Sender>
-where
-    Sender: P2PSender<Data = D>,
-{
+impl CeremonyCommon {
     pub fn is_idx_valid(&self, idx: usize) -> bool {
         self.all_idxs.contains(&idx)
     }

@@ -196,17 +196,12 @@ impl CeremonyManager {
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
         let initial_stage = {
-            use super::signing::{
-                frost_stages::AwaitCommitments1, SigningP2PSender, SigningStateCommonInfo,
-            };
+            use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
 
             let common = CeremonyCommon {
                 ceremony_id,
-                p2p_sender: SigningP2PSender::new(
-                    key_info.validator_map.clone(),
-                    self.event_sender.clone(),
-                    ceremony_id,
-                ),
+                outgoing_p2p_message_sender: self.event_sender.clone(),
+                validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
                 logger: self.logger.clone(),

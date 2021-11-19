@@ -83,6 +83,18 @@ pub enum MultisigData {
     Signing(SigningData),
 }
 
+impl From<SigningData> for MultisigData {
+    fn from(data : SigningData) -> Self {
+        MultisigData::Signing(data)
+    }
+}
+
+impl From<KeygenData> for MultisigData {
+    fn from(data : KeygenData) -> Self {
+        MultisigData::Keygen(data)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MultisigMessage {
     ceremony_id: CeremonyId,

@@ -13,16 +13,14 @@ use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    multisig::{client::MultisigMessage, KeyId, MessageHash},
+    multisig::{KeyId, MessageHash},
     p2p::AccountId,
 };
 
 use self::frost::SigningData;
 
 use super::{
-    common::{CeremonyStage, KeygenResult, P2PSender, RawP2PSender},
-    utils::PartyIdxMapping,
-    EventSender, MultisigData, SchnorrSignature,
+    common::{CeremonyStage, KeygenResult}, SchnorrSignature,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -69,42 +67,6 @@ impl PendingSigningInfo {
     #[cfg(test)]
     pub fn set_expiry_time(&mut self, expiry_time: Instant) {
         self.should_expire_at = expiry_time;
-    }
-}
-
-/// Sending half of the channel that additionally maps signer_idx -> accountId
-/// and wraps the binary data into the appropriate for signing type
-#[derive(Clone)]
-pub struct SigningP2PSender {
-    ceremony_id: CeremonyId,
-    sender: RawP2PSender,
-}
-
-impl SigningP2PSender {
-    pub fn new(
-        validator_map: Arc<PartyIdxMapping>,
-        sender: EventSender,
-        ceremony_id: CeremonyId,
-    ) -> Self {
-        SigningP2PSender {
-            ceremony_id,
-            sender: RawP2PSender::new(validator_map, sender),
-        }
-    }
-}
-
-impl P2PSender for SigningP2PSender {
-    type Data = SigningData;
-
-    fn send(&self, receiver_idx: usize, data: Self::Data) {
-        self.sender.send(
-            receiver_idx,
-            bincode::serialize(&MultisigMessage {
-                ceremony_id: self.ceremony_id,
-                data: MultisigData::Signing(data),
-            })
-            .unwrap(),
-        );
     }
 }
 
