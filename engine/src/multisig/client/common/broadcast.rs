@@ -106,7 +106,7 @@ where
                                     .common
                                     .validator_mapping
                                     .get_id(*destination_idx)
-                                    .unwrap()
+                                    .expect("Unknown account index")
                                     .clone(),
                                 data: bincode::serialize(&MultisigMessage {
                                     ceremony_id: self.common.ceremony_id,
@@ -131,7 +131,7 @@ where
                                     .common
                                     .validator_mapping
                                     .get_id(destination_idx)
-                                    .unwrap()
+                                    .expect("Unknown account index")
                                     .clone(),
                                 data: bincode::serialize(&MultisigMessage {
                                     ceremony_id: self.common.ceremony_id,
