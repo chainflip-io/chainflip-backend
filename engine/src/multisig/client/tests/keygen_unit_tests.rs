@@ -53,6 +53,8 @@ async fn should_report_on_timeout_before_keygen_request() {
 #[tokio::test]
 async fn should_report_on_timeout_stage() {
     let mut ctx = helpers::KeygenContext::new();
+
+    // Use invalid secret share so the ceremony will go all the way to the blaming stages
     ctx.use_invalid_secret_share(2, 0);
     let keygen_states = ctx.generate().await;
 
@@ -106,6 +108,8 @@ async fn should_delay_comm1_before_keygen_request() {
 #[tokio::test]
 async fn should_delay_stage_data() {
     let mut ctx = helpers::KeygenContext::new();
+
+    // Use invalid secret share so the ceremony will go all the way to the blaming stages
     ctx.use_invalid_secret_share(2, 0);
     let keygen_states = ctx.generate().await;
 
@@ -270,6 +274,8 @@ async fn should_ignore_duplicate_keygen_request() {
 #[tokio::test]
 async fn should_ignore_unexpected_message_for_stage() {
     let mut ctx = helpers::KeygenContext::new();
+
+    // Use invalid secret share so the ceremony will go all the way to the blaming stages
     ctx.use_invalid_secret_share(2, 0);
     let keygen_states = ctx.generate().await;
 
