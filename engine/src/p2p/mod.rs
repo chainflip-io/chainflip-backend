@@ -83,7 +83,7 @@ impl std::fmt::Debug for AccountId {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
-    pub account_id: AccountId, // TODO rename
+    pub account_id: AccountId,
     pub data: Vec<u8>,
 }
 
