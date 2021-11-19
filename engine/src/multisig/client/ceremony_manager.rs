@@ -1,16 +1,14 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use crate::multisig::client;
+use crate::multisig::client::{self, MultisigOutcome};
 
 use client::{
-    keygen_state_runner::KeygenStateRunner,
-    signing::frost::{SigningData, SigningDataWrapped},
-    state_runner::StateRunner,
-    utils::PartyIdxMapping,
-    CeremonyAbortReason, EventSender, KeygenDataWrapped, SchnorrSignature,
+    keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
+    utils::PartyIdxMapping, CeremonyAbortReason, MultisigOutcomeSender, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::logging::{
     CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_EXPIRED, KEYGEN_REQUEST_IGNORED,
@@ -19,11 +17,11 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
-use crate::p2p::AccountId;
+use crate::p2p::{AccountId, P2PMessage};
 
-use super::keygen::{HashContext, KeygenOptions};
+use super::keygen::{HashContext, KeygenData, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -32,17 +30,24 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
-    event_sender: EventSender,
+    outcome_sender: MultisigOutcomeSender,
+    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
 }
 
 impl CeremonyManager {
-    pub fn new(my_account_id: AccountId, event_sender: EventSender, logger: &slog::Logger) -> Self {
+    pub fn new(
+        my_account_id: AccountId,
+        outcome_sender: MultisigOutcomeSender,
+        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        logger: &slog::Logger,
+    ) -> Self {
         CeremonyManager {
             my_account_id,
-            event_sender,
+            outcome_sender,
+            outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
@@ -61,7 +66,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
                 let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
 
-                events_to_send.push(InnerEvent::SigningResult(outcome));
+                events_to_send.push(MultisigOutcome::Signing(outcome));
 
                 false
             } else {
@@ -74,7 +79,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
                 let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
 
-                events_to_send.push(InnerEvent::KeygenResult(outcome));
+                events_to_send.push(MultisigOutcome::Keygen(outcome));
 
                 false
             } else {
@@ -83,7 +88,7 @@ impl CeremonyManager {
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(event) {
+            if let Err(err) = self.outcome_sender.send(event) {
                 slog::error!(self.logger, "Unable to send event, error: {}", err);
             }
         }
@@ -148,7 +153,8 @@ impl CeremonyManager {
 
         state.on_keygen_request(
             ceremony_id,
-            self.event_sender.clone(),
+            self.outcome_sender.clone(),
+            self.outgoing_p2p_message_sender.clone(),
             validator_map,
             our_idx,
             signer_idxs,
@@ -199,17 +205,12 @@ impl CeremonyManager {
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
         let initial_stage = {
-            use super::signing::{
-                frost_stages::AwaitCommitments1, SigningP2PSender, SigningStateCommonInfo,
-            };
+            use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
 
             let common = CeremonyCommon {
                 ceremony_id,
-                p2p_sender: SigningP2PSender::new(
-                    key_info.validator_map.clone(),
-                    self.event_sender.clone(),
-                    ceremony_id,
-                ),
+                outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
+                validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
                 logger: self.logger.clone(),
@@ -230,16 +231,19 @@ impl CeremonyManager {
             ceremony_id,
             initial_stage,
             key_info.validator_map,
-            self.event_sender.clone(),
+            self.outcome_sender.clone(),
         );
     }
 
     /// Process data for a signing ceremony arriving from a peer
-    pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
+    pub fn process_signing_data(
+        &mut self,
+        sender_id: AccountId,
+        ceremony_id: u64,
+        data: SigningData,
+    ) {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
-
-        let SigningDataWrapped { data, ceremony_id } = wdata;
 
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
@@ -253,8 +257,8 @@ impl CeremonyManager {
             self.signing_states.remove(&ceremony_id);
             match result {
                 Ok(schnorr_sig) => {
-                    self.event_sender
-                        .send(InnerEvent::SigningResult(SigningOutcome {
+                    self.outcome_sender
+                        .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Ok(schnorr_sig),
                         }))
@@ -268,8 +272,8 @@ impl CeremonyManager {
                         &blamed_parties; CEREMONY_ID_KEY => ceremony_id
                     );
 
-                    self.event_sender
-                        .send(InnerEvent::SigningResult(SigningOutcome {
+                    self.outcome_sender
+                        .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
                         }))
@@ -283,10 +287,9 @@ impl CeremonyManager {
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
-        msg: KeygenDataWrapped,
+        ceremony_id: u64,
+        data: KeygenData,
     ) -> Option<KeygenResultInfo> {
-        let KeygenDataWrapped { ceremony_id, data } = msg;
-
         let logger = &self.logger;
         let state = self
             .keygen_states
@@ -311,8 +314,8 @@ impl CeremonyManager {
                         blamed_parties,
                     );
 
-                    self.event_sender
-                        .send(InnerEvent::KeygenResult(KeygenOutcome {
+                    self.outcome_sender
+                        .send(MultisigOutcome::Keygen(KeygenOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
                         }))

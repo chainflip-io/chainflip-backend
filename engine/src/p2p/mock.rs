@@ -108,7 +108,7 @@ impl NetworkMockInner {
 
     fn broadcast(&self, from: &AccountId, data: &[u8]) {
         let m = P2PMessage {
-            sender_id: from.to_owned(),
+            account_id: from.to_owned(),
             data: data.to_owned(),
         };
 
@@ -128,7 +128,7 @@ impl NetworkMockInner {
     /// Send to a specific `validator` only
     fn send(&self, from: &AccountId, to: &AccountId, data: &[u8]) {
         let m = P2PMessage {
-            sender_id: from.to_owned(),
+            account_id: from.to_owned(),
             data: data.to_owned(),
         };
 

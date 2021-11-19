@@ -1,15 +1,19 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{multisig::client::ThresholdParameters, p2p::AccountId};
+use crate::{
+    multisig::client::ThresholdParameters,
+    p2p::{AccountId, P2PMessage},
+};
 
 use super::{
     common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
-    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions, KeygenP2PSender},
+    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions},
     state_runner::StateRunner,
     utils::PartyIdxMapping,
-    EventSender, KeygenResultInfo,
+    KeygenResultInfo, MultisigOutcomeSender,
 };
 
 #[derive(Clone)]
@@ -31,7 +35,8 @@ impl KeygenStateRunner {
     pub fn on_keygen_request(
         &mut self,
         ceremony_id: CeremonyId,
-        event_sender: EventSender,
+        outcome_sender: MultisigOutcomeSender,
+        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,
         all_idxs: BTreeSet<usize>,
@@ -42,11 +47,8 @@ impl KeygenStateRunner {
 
         let common = CeremonyCommon {
             ceremony_id,
-            p2p_sender: KeygenP2PSender::new(
-                idx_mapping.clone(),
-                event_sender.clone(),
-                ceremony_id,
-            ),
+            outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
+            validator_mapping: idx_mapping.clone(),
             own_idx,
             all_idxs,
             logger: self.logger.clone(),
@@ -57,7 +59,7 @@ impl KeygenStateRunner {
         let stage = Box::new(BroadcastStage::new(processor, common));
 
         self.inner
-            .on_ceremony_request(ceremony_id, stage, idx_mapping, event_sender);
+            .on_ceremony_request(ceremony_id, stage, idx_mapping, outcome_sender);
     }
 
     pub fn try_expiring(&mut self) -> Option<Vec<AccountId>> {
