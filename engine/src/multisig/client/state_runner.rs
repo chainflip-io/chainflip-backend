@@ -69,6 +69,7 @@ where
         result_sender: EventSender,
     ) {
         if self.inner.is_some() {
+            // TODO: Use a more specific tag (keygen/signing)
             slog::warn!(
                 self.logger,
                 #CEREMONY_IGNORED,
