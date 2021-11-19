@@ -136,7 +136,7 @@ pub fn generate_shares_and_commitment(
         generate_secret_and_shares(params.share_count, params.threshold);
 
     // Zero-knowledge proof of `secret`
-    let zkp = generate_zkp_of_secret(secret, &context, index);
+    let zkp = generate_zkp_of_secret(secret, context, index);
 
     // TODO: zeroize secret here
 

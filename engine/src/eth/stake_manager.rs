@@ -6,7 +6,6 @@ use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{utils, SignatureAndEvent},
-    settings,
     state_chain::client::StateChainRpcApi,
 };
 
@@ -112,7 +111,7 @@ impl EthObserver for StakeManager {
             } => {
                 let _ = state_chain_client
                     .submit_extrinsic(
-                        &logger,
+                        logger,
                         pallet_cf_witnesser_api::Call::witness_staked(
                             account_id,
                             amount,
@@ -125,7 +124,7 @@ impl EthObserver for StakeManager {
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let _ = state_chain_client
                     .submit_extrinsic(
-                        &logger,
+                        logger,
                         pallet_cf_witnesser_api::Call::witness_claimed(
                             account_id,
                             amount,
@@ -220,13 +219,13 @@ impl EthObserver for StakeManager {
 }
 
 impl StakeManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
-        let contract =
-            ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
+    /// Loads the contract abi to get the event definitions
+    pub fn new(deployed_address: H160) -> Result<Self> {
         Ok(Self {
-            deployed_address: settings.eth.stake_manager_eth_address,
-            contract,
+            deployed_address,
+            contract: ethabi::Contract::load(
+                std::include_bytes!("abis/StakeManager.json").as_ref(),
+            )?,
         })
     }
 }
@@ -241,15 +240,13 @@ mod tests {
 
     #[test]
     fn test_load_contract() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        assert_ok!(StakeManager::new(&settings));
+        let address = H160::default();
+        assert_ok!(StakeManager::new(address));
     }
 
     #[test]
     fn test_staked_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
@@ -292,9 +289,7 @@ mod tests {
 
     #[test]
     fn test_claim_registered_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_register_event_signature =
@@ -346,9 +341,7 @@ mod tests {
 
     #[test]
     fn test_claim_executed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_executed_event_signature =
@@ -385,9 +378,7 @@ mod tests {
 
     #[test]
     fn flip_supply_updated_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let flip_supply_updated_event_signature =
@@ -421,9 +412,7 @@ mod tests {
 
     #[test]
     fn min_stake_changed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let min_stake_changed_event_signature =
@@ -455,9 +444,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let refunded_event_signature =

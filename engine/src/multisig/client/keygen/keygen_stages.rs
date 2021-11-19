@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use pallet_cf_vaults::CeremonyId;
 
+use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
 use crate::multisig::client;
 
 use client::{
@@ -179,6 +180,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
         } else {
             slog::debug!(
                 self.common.logger,
+                #KEYGEN_REJECTED_INCOMPATIBLE,
                 "The key is not contract compatible, aborting..."
             );
             // It is nobody's fault that the key is not compatible,
@@ -225,7 +227,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         let bad_parties: Vec<_> = incoming_shares
             .iter()
             .filter_map(|(sender_idx, share)| {
-                if verify_share(share, &self.commitments[&sender_idx], self.common.own_idx) {
+                if verify_share(share, &self.commitments[sender_idx], self.common.own_idx) {
                     None
                 } else {
                     slog::warn!(
@@ -347,7 +349,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                 // Ensure that complaints contain valid, non-duplicate indexes
                 let deduped_idxs = {
                     let mut idxs = blamed_idxs.clone();
-                    idxs.sort();
+                    idxs.sort_unstable();
                     idxs.dedup();
                     idxs
                 };

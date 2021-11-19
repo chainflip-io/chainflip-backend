@@ -241,7 +241,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
         match frost::aggregate_signature(
             &self.signing_common.data.0,
-            &all_idxs,
+            all_idxs,
             self.signing_common.key.get_public_key(),
             &pubkeys,
             &self.commitments,

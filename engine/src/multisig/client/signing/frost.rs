@@ -232,10 +232,10 @@ pub fn generate_local_sig(
     own_idx: usize,
     all_idxs: &BTreeSet<usize>,
 ) -> SigningResponse {
-    let bindings = generate_bindings(&msg, commitments, all_idxs);
+    let bindings = generate_bindings(msg, commitments, all_idxs);
 
     // This is `R` in a Schnorr signature
-    let group_commitment = gen_group_commitment(&commitments, &bindings);
+    let group_commitment = gen_group_commitment(commitments, &bindings);
 
     let SecretNoncePair { d, e, .. } = nonces;
 
@@ -294,7 +294,7 @@ pub fn aggregate_signature(
     commitments: &HashMap<usize, SigningCommitment>,
     responses: &HashMap<usize, SigningResponse>,
 ) -> Result<SchnorrSignature, Vec<usize>> {
-    let bindings = generate_bindings(&msg, commitments, signer_idxs);
+    let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -307,7 +307,7 @@ pub fn aggregate_signature(
     let mut invalid_idxs = vec![];
 
     for signer_idx in signer_idxs {
-        let rho_i = bindings[&signer_idx];
+        let rho_i = bindings[signer_idx];
         let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
         let commitment = &commitments[signer_idx];
