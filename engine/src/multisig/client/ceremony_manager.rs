@@ -30,7 +30,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
-    event_sender: MultisigOutcomeSender,
+    outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
@@ -40,13 +40,13 @@ pub struct CeremonyManager {
 impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
-        event_sender: MultisigOutcomeSender,
+        outcome_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
             my_account_id,
-            event_sender,
+            outcome_sender,
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
@@ -88,7 +88,7 @@ impl CeremonyManager {
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(event) {
+            if let Err(err) = self.outcome_sender.send(event) {
                 slog::error!(self.logger, "Unable to send event, error: {}", err);
             }
         }
@@ -153,7 +153,7 @@ impl CeremonyManager {
 
         state.on_keygen_request(
             ceremony_id,
-            self.event_sender.clone(),
+            self.outcome_sender.clone(),
             self.outgoing_p2p_message_sender.clone(),
             validator_map,
             our_idx,
@@ -231,7 +231,7 @@ impl CeremonyManager {
             ceremony_id,
             initial_stage,
             key_info.validator_map,
-            self.event_sender.clone(),
+            self.outcome_sender.clone(),
         );
     }
 
@@ -257,7 +257,7 @@ impl CeremonyManager {
             self.signing_states.remove(&ceremony_id);
             match result {
                 Ok(schnorr_sig) => {
-                    self.event_sender
+                    self.outcome_sender
                         .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Ok(schnorr_sig),
@@ -272,7 +272,7 @@ impl CeremonyManager {
                         &blamed_parties; CEREMONY_ID_KEY => ceremony_id
                     );
 
-                    self.event_sender
+                    self.outcome_sender
                         .send(MultisigOutcome::Signing(SigningOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
@@ -314,7 +314,7 @@ impl CeremonyManager {
                         blamed_parties,
                     );
 
-                    self.event_sender
+                    self.outcome_sender
                         .send(MultisigOutcome::Keygen(KeygenOutcome {
                             id: ceremony_id,
                             result: Err((CeremonyAbortReason::Invalid, blamed_parties)),

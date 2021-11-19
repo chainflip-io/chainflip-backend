@@ -35,7 +35,7 @@ impl KeygenStateRunner {
     pub fn on_keygen_request(
         &mut self,
         ceremony_id: CeremonyId,
-        event_sender: MultisigOutcomeSender,
+        outcome_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,
@@ -59,7 +59,7 @@ impl KeygenStateRunner {
         let stage = Box::new(BroadcastStage::new(processor, common));
 
         self.inner
-            .on_ceremony_request(ceremony_id, stage, idx_mapping, event_sender);
+            .on_ceremony_request(ceremony_id, stage, idx_mapping, outcome_sender);
     }
 
     pub fn try_expiring(&mut self) -> Option<Vec<AccountId>> {
