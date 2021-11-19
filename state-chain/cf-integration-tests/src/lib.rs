@@ -1023,8 +1023,11 @@ mod tests {
 						));
 					}
 
-					// Start an auction and confirm
-					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+					// Move to new epoch
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Start auction
+					testnet.move_forward_blocks(1);
+
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
@@ -1049,7 +1052,8 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					testnet.move_forward_blocks(1);
+					// Complete auction
+					testnet.move_forward_blocks(AUCTION_BLOCKS - 1);
 
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
 
@@ -1263,7 +1267,7 @@ mod tests {
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
-					let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
+					let PercentageRange { top, bottom: _ } = EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
 					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
 
