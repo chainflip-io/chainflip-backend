@@ -1295,7 +1295,7 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the genesis epoch");
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
