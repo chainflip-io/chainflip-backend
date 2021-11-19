@@ -200,7 +200,7 @@ where
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
-                &logger,
+                logger,
             ),
             inner_event_sender,
             pending_requests_to_sign: Default::default(),
@@ -259,7 +259,7 @@ where
                     sign_info.data, sign_info.signers;
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
-                match self.key_store.get_key(&key_id) {
+                match self.key_store.get_key(key_id) {
                     Some(key) => {
                         self.ceremony_manager.on_request_to_sign(
                             sign_info.data,
