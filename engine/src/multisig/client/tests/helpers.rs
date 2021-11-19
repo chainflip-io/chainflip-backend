@@ -6,13 +6,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::multisig::{
-    client::{
-        keygen::{HashContext, KeygenOptions, SecretShare3},
-        signing, CeremonyAbortReason, MultisigData,
-    },
-    KeyId, MultisigInstruction,
-};
+use crate::multisig::{KeyId, MultisigInstruction, client::{CeremonyAbortReason, MultisigData, ThresholdParameters, keygen::{HashContext, KeygenOptions, SecretShare3}, signing}};
 
 use signing::frost::{
     self, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
@@ -759,9 +753,9 @@ impl KeygenContext {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_inner_event(&mut r).await {
-                    InnerEvent::KeygenResult(KeygenOutcome { result, .. }) => result,
-                    _ => panic!("Unexpected inner event"),
+                let result = match recv_next_multisig_outcome(&mut r).await {
+                    MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
+                    _ => panic!("Unexpected keygen outcome"),
                 };
                 results.push(result);
             }

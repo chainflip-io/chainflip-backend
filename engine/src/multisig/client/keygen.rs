@@ -2,7 +2,8 @@ mod keygen_data;
 mod keygen_frost;
 mod keygen_stages;
 
-use std::sync::Arc;
+#[cfg(test)]
+pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
