@@ -235,7 +235,7 @@ async fn should_ignore_keygen_request_if_not_participating() {
 
     // Send the keygen request
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // The request should have been ignored and the not started a ceremony
     assert!(c1.is_at_keygen_stage(0));
@@ -260,7 +260,7 @@ async fn should_ignore_duplicate_keygen_request() {
 
     // Send another keygen request with the same ceremony_id but different signers
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert!(c1.is_at_keygen_stage(2));
@@ -448,7 +448,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
 
     // Send the keygen request with the modified signers list
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // Check that the keygen request was ignored
     assert!(c1.is_at_keygen_stage(0));
