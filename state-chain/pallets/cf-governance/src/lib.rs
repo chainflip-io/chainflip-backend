@@ -88,6 +88,12 @@ pub mod pallet {
 	#[pallet::getter(fn number_of_proposals)]
 	pub(super) type ProposalCount<T> = StorageValue<_, u32, ValueQuery>;
 
+	/// Pipeline of proposals which will get executed in the next block
+	#[pallet::storage]
+	#[pallet::getter(fn execution_pipeline )]
+	pub(super) type ExecutionPipeline<T> =
+		StorageValue<_, Vec<(<T as Config>::Call, ProposalId)>, ValueQuery>;
+
 	/// Time in seconds after a proposal expires
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
@@ -104,7 +110,8 @@ pub mod pallet {
 		/// and remove the expired ones for house keeping
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Check if their are any ongoing proposals
-			match <ActiveProposals<T>>::decode_len() {
+			let mut execution_weight = 0;
+			let active_proposal_weight = match <ActiveProposals<T>>::decode_len() {
 				Some(proposal_len) if proposal_len > 0 => {
 					// Separate the proposals into expired an active by partitioning
 					let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
@@ -119,7 +126,26 @@ pub mod pallet {
 						T::WeightInfo::expire_proposals(number_expired_proposals)
 				},
 				_ => T::WeightInfo::on_initialize_best_case(),
+			};
+			// If there is something in the pipeline execute it
+			if <ExecutionPipeline<T>>::decode_len() > Some(0) {
+				let execution_pipeline = <ExecutionPipeline<T>>::get();
+				for (call, id) in execution_pipeline {
+					// Execute the proposal
+					let result = call
+						.clone()
+						.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+					// Emit events about the execution status
+					match result {
+						Ok(_) => Self::deposit_event(Event::Executed(id)),
+						Err(_) => Self::deposit_event(Event::FailedExecution(id)),
+					}
+					execution_weight += call.get_dispatch_info().weight;
+				}
+				// Clean up execution pipeline
+				<ExecutionPipeline<T>>::set(vec![]);
 			}
+			active_proposal_weight + execution_weight
 		}
 	}
 
@@ -134,6 +160,8 @@ pub mod pallet {
 		Expired(ProposalId),
 		/// A proposal was approved \[proposal_id\]
 		Approved(ProposalId),
+		/// The execution of a proposal failed \[proposal_id\]
+		FailedExecution(ProposalId),
 	}
 
 	#[pallet::error]
@@ -224,31 +252,6 @@ pub mod pallet {
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
 			// Governance members don't pay transaction fees
-			Ok(Pays::No.into())
-		}
-
-		/// Execute a Proposal.
-		///
-		/// ## Events
-		///
-		/// - [Executed](Event::Executed)
-		///
-		/// ## Errors
-		///
-		/// - [NotMember](Error::NotMember)
-		/// - [ProposalNotFound](Error::ProposalNotFound)
-		/// - [DecodeOfCallFailed](Error::DecodeOfCallFailed)
-		/// - [MajorityNotReached](Error::MajorityNotReached)
-		#[pallet::weight(10_000)]
-		pub fn execute(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			// Ensure origin is part of the governance
-			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
-			// Ensure that the proposal exists
-			ensure!(<Proposals<T>>::contains_key(id), Error::<T>::ProposalNotFound);
-			// Try to execute the proposal
-			Self::execute_proposal(id)?;
-			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
 
@@ -359,33 +362,24 @@ impl<T: Config> Pallet<T> {
 		<ProposalCount<T>>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
-	fn execute_proposal(id: ProposalId) -> Result<(), DispatchError> {
+	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {
 		let proposal = <Proposals<T>>::get(id);
-		if Self::majority_reached(proposal.approved.len()) {
-			// Try to decode the stored extrinsic
-			if let Some(call) = Self::decode_call(&proposal.call) {
-				// Execute the extrinsic
-				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-				// Check the result and emit events
-				match result {
-					Ok(_) => Self::deposit_event(Event::Executed(id)),
-					Err(e) => return Err(e.error),
-				}
-				// Remove the proposal from storage
-				<Proposals<T>>::remove(id);
-				// Remove the proposal from active proposals
-				let active_proposals = <ActiveProposals<T>>::get();
-				let new_active_proposals =
-					active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
-				// Set the new active proposals
-				<ActiveProposals<T>>::set(new_active_proposals);
-				Ok(())
-			} else {
-				// Emit an event if the decode of a call failed
-				Err(Error::<T>::DecodeOfCallFailed.into())
-			}
+		// Try to decode the stored extrinsic
+		if let Some(call) = Self::decode_call(&proposal.call) {
+			// Push the proposal to the execution pipeline
+			<ExecutionPipeline<T>>::append((call.clone(), id));
+			// Remove the proposal from storage
+			<Proposals<T>>::remove(id);
+			// Remove the proposal from active proposals
+			let active_proposals = <ActiveProposals<T>>::get();
+			let new_active_proposals =
+				active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
+			// Set the new active proposals
+			<ActiveProposals<T>>::set(new_active_proposals);
+			Ok(())
 		} else {
-			Err(Error::<T>::MajorityNotReached.into())
+			// Emit an event if the decode of a call failed
+			Err(Error::<T>::DecodeOfCallFailed.into())
 		}
 	}
 	/// Checks if the majority for a proposal is reached
@@ -402,6 +396,11 @@ impl<T: Config> Pallet<T> {
 			// Add account to approved array
 			proposal.approved.push(account);
 			Self::deposit_event(Event::Approved(id));
+			// Check if the majority is reached
+			if Self::majority_reached(proposal.approved.len()) {
+				// Schedule execution
+				Self::schedule_proposal_execution(id)?;
+			}
 			Ok(())
 		})
 	}
