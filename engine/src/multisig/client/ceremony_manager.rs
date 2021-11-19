@@ -241,7 +241,7 @@ impl CeremonyManager {
     pub fn process_signing_data(
         &mut self,
         sender_id: AccountId,
-        ceremony_id: u64,
+        ceremony_id: CeremonyId,
         data: SigningData,
     ) {
         // Check if we have state for this data and delegate message to that state
@@ -290,7 +290,7 @@ impl CeremonyManager {
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
-        ceremony_id: u64,
+        ceremony_id: CeremonyId,
         data: KeygenData,
     ) -> Option<KeygenResultInfo> {
         let logger = &self.logger;
