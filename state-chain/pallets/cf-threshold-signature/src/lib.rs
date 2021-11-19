@@ -40,7 +40,7 @@ pub mod pallet {
 		pub chain_signing_context: T::SigningContext,
 	}
 
-	type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+	pub type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 	type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
 	#[pallet::config]
