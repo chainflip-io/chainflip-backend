@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use pallet_cf_vaults::CeremonyId;
 
+use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
 use crate::multisig::client;
 
 use client::{
@@ -177,6 +178,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
         } else {
             slog::debug!(
                 self.common.logger,
+                #KEYGEN_REJECTED_INCOMPATIBLE,
                 "The key is not contract compatible, aborting..."
             );
             // It is nobody's fault that the key is not compatible,
