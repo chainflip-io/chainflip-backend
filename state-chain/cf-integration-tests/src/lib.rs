@@ -765,7 +765,7 @@ mod tests {
 	}
 
 	// The number of blocks we expect an auction should last
-	const AUCTION_BLOCKS: BlockNumber = 2;
+	const AUCTION_BLOCKS: BlockNumber = 3;
 
 	mod epoch {
 		use super::*;
@@ -1256,10 +1256,10 @@ mod tests {
 					);
 
 					// Start an auction and confirm
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 
-					// Complete auction over AUCTION_BLOCKS
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Complete auction
+					testnet.move_to_complete_auction();
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
@@ -1275,7 +1275,7 @@ mod tests {
 					}
 
 					// We need to move forward one heartbeat interval to be regarded as offline
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
@@ -1288,6 +1288,8 @@ mod tests {
 						Validator::emergency_rotation_requested(),
 						"we should have requested an emergency rotation"
 					);
+
+					assert_eq!(1, Validator::epoch_index(), "We should be in the genesis epoch");
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1302,33 +1304,23 @@ mod tests {
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
+					// Emergency state reset
+					assert!(
+						!Validator::emergency_rotation_requested(),
+						"we should have had the state of emergency reset"
 					);
 
-					// Take our bottom percentage + 1 offline
-					let percentage_bottom_offline = 100 - bottom as u32;
-					let number_offline = 1 + (MAX_VALIDATORS * percentage_bottom_offline / 100) as usize;
-
-					let offline_nodes: Vec<_> =
-						nodes.iter().take(number_offline).cloned().collect();
-
-					for node in &offline_nodes {
+					for node in &nodes {
 						testnet.set_active(node, false);
 					}
 
-					// We need to move forward one heartbeats to be regarded as offline
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We should have a set of nodes offline
-					for node in &offline_nodes {
+					for node in &nodes {
 						assert_eq!(false, Online::is_online(node), "the node should be offline");
 					}
 
-					// The network state is now greater than 33% of our validators are offline
-					// and hence we don't want to run an emergency rotation as we would fail
 					assert!(
 						!Validator::emergency_rotation_requested(),
 						"we should *not* have requested an emergency rotation"
