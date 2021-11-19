@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fmt::Display,
     sync::Arc,
     time::{Duration, Instant},
@@ -34,7 +35,9 @@ where
 {
     logger: slog::Logger,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
-    delayed_messages: Vec<(AccountId, CeremonyData)>,
+    // Note that we use a map here to limit the number of messages
+    // that can be delayed from any one party to one per stage.
+    delayed_messages: BTreeMap<AccountId, CeremonyData>,
     /// Time point at which the current ceremony is considered expired and gets aborted
     should_expire_at: std::time::Instant,
 }
@@ -66,10 +69,11 @@ where
         result_sender: EventSender,
     ) {
         if self.inner.is_some() {
+            // TODO: Use a more specific tag (keygen/signing)
             slog::warn!(
                 self.logger,
                 #CEREMONY_IGNORED,
-                "Ceremony ignored: duplicate ceremony_id"
+                "Ceremony request ignored: duplicate ceremony_id"
             );
             return;
         }
@@ -211,7 +215,13 @@ where
             }
         }
 
-        self.delayed_messages.push((id, m));
+        self.delayed_messages.insert(id, m);
+
+        slog::debug!(
+            self.logger,
+            "Total delayed: {}",
+            self.delayed_messages.len()
+        );
     }
 
     /// Check if the state expired, and if so, return the parties that
@@ -220,8 +230,8 @@ where
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
-                    // blame the parties that tried to initiate the ceremony
-                    let blamed_ids = self
+                    // report the parties that tried to initiate the ceremony
+                    let reported_ids = self
                         .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
@@ -229,29 +239,29 @@ where
 
                     slog::warn!(
                         self.logger,
-                        "Ceremony expired before being authorized, blaming parties: {:?}",
-                        blamed_ids
+                        "Ceremony expired before being authorized, reporting parties: {:?}",
+                        reported_ids
                     );
 
-                    Some(blamed_ids)
+                    Some(reported_ids)
                 }
                 Some(authorised_state) => {
-                    // blame slow parties
-                    let blamed_idxs = authorised_state
+                    // report slow parties
+                    let reported_idxs = authorised_state
                         .stage
                         .as_ref()
                         .expect("stage in authorised state is always present")
                         .awaited_parties();
 
-                    let blamed_ids = authorised_state.idx_mapping.get_ids(blamed_idxs);
+                    let reported_ids = authorised_state.idx_mapping.get_ids(reported_idxs);
 
                     slog::warn!(
                         self.logger,
-                        "Ceremony expired, blaming parties: {:?}",
-                        blamed_ids,
+                        "Ceremony expired, reporting parties: {:?}",
+                        reported_ids,
                     );
 
-                    Some(blamed_ids)
+                    Some(reported_ids)
                 }
             }
         } else {

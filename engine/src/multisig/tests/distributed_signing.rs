@@ -147,7 +147,6 @@ async fn coordinate_signing(
 async fn distributed_signing() {
     let logger = logging::test_utils::new_test_logger();
     // calculate how many parties will be in the signing (must be exact)
-    // TODO: use the threshold_from_share_count function in keygen manager here.
     let threshold = utilities::threshold_from_share_count(N_PARTIES as u32) as usize;
 
     let mut rng = StdRng::seed_from_u64(0);

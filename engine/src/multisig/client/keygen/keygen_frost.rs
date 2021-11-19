@@ -1,6 +1,5 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::{
@@ -39,9 +38,12 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
+use zeroize::Zeroize;
+
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
+#[zeroize(drop)]
 pub struct ShamirShare {
     /// the result of polynomial evaluation
     pub value: Scalar,
@@ -71,8 +73,17 @@ fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
         })
 }
 
+/// Context used in hashing to prevent replay attacks
+#[derive(Clone)]
+pub struct HashContext(pub [u8; 32]);
+
 /// Generate challenge against which a ZKP of our secret will be generated
-fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment: Point) -> Scalar {
+fn generate_dkg_challenge(
+    index: usize,
+    context: &HashContext,
+    public: Point,
+    commitment: Point,
+) -> Scalar {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
@@ -80,7 +91,7 @@ fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment
     hasher.update(commitment.get_element().to_string());
 
     hasher.update(index.to_be_bytes());
-    hasher.update(context);
+    hasher.update(context.0);
 
     let result = hasher.finalize();
 
@@ -90,7 +101,7 @@ fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
-fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
+fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -> ZKPSignature {
     let nonce = Scalar::new_random();
     let nonce_commitment = Point::generator() * nonce;
 
@@ -106,7 +117,7 @@ fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSig
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
 
 #[derive(Clone)]
@@ -116,7 +127,7 @@ pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
 pub fn generate_shares_and_commitment(
-    context: &str,
+    context: &HashContext,
     index: usize,
     params: ThresholdParameters,
 ) -> (OutgoingShares, DKGUnverifiedCommitment) {
@@ -209,7 +220,7 @@ pub struct DKGCommitment {
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
     commitments: HashMap<usize, DKGUnverifiedCommitment>,
-    context: &str,
+    context: &HashContext,
 ) -> Result<HashMap<usize, DKGCommitment>, Vec<usize>> {
     let invalid_idxs: Vec<_> = commitments
         .iter()
@@ -239,13 +250,6 @@ pub fn validate_commitments(
     } else {
         Err(invalid_idxs)
     }
-}
-
-/// Unique context used for generating a ZKP
-pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
-    // TODO: use a deterministic random string here for more security
-    // (hash ceremony_id + the list of signers?)
-    ceremony_id.to_string()
 }
 
 /// Derive aggregate pubkey from party commitments
@@ -308,9 +312,7 @@ mod tests {
         let n = 4;
         let t = 2;
 
-        let ceremony_id = 2;
-
-        let context = generate_keygen_context(ceremony_id);
+        let context = HashContext([0; 32]);
 
         let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
             .map(|idx| {

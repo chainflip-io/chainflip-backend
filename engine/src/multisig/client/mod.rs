@@ -260,10 +260,10 @@ where
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
                 match self.key_store.get_key(key_id) {
-                    Some(key) => {
+                    Some(keygen_result_info) => {
                         self.ceremony_manager.on_request_to_sign(
                             sign_info.data,
-                            key.clone(),
+                            keygen_result_info.clone(),
                             sign_info.signers,
                             sign_info.ceremony_id,
                         );

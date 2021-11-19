@@ -8,7 +8,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::multisig::{
     client::{
-        keygen::{KeygenOptions, SecretShare3},
+        keygen::{HashContext, KeygenOptions, SecretShare3},
         signing, CeremonyAbortReason, ThresholdParameters,
     },
     KeyId, MultisigInstruction,
@@ -325,7 +325,7 @@ fn gen_invalid_local_sig() -> LocalSig3 {
 
 fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
-        "",
+        &HashContext([0; 32]),
         0,
         ThresholdParameters {
             share_count: VALIDATOR_IDS.len(),

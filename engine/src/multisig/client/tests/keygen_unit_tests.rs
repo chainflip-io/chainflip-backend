@@ -255,8 +255,7 @@ async fn should_ignore_duplicate_keygen_request() {
     let unknown_id = AccountId([0; 32]);
     assert!(!VALIDATOR_IDS.contains(&unknown_id));
     let mut keygen_ids = VALIDATOR_IDS.clone();
-    keygen_ids[1] = unknown_id.clone();
-    keygen_ids[2] = unknown_id;
+    keygen_ids[1] = unknown_id;
 
     // Send another keygen request with the same ceremony_id but different signers
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);

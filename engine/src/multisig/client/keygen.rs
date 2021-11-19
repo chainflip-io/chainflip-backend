@@ -15,6 +15,8 @@ pub use keygen_data::{
     VerifyComm2, VerifyComplaints5,
 };
 
+pub use keygen_frost::HashContext;
+
 pub use keygen_stages::AwaitCommitments1;
 
 use crate::p2p::AccountId;
