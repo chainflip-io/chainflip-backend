@@ -335,8 +335,6 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				T::Auctioneer::process().is_ok()
 			},
 			_ => {
-				// If we were in one, mark as completed
-				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
 			},
@@ -392,6 +390,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
+					// If we were in an emergency, mark as completed
+					Self::emergency_rotation_completed();
 					// Calculate our new epoch index
 					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
 						*epoch = epoch.saturating_add(One::one());
