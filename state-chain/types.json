@@ -81,6 +81,7 @@
     "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
+  "H256": "[u8; 32]",
   "ImbalanceSource": {
     "_enum": [
       "External",
@@ -107,6 +108,13 @@
   "PayloadFor": "[u8; 32]",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RegisterClaim": {
+    "sig_data": "SigData",
+    "node_id": "[u8; 32]",
+    "amount": "Uint",
+    "address": "EthereumAddress",
+    "expiry": "Uint"
+  },
   "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
@@ -126,6 +134,12 @@
     "patch": "u8"
   },
   "Signature": "SchnorrVerificationComponents",
+  "SigData": {
+    "msg_hash": "H256",
+    "sig": "Uint",
+    "nonce": "Uint",
+    "k_times_g_addr": "EthereumAddress"
+  },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
@@ -147,7 +161,7 @@
   "VaultRotationStatus": {
     "_enum": {
       "AwaitingKeygen": {
-        "ceremony_id": "CeremonyId", 
+        "ceremony_id": "CeremonyId",
         "candidates": "Vec<ValidatorId>"
       },
       "AwaitingRotation": {
