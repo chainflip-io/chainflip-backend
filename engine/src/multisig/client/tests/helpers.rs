@@ -303,8 +303,8 @@ pub struct KeygenContext {
     /// malicious nodes). Such tests can put non-standard
     /// data here before the ceremony is run.
     custom_data: CustomDataToSend,
-    pub rxs: Vec<MultisigOutcomeReceiver>,
-    pub p2p_rxs: Vec<P2PMessageReceiver>,
+    pub outcome_receivers: Vec<MultisigOutcomeReceiver>,
+    pub p2p_receivers: Vec<P2PMessageReceiver>,
     /// This clients will match the ones in `key_ready`,
     /// but stored separately so we could substitute
     /// them in more advanced tests
@@ -575,8 +575,8 @@ impl KeygenContext {
 
         KeygenContext {
             account_ids,
-            rxs,
-            p2p_rxs,
+            outcome_receivers: rxs,
+            p2p_receivers: p2p_rxs,
             clients,
             custom_data: Default::default(),
             key_id: None,
@@ -697,8 +697,8 @@ impl KeygenContext {
 
         let clients = &mut self.clients;
         let account_ids = &self.account_ids;
-        let rxs = &mut self.rxs;
-        let p2p_rxs = &mut self.p2p_rxs;
+        let rxs = &mut self.outcome_receivers;
+        let p2p_rxs = &mut self.p2p_receivers;
 
         let stage0 = Stage0Data {
             clients: clients.clone(),
@@ -991,8 +991,8 @@ impl KeygenContext {
         p2p_rx: P2PMessageReceiver,
     ) {
         self.clients[idx] = client;
-        self.rxs[idx] = rx;
-        self.p2p_rxs[idx] = p2p_rx;
+        self.outcome_receivers[idx] = rx;
+        self.p2p_receivers[idx] = p2p_rx;
     }
 
     // Use the generated key and the clients participating
@@ -1009,8 +1009,8 @@ impl KeygenContext {
         );
 
         let mut clients = self.clients.clone();
-        let rxs = &mut self.rxs;
-        let p2p_rxs = &mut self.p2p_rxs;
+        let rxs = &mut self.outcome_receivers;
+        let p2p_rxs = &mut self.p2p_receivers;
 
         assert_channel_empty(&mut p2p_rxs[0]).await;
 

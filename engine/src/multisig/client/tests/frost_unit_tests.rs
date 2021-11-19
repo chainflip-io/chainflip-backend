@@ -154,7 +154,7 @@ async fn should_delay_ver4() {
     receive_sig3!(c1, 2, &sign_states);
 
     assert!(c1.is_at_signing_stage(4));
-    helpers::clear_channel(&mut ctx.rxs[0]).await;
+    helpers::clear_channel(&mut ctx.outcome_receivers[0]).await;
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to create the signature (stage becomes None)
@@ -162,7 +162,7 @@ async fn should_delay_ver4() {
     assert!(c1.is_at_signing_stage(0));
 
     // Check that we've created a signature!
-    let outcome = match helpers::recv_next_multisig_outcome(&mut ctx.rxs[0]).await {
+    let outcome = match helpers::recv_next_multisig_outcome(&mut ctx.outcome_receivers[0]).await {
         MultisigOutcome::Signing(outcome) => outcome,
         e => panic!("Unexpected event {:?}", e),
     };
@@ -256,7 +256,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &bad_array_idxs).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &bad_array_idxs).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -282,7 +282,7 @@ async fn should_report_on_timeout_stage1() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -307,7 +307,7 @@ async fn should_report_on_timeout_stage2() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -332,7 +332,7 @@ async fn should_report_on_timeout_stage3() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -357,7 +357,7 @@ async fn should_report_on_timeout_stage4() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
