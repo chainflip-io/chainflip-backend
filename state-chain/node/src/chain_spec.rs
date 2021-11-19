@@ -14,8 +14,8 @@ use std::{convert::TryInto, env};
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
-const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
-const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "8c35032F0763fe7257806F8A687a3F9b7955272d";
+const KEY_MANAGER_ADDRESS_DEFAULT: &str = "523982bcc567b59fB7350f73D7a2D85665e2078f";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 
 /// Generate a crypto pair from seed.
@@ -255,6 +255,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
 	let happy_sr25519 =
 		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -312,9 +314,11 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 				],
 				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
+					// Snow White the dictator
+					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -326,7 +330,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					// Happy
 					happy_sr25519.into(),
 				],
-				3,
+				4,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
@@ -389,7 +393,7 @@ fn testnet_genesis(
 		vaults: VaultsConfig {
 			ethereum_vault_key: {
 				let key: [u8; 33] = hex_literal::hex![
-					"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015"
+					"023fc6569bd5a88f685382b2e5821725d5f5ba2ff3336f6b17164292bdf4396884"
 				];
 				key.to_vec()
 			},
