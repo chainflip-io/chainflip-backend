@@ -753,7 +753,7 @@ impl KeygenContext {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_multisig_outcome(&mut r).await {
+                let result = match expect_next_with_timeout(&mut r).await {
                     MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
                     _ => panic!("Unexpected keygen outcome"),
                 };
@@ -910,7 +910,7 @@ impl KeygenContext {
         {
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_multisig_outcome(&mut r).await {
+                let result = match expect_next_with_timeout(&mut r).await {
                     MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
                     _ => panic!("Unexpected multisig outcome"),
                 };
@@ -1142,7 +1142,11 @@ async fn check_and_get_signing_outcome(
 ) -> Option<SigningOutcome> {
     let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
-        if let Some(outcome) = check_sig_outcome(&mut rxs[idx.clone()]).await {
+        if let Some(outcome) = peek_with_timeout(&mut rxs[idx.clone()]).await.and_then(|outcome| if let MultisigOutcome::Signing(outcome) = outcome {
+            Some(outcome)
+        } else {
+            None
+        }) {
             // sort the vec of blamed_parties so that we can compare the SigningOutcome's later
             let sorted_outcome = match &outcome.result {
                 Ok(_) => outcome.clone(),
@@ -1173,7 +1177,7 @@ async fn check_and_get_signing_outcome(
 
         // Consume the outcome message if its all good
         for idx in SIGNER_IDXS.iter() {
-            recv_next_multisig_outcome_opt(&mut rxs[idx.clone()]).await;
+            next_with_timeout(&mut rxs[idx.clone()]).await;
         }
 
         return Some(outcomes[0].clone());
@@ -1195,57 +1199,37 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
 }
 
 /// Consume all messages in the channel, then times out
-pub async fn clear_channel(rx: &mut MultisigOutcomeReceiver) {
-    while let Some(_) = recv_next_multisig_outcome_opt(rx).await {}
+pub async fn clear_channel<I>(rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>) {
+    while let Some(_) = next_with_timeout(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
-pub async fn check_sig_outcome(rx: &mut MultisigOutcomeReceiver) -> Option<&SigningOutcome> {
-    let event: &MultisigOutcome = check_multisig_outcome(rx).await?;
-
-    if let MultisigOutcome::Signing(outcome) = event {
-        Some(outcome)
-    } else {
-        None
-    }
-}
-
-/// Check the next multisig outcome without consuming
-pub async fn check_multisig_outcome(rx: &mut MultisigOutcomeReceiver) -> Option<&MultisigOutcome> {
+pub async fn peek_with_timeout<I>(rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>) -> Option<&I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
         .ok()?
 }
 
-/// Asserts that MultisigOutcome is in the queue and returns it
-pub async fn recv_next_multisig_outcome(rx: &mut MultisigOutcomeReceiver) -> MultisigOutcome {
-    let res = recv_next_multisig_outcome_opt(rx).await;
-
-    if let Some(event) = res {
-        return event;
-    }
-    panic!("Expected Multisig Result");
-}
-
-/// checks for an MultisigOutcome in the queue with a short timeout, returns the MultisigOutcome if there is one.
-pub async fn recv_next_multisig_outcome_opt(
-    rx: &mut MultisigOutcomeReceiver,
-) -> Option<MultisigOutcome> {
+/// checks for an item in the queue with a short timeout, returns the item if there is one.
+pub async fn next_with_timeout<I>(
+    rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>,
+) -> Option<I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()?
 }
 
-pub async fn recv_p2p_message(rx: &mut P2PMessageReceiver) -> P2PMessage {
-    tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
-        .await
-        .ok()
-        .expect("timeout")
-        .unwrap()
+pub async fn expect_next_with_timeout<I>(
+    rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>,
+) -> I {
+    match next_with_timeout(rx).await {
+        Some(i) => i,
+        None => panic!("Expected {}", std::any::type_name::<I>())
+    }
 }
 
 async fn recv_multisig_message(rx: &mut P2PMessageReceiver) -> (AccountId, MultisigMessage) {
-    let m = recv_p2p_message(rx).await;
+    let m = expect_next_with_timeout(rx).await;
 
     (
         m.account_id,
@@ -1493,7 +1477,7 @@ impl MultisigClientNoDB {
 }
 
 pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[usize]) {
-    let blamed_parties = match check_multisig_outcome(rx)
+    let blamed_parties = match peek_with_timeout(rx)
         .await
         .as_ref()
         .expect("expected multisig_outcome")
