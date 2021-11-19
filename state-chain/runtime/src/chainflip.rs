@@ -21,12 +21,12 @@ use codec::{Decode, Encode};
 use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
+use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
-use pallet_cf_validator::PercentageRange;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -221,7 +221,7 @@ impl Heartbeat for ChainflipHeartbeat {
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
-		let PercentageRange{ top, bottom } = EmergencyRotationPercentageRange::get();
+		let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
 		let percent_online = network_state.percentage_online() as u8;
 		if percent_online >= bottom && percent_online <= top {
 			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
