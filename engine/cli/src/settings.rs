@@ -5,7 +5,6 @@ use structopt::StructOpt;
 
 #[derive(StructOpt, Clone)]
 pub struct CLICommandLineOptions {
-    // Config path
     #[structopt(short = "c", long = "config-path")]
     config_path: Option<String>,
 
@@ -21,17 +20,25 @@ pub enum CFCommand {
     Claim { amount: u128, eth_address: String },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct CLISettings {
     pub state_chain: StateChain,
 }
 
 impl CLISettings {
     pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-        let mut cli_config = match opts.config_path {
-            Some(path) => Self::from_file(&path)?,
-            None => Self::from_file("./engine/config/Default")?,
-        };
+        let mut cli_config = CLISettings::default();
+
+        // check we have all the cli args. If we do, don't bother with the config file
+        let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
+            && opts.state_chain_opts.state_chain_signing_key_file.is_some();
+
+        if !all_cl_args_set {
+            cli_config = match opts.config_path {
+                Some(path) => Self::from_file(&path)?,
+                None => Self::from_file("./engine/config/Default")?,
+            }
+        }
 
         // Override the settings with the cmd line options
         if let Some(ws_endpoint) = opts.state_chain_opts.state_chain_ws_endpoint {

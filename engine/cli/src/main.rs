@@ -23,7 +23,7 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::from_args();
-    let cli_settings = CLISettings::new(command_line_opts.clone()).expect("Could not read config");
+    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|_| anyhow::Error::msg("Please ensure your config file path is configured correctly. Or set all required command line arguments."))?;
 
     println!(
         "Connecting to state chain node at: `{}` and using private key located at: `{}`",
@@ -66,7 +66,7 @@ async fn send_claim(
     settings: &CLISettings,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (state_chain_client, block_stream) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (state_chain_client, block_stream, _) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     println!(
         "Submitting claim with amount `{}` to ETH address `0x{}`",

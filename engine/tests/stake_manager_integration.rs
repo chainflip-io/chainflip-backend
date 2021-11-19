@@ -14,6 +14,7 @@ use chainflip_engine::{
 };
 
 use futures::stream::StreamExt;
+use sp_core::H160;
 use sp_runtime::AccountId32;
 
 use web3::types::U256;
@@ -30,7 +31,8 @@ pub async fn test_all_stake_manager_events() {
         .await
         .unwrap();
 
-    let stake_manager = StakeManager::new(&settings).unwrap();
+    // TODO: Get the address from environment variables, so we don't need to start the SC
+    let stake_manager = StakeManager::new(H160::default()).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
