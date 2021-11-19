@@ -13,7 +13,7 @@ use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     multisig::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
     p2p,
@@ -25,7 +25,7 @@ pub async fn start<BlockStream, RpcClient>(
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
-    mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
+    mut multisig_event_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
@@ -188,7 +188,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .map(|v| p2p::AccountId(v.clone().into()))
                                         .collect();
 
-                                    let gen_new_key_event = MultisigInstruction::KeyGen(
+                                    let gen_new_key_event = MultisigInstruction::Keygen(
                                         KeygenInfo::new(ceremony_id, signers),
                                     );
 
@@ -202,7 +202,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigEvent::KeygenResult(KeygenOutcome {
+                                        MultisigOutcome::Keygen(KeygenOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -230,7 +230,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigEvent::MessageSigningResult(
+                                        MultisigOutcome::Signing(
                                             message_signing_result,
                                         ) => {
                                             panic!(
@@ -274,7 +274,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigEvent::MessageSigningResult(SigningOutcome {
+                                        MultisigOutcome::Signing(SigningOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -296,7 +296,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigEvent::KeygenResult(keygen_result) => {
+                                        MultisigOutcome::Keygen(keygen_result) => {
                                             panic!(
                                                 "Expecting MessageSigningResult, got: {:?}",
                                                 keygen_result
@@ -434,7 +434,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
-        let (state_chain_client, block_stream) =
+        let (state_chain_client, block_stream, _) =
             crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
                 .await
                 .unwrap();
@@ -442,7 +442,7 @@ mod tests {
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
         let (_multisig_event_sender, multisig_event_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+            tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
         let web3 = eth::new_synced_web3_client(&settings, &logger)
             .await

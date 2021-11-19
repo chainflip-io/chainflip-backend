@@ -13,7 +13,8 @@ use client::{
 use pallet_cf_vaults::CeremonyId;
 
 use crate::logging::{
-    CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+    CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_EXPIRED, KEYGEN_REQUEST_IGNORED,
+    REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
 };
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
@@ -22,7 +23,7 @@ use crate::multisig::{InnerEvent, KeygenInfo, KeygenOutcome, MessageHash, Signin
 
 use crate::p2p::AccountId;
 
-use super::keygen::KeygenOptions;
+use super::keygen::{HashContext, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -70,7 +71,7 @@ impl CeremonyManager {
 
         self.keygen_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
-                slog::warn!(logger, "Keygen state expired and will be abandoned");
+                slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
                 let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
 
                 events_to_send.push(InnerEvent::KeygenResult(outcome));
@@ -106,8 +107,12 @@ impl CeremonyManager {
 
         // Check that signer ids are known for this key
         let signer_idxs = validator_map
-            .get_all_idxs(&participants)
+            .get_all_idxs(participants)
             .map_err(|_| "invalid participants")?;
+
+        if signer_idxs.len() != participants.len() {
+            return Err("non unique participants");
+        }
 
         Ok((our_idx, signer_idxs))
     }
@@ -116,29 +121,30 @@ impl CeremonyManager {
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
         let KeygenInfo {
             ceremony_id,
-            mut signers,
+            signers,
         } = keygen_info;
 
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
-
-        signers.sort(); // TODO: This "fix" makes the code below (and in other places) unnecessarily complex and therefore it should be cleaned up. For example the signer_idx will always be a vec containing 1 to signers-len() in ascending order.
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&signers));
 
         let (our_idx, signer_idxs) = match self.map_ceremony_parties(&signers, &validator_map) {
             Ok(res) => res,
             Err(reason) => {
-                // TODO: alert
-                slog::warn!(logger, "Keygen request ignored: {}", reason);
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
                 return;
             }
         };
 
         let logger = &self.logger;
+
+        // TODO: Make sure that we don't process past (already removed) ceremonies
         let state = self
             .keygen_states
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
+
+        let context = generate_keygen_context(ceremony_id, signers.clone());
 
         state.on_keygen_request(
             ceremony_id,
@@ -147,6 +153,7 @@ impl CeremonyManager {
             our_idx,
             signer_idxs,
             keygen_options,
+            context,
         );
     }
 
@@ -298,6 +305,7 @@ impl CeremonyManager {
                 Err(blamed_parties) => {
                     slog::warn!(
                         self.logger,
+                        #KEYGEN_CEREMONY_FAILED,
                         "Keygen ceremony failed, blaming parties: {:?} ({:?})",
                         &blamed_parties,
                         blamed_parties,
@@ -339,4 +347,28 @@ impl CeremonyManager {
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
+}
+
+/// Create unique deterministic context used for generating a ZKP to prevent replay attacks
+pub fn generate_keygen_context(
+    ceremony_id: CeremonyId,
+    mut signers: Vec<AccountId>,
+) -> HashContext {
+    use sha2::{Digest, Sha256};
+
+    // We don't care if sorting is stable as all account ids are meant to be unique
+    signers.sort_unstable();
+
+    let mut hasher = Sha256::new();
+
+    hasher.update(ceremony_id.to_be_bytes());
+
+    // NOTE: it should be sufficient to use ceremony_id as context as
+    // we never reuse the same id for different ceremonies, but lets
+    // put the signers in to make the context hard to predict as well
+    for id in signers {
+        hasher.update(id.0);
+    }
+
+    HashContext(*hasher.finalize().as_ref())
 }

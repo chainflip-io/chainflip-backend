@@ -5,7 +5,6 @@ use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
-    settings,
     state_chain::client::StateChainRpcApi,
 };
 use cf_chains::ChainId;
@@ -57,8 +56,8 @@ impl ChainflipKey {
         let mut bytes: [u8; 33] = [0; 33];
         self.pub_key_x.to_big_endian(&mut bytes[1..]);
         bytes[0] = match self.pub_key_y_parity.is_zero() {
-            true => 02,
-            false => 03,
+            true => 2,
+            false => 3,
         };
         bytes
     }
@@ -129,7 +128,7 @@ impl EthObserver for KeyManager {
             KeyManagerEvent::KeyChange { new_key, .. } => {
                 let _ = state_chain_client
                     .submit_extrinsic(
-                        &logger,
+                        logger,
                         pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
                             ChainId::Ethereum,
                             new_key.serialize().to_vec(),
@@ -175,10 +174,10 @@ impl EthObserver for KeyManager {
 }
 
 impl KeyManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
+    /// Loads the contract abi to get the event definitions
+    pub fn new(deployed_address: H160) -> Result<Self> {
         Ok(Self {
-            deployed_address: settings.eth.key_manager_eth_address,
+            deployed_address,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
@@ -203,9 +202,7 @@ mod tests {
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
         // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let decode_log = key_manager.decode_log_closure().unwrap();
 
@@ -306,9 +303,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
         let decode_log = key_manager.decode_log_closure().unwrap();
 
         let refunded_event_signature =
@@ -336,9 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let transaction_hash =
             H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52")

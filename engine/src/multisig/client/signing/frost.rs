@@ -22,12 +22,15 @@ use crate::multisig::{
 
 use sha2::{Digest, Sha256};
 
+use zeroize::Zeroize;
+
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Section 5.3 (page 13)
 // TODO: Not sure if it is a good idea to to make
 // the secret values clonable
-#[derive(Clone)]
+#[derive(Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct SecretNoncePair {
     pub d: Scalar,
     pub d_pub: Point,
@@ -36,15 +39,16 @@ pub struct SecretNoncePair {
 }
 
 impl SecretNoncePair {
-    /// Generate a random pair of nonces
-    pub fn sample_random() -> Self {
+    /// Generate a random pair of nonces (in a Box,
+    /// to avoid them being copied on move)
+    pub fn sample_random() -> Box<Self> {
         let d = Scalar::new_random();
         let e = Scalar::new_random();
 
         let d_pub = Point::generator() * d;
         let e_pub = Point::generator() * e;
 
-        SecretNoncePair { d, d_pub, e, e_pub }
+        Box::new(SecretNoncePair { d, d_pub, e, e_pub })
     }
 }
 
@@ -228,10 +232,10 @@ pub fn generate_local_sig(
     own_idx: usize,
     all_idxs: &BTreeSet<usize>,
 ) -> SigningResponse {
-    let bindings = generate_bindings(&msg, commitments, all_idxs);
+    let bindings = generate_bindings(msg, commitments, all_idxs);
 
     // This is `R` in a Schnorr signature
-    let group_commitment = gen_group_commitment(&commitments, &bindings);
+    let group_commitment = gen_group_commitment(commitments, &bindings);
 
     let SecretNoncePair { d, e, .. } = nonces;
 
@@ -290,7 +294,7 @@ pub fn aggregate_signature(
     commitments: &HashMap<usize, SigningCommitment>,
     responses: &HashMap<usize, SigningResponse>,
 ) -> Result<SchnorrSignature, Vec<usize>> {
-    let bindings = generate_bindings(&msg, commitments, signer_idxs);
+    let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -303,7 +307,7 @@ pub fn aggregate_signature(
     let mut invalid_idxs = vec![];
 
     for signer_idx in signer_idxs {
-        let rho_i = bindings[&signer_idx];
+        let rho_i = bindings[signer_idx];
         let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
         let commitment = &commitments[signer_idx];

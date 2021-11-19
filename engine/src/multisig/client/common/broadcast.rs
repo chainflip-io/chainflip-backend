@@ -28,7 +28,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     type Message: Clone + Into<D> + TryFrom<D>;
 
     /// Init the stage, returning the data to broadcast
-    fn init(&self) -> DataToSend<Self::Message>;
+    fn init(&mut self) -> DataToSend<Self::Message>;
 
     /// For a given message, signal if it needs to be delayed
     /// until the next stage

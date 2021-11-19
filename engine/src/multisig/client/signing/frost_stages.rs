@@ -33,9 +33,7 @@ type SigningCeremonyCommon = CeremonyCommon<SigningData, SigningP2PSender>;
 pub struct AwaitCommitments1 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
-    // TODO: I probably shouldn't make copies/move this as we progress though
-    // stages (put in the Box?)
-    nonces: SecretNoncePair,
+    nonces: Box<SecretNoncePair>,
 }
 
 impl AwaitCommitments1 {
@@ -53,7 +51,7 @@ derive_display_as_type_name!(AwaitCommitments1);
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
     type Message = Comm1;
 
-    fn init(&self) -> DataToSend<Self::Message> {
+    fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
             index: self.common.own_idx,
             d: self.nonces.d_pub,
@@ -87,8 +85,8 @@ struct VerifyCommitmentsBroadcast2 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
     // Our nonce pair generated in the previous stage
-    nonces: SecretNoncePair,
-    // Public nonce commitments to be collected
+    nonces: Box<SecretNoncePair>,
+    // Public nonce commitments collected in the previous stage
     commitments: HashMap<usize, Comm1>,
 }
 
@@ -99,7 +97,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
-    fn init(&self) -> DataToSend<Self::Message> {
+    fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.commitments.clone();
 
         DataToSend::Broadcast(VerifyComm2 { data })
@@ -140,7 +138,7 @@ struct LocalSigStage3 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
     // Our nonce pair generated in the previous stage
-    nonces: SecretNoncePair,
+    nonces: Box<SecretNoncePair>,
     // Public nonce commitments (verified)
     commitments: HashMap<usize, Comm1>,
 }
@@ -152,21 +150,25 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
-    fn init(&self) -> DataToSend<Self::Message> {
+    fn init(&mut self) -> DataToSend<Self::Message> {
         slog::trace!(self.common.logger, "Generating local signature response");
 
-        DataToSend::Broadcast(frost::generate_local_sig(
+        let data = DataToSend::Broadcast(frost::generate_local_sig(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
             &self.nonces,
             &self.commitments,
             self.common.own_idx,
             &self.common.all_idxs,
-        ))
+        ));
 
-        // TODO: make sure secret nonces are deleted here (according to
+        use zeroize::Zeroize;
+
+        // Secret nonces are deleted here (according to
         // step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
-        // Zeroize memory if needed.
+        self.nonces.zeroize();
+
+        data
     }
 
     should_delay!(SigningData::VerifyLocalSigsStage4);
@@ -204,7 +206,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     type Message = VerifyLocalSig4;
 
     /// Broadcast all signature shares sent to us
-    fn init(&self) -> DataToSend<Self::Message> {
+    fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.local_sigs.clone();
 
         DataToSend::Broadcast(VerifyLocalSig4 { data })
@@ -239,7 +241,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
         match frost::aggregate_signature(
             &self.signing_common.data.0,
-            &all_idxs,
+            all_idxs,
             self.signing_common.key.get_public_key(),
             &pubkeys,
             &self.commitments,

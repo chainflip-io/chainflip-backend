@@ -43,7 +43,6 @@ pub type Comm1 = super::keygen_frost::DKGUnverifiedCommitment;
 
 pub type VerifyComm2 = BroadcastVerificationMessage<Comm1>;
 
-// TODO: should this be a simple Scalar with an implicit index?
 /// Secret share of our locally generated secret calculated separately
 /// for each party as the result of evaluating sharing polynomial (generated
 /// during stage 1) at the corresponding signer's index

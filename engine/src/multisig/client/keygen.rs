@@ -2,6 +2,9 @@ mod keygen_data;
 mod keygen_frost;
 mod keygen_stages;
 
+#[cfg(test)]
+pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
+
 use std::sync::Arc;
 
 use pallet_cf_vaults::CeremonyId;
@@ -11,6 +14,8 @@ pub use keygen_data::{
     BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
     VerifyComm2, VerifyComplaints5,
 };
+
+pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
 
