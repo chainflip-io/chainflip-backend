@@ -109,6 +109,10 @@ impl CeremonyManager {
             .get_all_idxs(&participants)
             .map_err(|_| "invalid participants")?;
 
+        if signer_idxs.len() != participants.len() {
+            return Err("non unique participants");
+        }
+
         Ok((our_idx, signer_idxs))
     }
 
