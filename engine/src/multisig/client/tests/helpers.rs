@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
-use futures::StreamExt;
+use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
 
@@ -115,15 +115,10 @@ macro_rules! distribute_data_keygen {
     }};
 }
 
-pub(super) type MultisigOutcomeReceiver = Pin<
-    Box<
-        futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<MultisigOutcome>>,
-    >,
->;
+pub(super) type MultisigOutcomeReceiver =
+    Pin<Box<Peekable<UnboundedReceiverStream<MultisigOutcome>>>>;
 
-pub(super) type P2PMessageReceiver = Pin<
-    Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<P2PMessage>>>,
->;
+pub(super) type P2PMessageReceiver = Pin<Box<Peekable<UnboundedReceiverStream<P2PMessage>>>>;
 
 pub struct Stage0Data {
     pub clients: Vec<MultisigClientNoDB>,
@@ -1210,19 +1205,13 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
 }
 
 /// Consume all messages in the channel, then times out
-pub async fn clear_channel<I>(
-    rx: &mut Pin<
-        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
-    >,
-) {
+pub async fn clear_channel<I>(rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>) {
     while let Some(_) = next_with_timeout(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
 pub async fn peek_with_timeout<I>(
-    rx: &mut Pin<
-        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
-    >,
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
 ) -> Option<&I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
@@ -1231,9 +1220,7 @@ pub async fn peek_with_timeout<I>(
 
 /// checks for an item in the queue with a short timeout, returns the item if there is one.
 pub async fn next_with_timeout<I>(
-    rx: &mut Pin<
-        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
-    >,
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
 ) -> Option<I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
@@ -1241,9 +1228,7 @@ pub async fn next_with_timeout<I>(
 }
 
 pub async fn expect_next_with_timeout<I>(
-    rx: &mut Pin<
-        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
-    >,
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
 ) -> I {
     match next_with_timeout(rx).await {
         Some(i) => i,
