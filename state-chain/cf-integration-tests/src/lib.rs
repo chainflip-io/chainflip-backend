@@ -1268,7 +1268,8 @@ mod tests {
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
-					let PercentageRange { top, bottom: _ } = EmergencyRotationPercentageRange::get();
+					let PercentageRange { top, bottom: _ } =
+						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
 					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
 
