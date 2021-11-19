@@ -369,8 +369,8 @@ async fn should_handle_invalid_commitments() {
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
     let bad_node_idxs = [1, 2];
-    ctx.use_invalid_keygen_comm1(bad_node_idxs[0], vec![0, 1, 2, 3]);
-    ctx.use_invalid_keygen_comm1(bad_node_idxs[1], vec![0, 1, 2, 3]);
+    ctx.use_invalid_keygen_comm1(bad_node_idxs[0]);
+    ctx.use_invalid_keygen_comm1(bad_node_idxs[1]);
 
     let keygen_states = ctx.generate().await;
 
@@ -423,4 +423,28 @@ async fn should_handle_not_compatible_keygen() {
             "Should have failed keygen with high pub key by now"
         )
     }
+}
+
+// If the list of signers in the keygen request contains a duplicate id, the request should be ignored
+#[ignore = "Test will fail for now. Fix for this is in PR #830"]
+#[tokio::test]
+async fn should_ignore_keygen_request_with_duplicate_signer() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+    ctx.tag_cache.clear();
+
+    // Get a client that hasn't gotten a keygen request yet
+    let mut c1 = keygen_states.get_client_at_stage(0);
+
+    // Create a duplicate in the list of signers
+    let mut keygen_ids = VALIDATOR_IDS.clone();
+    keygen_ids[1] = keygen_ids[2].clone();
+
+    // Send the keygen request with the modified signers list
+    let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
+    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+
+    // Check that the keygen request was ignored
+    assert!(c1.is_at_keygen_stage(0));
+    assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }

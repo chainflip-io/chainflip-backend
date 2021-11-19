@@ -641,28 +641,24 @@ impl KeygenContext {
             .insert((sender_idx, receiver_idx), fake_comm1);
     }
 
+    /// Make the specified node send a new random commitment to the receiver
     pub fn use_inconsistent_broadcast_for_keygen_comm1(
         &mut self,
         sender_idx: usize,
         receiver_idx: usize,
     ) {
         assert_ne!(sender_idx, receiver_idx);
-
-        // It doesn't matter what kind of commitment we create here,
-        // the main idea is that the commitment doesn't match what we
-        // send to all other parties
         self.custom_data
             .comm1_keygen
             .insert((sender_idx, receiver_idx), gen_invalid_keygen_comm1());
     }
 
-    pub fn use_invalid_keygen_comm1(&mut self, sender_idx: usize, receiver_idxs: Vec<usize>) {
-        // It doesn't matter what kind of commitment we create here,
-        // the main idea is that the commitment will fail validation
+    /// Make the specified node send an invalid commitment to all of the other account_ids
+    pub fn use_invalid_keygen_comm1(&mut self, sender_idx: usize) {
         let fake_comm1 = gen_invalid_keygen_comm1();
 
-        receiver_idxs.iter().for_each(|receiver_idx| {
-            if &sender_idx != receiver_idx {
+        (0..self.account_ids.len()).for_each(|receiver_idx| {
+            if sender_idx != receiver_idx {
                 self.custom_data
                     .comm1_keygen
                     .insert((sender_idx, receiver_idx.clone()), fake_comm1.clone());
