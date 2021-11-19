@@ -6,7 +6,13 @@ use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::multisig::{KeyId, MultisigInstruction, client::{CeremonyAbortReason, MultisigData, ThresholdParameters, keygen::{HashContext, KeygenOptions, SecretShare3}, signing}};
+use crate::multisig::{
+    client::{
+        keygen::{HashContext, KeygenOptions, SecretShare3},
+        signing, CeremonyAbortReason, MultisigData, ThresholdParameters,
+    },
+    KeyId, MultisigInstruction,
+};
 
 use signing::frost::{
     self, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
@@ -1142,11 +1148,16 @@ async fn check_and_get_signing_outcome(
 ) -> Option<SigningOutcome> {
     let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
-        if let Some(outcome) = peek_with_timeout(&mut rxs[idx.clone()]).await.and_then(|outcome| if let MultisigOutcome::Signing(outcome) = outcome {
-            Some(outcome)
-        } else {
-            None
-        }) {
+        if let Some(outcome) = peek_with_timeout(&mut rxs[idx.clone()])
+            .await
+            .and_then(|outcome| {
+                if let MultisigOutcome::Signing(outcome) = outcome {
+                    Some(outcome)
+                } else {
+                    None
+                }
+            })
+        {
             // sort the vec of blamed_parties so that we can compare the SigningOutcome's later
             let sorted_outcome = match &outcome.result {
                 Ok(_) => outcome.clone(),
@@ -1199,12 +1210,20 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
 }
 
 /// Consume all messages in the channel, then times out
-pub async fn clear_channel<I>(rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>) {
+pub async fn clear_channel<I>(
+    rx: &mut Pin<
+        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
+    >,
+) {
     while let Some(_) = next_with_timeout(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
-pub async fn peek_with_timeout<I>(rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>) -> Option<&I> {
+pub async fn peek_with_timeout<I>(
+    rx: &mut Pin<
+        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
+    >,
+) -> Option<&I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
         .ok()?
@@ -1212,7 +1231,9 @@ pub async fn peek_with_timeout<I>(rx: &mut Pin<Box<futures::stream::Peekable<tok
 
 /// checks for an item in the queue with a short timeout, returns the item if there is one.
 pub async fn next_with_timeout<I>(
-    rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>,
+    rx: &mut Pin<
+        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
+    >,
 ) -> Option<I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
@@ -1220,11 +1241,13 @@ pub async fn next_with_timeout<I>(
 }
 
 pub async fn expect_next_with_timeout<I>(
-    rx: &mut Pin<Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>>,
+    rx: &mut Pin<
+        Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<I>>>,
+    >,
 ) -> I {
     match next_with_timeout(rx).await {
         Some(i) => i,
-        None => panic!("Expected {}", std::any::type_name::<I>())
+        None => panic!("Expected {}", std::any::type_name::<I>()),
     }
 }
 
