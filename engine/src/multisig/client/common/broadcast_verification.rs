@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
@@ -52,8 +52,8 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
         if let Some((data, _)) = verification_messages
             .values()
             .map(|m| (m.data[idx].clone(), hash::<T>(&m.data[idx])))
-            .sorted_by_key(|(_, hash)| hash.clone())
-            .group_by(|(_, hash)| hash.clone())
+            .sorted_by_key(|(_, hash)| *hash)
+            .group_by(|(_, hash)| *hash)
             .into_iter()
             .map(|(_, mut group)| {
                 let first = group.next().expect("must have at least one element").0;
@@ -75,58 +75,62 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
 }
 
 #[cfg(test)]
-#[test]
-fn check_correct_broadcast() {
-    let mut verification_messages = HashMap::new();
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
 
-    // There is a consensus on each of the values,
-    // even though some parties disagree on some values
+    #[test]
+    fn check_correct_broadcast() {
+        let mut verification_messages = HashMap::new();
 
-    let all_messages = vec![
-        vec![1, 1, 1, 1],
-        vec![1, 2, 1, 1],
-        vec![2, 1, 2, 1],
-        vec![1, 1, 1, 2],
-    ];
+        // There is a consensus on each of the values,
+        // even though some parties disagree on some values
 
-    for (i, m) in all_messages.into_iter().enumerate() {
-        let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
+        let all_messages = vec![
+            vec![1, 1, 1, 1],
+            vec![1, 2, 1, 1],
+            vec![2, 1, 2, 1],
+            vec![1, 1, 1, 2],
+        ];
 
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
+        for (i, m) in all_messages.into_iter().enumerate() {
+            let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
+
+            verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
+        }
+
+        assert_eq!(
+            verify_broadcasts(&verification_messages).map(|x| x.values().copied().collect()),
+            Ok(vec![1, 1, 1, 1])
+        );
     }
 
-    assert_eq!(
-        verify_broadcasts(&verification_messages).map(|x| x.values().copied().collect()),
-        Ok(vec![1, 1, 1, 1])
-    );
-}
+    #[test]
+    fn check_incorrect_broadcast() {
+        let mut verification_messages = HashMap::new();
 
-#[cfg(test)]
-#[test]
-fn check_incorrect_broadcast() {
-    let mut verification_messages = HashMap::new();
+        // We can't achieve consensus on values from parties
+        // 2 and 4 (indexes in inner vectors), which we assume
+        // is due to them sending messages inconsistently
 
-    // We can't achieve consensus on values from parties
-    // 2 and 4 (indexes in inner vectors), which we assume
-    // is due to them sending messages inconsistently
+        let all_messages = vec![
+            vec![1, 2, 1, 2],
+            vec![1, 2, 1, 1],
+            vec![2, 1, 2, 1],
+            vec![1, 1, 1, 2],
+        ];
 
-    let all_messages = vec![
-        vec![1, 2, 1, 2],
-        vec![1, 2, 1, 1],
-        vec![2, 1, 2, 1],
-        vec![1, 1, 1, 2],
-    ];
+        for (i, m) in all_messages.into_iter().enumerate() {
+            let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
 
-    for (i, m) in all_messages.into_iter().enumerate() {
-        let data: HashMap<_, _> = m.iter().enumerate().map(|(i, d)| (i + 1, *d)).collect();
+            verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
+        }
 
-        verification_messages.insert(i + 1, BroadcastVerificationMessage { data });
+        assert_eq!(
+            verify_broadcasts(&verification_messages).map_err(|reported_idxs| {
+                reported_idxs.iter().copied().collect::<BTreeSet<usize>>()
+            }),
+            Err([2, 4].iter().copied().collect())
+        );
     }
-
-    assert_eq!(
-        verify_broadcasts(&verification_messages).map_err(|reported_idxs| {
-            reported_idxs.iter().copied().collect::<BTreeSet<usize>>()
-        }),
-        Err([2, 4].iter().copied().collect())
-    );
 }

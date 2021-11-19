@@ -248,7 +248,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Get the latest block hash at the time of the call
-    pub async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
+    pub async fn get_latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
         self.state_chain_rpc_client.latest_block_hash().await
     }
 
@@ -391,6 +391,27 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
+    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        value: &'static str,
+    ) -> Result<ValueType> {
+        let value_key = self
+            .get_metadata()
+            .module("Environment")?
+            .storage(value)?
+            .plain()?
+            .key();
+        let value_changes = self
+            .get_from_storage_with_key::<ValueType>(block_hash, value_key)
+            .await?;
+
+        Ok(value_changes
+            .last()
+            .expect("Failed to find value in environment storage")
+            .to_owned())
+    }
+
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
@@ -476,6 +497,7 @@ pub async fn connect_to_state_chain(
 ) -> Result<(
     Arc<StateChainClient<StateChainRpcClient>>,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
+    H256,
 )> {
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
@@ -484,7 +506,10 @@ pub async fn connect_to_state_chain(
     >::new(sp_core::sr25519::Pair::from_seed(
         &(<[u8; 32]>::try_from(
             hex::decode(
-                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?.replace("\"", ""),
+                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?
+                    .replace("\"", "")
+                    // allow inserting the private key with or without the 0x
+                    .replace("0x", ""),
             )
             .map_err(anyhow::Error::new)?,
         )
@@ -510,17 +535,17 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(into_anyhow_error)?;
 
-    let latest_block_hash = Some(try_unwrap_value(
+    let latest_block_hash = try_unwrap_value(
         chain_rpc_client
             .block_hash(None)
             .await
             .map_err(into_anyhow_error)?,
         anyhow::Error::msg("Failed to get latest block hash"),
-    )?);
+    )?;
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_rpc_client
-            .metadata(latest_block_hash)
+            .metadata(Some(latest_block_hash))
             .await
             .map_err(into_anyhow_error)?[..],
     )?)?;
@@ -528,7 +553,7 @@ pub async fn connect_to_state_chain(
     let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
         runtime_version: state_rpc_client
-            .runtime_version(latest_block_hash)
+            .runtime_version(Some(latest_block_hash))
             .await
             .map_err(into_anyhow_error)?,
         genesis_hash: try_unwrap_value(
@@ -561,7 +586,7 @@ pub async fn connect_to_state_chain(
                 > = Decode::decode(
                     &mut &state_chain_rpc_client
                         .state_rpc_client
-                        .storage(account_storage_key.clone(), latest_block_hash)
+                        .storage(account_storage_key.clone(), Some(latest_block_hash))
                         .await
                         .map_err(into_anyhow_error)?
                         .ok_or_else(|| {
@@ -583,6 +608,7 @@ pub async fn connect_to_state_chain(
             .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
             .map_err(into_anyhow_error)?
             .map_err(into_anyhow_error),
+        latest_block_hash,
     ))
 }
 
@@ -590,6 +616,8 @@ pub async fn connect_to_state_chain(
 mod tests {
 
     use std::convert::TryInto;
+
+    use sp_core::H160;
 
     use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
 
@@ -600,7 +628,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
-        let (state_chain_client, mut block_stream) =
+        let (state_chain_client, mut block_stream, _) =
             connect_to_state_chain(&settings.state_chain).await.unwrap();
 
         println!("My account id is: {}", state_chain_client.our_account_id);
@@ -613,7 +641,10 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client.get_events(block_hash).await.unwrap();
+            let my_state_for_this_block = state_chain_client
+                .get_environment_value::<H160>(block_hash, "KeyManagerAddress")
+                .await
+                .unwrap();
 
             println!(
                 "Returning AccountData for this block: {:?}",

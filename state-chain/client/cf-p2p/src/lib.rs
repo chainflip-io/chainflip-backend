@@ -31,6 +31,26 @@ use std::{
 	pin::Pin,
 };
 
+/// The identifier for our protocol, required to distinguish it from other protocols running on the
+/// substrate p2p network.
+pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
+
+/// Required by substrate to register and configure the protocol.
+pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
+		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
+		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+		max_notification_size: 1024 * 1024,
+		set_config: sc_network::config::SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+		},
+		fallback_names: Vec::new(),
+	}
+}
+
 // TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -100,10 +120,6 @@ pub enum P2PEvent {
 	ValidatorDisconnected(AccountIdBs58),
 }
 
-/// The identifier for our protocol, required to distinguish it from other protocols running on the
-/// substrate p2p network.
-pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
-
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	/// Runs concurrently in the background and manages receiving (from the senders in
 	/// "notification_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers
@@ -123,22 +139,6 @@ struct P2PValidatorNetworkNodeState {
 	validator_to_peer: HashMap<AccountId, PeerId>,
 	/// Our own AccountId
 	local_validator_id: Option<AccountId>,
-}
-
-/// Required by substrate to register and configure the protocol.
-pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
-		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
-		max_notification_size: 1024 * 1024,
-		set_config: sc_network::config::SetConfig {
-			in_peers: 0,
-			out_peers: 0,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
-		},
-		fallback_names: Vec::new(),
-	}
 }
 
 /// An abstration of the underlying network of peers.

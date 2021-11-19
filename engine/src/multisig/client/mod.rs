@@ -77,7 +77,7 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MultisigMessage {
-    KeyGenMessage(KeygenDataWrapped),
+    KeygenMessage(KeygenDataWrapped),
     SigningMessage(SigningDataWrapped),
 }
 
@@ -101,7 +101,7 @@ impl KeygenDataWrapped {
 
 impl From<KeygenDataWrapped> for MultisigMessage {
     fn from(wrapped: KeygenDataWrapped) -> Self {
-        MultisigMessage::KeyGenMessage(wrapped)
+        MultisigMessage::KeygenMessage(wrapped)
     }
 }
 
@@ -200,7 +200,7 @@ where
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 inner_event_sender.clone(),
-                &logger,
+                logger,
             ),
             inner_event_sender,
             pending_requests_to_sign: Default::default(),
@@ -237,7 +237,7 @@ where
     /// Process `instruction` issued internally (i.e. from SC or another local module)
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
-            MultisigInstruction::KeyGen(keygen_info) => {
+            MultisigInstruction::Keygen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
                 slog::debug!(
@@ -259,7 +259,7 @@ where
                     sign_info.data, sign_info.signers;
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
-                match self.key_store.get_key(&key_id) {
+                match self.key_store.get_key(key_id) {
                     Some(key) => {
                         self.ceremony_manager.on_request_to_sign(
                             sign_info.data,
@@ -343,7 +343,7 @@ where
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
-            Ok(MultisigMessage::KeyGenMessage(keygen_message)) => {
+            Ok(MultisigMessage::KeygenMessage(keygen_message)) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)

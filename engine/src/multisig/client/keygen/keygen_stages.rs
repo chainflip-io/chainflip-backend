@@ -225,7 +225,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         let bad_parties: Vec<_> = incoming_shares
             .iter()
             .filter_map(|(sender_idx, share)| {
-                if verify_share(share, &self.commitments[&sender_idx], self.common.own_idx) {
+                if verify_share(share, &self.commitments[sender_idx], self.common.own_idx) {
                     None
                 } else {
                     slog::warn!(
@@ -346,7 +346,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                 // Ensure that complaints contain valid, non-duplicate indexes
                 let deduped_idxs = {
                     let mut idxs = blamed_idxs.clone();
-                    idxs.sort();
+                    idxs.sort_unstable();
                     idxs.dedup();
                     idxs
                 };
