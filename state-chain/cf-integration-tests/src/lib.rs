@@ -396,11 +396,23 @@ mod tests {
 				);
 			}
 
+			pub fn move_to_next_epoch(&mut self, epoch: u32) {
+				let current_block_number = System::block_number();
+				self.move_forward_blocks(epoch - (current_block_number % epoch));
+			}
+
+			pub fn move_to_complete_auction(&mut self) {
+				self.move_forward_blocks(AUCTION_BLOCKS);
+			}
+
+			pub fn move_forward_heartbeat_interval(&mut self) {
+				self.move_forward_blocks(HeartbeatBlockInterval::get());
+			}
+
 			pub fn move_forward_blocks(&mut self, n: u32) {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
 				while System::block_number() < current_block_number + n {
-					System::set_block_number(System::block_number() + 1);
 					Timestamp::set_timestamp(
 						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
 					);
@@ -443,6 +455,7 @@ mod tests {
 					for (_, engine) in &self.engines {
 						engine.on_block(System::block_number());
 					}
+					System::set_block_number(System::block_number() + 1);
 				}
 			}
 		}
