@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use pallet_cf_vaults::CeremonyId;
-
 use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
 use crate::multisig::client;
 

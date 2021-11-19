@@ -1,6 +1,5 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::{
