@@ -175,7 +175,7 @@ async fn should_delay_ver4() {
 async fn should_handle_invalid_local_sig() {
     let mut ctx = helpers::KeygenContext::new();
     let _keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
+    ctx.auto_clear_tag_cache = false;
 
     // Party at this idx will send an invalid signature
     let bad_idx = 1;
@@ -195,7 +195,7 @@ async fn should_handle_invalid_local_sig() {
 async fn should_handle_inconsistent_broadcast_com1() {
     let mut ctx = helpers::KeygenContext::new();
     let _keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
+    ctx.auto_clear_tag_cache = false;
 
     // Party at this idx will send and invalid signature
     let bad_idx = 1;
@@ -216,7 +216,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 async fn should_handle_inconsistent_broadcast_sig3() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
-    ctx.tag_cache.clear();
+    ctx.auto_clear_tag_cache = false;
 
     // Party at this idx will send and invalid signature
     // This is the index in the array
@@ -239,7 +239,6 @@ async fn should_report_on_timeout_before_request_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let sign_states = ctx.sign().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
 
@@ -266,7 +265,6 @@ async fn should_report_on_timeout_stage1() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = sign_states.sign_phase1.clients[0].clone();
 
@@ -291,7 +289,6 @@ async fn should_report_on_timeout_stage2() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
 
@@ -316,7 +313,6 @@ async fn should_report_on_timeout_stage3() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = sign_states.sign_phase3.as_ref().unwrap().clients[0].clone();
 
@@ -341,7 +337,6 @@ async fn should_report_on_timeout_stage4() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = sign_states.sign_phase4.as_ref().unwrap().clients[0].clone();
 
@@ -365,7 +360,6 @@ async fn should_report_on_timeout_stage4() {
 async fn should_ignore_duplicate_rts() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let sign_states = ctx.sign().await;
 
@@ -440,7 +434,6 @@ async fn should_ignore_signing_non_participant() {
 async fn should_ignore_rts_with_unknown_signer_id() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
@@ -463,7 +456,6 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_ignore_rts_if_not_participating() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.key_ready_data().clients[3].clone();
     assert!(c1.is_at_signing_stage(0));
@@ -483,7 +475,6 @@ async fn should_ignore_rts_if_not_participating() {
 async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
@@ -512,7 +503,6 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
 async fn pending_rts_should_expire() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));

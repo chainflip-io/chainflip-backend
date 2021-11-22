@@ -195,7 +195,7 @@ pub struct ValidKeygenStates {
     pub ver_comp_stage5: Option<VerCompStage5Data>,
     pub blame_responses6: Option<BlameResponses6Data>,
     pub ver_blame_responses7: Option<VerBlameResponses7Data>,
-    /// Either a valid keygen result or a list of blamed parties
+    /// Either a valid keygen result or an abort reason and list of blamed parties
     pub key_ready: Result<KeyReadyData, (CeremonyAbortReason, Vec<AccountId>)>,
 }
 
@@ -316,6 +316,7 @@ pub struct KeygenContext {
     key_id: Option<KeyId>,
     // Cache of all tags that used in log calls
     pub tag_cache: TagCache,
+    pub auto_clear_tag_cache: bool,
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
@@ -583,6 +584,7 @@ impl KeygenContext {
             custom_data: Default::default(),
             key_id: None,
             tag_cache,
+            auto_clear_tag_cache: true,
         }
     }
 
@@ -771,6 +773,10 @@ impl KeygenContext {
                 check_reported_nodes_consistency(&reported_nodes),
                 "Not all nodes reported the same parties"
             );
+
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
 
             return ValidKeygenStates {
                 stage0,
@@ -969,6 +975,10 @@ impl KeygenContext {
                 assert_channel_empty(rx).await;
             }
 
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
+
             println!("Keygen ceremony took: {:?}", instant.elapsed());
 
             ValidKeygenStates {
@@ -1062,6 +1072,10 @@ impl KeygenContext {
 
         // Check if the ceremony was aborted at this stage
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
+
             // The ceremony was aborted early,
             return ValidSigningStates {
                 sign_phase1,
@@ -1107,6 +1121,10 @@ impl KeygenContext {
             // Make sure the channel is clean for the unit tests
             for idx in SIGNER_IDXS.iter() {
                 assert_channel_empty(&mut p2p_rxs[idx.clone()]).await;
+            }
+
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
             }
 
             ValidSigningStates {

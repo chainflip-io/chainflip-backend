@@ -51,4 +51,6 @@ lazy_static! {
         ceremony_id: KEYGEN_CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
+    static ref KEYGEN_STAGES: usize = 7;
+    static ref SIGNING_STAGES: usize = 5;
 }

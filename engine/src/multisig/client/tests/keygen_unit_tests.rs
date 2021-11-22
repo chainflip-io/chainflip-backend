@@ -31,7 +31,6 @@ async fn happy_path_results_in_valid_key() {
 async fn should_report_on_timeout_before_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.get_client_at_stage(0);
 
@@ -61,7 +60,7 @@ async fn should_report_on_timeout_stage() {
     let good_party_idx = 3;
 
     // Test the timeout for all stages
-    for stage in 1..=7 {
+    for stage in 1..=*KEYGEN_STAGES {
         // Get a client at the correct stage
         let mut c1 = keygen_states.get_client_at_stage(stage);
 
@@ -113,7 +112,7 @@ async fn should_delay_stage_data() {
     let keygen_states = ctx.generate().await;
 
     // Test the delay functionality for all stages except the last stage
-    for stage in 1..=6 {
+    for stage in 1..*KEYGEN_STAGES {
         // Get a client at the correct stage
         let mut c1 = keygen_states.get_client_at_stage(stage);
 
@@ -133,7 +132,7 @@ async fn should_delay_stage_data() {
         c1.receive_keygen_stage_data(stage + 1, &keygen_states, 3);
 
         // Check that the stage correctly advanced or finished
-        if stage + 2 > 7 {
+        if stage + 2 > *KEYGEN_STAGES {
             // The keygen finished
             assert!(c1.is_at_keygen_stage(0));
         } else {
@@ -167,6 +166,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 #[tokio::test]
 async fn should_report_on_invalid_blame_response() {
     let mut ctx = helpers::KeygenContext::new();
+    ctx.auto_clear_tag_cache = false;
 
     let bad_node_idx = 1;
 
@@ -192,6 +192,7 @@ async fn should_report_on_invalid_blame_response() {
 #[tokio::test]
 async fn should_abort_on_blames_at_invalid_indexes() {
     let mut ctx = helpers::KeygenContext::new();
+    ctx.auto_clear_tag_cache = false;
 
     let bad_node_idx = 1;
 
@@ -211,7 +212,6 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 async fn should_ignore_keygen_request_if_not_participating() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     let mut c1 = keygen_states.get_client_at_stage(0);
 
@@ -234,7 +234,6 @@ async fn should_ignore_keygen_request_if_not_participating() {
 async fn should_ignore_duplicate_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     // Get a client that is already in the middle of a keygen
     let mut c1 = keygen_states.get_client_at_stage(2);
@@ -271,7 +270,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     assert!(!VALIDATOR_IDS.contains(&unknown_id));
 
     // Test for all keygen stages
-    for current_stage in 1..=7 {
+    for current_stage in 1..=*KEYGEN_STAGES {
         // Get a client at the correct stage
         let mut c1 = keygen_states.get_client_at_stage(current_stage);
 
@@ -280,7 +279,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         c1.receive_keygen_stage_data(current_stage, &keygen_states, 2);
 
         // Receive messages from all unexpected stages (not the current stage or the next)
-        for stage in 1..=7 {
+        for stage in 1..=*KEYGEN_STAGES {
             if stage != current_stage && stage != current_stage + 1 {
                 c1.receive_keygen_stage_data(stage, &keygen_states, 3);
             }
@@ -309,7 +308,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 
         // Receive the last message and advance the stage
         c1.receive_keygen_stage_data(current_stage, &keygen_states, 3);
-        if current_stage + 1 > 7 {
+        if current_stage + 1 > *KEYGEN_STAGES {
             // The keygen finished
             assert!(c1.is_at_keygen_stage(0));
         } else {
@@ -329,6 +328,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 #[tokio::test]
 async fn should_handle_inconsistent_broadcast_comm1() {
     let mut ctx = helpers::KeygenContext::new();
+    ctx.auto_clear_tag_cache = false;
 
     // Make one of the nodes send different comm1 to most of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
@@ -351,6 +351,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 #[tokio::test]
 async fn should_handle_invalid_commitments() {
     let mut ctx = helpers::KeygenContext::new();
+    ctx.auto_clear_tag_cache = false;
 
     // Make a node send a bad commitment to the others
     // Note: we must send the same bad commitment to all of the nodes,
@@ -381,6 +382,7 @@ async fn should_handle_not_compatible_keygen() {
     loop {
         // Disallow the high pubkey and run the keygen as normal
         let mut ctx = helpers::KeygenContext::new_disallow_high_pubkey();
+        ctx.auto_clear_tag_cache = false;
         let keygen_states = ctx.generate().await;
 
         // Wait for it to fail
@@ -410,7 +412,6 @@ async fn should_handle_not_compatible_keygen() {
 async fn should_ignore_keygen_request_with_duplicate_signer() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
-    ctx.tag_cache.clear();
 
     // Get a client that hasn't gotten a keygen request yet
     let mut c1 = keygen_states.get_client_at_stage(0);
