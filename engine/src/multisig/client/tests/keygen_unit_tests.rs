@@ -1,7 +1,6 @@
 use crate::multisig::client::tests::helpers::get_stage_for_keygen_ceremony;
 use crate::multisig::client::CeremonyAbortReason;
 use crate::multisig::MultisigInstruction;
-use itertools::Itertools;
 
 use super::helpers::{self, check_blamed_paries};
 
@@ -180,23 +179,14 @@ async fn should_report_on_invalid_blame_response() {
     // but later sends a valid blame response (sent by default)
     ctx.use_invalid_secret_share(bad_node_idx + 1, 3);
 
-    let keygen_states = ctx.generate().await;
-
-    // Check that nodes had to go through a blaming stage
-    assert!(keygen_states.blame_responses6.is_some());
-
-    assert!(keygen_states.key_ready.is_err());
-
-    let (reason, reported) = keygen_states.key_ready.unwrap_err();
-
-    assert_eq!(reason, CeremonyAbortReason::Invalid);
-    assert!(ctx.tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
-
-    // Only (bad_node_idx) should be reported
-    assert_eq!(
-        reported.as_slice(),
-        &[AccountId([bad_node_idx as u8 + 1; 32])]
-    );
+    // Run the keygen ceremony and check that the failure details match
+    ctx.run_keygen_and_check_failure(
+        CeremonyAbortReason::Invalid,
+        vec![AccountId([bad_node_idx as u8 + 1; 32])],
+        KEYGEN_CEREMONY_FAILED,
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -207,16 +197,14 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 
     ctx.use_invalid_complaint(bad_node_idx);
 
-    let keygen_states = ctx.generate().await;
-
-    let (reason, reported) = keygen_states.key_ready.unwrap_err();
-
-    assert_eq!(reason, CeremonyAbortReason::Invalid);
-    assert!(ctx.tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
-    assert_eq!(
-        reported.as_slice(),
-        &[AccountId([bad_node_idx as u8 + 1; 32])]
-    );
+    // Run the keygen ceremony and check that the failure details match
+    ctx.run_keygen_and_check_failure(
+        CeremonyAbortReason::Invalid,
+        vec![AccountId([bad_node_idx as u8 + 1; 32])],
+        KEYGEN_CEREMONY_FAILED,
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -348,20 +336,14 @@ async fn should_handle_inconsistent_broadcast_comm1() {
     ctx.use_inconsistent_broadcast_for_keygen_comm1(bad_node_idx, 0);
     ctx.use_inconsistent_broadcast_for_keygen_comm1(bad_node_idx, 2);
 
-    let keygen_states = ctx.generate().await;
-
-    // The keygen should have failed
-    assert!(keygen_states.key_ready.is_err());
-
-    let (reason, reported) = keygen_states.key_ready.unwrap_err();
-
-    // Check that it failed for the correct reason and that the correct node was reported
-    assert_eq!(reason, CeremonyAbortReason::Invalid);
-    assert!(ctx.tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
-    assert_eq!(
-        reported.as_slice(),
-        &[AccountId([bad_node_idx as u8 + 1; 32])]
-    );
+    // Run the keygen ceremony and check that the failure details match
+    ctx.run_keygen_and_check_failure(
+        CeremonyAbortReason::Invalid,
+        vec![AccountId([bad_node_idx as u8 + 1; 32])],
+        KEYGEN_CEREMONY_FAILED,
+    )
+    .await
+    .unwrap();
 }
 
 // If one or more parties send invalid commitments, the ceremony should be aborted.
@@ -377,24 +359,17 @@ async fn should_handle_invalid_commitments() {
     ctx.use_invalid_keygen_comm1(bad_node_idxs[0]);
     ctx.use_invalid_keygen_comm1(bad_node_idxs[1]);
 
-    let keygen_states = ctx.generate().await;
-
-    // The keygen should have failed
-    assert!(keygen_states.key_ready.is_err());
-
-    let (reason, reported) = keygen_states.key_ready.unwrap_err();
-
-    // Check that it failed for the correct reason and that the correct node was reported
-    assert_eq!(reason, CeremonyAbortReason::Invalid);
-    assert!(ctx.tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
-    let reported_nodes_sorted: Vec<AccountId> = reported.iter().sorted().cloned().collect();
-    assert_eq!(
-        reported_nodes_sorted.as_slice(),
-        &[
+    // Run the keygen ceremony and check that the failure details match
+    ctx.run_keygen_and_check_failure(
+        CeremonyAbortReason::Invalid,
+        vec![
             AccountId([bad_node_idxs[0] as u8 + 1; 32]),
-            AccountId([bad_node_idxs[1] as u8 + 1; 32])
-        ]
-    );
+            AccountId([bad_node_idxs[1] as u8 + 1; 32]),
+        ],
+        KEYGEN_CEREMONY_FAILED,
+    )
+    .await
+    .unwrap();
 }
 
 // Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
@@ -431,7 +406,6 @@ async fn should_handle_not_compatible_keygen() {
 }
 
 // If the list of signers in the keygen request contains a duplicate id, the request should be ignored
-#[ignore = "Test will fail for now. Fix for this is in PR #830"]
 #[tokio::test]
 async fn should_ignore_keygen_request_with_duplicate_signer() {
     let mut ctx = helpers::KeygenContext::new();

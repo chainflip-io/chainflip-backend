@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
+use anyhow::Result;
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
@@ -1118,6 +1119,53 @@ impl KeygenContext {
         } else {
             panic!("No Signing Outcome")
         }
+    }
+
+    /// Run the keygen ceremony and check that the failure details match the expected details
+    pub async fn run_keygen_and_check_failure(
+        mut self,
+        expected_reason: CeremonyAbortReason,
+        expected_reported_nodes: Vec<AccountId>,
+        expected_tag: &str,
+    ) -> Result<()> {
+        // Run the keygen ceremony
+        let keygen_states = self.generate().await;
+
+        // Check that it failed
+        if !keygen_states.key_ready.is_err() {
+            return Err(anyhow::Error::msg("Keygen did not fail"));
+        }
+
+        let (reason, reported) = keygen_states.key_ready.unwrap_err();
+
+        // Check that the failure reason matches
+        if reason != expected_reason {
+            return Err(anyhow::Error::msg(format!(
+                "Incorrect keygen failure reason: {:?}, expected: {:?}",
+                reason, expected_reason
+            )));
+        }
+
+        // Check that the reported nodes match
+        let reported_nodes_sorted: Vec<AccountId> = reported.iter().sorted().cloned().collect();
+        let expected_nodes_sorted: Vec<AccountId> =
+            expected_reported_nodes.iter().sorted().cloned().collect();
+        if reported_nodes_sorted != expected_nodes_sorted {
+            return Err(anyhow::Error::msg(format!(
+                "Incorrect reported nodes: {:?}, expected: {:?}",
+                reported_nodes_sorted, expected_nodes_sorted
+            )));
+        }
+
+        // Check that the expected tag was logged
+        if !self.tag_cache.contains_tag(expected_tag) {
+            return Err(anyhow::Error::msg(format!(
+                "Didn't find the expected tag: {}",
+                expected_tag,
+            )));
+        }
+
+        Ok(())
     }
 }
 
