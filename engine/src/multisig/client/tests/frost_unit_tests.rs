@@ -76,6 +76,7 @@ async fn should_delay_comm1_before_rts() {
     assert!(c1.is_at_signing_stage(2));
 }
 
+// TODO: merge the delay tests into 1, see `should_delay_stage_data` in keygen unit tests
 #[tokio::test]
 async fn should_delay_ver2() {
     let mut ctx = helpers::KeygenContext::new();
@@ -132,7 +133,7 @@ async fn should_delay_sig3() {
 
 #[tokio::test]
 async fn should_delay_ver4() {
-    use crate::multisig::client::InnerEvent;
+    use crate::multisig::client::MultisigOutcome;
 
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
@@ -153,7 +154,7 @@ async fn should_delay_ver4() {
     receive_sig3!(c1, 2, &sign_states);
 
     assert!(c1.is_at_signing_stage(4));
-    helpers::clear_channel(&mut ctx.rxs[0]).await;
+    helpers::clear_channel(&mut ctx.outcome_receivers[0]).await;
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to create the signature (stage becomes None)
@@ -161,8 +162,8 @@ async fn should_delay_ver4() {
     assert!(c1.is_at_signing_stage(0));
 
     // Check that we've created a signature!
-    let outcome = match helpers::recv_next_inner_event(&mut ctx.rxs[0]).await {
-        InnerEvent::SigningResult(outcome) => outcome,
+    let outcome = match helpers::expect_next_with_timeout(&mut ctx.outcome_receivers[0]).await {
+        MultisigOutcome::Signing(outcome) => outcome,
         e => panic!("Unexpected event {:?}", e),
     };
     assert!(outcome.result.is_ok());
@@ -199,8 +200,8 @@ async fn should_handle_inconsistent_broadcast_com1() {
     // Party at this idx will send and invalid signature
     let bad_idx = 1;
 
-    ctx.use_inconsistent_broadcast_for_comm1(bad_idx, 0);
-    ctx.use_inconsistent_broadcast_for_comm1(bad_idx, 2);
+    ctx.use_inconsistent_broadcast_for_signing_comm1(bad_idx, 0);
+    ctx.use_inconsistent_broadcast_for_signing_comm1(bad_idx, 2);
 
     let sign_states = ctx.sign().await;
 
@@ -255,10 +256,11 @@ async fn should_report_on_timeout_before_request_to_sign() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &bad_array_idxs).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &bad_array_idxs).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
+// TODO: merge the timeout tests into 1, see `should_report_on_timeout_stage` in keygen unit tests
 #[tokio::test]
 async fn should_report_on_timeout_stage1() {
     let mut ctx = helpers::KeygenContext::new();
@@ -280,7 +282,7 @@ async fn should_report_on_timeout_stage1() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -305,7 +307,7 @@ async fn should_report_on_timeout_stage2() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -330,7 +332,7 @@ async fn should_report_on_timeout_stage3() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -355,7 +357,7 @@ async fn should_report_on_timeout_stage4() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -383,7 +385,7 @@ async fn should_delay_rts_until_key_is_ready() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
+    let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
 
     // send the request to sign
@@ -395,8 +397,9 @@ async fn should_delay_rts_until_key_is_ready() {
     // complete the keygen by sending the ver5 from each other client to client 0
     for sender_idx in 1..=3 {
         // send all but 1 ver2 data to the client
-        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
-        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
+        let s_id =
+            keygen_states.ver_comp_stage5.as_ref().unwrap().clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[sender_idx].clone();
 
         let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
         c1.process_p2p_message(m);
@@ -511,7 +514,7 @@ async fn pending_rts_should_expire() {
     let keygen_states = ctx.generate().await;
     ctx.tag_cache.clear();
 
-    let mut c1 = keygen_states.ver_comp_stage5.clients[0].clone();
+    let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
     assert!(c1.is_at_signing_stage(0));
 
     // Send the rts with the key id currently unknown to the client
@@ -523,8 +526,9 @@ async fn pending_rts_should_expire() {
 
     // Complete the keygen by sending the ver5 from each other client to client 0
     for sender_idx in 1..=3 {
-        let s_id = keygen_states.ver_comp_stage5.clients[sender_idx].get_my_account_id();
-        let ver5 = keygen_states.ver_comp_stage5.ver5[sender_idx].clone();
+        let s_id =
+            keygen_states.ver_comp_stage5.as_ref().unwrap().clients[sender_idx].get_my_account_id();
+        let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[sender_idx].clone();
 
         let m = helpers::keygen_data_to_p2p(ver5.clone(), &s_id, KEYGEN_CEREMONY_ID);
         c1.process_p2p_message(m);
@@ -543,6 +547,8 @@ async fn should_ignore_unexpected_message_for_stage() {
 
     let mut c1 = sign_states.sign_phase1.clients[0].clone();
     assert!(c1.is_at_signing_stage(1));
+
+    // TODO: Clean this up, see `should_ignore_unexpected_message_for_stage` in keygen unit tests
 
     // c1 is at idx 0, so we need messages from idx 1 & 2 to advance the stages
     let c2_idx = 1;

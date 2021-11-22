@@ -6,7 +6,6 @@ use std::{
 
 use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
-use web3::types::H160;
 
 pub use anyhow::Result;
 use url::Url;
@@ -30,8 +29,6 @@ impl StateChain {
 pub struct Eth {
     pub from_block: u64,
     pub node_endpoint: String,
-    pub stake_manager_eth_address: H160,
-    pub key_manager_eth_address: H160,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
@@ -90,10 +87,6 @@ pub struct CommandLineOptions {
     eth_from_block: Option<u64>,
     #[structopt(long = "eth.node_endpoint")]
     eth_node_endpoint: Option<String>,
-    #[structopt(long = "eth.stake_manager_eth_address")]
-    eth_stake_manager_eth_address: Option<H160>,
-    #[structopt(long = "eth.key_manager_eth_address")]
-    eth_key_manager_eth_address: Option<H160>,
     #[structopt(long = "eth.private_key_file", parse(from_os_str))]
     eth_private_key_file: Option<PathBuf>,
 
@@ -118,8 +111,6 @@ impl CommandLineOptions {
             state_chain_opts: StateChainOptions::default(),
             eth_from_block: None,
             eth_node_endpoint: None,
-            eth_stake_manager_eth_address: None,
-            eth_key_manager_eth_address: None,
             eth_private_key_file: None,
             health_check_hostname: None,
             health_check_port: None,
@@ -185,12 +176,6 @@ impl Settings {
         if let Some(opt) = opts.eth_node_endpoint {
             settings.eth.node_endpoint = opt
         };
-        if let Some(opt) = opts.eth_stake_manager_eth_address {
-            settings.eth.stake_manager_eth_address = opt
-        };
-        if let Some(opt) = opts.eth_key_manager_eth_address {
-            settings.eth.key_manager_eth_address = opt
-        };
         if let Some(opt) = opts.eth_private_key_file {
             settings.eth.private_key_file = opt
         };
@@ -254,7 +239,7 @@ impl Settings {
 
 /// Parse the URL and check that it is a valid websocket url
 pub fn parse_websocket_url(url: &str) -> Result<Url> {
-    let issue_list_url = Url::parse(&url)?;
+    let issue_list_url = Url::parse(url)?;
     if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
         return Err(anyhow::Error::msg("Wrong scheme"));
     }
@@ -375,12 +360,6 @@ mod tests {
             },
             eth_from_block: Some(1234),
             eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-            eth_stake_manager_eth_address: Some(
-                web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap(),
-            ),
-            eth_key_manager_eth_address: Some(
-                web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1").unwrap(),
-            ),
             eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
             health_check_hostname: Some("health_check_hostname".to_owned()),
             health_check_port: Some(1337),
@@ -402,14 +381,6 @@ mod tests {
 
         assert_eq!(opts.eth_from_block.unwrap(), settings.eth.from_block);
         assert_eq!(opts.eth_node_endpoint.unwrap(), settings.eth.node_endpoint);
-        assert_eq!(
-            opts.eth_stake_manager_eth_address.unwrap(),
-            settings.eth.stake_manager_eth_address
-        );
-        assert_eq!(
-            opts.eth_key_manager_eth_address.unwrap(),
-            settings.eth.key_manager_eth_address
-        );
         assert_eq!(
             opts.eth_private_key_file.unwrap(),
             settings.eth.private_key_file

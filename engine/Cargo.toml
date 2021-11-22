@@ -60,6 +60,8 @@ tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
+zeroize = "1.4.3"
+
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}

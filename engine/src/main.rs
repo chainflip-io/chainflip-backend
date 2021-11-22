@@ -2,8 +2,8 @@ use chainflip_engine::{
     eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
-    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
+    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -28,7 +28,7 @@ async fn main() {
         .run()
         .await;
 
-    let (state_chain_client, state_chain_block_stream) =
+    let (state_chain_client, state_chain_block_stream, latest_block_hash) =
         state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .unwrap();
@@ -48,7 +48,7 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
+    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
@@ -56,12 +56,12 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
 
     let (multisig_event_sender, multisig_event_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-    let (p2p_message_sender, p2p_message_receiver) =
+    let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
-    let (p2p_message_command_sender, p2p_message_command_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
+    let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
@@ -76,10 +76,19 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    let stake_manager_address = state_chain_client
+        .get_environment_value(latest_block_hash, "StakeManagerAddress")
+        .await
+        .expect("Should get StakeManager address from SC");
     let stake_manager_contract =
-        StakeManager::new(&settings).expect("Should create StakeManager contract");
+        StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
+
+    let key_manager_address = state_chain_client
+        .get_environment_value(latest_block_hash, "KeyManagerAddress")
+        .await
+        .expect("Should get KeyManager address from SC");
     let key_manager_contract =
-        KeyManager::new(&settings).expect("Should create KeyManager contract");
+        KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
     tokio::join!(
         // Start signing components
@@ -88,8 +97,8 @@ async fn main() {
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
-            p2p_message_receiver,
-            p2p_message_command_sender,
+            incoming_p2p_message_receiver,
+            outgoing_p2p_message_sender,
             shutdown_client_rx,
             multisig::KeygenOptions::default(),
             &root_logger,
@@ -106,8 +115,8 @@ async fn main() {
             )
             .await
             .expect("unable to connect p2p rpc client"),
-            p2p_message_sender,
-            p2p_message_command_receiver,
+            incoming_p2p_message_sender,
+            outgoing_p2p_message_receiver,
             p2p_shutdown_rx,
             &root_logger
         ),

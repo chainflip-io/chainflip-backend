@@ -75,7 +75,9 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
-    let mut option_handle_end_block: Option<(JoinHandle<()>, Arc<Mutex<Option<u64>>>)> = None;
+    type TaskEndBlock = Arc<Mutex<Option<u64>>>;
+
+    let mut option_handle_end_block: Option<(JoinHandle<()>, TaskEndBlock)> = None;
 
     let contract_observer = Arc::new(contract_observer);
 
@@ -83,7 +85,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
             // if we already have a thread, we want to tell it when to stop and await on it
             if let Some(window_to) = received_window.to {
-                if let None = *end_at_block.lock().await {
+                if end_at_block.lock().await.is_none() {
                     // we now have the block we want to end at
                     *end_at_block.lock().await = Some(window_to);
                     handle.await.unwrap();

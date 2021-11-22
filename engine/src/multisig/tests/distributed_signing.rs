@@ -15,7 +15,7 @@ use crate::{
             signing::SigningInfo,
             SigningOutcome,
         },
-        KeyDBMock, KeyId, MessageHash, MultisigEvent, MultisigInstruction,
+        KeyDBMock, KeyId, MessageHash, MultisigInstruction, MultisigOutcome,
     },
     p2p::{
         self,
@@ -30,7 +30,7 @@ use lazy_static::lazy_static;
 #[derive(Debug)]
 pub struct FakeNode {
     multisig_instruction_tx: UnboundedSender<MultisigInstruction>,
-    multisig_event_rx: UnboundedReceiver<MultisigEvent>,
+    multisig_event_rx: UnboundedReceiver<MultisigOutcome>,
 }
 
 /// Number of parties participating in keygen
@@ -51,10 +51,10 @@ async fn coordinate_signing(
     // get a keygen request ready with all of the VALIDATOR_IDS
     let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 
-    // publish the MultisigInstruction::KeyGen to all the clients
+    // publish the MultisigInstruction::Keygen to all the clients
     for node in &nodes {
         node.multisig_instruction_tx
-            .send(MultisigInstruction::KeyGen(keygen_request_info.clone()))
+            .send(MultisigInstruction::Keygen(keygen_request_info.clone()))
             .map_err(|_| "Receiver dropped")
             .unwrap();
     }
@@ -68,7 +68,7 @@ async fn coordinate_signing(
         .collect_vec();
 
     // wait on the keygen ceremony so we can use the correct KeyId to sign with
-    let key_id = if let Some(MultisigEvent::KeygenResult(KeygenOutcome {
+    let key_id = if let Some(MultisigOutcome::Keygen(KeygenOutcome {
         id: _,
         result: Ok(pubkey),
     })) = nodes[0].multisig_event_rx.recv().await
@@ -117,13 +117,11 @@ async fn coordinate_signing(
             let multisig_events = &mut nodes[*i].multisig_event_rx;
 
             match multisig_events.recv().await {
-                Some(MultisigEvent::MessageSigningResult(SigningOutcome {
-                    result: Ok(_), ..
-                })) => {
+                Some(MultisigOutcome::Signing(SigningOutcome { result: Ok(_), .. })) => {
                     slog::info!(logger, "Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }
-                Some(MultisigEvent::MessageSigningResult(_)) => {
+                Some(MultisigOutcome::Signing(_)) => {
                     slog::error!(logger, "Messaging signing result failed :(");
                     return Err(());
                 }
@@ -149,7 +147,6 @@ async fn coordinate_signing(
 async fn distributed_signing() {
     let logger = logging::test_utils::new_test_logger();
     // calculate how many parties will be in the signing (must be exact)
-    // TODO: use the threshold_from_share_count function in keygen manager here.
     let threshold = utilities::threshold_from_share_count(N_PARTIES as u32) as usize;
 
     let mut rng = StdRng::seed_from_u64(0);

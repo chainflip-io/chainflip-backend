@@ -39,6 +39,13 @@ pub struct SemVer {
 
 type Version = SemVer;
 
+/// A percentage range
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct PercentageRange {
+	pub top: u8,
+	pub bottom: u8,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -73,9 +80,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
-		/// Trigger an emergency rotation on falling below the percentage of online validators
+		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
-		type EmergencyRotationPercentageTrigger: Get<u8>;
+		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 	}
 
 	#[pallet::event]
@@ -328,8 +335,6 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				T::Auctioneer::process().is_ok()
 			},
 			_ => {
-				// If we were in one, mark as completed
-				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
 			},
@@ -385,6 +390,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
+					// If we were in an emergency, mark as completed
+					Self::emergency_rotation_completed();
 					// Calculate our new epoch index
 					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
 						*epoch = epoch.saturating_add(One::one());

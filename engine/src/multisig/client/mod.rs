@@ -21,7 +21,7 @@ use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
-    p2p::{AccountId, P2PMessage, P2PMessageCommand},
+    p2p::{AccountId, P2PMessage},
 };
 
 use serde::{Deserialize, Serialize};
@@ -29,15 +29,18 @@ use serde::{Deserialize, Serialize};
 use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
-use signing::SigningDataWrapped;
 
+use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
 
-use self::{ceremony_manager::CeremonyManager, signing::PendingSigningInfo};
+use self::{
+    ceremony_manager::CeremonyManager,
+    signing::{frost::SigningData, PendingSigningInfo},
+};
 
 pub use keygen::KeygenOptions;
 
@@ -76,33 +79,27 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum MultisigMessage {
-    KeyGenMessage(KeygenDataWrapped),
-    SigningMessage(SigningDataWrapped),
+pub enum MultisigData {
+    Keygen(KeygenData),
+    Signing(SigningData),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeygenDataWrapped {
-    pub ceremony_id: CeremonyId,
-    pub data: KeygenData,
-}
-
-impl KeygenDataWrapped {
-    pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
-    where
-        M: Into<KeygenData>,
-    {
-        KeygenDataWrapped {
-            ceremony_id,
-            data: m.into(),
-        }
+impl From<SigningData> for MultisigData {
+    fn from(data: SigningData) -> Self {
+        MultisigData::Signing(data)
     }
 }
 
-impl From<KeygenDataWrapped> for MultisigMessage {
-    fn from(wrapped: KeygenDataWrapped) -> Self {
-        MultisigMessage::KeyGenMessage(wrapped)
+impl From<KeygenData> for MultisigData {
+    fn from(data: KeygenData) -> Self {
+        MultisigData::Keygen(data)
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MultisigMessage {
+    ceremony_id: CeremonyId,
+    data: MultisigData,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,19 +148,12 @@ pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
 pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
-#[derive(Debug, PartialEq)]
-pub enum InnerEvent {
-    P2PMessageCommand(P2PMessageCommand),
-    SigningResult(SigningOutcome),
-    KeygenResult(KeygenOutcome),
-}
+pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutcome>;
 
-pub type EventSender = tokio::sync::mpsc::UnboundedSender<InnerEvent>;
-
-impl From<P2PMessageCommand> for InnerEvent {
-    fn from(m: P2PMessageCommand) -> Self {
-        InnerEvent::P2PMessageCommand(m)
-    }
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MultisigOutcome {
+    Signing(SigningOutcome),
+    Keygen(KeygenOutcome),
 }
 
 /// Multisig client is is responsible for persistently storing generated keys and
@@ -176,7 +166,8 @@ where
     my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
-    inner_event_sender: EventSender,
+    multisig_outcome_sender: MultisigOutcomeSender,
+    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -190,7 +181,8 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        inner_event_sender: EventSender,
+        multisig_outcome_sender: MultisigOutcomeSender,
+        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
@@ -199,10 +191,12 @@ where
             key_store: KeyStore::new(db),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
-                inner_event_sender.clone(),
+                multisig_outcome_sender.clone(),
+                outgoing_p2p_message_sender.clone(),
                 &logger,
             ),
-            inner_event_sender,
+            multisig_outcome_sender,
+            outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
             logger: logger.clone(),
@@ -237,7 +231,7 @@ where
     /// Process `instruction` issued internally (i.e. from SC or another local module)
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
-            MultisigInstruction::KeyGen(keygen_info) => {
+            MultisigInstruction::Keygen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
                 slog::debug!(
@@ -259,11 +253,11 @@ where
                     sign_info.data, sign_info.signers;
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
-                match self.key_store.get_key(&key_id) {
-                    Some(key) => {
+                match self.key_store.get_key(key_id) {
+                    Some(keygen_result_info) => {
                         self.ceremony_manager.on_request_to_sign(
                             sign_info.data,
-                            key.clone(),
+                            keygen_result_info.clone(),
                             sign_info.signers,
                             sign_info.ceremony_id,
                         );
@@ -322,8 +316,8 @@ where
         // NOTE: we only notify the SC after we have successfully saved the key
 
         if let Err(err) =
-            self.inner_event_sender
-                .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+            self.multisig_outcome_sender
+                .send(MultisigOutcome::Keygen(KeygenOutcome::success(
                     ceremony_id,
                     key_info.key.get_public_key().get_element(),
                 )))
@@ -339,33 +333,40 @@ where
 
     /// Process message from another validator
     pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
-        let P2PMessage { sender_id, data } = p2p_message;
+        let P2PMessage {
+            account_id: sender_id,
+            data,
+        } = p2p_message;
         let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match multisig_message {
-            Ok(MultisigMessage::KeyGenMessage(keygen_message)) => {
+            Ok(MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Keygen(data),
+            }) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let ceremony_id = keygen_message.ceremony_id;
-
-                if let Some(key) = self
-                    .ceremony_manager
-                    .process_keygen_data(sender_id, keygen_message)
+                if let Some(key) =
+                    self.ceremony_manager
+                        .process_keygen_data(sender_id, ceremony_id, data)
                 {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(signing_message)) => {
+            Ok(MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Signing(data),
+            }) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
                 self.ceremony_manager
-                    .process_signing_data(sender_id, signing_message);
+                    .process_signing_data(sender_id, ceremony_id, data);
             }
             Err(_) => {
                 slog::warn!(

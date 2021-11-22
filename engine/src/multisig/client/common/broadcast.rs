@@ -4,10 +4,12 @@ use std::{
     fmt::Display,
 };
 
-use super::{
-    ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
-    P2PSender,
+use crate::{
+    multisig::client::{MultisigData, MultisigMessage},
+    p2p::P2PMessage,
 };
+
+use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use super::broadcast_verification::verify_broadcasts;
 
@@ -28,7 +30,7 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     type Message: Clone + Into<D> + TryFrom<D>;
 
     /// Init the stage, returning the data to broadcast
-    fn init(&self) -> DataToSend<Self::Message>;
+    fn init(&mut self) -> DataToSend<Self::Message>;
 
     /// For a given message, signal if it needs to be delayed
     /// until the next stage
@@ -42,12 +44,11 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
 #[derive(Clone)]
-pub struct BroadcastStage<D, Result, P, Sender>
+pub struct BroadcastStage<D, Result, P>
 where
     P: BroadcastStageProcessor<D, Result>,
-    Sender: P2PSender<Data = D>,
 {
-    common: CeremonyCommon<D, Sender>,
+    common: CeremonyCommon,
     /// Messages collected so far
     messages: HashMap<usize, P::Message>,
     /// Determines the actual computations before/after
@@ -55,16 +56,12 @@ where
     processor: P,
 }
 
-impl<D, Result, P, Sender> BroadcastStage<D, Result, P, Sender>
+impl<D, Result, P> BroadcastStage<D, Result, P>
 where
     D: Clone,
     P: BroadcastStageProcessor<D, Result>,
-    Sender: P2PSender<Data = D>,
 {
-    pub fn new(processor: P, common: CeremonyCommon<D, Sender>) -> Self
-    where
-        Sender: P2PSender<Data = D>,
-    {
+    pub fn new(processor: P, common: CeremonyCommon) -> Self {
         BroadcastStage {
             common,
             messages: HashMap::new(),
@@ -73,28 +70,27 @@ where
     }
 }
 
-impl<D, Result, P, Sender> Display for BroadcastStage<D, Result, P, Sender>
+impl<D, Result, P> Display for BroadcastStage<D, Result, P>
 where
     P: BroadcastStageProcessor<D, Result>,
-    Sender: P2PSender<Data = D>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage<{}>", &self.processor)
     }
 }
 
-impl<D, Result, P, Sender> CeremonyStage for BroadcastStage<D, Result, P, Sender>
+impl<D, Result, P> CeremonyStage for BroadcastStage<D, Result, P>
 where
-    D: Clone + Display,
+    D: Clone + Display + Into<MultisigData>,
     Result: Clone,
     P: BroadcastStageProcessor<D, Result>,
     <P as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
-    Sender: P2PSender<Data = D>,
 {
     type Message = D;
     type Result = Result;
 
     fn init(&mut self) {
+        // TODO Clean and remove dup code (Alastair Holmes 18.11.2021)
         match self.processor.init() {
             DataToSend::Broadcast(data) => {
                 for destination_idx in &self.common.all_idxs {
@@ -102,9 +98,23 @@ where
                         // Save our own share
                         self.messages.insert(self.common.own_idx, data.clone());
                     } else {
+                        let data: D = data.clone().into();
                         self.common
-                            .p2p_sender
-                            .send(*destination_idx, data.clone().into());
+                            .outgoing_p2p_message_sender
+                            .send(P2PMessage {
+                                account_id: self
+                                    .common
+                                    .validator_mapping
+                                    .get_id(*destination_idx)
+                                    .expect("Unknown account index")
+                                    .clone(),
+                                data: bincode::serialize(&MultisigMessage {
+                                    ceremony_id: self.common.ceremony_id,
+                                    data: data.into(),
+                                })
+                                .unwrap(),
+                            })
+                            .expect("Could not send p2p message.");
                     }
                 }
             }
@@ -113,7 +123,23 @@ where
                     if destination_idx == self.common.own_idx {
                         self.messages.insert(self.common.own_idx, data);
                     } else {
-                        self.common.p2p_sender.send(destination_idx, data.into());
+                        let data: D = data.clone().into();
+                        self.common
+                            .outgoing_p2p_message_sender
+                            .send(P2PMessage {
+                                account_id: self
+                                    .common
+                                    .validator_mapping
+                                    .get_id(destination_idx)
+                                    .expect("Unknown account index")
+                                    .clone(),
+                                data: bincode::serialize(&MultisigMessage {
+                                    ceremony_id: self.common.ceremony_id,
+                                    data: data.into(),
+                                })
+                                .unwrap(),
+                            })
+                            .expect("Could not send p2p message.");
                     }
                 }
             }

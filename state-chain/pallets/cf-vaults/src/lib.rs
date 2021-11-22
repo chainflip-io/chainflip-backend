@@ -28,7 +28,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Id type used for the KeyGen ceremony.
+/// Id type used for the Keygen ceremony.
 pub type CeremonyId = u64;
 
 /// The current status of a vault rotation.
@@ -123,7 +123,7 @@ pub mod pallet {
 		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
 		/// The vault for the request has rotated \[chain_id\]
 		VaultRotationCompleted(ChainId),
-		/// All KeyGen ceremonies have been aborted \[chain_ids\]
+		/// All Keygen ceremonies have been aborted \[chain_ids\]
 		KeygenAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,

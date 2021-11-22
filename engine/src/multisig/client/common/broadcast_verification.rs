@@ -52,8 +52,8 @@ pub fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwn
         if let Some((data, _)) = verification_messages
             .values()
             .map(|m| (m.data[idx].clone(), hash::<T>(&m.data[idx])))
-            .sorted_by_key(|(_, hash)| hash.clone())
-            .group_by(|(_, hash)| hash.clone())
+            .sorted_by_key(|(_, hash)| *hash)
+            .group_by(|(_, hash)| *hash)
             .into_iter()
             .map(|(_, mut group)| {
                 let first = group.next().expect("must have at least one element").0;
