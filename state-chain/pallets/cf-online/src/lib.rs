@@ -19,9 +19,12 @@ use sp_runtime::traits::Zero;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState};
+	use cf_traits::{
+		offline_conditions::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState,
+	};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -47,7 +50,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// We check network liveness on every heartbeat interval and feed back the state of the
-		/// network as `NetworkState`
+		/// network as `NetworkState`.
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				let network_state = Self::check_network_liveness(current_block);
@@ -64,15 +67,38 @@ pub mod pallet {
 	impl<T: Config> IsOnline for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
+		/// We verify if the node is online checking first if they are a sinner and if they are not
+		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			match Nodes::<T>::get(validator_id) {
-				None => false,
-				Some(block_number) => {
-					let current_block_number = frame_system::Pallet::<T>::current_block_number();
-					Self::has_submitted_this_interval(block_number, current_block_number)
-				},
-			}
+			return Nodes::<T>::mutate_exists(validator_id, |maybe_node| {
+				if let Some(node) = maybe_node {
+					let current_block_number =
+						frame_system::Pallet::<T>::current_block_number();
+
+					return if node.ban <= current_block_number {
+						// Clear ban if we had one
+						if node.ban != Zero::zero() {
+							(*node).ban = Zero::zero();
+						}
+						// Determine if we are online
+						Self::has_submitted_this_interval(
+							node.last_heartbeat,
+							current_block_number,
+						)
+					} else {
+						false
+					}
+				} else {
+					false
+				}
+			})
 		}
+	}
+
+	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	pub struct Node<BlockNumber> {
+		pub last_heartbeat: BlockNumber,
+		pub ban: BlockNumber,
 	}
 
 	/// A map linking a node's validator id with the last block number at which they submitted a
@@ -80,7 +106,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, T::BlockNumber>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node<T::BlockNumber>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -99,7 +125,10 @@ pub mod pallet {
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
-			Nodes::<T>::insert(&validator_id, current_block_number);
+
+			Nodes::<T>::mutate(&validator_id, |node| {
+				(*node).last_heartbeat = current_block_number;
+			});
 
 			T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
 			Ok(().into())
@@ -120,9 +149,10 @@ pub mod pallet {
 		) -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
-			for (validator_id, block_number) in Nodes::<T>::iter() {
+			for (validator_id, node) in Nodes::<T>::iter() {
 				if T::EpochInfo::is_validator(&validator_id) {
-					if Self::has_submitted_this_interval(block_number, current_block_number) {
+					if Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
+					{
 						network_state.online.push(validator_id);
 					} else {
 						network_state.offline.push(validator_id);
@@ -132,6 +162,19 @@ pub mod pallet {
 			}
 
 			network_state
+		}
+	}
+
+	impl<T: Config> Banned for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn ban(validator_id: &Self::ValidatorId) {
+			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+			let ban = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
+
+			Nodes::<T>::mutate(validator_id, |node| {
+				(*node).ban = ban;
+			});
 		}
 	}
 }

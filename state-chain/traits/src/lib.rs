@@ -521,6 +521,13 @@ pub mod offline_conditions {
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError>;
 	}
+
+	/// We report on nodes that should be banned
+	pub trait Banned {
+		type ValidatorId;
+		/// A validator to be banned
+		fn ban(validator_id: &Self::ValidatorId);
+	}
 }
 
 /// The heartbeat of the network
