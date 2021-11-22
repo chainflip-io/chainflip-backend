@@ -19,7 +19,7 @@ pub struct CLICommandLineOptions {
 pub enum CFCommand {
     Claim {
         #[structopt(
-            help = "Amount to claim in Rinos (atomic units of FLIP). 1 FLIP = 10^18 Rinos"
+            help = "Amount to claim in Flipperinos (atomic units of FLIP). 1 FLIP = 10^18 Flipperinos"
         )]
         amount: u128,
         #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
