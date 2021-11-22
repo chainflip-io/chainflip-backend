@@ -8,7 +8,7 @@ use frame_benchmarking::{
 };
 
 use crate::pallet::SignatureFor;
-use cf_chains::{eth::SchnorrVerificationComponents};
+use cf_chains::eth::SchnorrVerificationComponents;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, OnInitialize},
