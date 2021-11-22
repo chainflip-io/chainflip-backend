@@ -498,9 +498,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
-		// TODO: set a sensible penalty and centralise. See #569
-		const PENALTY: i32 = 0;
-		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, PENALTY, signer)
+		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, signer)
 			.unwrap_or_else(|_| {
 				// Should never fail unless the validator doesn't exist.
 				log::error!("Unable to report unknown validator {:?}", signer);

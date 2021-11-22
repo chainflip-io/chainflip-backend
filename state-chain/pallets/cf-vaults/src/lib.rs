@@ -246,24 +246,16 @@ pub mod pallet {
 			);
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T>::InvalidCeremonyId);
 
-			// TODO:
-			// - Centralise penalty points.
-			// - Define offline condition(s) for keygen failures.
-			const PENALTY: i32 = 15;
 			for offender in guilty_validators {
-				T::OfflineReporter::report(
-					OfflineCondition::ParticipateSigningFailed,
-					PENALTY,
-					&offender,
-				)
-				.unwrap_or_else(|e| {
-					log::error!(
-						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-						offender,
-						e
-					);
-					0
-				});
+				T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
+					.unwrap_or_else(|e| {
+						log::error!(
+							"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+							offender,
+							e
+						);
+						0
+					});
 			}
 			Pallet::<T>::abort_rotation();
 			Ok(().into())

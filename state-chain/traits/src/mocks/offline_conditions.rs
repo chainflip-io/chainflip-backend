@@ -13,12 +13,20 @@ macro_rules! impl_mock_offline_conditions {
 			}
 		}
 
+		pub struct MockOfflinePenalty;
+		impl $crate::offline_conditions::OfflinePenalty for MockOfflinePenalty {
+			fn penalty(
+				condition: &$crate::offline_conditions::OfflineCondition,
+			) -> $crate::offline_conditions::ReputationPoints {
+				0
+			}
+		}
+
 		impl $crate::offline_conditions::OfflineReporter for MockOfflineReporter {
 			type ValidatorId = $account_id;
-
+			type Penalty = MockOfflinePenalty;
 			fn report(
 				_condition: $crate::offline_conditions::OfflineCondition,
-				_penalty: $crate::offline_conditions::ReputationPoints,
 				validator_id: &Self::ValidatorId,
 			) -> Result<frame_support::dispatch::Weight, $crate::offline_conditions::ReportError> {
 				REPORTED.with(|cell| cell.borrow_mut().push(validator_id.clone()));

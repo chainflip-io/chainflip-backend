@@ -497,8 +497,6 @@ pub mod offline_conditions {
 		ParticipateSigningFailed,
 		/// Not Enough Performance Credits
 		NotEnoughPerformanceCredits,
-		/// Contradicting Self During a Signing Ceremony
-		ContradictingSelfDuringSigningCeremony,
 	}
 
 	/// Error on reporting an offline condition.
@@ -508,14 +506,18 @@ pub mod offline_conditions {
 		UnknownValidator,
 	}
 
+	pub trait OfflinePenalty {
+		fn penalty(condition: &OfflineCondition) -> ReputationPoints;
+	}
+
 	/// For reporting offline conditions.
 	pub trait OfflineReporter {
 		type ValidatorId;
+		type Penalty: OfflinePenalty;
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
 		fn report(
 			condition: OfflineCondition,
-			penalty: ReputationPoints,
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError>;
 	}

@@ -71,6 +71,9 @@ pub mod pallet {
 			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
+		/// Penalise
+		type Penalty: OfflinePenalty;
+
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
@@ -179,14 +182,15 @@ pub mod pallet {
 	/// of reputation points
 	impl<T: Config> OfflineReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
+		type Penalty = T::Penalty;
 
 		fn report(
 			condition: OfflineCondition,
-			penalty: ReputationPoints,
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
 			ensure!(Reputations::<T>::contains_key(validator_id), ReportError::UnknownValidator);
+			let penalty = Self::Penalty::penalty(&condition);
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
