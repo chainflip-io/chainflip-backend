@@ -20,3 +20,5 @@ period set by the *heartbeat interval* which are measured in blocks.
 - Online: A node that is online has successfully submitted a heartbeat in the last heartbeat interval.
 - Offline: A node that is considered offline when they have *not* submitted a heartbeat during
   the last heartbeat interval.
+- Banned: A node that has been banned from participation in signing ceremonies for one heartbeat interval.
+  While the node is banned it will be regarded `Offline` but will be able to submit heartbeats.

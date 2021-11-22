@@ -67,7 +67,7 @@ pub mod pallet {
 	impl<T: Config> IsOnline for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
-		/// We verify if the node is online checking first if they are a sinner and if they are not
+		/// We verify if the node is online checking first if they are banned and if they are not
 		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
 			return Nodes::<T>::mutate_exists(validator_id, |maybe_node| {
@@ -93,12 +93,14 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Node<BlockNumber> {
+		/// The last heartbeat received from this node
 		pub last_heartbeat: BlockNumber,
+		/// The number of blocks this node is banned for
 		pub ban: BlockNumber,
 	}
 
 	/// A map linking a node's validator id with the last block number at which they submitted a
-	/// heartbeat.
+	/// heartbeat and if they are banned until which block they are banned.
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
