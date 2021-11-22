@@ -1,8 +1,7 @@
 mod tests {
 	use crate::mock::*;
-	use cf_traits::{EpochInfo, IsOnline};
+	use cf_traits::{offline_conditions::Banned, EpochInfo, IsOnline};
 	use frame_support::assert_ok;
-	use cf_traits::offline_conditions::Banned;
 
 	// Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
 	fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>::AccountId]) {

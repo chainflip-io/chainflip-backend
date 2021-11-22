@@ -72,8 +72,7 @@ pub mod pallet {
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
 			return Nodes::<T>::mutate_exists(validator_id, |maybe_node| {
 				if let Some(node) = maybe_node {
-					let current_block_number =
-						frame_system::Pallet::<T>::current_block_number();
+					let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
 					return if node.ban <= current_block_number {
 						// Clear ban if we had one
@@ -81,10 +80,7 @@ pub mod pallet {
 							(*node).ban = Zero::zero();
 						}
 						// Determine if we are online
-						Self::has_submitted_this_interval(
-							node.last_heartbeat,
-							current_block_number,
-						)
+						Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
 					} else {
 						false
 					}
