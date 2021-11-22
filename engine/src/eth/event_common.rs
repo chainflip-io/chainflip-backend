@@ -21,7 +21,7 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "InnerEvent: {:?}; block_number: {}; tx_hash: 0x{}",
+            "EventParameters: {:?}; block_number: {}; tx_hash: 0x{}",
             self.event_parameters,
             self.block_number,
             hex::encode(self.tx_hash)

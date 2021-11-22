@@ -44,7 +44,7 @@ async fn should_report_on_timeout_before_keygen_request() {
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.rxs[0], &[bad_party_idx]).await;
+    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
 }
 
@@ -74,7 +74,7 @@ async fn should_report_on_timeout_stage() {
         c1.cleanup();
 
         // Check that the late 2 clients are correctly reported
-        check_blamed_paries(&mut ctx.rxs[0], &bad_party_idxs).await;
+        check_blamed_paries(&mut ctx.outcome_receivers[0], &bad_party_idxs).await;
         assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
     }
 }

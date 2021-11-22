@@ -136,7 +136,10 @@ impl pallet_cf_auction::Config for Runtime {
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
+	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
+		bottom: 67,
+		top: 80,
+	};
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -146,7 +149,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -431,6 +434,7 @@ impl pallet_cf_online::Config for Runtime {
 }
 
 use frame_support::instances::Instance1;
+use pallet_cf_validator::PercentageRange;
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;

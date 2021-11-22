@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
-use futures::StreamExt;
+use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
 
@@ -9,14 +9,13 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use crate::multisig::{
     client::{
         keygen::{HashContext, KeygenOptions, SecretShare3},
-        signing, CeremonyAbortReason, ThresholdParameters,
+        signing, CeremonyAbortReason, MultisigData, ThresholdParameters,
     },
     KeyId, MultisigInstruction,
 };
 
 use signing::frost::{
-    self, LocalSig3, SigningCommitment, SigningData, SigningDataWrapped, VerifyComm2,
-    VerifyLocalSig4,
+    self, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
@@ -27,13 +26,12 @@ use crate::{
         client::{
             common::KeygenResultInfo,
             keygen::{self, KeygenData},
-            InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
-            {KeygenDataWrapped, MultisigMessage},
+            KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome, SigningOutcome,
         },
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
     },
-    p2p::{AccountId, P2PMessage, P2PMessageCommand},
+    p2p::{AccountId, P2PMessage},
 };
 
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
@@ -47,10 +45,10 @@ macro_rules! recv_data_keygen {
         let (_, m) = recv_multisig_message($rx).await;
 
         match m {
-            MultisigMessage::KeygenMessage(KeygenDataWrapped {
-                data: $variant(data),
+            MultisigMessage {
+                data: MultisigData::Keygen($variant(inner)),
                 ..
-            }) => data,
+            } => inner,
             _ => {
                 panic!("Received message is not {}", stringify!($variant));
             }
@@ -117,9 +115,10 @@ macro_rules! distribute_data_keygen {
     }};
 }
 
-pub(super) type InnerEventReceiver = Pin<
-    Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<InnerEvent>>>,
->;
+pub(super) type MultisigOutcomeReceiver =
+    Pin<Box<Peekable<UnboundedReceiverStream<MultisigOutcome>>>>;
+
+pub(super) type P2PMessageReceiver = Pin<Box<Peekable<UnboundedReceiverStream<P2PMessage>>>>;
 
 pub struct Stage0Data {
     pub clients: Vec<MultisigClientNoDB>,
@@ -295,6 +294,7 @@ struct CustomDataToSend {
     complaints: HashMap<usize, keygen::Complaints4>,
 }
 
+// TODO: Merge rxs, p2p_rxs, and account_ids, clients into a single vec (Alastair Holmes 18.11.2021)
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
@@ -304,7 +304,8 @@ pub struct KeygenContext {
     /// malicious nodes). Such tests can put non-standard
     /// data here before the ceremony is run.
     custom_data: CustomDataToSend,
-    pub rxs: Vec<InnerEventReceiver>,
+    pub outcome_receivers: Vec<MultisigOutcomeReceiver>,
+    pub p2p_receivers: Vec<P2PMessageReceiver>,
     /// This clients will match the ones in `key_ready`,
     /// but stored separately so we could substitute
     /// them in more advanced tests
@@ -335,7 +336,7 @@ fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-async fn collect_all_comm1(rxs: &mut Vec<InnerEventReceiver>) -> Vec<SigningCommitment> {
+async fn collect_all_comm1(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<SigningCommitment> {
     let mut comm1_vec = vec![];
 
     for idx in SIGNER_IDXS.iter() {
@@ -357,7 +358,7 @@ async fn collect_all_comm1(rxs: &mut Vec<InnerEventReceiver>) -> Vec<SigningComm
     comm1_vec
 }
 
-async fn collect_all_ver2(rxs: &mut Vec<InnerEventReceiver>) -> Vec<VerifyComm2> {
+async fn collect_all_ver2(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<VerifyComm2> {
     let mut ver2_vec = vec![];
 
     for sender_idx in SIGNER_IDXS.iter() {
@@ -379,7 +380,7 @@ async fn collect_all_ver2(rxs: &mut Vec<InnerEventReceiver>) -> Vec<VerifyComm2>
 }
 
 async fn collect_all_local_sigs3(
-    rxs: &mut Vec<InnerEventReceiver>,
+    rxs: &mut Vec<P2PMessageReceiver>,
     custom_sigs: &mut HashMap<usize, frost::LocalSig3>,
 ) -> Vec<frost::LocalSig3> {
     let mut local_sigs = vec![];
@@ -406,11 +407,11 @@ async fn collect_all_local_sigs3(
     local_sigs
 }
 
-async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<VerifyLocalSig4> {
+async fn collect_all_ver4(p2p_rxs: &mut Vec<P2PMessageReceiver>) -> Vec<VerifyLocalSig4> {
     let mut ver4_vec = vec![];
 
     for sender_idx in SIGNER_IDXS.iter() {
-        let rx = &mut rxs[*sender_idx];
+        let rx = &mut p2p_rxs[*sender_idx];
 
         let ver4 = recv_ver4_signing(rx).await;
 
@@ -554,19 +555,29 @@ impl KeygenContext {
 
     fn inner_new(account_ids: Vec<AccountId>, keygen_options: KeygenOptions) -> Self {
         let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
+        let mut p2p_rxs = vec![];
         let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-                let c =
-                    MultisigClient::new(id.clone(), KeyDBMock::new(), tx, keygen_options, &logger);
+                let (p2p_tx, p2p_rx) = tokio::sync::mpsc::unbounded_channel();
+                let c = MultisigClient::new(
+                    id.clone(),
+                    KeyDBMock::new(),
+                    tx,
+                    p2p_tx,
+                    keygen_options,
+                    &logger,
+                );
+                p2p_rxs.push(Box::pin(UnboundedReceiverStream::new(p2p_rx).peekable())); // See KeygenContext TODO
                 (c, Box::pin(UnboundedReceiverStream::new(rx).peekable()))
             })
             .unzip();
 
         KeygenContext {
             account_ids,
-            rxs,
+            outcome_receivers: rxs,
+            p2p_receivers: p2p_rxs,
             clients,
             custom_data: Default::default(),
             key_id: None,
@@ -687,7 +698,8 @@ impl KeygenContext {
 
         let clients = &mut self.clients;
         let account_ids = &self.account_ids;
-        let rxs = &mut self.rxs;
+        let rxs = &mut self.outcome_receivers;
+        let p2p_rxs = &mut self.p2p_receivers;
 
         let stage0 = Stage0Data {
             clients: clients.clone(),
@@ -704,7 +716,7 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info.clone()));
         }
 
-        let comm1_vec = recv_all_data_keygen!(rxs, KeygenData::Comm1);
+        let comm1_vec = recv_all_data_keygen!(p2p_rxs, KeygenData::Comm1);
 
         println!("Received all comm1");
 
@@ -727,7 +739,7 @@ impl KeygenContext {
             .iter()
             .for_each(|c| assert!(c.is_at_keygen_stage(2)));
 
-        let ver2_vec = recv_all_data_keygen!(rxs, KeygenData::Verify2);
+        let ver2_vec = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
         let ver_com_stage2 = CommVerStage2Data {
             clients: clients.clone(),
@@ -742,9 +754,9 @@ impl KeygenContext {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_inner_event(&mut r).await {
-                    InnerEvent::KeygenResult(KeygenOutcome { result, .. }) => result,
-                    _ => panic!("Unexpected inner event"),
+                let result = match expect_next_with_timeout(&mut r).await {
+                    MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
+                    _ => panic!("Unexpected keygen outcome"),
                 };
                 results.push(result);
             }
@@ -780,7 +792,7 @@ impl KeygenContext {
 
         let mut sec3_vec = vec![];
 
-        for rx in rxs.iter_mut() {
+        for rx in p2p_rxs.iter_mut() {
             let mut sec3_map = HashMap::new();
             for i in 0..self.account_ids.len() - 1 {
                 println!("recv secret3 keygen, i: {}", i);
@@ -824,7 +836,7 @@ impl KeygenContext {
 
         println!("Distributed all sec3");
 
-        let complaints = recv_all_data_keygen!(rxs, KeygenData::Complaints4);
+        let complaints = recv_all_data_keygen!(p2p_rxs, KeygenData::Complaints4);
 
         let comp_stage4 = Some(CompStage4Data {
             clients: clients.clone(),
@@ -842,7 +854,7 @@ impl KeygenContext {
 
         println!("Distributed all complaints");
 
-        let ver_complaints = recv_all_data_keygen!(rxs, KeygenData::VerifyComplaints5);
+        let ver_complaints = recv_all_data_keygen!(p2p_rxs, KeygenData::VerifyComplaints5);
 
         let ver_comp_stage5 = Some(VerCompStage5Data {
             clients: clients.clone(),
@@ -866,7 +878,7 @@ impl KeygenContext {
         if nodes_entered_blaming {
             println!("All clients entered blaming phase!");
 
-            let responses6 = recv_all_data_keygen!(rxs, KeygenData::BlameResponse6);
+            let responses6 = recv_all_data_keygen!(p2p_rxs, KeygenData::BlameResponse6);
             blame_responses6 = Some(BlameResponses6Data {
                 clients: clients.clone(),
                 resp6: responses6.clone(),
@@ -883,7 +895,7 @@ impl KeygenContext {
 
             println!("Distributed all blame responses");
 
-            let ver7 = recv_all_data_keygen!(rxs, KeygenData::VerifyBlameResponses7);
+            let ver7 = recv_all_data_keygen!(p2p_rxs, KeygenData::VerifyBlameResponses7);
             ver_blame_responses7 = Some(VerBlameResponses7Data {
                 clients: clients.clone(),
                 ver7: ver7.clone(),
@@ -899,9 +911,9 @@ impl KeygenContext {
         {
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
-                let result = match recv_next_inner_event(&mut r).await {
-                    InnerEvent::KeygenResult(KeygenOutcome { result, .. }) => result,
-                    _ => panic!("Unexpected inner event"),
+                let result = match expect_next_with_timeout(&mut r).await {
+                    MultisigOutcome::Keygen(KeygenOutcome { result, .. }) => result,
+                    _ => panic!("Unexpected multisig outcome"),
                 };
                 results.push(result);
             }
@@ -976,10 +988,12 @@ impl KeygenContext {
         &mut self,
         idx: usize,
         client: MultisigClientNoDB,
-        rx: InnerEventReceiver,
+        rx: MultisigOutcomeReceiver,
+        p2p_rx: P2PMessageReceiver,
     ) {
         self.clients[idx] = client;
-        self.rxs[idx] = rx;
+        self.outcome_receivers[idx] = rx;
+        self.p2p_receivers[idx] = p2p_rx;
     }
 
     // Use the generated key and the clients participating
@@ -996,9 +1010,10 @@ impl KeygenContext {
         );
 
         let mut clients = self.clients.clone();
-        let rxs = &mut self.rxs;
+        let rxs = &mut self.outcome_receivers;
+        let p2p_rxs = &mut self.p2p_receivers;
 
-        assert_channel_empty(&mut rxs[0]).await;
+        assert_channel_empty(&mut p2p_rxs[0]).await;
 
         // *** Send a request to sign and generate BC1 to be distributed ***
 
@@ -1011,7 +1026,7 @@ impl KeygenContext {
             assert!(c.is_at_signing_stage(1));
         }
 
-        let comm1_vec = collect_all_comm1(rxs).await;
+        let comm1_vec = collect_all_comm1(p2p_rxs).await;
 
         let sign_phase1 = SigningPhase1Data {
             clients: clients.clone(),
@@ -1033,7 +1048,7 @@ impl KeygenContext {
 
         // *** Collect Ver2 messages ***
 
-        let ver2_vec = collect_all_ver2(rxs).await;
+        let ver2_vec = collect_all_ver2(p2p_rxs).await;
 
         let sign_phase2 = SigningPhase2Data {
             clients: clients.clone(),
@@ -1063,7 +1078,7 @@ impl KeygenContext {
 
         // *** Collect local sigs ***
 
-        let local_sigs = collect_all_local_sigs3(rxs, &mut self.custom_data.local_sigs).await;
+        let local_sigs = collect_all_local_sigs3(p2p_rxs, &mut self.custom_data.local_sigs).await;
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -1074,7 +1089,7 @@ impl KeygenContext {
         broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.custom_data.sig3s).await;
 
         // *** Collect Ver4 messages ***
-        let ver4_vec = collect_all_ver4(rxs).await;
+        let ver4_vec = collect_all_ver4(p2p_rxs).await;
 
         let sign_phase4 = SigningPhase4Data {
             clients: clients.clone(),
@@ -1090,7 +1105,7 @@ impl KeygenContext {
 
             // Make sure the channel is clean for the unit tests
             for idx in SIGNER_IDXS.iter() {
-                assert_channel_empty(&mut rxs[idx.clone()]).await;
+                assert_channel_empty(&mut p2p_rxs[idx.clone()]).await;
             }
 
             ValidSigningStates {
@@ -1124,11 +1139,20 @@ fn check_reported_nodes_consistency(
 
 // Checks that all signers got the same outcome and returns it
 async fn check_and_get_signing_outcome(
-    rxs: &mut Vec<InnerEventReceiver>,
+    rxs: &mut Vec<MultisigOutcomeReceiver>,
 ) -> Option<SigningOutcome> {
     let mut outcomes: Vec<SigningOutcome> = Vec::new();
     for idx in SIGNER_IDXS.iter() {
-        if let Some(outcome) = check_sig_outcome(&mut rxs[idx.clone()]).await {
+        if let Some(outcome) = peek_with_timeout(&mut rxs[idx.clone()])
+            .await
+            .and_then(|outcome| {
+                if let MultisigOutcome::Signing(outcome) = outcome {
+                    Some(outcome)
+                } else {
+                    None
+                }
+            })
+        {
             // sort the vec of blamed_parties so that we can compare the SigningOutcome's later
             let sorted_outcome = match &outcome.result {
                 Ok(_) => outcome.clone(),
@@ -1159,7 +1183,7 @@ async fn check_and_get_signing_outcome(
 
         // Consume the outcome message if its all good
         for idx in SIGNER_IDXS.iter() {
-            recv_next_inner_event_opt(&mut rxs[idx.clone()]).await;
+            next_with_timeout(&mut rxs[idx.clone()]).await;
         }
 
         return Some(outcomes[0].clone());
@@ -1170,84 +1194,65 @@ async fn check_and_get_signing_outcome(
 const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// If we timeout, the channel is empty at the time of retrieval
-pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
-    match recv_next_inner_event_opt(rx).await {
+pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin>(rx: &mut S) {
+    match tokio::time::timeout(CHANNEL_TIMEOUT, rx.next()).await.ok() {
         None => {}
         Some(event) => {
+            // Note we also panic if the channel is closed
             panic!("Channel is not empty: {:?}", event);
         }
     }
 }
 
 /// Consume all messages in the channel, then times out
-pub async fn clear_channel(rx: &mut InnerEventReceiver) {
-    while let Some(_) = recv_next_inner_event_opt(rx).await {}
+pub async fn clear_channel<I>(rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>) {
+    while let Some(_) = next_with_timeout(rx).await {}
 }
 
 /// Check the next event produced by the receiver if it is SigningOutcome
-pub async fn check_sig_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
-    let event: &InnerEvent = check_inner_event(rx).await?;
-
-    if let InnerEvent::SigningResult(outcome) = event {
-        Some(outcome)
-    } else {
-        None
-    }
-}
-
-/// Check the next inner event without consuming
-pub async fn check_inner_event(rx: &mut InnerEventReceiver) -> Option<&InnerEvent> {
+pub async fn peek_with_timeout<I>(
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
+) -> Option<&I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
         .ok()?
 }
 
-/// Asserts that InnerEvent is in the queue and returns it
-pub async fn recv_next_inner_event(rx: &mut InnerEventReceiver) -> InnerEvent {
-    let res = recv_next_inner_event_opt(rx).await;
-
-    if let Some(event) = res {
-        return event;
-    }
-    panic!("Expected Inner Event");
-}
-
-/// checks for an InnerEvent in the queue with a short timeout, returns the InnerEvent if there is one.
-pub async fn recv_next_inner_event_opt(rx: &mut InnerEventReceiver) -> Option<InnerEvent> {
+/// checks for an item in the queue with a short timeout, returns the item if there is one.
+pub async fn next_with_timeout<I>(
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
+) -> Option<I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()?
 }
 
-pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessageCommand {
-    let res = tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
-        .await
-        .ok()
-        .expect("timeout")
-        .unwrap();
-
-    match res {
-        InnerEvent::P2PMessageCommand(m) => m,
-        e => {
-            eprintln!("Unexpected InnerEvent: {:?}", e);
-            panic!();
-        }
+pub async fn expect_next_with_timeout<I>(
+    rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
+) -> I {
+    match next_with_timeout(rx).await {
+        Some(i) => i,
+        None => panic!("Expected {}", std::any::type_name::<I>()),
     }
 }
 
-async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (AccountId, MultisigMessage) {
-    let m = recv_p2p_message(rx).await;
+async fn recv_multisig_message(rx: &mut P2PMessageReceiver) -> (AccountId, MultisigMessage) {
+    let m = expect_next_with_timeout(rx).await;
 
     (
-        m.destination,
+        m.account_id,
         bincode::deserialize(&m.data).expect("Invalid Multisig Message"),
     )
 }
 
-async fn recv_comm1_signing(rx: &mut InnerEventReceiver) -> frost::Comm1 {
+async fn recv_comm1_signing(rx: &mut P2PMessageReceiver) -> frost::Comm1 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::CommStage1(comm1) = data {
             return comm1;
         }
@@ -1257,10 +1262,14 @@ async fn recv_comm1_signing(rx: &mut InnerEventReceiver) -> frost::Comm1 {
     panic!();
 }
 
-async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
+async fn recv_local_sig(rx: &mut P2PMessageReceiver) -> frost::LocalSig3 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::LocalSigStage3(sig) = data {
             return sig;
         }
@@ -1270,24 +1279,29 @@ async fn recv_local_sig(rx: &mut InnerEventReceiver) -> frost::LocalSig3 {
     panic!();
 }
 
-async fn recv_secret3_keygen(rx: &mut InnerEventReceiver) -> (AccountId, keygen::SecretShare3) {
-    let (dest, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage::KeygenMessage(wrapped) = m {
-        let KeygenDataWrapped { data: message, .. } = wrapped;
-
-        if let KeygenData::SecretShares3(sec3) = message {
-            return (dest, sec3);
-        }
+async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen::SecretShare3) {
+    if let (
+        dest,
+        MultisigMessage {
+            data: MultisigData::Keygen(KeygenData::SecretShares3(sec3)),
+            ..
+        },
+    ) = recv_multisig_message(rx).await
+    {
+        return (dest, sec3);
+    } else {
+        panic!("Received message is not Secret3 (keygen)");
     }
-
-    panic!("Received message is not Secret3 (keygen)");
 }
 
-async fn recv_ver2_signing(rx: &mut InnerEventReceiver) -> frost::VerifyComm2 {
+async fn recv_ver2_signing(rx: &mut P2PMessageReceiver) -> frost::VerifyComm2 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::BroadcastVerificationStage2(ver2) = data {
             return ver2;
         }
@@ -1297,10 +1311,14 @@ async fn recv_ver2_signing(rx: &mut InnerEventReceiver) -> frost::VerifyComm2 {
     panic!();
 }
 
-async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig4 {
+async fn recv_ver4_signing(rx: &mut P2PMessageReceiver) -> frost::VerifyLocalSig4 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
+    if let MultisigMessage {
+        data: MultisigData::Signing(data),
+        ..
+    } = m
+    {
         if let SigningData::VerifyLocalSigsStage4(ver4) = data {
             return ver4;
         }
@@ -1311,13 +1329,13 @@ async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig
 }
 
 pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> P2PMessage {
-    let wrapped = SigningDataWrapped::new(data, SIGN_CEREMONY_ID);
-
-    let data = MultisigMessage::from(wrapped);
-    let data = bincode::serialize(&data).unwrap();
     P2PMessage {
-        sender_id: sender_id.clone(),
-        data,
+        account_id: sender_id.clone(),
+        data: bincode::serialize(&MultisigMessage {
+            ceremony_id: SIGN_CEREMONY_ID,
+            data: MultisigData::Signing(data.into()),
+        })
+        .unwrap(),
     }
 }
 
@@ -1326,14 +1344,13 @@ pub fn keygen_data_to_p2p(
     sender_id: &AccountId,
     ceremony_id: CeremonyId,
 ) -> P2PMessage {
-    let wrapped = KeygenDataWrapped::new(ceremony_id, data);
-
-    let data = MultisigMessage::from(wrapped);
-    let data = bincode::serialize(&data).unwrap();
-
     P2PMessage {
-        sender_id: sender_id.clone(),
-        data,
+        account_id: sender_id.clone(),
+        data: bincode::serialize(&MultisigMessage {
+            ceremony_id,
+            data: MultisigData::Keygen(data.into()),
+        })
+        .unwrap(),
     }
 }
 
@@ -1467,17 +1484,14 @@ impl MultisigClientNoDB {
     }
 }
 
-pub async fn check_blamed_paries(rx: &mut InnerEventReceiver, expected: &[usize]) {
-    let blamed_parties = match check_inner_event(rx)
+pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[usize]) {
+    let blamed_parties = match peek_with_timeout(rx)
         .await
         .as_ref()
-        .expect("expected inner_event")
+        .expect("expected multisig_outcome")
     {
-        InnerEvent::SigningResult(outcome) => &outcome.result.as_ref().unwrap_err().1,
-        InnerEvent::KeygenResult(outcome) => &outcome.result.as_ref().unwrap_err().1,
-        _ => {
-            panic!("expected ceremony outcome");
-        }
+        MultisigOutcome::Signing(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        MultisigOutcome::Keygen(outcome) => &outcome.result.as_ref().unwrap_err().1,
     };
 
     assert_eq!(

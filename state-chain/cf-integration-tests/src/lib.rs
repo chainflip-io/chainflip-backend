@@ -396,11 +396,23 @@ mod tests {
 				);
 			}
 
+			pub fn move_to_next_epoch(&mut self, epoch: u32) {
+				let current_block_number = System::block_number();
+				self.move_forward_blocks(epoch - (current_block_number % epoch));
+			}
+
+			pub fn move_to_complete_auction(&mut self) {
+				self.move_forward_blocks(AUCTION_BLOCKS);
+			}
+
+			pub fn move_forward_heartbeat_interval(&mut self) {
+				self.move_forward_blocks(HeartbeatBlockInterval::get());
+			}
+
 			pub fn move_forward_blocks(&mut self, n: u32) {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
 				while System::block_number() < current_block_number + n {
-					System::set_block_number(System::block_number() + 1);
 					Timestamp::set_timestamp(
 						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
 					);
@@ -443,6 +455,7 @@ mod tests {
 					for (_, engine) in &self.engines {
 						engine.on_block(System::block_number());
 					}
+					System::set_block_number(System::block_number() + 1);
 				}
 			}
 		}
@@ -752,7 +765,7 @@ mod tests {
 	}
 
 	// The number of blocks we expect an auction should last
-	const AUCTION_BLOCKS: BlockNumber = 2;
+	const AUCTION_BLOCKS: BlockNumber = 3;
 
 	mod epoch {
 		use super::*;
@@ -796,8 +809,9 @@ mod tests {
 					}
 
 					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS - System::block_number());
-
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Move to start of auction
+					testnet.move_forward_blocks(1);
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
@@ -1010,8 +1024,11 @@ mod tests {
 						));
 					}
 
-					// Start an auction and confirm
-					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+					// Move to new epoch
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Start auction
+					testnet.move_forward_blocks(1);
+
 					assert_eq!(
 						Auction::current_auction_index(),
 						1,
@@ -1036,7 +1053,8 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					testnet.move_forward_blocks(1);
+					// Complete auction
+					testnet.move_forward_blocks(AUCTION_BLOCKS - 1);
 
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
 
@@ -1111,8 +1129,9 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
-			Auction, EmergencyRotationPercentageTrigger, Flip, HeartbeatBlockInterval, Online,
+			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
 			Validator,
 		};
 
@@ -1214,7 +1233,6 @@ mod tests {
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
-			const PERCENTAGE_OFFLINE: u32 = 100 - EmergencyRotationPercentageTrigger::get() as u32;
 			// Blocks for our epoch, something larger than one heartbeat
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -1243,15 +1261,17 @@ mod tests {
 					);
 
 					// Start an auction and confirm
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 
-					// Complete auction over AUCTION_BLOCKS
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Complete auction
+					testnet.move_to_complete_auction();
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
-					// Set PERCENTAGE_OFFLINE of the validators inactive
-					let number_offline = (MAX_VALIDATORS * PERCENTAGE_OFFLINE / 100) as usize;
+					let PercentageRange { top, bottom: _ } =
+						EmergencyRotationPercentageRange::get();
+					let percentage_top_offline = 100 - top as u32;
+					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
@@ -1261,7 +1281,7 @@ mod tests {
 					}
 
 					// We need to move forward one heartbeat interval to be regarded as offline
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
@@ -1275,6 +1295,8 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
 
@@ -1287,6 +1309,28 @@ mod tests {
 					// Complete the 'Emergency rotation'
 					testnet.move_forward_blocks(AUCTION_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+
+					// Emergency state reset
+					assert!(
+						!Validator::emergency_rotation_requested(),
+						"we should have had the state of emergency reset"
+					);
+
+					for node in &nodes {
+						testnet.set_active(node, false);
+					}
+
+					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+
+					// We should have a set of nodes offline
+					for node in &nodes {
+						assert_eq!(false, Online::is_online(node), "the node should be offline");
+					}
+
+					assert!(
+						!Validator::emergency_rotation_requested(),
+						"we should *not* have requested an emergency rotation"
+					);
 				});
 		}
 	}

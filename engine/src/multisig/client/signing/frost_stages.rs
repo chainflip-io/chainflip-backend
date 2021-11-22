@@ -11,7 +11,7 @@ use signing::frost::{
     self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
-use signing::{SigningP2PSender, SigningStateCommonInfo};
+use signing::SigningStateCommonInfo;
 
 type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
 
@@ -23,21 +23,19 @@ macro_rules! should_delay {
     };
 }
 
-type SigningCeremonyCommon = CeremonyCommon<SigningData, SigningP2PSender>;
-
 // *********** Await Commitments1 *************
 
 /// Stage 1: Generate an broadcast our secret nonce pair
 /// and collect those from all other parties
 #[derive(Clone)]
 pub struct AwaitCommitments1 {
-    common: SigningCeremonyCommon,
+    common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
     nonces: Box<SecretNoncePair>,
 }
 
 impl AwaitCommitments1 {
-    pub fn new(common: SigningCeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+    pub fn new(common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
         AwaitCommitments1 {
             common,
             signing_common,
@@ -82,7 +80,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 /// Stage 2: Verifying data broadcast during stage 1
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
-    common: SigningCeremonyCommon,
+    common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
     // Our nonce pair generated in the previous stage
     nonces: Box<SecretNoncePair>,
@@ -135,7 +133,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 /// Stage 3: Generating and broadcasting signature response shares
 #[derive(Clone)]
 struct LocalSigStage3 {
-    common: SigningCeremonyCommon,
+    common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
     // Our nonce pair generated in the previous stage
     nonces: Box<SecretNoncePair>,
@@ -192,7 +190,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 /// Stage 4: Verifying the broadcasting of signature shares
 #[derive(Clone)]
 struct VerifyLocalSigsBroadcastStage4 {
-    common: SigningCeremonyCommon,
+    common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
     /// Nonce commitments from all parties (verified to be correctly broadcast)
     commitments: HashMap<usize, Comm1>,
