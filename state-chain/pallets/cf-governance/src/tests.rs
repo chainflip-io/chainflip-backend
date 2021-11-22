@@ -81,19 +81,15 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		next_block();
-		// // Now execute the proposal
-		// assert_ok!(Governance::execute(Origin::signed(BOB), 1));
 		// Expect the Executed event was fired
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
 		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
 		assert!(genesis_members.contains(&PETER));
-		assert!(genesis_members.contains(&MAX));
 		// Check if the storage was cleaned up
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
-		// let g = Proposals::<Test>::contains_key(1);
-		// assert!(!g);
+		assert_eq!(ExecutionPipeline::<Test>::get().len(), 0);
 	});
 }
 
@@ -116,6 +112,7 @@ fn already_executed() {
 			Governance::approve(Origin::signed(ALICE), 1),
 			<Error<Test>>::ProposalNotFound
 		);
+		assert_eq!(ExecutionPipeline::<Test>::decode_len().unwrap(), 1);
 	});
 }
 
@@ -148,6 +145,21 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		// Expect the Expired event to be fired
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Expired(1)),);
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
+fn can_not_vote_twice() {
+	new_test_ext().execute_with(|| {
+		// Propose a governance extrinsic
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			mock_extrinsic()
+		));
+		// Approve the proposal
+		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		// Try to approve it again and expect the extrinsic to fail
+		assert_noop!(Governance::approve(Origin::signed(BOB), 1), <Error<Test>>::AlreadyApproved);
 	});
 }
 
