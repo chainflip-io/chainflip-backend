@@ -15,7 +15,7 @@ pub struct RegisterClaim {
 	pub sig_data: SigData,
 	/// The id (ie. Chainflip account Id) of the claimant.
 	pub node_id: [u8; 32],
-	/// The amount being claimed.
+	/// The amount being claimed in Rinos (atomic FLIP units). 1 FLIP = 10^18 Rinos
 	pub amount: Uint,
 	/// The Ethereum address to which the claim with will be withdrawn.
 	pub address: Address,
