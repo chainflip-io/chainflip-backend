@@ -149,8 +149,8 @@ pub mod pallet {
 		) -> NetworkState<T::ValidatorId> {
 			let mut network_state = NetworkState::default();
 
-			for (validator_id, node) in Nodes::<T>::iter() {
-				if T::EpochInfo::is_validator(&validator_id) {
+			for validator_id in T::EpochInfo::current_validators() {
+				if let Ok(node) = Nodes::<T>::try_get(&validator_id) {
 					if Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
 					{
 						network_state.online.push(validator_id);
