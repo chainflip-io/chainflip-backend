@@ -2,7 +2,7 @@ use crate::{
 	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts, Pallet, PendingClaims,
 	WithdrawalAddresses,
 };
-use cf_chains::eth::{self, ChainflipContractCall};
+use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
@@ -13,8 +13,6 @@ type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
 type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance1>;
 
-const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
@@ -278,16 +276,13 @@ fn signature_is_inserted() {
 		// Claim it.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
-		// Check storage for the signature, should not be there.
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature(), false);
-
 		assert_event_stack!(
 			Event::Signer(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
 				// Insert a signature.
 				assert_ok!(Signer::signature_success(
 					Origin::root(),
 					id,
-					ETH_DUMMY_SIG));
+					Default::default()));
 			}
 		);
 

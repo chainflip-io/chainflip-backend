@@ -7,7 +7,8 @@ const MAX_TIME_FOR_NEXT_STEP_IN_BLOCKS: i32 = 12;
 /// Force a vault rotation and then monitor for expected events
 /// on the State Chain and the ethereum contracts
 /// This test should be run on a fresh network
-#[tokio::test]
+#[tokio::main]
+#[test]
 pub async fn vault_rotation_end_to_end() {
     let root_logger = new_cli_logger();
 
@@ -15,7 +16,7 @@ pub async fn vault_rotation_end_to_end() {
     let settings = Settings::from_file("config/SnowWhite.toml")
         .expect("Failed to read settings `config/SnowWhite.toml`");
 
-    let (state_chain_client, mut state_chain_block_stream) =
+    let (state_chain_client, mut state_chain_block_stream, _) =
         state_chain::client::connect_to_state_chain(&settings.state_chain)
             .await
             .expect("Could not connect to state chain");
@@ -63,8 +64,10 @@ pub async fn vault_rotation_end_to_end() {
 
     // now monitor for the events we expect
     'block_loop: while let Some(result_block_header) = state_chain_block_stream.next().await {
-        let block_header = result_block_header.expect("Should be valid block header");
-        match state_chain_client.get_events(&block_header).await {
+        let block_hash = result_block_header
+            .expect("Should be valid block header")
+            .hash();
+        match state_chain_client.get_events(block_hash).await {
             Ok(events) => {
                 for (_phase, event, _topics) in events {
                     match event {

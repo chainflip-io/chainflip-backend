@@ -20,13 +20,13 @@ mod tests {
 	fn test_should_mint_at() {
 		new_test_ext(vec![], None).execute_with(|| {
 			// It has been `MINT_INTERVAL` blocks since the last mint.
-			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL).0, true);
+			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL), true);
 			// It hasn't yet been `MINT_INTERVAL` blocks since the last mint.
-			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL - 1).0, false);
+			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL - 1), false);
 			// It has been more than `MINT_INTERVAL` blocks since the last mint.
-			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL + 1).0, true);
+			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL + 1), true);
 			// We have literally *just* minted.
-			assert_eq!(Emissions::should_mint_at(0).0, false);
+			assert_eq!(Emissions::should_mint_at(0), false);
 		});
 	}
 

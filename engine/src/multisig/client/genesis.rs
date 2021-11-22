@@ -32,10 +32,10 @@ pub async fn genesis_keys() {
 
     println!(
         "Pubkey is (66 chars, 33 bytes): {:?}",
-        hex::encode(result.key_ready.pubkey.serialize())
+        hex::encode(result.key_ready_data().pubkey.serialize())
     );
-    let account_id_to_idx_mapping = result.key_ready.sec_keys[0].validator_map.clone();
-    let secret_keys = result.key_ready.sec_keys;
+    let account_id_to_idx_mapping = result.key_ready_data().sec_keys[0].validator_map.clone();
+    let secret_keys = &result.key_ready_data().sec_keys;
 
     // pretty print the output :)
     let bashful_secret =

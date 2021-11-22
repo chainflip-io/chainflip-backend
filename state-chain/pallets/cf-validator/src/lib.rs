@@ -30,6 +30,22 @@ use sp_std::prelude::*;
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct SemVer {
+	pub major: u8,
+	pub minor: u8,
+	pub patch: u8,
+}
+
+type Version = SemVer;
+
+/// A percentage range
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct PercentageRange {
+	pub top: u8,
+	pub bottom: u8,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -64,9 +80,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
-		/// Trigger an emergency rotation on falling below the percentage of online validators
+		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
-		type EmergencyRotationPercentageTrigger: Get<u8>;
+		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 	}
 
 	#[pallet::event]
@@ -80,6 +96,8 @@ pub mod pallet {
 		ForceRotationRequested(),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
+		/// An validator has send his current CFE version
+		ValidatorCFEVersionRecorded(T::AccountId, Version),
 	}
 
 	#[pallet::error]
@@ -137,7 +155,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [AuctionInProgress](Error::AuctionInProgress)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
@@ -160,13 +178,36 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Session Pallet](pallet_session::Config)
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
+		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
 		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,
 			proof: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
+			Ok(().into())
+		}
+
+		/// Allow a validator to send their current cfe version.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [ValidatorCFEVersionRecorded](Event::ValidatorCFEVersionRecorded)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		pub fn cfe_version(origin: OriginFor<T>, semver: Version) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ValidatorCFEVersion::<T>::insert(account_id.clone(), semver.clone());
+			Self::deposit_event(Event::ValidatorCFEVersionRecorded(account_id, semver));
 			Ok(().into())
 		}
 	}
@@ -201,6 +242,12 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// Validator CFE version
+	#[pallet::storage]
+	#[pallet::getter(fn validator_cfe_version)]
+	pub type ValidatorCFEVersion<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, Version>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
@@ -224,6 +271,7 @@ pub mod pallet {
 					auction_result.minimum_active_bid,
 				);
 			}
+			CurrentEpoch::<T>::set(0);
 			Pallet::<T>::generate_lookup();
 		}
 	}
@@ -287,8 +335,6 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				T::Auctioneer::process().is_ok()
 			},
 			_ => {
-				// If we were in one, mark as completed
-				Self::emergency_rotation_completed();
 				// Do nothing more
 				false
 			},
@@ -344,6 +390,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
+					// If we were in an emergency, mark as completed
+					Self::emergency_rotation_completed();
 					// Calculate our new epoch index
 					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
 						*epoch = epoch.saturating_add(One::one());

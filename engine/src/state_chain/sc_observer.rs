@@ -1,6 +1,10 @@
+use cf_chains::ChainId;
+use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
+use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
+use sp_core::H256;
 use sp_runtime::AccountId32;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -9,19 +13,23 @@ use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     multisig::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
     p2p,
-    state_chain::client::StateChainRpcApi,
+    state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
 pub async fn start<BlockStream, RpcClient>(
-    state_chain_client: Arc<super::client::StateChainClient<RpcClient>>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
-    mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
+    mut multisig_event_receiver: UnboundedReceiver<MultisigOutcome>,
+
+    // TODO: we should be able to factor this out into a single ETH window sender
+    sm_window_sender: UnboundedSender<BlockHeightWindow>,
+    km_window_sender: UnboundedSender<BlockHeightWindow>,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
@@ -42,13 +50,94 @@ pub async fn start<BlockStream, RpcClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
+    // on the first block we get, we want to check our state
+    let mut should_refetch_account_data = true;
+    // (account_data, is_outgoing)
+    let mut option_account_data_epoch: Option<(ChainflipAccountData, bool)> = None;
+
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
             Ok(block_header) => {
-                // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval
-                    == 0
+                let block_hash = block_header.hash();
+
+                // get the eth vault we were last active for and start the witness processes
+                // for this window
+                async fn init_eth_witnessing<RpcClient: StateChainRpcApi>(
+                    state_chain_client: Arc<StateChainClient<RpcClient>>,
+                    block_hash: H256,
+                    account_data: ChainflipAccountData,
+                    sm_window_sender: &UnboundedSender<BlockHeightWindow>,
+                    km_window_sender: &UnboundedSender<BlockHeightWindow>,
+                ) -> anyhow::Result<()> {
+                    let eth_vault = state_chain_client
+                        .get_vault(
+                            block_hash,
+                            account_data
+                                .last_active_epoch
+                                .expect("we are active our outgoing"),
+                            ChainId::Ethereum,
+                        )
+                        .await?;
+                    sm_window_sender
+                        .send(eth_vault.active_window.clone())
+                        .unwrap();
+                    km_window_sender.send(eth_vault.active_window).unwrap();
+                    Ok(())
+                }
+
+                if should_refetch_account_data || option_account_data_epoch.is_none() {
+                    let account_data = state_chain_client
+                        .get_account_data(block_hash)
+                        .await
+                        .expect("Could not get account data");
+
+                    let current_epoch = state_chain_client
+                        .epoch_at_block(block_hash)
+                        .await
+                        .expect("Could not get current epoch");
+
+                    let is_outgoing =
+                        if let Some(last_active_epoch) = account_data.last_active_epoch {
+                            last_active_epoch + 1 == current_epoch
+                        } else {
+                            false
+                        };
+
+                    if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator)
+                    {
+                        init_eth_witnessing(
+                            state_chain_client.clone(),
+                            block_hash,
+                            account_data,
+                            &sm_window_sender,
+                            &km_window_sender,
+                        )
+                        .await
+                        .expect("should initiate the ethereum witnessing");
+                    }
+
+                    option_account_data_epoch = Some((account_data, is_outgoing));
+                    should_refetch_account_data =
+                        matches!(account_data.state, ChainflipAccountState::Backup)
+                            || matches!(account_data.state, ChainflipAccountState::Passive);
+                };
+
+                let (account_data, is_outgoing) =
+                    option_account_data_epoch.expect("always initialised on first iteration");
+
+                // We want to submit the heartbeat when we are:
+                // - active
+                // - outgoing
+                // - backup
+                // NOT Passive (unless we are outgoing + passive)
+                if (matches!(account_data.state, ChainflipAccountState::Validator)
+                    || matches!(account_data.state, ChainflipAccountState::Backup)
+                    || is_outgoing)
+                    // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
+                    && ((block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0)
                 {
                     slog::info!(
                         logger,
@@ -61,10 +150,32 @@ pub async fn start<BlockStream, RpcClient>(
                 }
 
                 // Process this block's events
-                match state_chain_client.get_events(&block_header).await {
+                match state_chain_client.get_events(block_hash).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::NewEpoch(_),
+                                ) => {
+                                    if is_outgoing
+                                        || matches!(
+                                            account_data.state,
+                                            ChainflipAccountState::Validator
+                                        )
+                                    {
+                                        init_eth_witnessing(
+                                            state_chain_client.clone(),
+                                            block_hash,
+                                            account_data,
+                                            &sm_window_sender,
+                                            &km_window_sender,
+                                        )
+                                        .await
+                                        .expect("should initiate eth witnessing");
+                                    }
+                                    // now that we have entered a new epoch, we want to check our state again
+                                    should_refetch_account_data = true;
+                                }
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
@@ -77,7 +188,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .map(|v| p2p::AccountId(v.clone().into()))
                                         .collect();
 
-                                    let gen_new_key_event = MultisigInstruction::KeyGen(
+                                    let gen_new_key_event = MultisigInstruction::Keygen(
                                         KeygenInfo::new(ceremony_id, signers),
                                     );
 
@@ -91,7 +202,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigEvent::KeygenResult(KeygenOutcome {
+                                        MultisigOutcome::Keygen(KeygenOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -119,7 +230,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigEvent::MessageSigningResult(
+                                        MultisigOutcome::Signing(
                                             message_signing_result,
                                         ) => {
                                             panic!(
@@ -163,7 +274,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigEvent::MessageSigningResult(SigningOutcome {
+                                        MultisigOutcome::Signing(SigningOutcome {
                                             id: _,
                                             result,
                                         }) => match result {
@@ -185,7 +296,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                 )
                                             }
                                         },
-                                        MultisigEvent::KeygenResult(keygen_result) => {
+                                        MultisigOutcome::Keygen(keygen_result) => {
                                             panic!(
                                                 "Expecting MessageSigningResult, got: {:?}",
                                                 keygen_result
@@ -217,6 +328,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission(
                                                         attempt_id,
                                                         raw_signed_tx.0,
+                                                        eth_broadcaster.address,
                                                     ),
                                                 )
                                             ).await;
@@ -322,7 +434,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
-        let (state_chain_client, block_stream) =
+        let (state_chain_client, block_stream, _) =
             crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
                 .await
                 .unwrap();
@@ -330,12 +442,17 @@ mod tests {
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
         let (_multisig_event_sender, multisig_event_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+            tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
         let web3 = eth::new_synced_web3_client(&settings, &logger)
             .await
             .unwrap();
         let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+
+        let (sm_window_sender, _sm_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+        let (km_window_sender, _km_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
         start(
             state_chain_client,
@@ -343,6 +460,8 @@ mod tests {
             eth_broadcaster,
             multisig_instruction_sender,
             multisig_event_receiver,
+            sm_window_sender,
+            km_window_sender,
             &logger,
         )
         .await;

@@ -203,7 +203,10 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
+	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
+		bottom: 67,
+		top: 80,
+	};
 }
 
 impl Config for Test {
@@ -214,7 +217,7 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auctioneer = AuctionPallet;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 }
 
 /// Session pallet requires a set of validators at genesis.

@@ -198,6 +198,27 @@ mod tests {
 				"We shouldn't have a set of validators at genesis"
 			);
 			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
+			assert_eq!(
+				ValidatorPallet::current_epoch(),
+				0,
+				"the first epoch should be the zeroth epoch"
+			);
+		});
+	}
+
+	#[test]
+	fn send_cfe_version() {
+		new_test_ext().execute_with(|| {
+			let version = SemVer { major: 4, minor: 2, patch: 0 };
+			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(ALICE), version.clone()));
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::ValidatorCFEVersionRecorded(
+					ALICE,
+					version.clone()
+				)),
+			);
+			assert_eq!(ValidatorPallet::validator_cfe_version(ALICE), Some(version));
 		});
 	}
 }

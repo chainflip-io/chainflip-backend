@@ -11,14 +11,12 @@ use state_chain_runtime::{
 };
 use std::{convert::TryInto, env};
 
-const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = EnvironmentConfig {
-	stake_manager_address: Some(hex_literal::hex!["9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F"]),
-	key_manager_address: Some(hex_literal::hex!["36fB9E46D6cBC14600D9089FD7Ce95bCf664179f"]),
-	ethereum_chain_id: Some(4),
-};
-
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
+
+const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
+const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -45,21 +43,19 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 /// Get the values for the state-chain environment.
 pub fn get_environment() -> ([u8; 20], [u8; 20], u64) {
 	let stake_manager_address: [u8; 20] = hex::decode(
-		env::var("STAKE_MANAGER_ADDRESS")
-			.unwrap_or(String::from("9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F")),
+		env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap()
 	.try_into()
 	.expect("address cast failed");
 	let key_manager_address: [u8; 20] = hex::decode(
-		env::var("KEY_MANAGER_ADDRESS")
-			.unwrap_or(String::from("36fB9E46D6cBC14600D9089FD7Ce95bCf664179f")),
+		env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap()
 	.try_into()
 	.expect("address cast failed");
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(String::from("4"))
+		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("chain id is no unsigned int");
 	(stake_manager_address, key_manager_address, ethereum_chain_id)
@@ -98,11 +94,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -122,6 +114,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
@@ -142,19 +137,15 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
-				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				// Sudo account - Snow White
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
 					// Bashful
 					bashful_sr25519.into(),
 				],
 				1,
-				EnvironmentConfig {
-					stake_manager_address: Some(stake_manager_address),
-					key_manager_address: Some(key_manager_address),
-					ethereum_chain_id: Some(ethereum_chain_id),
-				},
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -182,6 +173,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
 	let snow_white =
 		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
 		"three-node-test",
@@ -233,7 +225,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				DEFAULT_ENVIRONMENT_CONFIG,
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes
@@ -263,6 +255,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
 	let happy_sr25519 =
 		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let (stake_manager_address, key_manager_address, ethereum_chain_id) = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
 		"test",
@@ -334,7 +327,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				DEFAULT_ENVIRONMENT_CONFIG,
+				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 			)
 		},
 		// Bootnodes

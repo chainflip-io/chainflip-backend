@@ -6,9 +6,12 @@ edition = "2018"
 description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [dependencies]
+# Cryptography
+libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
+
 # Ethereum
 ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
-ethereum = {default-features = false, version = "0.9"}
+ethereum = {default-features = false, version = "0.10"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
@@ -44,7 +47,9 @@ tag = 'monthly-2021-09+1'
 
 
 [dev-dependencies]
-hex-literal = {version = "0.3.1"}
+hex-literal = {version = '0.3'}
+web3 = {git = 'https://github.com/tomusdrw/rust-web3', rev = '861cfcd', features = ['test']}
+rand = {version='0.8.4'}
 
 [features]
 default = ['std']
@@ -55,6 +60,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'hex/std',
+    'libsecp256k1/std',
     'log/std',
     'rlp/std',
     'serde',
@@ -62,3 +68,4 @@ std = [
     'sp-std/std',
     'secp256k1'
 ]
+mocks = []

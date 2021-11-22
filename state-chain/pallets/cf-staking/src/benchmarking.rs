@@ -5,8 +5,8 @@ use super::*;
 
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
-use frame_system::{Origin, RawOrigin};
-use sp_std::{boxed::Box, vec, vec::Vec};
+use frame_system::RawOrigin;
+use sp_std::vec::Vec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 

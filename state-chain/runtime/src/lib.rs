@@ -136,7 +136,10 @@ impl pallet_cf_auction::Config for Runtime {
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const EmergencyRotationPercentageTrigger: u8 = 80;
+	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
+		bottom: 67,
+		top: 80,
+	};
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -146,7 +149,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
-	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -160,6 +163,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -322,6 +326,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
+	type WaivedFees = chainflip::WaivedFees;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -331,6 +336,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
+	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -376,10 +382,15 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
+	type NonceProvider = Vaults;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumThresholdSigner;
+	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
 	type Event = Event;
+	type WeightInfoRewards = pallet_cf_rewards::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -396,10 +407,11 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
+	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const HeartbeatBlockInterval: BlockNumber = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
@@ -411,16 +423,18 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_online::Config for Runtime {
-	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
 use frame_support::instances::Instance1;
+use pallet_cf_validator::PercentageRange;
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
@@ -455,7 +469,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Call, Event<T>, Config},
+		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Rewards: pallet_cf_rewards::{Pallet, Call, Event<T>},
@@ -472,7 +486,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
-		Online: pallet_cf_online::{Pallet, Call, Storage, Event<T>,},
+		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
@@ -688,6 +702,13 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_staking, Staking);
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
+			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
+			add_benchmark!(params, batches, pallet_cf_online, Online);
+			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
+			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
+			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
+			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
+			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

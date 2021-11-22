@@ -18,12 +18,17 @@ use frame_support::{
 pub use pallet::*;
 use sp_std::{convert::TryFrom, prelude::*};
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Id type used for the KeyGen ceremony.
+/// Id type used for the Keygen ceremony.
 pub type CeremonyId = u64;
 
 /// The current status of a vault rotation.
@@ -79,6 +84,9 @@ pub mod pallet {
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -115,7 +123,7 @@ pub mod pallet {
 		KeygenRequest(CeremonyId, ChainId, Vec<T::ValidatorId>),
 		/// The vault for the request has rotated \[chain_id\]
 		VaultRotationCompleted(ChainId),
-		/// All KeyGen ceremonies have been aborted \[chain_ids\]
+		/// All Keygen ceremonies have been aborted \[chain_ids\]
 		KeygenAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
@@ -162,7 +170,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::keygen_success())]
 		pub fn keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -220,7 +228,7 @@ pub mod pallet {
 		///
 		/// - [Offline Reporter Trait](OfflineReporter)
 		/// - [Threshold Signer Trait](ThresholdSigner)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::keygen_failure())]
 		pub fn keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -278,7 +286,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Epoch Info Trait](EpochInfo)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
 			chain_id: ChainId,

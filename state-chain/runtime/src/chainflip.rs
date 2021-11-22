@@ -3,13 +3,13 @@ use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation, Rewards,
 	Runtime, Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageTrigger, HeartbeatBlockInterval};
+use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		ChainflipContractCall,
+		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
 	},
-	Ethereum,
+	Chain, ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
@@ -21,12 +21,12 @@ use codec::{Decode, Encode};
 use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
-use sp_core::{H160, H256};
+use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -194,9 +194,13 @@ pub struct ChainflipHeartbeat;
 
 impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
+	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
-		<Reputation as Heartbeat>::heartbeat_submitted(validator_id)
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		block_number: Self::BlockNumber,
+	) -> Weight {
+		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number)
 	}
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
@@ -215,9 +219,11 @@ impl Heartbeat for ChainflipHeartbeat {
 
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
-		// Check the state of the network and if we are below the emergency rotation trigger
+		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
-		if network_state.percentage_online() <= EmergencyRotationPercentageTrigger::get() as u32 {
+		let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
+		let percent_online = network_state.percentage_online() as u8;
+		if percent_online >= bottom && percent_online <= top {
 			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
 		}
 
@@ -267,6 +273,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 pub enum EthereumSigningContext {
 	PostClaimSignature(RegisterClaim),
 	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
+	UpdateFlipSupply(UpdateFlipSupply),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
@@ -281,9 +288,15 @@ impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
 	}
 }
 
+impl From<UpdateFlipSupply> for EthereumSigningContext {
+	fn from(call: UpdateFlipSupply) -> Self {
+		EthereumSigningContext::UpdateFlipSupply(call)
+	}
+}
+
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
-	type Payload = H256;
+	type Payload = eth::H256;
 	type Signature = eth::SchnorrVerificationComponents;
 	type Callback = Call;
 
@@ -291,6 +304,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
 			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
+			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
 		}
 	}
 
@@ -309,6 +323,14 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 					Environment::key_manager_address().into(),
 				)),
 			),
+			Self::UpdateFlipSupply(call) =>
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					contract_call_to_unsigned_tx(
+						call.clone(),
+						&signature,
+						Environment::stake_manager_address().into(),
+					),
+				)),
 		}
 	}
 }
@@ -316,7 +338,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	call: C,
 	signature: &eth::SchnorrVerificationComponents,
-	contract_address: H160,
+	contract_address: Address,
 ) -> eth::UnsignedTransaction {
 	eth::UnsignedTransaction {
 		chain_id: Environment::ethereum_chain_id(),
@@ -328,18 +350,19 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 
 pub struct EthereumBroadcastConfig;
 
-impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
+impl BroadcastConfig for EthereumBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
 	type TransactionHash = [u8; 32];
+	type SignerId = eth::Address;
 
 	fn verify_transaction(
-		signer: &<Runtime as Chainflip>::ValidatorId,
-		_unsigned_tx: &Self::UnsignedTransaction,
+		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		address: &Self::SignerId,
 	) -> Option<()> {
-		eth::verify_raw(signed_tx, signer)
+		eth::verify_transaction(unsigned_tx, signed_tx, address)
 			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
 	}
@@ -351,9 +374,36 @@ pub struct EthereumKeyProvider;
 impl KeyProvider<Ethereum> for EthereumKeyProvider {
 	type KeyId = Vec<u8>;
 
-	fn current_key() -> Self::KeyId {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as cf_chains::Chain>::CHAIN_ID)
+	fn current_key_id() -> Self::KeyId {
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
 			.expect("Ethereum is always supported.")
 			.public_key
+	}
+
+	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
+		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
+			.expect("Ethereum is always supported.")
+			.public_key
+			.try_into()
+			.expect("TODO: make it so this call can't fail.")
+	}
+}
+
+/// Checks if the caller can execute free transactions
+pub struct WaivedFees;
+
+impl cf_traits::WaivedFees for WaivedFees {
+	type AccountId = AccountId;
+	type Call = Call;
+
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
+		let is_gov_call = match call {
+			Call::Governance(_) => true,
+			_ => false,
+		};
+		if is_gov_call {
+			return super::Governance::members().contains(caller)
+		}
+		return false
 	}
 }

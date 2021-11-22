@@ -9,4 +9,5 @@ pub mod signer_nomination;
 pub mod stake_transfer;
 pub mod time_source;
 pub mod vault_rotation;
+pub mod waived_fees_mock;
 pub mod witnesser;

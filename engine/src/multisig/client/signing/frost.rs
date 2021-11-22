@@ -3,27 +3,33 @@
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
 
-use std::{collections::HashMap, convert::TryInto, fmt::Display};
+use std::{
+    collections::{BTreeSet, HashMap},
+    convert::TryInto,
+    fmt::Display,
+};
 
-use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;
 
 use crate::multisig::{
-    client::{common::BroadcastVerificationMessage, MultisigMessage},
+    client::common::BroadcastVerificationMessage,
     crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar},
     SchnorrSignature,
 };
 
 use sha2::{Digest, Sha256};
 
+use zeroize::Zeroize;
+
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Section 5.3 (page 13)
 // TODO: Not sure if it is a good idea to to make
 // the secret values clonable
-#[derive(Clone)]
+#[derive(Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct SecretNoncePair {
     pub d: Scalar,
     pub d_pub: Point,
@@ -32,15 +38,16 @@ pub struct SecretNoncePair {
 }
 
 impl SecretNoncePair {
-    /// Generate a random pair of nonces
-    pub fn sample_random() -> Self {
+    /// Generate a random pair of nonces (in a Box,
+    /// to avoid them being copied on move)
+    pub fn sample_random() -> Box<Self> {
         let d = Scalar::new_random();
         let e = Scalar::new_random();
 
         let d_pub = Point::generator() * d;
         let e_pub = Point::generator() * e;
 
-        SecretNoncePair { d, d_pub, e, e_pub }
+        Box::new(SecretNoncePair { d, d_pub, e, e_pub })
     }
 }
 
@@ -98,32 +105,6 @@ impl Display for SigningData {
     }
 }
 
-/// Helps identify data as used for
-/// a specific signing ceremony
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SigningDataWrapped {
-    pub data: SigningData,
-    pub ceremony_id: CeremonyId,
-}
-
-impl SigningDataWrapped {
-    pub fn new<S>(data: S, ceremony_id: CeremonyId) -> Self
-    where
-        S: Into<SigningData>,
-    {
-        SigningDataWrapped {
-            data: data.into(),
-            ceremony_id,
-        }
-    }
-}
-
-impl From<SigningDataWrapped> for MultisigMessage {
-    fn from(wrapped: SigningDataWrapped) -> Self {
-        MultisigMessage::SigningMessage(wrapped)
-    }
-}
-
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment(
@@ -144,7 +125,7 @@ fn gen_group_commitment(
 /// according to Section 4 (page 9)
 pub fn get_lagrange_coeff(
     signer_index: usize,
-    all_signer_indices: &[usize],
+    all_signer_indices: &BTreeSet<usize>,
 ) -> Result<Scalar, &'static str> {
     let mut num: Scalar = ECScalar::from(&BigInt::from(1));
     let mut den: Scalar = ECScalar::from(&BigInt::from(1));
@@ -173,7 +154,7 @@ fn gen_rho_i(
     index: usize,
     msg: &[u8],
     signing_commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
@@ -204,7 +185,7 @@ type SigningResponse = LocalSig3;
 fn generate_bindings(
     msg: &[u8],
     commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> HashMap<usize, Scalar> {
     commitments
         .iter()
@@ -222,12 +203,12 @@ pub fn generate_local_sig(
     nonces: &SecretNoncePair,
     commitments: &HashMap<usize, SigningCommitment>,
     own_idx: usize,
-    all_idxs: &[usize],
+    all_idxs: &BTreeSet<usize>,
 ) -> SigningResponse {
-    let bindings = generate_bindings(&msg, commitments, all_idxs);
+    let bindings = generate_bindings(msg, commitments, all_idxs);
 
     // This is `R` in a Schnorr signature
-    let group_commitment = gen_group_commitment(&commitments, &bindings);
+    let group_commitment = gen_group_commitment(commitments, &bindings);
 
     let SecretNoncePair { d, e, .. } = nonces;
 
@@ -280,13 +261,13 @@ fn is_party_response_valid(
 /// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
-    signer_idxs: &[usize],
+    signer_idxs: &BTreeSet<usize>,
     agg_pubkey: Point,
     pubkeys: &HashMap<usize, Point>,
     commitments: &HashMap<usize, SigningCommitment>,
     responses: &HashMap<usize, SigningResponse>,
 ) -> Result<SchnorrSignature, Vec<usize>> {
-    let bindings = generate_bindings(&msg, commitments, signer_idxs);
+    let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -299,7 +280,7 @@ pub fn aggregate_signature(
     let mut invalid_idxs = vec![];
 
     for signer_idx in signer_idxs {
-        let rho_i = bindings[&signer_idx];
+        let rho_i = bindings[signer_idx];
         let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
         let commitment = &commitments[signer_idx];
@@ -404,23 +385,14 @@ fn build_challenge(
     nonce_commitment: secp256k1::PublicKey,
     message: &[u8],
 ) -> Scalar {
-    use sp_core::Hasher;
-    use sp_runtime::traits::Keccak256;
+    use crate::eth::utils::pubkey_to_eth_addr;
+    let msg_hash: [u8; 32] = message
+        .try_into()
+        .expect("Should never fail, the `message` argument should always be a valid hash");
 
-    let eth_addr = crate::eth::utils::pubkey_to_eth_addr(nonce_commitment);
+    let e =
+        AggKey::from(&pubkey).message_challenge(&msg_hash, &pubkey_to_eth_addr(nonce_commitment));
 
-    let agg_key = AggKey::from(&pubkey);
-
-    // Assemble the challenge in correct order according to this contract:
-    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-    let e_bytes: Vec<_> = [
-        &agg_key.pub_key_x[..],
-        &[agg_key.pub_key_y_parity],
-        message,
-        &eth_addr[..],
-    ]
-    .concat();
-
-    let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
+    let e_bn = BigInt::from_bytes(&e[..]);
     ECScalar::from(&e_bn)
 }
