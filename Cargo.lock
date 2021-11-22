@@ -954,6 +954,7 @@ dependencies = [
  "state-chain-runtime",
  "structopt",
  "tokio 1.13.0",
+ "utilities",
 ]
 
 [[package]]
@@ -8571,6 +8572,7 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
+ "utilities",
 ]
 
 [[package]]
@@ -9551,6 +9553,9 @@ dependencies = [
 [[package]]
 name = "utilities"
 version = "0.1.0"
+dependencies = [
+ "hex",
+]
 
 [[package]]
 name = "value-bag"

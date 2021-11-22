@@ -1,14 +1,14 @@
 [package]
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
+build = 'build.rs'
 description = 'The Chainflip State Chain node, based on substrate-node-template'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-publish = false
 name = 'state-chain-node'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
-build = 'build.rs'
 
 [[bin]]
 name = 'state-chain-node'
@@ -26,12 +26,13 @@ path = '../runtime'
 
 [dependencies]
 # Chainflip-specific dependencies  
-cf-p2p = { path = '../client/cf-p2p' }
-futures = { version = '0.3.4' }
-hex-literal = '0.3.1'
+cf-p2p = {path = '../client/cf-p2p'}
+futures = {version = '0.3.4'}
 hex = '0.4'
+hex-literal = '0.3.1'
 jsonrpc-core-client = '18.0.0'
 jsonrpc-derive = '18.0.0'
+utilities = {path = '../../utilities'}
 
 # Substrate dependencies
 jsonrpc-core = '18.0.0'
@@ -150,11 +151,10 @@ default = []
 runtime-benchmarks = ['state-chain-runtime/runtime-benchmarks']
 
 [package.metadata.deb]
-name = "state-chain-node"
-maintainer = "Chainflip UG <dev@chainflip.io>"
+depends = "$auto"
 extended-description = """\
 Chainflip Validator Node Package"""
-depends = "$auto"
-section = "rust"
+maintainer = "Chainflip UG <dev@chainflip.io>"
+name = "state-chain-node"
 priority = "required"
-
+section = "rust"

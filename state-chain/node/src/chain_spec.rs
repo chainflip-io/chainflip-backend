@@ -10,6 +10,7 @@ use state_chain_runtime::{
 	ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
+use utilities::clean_eth_address;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -48,21 +49,16 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 }
-
-/// Get the values for the state-chain environment.
+/// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
-	let stake_manager_address: [u8; 20] = hex::decode(
-		env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
+	let stake_manager_address: [u8; 20] = clean_eth_address(
+		&env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
-	.unwrap()
-	.try_into()
-	.expect("address cast failed");
-	let key_manager_address: [u8; 20] = hex::decode(
-		env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
+	.unwrap();
+	let key_manager_address: [u8; 20] = clean_eth_address(
+		&env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
-	.unwrap()
-	.try_into()
-	.expect("address cast failed");
+	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
 		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
