@@ -71,31 +71,49 @@ pub mod pallet {
 		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
 			return Nodes::<T>::mutate_exists(validator_id, |maybe_node| {
-				if let Some(node) = maybe_node {
-					let current_block_number = frame_system::Pallet::<T>::current_block_number();
-					let ban_expired = node.ban <= current_block_number;
-					if ban_expired {
-						if node.ban != Zero::zero() {
-							(*node).ban = Zero::zero();
+				match maybe_node {
+					None => false,
+					Some(node) => {
+						let current_block_number =
+							frame_system::Pallet::<T>::current_block_number();
+						let ban_has_expired = node.ban <= current_block_number;
+						if ban_has_expired {
+							// Reset ban if node banned
+							if node.ban != Zero::zero() {
+								(*node).ban = Zero::zero();
+							}
+							// Determine if we are online
+							node.has_submitted_this_interval(current_block_number)
+						} else {
+							// We are offline regardless of heartbeats during our ban
+							false
 						}
-						// Determine if we are online
-						Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
-					} else {
-						false
-					}
-				} else {
-					false
+					},
 				}
 			})
 		}
 	}
 
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct Node<BlockNumber> {
+	/// A node's heartbeat
+	// #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	pub struct Node<T: Config> {
 		/// The last heartbeat received from this node
-		pub last_heartbeat: BlockNumber,
+		pub last_heartbeat: T::BlockNumber,
 		/// The block number this node is banned until
-		pub ban: BlockNumber,
+		pub ban: T::BlockNumber,
+	}
+
+	impl<T: Config> Default for Node<T> {
+		fn default() -> Self {
+			Node { last_heartbeat: Zero::zero(), ban: Zero::zero() }
+		}
+	}
+
+	impl<T: Config> Node<T> {
+		pub fn has_submitted_this_interval(&self, current_block_number: T::BlockNumber) -> bool {
+			(current_block_number - self.last_heartbeat) < T::HeartbeatBlockInterval::get()
+		}
 	}
 
 	/// A map linking a node's validator id with the last block number at which they submitted a
@@ -103,7 +121,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node<T::BlockNumber>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -134,33 +152,21 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn has_submitted_this_interval(
-			reported_block_number: BlockNumberFor<T>,
-			current_block_number: BlockNumberFor<T>,
-		) -> bool {
-			(current_block_number - reported_block_number) < T::HeartbeatBlockInterval::get()
-		}
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
 		/// of the network for those nodes that are validators.  Those validators that are banned
 		/// are included in this count.
 		fn check_network_liveness(
 			current_block_number: BlockNumberFor<T>,
 		) -> NetworkState<T::ValidatorId> {
-			let mut network_state = NetworkState::default();
-
-			for validator_id in T::EpochInfo::current_validators() {
-				if let Ok(node) = Nodes::<T>::try_get(&validator_id) {
-					if Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
-					{
-						network_state.online.push(validator_id);
-					} else {
-						network_state.offline.push(validator_id);
+			let (online, offline) =
+				T::EpochInfo::current_validators().into_iter().partition(|validator_id| {
+					match Nodes::<T>::try_get(validator_id) {
+						Ok(node) => node.has_submitted_this_interval(current_block_number),
+						Err(_) => false,
 					}
-					network_state.number_of_nodes += 1;
-				}
-			}
+				});
 
-			network_state
+			NetworkState { online, offline }
 		}
 	}
 
