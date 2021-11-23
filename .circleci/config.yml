@@ -218,7 +218,7 @@ workflows:
       - create-testnet:
           <<: *only_main_branches
           name: Create new testnet
-          extra_args: ""
+          extra_args: "--reset"
           tag: c20acd5e94cb07f338a2dc55e47ae9e6af107bc4
           #          requires:
           #            - docker-build-chainflip-engine
