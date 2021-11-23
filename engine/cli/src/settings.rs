@@ -17,7 +17,12 @@ pub struct CLICommandLineOptions {
 
 #[derive(StructOpt, Clone)]
 pub enum CFCommand {
-    Claim { amount: u128, eth_address: String },
+    Claim {
+        #[structopt(help = "Amount to claim in FLIP")]
+        amount: f64,
+        #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
+        eth_address: String,
+    },
 }
 
 #[derive(Deserialize, Debug, Default)]

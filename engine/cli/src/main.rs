@@ -61,22 +61,25 @@ fn clean_eth_address(dirty_eth_address: String) -> Result<[u8; 20]> {
 }
 
 async fn send_claim(
-    amount: u128,
+    amount: f64,
     eth_address: [u8; 20],
     settings: &CLISettings,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (state_chain_client, block_stream, _) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` to ETH address `0x{}`",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`",
         amount,
+        atomic_amount,
         hex::encode(eth_address)
     );
 
     if !confirm_submit() {
         return Ok(());
     }
+
+    let (state_chain_client, block_stream, _) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
@@ -86,7 +89,10 @@ async fn send_claim(
         .expect("Failed to submit redeem extrinsic");
 
     let tx_hash = state_chain_client
-        .submit_extrinsic(logger, pallet_cf_staking::Call::claim(amount, eth_address))
+        .submit_extrinsic(
+            logger,
+            pallet_cf_staking::Call::claim(atomic_amount, eth_address),
+        )
         .await
         .expect("Failed to submit claim extrinsic");
 
