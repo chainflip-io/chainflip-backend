@@ -173,11 +173,11 @@
     "tx_hash": "Vec<u8>"
   },
   "VaultRotationStatus": {
-    "_enum": [
-      "AwaitingKeygen",
-      "AwaitingRotation",
-      "Complete"
-    ]
+    "_enum": {
+      "AwaitingKeygen":"AwaitingKeygen"
+      "AwaitingRotation":"AwaitingRotation"
+      "Complete":"Complete"
+    }
   },
   "Version": "SemVer",
   "VoteCount": "u32"
