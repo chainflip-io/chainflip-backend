@@ -73,7 +73,7 @@ mod tests {
 				"Alice should be offline after missing one heartbeat"
 			);
 			assert_eq!(
-				MockHeartbeat::network_state().number_of_nodes,
+				MockHeartbeat::network_state().number_of_nodes(),
 				1,
 				"We should have one node"
 			);
@@ -111,7 +111,7 @@ mod tests {
 			assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is now not online");
 
 			assert_eq!(
-				MockHeartbeat::network_state().number_of_nodes,
+				MockHeartbeat::network_state().number_of_nodes(),
 				1,
 				"We should have one node"
 			);
