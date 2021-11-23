@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use chainflip_engine::state_chain::client::connect_to_state_chain;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -7,6 +5,7 @@ use structopt::StructOpt;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
+use utilities::clean_eth_address;
 
 mod settings;
 
@@ -38,26 +37,13 @@ async fn run_cli() -> Result<()> {
             eth_address,
         } => Ok(send_claim(
             amount,
-            clean_eth_address(eth_address)
+            clean_eth_address(&eth_address)
                 .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
             &cli_settings,
             &logger,
         )
         .await?),
     }
-}
-
-fn clean_eth_address(dirty_eth_address: String) -> Result<[u8; 20]> {
-    let eth_address_hex_str = match dirty_eth_address.strip_prefix("0x") {
-        Some(eth_address_stripped) => eth_address_stripped,
-        None => &dirty_eth_address,
-    };
-
-    let eth_address: [u8; 20] = hex::decode(eth_address_hex_str)?
-        .try_into()
-        .map_err(|_| anyhow::Error::msg("Could not create a [u8; 20]"))?;
-
-    Ok(eth_address)
 }
 
 async fn send_claim(
@@ -171,29 +157,5 @@ fn confirm_submit() -> bool {
                 continue;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cleans_eth_address() {
-        // fail too short
-        let input = "0x323232".to_string();
-        assert!(clean_eth_address(input).is_err());
-
-        // fail invalid chars
-        let input = "0xZ29aB9EbDb421CE48b70flippya6e9a3DBD609C5".to_string();
-        assert!(clean_eth_address(input).is_err());
-
-        // success with 0x
-        let input = "0xB29aB9EbDb421CE48b70699758a6e9a3DBD609C5".to_string();
-        assert!(clean_eth_address(input).is_ok());
-
-        // success without 0x
-        let input = "B29aB9EbDb421CE48b70699758a6e9a3DBD609C5".to_string();
-        assert!(clean_eth_address(input).is_ok());
     }
 }
