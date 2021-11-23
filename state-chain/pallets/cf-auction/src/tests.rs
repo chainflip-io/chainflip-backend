@@ -479,9 +479,6 @@ mod tests {
 					.map(|(id, _)| *id)
 					.partition(|id| *id % 2 == 0);
 
-			// The bad bidders have been reported
-			VaultRotationEventHandler::<Test>::penalise(&bad_bidders);
-
 			// Run through an auction
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(..)));

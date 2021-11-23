@@ -109,10 +109,6 @@ impl VaultRotationHandler for ChainflipVaultRotationHandler {
 	fn vault_rotation_aborted() {
 		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
 	}
-
-	fn penalise(bad_validators: &[Self::ValidatorId]) {
-		VaultRotationEventHandler::<Runtime>::penalise(bad_validators);
-	}
 }
 
 trait RewardDistribution {

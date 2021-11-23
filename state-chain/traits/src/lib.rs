@@ -157,8 +157,6 @@ pub trait VaultRotationHandler {
 	type ValidatorId;
 	/// The vault rotation has been aborted
 	fn vault_rotation_aborted();
-	/// Penalise bad validators during a vault rotation
-	fn penalise(bad_validators: &[Self::ValidatorId]);
 }
 
 /// Rotating vaults
