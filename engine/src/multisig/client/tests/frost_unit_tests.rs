@@ -379,3 +379,22 @@ async fn should_ignore_unexpected_message_for_stage() {
         }
     }
 }
+
+// If the list of signers in the sign request contains a duplicate id, the request should be ignored
+#[tokio::test]
+async fn should_ignore_keygen_request_with_duplicate_signer() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
+    c1.is_at_signing_stage(0).unwrap();
+
+    // Send the request to sign with a duplicate ID in the signers
+    let mut signer_ids = SIGNER_IDS.clone();
+    signer_ids[1] = signer_ids[2].clone();
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+
+    // The rts should not have started a ceremony and we should see an error tag
+    c1.is_at_signing_stage(0).unwrap();
+    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
