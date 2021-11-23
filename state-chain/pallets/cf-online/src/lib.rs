@@ -80,8 +80,12 @@ pub mod pallet {
 						}
 						// Determine if we are online
 						Self::has_submitted_this_interval(node.last_heartbeat, current_block_number)
-					} else { false }
-				} else { false 	}
+					} else {
+						false
+					}
+				} else {
+					false
+				}
 			})
 		}
 	}
@@ -90,7 +94,7 @@ pub mod pallet {
 	pub struct Node<BlockNumber> {
 		/// The last heartbeat received from this node
 		pub last_heartbeat: BlockNumber,
-		/// The number of blocks this node is banned for
+		/// The block number this node is banned until
 		pub ban: BlockNumber,
 	}
 
@@ -105,7 +109,8 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
 		/// For every interval we expect at least one heartbeat from all nodes of the network.
-		/// Failing this they would be considered offline.
+		/// Failing this they would be considered offline.  Banned validators can continue to submit
+		/// heartbeats so that when their ban has expired they would be considered online again.
 		///
 		/// ## Events
 		///
@@ -136,7 +141,8 @@ pub mod pallet {
 			(current_block_number - reported_block_number) < T::HeartbeatBlockInterval::get()
 		}
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
-		/// of the network for those nodes that are validators.
+		/// of the network for those nodes that are validators.  Those validators that are banned
+		/// are included in this count.
 		fn check_network_liveness(
 			current_block_number: BlockNumberFor<T>,
 		) -> NetworkState<T::ValidatorId> {
@@ -163,8 +169,8 @@ pub mod pallet {
 
 		fn ban(validator_id: &Self::ValidatorId) {
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+			// Ban is one heartbeat interval from now
 			let ban = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
-
 			Nodes::<T>::mutate(validator_id, |node| {
 				(*node).ban = ban;
 			});
