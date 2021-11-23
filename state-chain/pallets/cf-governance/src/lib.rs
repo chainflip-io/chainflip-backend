@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use codec::{Decode, Encode};
-use frame_support::traits::{EnsureOrigin, UnfilteredDispatchable, UnixTime};
+use frame_support::traits::{EnsureOrigin, UnixTime};
 pub use pallet::*;
 use sp_runtime::DispatchError;
 use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
@@ -29,7 +29,7 @@ pub mod pallet {
 
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
-	use sp_std::{boxed::Box, vec::Vec};
+	use sp_std::{boxed::Box, vec, vec::Vec};
 
 	use crate::WeightInfo;
 
