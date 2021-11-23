@@ -264,6 +264,19 @@ pub struct ValidSigningStates {
     pub outcome: SigningOutcome,
 }
 
+impl ValidSigningStates {
+    /// Get a clone of the client at index 0 from the specified stage
+    pub fn get_client_at_stage(&self, stage: usize) -> MultisigClientNoDB {
+        match stage {
+            1 => self.sign_phase1.clients[0].clone(),
+            2 => self.sign_phase2.clients[0].clone(),
+            3 => self.sign_phase3.as_ref().expect("No stage 3").clients[0].clone(),
+            4 => self.sign_phase4.as_ref().expect("No stage 4").clients[0].clone(),
+            _ => panic!("Invalid stage {}", stage),
+        }
+    }
+}
+
 pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
     client
         .ceremony_manager
@@ -1270,11 +1283,6 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
     }
 }
 
-/// Consume all messages in the channel, then times out
-pub async fn clear_channel<I>(rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>) {
-    while let Some(_) = next_with_timeout(rx).await {}
-}
-
 /// Check the next event produced by the receiver if it is SigningOutcome
 pub async fn peek_with_timeout<I>(
     rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
@@ -1560,6 +1568,61 @@ impl MultisigClientNoDB {
                     .clone(),
                 sender_id,
                 KEYGEN_CEREMONY_ID,
+            ),
+            _ => panic!("Invalid stage to receive message, stage: {}", stage),
+        }
+    }
+
+    /// Sends the correct singing data from the `VALIDATOR_IDS[sender_idx]` to the client via `process_p2p_message`
+    pub fn receive_signing_stage_data(
+        &mut self,
+        stage: usize,
+        sign_states: &ValidSigningStates,
+        sender_idx: usize,
+    ) {
+        let message = self.get_signing_p2p_message_for_stage(
+            stage,
+            sign_states,
+            sender_idx,
+            &VALIDATOR_IDS[sender_idx],
+        );
+        self.process_p2p_message(message);
+    }
+
+    /// Makes a P2PMessage using the signing data for the specified stage
+    pub fn get_signing_p2p_message_for_stage(
+        &mut self,
+        stage: usize,
+        sign_states: &ValidSigningStates,
+        sender_idx: usize,
+        sender_id: &AccountId,
+    ) -> P2PMessage {
+        match stage {
+            1 => sig_data_to_p2p(
+                sign_states.sign_phase1.comm1_vec[sender_idx].clone(),
+                sender_id,
+            ),
+            2 => sig_data_to_p2p(
+                sign_states.sign_phase2.ver2_vec[sender_idx].clone(),
+                sender_id,
+            ),
+            3 => sig_data_to_p2p(
+                sign_states
+                    .sign_phase3
+                    .as_ref()
+                    .expect("No signing stage 3")
+                    .local_sigs[sender_idx]
+                    .clone(),
+                sender_id,
+            ),
+            4 => sig_data_to_p2p(
+                sign_states
+                    .sign_phase4
+                    .as_ref()
+                    .expect("No signing stage 4")
+                    .ver4_vec[sender_idx]
+                    .clone(),
+                sender_id,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
         }
