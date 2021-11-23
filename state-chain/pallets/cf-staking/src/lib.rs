@@ -15,7 +15,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::eth::{
-	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
+	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents, Uint,
 };
 use cf_traits::{
 	Bid, BidderProvider, EpochInfo, NonceProvider, SigningContext, StakeTransfer, ThresholdSigner,
@@ -73,7 +73,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ From<u128>
-			+ Into<cf_chains::eth::Uint>;
+			+ Into<Uint>;
 
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
@@ -90,8 +90,8 @@ pub mod pallet {
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
-		/// Top-level Ethereum signing context needs to support `RegisterClaim`.
-		type SigningContext: From<RegisterClaim> + SigningContext<Self, Chain = cf_chains::Ethereum>;
+		/// Top-level signing context needs to support `RegisterClaim`.
+		type SigningContext: From<RegisterClaim> + SigningContext<Self>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
@@ -378,12 +378,12 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			signature: SchnorrVerificationComponents,
 		) -> DispatchResultWithPostInfo {
+			// TODO: we should use a different origin for this - it's no longer a witnessed tx - it
+			// requires a threshold signature. See #779.
 			Self::ensure_witnessed(origin)?;
 
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
-
-			// TODO: Verify the signature.
 
 			// Make sure the expiry time is still sane.
 			let min_ttl = T::MinClaimTTL::get();

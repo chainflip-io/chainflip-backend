@@ -1,5 +1,8 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
-use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
+	WaivedFees,
+};
 use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
 use sp_runtime::{
@@ -68,6 +71,9 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+// Implement mock for WaivedFees
+impl_mock_waived_fees!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = FlipBalance;
@@ -76,6 +82,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
 }
 
 parameter_types! {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::p2p::AccountId;
 
@@ -27,7 +27,7 @@ impl PartyIdxMapping {
     }
 
     /// Map all signer ids to their corresponding signer idx
-    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<Vec<usize>, ()> {
+    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<BTreeSet<usize>, ()> {
         signer_ids
             .iter()
             .map(|id| self.get_idx(id).ok_or(()))

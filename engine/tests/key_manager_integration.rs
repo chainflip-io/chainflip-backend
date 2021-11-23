@@ -1,13 +1,14 @@
 use chainflip_engine::{
     eth::{
         key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-        new_synced_web3_client,
+        new_synced_web3_client, EthObserver,
     },
     logging::utils,
     settings::Settings,
 };
 
 use futures::stream::StreamExt;
+use sp_core::H160;
 
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
@@ -19,7 +20,8 @@ pub async fn test_all_key_manager_events() {
         .await
         .unwrap();
 
-    let key_manager = KeyManager::new(&settings).unwrap();
+    // TODO: Get the address from environment variables, so we don't need to start the SC
+    let key_manager = KeyManager::new(H160::default()).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
@@ -46,7 +48,7 @@ Event stream was empty.
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     km_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,

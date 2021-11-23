@@ -1,6 +1,5 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::{
@@ -39,33 +38,52 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
+use zeroize::Zeroize;
+
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
+#[zeroize(drop)]
 pub struct ShamirShare {
-    /// index at which sharing polynomial was evaluated
-    index: usize,
     /// the result of polynomial evaluation
     pub value: Scalar,
+}
+
+#[cfg(test)]
+impl ShamirShare {
+    pub fn create_random() -> Self {
+        ShamirShare {
+            value: Scalar::new_random(),
+        }
+    }
 }
 
 /// Test-only helper function used to sanity check our sharing polynomial
 #[cfg(test)]
 fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
     use crate::multisig::client::signing::frost;
+    use std::collections::BTreeSet;
 
-    let all_idxs: Vec<usize> = shares.keys().into_iter().cloned().collect();
+    let all_idxs: BTreeSet<usize> = shares.keys().into_iter().cloned().collect();
 
-    shares.iter().fold(
-        Scalar::zero(),
-        |acc, (index, ShamirShare { index: _, value })| {
+    shares
+        .iter()
+        .fold(Scalar::zero(), |acc, (index, ShamirShare { value })| {
             acc + frost::get_lagrange_coeff(*index, &all_idxs).unwrap() * value
-        },
-    )
+        })
 }
 
+/// Context used in hashing to prevent replay attacks
+#[derive(Clone)]
+pub struct HashContext(pub [u8; 32]);
+
 /// Generate challenge against which a ZKP of our secret will be generated
-fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment: Point) -> Scalar {
+fn generate_dkg_challenge(
+    index: usize,
+    context: &HashContext,
+    public: Point,
+    commitment: Point,
+) -> Scalar {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
@@ -73,7 +91,7 @@ fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment
     hasher.update(commitment.get_element().to_string());
 
     hasher.update(index.to_be_bytes());
-    hasher.update(context);
+    hasher.update(context.0);
 
     let result = hasher.finalize();
 
@@ -83,7 +101,7 @@ fn generate_dkg_challenge(index: usize, context: &str, public: Point, commitment
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
-fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSignature {
+fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -> ZKPSignature {
     let nonce = Scalar::new_random();
     let nonce_commitment = Point::generator() * nonce;
 
@@ -99,23 +117,32 @@ fn generate_zkp_of_secret(secret: Scalar, context: &str, index: usize) -> ZKPSig
     }
 }
 
+#[derive(Clone, Default)]
+pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
+
+#[derive(Clone)]
+pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
+
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
 pub fn generate_shares_and_commitment(
-    context: &str,
+    context: &HashContext,
     index: usize,
     params: ThresholdParameters,
-) -> (HashMap<usize, ShamirShare>, DKGUnverifiedCommitment) {
+) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
         generate_secret_and_shares(params.share_count, params.threshold);
 
     // Zero-knowledge proof of `secret`
-    let zkp = generate_zkp_of_secret(secret, &context, index);
+    let zkp = generate_zkp_of_secret(secret, context, index);
 
     // TODO: zeroize secret here
 
-    (shares, DKGUnverifiedCommitment { commitments, zkp })
+    (
+        OutgoingShares(shares),
+        DKGUnverifiedCommitment { commitments, zkp },
+    )
 }
 
 // NOTE: shares should be sent after participants have exchanged commitments
@@ -144,7 +171,6 @@ fn generate_secret_and_shares(
             (
                 index,
                 ShamirShare {
-                    index,
                     value: evaluate_polynomial([secret].iter().chain(coefficients.iter()), index),
                 },
             )
@@ -160,8 +186,8 @@ fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitm
 }
 
 // (Figure 1: Round 2, Step 2)
-pub fn verify_share(share: &ShamirShare, com: &DKGCommitment) -> bool {
-    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), share.index)
+pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: usize) -> bool {
+    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), index)
 }
 
 /// Commitments to the sharing polynomial coefficient
@@ -194,7 +220,7 @@ pub struct DKGCommitment {
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
     commitments: HashMap<usize, DKGUnverifiedCommitment>,
-    context: &str,
+    context: &HashContext,
 ) -> Result<HashMap<usize, DKGCommitment>, Vec<usize>> {
     let invalid_idxs: Vec<_> = commitments
         .iter()
@@ -224,13 +250,6 @@ pub fn validate_commitments(
     } else {
         Err(invalid_idxs)
     }
-}
-
-/// Unique context used for generating a ZKP
-pub fn generate_keygen_context(ceremony_id: CeremonyId) -> String {
-    // TODO: use a deterministic random string here for more security
-    // (hash ceremony_id + the list of signers?)
-    ceremony_id.to_string()
 }
 
 /// Derive aggregate pubkey from party commitments
@@ -293,9 +312,7 @@ mod tests {
         let n = 4;
         let t = 2;
 
-        let ceremony_id = 2;
-
-        let context = generate_keygen_context(ceremony_id);
+        let context = HashContext([0; 32]);
 
         let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
             .map(|idx| {
@@ -329,7 +346,7 @@ mod tests {
                 .iter()
                 .map(|(idx, shares)| {
                     let share = shares[&receiver_idx].clone();
-                    assert!(verify_share(&share, &coeff_commitments[idx]));
+                    assert!(verify_share(&share, &coeff_commitments[idx], receiver_idx));
                     share
                 })
                 .collect();

@@ -83,7 +83,6 @@ std = [
     'sp-std/std',
     'sp-runtime/std',
     'pallet-session/std',
-    'frame-benchmarking/std',
     'pallet-cf-auction/std',
 ]
 runtime-benchmarks = [

@@ -97,7 +97,7 @@ impl HealthMonitor {
             }
         });
 
-        return shutdown_sender;
+        shutdown_sender
     }
 }
 

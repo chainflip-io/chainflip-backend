@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+cf-chains = {path = '../../chains', default-features = false}
 
 log = { version = '0.4.14', default-features = false }
 
@@ -45,6 +46,12 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-09+1'
+
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
@@ -71,6 +78,8 @@ tag = 'monthly-2021-09+1'
 [features]
 default = ['std']
 std = [
+	'cf-chains/std',
+    'cf-traits/std',
 	'codec/std',
 	'scale-info/std',
 	'frame-support/std',
@@ -80,5 +89,10 @@ std = [
 	'sp-std/std',
 	'sp-runtime/std',
 	'cf-traits/std',
+]
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime'] 

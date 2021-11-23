@@ -11,7 +11,7 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{impl_mock_stake_transfer, Chainflip, Heartbeat, NetworkState};
+use cf_traits::{impl_mock_stake_transfer, BlockNumber, Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
 
@@ -22,7 +22,7 @@ thread_local! {
 	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
-			awaiting: vec![],
+			offline: vec![],
 			online: vec![],
 			number_of_nodes: 0,
 		}
@@ -36,12 +36,12 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage, Event<T>},
+		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage},
 	}
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
+	pub const BlockHashCount: BlockNumber = 250;
 }
 
 impl frame_system::Config for Test {
@@ -80,8 +80,12 @@ parameter_types! {
 pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
+	type BlockNumber = u64;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		_block_number: Self::BlockNumber,
+	) -> Weight {
 		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
 		0
 	}
@@ -112,10 +116,10 @@ impl Chainflip for Test {
 }
 
 impl Config for Test {
-	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = MockHeartbeat;
 	type EpochInfo = MockEpochInfo;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

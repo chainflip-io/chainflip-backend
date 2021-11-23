@@ -3,9 +3,8 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec, vec::Vec};
 
 #[allow(unused)]
 use crate::Pallet as Auction;

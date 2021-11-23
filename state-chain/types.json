@@ -3,6 +3,7 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
+    "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
   "ActiveValidatorRange": "(u32,u32)",
@@ -33,6 +34,7 @@
     "winners": "Vec<ValidatorId>",
     "minimum_active_bid": "Amount"
   },
+  "BasisPoints": "u32",
   "Bid": "(ValidatorId, Amount)",
   "BlockHeightWindow": {
     "from": "u64",
@@ -40,6 +42,7 @@
   },
   "BlockNumber": "u32",
   "BroadcastAttemptId": "u64",
+  "BroadcastId": "u32",
   "BroadcastStage": {
     "_enum": [
       "TransactionSigning",
@@ -68,11 +71,17 @@
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
+  "FailedBroadcastAttempt": {
+    "broadcast_id": "BroadcastId",
+    "attempt_count": "AttemptCount",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
   "FlipAccount": {
     "stake": "Amount",
     "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
+  "H256": "[u8; 32]",
   "ImbalanceSource": {
     "_enum": [
       "External",
@@ -81,17 +90,31 @@
     ]
   },
   "KeyId": "Vec<u8>",
-  "Liveness": "u8",
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
   },
   "Nonce": "u64",
+  "OfflineCondition": {
+    "_enum": [
+      "BroadcastOutputFailed",
+      "ParticipateSigningFailed",
+      "NotEnoughPerformanceCredits",
+      "ContradictingSelfDuringSigningCeremony"
+    ]
+  },
   "OnlineCreditsFor": "BlockNumber",
-  "PayloadFor": "Vec<u8>",
+  "PayloadFor": "[u8; 32]",
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
+  "RegisterClaim": {
+    "sig_data": "SigData",
+    "node_id": "[u8; 32]",
+    "amount": "Uint",
+    "address": "EthereumAddress",
+    "expiry": "Uint"
+  },
   "RemainingBid": "(ValidatorId, Amount)",
   "ReputationPenalty": {
     "points": "ReputationPoints",
@@ -105,11 +128,29 @@
     "s": "[u8; 32]",
     "k_times_g_addr": "[u8; 20]"
   },
+  "SemVer": {
+    "major": "u8",
+    "minor": "u8",
+    "patch": "u8"
+  },
   "Signature": "SchnorrVerificationComponents",
+  "SigData": {
+    "msg_hash": "H256",
+    "sig": "Uint",
+    "nonce": "Uint",
+    "k_times_g_addr": "EthereumAddress"
+  },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
   "TransactionHash": "Vec<u8>",
+  "TransmissionFailure": {
+    "_enum": [
+      "TransactionRejected",
+      "TransactionFailed"
+    ]
+  },
+  "Uint": "[u8; 32]",
   "UnsignedTransactionFor": "Vec<u8>",
   "ValidatorId": "AccountId",
   "Vault": {
@@ -120,7 +161,7 @@
   "VaultRotationStatus": {
     "_enum": {
       "AwaitingKeygen": {
-        "ceremony_id": "CeremonyId", 
+        "ceremony_id": "CeremonyId",
         "candidates": "Vec<ValidatorId>"
       },
       "AwaitingRotation": {
@@ -131,5 +172,6 @@
       }
     }
   },
+  "Version": "SemVer",
   "VoteCount": "u32"
 }

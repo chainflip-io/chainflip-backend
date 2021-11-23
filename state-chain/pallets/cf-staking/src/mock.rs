@@ -1,12 +1,11 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
-	eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents},
-	Ethereum,
+	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
 };
+use cf_traits::{impl_mock_waived_fees, WaivedFees};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
 use pallet_cf_flip;
-use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -20,7 +19,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider, time_source},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
 	Chainflip, NonceProvider, SigningContext,
 };
 
@@ -54,7 +53,7 @@ impl frame_system::Config for Test {
 	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Hash = H256;
+	type Hash = sp_core::H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -82,12 +81,26 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(AccountId);
 cf_traits::impl_mock_offline_conditions!(AccountId);
 
+pub struct MockKeyProvider;
+
+impl cf_traits::KeyProvider<AlwaysVerifiesCoin> for MockKeyProvider {
+	type KeyId = Vec<u8>;
+
+	fn current_key_id() -> Self::KeyId {
+		Default::default()
+	}
+
+	fn current_key() -> <AlwaysVerifiesCoin as ChainCrypto>::AggKey {
+		vec![]
+	}
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
-	type TargetChain = Ethereum;
+	type TargetChain = AlwaysVerifiesCoin;
 	type SigningContext = ClaimSigningContext;
 	type SignerNomination = MockSignerNomination;
-	type KeyProvider = key_provider::MockKeyProvider<Ethereum, Self::KeyId>;
+	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
 }
 
@@ -99,6 +112,9 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
@@ -107,6 +123,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -124,6 +141,9 @@ impl NonceProvider<Ethereum> for Test {
 
 // Mock SigningContext
 
+pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct ClaimSigningContext(RegisterClaim);
 
@@ -134,17 +154,17 @@ impl From<RegisterClaim> for ClaimSigningContext {
 }
 
 impl SigningContext<Test> for ClaimSigningContext {
-	type Chain = Ethereum;
-	type Payload = H256;
-	type Signature = SchnorrVerificationComponents;
+	type Chain = AlwaysVerifiesCoin;
+	type Payload = <AlwaysVerifiesCoin as ChainCrypto>::Payload;
+	type Signature = <AlwaysVerifiesCoin as ChainCrypto>::ThresholdSignature;
 	type Callback = pallet_cf_staking::Call<Test>;
 
 	fn get_payload(&self) -> Self::Payload {
-		H256(ChainflipContractCall::signing_payload(&self.0).0)
+		vec![]
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
-		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), signature)
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), ETH_DUMMY_SIG)
 	}
 }
 
