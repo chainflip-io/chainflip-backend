@@ -4,15 +4,11 @@
 use super::*;
 
 use frame_benchmarking::{
-	benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
+	benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
 
-use cf_chains::eth::{UnsignedTransaction, U256};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
-use frame_system::RawOrigin;
-
 #[allow(unused)]
-use crate::Pallet as Auction;
+use crate::Pallet;
 
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
@@ -36,6 +32,4 @@ benchmarks_instance_pallet! {
 	transmission_failure {} : {}
 }
 
-// TODO: Figure out how to make this work with instantiable pallets.
-//
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

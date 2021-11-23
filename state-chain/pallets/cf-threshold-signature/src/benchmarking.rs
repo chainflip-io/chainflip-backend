@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::{benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite};
 
 #[allow(unused)]
 use crate::Pallet;
