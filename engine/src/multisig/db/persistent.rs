@@ -121,7 +121,7 @@ mod tests {
         let p_db = PersistentKeyDB::new(&db_path, &logger);
         let keys = p_db.load_keys();
         let key = keys.get(&key_id).expect("Should have an entry for key");
-        assert!(key.params.threshold, 1);
+        assert_eq!(key.params.threshold, 1);
         // clean up
         std::fs::remove_dir_all(db_path).unwrap();
     }
