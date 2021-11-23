@@ -321,16 +321,22 @@ pub struct NetworkState<ValidatorId: Default> {
 	pub offline: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
-	/// Number of nodes with the Validator state
-	pub number_of_nodes: u32,
 }
 
 impl<ValidatorId: Default> NetworkState<ValidatorId> {
+	/// Return the number of nodes with state Validator in the network
+	pub fn number_of_nodes(&self) -> u32 {
+		(self.online.len() + self.offline.len()) as u32
+	}
+
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
 
-		number_online.saturating_mul(100).checked_div(self.number_of_nodes).unwrap_or(0)
+		number_online
+			.saturating_mul(100)
+			.checked_div(self.number_of_nodes())
+			.unwrap_or(0)
 	}
 }
 
