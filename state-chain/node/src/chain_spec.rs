@@ -15,8 +15,8 @@ use utilities::clean_eth_address;
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
-const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
-const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9FEA5bbbFb94F3270E44Bc4BB26e9ca1f3440A14";
+const KEY_MANAGER_ADDRESS_DEFAULT: &str = "5b04D2B46061d396c1a3f0882a792e4b30f2DA0F";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015";
