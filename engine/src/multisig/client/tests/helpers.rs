@@ -740,7 +740,7 @@ impl KeygenContext {
 
         clients
             .iter()
-            .for_each(|c| assert!(c.is_at_keygen_stage(2)));
+            .for_each(|c| c.is_at_keygen_stage(2).unwrap());
 
         let ver2_vec = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
@@ -753,7 +753,7 @@ impl KeygenContext {
 
         distribute_data_keygen!(clients, self.account_ids, ver2_vec);
 
-        if !clients[0].is_at_keygen_stage(3) {
+        if !clients[0].is_at_keygen_stage(3).is_ok() {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
@@ -793,7 +793,7 @@ impl KeygenContext {
 
         clients
             .iter()
-            .for_each(|c| assert!(c.is_at_keygen_stage(3)));
+            .for_each(|c| c.is_at_keygen_stage(3).unwrap());
 
         // *** Collect all Secret3
 
@@ -1034,7 +1034,7 @@ impl KeygenContext {
 
             c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
-            assert!(c.is_at_signing_stage(1));
+            c.is_at_signing_stage(1).unwrap();
         }
 
         let comm1_vec = collect_all_comm1(p2p_rxs).await;
@@ -1054,7 +1054,7 @@ impl KeygenContext {
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            assert!(c.is_at_signing_stage(2));
+            c.is_at_signing_stage(2).unwrap();
         }
 
         // *** Collect Ver2 messages ***
@@ -1088,7 +1088,7 @@ impl KeygenContext {
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            assert!(c.is_at_signing_stage(3));
+            c.is_at_signing_stage(3).unwrap();
         }
 
         // *** Collect local sigs ***
@@ -1434,24 +1434,32 @@ impl MultisigClientNoDB {
     /// Check is the client is at the specified signing BroadcastStage (0-4).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_signing_stage(&self, stage_number: usize) -> bool {
+    pub fn is_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
-        match stage_number {
+        let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
             4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
             _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
         }
     }
 
     /// Check is the client is at the specified keygen BroadcastStage (0-5).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_keygen_stage(&self, stage_number: usize) -> bool {
+    pub fn is_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self);
-        match stage_number {
+        let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
@@ -1461,6 +1469,14 @@ impl MultisigClientNoDB {
             6 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
             7 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
             _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
         }
     }
 

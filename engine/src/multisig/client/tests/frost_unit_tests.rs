@@ -54,7 +54,7 @@ async fn should_delay_comm1_before_rts() {
     // "Slow" client c1 receives a message before a request to sign, it should be delayed
     receive_comm1!(c1, 1, sign_states);
 
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     let key = keygen_states.key_ready_data().sec_keys[0].clone();
 
@@ -66,12 +66,12 @@ async fn should_delay_comm1_before_rts() {
         SIGN_CEREMONY_ID,
     );
 
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 
     // One more comm1 should advance us to the next stage
     receive_comm1!(c1, 2, sign_states);
 
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 }
 
 // TODO: merge the delay tests into 1, see `should_delay_stage_data` in keygen unit tests
@@ -84,23 +84,23 @@ async fn should_delay_ver2() {
 
     let mut c1 = sign_states.sign_phase1.clients[0].clone();
 
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 
     // "Slow" client c1 receives a ver2 message before stage 2, it should be delayed
     receive_comm1!(c1, 1, sign_states);
     receive_ver2!(c1, 1, sign_states);
 
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 
     // c1 finally receives the remaining comm1, which advances us to stage 2
     receive_comm1!(c1, 2, sign_states);
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to advance us to stage 3
     receive_ver2!(c1, 2, sign_states);
 
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 }
 
 #[tokio::test]
@@ -112,21 +112,21 @@ async fn should_delay_sig3() {
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
 
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // "Slow" client c1 receives a sig3 message before stage 3, it should be delayed
     receive_ver2!(c1, 1, sign_states);
     receive_sig3!(c1, 1, &sign_states);
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // This should advance us to the next stage and trigger processing of the delayed message
     receive_ver2!(c1, 2, sign_states);
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to advance us to stage 4
     receive_sig3!(c1, 2, &sign_states);
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
 }
 
 #[tokio::test]
@@ -140,24 +140,24 @@ async fn should_delay_ver4() {
 
     let mut c1 = sign_states.sign_phase3.as_ref().unwrap().clients[0].clone();
 
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 
     // "Slow" client c1 receives a ver4 message before stage 4, it should be delayed
     receive_sig3!(c1, 1, &sign_states);
     receive_ver4!(c1, 1, sign_states);
 
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 
     // This should trigger processing of the delayed message
     receive_sig3!(c1, 2, &sign_states);
 
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
     helpers::clear_channel(&mut ctx.outcome_receivers[0]).await;
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to create the signature (stage becomes None)
     receive_ver4!(c1, 2, sign_states);
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // Check that we've created a signature!
     let outcome = match helpers::expect_next_with_timeout(&mut ctx.outcome_receivers[0]).await {
@@ -240,7 +240,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
 
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     let bad_array_idxs = [1usize, 2];
 
@@ -248,7 +248,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
         receive_comm1!(c1, *idx, sign_states);
     }
 
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     c1.expire_all();
     c1.cleanup();
@@ -273,7 +273,7 @@ async fn should_report_on_timeout_stage1() {
     // This party fails to send data in time
     let bad_party_idx = 2;
 
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 
     c1.expire_all();
     c1.cleanup();
@@ -297,7 +297,7 @@ async fn should_report_on_timeout_stage2() {
     // This party fails to send data in time
     let bad_party_idx = 2;
 
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     c1.expire_all();
     c1.cleanup();
@@ -321,7 +321,7 @@ async fn should_report_on_timeout_stage3() {
     // This party fails to send data in time
     let bad_party_idx = 2;
 
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 
     c1.expire_all();
     c1.cleanup();
@@ -345,7 +345,7 @@ async fn should_report_on_timeout_stage4() {
     // This party fails to send data in time
     let bad_party_idx = 2;
 
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
 
     c1.expire_all();
     c1.cleanup();
@@ -362,13 +362,13 @@ async fn should_ignore_duplicate_rts() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // Send another request to sign with the same ceremony_id and key_id
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been rejected and the existing ceremony is unchanged
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -378,13 +378,13 @@ async fn should_delay_rts_until_key_is_ready() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // send the request to sign
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been delayed, so the stage is unaffected
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // complete the keygen by sending the ver5 from each other client to client 0
     for sender_idx in 1..=3 {
@@ -398,7 +398,7 @@ async fn should_delay_rts_until_key_is_ready() {
     }
 
     // Now that the keygen completed, the rts should have been processed
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 }
 
 #[tokio::test]
@@ -408,12 +408,12 @@ async fn should_ignore_signing_non_participant() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // send all but 1 ver2 data to the client
     receive_ver2!(c1, 1, sign_states);
 
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // Make sure that the non_participant_id is not a signer
     let non_participant_idx = 3;
@@ -425,7 +425,7 @@ async fn should_ignore_signing_non_participant() {
     c1.process_p2p_message(helpers::sig_data_to_p2p(ver2, &non_participant_id));
 
     // The message should have been ignored and the client stage should not advanced/fail
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 }
 
 #[tokio::test]
@@ -434,7 +434,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // Get an id that was not in the keygen and substitute it in the signer list
     let unknown_signer_id = AccountId([0; 32]);
@@ -446,7 +446,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -456,7 +456,7 @@ async fn should_ignore_rts_if_not_participating() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[3].clone();
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // Make sure our id is not in the signers list
     assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
@@ -465,7 +465,7 @@ async fn should_ignore_rts_if_not_participating() {
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The rts should not have started a ceremony
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -475,7 +475,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // Send the request to sign with not enough signers
     let mut signer_ids = SIGNER_IDS.clone();
@@ -483,7 +483,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
     ctx.tag_cache.clear();
 
@@ -493,7 +493,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -503,7 +503,7 @@ async fn pending_rts_should_expire() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 
     // Send the rts with the key id currently unknown to the client
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
@@ -523,7 +523,7 @@ async fn pending_rts_should_expire() {
     }
 
     // Should be no pending rts, so no stage advancement once the keygen completed.
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -534,7 +534,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase1.clients[0].clone();
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
 
     // TODO: Clean this up, see `should_ignore_unexpected_message_for_stage` in keygen unit tests
 
@@ -545,47 +545,47 @@ async fn should_ignore_unexpected_message_for_stage() {
     // Stage 1
     // Send one correct message, so the stage only needs 1 more to advance
     receive_comm1!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
     // Send a bunch of unexpected messages from other states
     receive_sig3!(c1, c3_idx, sign_states);
     receive_ver4!(c1, c3_idx, sign_states);
     // Send a duplicate message
     receive_comm1!(c1, c2_idx, sign_states);
     // Make sure the stage did not advance
-    assert!(c1.is_at_signing_stage(1));
+    c1.is_at_signing_stage(1).unwrap();
     // Now finish with the correct message
     receive_comm1!(c1, c3_idx, sign_states);
     // The stage should have advanced
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
 
     // Stage 2
     receive_ver2!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
     receive_comm1!(c1, c3_idx, sign_states);
     receive_ver4!(c1, c3_idx, sign_states);
     receive_ver2!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(2));
+    c1.is_at_signing_stage(2).unwrap();
     receive_ver2!(c1, c3_idx, sign_states);
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
 
     // Stage 3
     receive_sig3!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
     receive_comm1!(c1, c3_idx, sign_states);
     receive_ver2!(c1, c3_idx, sign_states);
     receive_sig3!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(3));
+    c1.is_at_signing_stage(3).unwrap();
     receive_sig3!(c1, c3_idx, sign_states);
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
 
     // Stage 4
     receive_ver4!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
     receive_comm1!(c1, c3_idx, sign_states);
     receive_ver2!(c1, c3_idx, sign_states);
     receive_sig3!(c1, c3_idx, sign_states);
     receive_ver4!(c1, c2_idx, sign_states);
-    assert!(c1.is_at_signing_stage(4));
+    c1.is_at_signing_stage(4).unwrap();
     receive_ver4!(c1, c3_idx, sign_states);
-    assert!(c1.is_at_signing_stage(0));
+    c1.is_at_signing_stage(0).unwrap();
 }
