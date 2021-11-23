@@ -3,9 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
 
 use crate::pallet::SignatureFor;
 use cf_chains::eth::SchnorrVerificationComponents;
@@ -19,17 +17,7 @@ use frame_system::RawOrigin;
 use crate::Pallet;
 
 benchmarks_instance_pallet! {
-	// signature_success {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	const VALID_SIGNATURE: &'static str = "Wow!";
-	// 	let val: Vec<u8> = vec![];
-	// 	let sig = SchnorrVerificationComponents {
-	// 		s: [0u8; 32],
-	// 		k_times_g_addr: [0u8; 20]
-	// 	};
-	// 	let call = Call::<T, I>::signature_success(1, sig.into());
-	// 	let origin = T::EnsureWitnessed::successful_origin();
-	// } : { call.dispatch_bypass_filter(origin)? }
+	signature_success {} : {}
 	signature_failed {} : {}
 	on_initialize {} : {}
 }

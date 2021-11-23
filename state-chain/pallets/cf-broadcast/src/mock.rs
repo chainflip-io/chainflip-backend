@@ -1,4 +1,6 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
+use crate::{
+	self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination, WeightInfo,
+};
 use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
@@ -129,6 +131,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

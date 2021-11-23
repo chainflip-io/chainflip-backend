@@ -458,6 +458,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type OfflineReporter = Reputation;
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
 
 construct_runtime!(

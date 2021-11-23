@@ -15,9 +15,8 @@ use frame_system::RawOrigin;
 use crate::Pallet as Auction;
 
 benchmarks_instance_pallet! {
-	// TODO: implement benchmark
 	on_initialize {} : {}
-	// TODO: implement benchmark
+	start_broadcast {} : {}
 	// start_broadcast {
 	// 	let caller: T::AccountId = whitelisted_caller();
 	// 	let unsigned: SignedTransactionFor<T, I> = UnsignedTransaction {
@@ -32,12 +31,8 @@ benchmarks_instance_pallet! {
 	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
 	// 	let origin = T::EnsureWitnessed::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
-	// TODO: implement benchmark
 	transaction_ready_for_transmission {} : {}
-	// TODO: implement benchmark
-	transmission_success {
-	} : { }
-	// TODO: implement benchmark
+	transmission_success {} : {}
 	transmission_failure {} : {}
 }
 

@@ -218,6 +218,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
+	type WeightInfo = ();
 }
 
 impl VaultRotationHandler for Test {
