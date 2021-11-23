@@ -174,8 +174,8 @@
   },
   "VaultRotationStatus": {
     "_enum": {
-      "AwaitingKeygen":"AwaitingKeygen"
-      "AwaitingRotation":"AwaitingRotation"
+      "AwaitingKeygen":"AwaitingKeygen",
+      "AwaitingRotation":"AwaitingRotation",
       "Complete":"Complete"
     }
   },
