@@ -550,9 +550,13 @@ jobs:
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - download_file_from_chainflip:
           file_path: chainflip-cluster/contents/build.sh
+      - download_file_from_chainflip:
+          file_path: chainflip-cluster/contents/testnet/validator.yaml
       - run:
           name: Install cluster
           command: |
+            mkdir testnet
+            mv validator.yaml testnet
             chmod +x ./build.sh
             ./build.sh -b="$CIRCLE_BRANCH" -t="<<parameters.tag>>" <<parameters.extra_args>>
 ######################## /Jobs ########################
