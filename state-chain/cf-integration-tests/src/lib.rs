@@ -43,40 +43,71 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
+		use sp_std::default::Default;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-		// Events from ethereum contract
+		// Events from ethereum contracts
 		#[derive(Debug, Clone)]
-		pub enum ContractEvent {
+		enum ContractEvent {
 			Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance },
+			AggKeySet { new_key: PublicKey },
+		}
+
+		trait Events {
+			type Event: Clone;
+			fn push(&mut self, ev: Self::Event);
+			fn events(&self) -> Vec<Self::Event>;
+			fn clear(&mut self);
+		}
+
+		struct EventList(Vec<ContractEvent>);
+
+		impl Events for EventList {
+			type Event = ContractEvent;
+			fn push(&mut self, event: ContractEvent) {
+				self.0.push(event);
+			}
+			fn events(&self) -> Vec<ContractEvent> {
+				self.0.clone()
+			}
+			fn clear(&mut self) {
+				self.0.clear();
+			}
 		}
 
 		// A staking contract
-		#[derive(Default)]
-		pub struct StakingContract {
+		struct StakingContract {
 			// List of stakes
 			pub stakes: HashMap<NodeId, FlipBalance>,
-			// Events to be processed
-			pub events: Vec<ContractEvent>,
 		}
 
 		impl StakingContract {
-			// Stake for validator
-			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance) {
+			pub fn stake<T: Events<Event = ContractEvent>>(
+				&mut self,
+				node_id: NodeId,
+				amount: FlipBalance,
+				events: &mut T,
+			) {
 				let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
 				let total = current_amount + amount;
 				self.stakes.insert(node_id.clone(), total);
+				events.push(ContractEvent::Staked { node_id, amount, total });
+			}
+		}
 
-				self.events.push(ContractEvent::Staked { node_id, amount, total });
-			}
-			// Get events for this contract
-			fn events(&self) -> Vec<ContractEvent> {
-				self.events.clone()
-			}
-			// Clear events
-			fn clear(&mut self) {
-				self.events.clear();
+		struct KeyManagerContract {
+			agg_key: PublicKey,
+		}
+
+		impl KeyManagerContract {
+			fn set_agg_key<T: Events<Event = ContractEvent>>(
+				&mut self,
+				new_key: PublicKey,
+				events: &mut T,
+			) {
+				self.agg_key = new_key.clone();
+				events.push(ContractEvent::AggKeySet { new_key })
 			}
 		}
 
@@ -193,6 +224,9 @@ mod tests {
 								TX_HASH,
 							)
 							.expect("should be able to witness stake for node");
+						},
+						ContractEvent::AggKeySet { .. } => {
+							todo!("AggKeySet contract event")
 						},
 					}
 				}
@@ -314,16 +348,20 @@ mod tests {
 			));
 		}
 
-		#[derive(Default)]
 		pub struct Network {
 			engines: HashMap<NodeId, Engine>,
-			pub stake_manager_contract: StakingContract,
+			stake_manager_contract: StakingContract,
 			last_event: usize,
 			node_counter: u32,
 			pub signer: Rc<RefCell<Signer>>,
+			events: EventList,
 		}
 
 		impl Network {
+			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance) {
+				self.stake_manager_contract.stake(node_id, amount, &mut self.events);
+			}
+
 			pub fn next_node_id(&mut self) -> NodeId {
 				self.node_counter += 1;
 				// TODO improve this to not overflow
@@ -333,7 +371,14 @@ mod tests {
 			// Create a network which includes the validators in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(number_of_nodes: u8, nodes_to_include: &[NodeId]) -> (Self, Vec<NodeId>) {
-				let mut network: Network = Default::default();
+				let mut network: Network = Network {
+					engines: Default::default(),
+					stake_manager_contract: StakingContract { stakes: Default::default() },
+					events: EventList(Vec::<ContractEvent>::new()),
+					last_event: 0,
+					node_counter: 0,
+					signer: Rc::new(RefCell::new(Default::default())),
+				};
 
 				// Include any nodes already *created* to the test network
 				for node in nodes_to_include {
@@ -428,14 +473,14 @@ mod tests {
 					Validator::on_initialize(System::block_number());
 
 					// Notify contract events
-					for event in self.stake_manager_contract.events() {
+					for event in self.events.events() {
 						for (_, engine) in &self.engines {
 							engine.on_contract_event(&event);
 						}
 					}
 
-					// Clear events on contract
-					self.stake_manager_contract.clear();
+					// Clear events
+					self.events.clear();
 
 					// Collect state chain events
 					let events = frame_system::Pallet::<Runtime>::events()
@@ -796,9 +841,7 @@ mod tests {
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+						testnet.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
 					}
 
 					// Set the first 4 nodes offline
@@ -881,11 +924,11 @@ mod tests {
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						testnet.stake(node.clone(), stake_amount);
 					}
 					// Our keyless nodes also stake
 					for keyless_node in &keyless_nodes {
-						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
+						testnet.stake(keyless_node.clone(), stake_amount);
 					}
 
 					// Run to the next epoch to start the auction
@@ -1007,7 +1050,7 @@ mod tests {
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						testnet.stake(node.clone(), stake_amount);
 					}
 
 					// Move forward one block to process events
@@ -1165,7 +1208,7 @@ mod tests {
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &passive_nodes {
-						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					// Start an auction
@@ -1251,7 +1294,7 @@ mod tests {
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake(node.clone(), INITIAL_STAKE);
 					}
 
 					assert_eq!(
