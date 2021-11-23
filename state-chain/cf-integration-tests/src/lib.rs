@@ -1083,46 +1083,38 @@ mod tests {
 		// of the governance and is allowed to make free calls to governance extrinsic.
 		// All other accounts are normally charged and can call any extrinsic.
 		fn restriction_handling() {
-			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_VALIDATORS: u32 = 3;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
-				.build()
-				.execute_with(|| {
-					let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
-					let gov_call: state_chain_runtime::Call =
-						pallet_cf_governance::Call::approve(1).into();
-					// Expect a successful normal call to work
-					let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
-						&ALICE.into(),
-						&call,
-						&call.get_dispatch_info(),
-						5,
-						0,
-					);
-					assert!(ordinary.is_ok());
-					assert!(ordinary.unwrap().is_some());
-					// Expect a successful gov call to work
-					let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
-						&ERIN.into(),
-						&gov_call,
-						&gov_call.get_dispatch_info(),
-						5000,
-						0,
-					);
-					assert!(gov.is_ok());
-					assert!(gov.unwrap().is_none());
-					// Expect a non gov call to fail when it's executed by gov member
-					let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
-						&ERIN.into(),
-						&call,
-						&call.get_dispatch_info(),
-						5000,
-						0,
-					);
-					assert!(gov_err.is_err());
-				});
+			super::genesis::default().build().execute_with(|| {
+				let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+				let gov_call: state_chain_runtime::Call =
+					pallet_cf_governance::Call::approve(1).into();
+				// Expect a successful normal call to work
+				let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
+					&ALICE.into(),
+					&call,
+					&call.get_dispatch_info(),
+					5,
+					0,
+				);
+				assert!(ordinary.expect("we have a result").is_some(), "expected Some(Surplus)");
+				// Expect a successful gov call to work
+				let gov = FlipTransactionPayment::<Runtime>::withdraw_fee(
+					&ERIN.into(),
+					&gov_call,
+					&gov_call.get_dispatch_info(),
+					5000,
+					0,
+				);
+				assert!(gov.expect("we have a result").is_none(), "expected None");
+				// Expect a non gov call to fail when it's executed by gov member
+				let gov_err = FlipTransactionPayment::<Runtime>::withdraw_fee(
+					&ERIN.into(),
+					&call,
+					&call.get_dispatch_info(),
+					5000,
+					0,
+				);
+				assert!(gov_err.is_err(), "expected an error");
+			});
 		}
 	}
 

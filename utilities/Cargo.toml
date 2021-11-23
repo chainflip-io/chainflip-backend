@@ -9,3 +9,10 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
 [dependencies]
+hex = {version = "0.4.3", default-features = false}
+
+[features]
+default = ['std']
+std = [
+  'hex/std',
+]
