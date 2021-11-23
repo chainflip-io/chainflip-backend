@@ -59,58 +59,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		//*** Signing pallet witness calls ***//
-
-		/// Witness the success of a threshold signing ceremony.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_success(*id, signature.clone())
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_eth_signature_success(
-			origin: OriginFor<T>,
-			id: pallet_cf_threshold_signature::CeremonyId,
-			signature: <<T as pallet_cf_threshold_signature::Config<Instance1>>::SigningContext as SigningContext<T>>::Signature,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance1>::signature_success(id, signature);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-
-		/// Witness the failure of a threshold signing ceremony.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_failed(*id, offenders.clone())
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_eth_signature_failed(
-			origin: OriginFor<T>,
-			id: pallet_cf_threshold_signature::CeremonyId,
-			offenders: Vec<T::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance1>::signature_failed(id, offenders);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-
 		//*** Broadcast pallet witness calls ***//
 
 		/// Witness the successful completion of an outgoing broadcast.

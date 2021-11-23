@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_threshold_signature};
 use cf_chains::{eth, ChainCrypto};
-use cf_traits::{Chainflip, SigningContext};
+use cf_traits::{Chainflip, SigningContext, offline_conditions::*};
 use codec::{Decode, Encode};
 use frame_support::{
 	instances::Instance1,
@@ -25,7 +25,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>},
 	}
 );
 
@@ -68,6 +68,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
 // Mock SignerNomination
@@ -93,15 +94,15 @@ thread_local! {
 	pub static SIGNED_MESSAGE: std::cell::RefCell<Option<String>> = Default::default()
 }
 
-pub struct MockCallback<Ctx: SigningContext<Test>>(pub String, pub Ctx::Signature);
+pub struct MockCallback<C: ChainCrypto>(pub String, pub C::ThresholdSignature);
 
-impl<Ctx: SigningContext<Test>> MockCallback<Ctx> {
+impl MockCallback<Doge> {
 	pub fn get_stored_callback() -> Option<String> {
 		SIGNED_MESSAGE.with(|cell| cell.borrow().clone())
 	}
 }
 
-impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
+impl UnfilteredDispatchable for MockCallback<Doge> {
 	type Origin = Origin;
 
 	fn dispatch_bypass_filter(
@@ -169,15 +170,17 @@ pub const INVALID_SIGNATURE: &'static str = "Pow!";
 
 impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;
-	type Payload = [u8; 4];
-	type Signature = String;
-	type Callback = MockCallback<Self>;
+	type Callback = MockCallback<Doge>;
+	type ThresholdSignatureOrigin = crate::Origin::<Test, Instance1>;
 
-	fn get_payload(&self) -> Self::Payload {
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
 		DOGE_PAYLOAD
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		MockCallback(self.message.clone(), signature)
 	}
 }
