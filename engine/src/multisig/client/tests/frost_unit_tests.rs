@@ -4,9 +4,7 @@ use client::tests::*;
 
 use super::helpers;
 
-use crate::logging::{
-    CEREMONY_IGNORED, REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
-};
+use crate::logging::{REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED};
 
 macro_rules! receive_comm1 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
@@ -371,7 +369,7 @@ async fn should_ignore_duplicate_rts() {
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert!(c1.is_at_signing_stage(2));
-    assert!(ctx.tag_cache.contains_tag(CEREMONY_IGNORED));
+    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]

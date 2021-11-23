@@ -4,6 +4,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    logging::KEYGEN_REQUEST_IGNORED,
     multisig::client::ThresholdParameters,
     p2p::{AccountId, P2PMessage},
 };
@@ -58,8 +59,12 @@ impl KeygenStateRunner {
 
         let stage = Box::new(BroadcastStage::new(processor, common));
 
-        self.inner
-            .on_ceremony_request(ceremony_id, stage, idx_mapping, outcome_sender);
+        if let Err(reason) =
+            self.inner
+                .on_ceremony_request(ceremony_id, stage, idx_mapping, outcome_sender)
+        {
+            slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+        }
     }
 
     pub fn try_expiring(&mut self) -> Option<Vec<AccountId>> {

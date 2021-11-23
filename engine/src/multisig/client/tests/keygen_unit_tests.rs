@@ -7,7 +7,7 @@ use super::helpers::{self, check_blamed_paries};
 use super::*;
 
 use crate::logging::{
-    CEREMONY_IGNORED, KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_EXPIRED,
+    KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_EXPIRED,
     KEYGEN_REQUEST_IGNORED,
 };
 
@@ -250,7 +250,7 @@ async fn should_ignore_duplicate_keygen_request() {
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert!(c1.is_at_keygen_stage(2));
-    assert!(ctx.tag_cache.contains_tag(CEREMONY_IGNORED));
+    assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
 // Ignore unexpected messages at all stages. This includes:
