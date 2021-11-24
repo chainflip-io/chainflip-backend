@@ -285,22 +285,16 @@ pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<Stri
 
 #[derive(Default)]
 struct CustomDataToSend {
-    /// If a test requires a local sig different from
-    /// the one that would be normally generated, it
-    /// will be stored here.  This is different from
-    // `sig3_to_send` in that these signatures are
-    // treated as having been broadcast consistently
-    local_sigs: HashMap<usize, frost::LocalSig3>,
     /// Maps a (sender, receiver) pair to the data that will be
     /// sent (in case it needs to be invalid/different from what
     /// is expected normally)
     comm1_signing: HashMap<(usize, usize), SigningCommitment>,
     comm1_keygen: HashMap<(usize, usize), DKGUnverifiedCommitment>,
-    // Sig3 to send between (sender, receiver) in case it
-    // needs to be different from the regular (valid) one
+    // Sig3 to send between (sender, receiver) in case we want
+    // an invalid sig3 or inconsistent sig3 for tests
     sig3s: HashMap<(usize, usize), LocalSig3>,
     // Secret shares to send between (sender, receiver) in case it
-    // need to be different from the regular (valid) one
+    // needs to be different from the regular (valid) one
     secret_shares: HashMap<(usize, usize), SecretShare3>,
     // Secret shares to be broadcast during blaming stage
     secret_shares_blaming: HashMap<usize, keygen::BlameResponse6>,
@@ -394,20 +388,13 @@ async fn collect_all_ver2(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<VerifyComm2>
     ver2_vec
 }
 
-async fn collect_all_local_sigs3(
-    rxs: &mut Vec<P2PMessageReceiver>,
-    custom_sigs: &mut HashMap<usize, frost::LocalSig3>,
-) -> Vec<frost::LocalSig3> {
+async fn collect_all_local_sigs3(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<frost::LocalSig3> {
     let mut local_sigs = vec![];
 
     for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
-        let valid_sig = recv_local_sig(rx).await;
-
-        // Check if the test requested a custom local sig
-        // to be emitted by party idx
-        let sig = custom_sigs.remove(idx).unwrap_or(valid_sig);
+        let sig = recv_local_sig(rx).await;
 
         // Ignore all other (same) messages
         for _ in 0..SIGNER_IDXS.len() - 2 {
@@ -609,10 +596,16 @@ impl KeygenContext {
         &self.clients[idx]
     }
 
-    pub fn use_invalid_local_sig(&mut self, signer_idx: usize) {
-        self.custom_data
-            .local_sigs
-            .insert(signer_idx, gen_invalid_local_sig());
+    pub fn use_invalid_local_sig(&mut self, sender_idx: usize) {
+        let fake_sig3 = gen_invalid_local_sig();
+
+        (0..self.account_ids.len()).for_each(|receiver_idx| {
+            if sender_idx != receiver_idx {
+                self.custom_data
+                    .sig3s
+                    .insert((sender_idx, receiver_idx), fake_sig3.clone());
+            }
+        });
     }
 
     pub fn use_invalid_secret_share(&mut self, sender_idx: usize, receiver_idx: usize) {
@@ -1106,7 +1099,7 @@ impl KeygenContext {
 
         // *** Collect local sigs ***
 
-        let local_sigs = collect_all_local_sigs3(p2p_rxs, &mut self.custom_data.local_sigs).await;
+        let local_sigs = collect_all_local_sigs3(p2p_rxs).await;
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
