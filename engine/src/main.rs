@@ -22,7 +22,10 @@ async fn main() {
         settings.log.blacklist.clone(),
     );
 
-    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
+    slog::info!(
+        root_logger,
+        "Start the engines! :broom: :broom: + A little check from kyle"
+    );
 
     HealthMonitor::new(&settings.health_check, &root_logger)
         .run()

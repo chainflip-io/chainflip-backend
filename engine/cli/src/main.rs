@@ -146,7 +146,7 @@ fn confirm_submit() -> bool {
 
         match input {
             "y" | "yes" | "1" | "true" | "ofc" => {
-                println!("Submitting...");
+                println!("Submission initated");
                 return true;
             }
             "n" | "no" | "0" | "false" | "nah" => {
