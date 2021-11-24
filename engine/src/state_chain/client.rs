@@ -273,7 +273,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 Ok(tx_hash) => {
                     slog::trace!(
                         logger,
-                        "Extrinsic submitted successfully with tx_hash: {}",
+                        "{:?} submitted successfully with tx_hash: {}",
+                        extrinsic,
                         tx_hash
                     );
                     return Ok(tx_hash);
@@ -467,8 +468,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
-    pub fn get_metadata(&self) -> substrate_subxt::Metadata {
-        self.metadata.clone()
+    pub fn get_metadata(&self) -> &substrate_subxt::Metadata {
+        &self.metadata
     }
 
     pub fn get_heartbeat_block_interval(&self) -> u32 {
