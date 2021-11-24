@@ -666,7 +666,12 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_staking, Staking);
 			list_benchmark!(list, extra, pallet_cf_flip, Flip);
 			list_benchmark!(list, extra, pallet_cf_governance, Governance);
-			// list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
+			list_benchmark!(list, extra, pallet_cf_online, Online);
+			list_benchmark!(list, extra, pallet_cf_emissions, Emissions);
+			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
+			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
+			list_benchmark!(list, extra, pallet_cf_vaults, Vaults);
+			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
