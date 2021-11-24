@@ -119,7 +119,7 @@ mod tests {
 	}
 
 	#[test]
-	fn should_ignore_heartbeats_during_ban() {
+	fn submitting_heartbeats_should_not_lift_ban() {
 		new_test_ext().execute_with(|| {
 			// Ban Alice
 			<OnlinePallet as Banned>::ban(&ALICE);

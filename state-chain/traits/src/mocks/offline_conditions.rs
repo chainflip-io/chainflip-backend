@@ -16,7 +16,7 @@ macro_rules! impl_mock_offline_conditions {
 		pub struct MockOfflinePenalty;
 		impl $crate::offline_conditions::OfflinePenalty for MockOfflinePenalty {
 			fn penalty(
-				condition: &$crate::offline_conditions::OfflineCondition,
+				_condition: &$crate::offline_conditions::OfflineCondition,
 			) -> $crate::offline_conditions::ReputationPoints {
 				0
 			}

@@ -70,49 +70,39 @@ pub mod pallet {
 		/// We verify if the node is online checking first if they are banned and if they are not
 		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			return Nodes::<T>::mutate_exists(validator_id, |maybe_node| {
-				match maybe_node {
-					None => false,
-					Some(node) => {
-						let current_block_number =
-							frame_system::Pallet::<T>::current_block_number();
-						let ban_has_expired = node.ban <= current_block_number;
-						if ban_has_expired {
-							// Reset ban if node banned
-							if node.ban != Zero::zero() {
-								(*node).ban = Zero::zero();
-							}
-							// Determine if we are online
-							node.has_submitted_this_interval(current_block_number)
-						} else {
-							// We are offline regardless of heartbeats during our ban
-							false
-						}
-					},
-				}
-			})
+			return match Nodes::<T>::try_get(validator_id) {
+				Ok(node) => {
+					let current_block_number = frame_system::Pallet::<T>::current_block_number();
+					!node.is_banned(current_block_number) &&
+						node.has_submitted_this_interval(current_block_number)
+				},
+				Err(_) => false,
+			}
 		}
 	}
 
-	/// A node's heartbeat
-	// #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	// Data for tracking a node's liveness state.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-	pub struct Node<T: Config> {
+	pub struct Liveness<T: Config> {
 		/// The last heartbeat received from this node
 		pub last_heartbeat: T::BlockNumber,
 		/// The block number this node is banned until
-		pub ban: T::BlockNumber,
+		pub banned_until: T::BlockNumber,
 	}
 
-	impl<T: Config> Default for Node<T> {
+	impl<T: Config> Default for Liveness<T> {
 		fn default() -> Self {
-			Node { last_heartbeat: Zero::zero(), ban: Zero::zero() }
+			Liveness { last_heartbeat: Zero::zero(), banned_until: Zero::zero() }
 		}
 	}
 
-	impl<T: Config> Node<T> {
+	impl<T: Config> Liveness<T> {
 		pub fn has_submitted_this_interval(&self, current_block_number: T::BlockNumber) -> bool {
 			(current_block_number - self.last_heartbeat) < T::HeartbeatBlockInterval::get()
+		}
+
+		pub fn is_banned(&self, current_block_number: T::BlockNumber) -> bool {
+			self.banned_until > current_block_number
 		}
 	}
 
@@ -121,7 +111,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type Nodes<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, Node<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -153,8 +143,8 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
-		/// of the network for those nodes that are validators.  Those validators that are banned
-		/// are included in this count.
+		/// of the network for those nodes that are validators.  Whether a validator is banned or
+		/// not has no bearing on this metric.
 		fn check_network_liveness(
 			current_block_number: BlockNumberFor<T>,
 		) -> NetworkState<T::ValidatorId> {
@@ -178,7 +168,7 @@ pub mod pallet {
 			// Ban is one heartbeat interval from now
 			let ban = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
 			Nodes::<T>::mutate(validator_id, |node| {
-				(*node).ban = ban;
+				(*node).banned_until = ban;
 			});
 		}
 	}
