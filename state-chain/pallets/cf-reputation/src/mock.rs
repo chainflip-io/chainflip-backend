@@ -14,6 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
 	mocks::{epoch_info, epoch_info::Mock},
+	offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints},
 	Chainflip, Slashing,
 };
 
@@ -97,6 +98,18 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
+pub struct MockOfflinePenalty;
+
+impl OfflinePenalty for MockOfflinePenalty {
+	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
+		match condition {
+			OfflineCondition::BroadcastOutputFailed => 10,
+			OfflineCondition::ParticipateSigningFailed => 100,
+			OfflineCondition::NotEnoughPerformanceCredits => 1000,
+		}
+	}
+}
+
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
@@ -113,6 +126,7 @@ impl Config for Test {
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
+	type Penalty = MockOfflinePenalty;
 	type EpochInfo = epoch_info::Mock;
 	type WeightInfo = ();
 }

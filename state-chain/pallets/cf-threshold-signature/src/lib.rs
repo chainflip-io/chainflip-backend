@@ -188,24 +188,19 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: Vec<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			const PENALTY: i32 = 15; // TODO: This should probably be specified somewhere common for all penalties.
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Report the offenders.
 			for offender in offenders.iter() {
-				T::OfflineReporter::report(
-					OfflineCondition::ParticipateSigningFailed,
-					PENALTY,
-					offender,
-				)
-				.unwrap_or_else(|e| {
-					log::error!(
-						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-						offender,
-						e
-					);
-					0
-				});
+				T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, offender)
+					.unwrap_or_else(|e| {
+						log::error!(
+							"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+							offender,
+							e
+						);
+						0
+					});
 			}
 
 			// Remove the context and schedule for retry.

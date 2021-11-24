@@ -224,7 +224,6 @@ impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
 	fn vault_rotation_aborted() {}
-	fn penalise(_bad_validators: &[Self::ValidatorId]) {}
 }
 
 impl pallet_cf_vaults::Config for Test {

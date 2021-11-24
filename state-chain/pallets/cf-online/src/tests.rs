@@ -1,6 +1,6 @@
 mod tests {
 	use crate::mock::*;
-	use cf_traits::{EpochInfo, IsOnline};
+	use cf_traits::{offline_conditions::Banned, EpochInfo, IsOnline};
 	use frame_support::assert_ok;
 
 	// Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
@@ -21,7 +21,17 @@ mod tests {
 	fn submitting_heartbeat_more_than_once_in_an_interval() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
+			assert_eq!(
+				<OnlinePallet as IsOnline>::is_online(&ALICE),
+				true,
+				"Alice should be online"
+			);
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
+			assert_eq!(
+				<OnlinePallet as IsOnline>::is_online(&ALICE),
+				true,
+				"Alice should be online"
+			);
 			go_to_interval(1);
 			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
 		});
@@ -63,7 +73,7 @@ mod tests {
 				"Alice should be offline after missing one heartbeat"
 			);
 			assert_eq!(
-				MockHeartbeat::network_state().number_of_nodes,
+				MockHeartbeat::network_state().number_of_nodes(),
 				1,
 				"We should have one node"
 			);
@@ -101,10 +111,29 @@ mod tests {
 			assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is now not online");
 
 			assert_eq!(
-				MockHeartbeat::network_state().number_of_nodes,
+				MockHeartbeat::network_state().number_of_nodes(),
 				1,
 				"We should have one node"
 			);
+		});
+	}
+
+	#[test]
+	fn submitting_heartbeats_should_not_lift_ban() {
+		new_test_ext().execute_with(|| {
+			// Ban Alice
+			<OnlinePallet as Banned>::ban(&ALICE);
+			// Send a series of heartbeats over N blocks
+			let number_of_blocks = 10;
+			for block_number in 1..=number_of_blocks {
+				assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
+				run_to_block(block_number);
+				assert_eq!(false, <OnlinePallet as IsOnline>::is_online(&ALICE));
+			}
+			// Move to next interval
+			go_to_interval(1);
+			// Alice should be online
+			assert_eq!(true, <OnlinePallet as IsOnline>::is_online(&ALICE));
 		});
 	}
 }

@@ -41,7 +41,7 @@ use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	ChainflipVaultRotationHandler,
+	ChainflipVaultRotationHandler, OfflinePenalty,
 };
 use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
@@ -422,6 +422,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
+	type Penalty = OfflinePenalty;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 }
