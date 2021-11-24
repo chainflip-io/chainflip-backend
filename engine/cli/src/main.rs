@@ -26,7 +26,8 @@ async fn run_cli() -> Result<()> {
 
     println!(
         "Connecting to state chain node at: `{}` and using private key located at: `{}`",
-        cli_settings.state_chain.ws_endpoint, cli_settings.state_chain.signing_key_file
+        cli_settings.state_chain.ws_endpoint,
+        cli_settings.state_chain.signing_key_file.display()
     );
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();
