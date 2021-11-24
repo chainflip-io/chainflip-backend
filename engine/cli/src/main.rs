@@ -111,15 +111,11 @@ async fn send_claim(
                     });
                 for (_phase, event, _) in events {
                     if let state_chain_runtime::Event::Staking(
-                        pallet_cf_staking::Event::ClaimSignatureIssued(
-                            validator_id,
-                            signed_payload,
-                        ),
+                        pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, _),
                     ) = event
                     {
                         if validator_id == state_chain_client.our_account_id {
-                            println!("Here's the signed claim data. Please proceed to the Staking UI to complete your claim. <LINK>");
-                            println!("\n{}\n", hex::encode(signed_payload));
+                            println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
                             break 'outer;
                         }
                     }
