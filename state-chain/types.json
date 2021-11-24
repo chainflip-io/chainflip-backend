@@ -35,6 +35,7 @@
     "minimum_active_bid": "Amount"
   },
   "BasisPoints": "u32",
+  "Balance": "FlipBalance",
   "Bid": "(ValidatorId, Amount)",
   "BlockHeightWindow": {
     "from": "u64",
@@ -82,12 +83,18 @@
   },
   "FlipBalance": "u128",
   "H256": "[u8; 32]",
+  "InternalSource": {
+    "_enum": {
+      "Account": "(ValidatorId)",
+      "Reserve": "(ReserveId)"
+    }
+  },
   "ImbalanceSource": {
-    "_enum": [
-      "External",
-      "Account(AccountId)",
-      "Emissions"
-    ]
+    "_enum": {
+      "External": "",
+      "Internal": "(InternalSource)",
+      "Emissions": ""
+    }
   },
   "KeyId": "Vec<u8>",
   "LookupSource": "MultiAddress",
@@ -104,10 +111,10 @@
     "_enum": [
       "BroadcastOutputFailed",
       "ParticipateSigningFailed",
-      "NotEnoughPerformanceCredits",
-      "ContradictingSelfDuringSigningCeremony"
+      "NotEnoughPerformanceCredits"
     ]
   },
+  "OnlineCredits": "BlockNumber",
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "[u8; 32]",
   "PercentageRange": {
@@ -128,7 +135,11 @@
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
-  "ReputationOf": "BlockNumber",
+  "Reputation": {
+    "online_credits": "OnlineCredits",
+    "reputation_points": "ReputationPoints"
+  },
+  "ReputationOf": "Reputation",
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
@@ -159,7 +170,16 @@
     ]
   },
   "Uint": "[u8; 32]",
-  "UnsignedTransactionFor": "Vec<u8>",
+  "UnsignedTransaction": {
+    "chain_id": "u64",
+    "max_priority_fee_per_gas": "Option<U256>",
+    "max_fee_per_gas": "Option<U256>",
+    "gas_limit": "Option<U256>",
+    "contract": "EthereumAddress",
+    "value": "U256",
+    "data": "Vec<u8>"
+  },
+  "UnsignedTransactionFor": "UnsignedTransaction",
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "PublicKey",
