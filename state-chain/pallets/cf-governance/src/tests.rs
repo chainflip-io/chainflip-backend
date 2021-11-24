@@ -1,6 +1,5 @@
 use crate::{
 	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalCount,
-	Proposals,
 };
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};

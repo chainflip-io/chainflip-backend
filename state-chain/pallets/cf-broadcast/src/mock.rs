@@ -1,6 +1,4 @@
-use crate::{
-	self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination, WeightInfo,
-};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
