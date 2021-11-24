@@ -24,7 +24,6 @@ thread_local! {
 		NetworkState {
 			offline: vec![],
 			online: vec![],
-			number_of_nodes: 0,
 		}
 	);
 }

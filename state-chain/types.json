@@ -95,6 +95,10 @@
     "online": "u32",
     "offline": "u32"
   },
+  "Node": {
+    "last_heartbeat": "BlockNumber",
+    "ban": "BlockNumber"
+  },
   "Nonce": "u64",
   "OfflineCondition": {
     "_enum": [
@@ -106,6 +110,10 @@
   },
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "[u8; 32]",
+  "PercentageRange": {
+    "top": "u8",
+    "bottom": "u8"
+  },
   "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
   "RegisterClaim": {
@@ -169,7 +177,11 @@
     "tx_hash": "Vec<u8>"
   },
   "VaultRotationStatus": {
-    "_enum": ["AwaitingKeygen", "AwaitingRotation", "Complete"]
+    "_enum": {
+      "AwaitingKeygen":"AwaitingKeygen",
+      "AwaitingRotation":"AwaitingRotation",
+      "Complete":"Complete"
+    }
   },
   "Version": "SemVer",
   "VoteCount": "u32"

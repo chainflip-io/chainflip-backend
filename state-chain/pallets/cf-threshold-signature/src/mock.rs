@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_threshold_signature};
 use cf_chains::{eth, ChainCrypto};
-use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
+use cf_traits::{Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::{
 	instances::Instance1,
@@ -135,31 +135,7 @@ impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 }
 
 // Mock OfflineReporter
-
-thread_local! {
-	pub static REPORTED: std::cell::RefCell<Vec<u64>> = Default::default()
-}
-
-pub struct MockOfflineReporter;
-
-impl MockOfflineReporter {
-	pub fn get_reported() -> Vec<u64> {
-		REPORTED.with(|cell| cell.borrow().clone())
-	}
-}
-
-impl OfflineReporter for MockOfflineReporter {
-	type ValidatorId = u64;
-
-	fn report(
-		_condition: OfflineCondition,
-		_penalty: ReputationPoints,
-		validator_id: &Self::ValidatorId,
-	) -> Result<frame_support::dispatch::Weight, ReportError> {
-		REPORTED.with(|cell| cell.borrow_mut().push(*validator_id));
-		Ok(0)
-	}
-}
+cf_traits::impl_mock_offline_conditions!(u64);
 
 // Mock SigningContext
 

@@ -19,7 +19,7 @@ const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9FEA5bbbFb94F3270E44Bc4BB26e9ca1f34
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "5b04D2B46061d396c1a3f0882a792e4b30f2DA0F";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
-	"0339e302f45e05949fbb347e0c6bba224d82d227a701640158bc1c799091747015";
+	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {

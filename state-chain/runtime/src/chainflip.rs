@@ -12,6 +12,7 @@ use cf_chains::{
 	Chain, ChainCrypto, Ethereum,
 };
 use cf_traits::{
+	offline_conditions::{OfflineCondition, ReputationPoints},
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
 	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
@@ -108,10 +109,6 @@ impl VaultRotationHandler for ChainflipVaultRotationHandler {
 
 	fn vault_rotation_aborted() {
 		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
-	}
-
-	fn penalise(bad_validators: &[Self::ValidatorId]) {
-		VaultRotationEventHandler::<Runtime>::penalise(bad_validators);
 	}
 }
 
@@ -405,5 +402,17 @@ impl cf_traits::WaivedFees for WaivedFees {
 			return super::Governance::members().contains(caller)
 		}
 		return false
+	}
+}
+
+pub struct OfflinePenalty;
+
+impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
+	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
+		match condition {
+			OfflineCondition::BroadcastOutputFailed => 15,
+			OfflineCondition::ParticipateSigningFailed => 15,
+			OfflineCondition::NotEnoughPerformanceCredits => 100,
+		}
 	}
 }
