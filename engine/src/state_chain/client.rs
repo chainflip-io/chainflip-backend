@@ -467,8 +467,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
-    pub fn get_metadata(&self) -> substrate_subxt::Metadata {
-        self.metadata.clone()
+    pub fn get_metadata(&self) -> &substrate_subxt::Metadata {
+        &self.metadata
     }
 
     pub fn get_heartbeat_block_interval(&self) -> u32 {
