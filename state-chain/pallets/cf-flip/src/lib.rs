@@ -480,10 +480,14 @@ where
 	type BlockNumber = B;
 
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight {
-		// Get the MBA aka the bond
-		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
+		// Check that the slashing rate is not zero, no need to slash if this is set to zero, right
+		if slashing_rate == Zero::zero() {
+			return T::DbWeight::get().reads(1);
+		}
+		// Get the MBA aka the bond
+		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
 		// slash per day = n % of MBA
