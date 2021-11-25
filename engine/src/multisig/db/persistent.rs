@@ -61,6 +61,7 @@ impl KeyDB for PersistentKeyDB {
                             "Loaded key_info (key_id: {}) from database",
                             key_id
                         );
+                        slog::debug!(self.logger, "Full result info: {:?}", keygen_info);
                         Some((key_id, keygen_info))
                     }
                     Err(err) => {
