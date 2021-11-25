@@ -104,6 +104,7 @@ async fn send_claim(
             println!("Your claim request is on chain.\nWaiting for signed claim data...");
             'outer: while let Some(result_header) = block_stream.next().await {
                 let header = result_header.expect("Failed to get a valid block header");
+                println!("Got header at block: {}", header.number);
                 let events = state_chain_client
                     .get_events(header.hash())
                     .await
@@ -111,6 +112,7 @@ async fn send_claim(
                         panic!("Failed to fetch events for block: {}, {}", header.number, e)
                     });
                 for (_phase, event, _) in events {
+                    println!("Got event: {:?}", event);
                     if let state_chain_runtime::Event::Staking(
                         pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, _),
                     ) = event

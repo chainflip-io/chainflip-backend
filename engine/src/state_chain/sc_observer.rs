@@ -144,9 +144,10 @@ pub async fn start<BlockStream, RpcClient>(
                         "Sending heartbeat at block: {}",
                         block_header.number
                     );
-                    let _ = state_chain_client
+                    let result_heartbeat = state_chain_client
                         .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
+                    println!("Result of heartbeat submission: {:?}", result_heartbeat);
                 }
 
                 // Process this block's events
