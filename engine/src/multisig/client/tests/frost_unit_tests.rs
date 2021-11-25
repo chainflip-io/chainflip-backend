@@ -382,7 +382,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 
 // If the list of signers in the sign request contains a duplicate id, the request should be ignored
 #[tokio::test]
-async fn should_ignore_keygen_request_with_duplicate_signer() {
+async fn should_ignore_rts_with_duplicate_signer() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
