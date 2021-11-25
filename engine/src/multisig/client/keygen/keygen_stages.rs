@@ -138,12 +138,22 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
     ) -> StageResult<KeygenData, KeygenResult> {
         let commitments = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
-            Err(blamed_parties) => return StageResult::Error(blamed_parties),
+            Err(blamed_parties) => {
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to verify initial commitments broadcasts"),
+                )
+            }
         };
 
         let commitments = match validate_commitments(commitments, &self.context) {
             Ok(comms) => comms,
-            Err(blamed_parties) => return StageResult::Error(blamed_parties),
+            Err(blamed_parties) => {
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to validate initial commitments"),
+                )
+            }
         };
 
         slog::debug!(
@@ -181,7 +191,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             // It is nobody's fault that the key is not compatible,
             // so we abort with an empty list of responsible nodes
             // to let the State Chain restart the ceremony
-            StageResult::Error(vec![])
+            StageResult::Error(
+                vec![],
+                anyhow::Error::msg("The key is not contract compatible"),
+            )
         }
     }
 }
@@ -324,7 +337,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
         let verified_complaints = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
-                return StageResult::Error(blamed_parties);
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to verify complaints broadcasts"),
+                );
             }
         };
 
@@ -393,7 +409,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
 
             StageResult::NextStage(Box::new(stage))
         } else {
-            StageResult::Error(idxs_to_report)
+            StageResult::Error(idxs_to_report, anyhow::Error::msg("Improper complaint"))
         }
     }
 }
@@ -540,7 +556,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
         let verified_responses = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
-                return StageResult::Error(blamed_parties);
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to verify blame response broadcasts"),
+                );
             }
         };
 
@@ -577,7 +596,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
 
             StageResult::Done(keygen_result)
         } else {
-            StageResult::Error(bad_parties)
+            StageResult::Error(
+                bad_parties,
+                anyhow::Error::msg("Invalid secret share in a blame response"),
+            )
         }
     }
 }

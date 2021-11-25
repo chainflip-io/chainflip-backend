@@ -108,7 +108,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
         let verified_commitments = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
-                return StageResult::Error(blamed_parties);
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to verify Initial commitments broadcasts"),
+                );
             }
         };
 
@@ -221,7 +224,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
         let local_sigs = match verify_broadcasts(&messages) {
             Ok(sigs) => sigs,
             Err(blamed_parties) => {
-                return StageResult::Error(blamed_parties);
+                return StageResult::Error(
+                    blamed_parties,
+                    anyhow::Error::msg("Failed to verify Local signatures broadcasts"),
+                );
             }
         };
 
@@ -246,7 +252,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             &local_sigs,
         ) {
             Ok(sig) => StageResult::Done(sig),
-            Err(failed_idxs) => StageResult::Error(failed_idxs),
+            Err(failed_idxs) => StageResult::Error(
+                failed_idxs,
+                anyhow::Error::msg("Failed to aggregate signature"),
+            ),
         }
     }
 }
