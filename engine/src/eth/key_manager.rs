@@ -139,7 +139,9 @@ impl EthObserver for KeyManager {
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
     {
         match event.event_parameters {
-            KeyManagerEvent::KeyChange { new_key, .. } => {
+            KeyManagerEvent::AggKeySetByAggKey { new_key, .. }
+            | KeyManagerEvent::AggKeySetByGovKey { new_key, .. }
+            | KeyManagerEvent::GovKeySetByGovKey { new_key, .. } => {
                 let _ = state_chain_client
                     .submit_extrinsic(
                         logger,
@@ -159,30 +161,32 @@ impl EthObserver for KeyManager {
         }
     }
 
-    pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
+    fn decode_log_closure(
+        &self,
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
         let ak_set_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
         let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
         let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(
+        Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                if signature == ak_set_ak.signature {
+                Ok(if signature == ak_set_ak.signature {
                     let log = ak_set_ak.event.parse_log(raw_log)?;
-                    Ok(KeyManagerEvent::AggKeySetByAggKey {
+                    KeyManagerEvent::AggKeySetByAggKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    })
+                    }
                 } else if signature == ak_set_gk.signature {
                     let log = ak_set_gk.event.parse_log(raw_log)?;
-                    Ok(KeyManagerEvent::AggKeySetByGovKey {
+                    KeyManagerEvent::AggKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    })
+                    }
                 } else if signature == gk_set_gk.signature {
                     let log = gk_set_gk.event.parse_log(raw_log)?;
-                    Ok(KeyManagerEvent::GovKeySetByGovKey {
+                    KeyManagerEvent::GovKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
                     }

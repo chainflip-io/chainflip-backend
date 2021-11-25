@@ -51,7 +51,7 @@ pub async fn test_all_key_manager_events() {
 
     km_events
             .iter()
-            .find(|event| match &event.event_enum {
+            .find(|event| match &event.event_parameters {
             KeyManagerEvent::AggKeySetByAggKey {
                 old_key, new_key
             } => {
@@ -64,7 +64,7 @@ pub async fn test_all_key_manager_events() {
 
     km_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             KeyManagerEvent::AggKeySetByGovKey {
                 old_key, new_key
             } => {
@@ -77,7 +77,7 @@ pub async fn test_all_key_manager_events() {
 
     km_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             KeyManagerEvent::GovKeySetByGovKey {
                 old_key, new_key
             } => {
