@@ -110,7 +110,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to verify Initial commitments broadcasts"),
+                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
                 );
             }
         };
@@ -226,7 +226,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to verify Local signatures broadcasts"),
+                    anyhow::Error::msg("Inconsistent broadcast of local signatures"),
                 );
             }
         };

@@ -141,7 +141,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to verify initial commitments broadcasts"),
+                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
                 )
             }
         };
@@ -151,7 +151,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to validate initial commitments"),
+                    anyhow::Error::msg("Invalid initial commitments"),
                 )
             }
         };
@@ -339,7 +339,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to verify complaints broadcasts"),
+                    anyhow::Error::msg("Inconsistent broadcast of complaints"),
                 );
             }
         };
@@ -558,7 +558,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
             Err(blamed_parties) => {
                 return StageResult::Error(
                     blamed_parties,
-                    anyhow::Error::msg("Failed to verify blame response broadcasts"),
+                    anyhow::Error::msg("Inconsistent broadcast of blame response"),
                 );
             }
         };
