@@ -37,7 +37,7 @@ use crate::{
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{
-    KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID, VALIDATOR_IDS,
+    ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID,
 };
 
 macro_rules! recv_data_keygen {
@@ -329,8 +329,8 @@ fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: VALIDATOR_IDS.len(),
-            threshold: VALIDATOR_IDS.len(),
+            share_count: ACCOUNT_IDS.len(),
+            threshold: ACCOUNT_IDS.len(),
         },
     );
     fake_comm1
@@ -442,7 +442,7 @@ async fn broadcast_all_signing_comm1(
                     .remove(&(*sender_idx, *receiver_idx))
                     .unwrap_or(valid_comm1.clone());
 
-                let id = &super::VALIDATOR_IDS[*sender_idx];
+                let id = &super::ACCOUNT_IDS[*sender_idx];
 
                 let m = sig_data_to_p2p(comm1, id);
 
@@ -483,7 +483,7 @@ async fn broadcast_all_ver2(clients: &mut Vec<MultisigClientNoDB>, ver2_vec: &Ve
             if sender_idx != receiver_idx {
                 let ver2 = ver2_vec[*sender_idx].clone();
 
-                let id = &super::VALIDATOR_IDS[*sender_idx];
+                let id = &super::ACCOUNT_IDS[*sender_idx];
 
                 let m = sig_data_to_p2p(ver2, id);
 
@@ -505,7 +505,7 @@ async fn broadcast_all_local_sigs(
                 .remove(&(*sender_idx, *receiver_idx))
                 .unwrap_or(valid_sig);
 
-            let id = &super::VALIDATOR_IDS[*sender_idx];
+            let id = &super::ACCOUNT_IDS[*sender_idx];
 
             let m = sig_data_to_p2p(sig3, id);
 
@@ -525,7 +525,7 @@ async fn broadcast_all_ver4(
             if sender_idx != receiver_idx {
                 let ver4 = ver4_vec[*sender_idx].clone();
 
-                let id = &super::VALIDATOR_IDS[*sender_idx];
+                let id = &super::ACCOUNT_IDS[*sender_idx];
 
                 let m = sig_data_to_p2p(ver4, id);
 
@@ -539,7 +539,7 @@ impl KeygenContext {
     /// Generate context without starting the keygen ceremony.
     /// `allowing_high_pubkey` is enabled so tests will not fail.
     pub fn new() -> Self {
-        let account_ids = super::VALIDATOR_IDS.clone();
+        let account_ids = super::ACCOUNT_IDS.clone();
         KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
     }
 
@@ -549,7 +549,7 @@ impl KeygenContext {
 
     /// Generate context with the KeygenOptions as default, (No `allowing_high_pubkey`)
     pub fn new_disallow_high_pubkey() -> Self {
-        let account_ids = super::VALIDATOR_IDS.clone();
+        let account_ids = super::ACCOUNT_IDS.clone();
         KeygenContext::inner_new(account_ids, KeygenOptions::default())
     }
 
@@ -1398,7 +1398,7 @@ impl MultisigClientNoDB {
         }
     }
 
-    /// Sends the correct keygen data from the `VALIDATOR_IDS[sender_idx]` to the client via `process_p2p_message`
+    /// Sends the correct keygen data from the `ACCOUNT_IDS[sender_idx]` to the client via `process_p2p_message`
     pub fn receive_keygen_stage_data(
         &mut self,
         stage: usize,
@@ -1409,7 +1409,7 @@ impl MultisigClientNoDB {
             stage,
             keygen_states,
             sender_idx,
-            &VALIDATOR_IDS[sender_idx],
+            &ACCOUNT_IDS[sender_idx],
         );
         self.process_p2p_message(message);
     }

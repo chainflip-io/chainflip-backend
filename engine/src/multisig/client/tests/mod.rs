@@ -24,12 +24,12 @@ pub const SIGN_CEREMONY_ID: CeremonyId = 0;
 
 lazy_static! {
 
-    static ref VALIDATOR_IDS: Vec<AccountId> =
+    static ref ACCOUNT_IDS: Vec<AccountId> =
         [1, 2, 3, 4].iter().map(|i| AccountId([*i; 32])).collect();
     static ref SIGNER_IDXS: Vec<usize> = vec![0, 1, 2];
     static ref SIGNER_IDS: Vec<AccountId> = SIGNER_IDXS
         .iter()
-        .map(|idx| VALIDATOR_IDS[*idx].clone())
+        .map(|idx| ACCOUNT_IDS[*idx].clone())
         .collect();
     static ref UNEXPECTED_VALIDATOR_ID: AccountId = AccountId(
         "unexpected|unexpected|unexpected"
@@ -49,6 +49,6 @@ lazy_static! {
         .unwrap();
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
         ceremony_id: KEYGEN_CEREMONY_ID,
-        signers: VALIDATOR_IDS.clone()
+        signers: ACCOUNT_IDS.clone()
     };
 }
