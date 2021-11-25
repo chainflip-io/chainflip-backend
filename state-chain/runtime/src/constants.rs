@@ -16,7 +16,9 @@ pub mod common {
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
-	pub const REGISTRATION_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+	// This should be the same as the `CLAIM_DELAY` in:
+	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
+	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
 	/// This determines the average expected block time that we are targeting.
 	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked

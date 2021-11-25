@@ -15,7 +15,8 @@ use structopt::StructOpt;
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct StateChain {
     pub ws_endpoint: String,
-    pub signing_key_file: String,
+    #[serde(deserialize_with = "deser_path")]
+    pub signing_key_file: PathBuf,
 }
 
 impl StateChain {
@@ -66,7 +67,7 @@ pub struct StateChainOptions {
     #[structopt(long = "state_chain.ws_endpoint")]
     pub state_chain_ws_endpoint: Option<String>,
     #[structopt(long = "state_chain.signing_key_file")]
-    pub state_chain_signing_key_file: Option<String>,
+    pub state_chain_signing_key_file: Option<PathBuf>,
 }
 
 #[derive(StructOpt, Debug, Clone)]
@@ -356,7 +357,7 @@ mod tests {
             log_blacklist: Some(vec!["test2".to_owned()]),
             state_chain_opts: StateChainOptions {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
-                state_chain_signing_key_file: Some("signing_key_file".to_owned()),
+                state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_from_block: Some(1234),
             eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
