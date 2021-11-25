@@ -172,8 +172,6 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
-
-    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash>;
 }
 
 #[async_trait]
@@ -223,16 +221,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(into_anyhow_error)
     }
-
-    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
-        try_unwrap_value(
-            self.chain_rpc_client
-                .block_hash(None)
-                .await
-                .map_err(into_anyhow_error)?,
-            anyhow::Error::msg("Failed to get latest block hash"),
-        )
-    }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
@@ -247,11 +235,6 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Get the latest block hash at the time of the call
-    pub async fn get_latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
-        self.state_chain_rpc_client.latest_block_hash().await
-    }
-
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
