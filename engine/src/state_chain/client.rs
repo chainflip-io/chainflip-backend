@@ -172,8 +172,6 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
-
-    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash>;
 }
 
 #[async_trait]
@@ -223,16 +221,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(into_anyhow_error)
     }
-
-    async fn latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
-        try_unwrap_value(
-            self.chain_rpc_client
-                .block_hash(None)
-                .await
-                .map_err(into_anyhow_error)?,
-            anyhow::Error::msg("Failed to get latest block hash"),
-        )
-    }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
@@ -247,11 +235,6 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Get the latest block hash at the time of the call
-    pub async fn get_latest_block_hash(&self) -> Result<state_chain_runtime::Hash> {
-        self.state_chain_rpc_client.latest_block_hash().await
-    }
-
     /// Submit an extrinsic and retry if it fails on an invalid nonce
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
@@ -536,81 +519,92 @@ pub async fn connect_to_state_chain(
             .await
             .map_err(into_anyhow_error)?;
 
-    let latest_block_hash = try_unwrap_value(
-        chain_rpc_client
-            .block_hash(None)
-            .await
-            .map_err(into_anyhow_error)?,
-        anyhow::Error::msg("Failed to get latest block hash"),
-    )?;
+    let mut block_header_stream = chain_rpc_client
+        .subscribe_finalized_heads()
+        .map_err(into_anyhow_error)?
+        .map_err(into_anyhow_error);
 
-    let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
-            .metadata(Some(latest_block_hash))
-            .await
-            .map_err(into_anyhow_error)?[..],
-    )?)?;
-
-    let system_pallet_metadata = metadata.module("System")?.clone();
-    let state_chain_rpc_client = StateChainRpcClient {
-        runtime_version: state_rpc_client
-            .runtime_version(Some(latest_block_hash))
-            .await
-            .map_err(into_anyhow_error)?,
-        genesis_hash: try_unwrap_value(
+    // TODO It is possible to avoid this wait, but somewhat complex and probably not needed
+    if let Some(Ok(block_header)) = block_header_stream.next().await {
+        let latest_block_hash = try_unwrap_value(
             chain_rpc_client
-                .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+                .block_hash(Some(
+                    sp_rpc::number::NumberOrHex::from(block_header.number).into(),
+                ))
                 .await
                 .map_err(into_anyhow_error)?,
-            anyhow::Error::msg("Genesis block doesn't exist?"),
-        )?,
-        signer: signer.clone(),
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client: chain_rpc_client.clone(),
-    };
+            anyhow::Error::msg("Failed to get latest block hash"),
+        )?;
 
-    let our_account_id = signer.account_id().to_owned();
+        let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
+            &mut &state_rpc_client
+                .metadata(Some(latest_block_hash))
+                .await
+                .map_err(into_anyhow_error)?[..],
+        )?)?;
 
-    let account_storage_key = system_pallet_metadata
-        .storage("Account")?
-        .map()?
-        .key(&our_account_id);
+        let system_pallet_metadata = metadata.module("System")?.clone();
+        let state_chain_rpc_client = StateChainRpcClient {
+            runtime_version: state_rpc_client
+                .runtime_version(Some(latest_block_hash))
+                .await
+                .map_err(into_anyhow_error)?,
+            genesis_hash: try_unwrap_value(
+                chain_rpc_client
+                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+                    .await
+                    .map_err(into_anyhow_error)?,
+                anyhow::Error::msg("Genesis block doesn't exist?"),
+            )?,
+            signer: signer.clone(),
+            author_rpc_client,
+            state_rpc_client,
+            chain_rpc_client: chain_rpc_client.clone(),
+        };
 
-    Ok((
-        Arc::new(StateChainClient {
-            metadata,
-            nonce: AtomicU32::new({
-                let account_info: frame_system::AccountInfo<
-                    <RuntimeImplForSigningExtrinsics as System>::Index,
-                    <RuntimeImplForSigningExtrinsics as System>::AccountData,
-                > = Decode::decode(
-                    &mut &state_chain_rpc_client
-                        .state_rpc_client
-                        .storage(account_storage_key.clone(), Some(latest_block_hash))
-                        .await
-                        .map_err(into_anyhow_error)?
-                        .ok_or_else(|| {
-                            anyhow::format_err!(
-                                "AccountId {:?} doesn't exist on the state chain.",
-                                our_account_id,
-                            )
-                        })?
-                        .0[..],
-                )?;
-                account_info.nonce
+        let our_account_id = signer.account_id().to_owned();
+
+        let account_storage_key = system_pallet_metadata
+            .storage("Account")?
+            .map()?
+            .key(&our_account_id);
+
+        Ok((
+            Arc::new(StateChainClient {
+                metadata,
+                nonce: AtomicU32::new({
+                    let account_info: frame_system::AccountInfo<
+                        <RuntimeImplForSigningExtrinsics as System>::Index,
+                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
+                    > = Decode::decode(
+                        &mut &state_chain_rpc_client
+                            .state_rpc_client
+                            .storage(account_storage_key.clone(), Some(latest_block_hash))
+                            .await
+                            .map_err(into_anyhow_error)?
+                            .ok_or_else(|| {
+                                anyhow::format_err!(
+                                    "AccountId {:?} doesn't exist on the state chain.",
+                                    our_account_id,
+                                )
+                            })?
+                            .0[..],
+                    )?;
+                    account_info.nonce
+                }),
+                state_chain_rpc_client,
+                our_account_id,
+                account_storage_key,
+                events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
             }),
-            state_chain_rpc_client,
-            our_account_id,
-            account_storage_key,
-            events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
-        }),
-        chain_rpc_client
-            .subscribe_finalized_heads() // TODO: We cannot control at what block this stream begins (Could be a problem)
-            .map_err(into_anyhow_error)?
-            .map_err(into_anyhow_error),
-        latest_block_hash,
-    ))
+            block_header_stream,
+            latest_block_hash,
+        ))
+    } else {
+        Err(anyhow::Error::msg(
+            "Couldn't get first block from block header stream",
+        ))
+    }
 }
 
 #[cfg(test)]
