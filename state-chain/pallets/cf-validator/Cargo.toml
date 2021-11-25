@@ -1,11 +1,12 @@
 [package]
+name = 'pallet-cf-validator'
+version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-validator'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.0.1'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -14,38 +15,74 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 pallet-cf-auction = { path = '../cf-auction', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-serde = { version = "1.0.119", optional = true }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-frame-support = { version = "3.0.0", default-features = false }
-frame-system = { version = "3.0.0", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false }
-sp-std = { version = "3.0.0", default-features = false }
-sp-io = { version = "3.0.0", default-features = false }
-sp-core = { default-features = false, version = '3.0.0' }
-frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
-pallet-session = { default-features = false, version = '3.0.0' }
-log = { version = "0.4.14", default-features = false }
 
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.3.1'
+
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-09+1'
+
+[dependencies.pallet-session]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+# Dev dependencies
 [dev-dependencies]
-sp-std = { version = "3.0.0", default-features = false }
-sp-io = { version = "3.0.0", default-features = false }
-sp-core = { default-features = false, version = '3.0.0' }
 assert_matches = { version = "1.5.0" }
+
+[dev-dependencies.sp-io]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dev-dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
 
 [features]
 default = ['std']
 std = [
     'codec/std',
+    'scale-info/std',
     'frame-support/std',
     'frame-system/std',
     'sp-std/std',
     'sp-runtime/std',
-    'sp-core/std',
-    'sp-io/std',
-    'serde',
-    'log/std',
     'pallet-session/std',
-    'frame-benchmarking/std',
     'pallet-cf-auction/std',
 ]
 runtime-benchmarks = [
@@ -53,3 +90,4 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
+try-runtime = ['frame-support/try-runtime'] 

@@ -1,17 +1,21 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotator};
-use cf_traits::{Bid, ChainflipAccountData, EmergencyRotation};
-use frame_support::traits::ValidatorRegistration;
-use frame_support::{construct_runtime, parameter_types};
+use cf_traits::{
+	impl_mock_online,
+	mocks::{
+		chainflip_account::MockChainflipAccount,
+		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
+	},
+	Bid, ChainflipAccountData, EmergencyRotation,
+};
+use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -34,13 +38,15 @@ thread_local! {
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
-// offset the ids to create unique bidder groups
+// offset the ids to create unique bidder groups.  By default all bidders are online.
 pub fn generate_bids(number_of_bids: u32, group: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
 		for bid_number in (1..=number_of_bids as u64).rev() {
-			(*cell).push((bid_number * group as u64, bid_number * 100));
+			let validator_id = bid_number * group as u64;
+			MockOnline::set_online(&validator_id, true);
+			(*cell).push((validator_id, bid_number * 100));
 		}
 	});
 }
@@ -63,23 +69,14 @@ pub fn run_auction() {
 }
 
 pub fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events()
-		.pop()
-		.expect("Event expected")
-		.event
+	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 // The set we would expect
 pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();
 	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
-	(
-		bidders
-			.iter()
-			.map(|(validator_id, _)| *validator_id)
-			.collect(),
-		bidders.last().unwrap().1,
-	)
+	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
 }
 
 construct_runtime!(
@@ -88,8 +85,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -98,7 +95,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -120,6 +117,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -143,6 +141,8 @@ impl EmergencyRotation for MockEmergencyRotation {
 	fn emergency_rotation_completed() {}
 }
 
+impl_mock_online!(ValidatorId);
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -157,32 +157,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-}
-
-pub struct MockChainflipAccount;
-
-impl ChainflipAccount for MockChainflipAccount {
-	type AccountId = u64;
-
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
-	}
-
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
-		CHAINFLIP_ACCOUNTS.with(|cell| {
-			cell.borrow_mut()
-				.insert(*account_id, ChainflipAccountData { state });
-		})
-	}
-}
-
-pub struct MockOnline;
-impl IsOnline for MockOnline {
-	type ValidatorId = ValidatorId;
-
-	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
-		true
-	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -207,12 +181,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_auction: Some(AuctionPalletConfig {
+		system: Default::default(),
+		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 			winners,
 			minimum_active_bid,
-		}),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

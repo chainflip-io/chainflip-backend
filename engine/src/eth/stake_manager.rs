@@ -5,90 +5,24 @@ use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
-    eth::{eth_event_streamer, utils, SignatureAndEvent},
-    logging::COMPONENT_KEY,
-    settings,
+    eth::{utils, SignatureAndEvent},
+    state_chain::client::StateChainRpcApi,
 };
 
 use sp_runtime::AccountId32;
 
 use web3::{
     ethabi::{self, RawLog},
-    transports::WebSocket,
     types::{H160, H256},
-    Web3,
 };
+
+use std::fmt::Debug;
+
+use async_trait::async_trait;
 
 use anyhow::Result;
 
-use futures::{Future, Stream, StreamExt};
-use slog::o;
-
-use super::{decode_shared_event_closure, eth_event_streamer::Event, SharedEvent};
-
-/// Set up the eth event streamer for the StakeManager contract, and start it
-pub async fn start_stake_manager_witness(
-    web3: &Web3<WebSocket>,
-    settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient>,
-    logger: &slog::Logger,
-) -> Result<impl Future> {
-    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
-    slog::info!(logger, "Starting StakeManager witness");
-
-    slog::info!(logger, "Load Contract ABI");
-    let stake_manager = StakeManager::new(&settings)?;
-
-    let mut event_stream = stake_manager
-        .event_stream(&web3, settings.eth.from_block, &logger)
-        .await?;
-
-    Ok(async move {
-        while let Some(result_event) = event_stream.next().await {
-            // TODO: Handle unwraps
-            let event = result_event.unwrap();
-            match event.event_enum {
-                StakeManagerEvent::Staked {
-                    account_id,
-                    amount,
-                    staker: _,
-                    return_addr,
-                } => {
-                    state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_staked(
-                                account_id,
-                                amount,
-                                return_addr.0,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
-                }
-                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                    state_chain_client
-                        .submit_extrinsic(
-                            &logger,
-                            pallet_cf_witnesser_api::Call::witness_claimed(
-                                account_id,
-                                amount,
-                                event.tx_hash,
-                            ),
-                        )
-                        .await;
-                }
-                event => {
-                    slog::warn!(
-                        logger,
-                        "{:?} is not to be submitted to the State Chain",
-                        event
-                    );
-                }
-            }
-        }
-    })
-}
+use super::{decode_shared_event_closure, event_common::EventWithCommon, EthObserver, SharedEvent};
 
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
@@ -96,8 +30,6 @@ pub struct StakeManager {
     contract: ethabi::Contract,
 }
 
-// TODO: ClaimRegistered, FlipSupplyUpdated, MinStakeChanged, not used
-// so they are just using the ethabi encoding atm
 /// Represents the events that are expected from the StakeManager contract.
 #[derive(Debug)]
 pub enum StakeManagerEvent {
@@ -153,42 +85,71 @@ pub enum StakeManagerEvent {
         new_min_stake: ethabi::Uint,
     },
 
+    // TODO: Should be able to remove shared from here
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
     Shared(SharedEvent),
 }
 
-impl StakeManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
-        let contract =
-            ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
-        Ok(Self {
-            deployed_address: settings.eth.stake_manager_eth_address,
-            contract,
-        })
-    }
+#[async_trait]
+impl EthObserver for StakeManager {
+    type EventParameters = StakeManagerEvent;
 
-    // TODO: Maybe try to factor this out (See KeyManager)
-    pub async fn event_stream(
+    async fn handle_event<RPCClient>(
         &self,
-        web3: &Web3<WebSocket>,
-        from_block: u64,
+        event: EventWithCommon<Self::EventParameters>,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<Event<StakeManagerEvent>>>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.deployed_address,
-            self.decode_log_closure()?,
-            from_block,
-            logger,
-        )
-        .await
+    ) where
+        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+    {
+        match event.event_parameters {
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                staker: _,
+                return_addr,
+            } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        logger,
+                        pallet_cf_witnesser_api::Call::witness_staked(
+                            account_id,
+                            amount,
+                            return_addr.0,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        logger,
+                        pallet_cf_witnesser_api::Call::witness_claimed(
+                            account_id,
+                            amount,
+                            event.tx_hash,
+                        ),
+                    )
+                    .await;
+            }
+            ignored_event => {
+                slog::warn!(
+                    logger,
+                    "{:?} is not to be submitted to the State Chain",
+                    ignored_event
+                );
+            }
+        }
     }
 
-    pub fn decode_log_closure(
+    fn get_deployed_address(&self) -> H160 {
+        self.deployed_address
+    }
+
+    fn decode_log_closure(
         &self,
-    ) -> Result<impl Fn(H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
@@ -197,8 +158,8 @@ impl StakeManager {
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(
-            move |signature: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
+        Ok(Box::new(
+            move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -210,57 +171,62 @@ impl StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                if signature == staked.signature {
+                Ok(if signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::Staked {
+                    StakeManagerEvent::Staked {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                         staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == claim_registered.signature {
                     let log = claim_registered.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::ClaimRegistered {
+                    StakeManagerEvent::ClaimRegistered {
                         account_id,
                         amount: utils::decode_log_param(&log, "amount")?,
                         staker: utils::decode_log_param(&log, "staker")?,
                         start_time: utils::decode_log_param(&log, "startTime")?,
                         expiry_time: utils::decode_log_param(&log, "expiryTime")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == claim_executed.signature {
                     let log = claim_executed.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
-                    let event = StakeManagerEvent::ClaimExecuted {
+                    StakeManagerEvent::ClaimExecuted {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    };
-                    Ok(event)
+                    }
                 } else if signature == flip_supply_updated.signature {
                     let log = flip_supply_updated.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::FlipSupplyUpdated {
+                    StakeManagerEvent::FlipSupplyUpdated {
                         old_supply: utils::decode_log_param(&log, "oldSupply")?,
                         new_supply: utils::decode_log_param(&log, "newSupply")?,
                         block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                    };
-                    Ok(event)
+                    }
                 } else if signature == min_stake_changed.signature {
                     let log = min_stake_changed.event.parse_log(raw_log)?;
-                    let event = StakeManagerEvent::MinStakeChanged {
+                    StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
-                    };
-                    Ok(event)
+                    }
                 } else {
-                    Ok(StakeManagerEvent::Shared(decode_shared_event_closure(
-                        signature, raw_log,
-                    )?))
-                }
+                    StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                })
             },
-        )
+        ))
+    }
+}
+
+impl StakeManager {
+    /// Loads the contract abi to get the event definitions
+    pub fn new(deployed_address: H160) -> Result<Self> {
+        Ok(Self {
+            deployed_address,
+            contract: ethabi::Contract::load(
+                std::include_bytes!("abis/StakeManager.json").as_ref(),
+            )?,
+        })
     }
 }
 
@@ -274,15 +240,13 @@ mod tests {
 
     #[test]
     fn test_load_contract() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        assert_ok!(StakeManager::new(&settings));
+        let address = H160::default();
+        assert_ok!(StakeManager::new(address));
     }
 
     #[test]
     fn test_staked_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
@@ -325,9 +289,7 @@ mod tests {
 
     #[test]
     fn test_claim_registered_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_register_event_signature =
@@ -379,9 +341,7 @@ mod tests {
 
     #[test]
     fn test_claim_executed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_executed_event_signature =
@@ -418,9 +378,7 @@ mod tests {
 
     #[test]
     fn flip_supply_updated_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let flip_supply_updated_event_signature =
@@ -454,9 +412,7 @@ mod tests {
 
     #[test]
     fn min_stake_changed_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let min_stake_changed_event_signature =
@@ -488,9 +444,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let stake_manager = StakeManager::new(&settings).unwrap();
+        let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let refunded_event_signature =

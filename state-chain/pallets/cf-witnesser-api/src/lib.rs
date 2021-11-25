@@ -1,8 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-//! Witness Api Pallet
-//!
-//! A collection of convenience extrinsics that delegate to other pallets via witness consensus.
+#![doc = include_str!("../README.md")]
 
 pub use pallet::*;
 
@@ -14,10 +11,10 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::Ethereum;
+	use cf_chains::{ChainId, Ethereum};
 	use cf_traits::{SigningContext, Witnesser};
 	use frame_support::{
-		dispatch::DispatchResultWithPostInfo, instances::Instance0, pallet_prelude::*,
+		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};
@@ -26,11 +23,8 @@ pub mod pallet {
 		FlipBalance,
 	};
 	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
-	use pallet_cf_vaults::rotation::{CeremonyId, KeygenResponse, VaultRotationResponse};
-	use pallet_cf_vaults::{
-		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
-		ThresholdSignatureResponse,
-	};
+	use pallet_cf_vaults::{Call as VaultsCall, CeremonyId, Config as VaultsConfig};
+	use pallet_cf_witnesser::WeightInfo;
 	use sp_std::prelude::*;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -40,18 +34,21 @@ pub mod pallet {
 		frame_system::Config
 		+ StakingConfig
 		+ VaultsConfig
-		+ SigningConfig<Instance0, TargetChain = Ethereum>
-		+ BroadcastConfig<Instance0, TargetChain = Ethereum>
+		+ SigningConfig<Instance1, TargetChain = Ethereum>
+		+ BroadcastConfig<Instance1, TargetChain = Ethereum>
 	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
 			+ From<VaultsCall<Self>>
-			+ From<SigningCall<Self, Instance0>>
-			+ From<BroadcastCall<Self, Instance0>>;
+			+ From<SigningCall<Self, Instance1>>
+			+ From<BroadcastCall<Self, Instance1>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
+
+		/// Benchmark stuff
+		type WeightInfoWitnesser: pallet_cf_witnesser::WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -67,14 +64,24 @@ pub mod pallet {
 		/// Witness the success of a threshold signing ceremony.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_success(*id, signature.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
-			signature: <<T as pallet_cf_threshold_signature::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
+			signature: <<T as pallet_cf_threshold_signature::Config<Instance1>>::SigningContext as SigningContext<T>>::Signature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance0>::signature_success(id, signature);
+			let call = SigningCall::<T, Instance1>::signature_success(id, signature);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -82,14 +89,24 @@ pub mod pallet {
 		/// Witness the failure of a threshold signing ceremony.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(SigningCall::<T, Instance1>::signature_failed(*id, offenders.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_signature_failed(
 			origin: OriginFor<T>,
 			id: pallet_cf_threshold_signature::CeremonyId,
 			offenders: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = SigningCall::<T, Instance0>::signature_failed(id, offenders);
+			let call = SigningCall::<T, Instance1>::signature_failed(id, offenders);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -99,14 +116,24 @@ pub mod pallet {
 		/// Witness the successful completion of an outgoing broadcast.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::transmission_success(id, tx_hash);
+			let call = BroadcastCall::<T, Instance1>::transmission_success(id, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -114,15 +141,25 @@ pub mod pallet {
 		/// Witness the failure of an outgoing broadcast.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
 			id: pallet_cf_broadcast::BroadcastAttemptId,
 			failure: pallet_cf_broadcast::TransmissionFailure,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance0>,
+			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance0>::transmission_failure(id, failure, tx_hash);
+			let call = BroadcastCall::<T, Instance1>::transmission_failure(id, failure, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -132,7 +169,17 @@ pub mod pallet {
 		/// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::staked(staker_account_id.clone(), *amount, *withdrawal_address, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_staked(
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
@@ -148,7 +195,17 @@ pub mod pallet {
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(StakingCall::<T>::claimed(account_id.clone(), *claimed_amount, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_claimed(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
@@ -162,43 +219,78 @@ pub mod pallet {
 
 		//*** Vaults pallet witness calls ***//
 
-		/// Witness a key generation response from 2/3 of our current validators
+		/// Witness a successful key generation.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_keygen_response(
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_success(*ceremony_id, *chain_id, new_public_key.clone())
+		.get_dispatch_info()
+		.weight))]
+		pub fn witness_keygen_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
+			chain_id: ChainId,
+			new_public_key: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::keygen_response(ceremony_id, response);
+			let call = VaultsCall::keygen_success(ceremony_id, chain_id, new_public_key);
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a threshold signature response from 2/3 of our current validators
-		#[pallet::weight(10_000)]
-		pub fn witness_threshold_signature_response(
+		/// Witness a keygen failure
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_failure(*ceremony_id, *chain_id, guilty_validators.clone())
+		.get_dispatch_info()
+		.weight))]
+		pub fn witness_keygen_failure(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
+			chain_id: ChainId,
+			guilty_validators: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
+			let call = VaultsCall::keygen_failure(ceremony_id, chain_id, guilty_validators);
 			T::Witnesser::witness(who, call.into())
 		}
 
-		/// Witness a vault rotation response from 2/3 of our current validators
+		/// Witness an on-chain vault key rotation
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_vault_rotation_response(
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::vault_key_rotated(*chain_id, new_public_key.clone(), *block_number, tx_hash.clone())
+		.get_dispatch_info()
+		.weight))]
+		pub fn witness_vault_key_rotated(
 			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
-			response: VaultRotationResponse<T::TransactionHash>,
+			chain_id: ChainId,
+			new_public_key: Vec<u8>,
+			block_number: u64,
+			tx_hash: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::vault_rotation_response(ceremony_id, response);
+			let call =
+				VaultsCall::vault_key_rotated(chain_id, new_public_key, block_number, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

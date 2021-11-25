@@ -2,29 +2,28 @@ use super::*;
 use crate as pallet_cf_online;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
-use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
-use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::{Chainflip, Heartbeat, NetworkState};
-use sp_std::cell::RefCell;
+use cf_traits::{impl_mock_stake_transfer, BlockNumber, Chainflip, Heartbeat, NetworkState};
 
 type ValidatorId = u64;
+
+cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32);
+impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {
 	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
-			missing: vec![],
-			online: vec![],
 			offline: vec![],
+			online: vec![],
 		}
 	);
 }
@@ -35,17 +34,17 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage},
 	}
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
+	pub const BlockHashCount: BlockNumber = 250;
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -67,6 +66,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 // A heartbeat interval in blocks
@@ -79,8 +79,12 @@ parameter_types! {
 pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
+	type BlockNumber = u64;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight {
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		_block_number: Self::BlockNumber,
+	) -> Weight {
 		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
 		0
 	}
@@ -91,13 +95,19 @@ impl Heartbeat for MockHeartbeat {
 	}
 }
 
+impl MockHeartbeat {
+	pub(crate) fn network_state() -> NetworkState<ValidatorId> {
+		NETWORK_STATE.with(|cell| (*cell.borrow()).clone())
+	}
+}
+
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
@@ -105,21 +115,18 @@ impl Chainflip for Test {
 }
 
 impl Config for Test {
-	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type EpochInfo = epoch_info::Mock;
 	type Heartbeat = MockHeartbeat;
+	type EpochInfo = MockEpochInfo;
+	type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_online: Some(OnlinePalletConfig {}),
-	};
+	let config = GenesisConfig { system: Default::default() };
 
-	// We only expect Alice to be a validator at the moment
-	Mock::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+	MockEpochInfo::add_validator(ALICE);
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

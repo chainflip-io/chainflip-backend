@@ -4,91 +4,26 @@
 use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
-    eth::{eth_event_streamer, utils, SignatureAndEvent},
-    logging::COMPONENT_KEY,
-    settings,
+    eth::{utils, SignatureAndEvent},
+    state_chain::client::StateChainRpcApi,
 };
+use cf_chains::ChainId;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    transports::WebSocket,
     types::{H160, H256},
-    Web3,
 };
 
 use anyhow::Result;
 
-use futures::{Future, Stream, StreamExt};
+use std::fmt::Debug;
 
-use slog::o;
+use async_trait::async_trait;
 
 use super::decode_shared_event_closure;
-use super::eth_event_streamer::Event;
-
-/// Set up the eth event streamer for the KeyManager contract, and start it
-pub async fn start_key_manager_witness(
-    web3: &Web3<WebSocket>,
-    settings: &settings::Settings,
-    _state_chain_client: Arc<StateChainClient>,
-    logger: &slog::Logger,
-) -> Result<impl Future> {
-    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
-    slog::info!(logger, "Starting KeyManager witness");
-
-    slog::info!(logger, "Load Contract ABI");
-    let key_manager = KeyManager::new(&settings)?;
-
-    let mut event_stream = key_manager
-        .event_stream(&web3, settings.eth.from_block, &logger)
-        .await?;
-
-    Ok(async move {
-        while let Some(result_event) = event_stream.next().await {
-            // TODO: Handle unwraps
-            let event = result_event.unwrap();
-            match event.event_enum {
-                KeyManagerEvent::AggKeySetByAggKey { .. } => {
-                    slog::info!(
-                        logger,
-                        "AggKeySetByAggKey event found: {}",
-                        hex::encode(event.tx_hash)
-                    );
-                }
-                KeyManagerEvent::AggKeySetByGovKey { .. } => {
-                    slog::info!(
-                        logger,
-                        "AggKeySetByGovKey event found: {}",
-                        hex::encode(event.tx_hash)
-                    );
-                }
-                KeyManagerEvent::GovKeySetByGovKey { .. } => {
-                    slog::info!(
-                        logger,
-                        "GovKeySetByGovKey event found: {}",
-                        hex::encode(event.tx_hash)
-                    );
-                }
-                KeyManagerEvent::Shared(shared_event) => match shared_event {
-                    SharedEvent::Refunded { .. } => {
-                        slog::info!(
-                            logger,
-                            "Refunded event found: {}",
-                            hex::encode(event.tx_hash)
-                        );
-                    }
-                    SharedEvent::RefundFailed { .. } => {
-                        slog::info!(
-                            logger,
-                            "RefundFailed event found: {}",
-                            hex::encode(event.tx_hash)
-                        );
-                    }
-                },
-            }
-        }
-    })
-}
+use super::event_common::EventWithCommon;
+use super::EthObserver;
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -113,6 +48,18 @@ impl ChainflipKey {
                 false => web3::types::U256::from_dec_str("0").unwrap(),
             },
         })
+    }
+
+    /// 1 byte of pub_key_y_parity followed by 32 bytes of pub_key_x
+    /// Equivalent to secp256k1::PublicKey.serialize()
+    pub fn serialize(&self) -> [u8; 33] {
+        let mut bytes: [u8; 33] = [0; 33];
+        self.pub_key_x.to_big_endian(&mut bytes[1..]);
+        bytes[0] = match self.pub_key_y_parity.is_zero() {
+            true => 2,
+            false => 3,
+        };
+        bytes
     }
 }
 
@@ -179,31 +126,37 @@ pub enum KeyManagerEvent {
     Shared(SharedEvent),
 }
 
-impl KeyManager {
-    /// Loads the contract abi to get event definitions
-    pub fn new(settings: &settings::Settings) -> Result<Self> {
-        Ok(Self {
-            deployed_address: settings.eth.key_manager_eth_address,
-            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
-        })
-    }
+#[async_trait]
+impl EthObserver for KeyManager {
+    type EventParameters = KeyManagerEvent;
 
-    // TODO: Maybe try to factor this out (See StakeManager)
-    pub async fn event_stream(
+    async fn handle_event<RPCClient>(
         &self,
-        web3: &Web3<WebSocket>,
-        from_block: u64,
+        event: EventWithCommon<Self::EventParameters>,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
-    ) -> Result<impl Stream<Item = Result<Event<KeyManagerEvent>>>> {
-        slog::info!(logger, "Creating new event stream");
-        eth_event_streamer::new_eth_event_stream(
-            web3,
-            self.deployed_address,
-            self.decode_log_closure()?,
-            from_block,
-            logger,
-        )
-        .await
+    ) where
+        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+    {
+        match event.event_parameters {
+            KeyManagerEvent::KeyChange { new_key, .. } => {
+                let _ = state_chain_client
+                    .submit_extrinsic(
+                        logger,
+                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
+                            ChainId::Ethereum,
+                            new_key.serialize().to_vec(),
+                            event.block_number,
+                            event.tx_hash.to_vec(),
+                        ),
+                    )
+                    .await;
+            }
+            KeyManagerEvent::Shared(shared_event) => match shared_event {
+                SharedEvent::Refunded { .. } => {}
+                SharedEvent::RefundFailed { .. } => {}
+            },
+        }
     }
 
     pub fn decode_log_closure(&self) -> Result<impl Fn(H256, RawLog) -> Result<KeyManagerEvent>> {
@@ -232,14 +185,26 @@ impl KeyManager {
                     Ok(KeyManagerEvent::GovKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    })
+                    }
                 } else {
-                    Ok(KeyManagerEvent::Shared(decode_shared_event_closure(
-                        signature, raw_log,
-                    )?))
-                }
+                    KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                })
             },
-        )
+        ))
+    }
+
+    fn get_deployed_address(&self) -> H160 {
+        self.deployed_address
+    }
+}
+
+impl KeyManager {
+    /// Loads the contract abi to get the event definitions
+    pub fn new(deployed_address: H160) -> Result<Self> {
+        Ok(Self {
+            deployed_address,
+            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
+        })
     }
 }
 
@@ -261,9 +226,7 @@ mod tests {
         // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let decode_log = key_manager.decode_log_closure().unwrap();
 
@@ -369,9 +332,7 @@ mod tests {
 
     #[test]
     fn refunded_log_parsing() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
         let decode_log = key_manager.decode_log_closure().unwrap();
 
         let refunded_event_signature =
@@ -399,15 +360,13 @@ mod tests {
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let key_manager = KeyManager::new(&settings).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let transaction_hash =
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let event = Event::decode(
+        let event = EventWithCommon::decode(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
@@ -415,7 +374,7 @@ mod tests {
                 .unwrap()],
                 data: web3::types::Bytes(hex::decode("31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
                 block_hash: None,
-                block_number: None,
+                block_number: Some(web3::types::U64::zero()),
                 transaction_hash: Some(transaction_hash),
                 transaction_index: None,
                 log_index: None,
@@ -426,5 +385,27 @@ mod tests {
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash.to_fixed_bytes());
+    }
+
+    #[test]
+    fn test_chainflip_key_serialize() {
+        use secp256k1::PublicKey;
+
+        // Create a `ChainflipKey` and a `PublicKey` that are the same
+        let cf_key = ChainflipKey::from_dec_str(
+            "22479114112312168431982914496826057754130808976066989807481484372215659188398",
+            true,
+        )
+        .unwrap();
+
+        let sk = secp256k1::SecretKey::from_str(
+            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
+        )
+        .unwrap();
+
+        let secp_key = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
+
+        // Compare the serialize() values to make sure we serialize the same as secp256k1
+        assert_eq!(cf_key.serialize(), secp_key.serialize());
     }
 }

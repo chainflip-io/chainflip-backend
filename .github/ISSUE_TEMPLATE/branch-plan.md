@@ -9,7 +9,7 @@ assignees: ''
 
 ## English description of the proposed features to be introduced by this branch
 
-A clear and concise description of what ths proposed branch will introduce to the codebase. Ideally in plain English.
+A clear and concise description of what this branch will introduce. Ideally in plain English.
 
 ## Describe the solution you'd like to implement
 
@@ -21,7 +21,7 @@ A more thorough technical description of the code to be introduced. Including bu
 - Dependencies assumed of other components
 - Suspected (or actual, if possible) breaking changes
 - Target Branch
-- Linked Issues (Either Github or ~~Clubhouse~~ Shortcut)
+- Linked Issues (Either Github or Shortcut)
 
 ### Storage
 
@@ -48,9 +48,9 @@ A more thorough technical description of the code to be introduced. Including bu
 
 ---
 
-### ~~Clubhouse~~ Shortcut Story Link
+### Shortcut Story Link
 
-[CH-XXXX].
+[SC-XXXX].
 
 ### Describe alternatives you've considered
 

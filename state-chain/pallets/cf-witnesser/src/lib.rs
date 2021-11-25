@@ -1,11 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod tests;
@@ -23,6 +29,7 @@ use frame_support::{
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use utilities::threshold_from_share_count;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -43,6 +50,7 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Member
 			+ FullCodec
+			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
 
@@ -54,6 +62,9 @@ pub mod pallet {
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 
 	/// A hash to index the call by.
@@ -85,8 +96,8 @@ pub mod pallet {
 	>;
 
 	/// The current threshold for reaching consensus.
-	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
-	/// therefore the threshold might change due to unavailable nodes, slashing etc.)
+	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator
+	/// set and therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
 	pub type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
 
@@ -128,22 +139,22 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Called as a witness of some external event.
 		///
-		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
-		/// identical transaction. This can be thought of as a vote for the encoded [Call](Config::Call) value.
+		/// The provided `call` will be dispatched when the configured threshold number of validtors
+		/// have submitted an identical transaction. This can be thought of as a vote for the
+		/// encoded [Call](Config::Call) value.
 		///
 		/// ## Events
 		///
-		/// - [WitnessReceived](Event::WitnessReceived): A witness vote has been counted.
-		/// - [ThresholdReached](Event::ThresholdReached): We have collected enough votes to execute the call.
-		/// - [WitnessExecuted](Event::WitnessExecuted): We have executed the call, successfully or not.
+		/// - [WitnessReceived](Event::WitnessReceived)
+		/// - [ThresholdReached](Event::ThresholdReached)
+		/// - [WitnessExecuted](Event::WitnessExecuted)
 		///
 		/// ## Errors
 		///
-		/// - [UnauthorisedWitness](Error::UnauthorisedWitness): The Validator is not in the active set for this epoch.
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds): The Validator's index in the active set is
-		///   outside of the range of our bitmask. Should be impossible?
-		/// - [DuplicateWitness](Error::DuplicateWitness): This Validator has attempted to vote twice.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
+		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [DuplicateWitness](Error::DuplicateWitness)
+		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
@@ -167,7 +178,8 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Do the actual witnessing.
 	///
-	/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a high level:
+	/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a
+	/// high level:
 	///
 	/// 1. Look up the account id in the list of validators.
 	/// 2. Get the list of votes for the call, or an empty list if this is the first vote.
@@ -175,11 +187,12 @@ impl<T: Config> Pallet<T> {
 	/// 4. Check the number of votes against the reuquired threshold.
 	/// 5. If the threshold is exceeded, execute the voted-on `call`.
 	///
-	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator account ID in the
-	/// current Epoch.
+	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator
+	/// account ID in the current Epoch.
 	///
 	/// **Note:**
-	/// This implementation currently allows voting to continue even after the vote threshold is reached.
+	/// This implementation currently allows voting to continue even after the vote threshold is
+	/// reached.
 	fn do_witness(
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
@@ -214,13 +227,12 @@ impl<T: Config> Pallet<T> {
 				let mut vote_count = bits.count_ones();
 
 				// Get a reference to the existing vote.
-				let mut vote = bits
-					.get_mut(index)
-					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				let mut vote = bits.get_mut(index).ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
 
-				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
+				// Return an error if already voted, otherwise set the indexed bit to `true` to
+				// indicate a vote.
 				if *vote {
-					Err(Error::<T>::DuplicateWitness)?
+					return Err(Error::<T>::DuplicateWitness)
 				}
 
 				vote_count += 1;
@@ -239,10 +251,7 @@ impl<T: Config> Pallet<T> {
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		let threshold = ConsensusThreshold::<T>::get() as usize;
 		if num_votes == threshold {
-			Self::deposit_event(Event::<T>::ThresholdReached(
-				call_hash,
-				num_votes as VoteCount,
-			));
+			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
@@ -270,7 +279,7 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 ///
 /// ```ignore
 /// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
-/// 	log::debug!("This extrinsic was called as a result of witness threshold consensus.");
+///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
 /// ```
 pub struct EnsureWitnessed;
@@ -314,16 +323,7 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		}
 		NumValidators::<T>::set(total);
 
-		let calc_threshold = |total: u32| -> u32 {
-			let doubled = total * 2;
-			if doubled % 3 == 0 {
-				doubled / 3
-			} else {
-				doubled / 3 + 1
-			}
-		};
-
 		// Assume all validators are live at the start of an Epoch.
-		ConsensusThreshold::<T>::mutate(|thresh| *thresh = calc_threshold(total))
+		ConsensusThreshold::<T>::mutate(|thresh| *thresh = threshold_from_share_count(total) + 1)
 	}
 }

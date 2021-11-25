@@ -1,42 +1,76 @@
 [package]
+name = 'pallet-cf-witnesser'
+version = '0.1.0'
 authors = ['Chainflip <https://chainflip.io>']
 description = 'FRAME pallet for chainflip witnessing.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = 'TBC'
-name = 'pallet-cf-witnesser'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
-version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
-
-# alias "parity-scale-code" to "codec"
-[dependencies.codec]
-default-features = false
-features = ['derive']
-package = 'parity-scale-codec'
-version = '2.0.0'
 
 [dependencies]
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
+# Local deps
+utilities = { path = '../../../utilities', default-features = false }
+
 # Non-substrate external deps
 bitvec = { default-features = false, version = '0.20', features = ["alloc"] }
 
-# Substrate deps
-frame-support = { default-features = false, version = '3.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-sp-core = { default-features = false, version = '3.0.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
-sp-std = { default-features = false, version = '3.0.0' }
-sp-io = { default-features = false, version = '3.0.0' }
-frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.3.1'
 
-[dev-dependencies]
-serde = { version = "1.0.119" }
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-09+1'
+
+# Dev dependencies
+[dev-dependencies.sp-io]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dev-dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
 
 [features]
 default = ['std']
@@ -44,17 +78,16 @@ std = [
     'bitvec/std',
     'cf-traits/std',
     'codec/std',
+    'scale-info/std',
     'frame-support/std',
     'frame-system/std',
     'pallet-cf-validator/std',
-    'sp-core/std',
-    'sp-io/std',
     'sp-runtime/std',
     'sp-std/std',
-    'frame-benchmarking/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
+try-runtime = ['frame-support/try-runtime'] 

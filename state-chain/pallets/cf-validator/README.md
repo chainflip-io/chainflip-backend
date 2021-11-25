@@ -23,7 +23,6 @@ Epoch session.
   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
   undetermined number of blocks.
 - Sudo: A single account that is also called the "sudo key" which allows "privileged functions"
-
 - Emergency Rotation: An emergency rotation can be requested which initiates a new auction and on success of this 
   auction a new validating set will secure the network.
 

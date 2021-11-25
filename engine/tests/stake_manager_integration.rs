@@ -7,12 +7,14 @@ use chainflip_engine::{
     eth::{
         new_synced_web3_client,
         stake_manager::{StakeManager, StakeManagerEvent},
+        EthObserver,
     },
     logging::utils,
     settings::Settings,
 };
 
 use futures::stream::StreamExt;
+use sp_core::H160;
 use sp_runtime::AccountId32;
 
 use web3::types::U256;
@@ -21,7 +23,7 @@ mod common;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
@@ -29,7 +31,8 @@ pub async fn test_all_stake_manager_events() {
         .await
         .unwrap();
 
-    let stake_manager = StakeManager::new(&settings).unwrap();
+    // TODO: Get the address from environment variables, so we don't need to start the SC
+    let stake_manager = StakeManager::new(H160::default()).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
@@ -53,7 +56,7 @@ pub async fn test_all_stake_manager_events() {
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -79,7 +82,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -108,7 +111,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::ClaimExecuted {
                 account_id, amount, ..
             } => {
@@ -126,7 +129,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -148,7 +151,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_enum {
+        .find(|event| match &event.event_parameters {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,

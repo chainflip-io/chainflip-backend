@@ -2,19 +2,18 @@
 
 pub mod mocks;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use codec::{Decode, Encode};
-use frame_support::pallet_prelude::Member;
-use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	pallet_prelude::Member,
+	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
 use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
-use sp_std::marker::PhantomData;
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -29,11 +28,13 @@ pub trait Chainflip: frame_system::Config {
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
 	type ValidatorId: Member
+		+ Default
 		+ Parameter
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
+
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter;
+	type KeyId: Member + Parameter + From<Vec<u8>>;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
@@ -47,12 +48,12 @@ pub trait Witnesser {
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
 
-	/// Witness an event. The event is represented by a call, which is dispatched when a threshold number of witnesses
-	/// have been made.
+	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
+	/// number of witnesses have been made.
 	///
 	/// **IMPORTANT**
-	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should be enforced by adding
-	/// a salt or nonce to the function arguments.
+	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should
+	/// be enforced by adding a salt or nonce to the function arguments.
 	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
 }
@@ -92,8 +93,7 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids,
 	/// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	/// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
-	/// from the trait `VaultRotation`
+	/// We have ran the auction and have a set of validators with minimum active bid.
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
 	ConfirmedValidators(Vec<ValidatorId>, Amount),
@@ -157,42 +157,19 @@ pub trait VaultRotationHandler {
 	type ValidatorId;
 	/// The vault rotation has been aborted
 	fn vault_rotation_aborted();
-	/// Penalise bad validators during a vault rotation
-	fn penalise(bad_validators: &[Self::ValidatorId]);
-}
-
-/// Errors occurring during a rotation
-#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
-pub enum RotationError<ValidatorId> {
-	/// An invalid request index
-	InvalidCeremonyId,
-	/// Empty validator set provided
-	EmptyValidatorSet,
-	/// A set of badly acting validators
-	BadValidators(Vec<ValidatorId>),
-	/// The keygen response says the newly generated key is the same as the old key
-	KeyUnchanged,
-	/// Failed to construct a valid chain specific payload for rotation
-	FailedToConstructPayload,
-	/// The vault rotation is not confirmed
-	NotConfirmed,
-	/// Failed to make keygen request
-	FailedToMakeKeygenRequest,
-	/// New public key has not been set by a keygen_response
-	NewPublicKeyNotSet,
 }
 
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
+	type RotationError;
+
 	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
+	fn finalize_rotation() -> Result<(), Self::RotationError>;
 }
 
 /// An error has occurred during an auction
@@ -212,8 +189,8 @@ pub trait EpochTransitionHandler {
 	type Amount: Copy;
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with a
-	/// `_new_bond`
+	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
+	/// a `_new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -225,7 +202,7 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders
+	/// Provide a list of bidders, those stakers that are not retired
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
@@ -263,8 +240,8 @@ pub trait StakeTransfer {
 
 	/// Reserves funds for a claim, if enough claimable funds are available.
 	///
-	/// Note this function makes no assumptions about how many claims may be pending simultaneously: if enough funds
-	/// are available, it succeeds. Otherwise, it fails.
+	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
+	/// if enough funds are available, it succeeds. Otherwise, it fails.
 	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
 
 	/// Performs any necessary settlement once a claim has been confirmed off-chain.
@@ -306,7 +283,8 @@ pub trait RewardsDistribution {
 
 pub trait RewardRollover {
 	type AccountId;
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
+	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
+	/// are available.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
@@ -316,21 +294,13 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions() -> Weight;
 }
 
-/// A nonce
+/// A nonce.
 pub type Nonce = u64;
 
-/// A identifier for the chain a nonce is required
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum NonceIdentifier {
-	Ethereum = 1,
-	Bitcoin = 2,
-	Dot = 3,
-}
-
-/// Provide a nonce
-pub trait NonceProvider {
-	/// Provide the next nonce for the chain identified
-	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+/// Provides a unqiue nonce for some [Chain].
+pub trait NonceProvider<C: Chain> {
+	/// Get the next nonce.
+	fn next_nonce() -> Nonce;
 }
 
 pub trait IsOnline {
@@ -340,27 +310,30 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A representation of the current network state
+/// A representation of the current network state for this heartbeat interval.
+/// A node is regarded online if we have received a heartbeat during the last heartbeat interval
+/// otherwise they are considered offline.  
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId> {
-	/// We are missing the last heartbeat from this node and yet cannot determine if they
-	/// are offline or online.
-	pub missing: Vec<ValidatorId>,
-	/// The node is online
-	pub online: Vec<ValidatorId>,
-	/// The node has been determined as being offline
+pub struct NetworkState<ValidatorId: Default> {
+	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
+	/// Online nodes
+	pub online: Vec<ValidatorId>,
 }
 
-impl<ValidatorId> NetworkState<ValidatorId> {
+impl<ValidatorId: Default> NetworkState<ValidatorId> {
+	/// Return the number of nodes with state Validator in the network
+	pub fn number_of_nodes(&self) -> u32 {
+		(self.online.len() + self.offline.len()) as u32
+	}
+
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
-		let number_offline = self.offline.len() as u32;
 
 		number_online
 			.saturating_mul(100)
-			.checked_div(number_online + number_offline)
+			.checked_div(self.number_of_nodes())
 			.unwrap_or(0)
 	}
 }
@@ -385,13 +358,12 @@ pub enum ChainflipAccountState {
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
+	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData {
-			state: ChainflipAccountState::Passive,
-		}
+		ChainflipAccountData { state: ChainflipAccountState::Passive, last_active_epoch: None }
 	}
 }
 
@@ -400,6 +372,16 @@ pub trait ChainflipAccount {
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex);
+}
+
+/// An outgoing node
+pub trait IsOutgoing {
+	type AccountId;
+
+	/// Returns true if this account is an outgoer which by definition is a node that was in the
+	/// active set in the *last* epoch
+	fn is_outgoing(account_id: &Self::AccountId) -> bool;
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
@@ -416,6 +398,13 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
+		})
+		.expect("mutating account state")
+	}
+
+	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).last_active_epoch = Some(index);
 		})
 		.expect("mutating account state")
 	}
@@ -439,18 +428,21 @@ pub trait SignerNomination {
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	fn nomination_with_seed(seed: u64) -> Self::SignerId;
 
-	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
-	/// seed value is used as a source of randomness.
+	/// Returns a list of live signers where the number of signers is sufficient to author a
+	/// threshold signature. The seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.
-pub trait KeyProvider<C: Chain> {
+pub trait KeyProvider<C: ChainCrypto> {
 	/// The type of the provided key_id.
 	type KeyId;
 
-	/// Gets the key.
-	fn current_key() -> Self::KeyId;
+	/// Gets the key id for the current key.
+	fn current_key_id() -> Self::KeyId;
+
+	/// Get the chain's current agg key.
+	fn current_key() -> C::AggKey;
 }
 
 /// Api trait for pallets that need to sign things.
@@ -492,8 +484,7 @@ pub trait SigningContext<T: Chainflip> {
 		origin: OriginFor<T>,
 		signature: Self::Signature,
 	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature)
-			.dispatch_bypass_filter(origin)
+		self.resolve_callback(signature).dispatch_bypass_filter(origin)
 	}
 }
 
@@ -510,8 +501,6 @@ pub mod offline_conditions {
 		ParticipateSigningFailed,
 		/// Not Enough Performance Credits
 		NotEnoughPerformanceCredits,
-		/// Contradicting Self During a Signing Ceremony
-		ContradictingSelfDuringSigningCeremony,
 	}
 
 	/// Error on reporting an offline condition.
@@ -521,24 +510,39 @@ pub mod offline_conditions {
 		UnknownValidator,
 	}
 
+	pub trait OfflinePenalty {
+		fn penalty(condition: &OfflineCondition) -> ReputationPoints;
+	}
+
 	/// For reporting offline conditions.
 	pub trait OfflineReporter {
 		type ValidatorId;
+		type Penalty: OfflinePenalty;
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
 		fn report(
 			condition: OfflineCondition,
-			penalty: ReputationPoints,
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError>;
+	}
+
+	/// We report on nodes that should be banned
+	pub trait Banned {
+		type ValidatorId;
+		/// A validator to be banned
+		fn ban(validator_id: &Self::ValidatorId);
 	}
 }
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId;
+	type ValidatorId: Default;
+	type BlockNumber;
 	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId) -> Weight;
+	fn heartbeat_submitted(
+		validator_id: &Self::ValidatorId,
+		block_number: Self::BlockNumber,
+	) -> Weight;
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
 }
@@ -552,4 +556,11 @@ pub trait BlockEmissions {
 	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
 	/// Calculate the emissions per block
 	fn calculate_block_emissions() -> Weight;
+}
+
+/// Checks if the caller can execute free transactions
+pub trait WaivedFees {
+	type AccountId;
+	type Call;
+	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }

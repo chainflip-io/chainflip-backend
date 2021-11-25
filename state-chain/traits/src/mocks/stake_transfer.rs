@@ -11,7 +11,6 @@ macro_rules! impl_mock_stake_transfer {
 		}
 
 		pub struct MockStakeHandler;
-
 		impl MockStakeHandler {
 			// Check if updated and reset
 			pub fn has_stake_updated(account_id: &$account_id) -> bool {

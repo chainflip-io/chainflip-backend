@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)] // NOTE: This is stable as of rustc v1.54.0
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(test)]
 pub mod mock;
@@ -10,7 +10,7 @@ mod tests;
 
 use codec::{Decode, Encode};
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
@@ -18,8 +18,7 @@ use cf_traits::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::RuntimeDebug;
-use sp_std::marker::PhantomData;
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 pub type CeremonyId = u64;
 
@@ -27,8 +26,7 @@ pub type CeremonyId = u64;
 pub mod pallet {
 	use super::*;
 	use codec::FullCodec;
-	use frame_support::pallet_prelude::*;
-	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
+	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
 	/// Metadata for a pending threshold signature request.
@@ -39,8 +37,8 @@ pub mod pallet {
 		pub chain_signing_context: T::SigningContext,
 	}
 
-	type SignatureFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Signature;
-	type PayloadFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Payload;
+	type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+	type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -49,10 +47,17 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: Chain;
+		type TargetChain: Chain + ChainCrypto;
 
 		/// The context definition for this instance.
-		type SigningContext: SigningContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
+		/// TODO: Remove `Payload` and `Signature` from this type.
+		type SigningContext: SigningContext<
+				Self,
+				Chain = Self::TargetChain,
+				Payload = PayloadFor<Self, I>,
+				Signature = SignatureFor<Self, I>,
+			> + Member
+			+ FullCodec;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -85,11 +90,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// [ceremony_id, key_id, signatories, payload]
+		/// \[ceremony_id, key_id, signatories, payload\]
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
-		/// [ceremony_id, key_id, offenders]
+		/// \[ceremony_id, key_id, offenders\]
 		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
-		/// [ceremony_id]
+		/// \[ceremony_id\]
 		ThresholdSignatureSuccess(CeremonyId),
 	}
 
@@ -97,6 +102,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The provided ceremony id is invalid.
 		InvalidCeremonyId,
+		/// The provided threshold signature is invalid.
+		InvalidThresholdSignature,
 	}
 
 	#[pallet::hooks]
@@ -104,7 +111,7 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let num_retries = RetryQueue::<T, I>::decode_len().unwrap_or(0);
 			if num_retries == 0 {
-				return 0;
+				return 0
 			}
 
 			// Process pending retries.
@@ -115,14 +122,23 @@ pub mod pallet {
 				);
 			}
 			// TODO: replace this with benchmark results.
-			num_retries as u64
-				* frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+			num_retries as u64 *
+				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// A threshold signature ceremony has succeeded.
+		///
+		/// ## Events
+		///
+		/// - [ThresholdSignatureSuccess](Event::ThresholdSignatureSuccess)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		/// - [InvalidThresholdSignature](Error::InvalidThresholdSignature)
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -131,47 +147,60 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			// Ensure the id is valid and remove the context.
+			// Ensure the id is valid and get the context.
 			let context =
-				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
+				PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
 
-			// TODO: verify the threshold signature.
+			// Verify the threshold signature.
+			let agg_key = T::KeyProvider::current_key();
+			ensure!(
+				<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+					&agg_key,
+					&context.chain_signing_context.get_payload(),
+					&signature,
+				),
+				Error::<T, I>::InvalidThresholdSignature
+			);
+
+			// The request succeeded, remove it.
+			PendingRequests::<T, I>::remove(id);
 
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
 			// Dispatch the callback.
-			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
-			// origin.
-			context
-				.chain_signing_context
-				.dispatch_callback(origin, signature)
+			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through
+			// the witness origin. See #779.
+			context.chain_signing_context.dispatch_callback(origin, signature)
 		}
 
 		/// A threshold signature ceremony has failed.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		#[pallet::weight(10_000)]
 		pub fn signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
 			offenders: Vec<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			const PENALTY: i32 = 15; // TODO: This should probably be specified somewhere common for all penalties.
-			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
+			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Report the offenders.
 			for offender in offenders.iter() {
-				T::OfflineReporter::report(
-					OfflineCondition::ParticipateSigningFailed,
-					PENALTY,
-					offender,
-				)
-				.unwrap_or_else(|e| {
-					frame_support::debug::error!(
-						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-						offender,
-						e
-					);
-					0
-				});
+				T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, offender)
+					.unwrap_or_else(|e| {
+						log::error!(
+							"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+							offender,
+							e
+						);
+						0
+					});
 			}
 
 			// Remove the context and schedule for retry.
@@ -200,13 +229,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Get the current signing key.
-		let key_id = T::KeyProvider::current_key();
+		let key_id = T::KeyProvider::current_key_id();
 
 		// Construct the payload.
 		let payload = context.get_payload();
 
 		// Select nominees for threshold signature.
-		// Q: does it matter if this is predictable? ie. does it matter if we use the `id` as a seed value?
+		// Q: does it matter if this is predictable? ie. does it matter if we use the `id` as a seed
+		// value?
 		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
 
 		// Store the context.

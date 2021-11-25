@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, new_synced_web3_client},
+    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver},
     logging::utils,
     settings::Settings,
 };
@@ -7,13 +7,12 @@ use chainflip_engine::{
 use anyhow::Result;
 use config::{Config, Environment, File};
 use futures::stream::StreamExt;
-
-mod common;
+use sp_core::H160;
 
 /// Simply runs a test against infura to ensure we can subscribe to infura
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
-    let root_logger = utils::create_cli_logger();
+    let root_logger = utils::new_cli_logger();
 
     let settings = test_settings_from_file_and_env().unwrap();
 
@@ -21,7 +20,8 @@ pub async fn test_all_key_manager_events() {
         .await
         .unwrap();
 
-    let key_manager = KeyManager::new(&settings).unwrap();
+    // TODO: Get the address from environment variables, so we don't need to start the SC
+    let key_manager = KeyManager::new(H160::default()).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.

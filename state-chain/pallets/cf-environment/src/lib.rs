@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extended_key_value_attributes)]
 #![doc = include_str!("../README.md")]
+#![doc = include_str!("../../cf-doc-head.md")]
 
 pub use pallet::*;
 #[frame_support::pallet]
@@ -30,17 +30,17 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
 	/// The address of the ETH stake manager contract
-	pub type StakeManagerAddress<T> = StorageValue<_, EthereumAddress>;
+	pub type StakeManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
-	pub type KeyManagerAddress<T> = StorageValue<_, EthereumAddress>;
+	pub type KeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The address of the ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, u32>;
+	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::event]
 	pub enum Event<T: Config> {}
@@ -55,7 +55,7 @@ pub mod pallet {
 	pub struct GenesisConfig {
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
-		pub ethereum_chain_id: u32,
+		pub ethereum_chain_id: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -73,9 +73,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			StakeManagerAddress::<T>::set(Some(self.stake_manager_address.clone()));
-			KeyManagerAddress::<T>::set(Some(self.key_manager_address.clone()));
-			EthereumChainId::<T>::set(Some(self.ethereum_chain_id.clone()));
+			StakeManagerAddress::<T>::set(self.stake_manager_address);
+			KeyManagerAddress::<T>::set(self.key_manager_address);
+			EthereumChainId::<T>::set(self.ethereum_chain_id);
 		}
 	}
 }

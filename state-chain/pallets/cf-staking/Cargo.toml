@@ -1,18 +1,16 @@
 [package]
+name = 'pallet-cf-staking'
+version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet for managing stakers of FLIP.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'pallet-cf-staking'
+publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
-
-[build-dependencies]
-substrate-wasm-builder = '3.0.0'
 
 [dependencies]
 # Internal deps
@@ -22,21 +20,60 @@ pallet-cf-validator = {path = '../cf-validator', default-features = false}
 pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
 
 # Non-substrate external deps
-codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
-ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
-ethereum-types = {default-features = false, version = "0.12"}
+log = { version = '0.4.14', default-features = false }
 
-# Substrate deps
-frame-support = {default-features = false, version = '3.0.0'}
-frame-system = {default-features = false, version = '3.0.0'}
-serde = {optional = true, version = '1.0.119'}
-sp-core = {default-features = false, version = '3.0.0'}
-sp-runtime = {default-features = false, version = '3.0.0'}
-sp-std = {default-features = false, version = '3.0.0'}
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.3.1'
 
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '1.0'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+optional = true
+tag = 'monthly-2021-09+1'
+
+# Dev dependencies
 [dev-dependencies]
+cf-chains = {path = '../../chains', features = ['mocks']}
 pallet-cf-flip = {path = '../cf-flip'}
-sp-io = {version = '3.0.0'}
+
+[dev-dependencies.sp-io]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
 
 [features]
 default = ['std']
@@ -46,11 +83,17 @@ std = [
   'pallet-cf-validator/std',
   'pallet-cf-threshold-signature/std',
   'codec/std',
+  'scale-info/std',
+  'log/std',
   'frame-support/std',
   'frame-system/std',
   'sp-runtime/std',
   'sp-core/std',
   'sp-std/std',
-  'serde',
-  'ethabi/std',
 ]
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]
+try-runtime = ['frame-support/try-runtime'] 

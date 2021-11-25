@@ -1,6 +1,9 @@
 use crate as pallet_cf_rewards;
-use cf_traits::{RewardRollover, StakeTransfer};
-use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, RewardRollover,
+	StakeTransfer,
+};
+use frame_support::{assert_ok, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -8,6 +11,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
+use cf_traits::WaivedFees;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -19,9 +24,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		FlipRewards: pallet_cf_rewards::{Module, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
+		FlipRewards: pallet_cf_rewards::{Pallet, Storage, Event<T>},
 	}
 );
 
@@ -33,7 +38,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -55,19 +60,11 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
-}
-pub struct MockEnsureGovernance;
-
-impl EnsureOrigin<Origin> for MockEnsureGovernance {
-	type Success = ();
-
-	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
-		Ok(().into())
-	}
 }
 
 cf_traits::impl_mock_stake_transfer!(u64, u128);
@@ -76,17 +73,23 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
 }
 
 impl pallet_cf_rewards::Config for Test {
 	type Event = Event;
+	type WeightInfoRewards = ();
 }
 
 pub fn check_balance_integrity() {
@@ -111,10 +114,7 @@ pub fn new_test_ext(
 	accounts: Vec<(AccountId, u128)>,
 ) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000u128);
-	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-	};
+	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 	ext.execute_with(|| {
 		let mut beneficiaries = vec![];

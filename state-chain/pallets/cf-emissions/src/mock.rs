@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
+use cf_chains::{eth, Ethereum};
 use frame_support::{
 	parameter_types,
-	traits::{EnsureOrigin, Imbalance},
+	traits::{Imbalance, UnfilteredDispatchable},
 };
 use frame_system as system;
 use pallet_cf_flip;
@@ -14,10 +15,20 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+use cf_traits::WaivedFees;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{mocks::epoch_info, RewardsDistribution};
+use cf_traits::{
+	impl_mock_waived_fees,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
+	Chainflip, NonceProvider, RewardsDistribution, SigningContext, ThresholdSigner,
+};
+
+pub type AccountId = u64;
+
+cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -26,9 +37,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Emissions: pallet_cf_emissions::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -38,7 +49,7 @@ parameter_types! {
 }
 
 impl system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -60,35 +71,94 @@ impl system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
+}
+
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_offline_conditions!(u64);
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = AccountId;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
+}
+
+pub struct MockCallback;
+
+impl UnfilteredDispatchable for MockCallback {
+	type Origin = Origin;
+
+	fn dispatch_bypass_filter(
+		self,
+		_origin: Self::Origin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		Ok(().into())
+	}
+}
+
+pub struct MockEthSigningContext;
+
+impl From<eth::update_flip_supply::UpdateFlipSupply> for MockEthSigningContext {
+	fn from(_: eth::update_flip_supply::UpdateFlipSupply) -> Self {
+		MockEthSigningContext
+	}
+}
+
+impl SigningContext<Test> for MockEthSigningContext {
+	type Chain = Ethereum;
+	type Payload = Vec<u8>;
+	type Signature = Vec<u8>;
+	type Callback = MockCallback;
+
+	fn get_payload(&self) -> Self::Payload {
+		b"payloooooad".to_vec()
+	}
+
+	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+		MockCallback
+	}
+}
+
+pub struct MockThresholdSigner;
+
+impl ThresholdSigner<Test> for MockThresholdSigner {
+	type Context = MockEthSigningContext;
+
+	fn request_signature(_context: Self::Context) -> u64 {
+		0
+	}
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
-pub struct MockEnsureGovernance;
-
-impl EnsureOrigin<Origin> for MockEnsureGovernance {
-	type Success = ();
-
-	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
-		Ok(().into())
-	}
-}
-
-cf_traits::impl_mock_stake_transfer!(u64, u128);
-
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
+
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
+}
+
+pub const NONCE: u64 = 42;
+
+impl NonceProvider<Ethereum> for Test {
+	fn next_nonce() -> cf_traits::Nonce {
+		NONCE
+	}
 }
 
 pub const MINT_INTERVAL: u64 = 5;
@@ -98,7 +168,6 @@ parameter_types! {
 
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
 
 pub struct MockRewardsDistribution<T>(PhantomData<T>);
@@ -126,20 +195,24 @@ impl pallet_cf_emissions::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type MintInterval = MintInterval;
 	type BlocksPerDay = BlocksPerDay;
+	type NonceProvider = Self;
+	type SigningContext = MockEthSigningContext;
+	type ThresholdSigner = MockThresholdSigner;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig { total_issuance }),
-		pallet_cf_emissions: Some({
+		system: Default::default(),
+		flip: FlipConfig { total_issuance },
+		emissions: {
 			EmissionsConfig {
 				validator_emission_inflation: 1000,       // 10%
 				backup_validator_emission_inflation: 100, // 1%
 			}
-		}),
+		},
 	};
 
 	for v in validators {

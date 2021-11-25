@@ -1,4 +1,5 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance0, SignerNomination};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
+use cf_chains::Ethereum;
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
@@ -19,8 +20,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MockBroadcast: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -30,7 +31,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -52,13 +53,14 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
@@ -80,13 +82,8 @@ impl SignerNomination for MockNominator {
 	}
 }
 
-// Doge
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct Doge;
-impl cf_chains::Chain for Doge {}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockBroadcast;
+pub struct MockBroadcastConfig;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockUnsignedTx;
@@ -97,16 +94,17 @@ pub enum MockSignedTx {
 	Invalid,
 }
 
-impl BroadcastConfig<Test> for MockBroadcast {
-	type Chain = Doge;
+impl BroadcastConfig for MockBroadcastConfig {
+	type Chain = Ethereum;
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
 	type TransactionHash = [u8; 4];
+	type SignerId = ();
 
 	fn verify_transaction(
-		_signer: &<Test as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
+		_signer_id: &Self::SignerId,
 	) -> Option<()> {
 		match signed_tx {
 			MockSignedTx::Valid => Some(()),
@@ -123,10 +121,10 @@ parameter_types! {
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
 }
 
-impl pallet_cf_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
-	type TargetChain = Doge;
-	type BroadcastConfig = MockBroadcast;
+	type TargetChain = Ethereum;
+	type BroadcastConfig = MockBroadcastConfig;
 	type SignerNomination = MockNominator;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningTimeout = SigningTimeout;
@@ -135,10 +133,8 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

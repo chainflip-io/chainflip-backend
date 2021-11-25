@@ -1,14 +1,14 @@
-# Chainflip Threshold Signing pallet
+# Chainflip Threshold Signature pallet
 
 This is a pallet for requesting threshold signatures.
 
-## Purpose
+## Overview
 
 Requesting a threshold signature is central to Chainflip's operational model. Any outgoing transactions need to be
 *provably* verified by a 2/3 majority of active validators. However this is an off-chain operation, so the state chain
 frequently needs to issue threshold signature requests and the result needs to be stored on-chain. This pallet manages
-the lifecycle of such a request. Loosely: if a signature request succeeds, it resovles a callback functon and calls it 
-with the generated threshold signature as the argument. If the request fails, it is scheduled for retry and a new 
+the lifecycle of such a request. Loosely: if a signature request succeeds, it resovles a callback functon and calls it
+with the generated threshold signature as the argument. If the request fails, it is scheduled for retry and a new
 request is made upon initialization of the next block.
 
 ![swimlanes](https://swimlanes.io/u/1s-nyDuYQ)

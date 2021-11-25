@@ -1,16 +1,13 @@
 use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
-use frame_support::instances::Instance0;
-use frame_support::traits::Hooks;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Scenario {
 	HappyPath,
 	RetryPath,
+	InvalidThresholdSignaturePath,
 }
-
-pub const SIGNATURE: &'static str = "Wow!";
 
 struct MockCfe;
 
@@ -25,7 +22,7 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_threshold_signature_Instance0(
+			Event::DogeThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 					req_id,
 					key_id,
@@ -33,25 +30,37 @@ impl MockCfe {
 					payload,
 				),
 			) => {
-				assert_eq!(key_id, DOGE_KEY_ID);
+				assert_eq!(key_id, MOCK_KEY_ID);
 				assert_eq!(signers, vec![RANDOM_NOMINEE]);
 				assert_eq!(payload, DOGE_PAYLOAD);
 
-				assert_ok!(match scenario {
-					Scenario::HappyPath => DogeThresholdSigner::signature_success(
-						Origin::root(),
-						req_id,
-						SIGNATURE.to_string(),
-					),
+				match scenario {
+					Scenario::HappyPath => {
+						assert_ok!(DogeThresholdSigner::signature_success(
+							Origin::root(),
+							req_id,
+							VALID_SIGNATURE.to_string(),
+						));
+					},
 					Scenario::RetryPath => {
-						DogeThresholdSigner::signature_failed(
+						assert_ok!(DogeThresholdSigner::signature_failed(
 							Origin::root(),
 							req_id,
 							vec![RANDOM_NOMINEE],
-						)
-					}
-				});
-			}
+						));
+					},
+					Scenario::InvalidThresholdSignaturePath => {
+						assert_noop!(
+							DogeThresholdSigner::signature_success(
+								Origin::root(),
+								req_id,
+								INVALID_SIGNATURE.to_string(),
+							),
+							Error::<Test, Instance1>::InvalidThresholdSignature
+						);
+					},
+				};
+			},
 			_ => panic!("Unexpected event"),
 		};
 	}
@@ -75,7 +84,7 @@ fn happy_path() {
 				request_id + 1,
 				"MaliciousSignature".to_string()
 			),
-			Error::<Test, Instance0>::InvalidCeremonyId
+			Error::<Test, Instance1>::InvalidCeremonyId
 		);
 
 		// CFE responds
@@ -110,10 +119,7 @@ fn retry_path() {
 		assert!(DogeThresholdSigner::pending_request(request_id).is_none());
 
 		// Call back has *not* executed.
-		assert_eq!(
-			MockCallback::<DogeThresholdSignerContext>::get_stored_callback(),
-			None
-		);
+		assert_eq!(MockCallback::<DogeThresholdSignerContext>::get_stored_callback(), None);
 
 		// The offender has been reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
@@ -131,5 +137,20 @@ fn retry_path() {
 		let pending = DogeThresholdSigner::pending_request(request_id + 1).unwrap();
 		assert_eq!(pending.attempt, 1);
 		assert_eq!(pending.signatories, vec![RANDOM_NOMINEE]);
+	});
+}
+
+#[test]
+fn invalid_threshold_signature_path() {
+	new_test_ext().execute_with(|| {
+		// Initiate request
+		let _request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
+			message: "So threshold!".to_string(),
+		});
+
+		// CFE responds
+		MockCfe::respond(Scenario::InvalidThresholdSignaturePath);
+
+		// TODO: Define what behaviour we expect from here.
 	});
 }

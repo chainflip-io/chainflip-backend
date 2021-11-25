@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
-	BroadcastRetryQueue, BroadcastStage, Error, Event as BroadcastEvent, Instance0,
+	BroadcastRetryQueue, BroadcastStage, Error, Event as BroadcastEvent, Instance1,
 	TransmissionFailure,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -33,11 +33,11 @@ impl MockCfe {
 
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_broadcast_Instance0(broadcast_event) => match broadcast_event {
+			Event::MockBroadcast(broadcast_event) => match broadcast_event {
 				BroadcastEvent::TransactionSigningRequest(attempt_id, nominee, unsigned_tx) => {
 					if let Scenario::Timeout = scenario {
 						// Ignore the request.
-						return;
+						return
 					}
 					Self::handle_transaction_signature_request(
 						attempt_id,
@@ -45,26 +45,25 @@ impl MockCfe {
 						unsigned_tx,
 						scenario,
 					);
-				}
+				},
 				BroadcastEvent::TransmissionRequest(attempt_id, _signed_tx) => {
 					if let Scenario::Timeout = scenario {
 						// Ignore the request.
-						return;
+						return
 					}
 					Self::handle_broadcast_request(attempt_id, scenario);
-				}
+				},
 				BroadcastEvent::BroadcastComplete(broadcast_id) => {
 					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
-				}
+				},
 				BroadcastEvent::BroadcastRetryScheduled(_, _) => {
 					// Informational only. No action required by the CFE.
-				}
+				},
 				BroadcastEvent::BroadcastFailed(broadcast_id, _, _) => {
 					FAILED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
-				}
-				BroadcastEvent::BroadcastAttemptExpired(broadcast_id, stage) => {
-					EXPIRED_ATTEMPTS.with(|cell| cell.borrow_mut().push((broadcast_id, stage)))
-				}
+				},
+				BroadcastEvent::BroadcastAttemptExpired(broadcast_id, stage) =>
+					EXPIRED_ATTEMPTS.with(|cell| cell.borrow_mut().push((broadcast_id, stage))),
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 			},
 			_ => panic!("Unexpected event"),
@@ -79,23 +78,25 @@ impl MockCfe {
 		scenario: Scenario,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
-		// Invalid signer refused.
+		// Only the nominee can return the signed tx.
 		assert_noop!(
-			DogeBroadcast::transaction_ready_for_transmission(
+			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
 				MockSignedTx::Valid,
+				()
 			),
-			Error::<Test, Instance0>::InvalidSigner
+			Error::<Test, Instance1>::InvalidSigner
 		);
 		// Only the nominee can return the signed tx.
-		assert_ok!(DogeBroadcast::transaction_ready_for_transmission(
+		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(nominee).into(),
 			attempt_id,
 			match scenario {
 				Scenario::BadSigner => MockSignedTx::Invalid,
 				_ => MockSignedTx::Valid,
 			},
+			()
 		));
 	}
 
@@ -103,10 +104,10 @@ impl MockCfe {
 	fn handle_broadcast_request(attempt_id: BroadcastAttemptId, scenario: Scenario) {
 		assert_ok!(match scenario {
 			Scenario::HappyPath =>
-				DogeBroadcast::transmission_success(Origin::root(), attempt_id, [0xcf; 4]),
+				MockBroadcast::transmission_success(Origin::root(), attempt_id, [0xcf; 4]),
 			Scenario::TransmissionFailure(failure) => {
-				DogeBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
-			}
+				MockBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
+			},
 			_ => unimplemented!(),
 		});
 	}
@@ -119,34 +120,28 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_some()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some()
 		);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_some());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some());
 
 		// CFE responds again with confirmation of a successful broadcast.
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
 
 		// CFE logs the completed broadcast.
 		MockCfe::respond(Scenario::HappyPath);
-		assert_eq!(
-			COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
-			BROADCAST_ID
-		);
+		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), BROADCAST_ID);
 	})
 }
 
@@ -156,12 +151,9 @@ fn test_broadcast_rejected() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
@@ -169,31 +161,23 @@ fn test_broadcast_rejected() {
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_some());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some());
 
 		// CFE responds that the transaction was rejected.
-		MockCfe::respond(Scenario::TransmissionFailure(
-			TransmissionFailure::TransactionRejected,
-		));
+		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionRejected));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
-			1
-		);
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The `on_initialize` hook is called and triggers a new broadcast attempt.
-		DogeBroadcast::on_initialize(0);
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
-			0
-		);
+		MockBroadcast::on_initialize(0);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 0);
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID + 1)
 				.unwrap()
 				.attempt_count == 1
 		);
@@ -210,12 +194,9 @@ fn test_broadcast_failed() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
@@ -223,32 +204,22 @@ fn test_broadcast_failed() {
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_some());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some());
 
 		// CFE responds that the transaction failed.
-		MockCfe::respond(Scenario::TransmissionFailure(
-			TransmissionFailure::TransactionFailed,
-		));
+		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionFailed));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
 
 		// We don't retry.
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
-			0
-		);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 0);
 		// The broadcast has failed.
-		MockCfe::respond(Scenario::TransmissionFailure(
-			TransmissionFailure::TransactionFailed,
-		));
-		assert_eq!(
-			FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
-			BROADCAST_ID
-		);
+		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionFailed));
+		assert_eq!(FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), BROADCAST_ID);
 	})
 }
 
@@ -258,12 +229,9 @@ fn test_bad_signature() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
@@ -273,13 +241,10 @@ fn test_bad_signature() {
 
 		// Broadcast is removed and scheduled for retry.
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none()
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none()
 		);
-		assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
-			1
-		);
+		assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
@@ -290,25 +255,26 @@ fn test_bad_signature() {
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			DogeBroadcast::transaction_ready_for_transmission(
+			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
 				0,
-				MockSignedTx::Valid
+				MockSignedTx::Valid,
+				()
 			),
-			Error::<Test, Instance0>::InvalidBroadcastAttemptId
+			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			DogeBroadcast::transmission_success(Origin::root(), 0, [0u8; 4]),
-			Error::<Test, Instance0>::InvalidBroadcastAttemptId
+			MockBroadcast::transmission_success(Origin::root(), 0, [0u8; 4]),
+			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			DogeBroadcast::transmission_failure(
+			MockBroadcast::transmission_failure(
 				Origin::root(),
 				0,
 				TransmissionFailure::TransactionFailed,
 				[0u8; 4]
 			),
-			Error::<Test, Instance0>::InvalidBroadcastAttemptId
+			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 	})
 }
@@ -320,39 +286,34 @@ fn test_signature_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
 
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
-		DogeBroadcast::on_initialize(current_block + 1);
+		MockBroadcast::on_initialize(current_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
 		assert!(
-			AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
 
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
-		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockBroadcast::on_initialize(expected_expiry_block);
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
 			// Old attempt has expired.
-			assert!(
-				AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
-					.is_none()
-			);
+			assert!(AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
+				.is_none());
 			assert_eq!(
 				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::TransactionSigning),
@@ -361,7 +322,7 @@ fn test_signature_request_expiry() {
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
 				let new_attempt =
-					AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
+					AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID + 1)
 						.unwrap();
 				new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
 			});
@@ -370,7 +331,7 @@ fn test_signature_request_expiry() {
 		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
-		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockBroadcast::on_initialize(expected_expiry_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();
@@ -384,32 +345,29 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast and pass the signing stage;
-		assert_ok!(DogeBroadcast::start_broadcast(
-			Origin::root(),
-			MockUnsignedTx
-		));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
-		DogeBroadcast::on_initialize(current_block + 1);
+		MockBroadcast::on_initialize(current_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		// Nothing should have changed
 		assert!(
-			AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID)
+			AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
 				.attempt_count == 0
 		);
 
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + TRANSMISSION_EXPIRY_BLOCKS;
-		DogeBroadcast::on_initialize(expected_expiry_block);
+		MockBroadcast::on_initialize(expected_expiry_block);
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
 			// Old attempt has expired.
-			assert!(AwaitingTransmission::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID).is_none());
+			assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
 			assert_eq!(
 				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::Transmission),
@@ -417,7 +375,7 @@ fn test_transmission_request_expiry() {
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
 				let new_attempt =
-					AwaitingTransactionSignature::<Test, Instance0>::get(BROADCAST_ATTEMPT_ID + 1)
+					AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID + 1)
 						.unwrap();
 				new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
 			});
@@ -426,7 +384,7 @@ fn test_transmission_request_expiry() {
 		check_end_state();
 
 		// Subsequent calls to the hook have no further effect.
-		DogeBroadcast::on_initialize(expected_expiry_block + 1);
+		MockBroadcast::on_initialize(expected_expiry_block + 1);
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();

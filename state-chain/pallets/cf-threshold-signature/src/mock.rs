@@ -1,9 +1,12 @@
 use crate::{self as pallet_cf_threshold_signature};
-use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
+use cf_chains::{eth, ChainCrypto};
+use cf_traits::{Chainflip, SigningContext};
 use codec::{Decode, Encode};
-use frame_support::parameter_types;
-use frame_support::traits::EnsureOrigin;
-use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{EnsureOrigin, UnfilteredDispatchable},
+};
 use frame_system;
 use sp_core::H256;
 use sp_runtime::{
@@ -21,8 +24,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance0>::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -32,7 +35,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -54,12 +57,13 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
@@ -112,50 +116,47 @@ impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
 }
 
 // Mock KeyProvider
-pub const DOGE_KEY_ID: u32 = 0xd093;
+pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
 
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 
-	fn current_key() -> Self::KeyId {
-		DOGE_KEY_ID
+	fn current_key_id() -> Self::KeyId {
+		MOCK_KEY_ID.to_vec()
+	}
+
+	fn current_key() -> <Doge as ChainCrypto>::AggKey {
+		eth::AggKey::from_pubkey_compressed(hex_literal::hex!(
+			"0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae"
+		))
 	}
 }
 
 // Mock OfflineReporter
-
-thread_local! {
-	pub static REPORTED: std::cell::RefCell<Vec<u64>> = Default::default()
-}
-
-pub struct MockOfflineReporter;
-
-impl MockOfflineReporter {
-	pub fn get_reported() -> Vec<u64> {
-		REPORTED.with(|cell| cell.borrow().clone())
-	}
-}
-
-impl OfflineReporter for MockOfflineReporter {
-	type ValidatorId = u64;
-
-	fn report(
-		_condition: OfflineCondition,
-		_penalty: ReputationPoints,
-		validator_id: &Self::ValidatorId,
-	) -> Result<frame_support::dispatch::Weight, ReportError> {
-		REPORTED.with(|cell| cell.borrow_mut().push(*validator_id));
-		Ok(0)
-	}
-}
+cf_traits::impl_mock_offline_conditions!(u64);
 
 // Mock SigningContext
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct Doge;
-impl cf_chains::Chain for Doge {}
+impl cf_chains::Chain for Doge {
+	const CHAIN_ID: cf_chains::ChainId = cf_chains::ChainId::Ethereum;
+}
+impl ChainCrypto for Doge {
+	type AggKey = eth::AggKey;
+	type Payload = [u8; 4];
+	type ThresholdSignature = String;
+
+	fn verify_threshold_signature(
+		_agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
+	) -> bool {
+		*payload == DOGE_PAYLOAD && signature == "Wow!"
+	}
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct DogeThresholdSignerContext {
@@ -163,6 +164,8 @@ pub struct DogeThresholdSignerContext {
 }
 
 pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
+pub const VALID_SIGNATURE: &'static str = "Wow!";
+pub const INVALID_SIGNATURE: &'static str = "Pow!";
 
 impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;
@@ -179,7 +182,7 @@ impl SigningContext<Test> for DogeThresholdSignerContext {
 	}
 }
 
-impl pallet_cf_threshold_signature::Config<Instance0> for Test {
+impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
 	type SigningContext = DogeThresholdSignerContext;
@@ -190,10 +193,8 @@ impl pallet_cf_threshold_signature::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

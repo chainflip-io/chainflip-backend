@@ -1,9 +1,10 @@
 //! Chainflip transaction fees.
 //!
-//! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage 'good'
-//! behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
+//! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage
+//! 'good' behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
+use cf_traits::WaivedFees;
 use frame_support::{pallet_prelude::InvalidTransaction, traits::Imbalance};
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
@@ -23,11 +24,14 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 
 	fn withdraw_fee(
 		who: &T::AccountId,
-		_call: &T::Call,
+		call: &T::Call,
 		_dispatch_info: &DispatchInfoOf<T::Call>,
 		fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
+		if T::WaivedFees::should_waive_fees(call, who) {
+			return Ok(None)
+		}
 		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			if surplus.peek().is_zero() {
 				Ok(None)
@@ -48,8 +52,8 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		escrow: Self::LiquidityInfo,
 	) -> Result<(), frame_support::unsigned::TransactionValidityError> {
 		if let Some(surplus) = escrow {
-			// It's possible the account was deleted during extrinsic execution. If this is the case,
-			// we shouldn't refund anything, we can just burn all fees in escrow.
+			// It's possible the account was deleted during extrinsic execution. If this is the
+			// case, we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
 				corrected_fee
 			} else {
