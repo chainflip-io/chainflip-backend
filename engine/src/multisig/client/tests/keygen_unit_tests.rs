@@ -229,8 +229,8 @@ async fn should_ignore_keygen_request_if_not_participating() {
 
     // Get an id that is not `c1`s id
     let unknown_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_id));
-    let mut keygen_ids = VALIDATOR_IDS.clone();
+    assert!(!ACCOUNT_IDS.contains(&unknown_id));
+    let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[0] = unknown_id;
 
     // Send the keygen request
@@ -253,8 +253,8 @@ async fn should_ignore_duplicate_keygen_request() {
 
     // Create a list of accounts that is different from the default Keygen
     let unknown_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_id));
-    let mut keygen_ids = VALIDATOR_IDS.clone();
+    assert!(!ACCOUNT_IDS.contains(&unknown_id));
+    let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[1] = unknown_id;
 
     // Send another keygen request with the same ceremony_id but different signers
@@ -280,7 +280,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 
     // Get an id that is not in the keygen ceremony
     let unknown_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_id));
+    assert!(!ACCOUNT_IDS.contains(&unknown_id));
 
     // Test for all keygen stages
     for current_stage in 1..=7 {
@@ -442,7 +442,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     let mut c1 = keygen_states.get_client_at_stage(0);
 
     // Create a duplicate in the list of signers
-    let mut keygen_ids = VALIDATOR_IDS.clone();
+    let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[1] = keygen_ids[2].clone();
 
     // Send the keygen request with the modified signers list

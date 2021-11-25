@@ -2,6 +2,7 @@ use client::KeygenOutcome;
 use itertools::Itertools;
 use rand::{
     prelude::{IteratorRandom, StdRng},
+    seq::SliceRandom,
     SeedableRng,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -36,8 +37,17 @@ pub struct FakeNode {
 /// Number of parties participating in keygen
 const N_PARTIES: usize = 3;
 lazy_static! {
-    static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<AccountId> = SIGNERS
+    static ref SIGNERS: Vec<usize> = {
+        let mut v: Vec<_> = (1..=N_PARTIES).collect();
+        let mut rng = StdRng::seed_from_u64(2);
+        v.shuffle(&mut rng);
+
+        // ensure the list is not sorted
+        assert_ne!(v, v.iter().copied().sorted().collect::<Vec<_>>());
+
+        v
+    };
+    static ref ACCOUNT_IDS: Vec<AccountId> = SIGNERS
         .iter()
         .map(|idx| AccountId([*idx as u8; 32]))
         .collect();
@@ -48,8 +58,8 @@ async fn coordinate_signing(
     active_indices: &[usize],
     logger: &slog::Logger,
 ) -> Result<(), ()> {
-    // get a keygen request ready with all of the VALIDATOR_IDS
-    let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
+    // get a keygen request ready with all of the ACCOUNT_IDS
+    let keygen_request_info = KeygenInfo::new(0, ACCOUNT_IDS.clone());
 
     // publish the MultisigInstruction::Keygen to all the clients
     for node in &nodes {
@@ -61,10 +71,10 @@ async fn coordinate_signing(
 
     slog::info!(logger, "Published key gen instruction to all the clients");
 
-    // get a list of the signer_ids as a subset of VALIDATOR_IDS with an offset of 1
+    // get a list of the signer_ids as a subset of ACCOUNT_IDS with an offset of 1
     let signer_ids = active_indices
         .iter()
-        .map(|i| VALIDATOR_IDS[*i].clone())
+        .map(|i| ACCOUNT_IDS[*i].clone())
         .collect_vec();
 
     // wait on the keygen ceremony so we can use the correct KeyId to sign with
@@ -149,13 +159,18 @@ async fn distributed_signing() {
     // calculate how many parties will be in the signing (must be exact)
     let threshold = utilities::threshold_from_share_count(N_PARTIES as u32) as usize;
 
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = StdRng::seed_from_u64(2);
 
     // Parties (from 0..n that will participate in the signing process)
-    let mut active_indices = (0..N_PARTIES)
+    let active_indices = (0..N_PARTIES)
         .into_iter()
         .choose_multiple(&mut rng, threshold + 1);
-    active_indices.sort_unstable();
+
+    // We don't want to (implicitly) rely on the list to be ordered
+    assert_ne!(
+        active_indices,
+        active_indices.iter().copied().sorted().collect::<Vec<_>>()
+    );
 
     slog::info!(
         logger,
@@ -174,7 +189,7 @@ async fn distributed_signing() {
     let mut shutdown_txs = vec![];
     let mut fake_nodes = vec![];
     for i in 0..N_PARTIES {
-        let p2p_client = network.new_client(VALIDATOR_IDS[i].clone());
+        let p2p_client = network.new_client(ACCOUNT_IDS[i].clone());
         let logger = logger.clone();
 
         let db = KeyDBMock::new();
@@ -189,7 +204,7 @@ async fn distributed_signing() {
             MockChannelEventHandler::new();
         let (shutdown_client_tx, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
         let client_fut = crate::multisig::start_client(
-            VALIDATOR_IDS[i].clone(),
+            ACCOUNT_IDS[i].clone(),
             db,
             multisig_instruction_rx,
             multisig_event_tx,

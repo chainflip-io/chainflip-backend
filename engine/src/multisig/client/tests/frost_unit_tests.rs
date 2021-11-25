@@ -11,7 +11,7 @@ use crate::logging::{
 macro_rules! receive_comm1 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
         let comm1 = $sign_states.sign_phase1.comm1_vec[$sender].clone();
-        let m = helpers::sig_data_to_p2p(comm1, &VALIDATOR_IDS[$sender]);
+        let m = helpers::sig_data_to_p2p(comm1, &ACCOUNT_IDS[$sender]);
         $c1.process_p2p_message(m);
     };
 }
@@ -19,7 +19,7 @@ macro_rules! receive_comm1 {
 macro_rules! receive_ver2 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
         let ver2 = $sign_states.sign_phase2.ver2_vec[$sender].clone();
-        let m = helpers::sig_data_to_p2p(ver2, &VALIDATOR_IDS[$sender]);
+        let m = helpers::sig_data_to_p2p(ver2, &ACCOUNT_IDS[$sender]);
         $c1.process_p2p_message(m);
     };
 }
@@ -28,7 +28,7 @@ macro_rules! receive_sig3 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
         let sign_phase3 = $sign_states.sign_phase3.as_ref().expect("phase 3");
         let sig3 = sign_phase3.local_sigs[$sender].clone();
-        let m = helpers::sig_data_to_p2p(sig3, &VALIDATOR_IDS[$sender]);
+        let m = helpers::sig_data_to_p2p(sig3, &ACCOUNT_IDS[$sender]);
         $c1.process_p2p_message(m);
     };
 }
@@ -37,7 +37,7 @@ macro_rules! receive_ver4 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
         let sign_phase4 = $sign_states.sign_phase4.as_ref().expect("phase 4");
         let ver4 = sign_phase4.ver4_vec[$sender].clone();
-        let m = helpers::sig_data_to_p2p(ver4, &VALIDATOR_IDS[$sender]);
+        let m = helpers::sig_data_to_p2p(ver4, &ACCOUNT_IDS[$sender]);
         $c1.process_p2p_message(m);
     };
 }
@@ -425,7 +425,7 @@ async fn should_ignore_signing_non_participant() {
 
     // Make sure that the non_participant_id is not a signer
     let non_participant_idx = 3;
-    let non_participant_id = VALIDATOR_IDS[non_participant_idx].clone();
+    let non_participant_id = ACCOUNT_IDS[non_participant_idx].clone();
     assert!(!SIGNER_IDS.contains(&non_participant_id));
 
     // Send some ver2 data from the non-participant to the client
@@ -447,7 +447,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
     // Get an id that was not in the keygen and substitute it in the signer list
     let unknown_signer_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_signer_id));
+    assert!(!ACCOUNT_IDS.contains(&unknown_signer_id));
     let mut signer_ids = SIGNER_IDS.clone();
     signer_ids[1] = unknown_signer_id;
 
@@ -500,7 +500,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
 
     // Send the request to sign with too many signers
     let mut signer_ids = SIGNER_IDS.clone();
-    signer_ids.push(VALIDATOR_IDS[3].clone());
+    signer_ids.push(ACCOUNT_IDS[3].clone());
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
