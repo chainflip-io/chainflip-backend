@@ -11,7 +11,7 @@ pub enum StageResult<M, Result> {
     /// Ceremony proceeds to the next stage
     NextStage(Box<dyn CeremonyStage<Message = M, Result = Result>>),
     /// Ceremony aborted (contains parties to report)
-    Error(Vec<usize>),
+    Error(Vec<usize>, anyhow::Error),
     /// Ceremony finished and successful
     Done(Result),
 }
