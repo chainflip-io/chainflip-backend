@@ -479,9 +479,9 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
 ) -> Result<(
-    Arc<StateChainClient<StateChainRpcClient>>,
-    impl Stream<Item = Result<state_chain_runtime::Header>>,
     H256,
+    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
 )> {
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
@@ -559,7 +559,7 @@ pub async fn connect_to_state_chain(
             signer: signer.clone(),
             author_rpc_client,
             state_rpc_client,
-            chain_rpc_client: chain_rpc_client.clone(),
+            chain_rpc_client,
         };
 
         let our_account_id = signer.account_id().to_owned();
@@ -570,6 +570,8 @@ pub async fn connect_to_state_chain(
             .key(&our_account_id);
 
         Ok((
+            latest_block_hash,
+            block_header_stream,
             Arc::new(StateChainClient {
                 metadata,
                 nonce: AtomicU32::new({
@@ -597,8 +599,6 @@ pub async fn connect_to_state_chain(
                 account_storage_key,
                 events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
             }),
-            block_header_stream,
-            latest_block_hash,
         ))
     } else {
         Err(anyhow::Error::msg(
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
-        let (state_chain_client, mut block_stream, _) =
+        let (_, mut block_stream, state_chain_client) =
             connect_to_state_chain(&settings.state_chain).await.unwrap();
 
         println!("My account id is: {}", state_chain_client.our_account_id);
