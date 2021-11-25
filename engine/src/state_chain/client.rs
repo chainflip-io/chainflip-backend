@@ -499,11 +499,12 @@ pub async fn connect_to_state_chain(
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
-    
-    let rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(state_chain_settings.ws_endpoint.as_str())?)
-            .await
-            .map_err(into_anyhow_error)?;
+
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(into_anyhow_error)?;
 
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
