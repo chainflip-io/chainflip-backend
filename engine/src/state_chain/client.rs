@@ -7,7 +7,7 @@ use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
-use jsonrpc_core_client::RpcError;
+use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
 use sp_core::H256;
 use sp_core::{
@@ -499,25 +499,15 @@ pub async fn connect_to_state_chain(
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
-
-    let rpc_server_url = &url::Url::parse(state_chain_settings.ws_endpoint.as_str())?;
-
-    // TODO connect only once (Using a single RpcChannel)
-
-    let author_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<AuthorRpcClient>(rpc_server_url)
+    
+    let rpc_client =
+        jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(state_chain_settings.ws_endpoint.as_str())?)
             .await
             .map_err(into_anyhow_error)?;
 
-    let chain_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<ChainRpcClient>(rpc_server_url)
-            .await
-            .map_err(into_anyhow_error)?;
-
-    let state_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<StateRpcClient>(rpc_server_url)
-            .await
-            .map_err(into_anyhow_error)?;
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
 
     let mut block_header_stream = chain_rpc_client
         .subscribe_finalized_heads()
