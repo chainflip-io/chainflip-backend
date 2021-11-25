@@ -24,7 +24,7 @@ use core::convert::TryInto;
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
     let eth_address_hex_str = match dirty_eth_address.strip_prefix("0x") {
         Some(eth_address_stripped) => eth_address_stripped,
-        None => &dirty_eth_address,
+        None => dirty_eth_address,
     };
 
     let eth_address: [u8; 20] = hex::decode(eth_address_hex_str)

@@ -149,7 +149,7 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
-        let context = generate_keygen_context(ceremony_id, signers.clone());
+        let context = generate_keygen_context(ceremony_id, signers);
 
         state.on_keygen_request(
             ceremony_id,

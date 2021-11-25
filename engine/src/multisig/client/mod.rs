@@ -193,7 +193,7 @@ where
                 my_account_id,
                 multisig_outcome_sender.clone(),
                 outgoing_p2p_message_sender.clone(),
-                &logger,
+                logger,
             ),
             multisig_outcome_sender,
             outgoing_p2p_message_sender,

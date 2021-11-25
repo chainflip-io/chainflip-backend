@@ -48,7 +48,7 @@ impl KeygenStateRunner {
 
         let common = CeremonyCommon {
             ceremony_id,
-            outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
+            outgoing_p2p_message_sender,
             validator_mapping: idx_mapping.clone(),
             own_idx,
             all_idxs,
