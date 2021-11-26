@@ -6,7 +6,6 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use state_chain_runtime::EthereumThresholdSigner;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -270,7 +269,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .map_err(|_| "Receiver should exist")
                                         .unwrap();
 
-                                    let response_extrinsic = match multisig_event_receiver
+                                    match multisig_event_receiver
                                         .recv()
                                         .await
                                         .expect("Channel closed!")

@@ -6,11 +6,7 @@ use cf_chains::{
 	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
 	ChainCrypto, Ethereum,
 };
-use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, key_provider::MockKeyProvider},
-	Chainflip, NonceProvider, VaultRotationHandler,
-};
+use cf_traits::{Chainflip, NonceProvider, VaultRotationHandler, impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types, mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo, key_provider::MockKeyProvider}};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
 use frame_system as system;
 use sp_core::H256;
@@ -33,7 +29,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
 		Vaults: pallet_cf_vaults::{Pallet, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage, Origin<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Event<T>, Storage},
 	}
 );
@@ -98,15 +94,14 @@ impl From<SetAggKeyWithAggKey> for MockSigningContext {
 
 impl cf_traits::SigningContext<Test> for MockSigningContext {
 	type Chain = Ethereum;
-	type Payload = <Ethereum as ChainCrypto>::Payload;
-	type Signature = <Ethereum as ChainCrypto>::ThresholdSignature;
 	type Callback = Call;
+	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Test, Instance1>;
 
-	fn get_payload(&self) -> Self::Payload {
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
 		Default::default()
 	}
 
-	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(&self, _signature: <Self::Chain as ChainCrypto>::ThresholdSignature) -> Self::Callback {
 		Call::System(frame_system::Call::remark(b"Hello".to_vec()))
 	}
 }
@@ -153,7 +148,6 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
-	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -164,7 +158,7 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 }
 
-type Amount = u64;
+type Amount = u128;
 type ValidatorId = u64;
 
 impl Chainflip for Test {
@@ -173,6 +167,7 @@ impl Chainflip for Test {
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type KeyId = Vec<u8>;
 	type Call = Call;
+	type EpochInfo = MockEpochInfo;
 }
 
 cf_traits::impl_mock_signer_nomination!(u64);
@@ -216,6 +211,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastConfig = MockBroadcastConfig;
 	type SignerNomination = MockSignerNomination;
 	type OfflineReporter = MockOfflineReporter;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 }
@@ -229,7 +225,6 @@ impl VaultRotationHandler for Test {
 impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
 	type RotationHandler = Self;
-	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;

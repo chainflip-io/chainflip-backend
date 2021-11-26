@@ -11,7 +11,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::eth;
+use cf_chains::{eth, ChainCrypto};
 use cf_traits::Chainflip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
@@ -66,7 +66,6 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for MockRuntime {
@@ -74,7 +73,8 @@ impl Chainflip for MockRuntime {
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
 pub struct MockRotationHandler;
@@ -107,15 +107,17 @@ impl From<eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey> for MockEthSigning
 
 impl SigningContext<MockRuntime> for MockEthSigningContext {
 	type Chain = Ethereum;
-	type Payload = Vec<u8>;
-	type Signature = Vec<u8>;
 	type Callback = MockCallback;
+	type ThresholdSignatureOrigin = Origin;
 
-	fn get_payload(&self) -> Self::Payload {
-		b"payloooooad".to_vec()
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+		Default::default()
 	}
 
-	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		MockCallback
 	}
 }
@@ -136,7 +138,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type WeightInfo = ();
 }
 

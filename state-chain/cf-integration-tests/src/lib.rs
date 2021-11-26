@@ -8,7 +8,10 @@ mod tests {
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
-	use sp_runtime::{traits::Zero, Storage};
+	use sp_runtime::{
+		traits::Zero,
+		Storage,
+	};
 	use state_chain_runtime::{
 		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, Flip, Governance,
 		Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System, Timestamp,
@@ -246,17 +249,16 @@ mod tests {
 							if signers.contains(&self.node_id) {
 								// Sign with current key
 								let verification_components = (&*self.signer).borrow_mut().sign(payload);
-								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
-									Origin::signed(self.node_id.clone()),
+								state_chain_runtime::EthereumThresholdSigner::signature_success(
+									Origin::none(),
 									*ceremony_id,
 									verification_components,
-								).expect("should be able to ethereum signature for node");
+								).expect("should be able to submit ethereum signature for node");
 							}
 						},
 						Event::EthereumThresholdSigner(
 							// A threshold has been met for this signature
-							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
-								_ceremony_id)) => {
+							pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 								match self.engine_state {
 									// If we rotating let's witness the keys being rotated on the contract
 									EngineState::Rotation => {

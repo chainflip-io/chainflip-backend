@@ -81,12 +81,6 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<
-			ValidatorId = <Self as frame_system::Config>::AccountId,
-			Amount = FlipBalance<Self>,
-		>;
-
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 

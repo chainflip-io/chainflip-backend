@@ -73,9 +73,6 @@ pub mod pallet {
 		/// Rotation handler.
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 
-		/// Epoch info.
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
-
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 

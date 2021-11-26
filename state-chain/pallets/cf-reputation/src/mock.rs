@@ -12,11 +12,7 @@ use sp_std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{
-	mocks::{epoch_info, epoch_info::Mock},
-	offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints},
-	Chainflip, Slashing,
-};
+use cf_traits::{Chainflip, Slashing, mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo}, offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints}};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -110,14 +106,13 @@ impl OfflinePenalty for MockOfflinePenalty {
 	}
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
 }
 
 impl Config for Test {
@@ -127,8 +122,8 @@ impl Config for Test {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type Penalty = MockOfflinePenalty;
-	type EpochInfo = epoch_info::Mock;
 	type WeightInfo = ();
+	type EpochInfo = MockEpochInfo;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -140,7 +135,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	};
 
 	// We only expect Alice to be a validator at the moment
-	Mock::add_validator(ALICE);
+	MockEpochInfo::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {

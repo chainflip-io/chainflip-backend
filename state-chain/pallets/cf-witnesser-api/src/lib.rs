@@ -12,7 +12,7 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{ChainId, Ethereum};
-	use cf_traits::{SigningContext, Witnesser};
+	use cf_traits::Witnesser;
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
