@@ -4,7 +4,13 @@ pub mod mocks;
 
 use cf_chains::{Chain, ChainCrypto};
 use codec::{Decode, Encode};
-use frame_support::{Parameter, dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight}, pallet_prelude::Member, sp_runtime::traits::AtLeast32BitUnsigned, traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap}};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	pallet_prelude::Member,
+	sp_runtime::traits::AtLeast32BitUnsigned,
+	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
+	Parameter,
+};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -86,8 +92,8 @@ pub trait EpochInfo {
 
 	/// The consensus threshold for the current epoch.
 	///
-	/// By default this is based on [cf_utilities::threshold_from_share_count] where the `share_count` is taken from
-	/// [Self::active_validator_count].
+	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
+	/// `share_count` is taken from [Self::active_validator_count].
 	fn consensus_treshold() -> u32 {
 		cf_utilities::threshold_from_share_count(Self::active_validator_count())
 	}

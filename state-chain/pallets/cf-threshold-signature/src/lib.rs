@@ -15,9 +15,13 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
+use frame_support::traits::EnsureOrigin;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{
+	traits::{BlockNumberProvider, Saturating},
+	RuntimeDebug,
+};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::FromIterator,
@@ -60,7 +64,7 @@ pub mod pallet {
 			// respond.
 			let response_threshold = self.participant_count / 10 + 1;
 
-			self.remaining_respondents.len() <
+			self.remaining_respondents.len() <=
 				(self.participant_count - response_threshold) as usize
 		}
 
@@ -154,12 +158,19 @@ pub mod pallet {
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, RequestContext<T, I>, OptionQuery>;
 
-	/// A queue of `(ceremony_id, countdown)` where `countdown` is the number of block remaining
-	/// until the retry attempt is triggered.
+	// /// A queue of `(ceremony_id, countdown)` where `countdown` is the number of block remaining
+	// /// until the retry attempt is triggered.
+	// #[pallet::storage]
+	// #[pallet::getter(fn retry_queue)]
+	// pub type RetryQueue<T: Config<I>, I: 'static = ()> =
+	// 	StorageValue<_, Vec<(CeremonyId, u32)>, ValueQuery>;
+
+	/// A map containing lists of ceremony ids that should be retried at the block stored in the
+	/// key.
 	#[pallet::storage]
-	#[pallet::getter(fn retry_queue)]
-	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<(CeremonyId, u32)>, ValueQuery>;
+	#[pallet::getter(fn retry_queues)]
+	pub type RetryQueues<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<CeremonyId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -170,6 +181,12 @@ pub mod pallet {
 		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
 		/// \[ceremony_id, result\]
 		ThresholdDispatchComplete(CeremonyId, DispatchResult),
+		/// \[ceremony_id\]
+		RetryRequested(CeremonyId),
+		/// \[ceremony_id\]
+		RetryStale(CeremonyId),
+		/// \[ceremony_id, reporter_id\]
+		FailureReportProcessed(CeremonyId, T::ValidatorId),
 	}
 
 	#[pallet::error]
@@ -185,44 +202,39 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_n: BlockNumberFor<T>) -> frame_support::weights::Weight {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut num_retries = 0;
 
 			// Process pending retries.
-			RetryQueue::<T, I>::mutate(|retry_queue| {
-				for (ceremony_id, countdown) in retry_queue.iter_mut() {
-					*countdown -= 1;
-					if (*countdown) == 0 {
-						if let Some(failed_ceremony_context) =
-							PendingRequests::<T, I>::take(ceremony_id)
-						{
-							num_retries += 1;
-							// Report the offenders.
-							for offender in failed_ceremony_context.offenders() {
-								T::OfflineReporter::report(
-									OfflineCondition::ParticipateSigningFailed,
-									&offender,
-								)
-								.unwrap_or_else(|e| {
-									log::error!(
-										"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-										offender,
-										e
-									);
-									0
-								});
-							}
-
-							// Initiate a new attempt.
-							Self::request_attempt(
-								failed_ceremony_context.chain_signing_context,
-								failed_ceremony_context.attempt.wrapping_add(1),
+			for ceremony_id in RetryQueues::<T, I>::take(current_block) {
+				if let Some(failed_ceremony_context) = PendingRequests::<T, I>::take(ceremony_id) {
+					num_retries += 1;
+					// Report the offenders.
+					for offender in failed_ceremony_context.offenders() {
+						T::OfflineReporter::report(
+							OfflineCondition::ParticipateSigningFailed,
+							&offender,
+						)
+						.unwrap_or_else(|e| {
+							log::error!(
+								"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+								offender,
+								e
 							);
-						}
+							0
+						});
 					}
+
+					// Initiate a new attempt.
+					Self::request_attempt(
+						failed_ceremony_context.chain_signing_context,
+						failed_ceremony_context.attempt.wrapping_add(1),
+					);
+					Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id))
+				} else {
+					Self::deposit_event(Event::<T, I>::RetryStale(ceremony_id))
 				}
-				retry_queue.retain(|(_, countdown)| *countdown > 0);
-			});
+			}
 
 			// TODO: replace this with benchmark results.
 			num_retries as u64 *
@@ -315,7 +327,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - None
+		/// - [FailureReportProcessed](Event::FailureReportProcessed)
 		///
 		/// ## Errors
 		///
@@ -331,23 +343,43 @@ pub mod pallet {
 
 			let reporter_id = ensure_signed(origin)?.into();
 
-			let mut context =
-				PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
+			let _ = PendingRequests::<T, I>::try_mutate(id, |maybe_context| {
+				maybe_context
+					.as_mut()
+					.ok_or(Error::<T, I>::InvalidCeremonyId)
+					.and_then(|context| {
+						if !context.remaining_respondents.remove(&reporter_id) {
+							return Err(Error::<T, I>::InvalidRespondent)
+						}
 
-			ensure!(
-				context.remaining_respondents.remove(&reporter_id),
-				Error::<T, I>::InvalidRespondent
-			);
+						for id in offenders {
+							(*context.blame_counts.entry(id).or_default()) += 1;
+						}
 
-			for id in offenders {
-				(*context.blame_counts.entry(id).or_default()) += 1;
-			}
+						if !context.retry_scheduled && context.countdown_threshold_reached() {
+							// Schedule for retry.
+							context.retry_scheduled = true;
+							RetryQueues::<T, I>::append(
+								frame_system::Pallet::<T>::current_block_number().saturating_add(
+									BlockNumberFor::<T>::from(FAILURE_TIMEOUT_BLOCKS),
+								),
+								id,
+							);
+						}
+						if context.remaining_respondents.is_empty() {
+							// All respondents have reported, schedule retry for next block.
+							RetryQueues::<T, I>::append(
+								frame_system::Pallet::<T>::current_block_number()
+									.saturating_add(BlockNumberFor::<T>::from(1u32)),
+								id,
+							);
+						}
 
-			if !context.retry_scheduled && context.countdown_threshold_reached() {
-				// Schedule for retry.
-				context.retry_scheduled = true;
-				RetryQueue::<T, I>::append((id, FAILURE_TIMEOUT_BLOCKS));
-			}
+						Ok(())
+					})
+			})?;
+
+			Self::deposit_event(Event::<T, I>::FailureReportProcessed(id, reporter_id));
 
 			Ok(().into())
 		}
@@ -396,6 +428,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		));
 
 		id
+	}
+}
+
+pub struct EnsureThresholdSigned<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
+
+impl<OuterOrigin, T, I> EnsureOrigin<OuterOrigin> for EnsureThresholdSigned<T, I>
+where
+	OuterOrigin: Into<Result<Origin<T, I>, OuterOrigin>> + From<Origin<T, I>>,
+	T: Config<I>,
+	I: 'static,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		o.into().map(|_| ())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		Origin::<T, I>(Default::default()).into()
 	}
 }
 
