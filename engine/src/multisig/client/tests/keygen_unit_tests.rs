@@ -3,6 +3,8 @@ use crate::multisig::MultisigInstruction;
 
 use super::helpers::{self, check_blamed_paries};
 
+use crate::testing::assert_ok;
+
 use super::*;
 
 use crate::logging::{
@@ -86,18 +88,18 @@ async fn should_delay_comm1_before_keygen_request() {
     // Receive an early stage1 message, should be delayed
     c1.receive_keygen_stage_data(1, &keygen_states, 1);
 
-    c1.is_at_keygen_stage(0).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(0));
 
     c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
 
-    c1.is_at_keygen_stage(1).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(1));
 
     // Receive the remaining stage1 messages. Provided that the first
     // message was properly delayed, this should advance us to the next stage
     c1.receive_keygen_stage_data(1, &keygen_states, 2);
     c1.receive_keygen_stage_data(1, &keygen_states, 3);
 
-    c1.is_at_keygen_stage(2).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(2));
 }
 
 // Data for any stage that arrives one stage too early should be properly delayed
@@ -120,11 +122,11 @@ async fn should_delay_stage_data() {
         c1.receive_keygen_stage_data(stage, &keygen_states, 2);
         c1.receive_keygen_stage_data(stage + 1, &keygen_states, 1);
         c1.receive_keygen_stage_data(stage + 1, &keygen_states, 2);
-        c1.is_at_keygen_stage(stage).unwrap();
+        assert_ok!(c1.is_at_keygen_stage(stage));
 
         // Now receive the final clients data to advance the stage
         c1.receive_keygen_stage_data(stage, &keygen_states, 3);
-        c1.is_at_keygen_stage(stage + 1).unwrap();
+        assert_ok!(c1.is_at_keygen_stage(stage + 1));
 
         // If the messages were delayed properly, then receiving
         // the last clients data will advance the stage again
@@ -133,9 +135,9 @@ async fn should_delay_stage_data() {
         // Check that the stage correctly advanced or finished
         if stage + 2 > *KEYGEN_STAGES {
             // The keygen finished
-            c1.is_at_keygen_stage(0).unwrap();
+            assert_ok!(c1.is_at_keygen_stage(0));
         } else {
-            c1.is_at_keygen_stage(stage + 2).unwrap();
+            assert_ok!(c1.is_at_keygen_stage(stage + 2));
         }
     }
 }
@@ -225,7 +227,7 @@ async fn should_ignore_keygen_request_if_not_participating() {
     c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // The request should have been ignored and the not started a ceremony
-    c1.is_at_keygen_stage(0).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(0));
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
@@ -248,7 +250,7 @@ async fn should_ignore_duplicate_keygen_request() {
     c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // The request should have been rejected and the existing ceremony is unchanged
-    c1.is_at_keygen_stage(2).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(2));
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
@@ -309,9 +311,9 @@ async fn should_ignore_unexpected_message_for_stage() {
         c1.receive_keygen_stage_data(current_stage, &keygen_states, 3);
         if current_stage + 1 > *KEYGEN_STAGES {
             // The keygen finished
-            c1.is_at_keygen_stage(0).unwrap();
+            assert_ok!(c1.is_at_keygen_stage(0));
         } else {
-            c1.is_at_keygen_stage(current_stage + 1).unwrap();
+            assert_ok!(c1.is_at_keygen_stage(current_stage + 1));
         }
     }
 }
@@ -419,6 +421,6 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
 
     // Check that the keygen request was ignored
-    c1.is_at_keygen_stage(0).unwrap();
+    assert_ok!(c1.is_at_keygen_stage(0));
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
