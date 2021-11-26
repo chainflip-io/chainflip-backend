@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
@@ -7,7 +7,7 @@ use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
-use jsonrpc_core_client::RpcError;
+use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
 use sp_core::H256;
 use sp_core::{
@@ -479,9 +479,9 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
 ) -> Result<(
-    Arc<StateChainClient<StateChainRpcClient>>,
-    impl Stream<Item = Result<state_chain_runtime::Header>>,
     H256,
+    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
 )> {
     use substrate_subxt::Signer;
     let signer = substrate_subxt::PairSigner::<
@@ -500,24 +500,16 @@ pub async fn connect_to_state_chain(
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
 
-    let rpc_server_url = &url::Url::parse(state_chain_settings.ws_endpoint.as_str())?;
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
 
-    // TODO connect only once (Using a single RpcChannel)
-
-    let author_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<AuthorRpcClient>(rpc_server_url)
-            .await
-            .map_err(into_anyhow_error)?;
-
-    let chain_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<ChainRpcClient>(rpc_server_url)
-            .await
-            .map_err(into_anyhow_error)?;
-
-    let state_rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<StateRpcClient>(rpc_server_url)
-            .await
-            .map_err(into_anyhow_error)?;
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
 
     let mut block_header_stream = chain_rpc_client
         .subscribe_finalized_heads()
@@ -559,7 +551,7 @@ pub async fn connect_to_state_chain(
             signer: signer.clone(),
             author_rpc_client,
             state_rpc_client,
-            chain_rpc_client: chain_rpc_client.clone(),
+            chain_rpc_client,
         };
 
         let our_account_id = signer.account_id().to_owned();
@@ -570,6 +562,8 @@ pub async fn connect_to_state_chain(
             .key(&our_account_id);
 
         Ok((
+            latest_block_hash,
+            block_header_stream,
             Arc::new(StateChainClient {
                 metadata,
                 nonce: AtomicU32::new({
@@ -597,8 +591,6 @@ pub async fn connect_to_state_chain(
                 account_storage_key,
                 events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
             }),
-            block_header_stream,
-            latest_block_hash,
         ))
     } else {
         Err(anyhow::Error::msg(
@@ -623,7 +615,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
-        let (state_chain_client, mut block_stream, _) =
+        let (_, mut block_stream, state_chain_client) =
             connect_to_state_chain(&settings.state_chain).await.unwrap();
 
         println!("My account id is: {}", state_chain_client.our_account_id);

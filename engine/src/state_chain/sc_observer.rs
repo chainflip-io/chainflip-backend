@@ -434,7 +434,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
-        let (state_chain_client, block_stream, _) =
+        let (_, block_stream, state_chain_client) =
             crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
                 .await
                 .unwrap();
