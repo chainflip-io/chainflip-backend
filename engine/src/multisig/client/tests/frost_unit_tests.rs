@@ -17,31 +17,53 @@ async fn should_delay_stage_data() {
     let sign_states = ctx.sign().await;
 
     // Test the delay functionality for all stages except the last stage
-    for stage in 1..*SIGNING_STAGES {
+    for stage in 1..SIGNING_STAGES {
         // Get a client at the correct stage
         let mut c1 = sign_states.get_client_at_stage(stage);
 
         // Receive the data of this stage and the next from all but 1 client
         c1.receive_signing_stage_data(stage, &sign_states, 1);
         c1.receive_signing_stage_data(stage + 1, &sign_states, 1);
-        assert_ok!(c1.is_at_signing_stage(stage));
+        assert_ok!(c1.ensure_at_signing_stage(stage));
 
         // Now receive the final clients data to advance the stage
         c1.receive_signing_stage_data(stage, &sign_states, 2);
-        assert_ok!(c1.is_at_signing_stage(stage + 1));
+        assert_ok!(c1.ensure_at_signing_stage(stage + 1));
 
         // If the messages were delayed properly, then receiving
         // the last clients data will advance the stage again
         c1.receive_signing_stage_data(stage + 1, &sign_states, 2);
 
         // Check that the stage correctly advanced or finished
-        if stage + 2 > *SIGNING_STAGES {
+        if stage + 2 > SIGNING_STAGES {
             // The keygen finished
-            assert_ok!(c1.is_at_signing_stage(0));
+            assert_ok!(c1.ensure_at_signing_stage(0));
         } else {
-            assert_ok!(c1.is_at_signing_stage(stage + 2));
+            assert_ok!(c1.ensure_at_signing_stage(stage + 2));
         }
     }
+}
+
+// If any initial commitments arrive before the request to sign,
+// they should be delayed and processed after it arrives
+#[tokio::test]
+async fn should_delay_comm1_before_rts() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = keygen_states.key_ready_data().clients[0].clone();
+    assert_ok!(c1.ensure_at_signing_stage(0));
+
+    // Send comm1 from the other 2 clients before the request to sign
+    c1.receive_signing_stage_data(1, &sign_states, 1);
+    c1.receive_signing_stage_data(1, &sign_states, 2);
+
+    // Now get the request to sign
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // It should advance to stage 2 right away if the comm1's were delayed correctly
+    assert_ok!(c1.ensure_at_signing_stage(2));
 }
 
 #[tokio::test]
@@ -115,7 +137,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
 
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     let bad_array_idxs = [1usize, 2];
 
@@ -123,7 +145,7 @@ async fn should_report_on_timeout_before_request_to_sign() {
         c1.receive_signing_stage_data(1, &sign_states, *idx);
     }
 
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     c1.expire_all();
     c1.cleanup();
@@ -144,7 +166,7 @@ async fn should_report_on_timeout_stage() {
     let good_party_idx = 2;
 
     // Test the timeout for all stages
-    for stage in 1..=*SIGNING_STAGES {
+    for stage in 1..=SIGNING_STAGES {
         // Get a client at the correct stage
         let mut c1 = sign_states.get_client_at_stage(stage);
 
@@ -169,13 +191,13 @@ async fn should_ignore_duplicate_rts() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = sign_states.sign_phase2.clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(2));
+    assert_ok!(c1.ensure_at_signing_stage(2));
 
     // Send another request to sign with the same ceremony_id and key_id
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been rejected and the existing ceremony is unchanged
-    assert_ok!(c1.is_at_signing_stage(2));
+    assert_ok!(c1.ensure_at_signing_stage(2));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -185,13 +207,13 @@ async fn should_delay_rts_until_key_is_ready() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // send the request to sign
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The request should have been delayed, so the stage is unaffected
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // complete the keygen by sending the ver5 from each other client to client 0
     for sender_idx in 1..=3 {
@@ -205,7 +227,7 @@ async fn should_delay_rts_until_key_is_ready() {
     }
 
     // Now that the keygen completed, the rts should have been processed
-    assert_ok!(c1.is_at_signing_stage(1));
+    assert_ok!(c1.ensure_at_signing_stage(1));
 }
 
 #[tokio::test]
@@ -214,7 +236,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Get an id that was not in the keygen and substitute it in the signer list
     let unknown_signer_id = AccountId([0; 32]);
@@ -226,7 +248,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -236,7 +258,7 @@ async fn should_ignore_rts_if_not_participating() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[3].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Make sure our id is not in the signers list
     assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
@@ -245,7 +267,7 @@ async fn should_ignore_rts_if_not_participating() {
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // The rts should not have started a ceremony
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -255,7 +277,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the request to sign with not enough signers
     let mut signer_ids = SIGNER_IDS.clone();
@@ -263,7 +285,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
     ctx.tag_cache.clear();
 
@@ -273,7 +295,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
@@ -283,7 +305,7 @@ async fn pending_rts_should_expire() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.ver_comp_stage5.as_ref().unwrap().clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the rts with the key id currently unknown to the client
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
@@ -303,7 +325,7 @@ async fn pending_rts_should_expire() {
     }
 
     // Should be no pending rts, so no stage advancement once the keygen completed.
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
 }
 
@@ -322,7 +344,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     assert!(!VALIDATOR_IDS.contains(&unknown_id));
 
     // Test for all keygen stages
-    for current_stage in 1..=*SIGNING_STAGES {
+    for current_stage in 1..=SIGNING_STAGES {
         // Get a client at the correct stage
         let mut c1 = sign_states.get_client_at_stage(current_stage);
 
@@ -330,20 +352,20 @@ async fn should_ignore_unexpected_message_for_stage() {
         c1.receive_signing_stage_data(current_stage, &sign_states, 1);
 
         // Receive messages from all unexpected stages (not the current stage or the next)
-        for stage in 1..=*SIGNING_STAGES {
+        for stage in 1..=SIGNING_STAGES {
             if stage != current_stage && stage != current_stage + 1 {
                 c1.receive_signing_stage_data(stage, &sign_states, 2);
             }
         }
         assert!(
-            c1.is_at_signing_stage(current_stage).is_ok(),
+            c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from an unexpected stage"
         );
 
         // Receive a duplicate message
         c1.receive_signing_stage_data(current_stage, &sign_states, 1);
         assert!(
-            c1.is_at_signing_stage(current_stage).is_ok(),
+            c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from a duplicate sender id"
         );
 
@@ -352,7 +374,7 @@ async fn should_ignore_unexpected_message_for_stage() {
             c1.get_signing_p2p_message_for_stage(current_stage, &sign_states, 1, &unknown_id);
         c1.process_p2p_message(message);
         assert!(
-            c1.is_at_signing_stage(current_stage).is_ok(),
+            c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from an unknown id"
         );
 
@@ -367,17 +389,17 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
         c1.process_p2p_message(message);
         assert!(
-            c1.is_at_signing_stage(current_stage).is_ok(),
+            c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from an non-participant"
         );
 
         // Receive the last message and advance the stage
         c1.receive_signing_stage_data(current_stage, &sign_states, 2);
-        if current_stage + 1 > *SIGNING_STAGES {
+        if current_stage + 1 > SIGNING_STAGES {
             // The keygen finished
-            assert_ok!(c1.is_at_signing_stage(0));
+            assert_ok!(c1.ensure_at_signing_stage(0));
         } else {
-            assert_ok!(c1.is_at_signing_stage(current_stage + 1));
+            assert_ok!(c1.ensure_at_signing_stage(current_stage + 1));
         }
     }
 }
@@ -389,7 +411,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     let keygen_states = ctx.generate().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[0].clone();
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the request to sign with a duplicate ID in the signers
     let mut signer_ids = SIGNER_IDS.clone();
@@ -397,6 +419,6 @@ async fn should_ignore_rts_with_duplicate_signer() {
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
-    assert_ok!(c1.is_at_signing_stage(0));
+    assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }

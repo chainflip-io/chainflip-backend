@@ -15,6 +15,8 @@ use crate::multisig::{
     KeyId, MultisigInstruction,
 };
 
+use crate::testing::assert_ok;
+
 use signing::frost::{self, LocalSig3, SigningCommitment, SigningData};
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
@@ -77,7 +79,6 @@ macro_rules! recv_all_data_keygen {
 
 macro_rules! recv_data_signing {
     ($rx:expr, $variant: path) => {{
-        println!("Waiting on a message");
         let (_, m) = recv_multisig_message($rx).await;
 
         match m {
@@ -633,7 +634,7 @@ impl KeygenContext {
 
         clients
             .iter()
-            .for_each(|c| c.is_at_keygen_stage(2).unwrap());
+            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(2)));
 
         let ver2_vec = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
@@ -646,7 +647,7 @@ impl KeygenContext {
 
         distribute_data_keygen!(clients, self.account_ids, ver2_vec);
 
-        if !clients[0].is_at_keygen_stage(3).is_ok() {
+        if !clients[0].ensure_at_keygen_stage(3).is_ok() {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
@@ -686,7 +687,7 @@ impl KeygenContext {
 
         clients
             .iter()
-            .for_each(|c| c.is_at_keygen_stage(3).unwrap());
+            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(3)));
 
         // *** Collect all Secret3
 
@@ -927,7 +928,7 @@ impl KeygenContext {
 
             c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
-            c.is_at_signing_stage(1).unwrap();
+            assert_ok!(c.ensure_at_signing_stage(1));
         }
 
         let comm1_vec = recv_all_data_signing!(p2p_rxs, SigningData::CommStage1);
@@ -946,11 +947,10 @@ impl KeygenContext {
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            c.is_at_signing_stage(2).unwrap();
+            assert_ok!(c.ensure_at_signing_stage(2));
         }
 
         // *** Collect Ver2 messages ***
-        //let ver2_vec = collect_all_ver2(p2p_rxs).await;
         let ver2_vec = recv_all_data_signing!(p2p_rxs, SigningData::BroadcastVerificationStage2);
 
         let sign_phase2 = SigningPhase2Data {
@@ -980,7 +980,7 @@ impl KeygenContext {
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            c.is_at_signing_stage(3).unwrap();
+            assert_ok!(c.ensure_at_signing_stage(3));
         }
 
         // *** Collect local sigs ***
@@ -1037,16 +1037,16 @@ impl KeygenContext {
         expected_reason: CeremonyAbortReason,
         expected_reported_nodes: Vec<AccountId>,
         expected_tag: &str,
-    ) -> Result<()> {
+    ) -> Result<ValidKeygenStates> {
         // Run the keygen ceremony
         let keygen_states = self.generate().await;
 
         // Check that it failed
-        if !keygen_states.key_ready.is_err() {
+        if keygen_states.key_ready.is_ok() {
             return Err(anyhow::Error::msg("Keygen did not fail"));
         }
 
-        let (reason, reported) = keygen_states.key_ready.unwrap_err();
+        let (reason, reported) = keygen_states.key_ready.as_ref().unwrap_err().clone();
 
         // Check that the failure reason matches
         if reason != expected_reason {
@@ -1075,7 +1075,7 @@ impl KeygenContext {
             )));
         }
 
-        Ok(())
+        Ok(keygen_states)
     }
 }
 
@@ -1256,7 +1256,7 @@ impl MultisigClientNoDB {
     /// Check is the client is at the specified signing BroadcastStage (0-4).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_signing_stage(&self, stage_number: usize) -> Result<()> {
+    pub fn ensure_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
         let is_at_stage = match stage_number {
             0 => stage == None,
@@ -1279,7 +1279,7 @@ impl MultisigClientNoDB {
     /// Check is the client is at the specified keygen BroadcastStage (0-5).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
+    pub fn ensure_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self);
         let is_at_stage = match stage_number {
             0 => stage == None,
