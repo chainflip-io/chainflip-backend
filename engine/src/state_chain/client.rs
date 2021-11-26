@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
@@ -504,7 +504,8 @@ pub async fn connect_to_state_chain(
         state_chain_settings.ws_endpoint.as_str(),
     )?)
     .await
-    .map_err(into_anyhow_error)?;
+    .map_err(into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
 
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
