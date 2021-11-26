@@ -70,7 +70,7 @@ impl KeygenStateRunner {
         &mut self,
         sender_id: AccountId,
         data: KeygenData,
-    ) -> Option<Result<KeygenResultInfo, Vec<AccountId>>> {
+    ) -> Option<Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>> {
         self.inner.process_message(sender_id, data).map(|res| {
             res.map(|keygen_result| {
                 let params =

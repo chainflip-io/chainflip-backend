@@ -281,12 +281,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             Ok(sig) => pallet_cf_witnesser_api::Call::witness_eth_signature_success(
                                                 ceremony_id, sig.into()
                                             ),
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Signing failed with error: {:?}",
-                                                    err
-                                                );
+                                            Err((_, bad_account_ids)) => {
                                                 let bad_account_ids: Vec<_> = bad_account_ids
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
