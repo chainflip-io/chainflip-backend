@@ -88,7 +88,9 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
-	fn active_validator_count() -> u32;
+	fn active_validator_count() -> u32 {
+		Self::current_validators().len() as u32
+	}
 
 	/// The consensus threshold for the current epoch.
 	///
@@ -99,9 +101,9 @@ pub trait EpochInfo {
 	}
 }
 
-pub struct CurrentEpoch<T>(PhantomData<T>);
+pub struct CurrentThreshold<T>(PhantomData<T>);
 
-impl<T: Chainflip> Get<u32> for CurrentEpoch<T> {
+impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	fn get() -> u32 {
 		T::EpochInfo::consensus_treshold()
 	}

@@ -155,14 +155,17 @@ pub struct StateChainRpcClient {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
+    /// Submit an extrinsic to the state chain. If `Some(nonce)` is provided, uses that nonce and
+    /// sends a signed transaction. If the nonce is `None, send an unsigned transaction.
     async fn submit_extrinsic_rpc<Extrinsic>(
         &self,
-        nonce: u32,
+        nonce: MaybeNonce,
         extrinsic: Extrinsic,
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send;
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+        MaybeNonce: Into<Option<u32>>;
 
     async fn storage_events_at(
         &self,
@@ -178,24 +181,33 @@ pub trait StateChainRpcApi {
 impl StateChainRpcApi for StateChainRpcClient {
     async fn submit_extrinsic_rpc<Extrinsic>(
         &self,
-        nonce: u32,
+        nonce: MaybeNonce,
         extrinsic: Extrinsic,
     ) -> Result<sp_core::H256, RpcError>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+        MaybeNonce: Into<Option<u32>>,
     {
         self.author_rpc_client
             .submit_extrinsic(Bytes::from(
-                substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
-                    &self.runtime_version,
-                    self.genesis_hash,
-                    nonce,
-                    substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic).encode()),
-                    &self.signer,
-                )
-                .await
-                .expect("Should be able to sign")
+                if let Some(nonce) = nonce.into() {
+                    substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
+                        &self.runtime_version,
+                        self.genesis_hash,
+                        nonce,
+                        substrate_subxt::Encoded(
+                            state_chain_runtime::Call::from(extrinsic).encode(),
+                        ),
+                        &self.signer,
+                    )
+                    .await
+                    .expect("Should be able to sign")
+                } else {
+                    substrate_subxt::extrinsic::create_unsigned(substrate_subxt::Encoded(
+                        state_chain_runtime::Call::from(extrinsic).encode(),
+                    ))
+                }
                 .encode(),
             ))
             .await
@@ -235,7 +247,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Submit an extrinsic and retry if it fails on an invalid nonce
+    /// Sign and submit an extrinsic and retry if it fails on an invalid nonce.
     pub async fn submit_extrinsic<Extrinsic>(
         &self,
         logger: &slog::Logger,
@@ -282,6 +294,37 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Err(anyhow::Error::msg(
             "Exceeded maximum number of retry attempts",
         ))
+    }
+
+    /// Submit an unsigned extrinsic.
+    pub async fn submit_unsigned_extrinsic<Extrinsic>(
+        &self,
+        logger: &slog::Logger,
+        extrinsic: Extrinsic,
+    ) -> Result<H256>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+    {
+        match self
+            .state_chain_rpc_client
+            .submit_extrinsic_rpc(None, extrinsic.clone())
+            .await
+        {
+            Ok(tx_hash) => {
+                slog::trace!(
+                    logger,
+                    "{:?} submitted successfully with tx_hash: {}",
+                    extrinsic,
+                    tx_hash
+                );
+                return Ok(tx_hash);
+            }
+            Err(err) => {
+                slog::error!(logger, "Error: {}", err);
+                return Err(into_anyhow_error(err));
+            }
+        }
     }
 
     /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.

@@ -24,6 +24,7 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	convert::TryInto,
 	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
@@ -36,7 +37,7 @@ pub mod pallet {
 	use super::*;
 	use codec::FullCodec;
 	use frame_support::{
-		dispatch::DispatchResultWithPostInfo,
+		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 		pallet_prelude::*,
 		storage::bounded_btree_set::BoundedBTreeSet,
 		unsigned::{TransactionValidity, ValidateUnsigned},
@@ -198,6 +199,8 @@ pub mod pallet {
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
 		InvalidRespondent,
+		/// To many parties were reported as having failed in the threshold ceremony.
+		ToManyOffenders,
 	}
 
 	#[pallet::hooks]
@@ -323,7 +326,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// A threshold signature ceremony has failed.
+		/// Report that a threshold signature ceremony has failed and incriminate the guilty
+		/// participants.
+		///
+		/// The `offenders` argument takes a [BoundedBTreeSet] where the set size is limited
+		/// to the current size of the threshold group.
 		///
 		/// ## Events
 		///
@@ -337,7 +344,10 @@ pub mod pallet {
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
-			offenders: BoundedBTreeSet<<T as Chainflip>::ValidatorId, cf_traits::CurrentEpoch<T>>,
+			offenders: BoundedBTreeSet<
+				<T as Chainflip>::ValidatorId,
+				cf_traits::CurrentThreshold<T>,
+			>,
 		) -> DispatchResultWithPostInfo {
 			const FAILURE_TIMEOUT_BLOCKS: u32 = 10;
 
@@ -382,6 +392,32 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::FailureReportProcessed(id, reporter_id));
 
 			Ok(().into())
+		}
+
+		/// Same as [Self::report_signature_failed] except accepts an unbounded [BTreeSet] as an
+		/// input argument.
+		///
+		/// ## Events
+		///
+		/// - [FailureReportProcessed](Event::FailureReportProcessed)
+		///
+		/// ## Errors
+		///
+		/// - [ToManyOffenders](Error::ToManyOffenders)
+		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		/// - [InvalidRespondent](Error::InvalidRespondent)
+
+		#[pallet::weight(10_000)]
+		pub fn report_signature_failed_unbounded(
+			origin: OriginFor<T>,
+			id: CeremonyId,
+			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
+		) -> DispatchResultWithPostInfo {
+			Call::<T, I>::report_signature_failed(
+				id,
+				offenders.try_into().map_err(|_| Error::<T, I>::ToManyOffenders)?,
+			)
+			.dispatch_bypass_filter(origin)
 		}
 	}
 }
