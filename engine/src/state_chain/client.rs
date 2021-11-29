@@ -219,7 +219,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
-    pub async fn submit_extrinsic<Extrinsic>(
+    pub async fn sign_and_submit_extrinsic<Extrinsic>(
         &self,
         logger: &slog::Logger,
         extrinsic: Extrinsic,
@@ -712,7 +712,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_extrinsic(&logger, force_rotation_call)
+                .sign_and_submit_extrinsic(&logger, force_rotation_call)
                 .await
         );
 
@@ -756,7 +756,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_extrinsic(&logger, force_rotation_call)
+            .sign_and_submit_extrinsic(&logger, force_rotation_call)
             .await
             .unwrap_err();
 
@@ -797,7 +797,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_extrinsic(&logger, force_rotation_call.clone())
+            .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
             .await
             .unwrap_err();
 
@@ -861,7 +861,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_extrinsic(&logger, force_rotation_call.clone())
+                .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
                 .await
         );
 

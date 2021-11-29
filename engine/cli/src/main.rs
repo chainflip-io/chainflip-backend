@@ -71,12 +71,12 @@ async fn send_claim(
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
     let _tx_hash_redeem = state_chain_client
-        .submit_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
+        .sign_and_submit_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
         .await
         .expect("Failed to submit redeem extrinsic");
 
     let tx_hash = state_chain_client
-        .submit_extrinsic(
+        .sign_and_submit_extrinsic(
             logger,
             pallet_cf_staking::Call::claim(atomic_amount, eth_address),
         )

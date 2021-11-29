@@ -36,7 +36,7 @@ async fn main() {
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
     state_chain_client
-        .submit_extrinsic(
+        .sign_and_submit_extrinsic(
             &root_logger,
             pallet_cf_validator::Call::cfe_version(SemVer {
                 major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),

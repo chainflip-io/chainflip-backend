@@ -171,7 +171,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 1)]));
 
 			// We have reach the threshold to start the retry countdown.
-			assert!(request_context.countdown_threshold_reached());
+			assert!(request_context.countdown_initiation_threshold_reached());
 
 			// Callback has *not* executed but is scheduled for a retry in 10 blocks' time.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 10;
@@ -231,7 +231,7 @@ fn fail_path_no_timeout() {
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
 
 			// We have reach the threshold to start the retry countdown.
-			assert!(request_context.countdown_threshold_reached());
+			assert!(request_context.countdown_initiation_threshold_reached());
 
 			// Callback has *not* executed but is scheduled for a retry both in the next block *and*
 			// in 10 blocks' time.
@@ -369,19 +369,19 @@ mod failure_reporting {
 		let mut ctx = init_context([1, 2, 3, 4, 5]);
 
 		// No reports yet.
-		assert!(!ctx.countdown_threshold_reached());
+		assert!(!ctx.countdown_initiation_threshold_reached());
 
 		// First report, countdown threshold passed.
 		report(&mut ctx, 1, vec![2]);
-		assert!(ctx.countdown_threshold_reached());
+		assert!(ctx.countdown_initiation_threshold_reached());
 
 		// Second report, countdown threshold passed.
 		report(&mut ctx, 2, vec![1]);
-		assert!(ctx.countdown_threshold_reached());
+		assert!(ctx.countdown_initiation_threshold_reached());
 
 		// Third report, countdown threshold passed.
 		report(&mut ctx, 3, vec![1]);
-		assert!(ctx.countdown_threshold_reached());
+		assert!(ctx.countdown_initiation_threshold_reached());
 
 		// Status: 3 responses in, votes: [1:2, 2:1]
 		// Vote threshold not met, but two validators have failed to respond - they would be
@@ -390,7 +390,7 @@ mod failure_reporting {
 
 		// Fourth report, reporting threshold passed.
 		report(&mut ctx, 4, vec![1]);
-		assert!(ctx.countdown_threshold_reached());
+		assert!(ctx.countdown_initiation_threshold_reached());
 
 		// Status: 4 responses in, votes: [1:3, 2:1]
 		// Vote threshold has not been met for validator `1`, and `5` has not responded.
@@ -399,7 +399,7 @@ mod failure_reporting {
 
 		// Fifth report, reporting threshold passed.
 		report(&mut ctx, 5, vec![1, 2]);
-		assert!(ctx.countdown_threshold_reached());
+		assert!(ctx.countdown_initiation_threshold_reached());
 
 		// Status: 5 responses in, votes: [1:4, 2:2]. Only 1 has met the vote threshold.
 		assert_eq!(ctx.offenders(), vec![1], "Context was {:?}.", ctx);

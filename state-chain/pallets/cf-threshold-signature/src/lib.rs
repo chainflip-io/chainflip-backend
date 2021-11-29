@@ -60,7 +60,7 @@ pub mod pallet {
 		/// Based on the current state of the request, defines whether we have reached a point where
 		/// enough respondents have reported a failure of the ceremony such that we can schedule a
 		/// retry.
-		pub fn countdown_threshold_reached(&self) -> bool {
+		pub fn countdown_initiation_threshold_reached(&self) -> bool {
 			// The number of responses at which we start a timeout to allow other participants to
 			// respond.
 			let response_threshold = self.participant_count / 10 + 1;
@@ -215,7 +215,7 @@ pub mod pallet {
 						)
 						.unwrap_or_else(|e| {
 							log::error!(
-								"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+								"Unable to report ParticipateSigningFailed for participant {:?}: {:?}",
 								offender,
 								e
 							);
@@ -361,7 +361,9 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						if !context.retry_scheduled && context.countdown_threshold_reached() {
+						if !context.retry_scheduled &&
+							context.countdown_initiation_threshold_reached()
+						{
 							// Schedule for retry.
 							context.retry_scheduled = true;
 							RetryQueues::<T, I>::append(
