@@ -393,7 +393,7 @@ mod failure_reporting {
 		assert!(ctx.countdown_threshold_reached());
 
 		// Status: 4 responses in, votes: [1:3, 2:1]
-		// Vote threshold has been not been met for validator `1`, and `5` has not responded.
+		// Vote threshold has not been met for validator `1`, and `5` has not responded.
 		// As things stand, [5] would be reported.
 		assert_eq!(ctx.offenders(), vec![5], "Context was {:?}.", ctx);
 
