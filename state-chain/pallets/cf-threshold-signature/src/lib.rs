@@ -150,10 +150,12 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	/// A counter to generate fresh ceremony ids.
 	#[pallet::storage]
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
+	/// Stores the context required for processing live requests.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_request)]
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
@@ -193,7 +195,7 @@ pub mod pallet {
 		/// responded.
 		InvalidRespondent,
 		/// To many parties were reported as having failed in the threshold ceremony.
-		ToManyOffenders,
+		ExcessOffenders,
 	}
 
 	#[pallet::hooks]
@@ -408,7 +410,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			Call::<T, I>::report_signature_failed(
 				id,
-				offenders.try_into().map_err(|_| Error::<T, I>::ToManyOffenders)?,
+				offenders.try_into().map_err(|_| Error::<T, I>::ExcessOffenders)?,
 			)
 			.dispatch_bypass_filter(origin)
 		}
