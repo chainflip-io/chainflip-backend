@@ -353,6 +353,8 @@ impl pallet_cf_staking::Config for Runtime {
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;

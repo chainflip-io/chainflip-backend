@@ -12,7 +12,11 @@ use sp_std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{Chainflip, Slashing, mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo}, offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints}};
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
+	offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints},
+	Chainflip, Slashing,
+};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);

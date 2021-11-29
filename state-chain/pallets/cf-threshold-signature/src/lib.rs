@@ -247,7 +247,7 @@ pub mod pallet {
 
 	#[pallet::origin]
 	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode)]
-	pub struct Origin<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
+	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
 	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {

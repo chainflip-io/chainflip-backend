@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use cf_chains::{ChainCrypto, Ethereum, eth};
+use cf_chains::{eth, ChainCrypto, Ethereum};
 use frame_support::{
 	parameter_types,
 	traits::{Imbalance, UnfilteredDispatchable},

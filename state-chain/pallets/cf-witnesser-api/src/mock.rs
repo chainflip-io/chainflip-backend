@@ -6,7 +6,14 @@ use cf_chains::{
 	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
 	ChainCrypto, Ethereum,
 };
-use cf_traits::{Chainflip, NonceProvider, VaultRotationHandler, impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types, mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo, key_provider::MockKeyProvider}};
+use cf_traits::{
+	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		key_provider::MockKeyProvider,
+	},
+	Chainflip, NonceProvider, VaultRotationHandler,
+};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
 use frame_system as system;
 use sp_core::H256;
@@ -101,7 +108,10 @@ impl cf_traits::SigningContext<Test> for MockSigningContext {
 		Default::default()
 	}
 
-	fn resolve_callback(&self, _signature: <Self::Chain as ChainCrypto>::ThresholdSignature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		Call::System(frame_system::Call::remark(b"Hello".to_vec()))
 	}
 }
@@ -155,6 +165,7 @@ impl pallet_cf_staking::Config for Test {
 	type NonceProvider = Self;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 }
 

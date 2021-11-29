@@ -698,7 +698,9 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(1)
             // with verifies it's call with the correct argument
-            .returning(move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+            .returning(
+                move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Ok(tx_hash.clone()),
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
@@ -733,13 +735,15 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(MAX_RETRY_ATTEMPTS)
             // with verifies it's call with the correct argument
-            .returning(move |_nonce: Option<u32>, _call: state_chain_runtime::Call| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
-            });
+            .returning(
+                move |_nonce: Option<u32>, _call: state_chain_runtime::Call| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1014),
+                        message: "Priority too low".to_string(),
+                        data: None,
+                    }))
+                },
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
@@ -774,7 +778,9 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(1)
             // with verifies it's call with the correct argument
-            .returning(move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Err(RpcError::Timeout));
+            .returning(
+                move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Err(RpcError::Timeout),
+            );
 
         let state_chain_client = StateChainClient {
             metadata: substrate_subxt::Metadata::default(),
@@ -820,18 +826,22 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(1)
             // with verifies it's call with the correct argument
-            .returning(move |_nonce: Option<u32>, _call: state_chain_runtime::Call| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
-            });
+            .returning(
+                move |_nonce: Option<u32>, _call: state_chain_runtime::Call| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1014),
+                        message: "Priority too low".to_string(),
+                        data: None,
+                    }))
+                },
+            );
 
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+            .returning(
+                move |_nonce: Option<u32>, _call: state_chain_runtime::Call| Ok(tx_hash.clone()),
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),

@@ -183,6 +183,7 @@ impl pallet_cf_staking::Config for Test {
 	type NonceProvider = Self;
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
