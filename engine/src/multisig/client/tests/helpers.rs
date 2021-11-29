@@ -157,8 +157,7 @@ macro_rules! distribute_data_signing {
     ($clients:expr, $messages: expr) => {{
         for sender_idx in SIGNER_IDXS.iter() {
             for receiver_idx in SIGNER_IDXS.iter() {
-                let m =
-                    sig_data_to_p2p($messages[*sender_idx].clone(), &VALIDATOR_IDS[*sender_idx]);
+                let m = sig_data_to_p2p($messages[*sender_idx].clone(), &ACCOUNT_IDS[*sender_idx]);
 
                 if receiver_idx != sender_idx {
                     $clients[*receiver_idx].process_p2p_message(m.clone());
@@ -177,7 +176,7 @@ macro_rules! distribute_data_signing_custom {
                     .remove(&(*sender_idx, *receiver_idx))
                     .unwrap_or(valid_message);
 
-                let m = sig_data_to_p2p(message, &VALIDATOR_IDS[*sender_idx]);
+                let m = sig_data_to_p2p(message, &ACCOUNT_IDS[*sender_idx]);
 
                 if receiver_idx != sender_idx {
                     $clients[*receiver_idx].process_p2p_message(m.clone());
@@ -1387,7 +1386,7 @@ impl MultisigClientNoDB {
         }
     }
 
-    /// Sends the correct singing data from the `VALIDATOR_IDS[sender_idx]` to the client via `process_p2p_message`
+    /// Sends the correct singing data from the `ACCOUNT_IDS[sender_idx]` to the client via `process_p2p_message`
     pub fn receive_signing_stage_data(
         &mut self,
         stage: usize,
@@ -1398,7 +1397,7 @@ impl MultisigClientNoDB {
             stage,
             sign_states,
             sender_idx,
-            &VALIDATOR_IDS[sender_idx],
+            &ACCOUNT_IDS[sender_idx],
         );
         self.process_p2p_message(message);
     }

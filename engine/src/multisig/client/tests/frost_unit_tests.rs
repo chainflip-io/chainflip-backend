@@ -341,7 +341,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 
     // Get an id that is not in the keygen ceremony
     let unknown_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_id));
+    assert!(!ACCOUNT_IDS.contains(&unknown_id));
 
     // Test for all keygen stages
     for current_stage in 1..=SIGNING_STAGES {
@@ -379,7 +379,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a message from a node that is not in the signing ceremony
-        let non_participant_id = &VALIDATOR_IDS[3];
+        let non_participant_id = &ACCOUNT_IDS[3];
         assert!(!SIGNER_IDS.contains(&non_participant_id));
         let message = c1.get_signing_p2p_message_for_stage(
             current_stage,
