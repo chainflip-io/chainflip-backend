@@ -158,7 +158,7 @@ pub mod pallet {
 	#[pallet::getter(fn pending_request)]
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, RequestContext<T, I>, OptionQuery>;
-	
+
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
 	#[pallet::storage]
