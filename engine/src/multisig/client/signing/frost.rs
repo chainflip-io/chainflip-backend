@@ -271,11 +271,15 @@ pub fn aggregate_signature(
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
+    println!("The group commitment: {:?}", group_commitment);
+
     let challenge = build_challenge(
         agg_pubkey.get_element(),
         group_commitment.get_element(),
         msg,
     );
+
+    println!("The challenge: {:?}", challenge);
 
     let mut invalid_idxs = vec![];
 
