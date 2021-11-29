@@ -271,7 +271,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
                     }
                     err => {
-                        slog::error!(logger, "Error: {}", err);
+                        slog::error!(logger, "Error: {:?}", err);
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(into_anyhow_error(err));
                     }

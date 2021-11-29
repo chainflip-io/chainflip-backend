@@ -5,10 +5,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
 
 use crate::{
-    logging::CEREMONY_IGNORED,
     multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
@@ -67,15 +67,9 @@ where
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
-    ) {
+    ) -> Result<()> {
         if self.inner.is_some() {
-            // TODO: Use a more specific tag (keygen/signing)
-            slog::warn!(
-                self.logger,
-                #CEREMONY_IGNORED,
-                "Ceremony request ignored: duplicate ceremony_id"
-            );
-            return;
+            return Err(anyhow::Error::msg("Duplicate ceremony_id"));
         }
 
         stage.init();
@@ -94,6 +88,8 @@ where
         self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
         self.process_delayed();
+
+        Ok(())
     }
 
     /// Process message from a peer, returning ceremony outcome if
