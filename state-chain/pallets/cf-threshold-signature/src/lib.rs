@@ -158,14 +158,7 @@ pub mod pallet {
 	#[pallet::getter(fn pending_request)]
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, RequestContext<T, I>, OptionQuery>;
-
-	// /// A queue of `(ceremony_id, countdown)` where `countdown` is the number of block remaining
-	// /// until the retry attempt is triggered.
-	// #[pallet::storage]
-	// #[pallet::getter(fn retry_queue)]
-	// pub type RetryQueue<T: Config<I>, I: 'static = ()> =
-	// 	StorageValue<_, Vec<(CeremonyId, u32)>, ValueQuery>;
-
+	
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
 	#[pallet::storage]
