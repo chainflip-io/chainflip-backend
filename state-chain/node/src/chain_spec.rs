@@ -289,6 +289,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
 	let happy_sr25519 =
 		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
 		stake_manager_address,
 		key_manager_address,
@@ -350,10 +352,12 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 						.unchecked_into(),
 					),
 				],
-				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				// Sudo account - Snow White
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
+					// Snow White the dictator
+					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -365,7 +369,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					// Happy
 					happy_sr25519.into(),
 				],
-				3,
+				4,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 				eth_init_agg_key,
 			)
