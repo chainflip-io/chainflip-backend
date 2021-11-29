@@ -48,11 +48,17 @@ pub mod pallet {
 	/// Metadata for a pending threshold signature request.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
+		/// How many previous attempts have been made to sign the attached payload.
 		pub attempt: u8,
+		/// Whether or not this request has been scheduled to be retried.
 		pub retry_scheduled: bool,
+		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
+		/// The number of blame votes (accusations) each validator has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
+		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
+		/// Signing context for generating the payload and success callback.
 		pub chain_signing_context: T::SigningContext,
 	}
 
