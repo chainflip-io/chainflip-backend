@@ -251,7 +251,7 @@ mod tests {
 									Origin::none(),
 									*ceremony_id,
 									verification_components,
-								).expect("should be able to submit ethereum signature for node");
+								).expect("should be able to submit threshold signature for Ethereum");
 							} };
 						},
 						Event::EthereumThresholdSigner(
