@@ -146,7 +146,7 @@ fn happy_path() {
 }
 
 #[test]
-fn fail_path() {
+fn fail_path_with_timeout() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const VALIDATORS: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
@@ -187,12 +187,84 @@ fn fail_path() {
 			// No longer pending retry.
 			assert!(DogeThresholdSigner::retry_queues(retry_block).is_empty());
 
-			// We have a new request pending.
+			// Participant 1 was reported for not responding.
+			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
+
+			// We have a new request pending: New ceremony_id, same request context.
 			let pending = DogeThresholdSigner::pending_request(ceremony_id + 1).unwrap();
-			assert_eq!(pending.attempt, 1);
+			assert_eq!(pending.attempt, request_context.attempt + 1);
+			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().into_iter())
+			);
+		});
+}
+
+#[test]
+fn fail_path_no_timeout() {
+	const NOMINEES: [u64; 5] = [1, 2, 3, 4, 5];
+	const VALIDATORS: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+	ExtBuilder::new()
+		.with_validators(VALIDATORS)
+		.with_nominees(NOMINEES)
+		.with_pending_request("Woof!")
+		.build()
+		.execute_with(|| {
+			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let cfes = [
+				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
+				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
+				MockCfe { id: 3, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
+				MockCfe { id: 4, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
+				MockCfe { id: 5, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
+			];
+
+			// CFEs respond
+			tick(&cfes[..]);
+
+			// Request is still in pending state but scheduled for retry.
+			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
+			assert!(request_context.retry_scheduled);
+
+			// Account 1 has 4 blame votes against it.
+			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
+
+			// We have reach the threshold to start the retry countdown.
+			assert!(request_context.countdown_threshold_reached());
+
+			// Callback has *not* executed but is scheduled for a retry both in the next block *and*
+			// in 10 blocks' time.
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
+			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() + 10;
+			assert!(!MockCallback::<Doge>::has_executed());
+			assert_eq!(DogeThresholdSigner::retry_queues(retry_block).len(), 1);
+			assert_eq!(DogeThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
+
+			// The offender has not yet been reported.
+			assert!(MockOfflineReporter::get_reported().is_empty());
+
+			// Process retries.
+			<DogeThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+
+			// No longer pending retry.
+			assert!(DogeThresholdSigner::retry_queues(retry_block).is_empty());
+
+			// We did reach the reporting threshold, participant 1 was reported.
+			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
+
+			// We have a new request pending: New ceremony_id, same request context.
+			let pending = DogeThresholdSigner::pending_request(ceremony_id + 1).unwrap();
+			assert_eq!(pending.attempt, request_context.attempt + 1);
+			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
+			assert_eq!(
+				pending.remaining_respondents,
+				BTreeSet::from_iter(MockNominator::get_nominees().into_iter())
+			);
+
+			// Processing the redundant retry request has no effect.
+			<DogeThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+				retry_block_redundant,
 			);
 		});
 }

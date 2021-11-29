@@ -97,7 +97,7 @@ pub mod pallet {
 			let mut to_report = self
 				.blame_counts
 				.iter()
-				.filter(|(_, count)| **count >= blame_threshold)
+				.filter(|(_, count)| **count > blame_threshold)
 				.map(|(id, _)| id)
 				.cloned()
 				.collect::<BTreeSet<_>>();
