@@ -96,7 +96,7 @@ pub trait EpochInfo {
 	///
 	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
 	/// `share_count` is taken from [Self::active_validator_count].
-	fn consensus_treshold() -> u32 {
+	fn consensus_threshold() -> u32 {
 		cf_utilities::threshold_from_share_count(Self::active_validator_count())
 	}
 }
@@ -105,7 +105,7 @@ pub struct CurrentThreshold<T>(PhantomData<T>);
 
 impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	fn get() -> u32 {
-		T::EpochInfo::consensus_treshold()
+		T::EpochInfo::consensus_threshold()
 	}
 }
 
