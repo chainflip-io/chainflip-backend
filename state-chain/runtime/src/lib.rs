@@ -158,7 +158,6 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EpochInfo = Validator;
 	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
@@ -351,10 +350,11 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type StakerId = AccountId;
 	type Flip = Flip;
-	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -430,7 +430,6 @@ impl pallet_cf_reputation::Config for Runtime {
 impl pallet_cf_online::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = ChainflipHeartbeat;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
@@ -457,6 +456,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type OfflineReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
 }
@@ -489,7 +490,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );

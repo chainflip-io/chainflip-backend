@@ -127,7 +127,7 @@ impl EthObserver for KeyManager {
         match event.event_parameters {
             KeyManagerEvent::KeyChange { new_key, .. } => {
                 let _ = state_chain_client
-                    .submit_extrinsic(
+                    .sign_and_submit_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
                             ChainId::Ethereum,

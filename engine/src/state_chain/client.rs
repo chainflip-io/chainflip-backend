@@ -22,6 +22,7 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
+use substrate_subxt::UncheckedExtrinsic;
 use substrate_subxt::{
     extrinsic::{
         CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
@@ -142,10 +143,6 @@ pub type EventInfo = (
 const MAX_RETRY_ATTEMPTS: usize = 10;
 
 pub struct StateChainRpcClient {
-    runtime_version: sp_version::RuntimeVersion,
-    genesis_hash: state_chain_runtime::Hash,
-    pub signer:
-        substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
     chain_rpc_client: ChainRpcClient,
@@ -155,14 +152,12 @@ pub struct StateChainRpcClient {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
-    async fn submit_extrinsic_rpc<Extrinsic>(
+    /// Submit an extrinsic to the state chain. If `Some(nonce)` is provided, uses that nonce and
+    /// sends a signed transaction. If the nonce is `None`, send an unsigned transaction.
+    async fn submit_extrinsic_rpc(
         &self,
-        nonce: u32,
-        extrinsic: Extrinsic,
-    ) -> Result<sp_core::H256, RpcError>
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send;
+        extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
+    ) -> Result<sp_core::H256, RpcError>;
 
     async fn storage_events_at(
         &self,
@@ -176,28 +171,12 @@ pub trait StateChainRpcApi {
 
 #[async_trait]
 impl StateChainRpcApi for StateChainRpcClient {
-    async fn submit_extrinsic_rpc<Extrinsic>(
+    async fn submit_extrinsic_rpc(
         &self,
-        nonce: u32,
-        extrinsic: Extrinsic,
-    ) -> Result<sp_core::H256, RpcError>
-    where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
-    {
+        extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
+    ) -> Result<sp_core::H256, RpcError> {
         self.author_rpc_client
-            .submit_extrinsic(Bytes::from(
-                substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
-                    &self.runtime_version,
-                    self.genesis_hash,
-                    nonce,
-                    substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic).encode()),
-                    &self.signer,
-                )
-                .await
-                .expect("Should be able to sign")
-                .encode(),
-            ))
+            .submit_extrinsic(Bytes::from(extrinsic.encode()))
             .await
     }
 
@@ -230,13 +209,17 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     nonce: AtomicU32,
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
+    runtime_version: sp_version::RuntimeVersion,
+    genesis_hash: state_chain_runtime::Hash,
+    pub signer:
+        substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Submit an extrinsic and retry if it fails on an invalid nonce
-    pub async fn submit_extrinsic<Extrinsic>(
+    /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    pub async fn sign_and_submit_extrinsic<Extrinsic>(
         &self,
         logger: &slog::Logger,
         extrinsic: Extrinsic,
@@ -245,12 +228,24 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
+        let encoded_call =
+            substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode());
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             match self
                 .state_chain_rpc_client
-                .submit_extrinsic_rpc(nonce, extrinsic.clone())
+                .submit_extrinsic_rpc(
+                    substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
+                        &self.runtime_version,
+                        self.genesis_hash,
+                        nonce,
+                        encoded_call.clone(),
+                        &self.signer,
+                    )
+                    .await
+                    .expect("Should be able to sign"),
+                )
                 .await
             {
                 Ok(tx_hash) => {
@@ -282,6 +277,41 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Err(anyhow::Error::msg(
             "Exceeded maximum number of retry attempts",
         ))
+    }
+
+    /// Submit an unsigned extrinsic.
+    pub async fn submit_unsigned_extrinsic<Extrinsic>(
+        &self,
+        logger: &slog::Logger,
+        extrinsic: Extrinsic,
+    ) -> Result<H256>
+    where
+        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+    {
+        match self
+            .state_chain_rpc_client
+            .submit_extrinsic_rpc(substrate_subxt::extrinsic::create_unsigned::<
+                RuntimeImplForSigningExtrinsics,
+            >(substrate_subxt::Encoded(
+                state_chain_runtime::Call::from(extrinsic.clone()).encode(),
+            )))
+            .await
+        {
+            Ok(tx_hash) => {
+                slog::trace!(
+                    logger,
+                    "{:?} submitted successfully with tx_hash: {}",
+                    extrinsic,
+                    tx_hash
+                );
+                return Ok(tx_hash);
+            }
+            Err(err) => {
+                slog::error!(logger, "Error: {}", err);
+                return Err(into_anyhow_error(err));
+            }
+        }
     }
 
     /// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.
@@ -537,18 +567,6 @@ pub async fn connect_to_state_chain(
 
         let system_pallet_metadata = metadata.module("System")?.clone();
         let state_chain_rpc_client = StateChainRpcClient {
-            runtime_version: state_rpc_client
-                .runtime_version(Some(latest_block_hash))
-                .await
-                .map_err(into_anyhow_error)?,
-            genesis_hash: try_unwrap_value(
-                chain_rpc_client
-                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                    .await
-                    .map_err(into_anyhow_error)?,
-                anyhow::Error::msg("Genesis block doesn't exist?"),
-            )?,
-            signer: signer.clone(),
             author_rpc_client,
             state_rpc_client,
             chain_rpc_client,
@@ -586,6 +604,20 @@ pub async fn connect_to_state_chain(
                     )?;
                     account_info.nonce
                 }),
+                runtime_version: state_chain_rpc_client
+                    .state_rpc_client
+                    .runtime_version(Some(latest_block_hash))
+                    .await
+                    .map_err(into_anyhow_error)?,
+                genesis_hash: try_unwrap_value(
+                    state_chain_rpc_client
+                        .chain_rpc_client
+                        .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+                        .await
+                        .map_err(into_anyhow_error)?,
+                    anyhow::Error::msg("Genesis block doesn't exist?"),
+                )?,
+                signer: signer.clone(),
                 state_chain_rpc_client,
                 our_account_id,
                 account_storage_key,
@@ -605,6 +637,8 @@ mod tests {
     use std::convert::TryInto;
 
     use sp_core::H160;
+    use sp_version::RuntimeVersion;
+    use substrate_subxt::PairSigner;
 
     use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
 
@@ -654,8 +688,9 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            // with verifies it's call with the correct argument
-            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
@@ -664,6 +699,9 @@ mod tests {
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
         };
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -674,7 +712,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_extrinsic(&logger, force_rotation_call)
+                .sign_and_submit_extrinsic(&logger, force_rotation_call)
                 .await
         );
 
@@ -689,14 +727,15 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(MAX_RETRY_ATTEMPTS)
-            // with verifies it's call with the correct argument
-            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
-            });
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1014),
+                        message: "Priority too low".to_string(),
+                        data: None,
+                    }))
+                },
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
@@ -705,6 +744,9 @@ mod tests {
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
         };
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -714,7 +756,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_extrinsic(&logger, force_rotation_call)
+            .sign_and_submit_extrinsic(&logger, force_rotation_call)
             .await
             .unwrap_err();
 
@@ -730,8 +772,11 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            // with verifies it's call with the correct argument
-            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Err(RpcError::Timeout));
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
+                    Err(RpcError::Timeout)
+                },
+            );
 
         let state_chain_client = StateChainClient {
             metadata: substrate_subxt::Metadata::default(),
@@ -740,6 +785,9 @@ mod tests {
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
         };
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -749,7 +797,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_extrinsic(&logger, force_rotation_call.clone())
+            .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
             .await
             .unwrap_err();
 
@@ -776,19 +824,22 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            // with verifies it's call with the correct argument
-            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
-            });
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1014),
+                        message: "Priority too low".to_string(),
+                        data: None,
+                    }))
+                },
+            );
 
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_nonce: u32, _call: state_chain_runtime::Call| Ok(tx_hash.clone()));
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
+            );
 
         let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
@@ -797,6 +848,9 @@ mod tests {
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
         };
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -807,7 +861,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_extrinsic(&logger, force_rotation_call.clone())
+                .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
                 .await
         );
 

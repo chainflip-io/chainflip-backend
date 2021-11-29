@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use cf_chains::{eth, Ethereum};
+use cf_chains::{eth, ChainCrypto, Ethereum};
 use frame_support::{
 	parameter_types,
 	traits::{Imbalance, UnfilteredDispatchable},
@@ -74,7 +74,6 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
@@ -82,7 +81,8 @@ impl Chainflip for Test {
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
 pub struct MockCallback;
@@ -108,15 +108,17 @@ impl From<eth::update_flip_supply::UpdateFlipSupply> for MockEthSigningContext {
 
 impl SigningContext<Test> for MockEthSigningContext {
 	type Chain = Ethereum;
-	type Payload = Vec<u8>;
-	type Signature = Vec<u8>;
 	type Callback = MockCallback;
+	type ThresholdSignatureOrigin = Origin;
 
-	fn get_payload(&self) -> Self::Payload {
-		b"payloooooad".to_vec()
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+		Default::default()
 	}
 
-	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		MockCallback
 	}
 }

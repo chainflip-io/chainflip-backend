@@ -7,6 +7,9 @@
 /// we are using and in the corresponding literature.
 
 pub fn threshold_from_share_count(share_count: u32) -> u32 {
+    if share_count == 0 {
+        return 0;
+    }
     ((share_count * 2) - 1) / 3
 }
 

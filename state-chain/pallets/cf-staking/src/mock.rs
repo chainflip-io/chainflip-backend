@@ -32,7 +32,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Signer: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		Signer: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
@@ -76,6 +76,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EpochInfo = MockEpochInfo;
 }
 
 cf_traits::impl_mock_signer_nomination!(AccountId);
@@ -155,22 +156,23 @@ impl From<RegisterClaim> for ClaimSigningContext {
 
 impl SigningContext<Test> for ClaimSigningContext {
 	type Chain = AlwaysVerifiesCoin;
-	type Payload = <AlwaysVerifiesCoin as ChainCrypto>::Payload;
-	type Signature = <AlwaysVerifiesCoin as ChainCrypto>::ThresholdSignature;
 	type Callback = pallet_cf_staking::Call<Test>;
+	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Test, Instance1>;
 
-	fn get_payload(&self) -> Self::Payload {
-		vec![]
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+		Default::default()
 	}
 
-	fn resolve_callback(&self, _signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), ETH_DUMMY_SIG)
 	}
 }
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
-	type EpochInfo = MockEpochInfo;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -181,6 +183,7 @@ impl pallet_cf_staking::Config for Test {
 	type NonceProvider = Self;
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);

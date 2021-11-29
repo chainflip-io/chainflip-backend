@@ -66,7 +66,7 @@ pub type AttemptCount = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*};
+	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured SignedTransaction.
@@ -161,6 +161,9 @@ pub mod pallet {
 
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
+
+		/// Ensure that only threshold signature consensus can trigger a broadcast.
+		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
 
 		/// The timeout duration for the signing stage, measured in number of blocks.
 		#[pallet::constant]
@@ -305,9 +308,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			// TODO: This doesn't necessarily have to be witnessed, but *should* be restricted such
-			// that it can only be called internally.
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 				*id += 1;

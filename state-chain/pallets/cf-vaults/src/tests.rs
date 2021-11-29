@@ -196,7 +196,7 @@ mod tests {
 			);
 
 			// We have yet to move to the new epoch
-			let current_epoch = <MockRuntime as crate::Config>::EpochInfo::epoch_index();
+			let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
 
 			let Vault { public_key, active_window } =
 				Vaults::<MockRuntime>::get(current_epoch, ChainId::Ethereum)

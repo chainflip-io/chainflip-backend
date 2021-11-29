@@ -23,6 +23,13 @@ macro_rules! impl_mock_epoch_info {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().len())
 			}
 
+			/// Get the current number of validators.
+			pub fn set_validators(validators: Vec<$account_id>) {
+				CURRENT_VALIDATORS.with(|cell| {
+					*cell.borrow_mut() = validators;
+				})
+			}
+
 			/// Add a validator to the current validators.
 			pub fn add_validator(account: $account_id) {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
@@ -85,6 +92,10 @@ macro_rules! impl_mock_epoch_info {
 
 			fn is_auction_phase() -> bool {
 				IS_AUCTION.with(|cell| *cell.borrow())
+			}
+
+			fn active_validator_count() -> u32 {
+				Self::current_validators().len() as u32
 			}
 		}
 	};

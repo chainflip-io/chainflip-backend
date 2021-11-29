@@ -6,7 +6,7 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -46,7 +46,7 @@ pub async fn start<BlockStream, RpcClient>(
     );
 
     state_chain_client
-        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+        .sign_and_submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
         .await
         .expect("Should be able to submit first heartbeat");
 
@@ -145,7 +145,7 @@ pub async fn start<BlockStream, RpcClient>(
                         block_header.number
                     );
                     let _ = state_chain_client
-                        .submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .sign_and_submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
 
@@ -240,7 +240,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .submit_extrinsic(&logger, response_extrinsic)
+                                        .sign_and_submit_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 state_chain_runtime::Event::EthereumThresholdSigner(
@@ -269,7 +269,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         .map_err(|_| "Receiver should exist")
                                         .unwrap();
 
-                                    let response_extrinsic = match multisig_event_receiver
+                                    match multisig_event_receiver
                                         .recv()
                                         .await
                                         .expect("Channel closed!")
@@ -278,17 +278,31 @@ pub async fn start<BlockStream, RpcClient>(
                                             id: _,
                                             result,
                                         }) => match result {
-                                            Ok(sig) => pallet_cf_witnesser_api::Call::witness_eth_signature_success(
-                                                ceremony_id, sig.into()
-                                            ),
+                                            Ok(sig) => {
+                                                let _ = state_chain_client
+                                                    .submit_unsigned_extrinsic(
+                                                        &logger,
+                                                        pallet_cf_threshold_signature::Call::signature_success(
+                                                            ceremony_id,
+                                                            sig.into()
+                                                        )
+                                                    )
+                                                    .await;
+                                            }
                                             Err((_, bad_account_ids)) => {
-                                                let bad_account_ids: Vec<_> = bad_account_ids
+                                                let bad_account_ids: BTreeSet<_> = bad_account_ids
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                pallet_cf_witnesser_api::Call::witness_eth_signature_failed(
-                                                    ceremony_id, bad_account_ids
-                                                )
+                                                let _ = state_chain_client
+                                                    .sign_and_submit_extrinsic(
+                                                        &logger,
+                                                        pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
+                                                            ceremony_id,
+                                                            bad_account_ids
+                                                        )
+                                                    )
+                                                    .await;
                                             }
                                         },
                                         MultisigOutcome::Keygen(keygen_result) => {
@@ -298,9 +312,6 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                         }
                                     };
-                                    let _ = state_chain_client
-                                        .submit_extrinsic(&logger, response_extrinsic)
-                                        .await;
                                 }
                                 state_chain_runtime::Event::EthereumBroadcaster(
                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
@@ -317,7 +328,7 @@ pub async fn start<BlockStream, RpcClient>(
                                     );
                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                         Ok(raw_signed_tx) => {
-                                            let _ = state_chain_client.submit_extrinsic(
+                                            let _ = state_chain_client.sign_and_submit_extrinsic(
                                                 &logger,
                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission(
@@ -385,7 +396,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .submit_extrinsic(&logger, response_extrinsic)
+                                        .sign_and_submit_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 ignored_event => {
