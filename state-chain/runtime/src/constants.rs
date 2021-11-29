@@ -32,6 +32,7 @@ pub mod common {
 	pub const SLOT_DURATION: u64 = MILLISECONDS_PER_BLOCK;
 
 	// Time is measured by number of blocks.
+	// TOOO: Unpluralise
 	pub const MINUTES: BlockNumber = 60_000 / (MILLISECONDS_PER_BLOCK as BlockNumber);
 	pub const HOURS: BlockNumber = MINUTES * 60;
 	pub const DAYS: BlockNumber = HOURS * 24;
