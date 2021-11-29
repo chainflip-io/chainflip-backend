@@ -26,7 +26,26 @@ pub async fn genesis_keys() {
     let dopey = AccountId(dopey);
     println!("dopey: {:?}", dopey);
 
-    let account_ids = vec![doc.clone(), dopey.clone(), bashful.clone()];
+    let grumpy =
+        hex::decode("28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805").unwrap();
+    let grumpy: [u8; 32] = grumpy.try_into().unwrap();
+    let grumpy = AccountId(grumpy);
+    println!("grumpy: {:?}", grumpy);
+
+    let happy =
+        hex::decode("7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d").unwrap();
+    let happy: [u8; 32] = happy.try_into().unwrap();
+    let happy = AccountId(happy);
+    println!("happy: {:?}", happy);
+
+    // These are in lexicographical order
+    let account_ids = vec![
+        grumpy.clone(),
+        bashful.clone(),
+        happy.clone(),
+        doc.clone(),
+        dopey.clone(),
+    ];
     let mut keygen_context = KeygenContext::new_with_account_ids(account_ids);
     let result = keygen_context.generate().await;
 
@@ -55,4 +74,16 @@ pub async fn genesis_keys() {
     let dopey_secret = bincode::serialize(&dopey_secret).expect("Could not serialize dopey_secret");
     let dopey_secret = hex::encode(dopey_secret);
     println!("Dopey secret: {:?}", dopey_secret);
+
+    let grumpy_secret =
+        secret_keys[account_id_to_idx_mapping.get_idx(&grumpy).unwrap() - 1].clone();
+    let grumpy_secret =
+        bincode::serialize(&grumpy_secret).expect("Could not serialize grumpy_secret");
+    let grumpy_secret = hex::encode(grumpy_secret);
+    println!("Grumpy secret: {:?}", grumpy_secret);
+
+    let happy_secret = secret_keys[account_id_to_idx_mapping.get_idx(&happy).unwrap() - 1].clone();
+    let happy_secret = bincode::serialize(&happy_secret).expect("Could not serialize happy_secret");
+    let happy_secret = hex::encode(happy_secret);
+    println!("Happy secret: {:?}", happy_secret);
 }
