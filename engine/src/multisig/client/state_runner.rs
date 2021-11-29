@@ -98,7 +98,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, Vec<AccountId>>> {
+    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -154,8 +154,11 @@ where
 
                             self.process_delayed();
                         }
-                        StageResult::Error(bad_validators) => {
-                            return Some(Err(authorised_state.idx_mapping.get_ids(bad_validators)));
+                        StageResult::Error(bad_validators, reason) => {
+                            return Some(Err((
+                                authorised_state.idx_mapping.get_ids(bad_validators),
+                                reason,
+                            )));
                         }
                         StageResult::Done(result) => {
                             slog::debug!(self.logger, "Ceremony reached the final stage!");

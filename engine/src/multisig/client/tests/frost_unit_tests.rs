@@ -240,7 +240,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
     // Get an id that was not in the keygen and substitute it in the signer list
     let unknown_signer_id = AccountId([0; 32]);
-    assert!(!VALIDATOR_IDS.contains(&unknown_signer_id));
+    assert!(!ACCOUNT_IDS.contains(&unknown_signer_id));
     let mut signer_ids = SIGNER_IDS.clone();
     signer_ids[1] = unknown_signer_id;
 
@@ -291,7 +291,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
 
     // Send the request to sign with too many signers
     let mut signer_ids = SIGNER_IDS.clone();
-    signer_ids.push(VALIDATOR_IDS[3].clone());
+    signer_ids.push(ACCOUNT_IDS[3].clone());
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
