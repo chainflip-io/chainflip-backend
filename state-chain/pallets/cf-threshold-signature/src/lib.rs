@@ -194,7 +194,7 @@ pub mod pallet {
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
 		InvalidRespondent,
-		/// To many parties were reported as having failed in the threshold ceremony.
+		/// Too many parties were reported as having failed in the threshold ceremony.
 		ExcessOffenders,
 	}
 
