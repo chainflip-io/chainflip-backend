@@ -149,7 +149,7 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
-        let context = generate_keygen_context(ceremony_id, signers.clone());
+        let context = generate_keygen_context(ceremony_id, signers);
 
         state.on_keygen_request(
             ceremony_id,
@@ -227,12 +227,14 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        state.on_ceremony_request(
+        if let Err(reason) = state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             key_info.validator_map,
             self.outcome_sender.clone(),
-        );
+        ) {
+            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+        }
     }
 
     /// Process data for a signing ceremony arriving from a peer
