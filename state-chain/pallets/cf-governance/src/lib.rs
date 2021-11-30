@@ -391,11 +391,10 @@ impl<T: Config> Pallet<T> {
 		// Remove the proposal from storage
 		Proposals::<T>::remove(id);
 		// Remove the proposal from active proposals
-		let active_proposals = ActiveProposals::<T>::get();
-		let new_active_proposals =
-			active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
+		let mut active_proposals = ActiveProposals::<T>::get();
+		active_proposals.retain(|x| x.0 != id);
 		// Set the new active proposals
-		ActiveProposals::<T>::set(new_active_proposals);
+		ActiveProposals::<T>::set(active_proposals);
 		Ok(())
 	}
 	/// Checks if the majority for a proposal is reached
