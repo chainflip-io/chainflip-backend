@@ -1,6 +1,6 @@
 use crate::common::rpc_error_into_anyhow_error;
 use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use cf_p2p::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
 use futures::{stream::BoxStream, TryStreamExt};
