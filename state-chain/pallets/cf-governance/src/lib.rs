@@ -3,7 +3,10 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use codec::{Decode, Encode};
-use frame_support::traits::{EnsureOrigin, UnixTime};
+use frame_support::{
+	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	traits::{EnsureOrigin, UnixTime},
+};
 pub use pallet::*;
 use sp_runtime::DispatchError;
 use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
@@ -25,11 +28,13 @@ pub mod pallet {
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
+		weights::PostDispatchInfo,
 	};
+	use sp_runtime::DispatchErrorWithPostInfo;
 
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
-	use sp_std::{boxed::Box, vec, vec::Vec};
+	use sp_std::{boxed::Box, vec::Vec};
 
 	use crate::WeightInfo;
 
@@ -92,7 +97,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn execution_pipeline )]
 	pub(super) type ExecutionPipeline<T> =
-		StorageValue<_, Vec<(<T as Config>::Call, ProposalId)>, ValueQuery>;
+		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
 	/// Time in seconds after a proposal expires
 	#[pallet::storage]
@@ -109,42 +114,10 @@ pub mod pallet {
 		/// on_initialize hook - check the ActiveProposals
 		/// and remove the expired ones for house keeping
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			// Check if their are any ongoing proposals
-			let mut execution_weight = 0;
-			let active_proposal_weight = match ActiveProposals::<T>::decode_len() {
-				Some(proposal_len) if proposal_len > 0 => {
-					// Separate the proposals into expired an active by partitioning
-					let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
-						ActiveProposals::<T>::get()
-							.iter()
-							.partition(|p| p.1 <= T::TimeSource::now().as_secs());
-					// Remove expired proposals
-					let number_expired_proposals = expired.len() as u32;
-					Self::expire_proposals(expired);
-					ActiveProposals::<T>::set(active);
-					T::WeightInfo::on_initialize(proposal_len as u32) +
-						T::WeightInfo::expire_proposals(number_expired_proposals)
-				},
-				_ => T::WeightInfo::on_initialize_best_case(),
-			};
-			// If there is something in the pipeline execute it
-			if ExecutionPipeline::<T>::decode_len() > Some(0) {
-				let execution_pipeline = ExecutionPipeline::<T>::get();
-				for (call, id) in execution_pipeline {
-					// Execute the proposal
-					let result = call
-						.clone()
-						.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-					// Emit events about the execution status
-					match result {
-						Ok(_) => Self::deposit_event(Event::Executed(id)),
-						Err(_) => Self::deposit_event(Event::FailedExecution(id)),
-					}
-					execution_weight += call.get_dispatch_info().weight;
-				}
-				// Clean up execution pipeline
-				ExecutionPipeline::<T>::set(vec![]);
-			}
+			// Check expiry and expire the proposals if needed
+			let active_proposal_weight = Self::check_expiry();
+			// Execute all proposals which reached threshold in the last block
+			let execution_weight = Self::execute_proposals();
 			active_proposal_weight + execution_weight
 		}
 	}
@@ -160,8 +133,10 @@ pub mod pallet {
 		Expired(ProposalId),
 		/// A proposal was approved \[proposal_id\]
 		Approved(ProposalId),
-		/// The execution of a proposal failed \[proposal_id\]
-		FailedExecution(ProposalId),
+		/// The execution of a proposal failed \[dispatch_error\]
+		FailedExecution(DispatchErrorWithPostInfo<PostDispatchInfo>),
+		/// The decode of call failed \[proposal_id\]
+		DecodeOfCallFailed(ProposalId),
 	}
 
 	#[pallet::error]
@@ -337,6 +312,53 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	/// Checks the expiry state of the proposals
+	fn check_expiry() -> Weight {
+		match ActiveProposals::<T>::decode_len() {
+			Some(proposal_len) if proposal_len > 0 => {
+				// Separate the proposals into expired an active by partitioning
+				let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
+					ActiveProposals::<T>::get()
+						.iter()
+						.partition(|p| p.1 <= T::TimeSource::now().as_secs());
+				// Remove expired proposals
+				let number_expired_proposals = expired.len() as u32;
+				Self::expire_proposals(expired);
+				ActiveProposals::<T>::set(active);
+				T::WeightInfo::on_initialize(proposal_len as u32) +
+					T::WeightInfo::expire_proposals(number_expired_proposals)
+			},
+			_ => T::WeightInfo::on_initialize_best_case(),
+		}
+	}
+	/// Executes all proposals in the pipeline
+	fn execute_proposals() -> Weight {
+		let mut execution_weight = 0;
+		// If there is something in the pipeline execute it
+		if ExecutionPipeline::<T>::decode_len() > Some(0) {
+			let execution_pipeline = ExecutionPipeline::<T>::get();
+			for (call, id) in execution_pipeline {
+				if let Some(call) = Self::decode_call(&call) {
+					// Execute the proposal
+					let result = call
+						.clone()
+						.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+					// Emit events about the execution status
+					match result {
+						Ok(_) => Self::deposit_event(Event::Executed(id)),
+						Err(err) => Self::deposit_event(Event::FailedExecution(err)),
+					}
+					execution_weight += call.get_dispatch_info().weight;
+				} else {
+					// Emit an error if the decode of a call failed
+					Self::deposit_event(Event::DecodeOfCallFailed(id));
+				}
+			}
+			// Clean up execution pipeline
+			ExecutionPipeline::<T>::set(vec![]);
+		}
+		execution_weight
+	}
 	/// Expire proposals
 	fn expire_proposals(expired: Vec<ActiveProposal>) {
 		for expired_proposal in expired {
@@ -364,22 +386,17 @@ impl<T: Config> Pallet<T> {
 	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {
 		let proposal = Proposals::<T>::get(id);
 		// Try to decode the stored extrinsic
-		if let Some(call) = Self::decode_call(&proposal.call) {
-			// Push the proposal to the execution pipeline
-			ExecutionPipeline::<T>::append((call.clone(), id));
-			// Remove the proposal from storage
-			Proposals::<T>::remove(id);
-			// Remove the proposal from active proposals
-			let active_proposals = ActiveProposals::<T>::get();
-			let new_active_proposals =
-				active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
-			// Set the new active proposals
-			ActiveProposals::<T>::set(new_active_proposals);
-			Ok(())
-		} else {
-			// Emit an event if the decode of a call failed
-			Err(Error::<T>::DecodeOfCallFailed.into())
-		}
+		// Push the proposal to the execution pipeline
+		ExecutionPipeline::<T>::append((proposal.call, id));
+		// Remove the proposal from storage
+		Proposals::<T>::remove(id);
+		// Remove the proposal from active proposals
+		let active_proposals = ActiveProposals::<T>::get();
+		let new_active_proposals =
+			active_proposals.iter().filter(|x| x.0 != id).cloned().collect::<Vec<_>>();
+		// Set the new active proposals
+		ActiveProposals::<T>::set(new_active_proposals);
+		Ok(())
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
