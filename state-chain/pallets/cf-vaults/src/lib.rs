@@ -16,7 +16,12 @@ use frame_support::{
 	pallet_prelude::*,
 };
 pub use pallet::*;
-use sp_std::{convert::TryFrom, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	convert::TryFrom,
+	iter::{FromIterator, Iterator},
+	prelude::*,
+};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -31,12 +36,91 @@ mod tests;
 /// Id type used for the Keygen ceremony.
 pub type CeremonyId = u64;
 
+/// Tracks the current state of the keygen ceremony.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct KeygenResponseStatus<T: Config> {
+	/// The total number of candidates participating in the keygen ceremony.
+	candidate_count: u32,
+	/// The candidates that have yet to reply.
+	remaining_candidates: BTreeSet<T::ValidatorId>,
+	/// A map of new keys with the number of votes for each key.
+	success_votes: BTreeMap<Vec<u8>, u32>,
+	/// A map of the number of blame votes that each validator has received.
+	blame_votes: BTreeMap<T::ValidatorId, u32>,
+}
+
+impl<T: Config> KeygenResponseStatus<T> {
+	pub fn threshold(&self) -> u32 {
+		utilities::threshold_from_share_count(self.candidate_count)
+	}
+
+	/// Accumulate a success vote into the keygen status.
+	///
+	/// Does not mutate on the error case.
+	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: Vec<u8>) -> DispatchResult {
+		ensure!(self.remaining_candidates.remove(voter), Error::<T>::InvalidRespondent);
+
+		*self.success_votes.entry(key).or_default() += 1;
+
+		Ok(())
+	}
+
+	/// Accumulate a failure vote into the keygen status.
+	///
+	/// Does not mutate on the error case.
+	fn add_failure_vote(
+		&mut self,
+		voter: &T::ValidatorId,
+		blamed: BTreeSet<T::ValidatorId>,
+	) -> DispatchResult {
+		ensure!(self.remaining_candidates.remove(voter), Error::<T>::InvalidRespondent);
+
+		for id in blamed {
+			*self.blame_votes.entry(id).or_default() += 1
+		}
+
+		Ok(())
+	}
+
+	/// How many candidates are we still awaiting a response from?
+	fn remaining_candidate_count(&self) -> u32 {
+		self.remaining_candidates.len() as u32
+	}
+
+	/// Returns `Some(key)` *iff any* key has more than `self.threshold()` number of votes, otherwise
+	/// returns `None`.
+	/// 
+	/// TODO: Is 2/3 too conservative? Should we require more respondents based on the emergency rotation
+	/// bounds?
+	fn keygen_result(&self) -> Option<&Vec<u8>> {
+		self.success_votes.iter().find_map(|(key, votes)| if *votes > self.threshold() {
+			Some(key)
+		} else {
+			None
+		})
+	}
+}
+
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VaultRotationStatus<T: Config> {
-	AwaitingKeygen { keygen_ceremony_id: CeremonyId, candidates: Vec<T::ValidatorId> },
+	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T> },
 	AwaitingRotation { new_public_key: Vec<u8> },
 	Complete { tx_hash: Vec<u8> },
+}
+
+impl<T: Config> VaultRotationStatus<T> {
+	fn new(id: CeremonyId, candidates: BTreeSet<T::ValidatorId>) -> Self {
+		Self::AwaitingKeygen {
+			keygen_ceremony_id: id,
+			response_status: KeygenResponseStatus {
+				candidate_count: candidates.len() as u32,
+				remaining_candidates: candidates,
+				success_votes: Default::default(),
+				blame_votes: Default::default(),
+			},
+		}
+	}
 }
 
 /// The bounds within which a public key for a vault should be used for witnessing.
@@ -58,7 +142,7 @@ pub struct Vault {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
+	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -124,8 +208,10 @@ pub mod pallet {
 		KeygenAborted(Vec<ChainId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
-		/// UnexpectedPubkeyWitnessed \[chain_id, key\]
+		/// The new public key witnessed externally was not the expected one \[chain_id, key\]
 		UnexpectedPubkeyWitnessed(ChainId, Vec<u8>),
+		/// A validator has reported that keygen was successful \[validator_id\]
+		KeygenSuccessReported(T::ValidatorId),
 	}
 
 	#[pallet::error]
@@ -146,6 +232,8 @@ pub mod pallet {
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
+		/// A validator sent a response for a ceremony in which they weren't involved.
+		InvalidRespondent,
 	}
 
 	#[pallet::call]
@@ -174,12 +262,16 @@ pub mod pallet {
 			chain_id: ChainId,
 			new_public_key: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			let reporter = ensure_signed(origin)?.into();
 
-			let rotation =
+			// -- Validity checks.
+
+			let mut rotation =
 				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
-			let pending_ceremony_id = ensure_variant!(
-				VaultRotationStatus::<T>::AwaitingKeygen { keygen_ceremony_id, .. } => keygen_ceremony_id,
+			let (pending_ceremony_id, rotation_status) = ensure_variant!(
+				VaultRotationStatus::<T>::AwaitingKeygen {
+					keygen_ceremony_id, ref mut response_status
+				} => (keygen_ceremony_id, response_status),
 				rotation,
 				Error::<T>::InvalidRotationStatus,
 			);
@@ -188,6 +280,19 @@ pub mod pallet {
 				log::error!("Unable to decode new public key {:?}: {:?}", new_public_key, e);
 				Error::<T>::InvalidPublicKey
 			})?;
+
+			// -- Tally the votes.
+
+			rotation_status.add_success_vote(&reporter, new_public_key.clone())?;
+
+			Self::deposit_event(Event::<T>::KeygenSuccessReported(reporter));
+
+			if rotation_status.remaining_candidate_count() > 0 {
+				PendingVaultRotations::<T>::insert(chain_id, rotation);
+				return Ok(().into())
+			}
+
+			// -- Rotation has succeeded.
 
 			PendingVaultRotations::<T>::insert(
 				chain_id,
@@ -230,30 +335,47 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			chain_id: ChainId,
-			guilty_validators: Vec<T::ValidatorId>,
+			// TODO: Should probably use a BoundedBTreeSet
+			guilty_validators: BTreeSet<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			let reporter = ensure_signed(origin)?.into();
+
+			// -- Validity checks.
 
 			let rotation =
 				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
-			let pending_ceremony_id = ensure_variant!(
-				VaultRotationStatus::<T>::AwaitingKeygen { keygen_ceremony_id, .. } => keygen_ceremony_id,
+			let (pending_ceremony_id, mut rotation_status) = ensure_variant!(
+				VaultRotationStatus::<T>::AwaitingKeygen {
+					keygen_ceremony_id, response_status
+				} => (keygen_ceremony_id, response_status),
 				rotation,
 				Error::<T>::InvalidRotationStatus,
 			);
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T>::InvalidCeremonyId);
 
-			for offender in guilty_validators {
-				T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
-					.unwrap_or_else(|e| {
-						log::error!(
-							"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
-							offender,
-							e
-						);
-						0
-					});
+			// -- Tally the votes.
+
+			rotation_status.add_failure_vote(&reporter, guilty_validators)?;
+
+			Self::deposit_event(Event::<T>::KeygenSuccessReported(reporter));
+
+			if rotation_status.remaining_candidate_count() > 0 {
+				return Ok(().into())
 			}
+
+			// TODO: report offenders.
+
+			// for offender in guilty_validators {
+			// 	T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
+			// 		.unwrap_or_else(|e| {
+			// 			log::error!(
+			// 				"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+			// 				offender,
+			// 				e
+			// 			);
+			// 			0
+			// 		});
+			// }
 			Pallet::<T>::abort_rotation();
 			Ok(().into())
 		}
@@ -426,10 +548,7 @@ impl<T: Config> Pallet<T> {
 
 		PendingVaultRotations::<T>::insert(
 			chain_id,
-			VaultRotationStatus::<T>::AwaitingKeygen {
-				keygen_ceremony_id: ceremony_id,
-				candidates: candidates.clone(),
-			},
+			VaultRotationStatus::<T>::new(ceremony_id, BTreeSet::from_iter(candidates.clone())),
 		);
 		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, chain_id, candidates));
 
