@@ -226,10 +226,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
-        let encoded_call =
-            substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode());
+        let extrinsic = state_chain_runtime::Call::from(extrinsic);
+        let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
@@ -240,7 +239,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         &self.runtime_version,
                         self.genesis_hash,
                         nonce,
-                        encoded_call.clone(),
+                        encoded_extrinsic.clone(),
                         &self.signer,
                     )
                     .await
@@ -267,7 +266,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
-                        slog::error!(logger, "{}", err);
+                        slog::error!(
+                            logger,
+                            "Extrinsic failed with error: {}. Extrinsic: {:?}",
+                            err,
+                            extrinsic
+                        );
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(err);
                     }
