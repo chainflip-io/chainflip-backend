@@ -17,7 +17,7 @@ benchmarks! {
 		let rewards_entitlement: T::Balance = T::Balance::from(1000000000 as u32);
 		let apportioned_rewards: T::Balance = T::Balance::from(2 as u32);
 		let reserved_balance: T::Balance = T::Balance::from(2 as u32);
-		FlipIssuance::<T>::mint(reserved_balance);
+		let _ = FlipIssuance::<T>::mint(reserved_balance);
 		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, 4 as u32);
 		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, rewards_entitlement);
 		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, apportioned_rewards);
