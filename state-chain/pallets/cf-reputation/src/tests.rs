@@ -5,7 +5,7 @@ mod tests {
 	};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::{BuildStorage, DispatchError::BadOrigin};
-	use std::ops::Neg;
+	use sp_std::{cmp::max, ops::Neg};
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
@@ -192,11 +192,11 @@ mod tests {
 	fn reporting_any_offline_condition_for_unknown_validator_should_produce_error() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, 100, &BOB),
+				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, &BOB),
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, 100, &BOB),
+				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, &BOB),
 				ReportError::UnknownValidator
 			);
 		});
@@ -207,11 +207,11 @@ mod tests {
 	) {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, 100, &ALICE),
+				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, &ALICE),
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, 100, &ALICE),
+				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, &ALICE),
 				ReportError::UnknownValidator
 			);
 		});
@@ -222,11 +222,14 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
 			let offline_test = |offline_condition: OfflineCondition,
-			                    who: <Test as frame_system::Config>::AccountId,
-			                    penalty: ReputationPoints| {
+			                    who: <Test as frame_system::Config>::AccountId| {
+				let penalty = MockOfflinePenalty::penalty(&offline_condition);
 				let points_before = reputation_points(who);
-				assert_ok!(ReputationPallet::report(offline_condition.clone(), penalty, &who));
-				assert_eq!(reputation_points(who), points_before - penalty);
+				assert_ok!(ReputationPallet::report(offline_condition.clone(), &who));
+				assert_eq!(
+					reputation_points(who),
+					max(points_before - penalty, ReputationPointFloorAndCeiling::get().0)
+				);
 				assert_eq!(
 					last_event(),
 					mock::Event::ReputationPallet(crate::Event::OfflineConditionPenalty(
@@ -237,10 +240,9 @@ mod tests {
 				);
 			};
 			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
-			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE, 100);
-			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE, 100);
-			offline_test(OfflineCondition::ContradictingSelfDuringSigningCeremony, ALICE, 100);
-			offline_test(OfflineCondition::NotEnoughPerformanceCredits, ALICE, 100);
+			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE);
+			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE);
+			offline_test(OfflineCondition::NotEnoughPerformanceCredits, ALICE);
 		});
 	}
 
@@ -249,12 +251,11 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 			let points_before = reputation_points(ALICE);
-			let penalty = 100;
 			assert_ok!(ReputationPallet::report(
 				OfflineCondition::ParticipateSigningFailed,
-				penalty,
 				&ALICE
 			));
+			let penalty = MockOfflinePenalty::penalty(&OfflineCondition::ParticipateSigningFailed);
 			assert_eq!(reputation_points(ALICE), points_before - penalty);
 			assert_eq!(
 				last_event(),

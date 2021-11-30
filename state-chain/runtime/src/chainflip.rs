@@ -12,13 +12,14 @@ use cf_chains::{
 	Chain, ChainCrypto, Ethereum,
 };
 use cf_traits::{
+	offline_conditions::{OfflineCondition, ReputationPoints},
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
 	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
 	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::weights::Weight;
+use frame_support::{instances::*, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -34,6 +35,7 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type EpochInfo = Validator;
 }
 
 pub struct ChainflipEpochTransitions;
@@ -108,10 +110,6 @@ impl VaultRotationHandler for ChainflipVaultRotationHandler {
 
 	fn vault_rotation_aborted() {
 		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
-	}
-
-	fn penalise(bad_validators: &[Self::ValidatorId]) {
-		VaultRotationEventHandler::<Runtime>::penalise(bad_validators);
 	}
 }
 
@@ -296,11 +294,10 @@ impl From<UpdateFlipSupply> for EthereumSigningContext {
 
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
-	type Payload = eth::H256;
-	type Signature = eth::SchnorrVerificationComponents;
 	type Callback = Call;
+	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Runtime, Instance1>;
 
-	fn get_payload(&self) -> Self::Payload {
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
 		match self {
 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
 			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
@@ -308,7 +305,10 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 		}
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		match self {
 			Self::PostClaimSignature(claim) =>
 				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
@@ -405,5 +405,17 @@ impl cf_traits::WaivedFees for WaivedFees {
 			return super::Governance::members().contains(caller)
 		}
 		return false
+	}
+}
+
+pub struct OfflinePenalty;
+
+impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
+	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
+		match condition {
+			OfflineCondition::BroadcastOutputFailed => 15,
+			OfflineCondition::ParticipateSigningFailed => 15,
+			OfflineCondition::NotEnoughPerformanceCredits => 100,
+		}
 	}
 }

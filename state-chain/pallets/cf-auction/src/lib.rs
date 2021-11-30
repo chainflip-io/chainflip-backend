@@ -111,11 +111,6 @@ pub mod pallet {
 	#[pallet::getter(fn current_auction_index)]
 	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, AuctionIndex, ValueQuery>;
 
-	/// Validators that have been reported as being bad
-	#[pallet::storage]
-	#[pallet::getter(fn bad_validators)]
-	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
-
 	/// The remaining set of bidders after an auction
 	#[pallet::storage]
 	#[pallet::getter(fn remaining_bidders)]
@@ -281,17 +276,13 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				let mut bidders = T::BidderProvider::get_bidders();
-				// Rule #1 - They are not bad
-				bidders.retain(|(id, _)| !BadValidators::<T>::get().contains(id));
-				// They aren't bad now
-				BadValidators::<T>::kill();
-				// Rule #2 - If we have a bid at 0 then please leave
+				// Rule #1 - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
-				// Rule #3 - They are registered
+				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #4 - Confirm that the validators are 'online'
+				// Rule #3 - Confirm that the validators are 'online'
 				bidders.retain(|(id, _)| T::Online::is_online(id));
-				// Rule #5 - Confirm we have our set size
+				// Rule #4 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
@@ -472,10 +463,6 @@ impl<T: Config> VaultRotationHandler for VaultRotationEventHandler<T> {
 
 	fn vault_rotation_aborted() {
 		Pallet::<T>::abort();
-	}
-
-	fn penalise(bad_validators: &[Self::ValidatorId]) {
-		BadValidators::<T>::set(bad_validators.to_vec());
 	}
 }
 

@@ -1,5 +1,5 @@
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok, instances::Instance1};
+use frame_support::{assert_noop, assert_ok};
 
 #[cfg(test)]
 mod staking_witness_tests {
@@ -68,42 +68,6 @@ mod staking_witness_tests {
 			assert_noop!(
 				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, ETH_TX_HASH),
 				pallet_cf_staking::Error::<Test>::NoPendingClaim
-			);
-
-			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);
-		});
-	}
-
-	#[test]
-	fn test_post_claim_signature() {
-		new_test_ext().execute_with(|| {
-			MockWitnesser::set_threshold(2);
-
-			// The call we are witnessing.
-			let call: Call =
-				pallet_cf_threshold_signature::Call::<Test, Instance1>::signature_success(
-					STAKER,
-					Default::default(),
-				)
-				.into();
-
-			// One vote.
-			assert_ok!(WitnessApi::witness_eth_signature_success(
-				Origin::signed(WITNESS),
-				STAKER,
-				Default::default(),
-			));
-
-			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
-
-			// Second vote - fails because there is no pending request. Expected behaviour.
-			assert_noop!(
-				WitnessApi::witness_eth_signature_success(
-					Origin::signed(WITNESS),
-					STAKER,
-					Default::default()
-				),
-				pallet_cf_threshold_signature::Error::<Test, Instance1>::InvalidCeremonyId
 			);
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);

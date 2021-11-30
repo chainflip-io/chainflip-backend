@@ -8,6 +8,7 @@ description = "Common traits used in the Chainflip runtime"
 [dependencies]
 # Internal
 cf-chains = { path ='../chains', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Parity deps
 [dependencies.codec]

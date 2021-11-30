@@ -105,9 +105,9 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				wasm_binary,
 				// Initial PoA authorities
 				vec![authority_keys_from_seed("Alice")],
-				// Sudo account
+				// Governance account
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				// Pre-funded accounts
+				// Stakers at genesis
 				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
@@ -164,9 +164,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
-				// Sudo account - Snow White
+				// Governance account - Snow White
 				snow_white.into(),
-				// Pre-funded accounts
+				// Stakers at genesis
 				vec![
 					// Bashful
 					bashful_sr25519.into(),
@@ -244,12 +244,10 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 						.unchecked_into(),
 					),
 				],
-				// Sudo account - Snow White
+				// Governance account - Snow White
 				snow_white.into(),
-				// Pre-funded accounts
+				// Stakers at genesis
 				vec![
-					// Snow White the dictator
-					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -289,6 +287,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
 	let happy_sr25519 =
 		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
 		stake_manager_address,
 		key_manager_address,
@@ -350,9 +350,9 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 						.unchecked_into(),
 					),
 				],
-				// Sudo account - Bashful
-				bashful_sr25519.into(),
-				// Pre-funded accounts
+				// Governance account - Snow White
+				snow_white.into(),
+				// Stakers at genesis
 				vec![
 					// Bashful
 					bashful_sr25519.into(),
@@ -389,7 +389,7 @@ fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
-	endowed_accounts: Vec<AccountId>,
+	genesis_stakers: Vec<AccountId>,
 	min_validators: u32,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
@@ -409,7 +409,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 		staking: StakingConfig {
-			genesis_stakers: endowed_accounts
+			genesis_stakers: genesis_stakers
 				.iter()
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),

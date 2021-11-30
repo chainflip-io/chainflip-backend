@@ -1,5 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
+use jsonrpc_core_client::RpcError;
+
 struct MutexStateAndPoisonFlag<T> {
     poisoned: bool,
     state: T,
@@ -91,6 +93,6 @@ mod tests {
 }
 
 // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
-pub fn into_anyhow_error(error: impl std::fmt::Display) -> anyhow::Error {
-    anyhow::Error::msg(error.to_string())
+pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
+    anyhow::Error::msg(format!("{:?}", error))
 }

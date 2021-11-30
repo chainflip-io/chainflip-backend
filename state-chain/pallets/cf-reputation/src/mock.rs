@@ -13,7 +13,8 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
-	mocks::{epoch_info, epoch_info::Mock},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
+	offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints},
 	Chainflip, Slashing,
 };
 
@@ -97,14 +98,25 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+pub struct MockOfflinePenalty;
+
+impl OfflinePenalty for MockOfflinePenalty {
+	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
+		match condition {
+			OfflineCondition::BroadcastOutputFailed => 10,
+			OfflineCondition::ParticipateSigningFailed => 100,
+			OfflineCondition::NotEnoughPerformanceCredits => 1000,
+		}
+	}
+}
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
 }
 
 impl Config for Test {
@@ -113,8 +125,9 @@ impl Config for Test {
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
-	type EpochInfo = epoch_info::Mock;
+	type Penalty = MockOfflinePenalty;
 	type WeightInfo = ();
+	type EpochInfo = MockEpochInfo;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -126,7 +139,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	};
 
 	// We only expect Alice to be a validator at the moment
-	Mock::add_validator(ALICE);
+	MockEpochInfo::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {

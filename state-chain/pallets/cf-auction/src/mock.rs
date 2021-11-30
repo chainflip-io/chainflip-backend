@@ -1,6 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::{
+	impl_mock_online,
 	mocks::{
 		chainflip_account::MockChainflipAccount,
 		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
@@ -37,13 +38,15 @@ thread_local! {
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
-// offset the ids to create unique bidder groups
+// offset the ids to create unique bidder groups.  By default all bidders are online.
 pub fn generate_bids(number_of_bids: u32, group: u32) {
 	BIDDER_SET.with(|cell| {
 		let mut cell = cell.borrow_mut();
 		(*cell).clear();
 		for bid_number in (1..=number_of_bids as u64).rev() {
-			(*cell).push((bid_number * group as u64, bid_number * 100));
+			let validator_id = bid_number * group as u64;
+			MockOnline::set_online(&validator_id, true);
+			(*cell).push((validator_id, bid_number * 100));
 		}
 	});
 }
@@ -138,6 +141,8 @@ impl EmergencyRotation for MockEmergencyRotation {
 	fn emergency_rotation_completed() {}
 }
 
+impl_mock_online!(ValidatorId);
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -152,15 +157,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-}
-
-pub struct MockOnline;
-impl IsOnline for MockOnline {
-	type ValidatorId = ValidatorId;
-
-	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
-		true
-	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

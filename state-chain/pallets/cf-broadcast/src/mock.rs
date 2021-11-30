@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
-use cf_traits::Chainflip;
+use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
 use frame_system;
@@ -56,7 +56,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
@@ -64,7 +63,8 @@ impl Chainflip for Test {
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
 pub struct MockNominator;
@@ -127,6 +127,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastConfig = MockBroadcastConfig;
 	type SignerNomination = MockNominator;
 	type OfflineReporter = MockOfflineReporter;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();

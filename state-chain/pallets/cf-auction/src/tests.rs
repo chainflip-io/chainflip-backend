@@ -479,8 +479,10 @@ mod tests {
 					.map(|(id, _)| *id)
 					.partition(|id| *id % 2 == 0);
 
-			// The bad bidders have been reported
-			VaultRotationEventHandler::<Test>::penalise(&bad_bidders);
+			// Set bad bidders offline
+			for bad_bidder in &bad_bidders {
+				MockOnline::set_online(bad_bidder, false);
+			}
 
 			// Run through an auction
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));

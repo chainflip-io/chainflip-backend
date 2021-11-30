@@ -24,7 +24,6 @@ thread_local! {
 		NetworkState {
 			offline: vec![],
 			online: vec![],
-			number_of_nodes: 0,
 		}
 	);
 }
@@ -113,12 +112,12 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EpochInfo = MockEpochInfo;
 }
 
 impl Config for Test {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type Heartbeat = MockHeartbeat;
-	type EpochInfo = MockEpochInfo;
 	type WeightInfo = ();
 }
 

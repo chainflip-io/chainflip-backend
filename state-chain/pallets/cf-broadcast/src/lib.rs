@@ -69,7 +69,7 @@ pub type AttemptCount = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*};
+	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured SignedTransaction.
@@ -164,6 +164,9 @@ pub mod pallet {
 
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
+
+		/// Ensure that only threshold signature consensus can trigger a broadcast.
+		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
 
 		/// The timeout duration for the signing stage, measured in number of blocks.
 		#[pallet::constant]
@@ -311,9 +314,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			// TODO: This doesn't necessarily have to be witnessed, but *should* be restricted such
-			// that it can only be called internally.
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 				*id += 1;
@@ -504,9 +505,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
-		// TODO: set a sensible penalty and centralise. See #569
-		const PENALTY: i32 = 0;
-		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, PENALTY, signer)
+		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, signer)
 			.unwrap_or_else(|_| {
 				// Should never fail unless the validator doesn't exist.
 				log::error!("Unable to report unknown validator {:?}", signer);

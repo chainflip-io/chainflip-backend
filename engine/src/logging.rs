@@ -6,11 +6,10 @@ pub const CEREMONY_ID_KEY: &str = "ceremony_id";
 pub const REQUEST_TO_SIGN_IGNORED: &str = "E0";
 pub const REQUEST_TO_SIGN_EXPIRED: &str = "E1";
 pub const SIGNING_CEREMONY_FAILED: &str = "E2";
-pub const CEREMONY_IGNORED: &str = "E3";
-pub const KEYGEN_REQUEST_IGNORED: &str = "E4";
-pub const KEYGEN_REQUEST_EXPIRED: &str = "E5";
-pub const KEYGEN_CEREMONY_FAILED: &str = "E6";
-pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E7";
+pub const KEYGEN_REQUEST_IGNORED: &str = "E3";
+pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
+pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
+pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
 pub mod utils {
 

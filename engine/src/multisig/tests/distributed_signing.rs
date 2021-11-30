@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use client::KeygenOutcome;
 use itertools::Itertools;
 use rand::{
     prelude::{IteratorRandom, StdRng},
+    seq::SliceRandom,
     SeedableRng,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -34,25 +37,46 @@ pub struct FakeNode {
 }
 
 /// Number of parties participating in keygen
-const N_PARTIES: usize = 3;
+const N_PARTIES: usize = 4;
 lazy_static! {
-    static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<AccountId> = SIGNERS
-        .iter()
-        .map(|idx| AccountId([*idx as u8; 32]))
-        .collect();
+    static ref ACCOUNT_IDS2: Vec<AccountId> = {
+        let ids: Vec<_> = (1..=N_PARTIES)
+            .map(|idx| AccountId([idx as u8; 32]))
+            .collect();
+
+        ensure_unsorted(ids, 0)
+    };
 }
 
-async fn coordinate_signing(
-    mut nodes: Vec<FakeNode>,
-    active_indices: &[usize],
+fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
+where
+    T: Clone + Ord,
+{
+    assert!(v.len() > 1);
+    let mut rng = StdRng::seed_from_u64(seed);
+    let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
+
+    while v != sorted {
+        v.shuffle(&mut rng);
+    }
+
+    v
+}
+
+async fn coordinate_keygen_and_signing(
+    mut nodes: HashMap<AccountId, FakeNode>,
     logger: &slog::Logger,
 ) -> Result<(), ()> {
-    // get a keygen request ready with all of the VALIDATOR_IDS
-    let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
+    // get a keygen request ready with all of the ACCOUNT_IDS
 
     // publish the MultisigInstruction::Keygen to all the clients
-    for node in &nodes {
+    for (i, (_id, node)) in nodes.iter().enumerate() {
+        // Ensure that we don't rely on all parties receiving the list of
+        // participants in the same order:
+        let account_ids = ensure_unsorted(ACCOUNT_IDS2.clone(), i as u64);
+
+        let keygen_request_info = KeygenInfo::new(0, account_ids);
+
         node.multisig_instruction_tx
             .send(MultisigInstruction::Keygen(keygen_request_info.clone()))
             .map_err(|_| "Receiver dropped")
@@ -61,37 +85,60 @@ async fn coordinate_signing(
 
     slog::info!(logger, "Published key gen instruction to all the clients");
 
-    // get a list of the signer_ids as a subset of VALIDATOR_IDS with an offset of 1
-    let signer_ids = active_indices
-        .iter()
-        .map(|i| VALIDATOR_IDS[*i].clone())
-        .collect_vec();
+    // get a list of the signer_ids as a subset of ACCOUNT_IDS with an offset of 1
 
     // wait on the keygen ceremony so we can use the correct KeyId to sign with
-    let key_id = if let Some(MultisigOutcome::Keygen(KeygenOutcome {
-        id: _,
-        result: Ok(pubkey),
-    })) = nodes[0].multisig_event_rx.recv().await
-    {
-        // drain all other channels
-        for i in 1..nodes.len() {
-            let _ = nodes[i].multisig_event_rx.recv().await;
+    let key_id = {
+        // Receive 1 event from each channel
+        let results = futures::future::join_all(
+            nodes
+                .values_mut()
+                .map(|n| n.multisig_event_rx.recv())
+                .collect_vec(),
+        )
+        .await;
+
+        if let Some(MultisigOutcome::Keygen(KeygenOutcome {
+            id: _,
+            result: Ok(pubkey),
+        })) = results[0]
+        {
+            KeyId(pubkey.serialize().into())
+        } else {
+            panic!("Expecting a successful keygen result");
         }
-        KeyId(pubkey.serialize().into())
-    } else {
-        panic!("Expecting a successful keygen result");
     };
 
-    // Only some clients should receive the instruction to sign
-    for i in active_indices {
-        let n = &nodes[*i];
+    // Only some clients should receive the instruction to sign, choose which ones:
+    let signer_ids = {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        // calculate how many parties will be in the signing (must be exact)
+        let threshold = utilities::threshold_from_share_count(N_PARTIES as u32) as usize;
+
+        let signer_ids = ACCOUNT_IDS2
+            .iter()
+            .cloned()
+            .choose_multiple(&mut rng, threshold + 1);
+
+        let signer_ids = ensure_unsorted(signer_ids, 0);
+
+        slog::info!(logger, "Active parties: {:?}", signer_ids);
+
+        assert!(signer_ids.len() <= N_PARTIES);
+
+        signer_ids
+    };
+
+    for (i, id) in signer_ids.iter().enumerate() {
+        let n = &nodes[id];
 
         n.multisig_instruction_tx
             .send(MultisigInstruction::Sign(SigningInfo::new(
                 0, /* ceremony_id */
                 key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE.clone()),
-                signer_ids.clone(),
+                ensure_unsorted(signer_ids.clone(), i as u64),
             )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
@@ -101,7 +148,7 @@ async fn coordinate_signing(
                 1, /* ceremony_id */
                 key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE2.clone()),
-                signer_ids.clone(),
+                ensure_unsorted(signer_ids.clone(), i as u64),
             )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
@@ -113,12 +160,12 @@ async fn coordinate_signing(
     let mut signed_count = 0;
     loop {
         // go through each node and get the multisig events from the receiver
-        for i in active_indices {
-            let multisig_events = &mut nodes[*i].multisig_event_rx;
+        for id in &signer_ids {
+            let multisig_events = &mut nodes.get_mut(id).unwrap().multisig_event_rx;
 
             match multisig_events.recv().await {
                 Some(MultisigOutcome::Signing(SigningOutcome { result: Ok(_), .. })) => {
-                    slog::info!(logger, "Message is signed from {}", i);
+                    slog::info!(logger, "Message is signed from {}", id);
                     signed_count = signed_count + 1;
                 }
                 Some(MultisigOutcome::Signing(_)) => {
@@ -128,13 +175,13 @@ async fn coordinate_signing(
                 None => slog::error!(
                     logger,
                     "Unexpected error: client stream returned early: {}",
-                    i
+                    id
                 ),
-                Some(res) => slog::error!(logger, "Unexpected result: {:?} from {}", res, i),
+                Some(res) => slog::error!(logger, "Unexpected result: {:?} from {}", res, id),
             };
         }
         // stop the test when all of the MessageSigned have come in
-        if signed_count >= active_indices.len() * 2 {
+        if signed_count >= signer_ids.len() * 2 {
             break;
         }
         slog::info!(logger, "Not all messages signed, go around again");
@@ -146,25 +193,6 @@ async fn coordinate_signing(
 #[tokio::test]
 async fn distributed_signing() {
     let logger = logging::test_utils::new_test_logger();
-    // calculate how many parties will be in the signing (must be exact)
-    let threshold = utilities::threshold_from_share_count(N_PARTIES as u32) as usize;
-
-    let mut rng = StdRng::seed_from_u64(0);
-
-    // Parties (from 0..n that will participate in the signing process)
-    let mut active_indices = (0..N_PARTIES)
-        .into_iter()
-        .choose_multiple(&mut rng, threshold + 1);
-    active_indices.sort_unstable();
-
-    slog::info!(
-        logger,
-        "There are {} active parties: {:?}",
-        active_indices.len(),
-        active_indices
-    );
-
-    assert!(active_indices.len() <= N_PARTIES);
 
     let network = NetworkMock::new();
 
@@ -172,9 +200,9 @@ async fn distributed_signing() {
     let mut node_client_and_conductor_futs = vec![];
 
     let mut shutdown_txs = vec![];
-    let mut fake_nodes = vec![];
-    for i in 0..N_PARTIES {
-        let p2p_client = network.new_client(VALIDATOR_IDS[i].clone());
+    let mut fake_nodes: HashMap<AccountId, FakeNode> = Default::default();
+    for id in &*ACCOUNT_IDS2 {
+        let p2p_client = network.new_client(id.clone());
         let logger = logger.clone();
 
         let db = KeyDBMock::new();
@@ -189,7 +217,7 @@ async fn distributed_signing() {
             MockChannelEventHandler::new();
         let (shutdown_client_tx, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
         let client_fut = crate::multisig::start_client(
-            VALIDATOR_IDS[i].clone(),
+            id.clone(),
             db,
             multisig_instruction_rx,
             multisig_event_tx,
@@ -214,15 +242,18 @@ async fn distributed_signing() {
         shutdown_txs.push(shutdown_conductor_tx);
         shutdown_txs.push(shutdown_client_tx);
 
-        fake_nodes.push(FakeNode {
-            multisig_instruction_tx,
-            multisig_event_rx,
-        })
+        fake_nodes.insert(
+            id.clone(),
+            FakeNode {
+                multisig_instruction_tx,
+                multisig_event_rx,
+            },
+        );
     }
 
     let test_fut = async move {
         assert_eq!(
-            coordinate_signing(fake_nodes, &active_indices, &logger).await,
+            coordinate_keygen_and_signing(fake_nodes, &logger).await,
             Ok(()),
             "One of the clients failed to sign the message"
         );
