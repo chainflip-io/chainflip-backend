@@ -347,7 +347,6 @@ impl<T: Config> Pallet<T> {
 	/// block number
 	fn should_rotate(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
-			Force::<T>::set(false);
 			return true
 		}
 
@@ -390,6 +389,10 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
 				// If we have a set of winners
 				if !winners.is_empty() {
+					// Reset forced rotation flag
+					if Force::<T>::get() {
+						Force::<T>::set(false);
+					}
 					// If we were in an emergency, mark as completed
 					Self::emergency_rotation_completed();
 					// Calculate our new epoch index
