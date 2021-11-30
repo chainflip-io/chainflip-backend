@@ -106,7 +106,10 @@ impl RegisterClaim {
 
 #[cfg(test)]
 mod test_register_claim {
+	use std::convert::TryInto;
+
 	use super::*;
+	use ethabi::ethereum_types::{H160, U256};
 	use frame_support::assert_ok;
 
 	#[test]
@@ -175,5 +178,46 @@ mod test_register_claim {
 				])
 				.unwrap()
 		);
+	}
+
+	#[test]
+	fn regClaim_withSig() {
+		let node_id: [u8; 32] =
+			hex::decode("36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911")
+				.unwrap()
+				.try_into()
+				.unwrap();
+
+		let msg_hash: [u8; 32] =
+			hex::decode("64ebdabed7b3f0e349145c763e28247d75ece36865b35f8aba4064328cd6975a")
+				.unwrap()
+				.try_into()
+				.unwrap();
+
+		let sig: U256 =
+			U256::from("889a33fcd35016d175c6959abd2aff15d18f2b9c7e34443066eccabc8df054bb");
+
+		let nonce: U256 =
+			U256::from("0200000000000000000000000000000000000000000000000000000000000000");
+
+		let k_times_g_addr: [u8; 20] = hex::decode("f58c36ba93cf06aea2130508d2fec7500d6de934")
+			.unwrap()
+			.try_into()
+			.unwrap();
+		let k_times_g_addr: H160 = H160::from(k_times_g_addr);
+		let sig_data = SigData { msg_hash: H256::from(msg_hash), sig, nonce, k_times_g_addr };
+		let amount = U256::from("0100000000000000000000000000000000000000000000000000000000000000");
+		let address: [u8; 20] = hex::decode("f29ab9ebdb481be48b80699758e6e9a3dbd609c6")
+			.unwrap()
+			.try_into()
+			.unwrap();
+		let address: H160 = H160::from(address);
+
+		let expiry = U256::from("d22cae6100000000000000000000000000000000000000000000000000000000");
+		let register_claim = RegisterClaim { sig_data, node_id, amount, address, expiry };
+
+		let encoded_with_sig = register_claim.abi_encoded();
+
+		println!("encoded: {:?}", hex::decode(encoded_with_sig).unwrap());
 	}
 }

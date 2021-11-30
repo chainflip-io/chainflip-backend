@@ -1,4 +1,4 @@
-//! Definitions for the "registerClaim" transaction.
+//! Definitions for the "setAggKeyWithAggKey" transaction.
 
 use super::{AggKey, ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
 
