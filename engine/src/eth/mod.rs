@@ -200,13 +200,19 @@ impl EthBroadcaster {
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
+        let mut tx_params = TransactionParameters {
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
+            transaction_type: Some(web3::types::U64::from(2)),
+            ..Default::default()
+        };
+
         let gas_limit = if let Some(gas_limit) = unsigned_tx.gas_limit {
             gas_limit
         } else {
-            let req = CallRequest {
-                to: Some(unsigned_tx.contract),
-                ..Default::default()
-            };
+            let req: CallRequest = tx_params.clone().into();
             self.web3
                 .eth()
                 .estimate_gas(req, None)
@@ -214,15 +220,7 @@ impl EthBroadcaster {
                 .context("Failed to estimate gas")?
         };
 
-        let tx_params = TransactionParameters {
-            to: Some(unsigned_tx.contract),
-            data: unsigned_tx.data.into(),
-            chain_id: Some(unsigned_tx.chain_id),
-            value: unsigned_tx.value,
-            transaction_type: Some(web3::types::U64::from(2)),
-            gas: gas_limit,
-            ..Default::default()
-        };
+        tx_params.gas = gas_limit;
 
         Ok(self
             .web3
