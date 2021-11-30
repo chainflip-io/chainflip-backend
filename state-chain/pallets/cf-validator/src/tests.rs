@@ -189,6 +189,61 @@ mod tests {
 	}
 
 	#[test]
+	fn should_repeat_auction_after_aborted_auction() {
+		new_test_ext().execute_with(|| {
+			let set_size = 10;
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			// Set block length of epoch to 100
+			let epoch = 100;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			// Confirm we are in the waiting state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Run to epoch, auction will start
+			run_to_block(epoch);
+			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
+			// Validators are selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			// Abort the current auction
+			<AuctionPallet as Auctioneer>::abort();
+			// Back to initial state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Move to next block, a new auction starts
+			run_to_block(epoch + 1);
+			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
+			// Another set of validators selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+		});
+	}
+
+	#[test]
+	fn should_repeat_auction_after_forcing_auction_and_then_aborted_auction() {
+		new_test_ext().execute_with(|| {
+			let set_size = 10;
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			// Set block length of epoch to 100
+			let epoch = 100;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			// Confirm we are in the waiting state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Force a rotation, auction will start
+			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+			run_to_block(System::block_number() + 1);
+			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
+			// Validators are selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			// Abort the current auction
+			<AuctionPallet as Auctioneer>::abort();
+			// Back to initial state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Move to next block, a new auction starts
+			run_to_block(System::block_number() + 2);
+			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
+			// Another set of validators selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+		});
+	}
+
+	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
 			// We should have a set of 0 validators on genesis with a minimum bid of 0 set
