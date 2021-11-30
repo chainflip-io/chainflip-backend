@@ -154,6 +154,7 @@
   },
   "Signature": "SchnorrVerificationComponents",
   "SignatureFor": "SchnorrVerificationComponents",
+  "SignerIdFor": "EthereumAddress",
   "SigData": {
     "msg_hash": "H256",
     "sig": "Uint",
@@ -164,6 +165,7 @@
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
   "TransactionHash": "Vec<u8>",
+  "TransactionHashFor": "[u8; 32]",
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",
