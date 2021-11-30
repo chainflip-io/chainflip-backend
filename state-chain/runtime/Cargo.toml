@@ -203,6 +203,7 @@ runtime-benchmarks = [
   'pallet-cf-rewards/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
+  'pallet-cf-threshold-signature/runtime-benchmarks',
   # 'pallet-cf-broadcast/runtime-benchmarks',
 ]
 std = [

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
+use anyhow::Result;
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
@@ -14,9 +15,9 @@ use crate::multisig::{
     KeyId, MultisigInstruction,
 };
 
-use signing::frost::{
-    self, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
-};
+use crate::testing::assert_ok;
+
+use signing::frost::{self, LocalSig3, SigningCommitment, SigningData};
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
@@ -37,7 +38,7 @@ use crate::{
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{
-    KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID, VALIDATOR_IDS,
+    ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID,
 };
 
 macro_rules! recv_data_keygen {
@@ -63,8 +64,8 @@ macro_rules! recv_all_data_keygen {
         let count = $rxs.len();
 
         for rx in $rxs.iter_mut() {
-            let comm1 = recv_data_keygen!(rx, $variant);
-            messages.push(comm1);
+            let data = recv_data_keygen!(rx, $variant);
+            messages.push(data);
 
             // ignore (count(other nodes) - 1) messages
             for _ in 0..count - 2 {
@@ -76,21 +77,57 @@ macro_rules! recv_all_data_keygen {
     }};
 }
 
+macro_rules! recv_data_signing {
+    ($rx:expr, $variant: path) => {{
+        let (_, m) = recv_multisig_message($rx).await;
+
+        match m {
+            MultisigMessage {
+                data: MultisigData::Signing($variant(inner)),
+                ..
+            } => inner,
+            _ => {
+                panic!("Received message is not {}", stringify!($variant));
+            }
+        }
+    }};
+}
+
+macro_rules! recv_all_data_signing {
+    ($rxs:expr, $variant: path) => {{
+        let mut messages = vec![];
+
+        for idx in SIGNER_IDXS.iter() {
+            let rx = &mut $rxs[*idx];
+            let data = recv_data_signing!(rx, $variant);
+            messages.push(data);
+
+            // ignore (count(other nodes) - 1) messages
+            for _ in 0..SIGNER_IDXS.len() - 2 {
+                let _ = recv_data_signing!(rx, $variant);
+            }
+            assert_channel_empty(rx).await;
+        }
+
+        messages
+    }};
+}
+
 macro_rules! distribute_data_keygen_custom {
     ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr) => {{
         for sender_idx in 0..$account_ids.len() {
-            let valid_message = $messages[sender_idx].clone();
-
-            let message = $custom_messages
-                .remove(&sender_idx)
-                .unwrap_or(valid_message);
-
-            let id = &$account_ids[sender_idx];
-
-            let m = keygen_data_to_p2p(message, id, KEYGEN_CEREMONY_ID);
-
             for receiver_idx in 0..$account_ids.len() {
                 if receiver_idx != sender_idx {
+                    let valid_message = $messages[sender_idx].clone();
+
+                    let message = $custom_messages
+                        .remove(&(sender_idx, receiver_idx))
+                        .unwrap_or(valid_message);
+
+                    let id = &$account_ids[sender_idx];
+
+                    let m = keygen_data_to_p2p(message, id, KEYGEN_CEREMONY_ID);
+
                     $clients[receiver_idx].process_p2p_message(m.clone());
                 }
             }
@@ -101,14 +138,48 @@ macro_rules! distribute_data_keygen_custom {
 macro_rules! distribute_data_keygen {
     ($clients:expr, $account_ids: expr, $messages: expr) => {{
         for sender_idx in 0..$account_ids.len() {
-            let message = $messages[sender_idx].clone();
-            let id = &$account_ids[sender_idx];
-
-            let m = keygen_data_to_p2p(message, id, KEYGEN_CEREMONY_ID);
+            let m = keygen_data_to_p2p(
+                $messages[sender_idx].clone(),
+                &$account_ids[sender_idx],
+                KEYGEN_CEREMONY_ID,
+            );
 
             for receiver_idx in 0..$account_ids.len() {
                 if receiver_idx != sender_idx {
                     $clients[receiver_idx].process_p2p_message(m.clone());
+                }
+            }
+        }
+    }};
+}
+
+macro_rules! distribute_data_signing {
+    ($clients:expr, $messages: expr) => {{
+        for sender_idx in SIGNER_IDXS.iter() {
+            for receiver_idx in SIGNER_IDXS.iter() {
+                let m = sig_data_to_p2p($messages[*sender_idx].clone(), &ACCOUNT_IDS[*sender_idx]);
+
+                if receiver_idx != sender_idx {
+                    $clients[*receiver_idx].process_p2p_message(m.clone());
+                }
+            }
+        }
+    }};
+}
+
+macro_rules! distribute_data_signing_custom {
+    ($clients:expr, $messages: expr, $custom_messages: expr) => {{
+        for sender_idx in SIGNER_IDXS.iter() {
+            for receiver_idx in SIGNER_IDXS.iter() {
+                let valid_message = $messages[*sender_idx].clone();
+                let message = $custom_messages
+                    .remove(&(*sender_idx, *receiver_idx))
+                    .unwrap_or(valid_message);
+
+                let m = sig_data_to_p2p(message, &ACCOUNT_IDS[*sender_idx]);
+
+                if receiver_idx != sender_idx {
+                    $clients[*receiver_idx].process_p2p_message(m.clone());
                 }
             }
         }
@@ -194,7 +265,7 @@ pub struct ValidKeygenStates {
     pub ver_comp_stage5: Option<VerCompStage5Data>,
     pub blame_responses6: Option<BlameResponses6Data>,
     pub ver_blame_responses7: Option<VerBlameResponses7Data>,
-    /// Either a valid keygen result or a list of blamed parties
+    /// Either a valid keygen result or an abort reason and list of blamed parties
     pub key_ready: Result<KeyReadyData, (CeremonyAbortReason, Vec<AccountId>)>,
 }
 
@@ -263,6 +334,19 @@ pub struct ValidSigningStates {
     pub outcome: SigningOutcome,
 }
 
+impl ValidSigningStates {
+    /// Get a clone of the client at index 0 from the specified stage
+    pub fn get_client_at_stage(&self, stage: usize) -> MultisigClientNoDB {
+        match stage {
+            1 => self.sign_phase1.clients[0].clone(),
+            2 => self.sign_phase2.clients[0].clone(),
+            3 => self.sign_phase3.as_ref().expect("No stage 3").clients[0].clone(),
+            4 => self.sign_phase4.as_ref().expect("No stage 4").clients[0].clone(),
+            _ => panic!("Invalid stage {}", stage),
+        }
+    }
+}
+
 pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
     client
         .ceremony_manager
@@ -271,27 +355,21 @@ pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<Stri
 
 #[derive(Default)]
 struct CustomDataToSend {
-    /// If a test requires a local sig different from
-    /// the one that would be normally generated, it
-    /// will be stored here.  This is different from
-    // `sig3_to_send` in that these signatures are
-    // treated as having been broadcast consistently
-    local_sigs: HashMap<usize, frost::LocalSig3>,
     /// Maps a (sender, receiver) pair to the data that will be
     /// sent (in case it needs to be invalid/different from what
     /// is expected normally)
     comm1_signing: HashMap<(usize, usize), SigningCommitment>,
     comm1_keygen: HashMap<(usize, usize), DKGUnverifiedCommitment>,
-    // Sig3 to send between (sender, receiver) in case it
-    // needs to be different from the regular (valid) one
+    // Sig3 to send between (sender, receiver) in case we want
+    // an invalid sig3 or inconsistent sig3 for tests
     sig3s: HashMap<(usize, usize), LocalSig3>,
     // Secret shares to send between (sender, receiver) in case it
-    // need to be different from the regular (valid) one
+    // needs to be different from the regular (valid) one
     secret_shares: HashMap<(usize, usize), SecretShare3>,
     // Secret shares to be broadcast during blaming stage
-    secret_shares_blaming: HashMap<usize, keygen::BlameResponse6>,
+    secret_shares_blaming: HashMap<(usize, usize), keygen::BlameResponse6>,
     // Complaints to be broadcast
-    complaints: HashMap<usize, keygen::Complaints4>,
+    complaints: HashMap<(usize, usize), keygen::Complaints4>,
 }
 
 // TODO: Merge rxs, p2p_rxs, and account_ids, clients into a single vec (Alastair Holmes 18.11.2021)
@@ -315,6 +393,7 @@ pub struct KeygenContext {
     key_id: Option<KeyId>,
     // Cache of all tags that used in log calls
     pub tag_cache: TagCache,
+    pub auto_clear_tag_cache: bool,
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
@@ -329,217 +408,18 @@ fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: VALIDATOR_IDS.len(),
-            threshold: VALIDATOR_IDS.len(),
+            share_count: ACCOUNT_IDS.len(),
+            threshold: ACCOUNT_IDS.len(),
         },
     );
     fake_comm1
-}
-
-async fn collect_all_comm1(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<SigningCommitment> {
-    let mut comm1_vec = vec![];
-
-    for idx in SIGNER_IDXS.iter() {
-        let rx = &mut rxs[*idx];
-
-        let comm1 = recv_comm1_signing(rx).await;
-
-        // Make sure that messages to other parties are
-        // consistent
-        for _ in 0..SIGNER_IDXS.len() - 2 {
-            assert_eq!(comm1, recv_comm1_signing(rx).await);
-        }
-
-        assert_channel_empty(rx).await;
-
-        comm1_vec.push(comm1);
-    }
-
-    comm1_vec
-}
-
-async fn collect_all_ver2(rxs: &mut Vec<P2PMessageReceiver>) -> Vec<VerifyComm2> {
-    let mut ver2_vec = vec![];
-
-    for sender_idx in SIGNER_IDXS.iter() {
-        let rx = &mut rxs[*sender_idx];
-
-        let ver2 = recv_ver2_signing(rx).await;
-
-        // Ignore all other (same) messages
-        for _ in 0..SIGNER_IDXS.len() - 2 {
-            let _ = recv_ver2_signing(rx).await;
-        }
-
-        assert_channel_empty(rx).await;
-
-        ver2_vec.push(ver2);
-    }
-
-    ver2_vec
-}
-
-async fn collect_all_local_sigs3(
-    rxs: &mut Vec<P2PMessageReceiver>,
-    custom_sigs: &mut HashMap<usize, frost::LocalSig3>,
-) -> Vec<frost::LocalSig3> {
-    let mut local_sigs = vec![];
-
-    for idx in SIGNER_IDXS.iter() {
-        let rx = &mut rxs[*idx];
-
-        let valid_sig = recv_local_sig(rx).await;
-
-        // Check if the test requested a custom local sig
-        // to be emitted by party idx
-        let sig = custom_sigs.remove(idx).unwrap_or(valid_sig);
-
-        // Ignore all other (same) messages
-        for _ in 0..SIGNER_IDXS.len() - 2 {
-            let _ = recv_local_sig(rx).await;
-        }
-
-        assert_channel_empty(rx).await;
-
-        local_sigs.push(sig);
-    }
-
-    local_sigs
-}
-
-async fn collect_all_ver4(p2p_rxs: &mut Vec<P2PMessageReceiver>) -> Vec<VerifyLocalSig4> {
-    let mut ver4_vec = vec![];
-
-    for sender_idx in SIGNER_IDXS.iter() {
-        let rx = &mut p2p_rxs[*sender_idx];
-
-        let ver4 = recv_ver4_signing(rx).await;
-
-        // Ignore all other (same) messages
-        for _ in 0..SIGNER_IDXS.len() - 2 {
-            let _ = recv_ver4_signing(rx).await;
-        }
-
-        assert_channel_empty(rx).await;
-
-        ver4_vec.push(ver4);
-    }
-
-    ver4_vec
-}
-
-async fn broadcast_all_signing_comm1(
-    clients: &mut Vec<MultisigClientNoDB>,
-    comm1_vec: &Vec<SigningCommitment>,
-    custom_comm1s: &mut HashMap<(usize, usize), SigningCommitment>,
-) {
-    for sender_idx in SIGNER_IDXS.iter() {
-        for receiver_idx in SIGNER_IDXS.iter() {
-            if receiver_idx != sender_idx {
-                let valid_comm1 = &comm1_vec[*sender_idx];
-
-                let comm1 = custom_comm1s
-                    .remove(&(*sender_idx, *receiver_idx))
-                    .unwrap_or(valid_comm1.clone());
-
-                let id = &super::VALIDATOR_IDS[*sender_idx];
-
-                let m = sig_data_to_p2p(comm1, id);
-
-                clients[*receiver_idx].process_p2p_message(m.clone());
-            }
-        }
-    }
-}
-
-async fn broadcast_all_keygen_comm1(
-    clients: &mut Vec<MultisigClientNoDB>,
-    account_ids: &Vec<AccountId>,
-    comm1_vec: &Vec<DKGUnverifiedCommitment>,
-    custom_comm1s: &mut HashMap<(usize, usize), DKGUnverifiedCommitment>,
-) {
-    for sender_idx in 0..account_ids.len() {
-        for receiver_idx in 0..account_ids.len() {
-            if receiver_idx != sender_idx {
-                let valid_comm1 = &comm1_vec[sender_idx.clone()];
-
-                let comm1 = custom_comm1s
-                    .remove(&(sender_idx.clone(), receiver_idx.clone()))
-                    .unwrap_or(valid_comm1.clone());
-
-                let id = &account_ids[sender_idx];
-
-                let m = keygen_data_to_p2p(comm1, id, KEYGEN_CEREMONY_ID);
-
-                clients[receiver_idx].process_p2p_message(m.clone());
-            }
-        }
-    }
-}
-
-async fn broadcast_all_ver2(clients: &mut Vec<MultisigClientNoDB>, ver2_vec: &Vec<VerifyComm2>) {
-    for sender_idx in SIGNER_IDXS.iter() {
-        for receiver_idx in SIGNER_IDXS.iter() {
-            if sender_idx != receiver_idx {
-                let ver2 = ver2_vec[*sender_idx].clone();
-
-                let id = &super::VALIDATOR_IDS[*sender_idx];
-
-                let m = sig_data_to_p2p(ver2, id);
-
-                clients[*receiver_idx].process_p2p_message(m);
-            }
-        }
-    }
-}
-
-async fn broadcast_all_local_sigs(
-    clients: &mut Vec<MultisigClientNoDB>,
-    valid_sigs: &Vec<LocalSig3>,
-    custom_sigs: &mut HashMap<(usize, usize), LocalSig3>,
-) {
-    for sender_idx in SIGNER_IDXS.iter() {
-        for receiver_idx in SIGNER_IDXS.iter() {
-            let valid_sig = valid_sigs[*sender_idx].clone();
-            let sig3 = custom_sigs
-                .remove(&(*sender_idx, *receiver_idx))
-                .unwrap_or(valid_sig);
-
-            let id = &super::VALIDATOR_IDS[*sender_idx];
-
-            let m = sig_data_to_p2p(sig3, id);
-
-            if receiver_idx != sender_idx {
-                clients[*receiver_idx].process_p2p_message(m.clone());
-            }
-        }
-    }
-}
-
-async fn broadcast_all_ver4(
-    clients: &mut Vec<MultisigClientNoDB>,
-    ver4_vec: &Vec<VerifyLocalSig4>,
-) {
-    for sender_idx in SIGNER_IDXS.iter() {
-        for receiver_idx in SIGNER_IDXS.iter() {
-            if sender_idx != receiver_idx {
-                let ver4 = ver4_vec[*sender_idx].clone();
-
-                let id = &super::VALIDATOR_IDS[*sender_idx];
-
-                let m = sig_data_to_p2p(ver4, id);
-
-                clients[*receiver_idx].process_p2p_message(m);
-            }
-        }
-    }
 }
 
 impl KeygenContext {
     /// Generate context without starting the keygen ceremony.
     /// `allowing_high_pubkey` is enabled so tests will not fail.
     pub fn new() -> Self {
-        let account_ids = super::VALIDATOR_IDS.clone();
+        let account_ids = super::ACCOUNT_IDS.clone();
         KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
     }
 
@@ -549,7 +429,7 @@ impl KeygenContext {
 
     /// Generate context with the KeygenOptions as default, (No `allowing_high_pubkey`)
     pub fn new_disallow_high_pubkey() -> Self {
-        let account_ids = super::VALIDATOR_IDS.clone();
+        let account_ids = super::ACCOUNT_IDS.clone();
         KeygenContext::inner_new(account_ids, KeygenOptions::default())
     }
 
@@ -582,6 +462,7 @@ impl KeygenContext {
             custom_data: Default::default(),
             key_id: None,
             tag_cache,
+            auto_clear_tag_cache: true,
         }
     }
 
@@ -593,10 +474,16 @@ impl KeygenContext {
         &self.clients[idx]
     }
 
-    pub fn use_invalid_local_sig(&mut self, signer_idx: usize) {
-        self.custom_data
-            .local_sigs
-            .insert(signer_idx, gen_invalid_local_sig());
+    pub fn use_invalid_local_sig(&mut self, sender_idx: usize) {
+        let fake_sig3 = gen_invalid_local_sig();
+
+        (0..self.account_ids.len()).for_each(|receiver_idx| {
+            if sender_idx != receiver_idx {
+                self.custom_data
+                    .sig3s
+                    .insert((sender_idx, receiver_idx), fake_sig3.clone());
+            }
+        });
     }
 
     pub fn use_invalid_secret_share(&mut self, sender_idx: usize, receiver_idx: usize) {
@@ -612,8 +499,13 @@ impl KeygenContext {
     pub fn use_invalid_complaint(&mut self, sender_idx: usize) {
         // This complaint is invalid because it contains an invalid index
         let complaint = keygen::Complaints4(vec![1, usize::MAX]);
-
-        self.custom_data.complaints.insert(sender_idx, complaint);
+        (0..self.account_ids.len()).for_each(|receiver_idx| {
+            if sender_idx != receiver_idx {
+                self.custom_data
+                    .complaints
+                    .insert((sender_idx, receiver_idx), complaint.clone());
+            }
+        });
     }
 
     pub fn use_invalid_blame_response(&mut self, sender_idx: usize, receiver_idx: usize) {
@@ -623,12 +515,17 @@ impl KeygenContext {
         // as the invalid share sent earlier (prior to blaming)
         let invalid_share = SecretShare3::create_random();
 
-        self.custom_data
-            .secret_shares_blaming
-            .entry(sender_idx)
-            .or_insert(keygen::BlameResponse6(Default::default()))
-            .0
-            .insert(receiver_idx, invalid_share);
+        // Send the same invalid share to all other parties
+        (0..self.account_ids.len()).for_each(|rec_idx| {
+            if sender_idx != rec_idx {
+                self.custom_data
+                    .secret_shares_blaming
+                    .entry((sender_idx, rec_idx))
+                    .or_insert(keygen::BlameResponse6(Default::default()))
+                    .0
+                    .insert(receiver_idx, invalid_share.clone());
+            }
+        });
     }
 
     pub fn use_inconsistent_broadcast_for_signing_comm1(
@@ -725,19 +622,18 @@ impl KeygenContext {
             comm1_vec: comm1_vec.clone(),
         };
 
-        broadcast_all_keygen_comm1(
+        distribute_data_keygen_custom!(
             clients,
             &self.account_ids,
             &comm1_vec,
-            &mut self.custom_data.comm1_keygen,
-        )
-        .await;
+            &mut self.custom_data.comm1_keygen
+        );
 
         println!("Distributed all comm1");
 
         clients
             .iter()
-            .for_each(|c| assert!(c.is_at_keygen_stage(2)));
+            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(2)));
 
         let ver2_vec = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
@@ -750,7 +646,7 @@ impl KeygenContext {
 
         distribute_data_keygen!(clients, self.account_ids, ver2_vec);
 
-        if !clients[0].is_at_keygen_stage(3) {
+        if !clients[0].ensure_at_keygen_stage(3).is_ok() {
             // The ceremony failed early, gather the result and reported_nodes, then return
             let mut results = vec![];
             for mut r in rxs.iter_mut() {
@@ -771,6 +667,10 @@ impl KeygenContext {
                 "Not all nodes reported the same parties"
             );
 
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
+
             return ValidKeygenStates {
                 stage0,
                 comm_stage1,
@@ -786,7 +686,7 @@ impl KeygenContext {
 
         clients
             .iter()
-            .for_each(|c| assert!(c.is_at_keygen_stage(3)));
+            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(3)));
 
         // *** Collect all Secret3
 
@@ -968,6 +868,10 @@ impl KeygenContext {
                 assert_channel_empty(rx).await;
             }
 
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
+
             println!("Keygen ceremony took: {:?}", instant.elapsed());
 
             ValidKeygenStates {
@@ -1023,10 +927,10 @@ impl KeygenContext {
 
             c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
-            assert!(c.is_at_signing_stage(1));
+            assert_ok!(c.ensure_at_signing_stage(1));
         }
 
-        let comm1_vec = collect_all_comm1(p2p_rxs).await;
+        let comm1_vec = recv_all_data_signing!(p2p_rxs, SigningData::CommStage1);
 
         let sign_phase1 = SigningPhase1Data {
             clients: clients.clone(),
@@ -1034,21 +938,19 @@ impl KeygenContext {
         };
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
-        broadcast_all_signing_comm1(
+        distribute_data_signing_custom!(
             &mut clients,
             &comm1_vec,
-            &mut self.custom_data.comm1_signing,
-        )
-        .await;
+            &mut self.custom_data.comm1_signing
+        );
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            assert!(c.is_at_signing_stage(2));
+            assert_ok!(c.ensure_at_signing_stage(2));
         }
 
         // *** Collect Ver2 messages ***
-
-        let ver2_vec = collect_all_ver2(p2p_rxs).await;
+        let ver2_vec = recv_all_data_signing!(p2p_rxs, SigningData::BroadcastVerificationStage2);
 
         let sign_phase2 = SigningPhase2Data {
             clients: clients.clone(),
@@ -1057,10 +959,14 @@ impl KeygenContext {
 
         // *** Distribute Ver2 messages ***
 
-        broadcast_all_ver2(&mut clients, &ver2_vec).await;
+        distribute_data_signing!(&mut clients, &ver2_vec);
 
         // Check if the ceremony was aborted at this stage
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
+            }
+
             // The ceremony was aborted early,
             return ValidSigningStates {
                 sign_phase1,
@@ -1073,12 +979,12 @@ impl KeygenContext {
 
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-            assert!(c.is_at_signing_stage(3));
+            assert_ok!(c.ensure_at_signing_stage(3));
         }
 
         // *** Collect local sigs ***
 
-        let local_sigs = collect_all_local_sigs3(p2p_rxs, &mut self.custom_data.local_sigs).await;
+        let local_sigs = recv_all_data_signing!(p2p_rxs, SigningData::LocalSigStage3);
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -1086,10 +992,10 @@ impl KeygenContext {
         };
 
         // *** Distribute local sigs ***
-        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.custom_data.sig3s).await;
+        distribute_data_signing_custom!(&mut clients, &local_sigs, &mut self.custom_data.sig3s);
 
         // *** Collect Ver4 messages ***
-        let ver4_vec = collect_all_ver4(p2p_rxs).await;
+        let ver4_vec = recv_all_data_signing!(p2p_rxs, SigningData::VerifyLocalSigsStage4);
 
         let sign_phase4 = SigningPhase4Data {
             clients: clients.clone(),
@@ -1098,7 +1004,7 @@ impl KeygenContext {
 
         // *** Distribute Ver4 messages ***
 
-        broadcast_all_ver4(&mut clients, &ver4_vec).await;
+        distribute_data_signing!(&mut clients, &ver4_vec);
 
         if let Some(outcome) = check_and_get_signing_outcome(rxs).await {
             println!("Signing ceremony took: {:?}", instant.elapsed());
@@ -1106,6 +1012,10 @@ impl KeygenContext {
             // Make sure the channel is clean for the unit tests
             for idx in SIGNER_IDXS.iter() {
                 assert_channel_empty(&mut p2p_rxs[idx.clone()]).await;
+            }
+
+            if self.auto_clear_tag_cache {
+                self.tag_cache.clear();
             }
 
             ValidSigningStates {
@@ -1118,6 +1028,53 @@ impl KeygenContext {
         } else {
             panic!("No Signing Outcome")
         }
+    }
+
+    /// Run the keygen ceremony and check that the failure details match the expected details
+    pub async fn run_keygen_and_check_failure(
+        mut self,
+        expected_reason: CeremonyAbortReason,
+        expected_reported_nodes: Vec<AccountId>,
+        expected_tag: &str,
+    ) -> Result<ValidKeygenStates> {
+        // Run the keygen ceremony
+        let keygen_states = self.generate().await;
+
+        // Check that it failed
+        if keygen_states.key_ready.is_ok() {
+            return Err(anyhow::Error::msg("Keygen did not fail"));
+        }
+
+        let (reason, reported) = keygen_states.key_ready.as_ref().unwrap_err().clone();
+
+        // Check that the failure reason matches
+        if reason != expected_reason {
+            return Err(anyhow::Error::msg(format!(
+                "Incorrect keygen failure reason: {:?}, expected: {:?}",
+                reason, expected_reason
+            )));
+        }
+
+        // Check that the reported nodes match
+        let reported_nodes_sorted: Vec<AccountId> = reported.iter().sorted().cloned().collect();
+        let expected_nodes_sorted: Vec<AccountId> =
+            expected_reported_nodes.iter().sorted().cloned().collect();
+        if reported_nodes_sorted != expected_nodes_sorted {
+            return Err(anyhow::Error::msg(format!(
+                "Incorrect reported nodes: {:?}, expected: {:?}",
+                reported_nodes_sorted, expected_nodes_sorted
+            )));
+        }
+
+        // Check that the expected tag was logged
+        if !self.tag_cache.contains_tag(expected_tag) {
+            return Err(anyhow::Error::msg(format!(
+                "Didn't find the expected tag: {}",
+                expected_tag,
+            )));
+        }
+
+        Ok(keygen_states)
     }
 }
 
@@ -1204,11 +1161,6 @@ pub async fn assert_channel_empty<I: Debug, S: futures::Stream<Item = I> + Unpin
     }
 }
 
-/// Consume all messages in the channel, then times out
-pub async fn clear_channel<I>(rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>) {
-    while let Some(_) = next_with_timeout(rx).await {}
-}
-
 /// Check the next event produced by the receiver if it is SigningOutcome
 pub async fn peek_with_timeout<I>(
     rx: &mut Pin<Box<Peekable<UnboundedReceiverStream<I>>>>,
@@ -1232,7 +1184,10 @@ pub async fn expect_next_with_timeout<I>(
 ) -> I {
     match next_with_timeout(rx).await {
         Some(i) => i,
-        None => panic!("Expected {}", std::any::type_name::<I>()),
+        None => panic!(
+            "Timeout waiting for message, expected {}",
+            std::any::type_name::<I>()
+        ),
     }
 }
 
@@ -1243,40 +1198,6 @@ async fn recv_multisig_message(rx: &mut P2PMessageReceiver) -> (AccountId, Multi
         m.account_id,
         bincode::deserialize(&m.data).expect("Invalid Multisig Message"),
     )
-}
-
-async fn recv_comm1_signing(rx: &mut P2PMessageReceiver) -> frost::Comm1 {
-    let (_, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage {
-        data: MultisigData::Signing(data),
-        ..
-    } = m
-    {
-        if let SigningData::CommStage1(comm1) = data {
-            return comm1;
-        }
-    }
-
-    eprintln!("Received message is not Comm1 (signing)");
-    panic!();
-}
-
-async fn recv_local_sig(rx: &mut P2PMessageReceiver) -> frost::LocalSig3 {
-    let (_, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage {
-        data: MultisigData::Signing(data),
-        ..
-    } = m
-    {
-        if let SigningData::LocalSigStage3(sig) = data {
-            return sig;
-        }
-    }
-
-    eprintln!("Received message is not LocalSig");
-    panic!();
 }
 
 async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen::SecretShare3) {
@@ -1292,40 +1213,6 @@ async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen:
     } else {
         panic!("Received message is not Secret3 (keygen)");
     }
-}
-
-async fn recv_ver2_signing(rx: &mut P2PMessageReceiver) -> frost::VerifyComm2 {
-    let (_, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage {
-        data: MultisigData::Signing(data),
-        ..
-    } = m
-    {
-        if let SigningData::BroadcastVerificationStage2(ver2) = data {
-            return ver2;
-        }
-    }
-
-    eprintln!("Received message is not Secret2 (signing)");
-    panic!();
-}
-
-async fn recv_ver4_signing(rx: &mut P2PMessageReceiver) -> frost::VerifyLocalSig4 {
-    let (_, m) = recv_multisig_message(rx).await;
-
-    if let MultisigMessage {
-        data: MultisigData::Signing(data),
-        ..
-    } = m
-    {
-        if let SigningData::VerifyLocalSigsStage4(ver4) = data {
-            return ver4;
-        }
-    }
-
-    eprintln!("Received message is not Secret2 (signing)");
-    panic!();
 }
 
 pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> P2PMessage {
@@ -1368,24 +1255,32 @@ impl MultisigClientNoDB {
     /// Check is the client is at the specified signing BroadcastStage (0-4).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_signing_stage(&self, stage_number: usize) -> bool {
+    pub fn ensure_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
-        match stage_number {
+        let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
             4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
             _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
         }
     }
 
     /// Check is the client is at the specified keygen BroadcastStage (0-5).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
-    pub fn is_at_keygen_stage(&self, stage_number: usize) -> bool {
+    pub fn ensure_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self);
-        match stage_number {
+        let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
@@ -1395,10 +1290,18 @@ impl MultisigClientNoDB {
             6 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
             7 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
             _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
         }
     }
 
-    /// Sends the correct keygen data from the `VALIDATOR_IDS[sender_idx]` to the client via `process_p2p_message`
+    /// Sends the correct keygen data from the `ACCOUNT_IDS[sender_idx]` to the client via `process_p2p_message`
     pub fn receive_keygen_stage_data(
         &mut self,
         stage: usize,
@@ -1409,7 +1312,7 @@ impl MultisigClientNoDB {
             stage,
             keygen_states,
             sender_idx,
-            &VALIDATOR_IDS[sender_idx],
+            &ACCOUNT_IDS[sender_idx],
         );
         self.process_p2p_message(message);
     }
@@ -1478,6 +1381,61 @@ impl MultisigClientNoDB {
                     .clone(),
                 sender_id,
                 KEYGEN_CEREMONY_ID,
+            ),
+            _ => panic!("Invalid stage to receive message, stage: {}", stage),
+        }
+    }
+
+    /// Sends the correct singing data from the `ACCOUNT_IDS[sender_idx]` to the client via `process_p2p_message`
+    pub fn receive_signing_stage_data(
+        &mut self,
+        stage: usize,
+        sign_states: &ValidSigningStates,
+        sender_idx: usize,
+    ) {
+        let message = self.get_signing_p2p_message_for_stage(
+            stage,
+            sign_states,
+            sender_idx,
+            &ACCOUNT_IDS[sender_idx],
+        );
+        self.process_p2p_message(message);
+    }
+
+    /// Makes a P2PMessage using the signing data for the specified stage
+    pub fn get_signing_p2p_message_for_stage(
+        &mut self,
+        stage: usize,
+        sign_states: &ValidSigningStates,
+        sender_idx: usize,
+        sender_id: &AccountId,
+    ) -> P2PMessage {
+        match stage {
+            1 => sig_data_to_p2p(
+                sign_states.sign_phase1.comm1_vec[sender_idx].clone(),
+                sender_id,
+            ),
+            2 => sig_data_to_p2p(
+                sign_states.sign_phase2.ver2_vec[sender_idx].clone(),
+                sender_id,
+            ),
+            3 => sig_data_to_p2p(
+                sign_states
+                    .sign_phase3
+                    .as_ref()
+                    .expect("No signing stage 3")
+                    .local_sigs[sender_idx]
+                    .clone(),
+                sender_id,
+            ),
+            4 => sig_data_to_p2p(
+                sign_states
+                    .sign_phase4
+                    .as_ref()
+                    .expect("No signing stage 4")
+                    .ver4_vec[sender_idx]
+                    .clone(),
+                sender_id,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
         }

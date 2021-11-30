@@ -8,10 +8,9 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Imbalance, SignedImbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
 	Parameter,
 };
-use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -30,6 +29,8 @@ pub trait Chainflip: frame_system::Config {
 	type ValidatorId: Member
 		+ Default
 		+ Parameter
+		+ Ord
+		+ core::fmt::Debug
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
 
@@ -39,6 +40,8 @@ pub trait Chainflip: frame_system::Config {
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+	/// Information about the current Epoch.
+	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -83,6 +86,27 @@ pub trait EpochInfo {
 
 	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
 	fn is_auction_phase() -> bool;
+
+	/// The number of validators in the current active set.
+	fn active_validator_count() -> u32 {
+		Self::current_validators().len() as u32
+	}
+
+	/// The consensus threshold for the current epoch.
+	///
+	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
+	/// `share_count` is taken from [Self::active_validator_count].
+	fn consensus_threshold() -> u32 {
+		cf_utilities::threshold_from_share_count(Self::active_validator_count())
+	}
+}
+
+pub struct CurrentThreshold<T>(PhantomData<T>);
+
+impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
+	fn get() -> u32 {
+		T::EpochInfo::consensus_threshold()
+	}
 }
 
 /// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
@@ -464,27 +488,29 @@ where
 /// Types, methods and state for requesting and processing a threshold signature.
 pub trait SigningContext<T: Chainflip> {
 	/// The chain that this context applies to.
-	type Chain: Chain;
-	/// The payload type that will be signed over.
-	type Payload: Parameter;
-	/// The signature type that is returned by the threshold signature.
-	type Signature: Parameter;
+	type Chain: Chain + ChainCrypto;
 	/// The callback that will be dispatched when we receive the signature.
 	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
+	/// The origin that is authorised to dispatch the callback, ie. the origin that represents
+	/// a valid, verifiied, threshold signature.
+	type ThresholdSignatureOrigin: Into<T::Origin>;
 
 	/// Returns the signing payload.
-	fn get_payload(&self) -> Self::Payload;
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload;
 
 	/// Returns the callback to be triggered on success.
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback;
+	fn resolve_callback(
+		&self,
+		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback;
 
 	/// Dispatches the success callback.
 	fn dispatch_callback(
 		&self,
-		origin: OriginFor<T>,
-		signature: Self::Signature,
+		origin: Self::ThresholdSignatureOrigin,
+		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
 	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature).dispatch_bypass_filter(origin)
+		self.resolve_callback(signature).dispatch_bypass_filter(origin.into())
 	}
 }
 

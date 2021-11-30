@@ -81,12 +81,6 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<
-			ValidatorId = <Self as frame_system::Config>::AccountId,
-			Amount = FlipBalance<Self>,
-		>;
-
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
@@ -95,6 +89,9 @@ pub mod pallet {
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+
+		/// Ensure that only threshold signature consensus can post a signature.
+		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -378,9 +375,7 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			signature: SchnorrVerificationComponents,
 		) -> DispatchResultWithPostInfo {
-			// TODO: we should use a different origin for this - it's no longer a witnessed tx - it
-			// requires a threshold signature. See #779.
-			Self::ensure_witnessed(origin)?;
+			T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;

@@ -898,6 +898,7 @@ dependencies = [
  "scale-info",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]

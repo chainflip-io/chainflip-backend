@@ -7,6 +7,9 @@
 /// we are using and in the corresponding literature.
 
 pub fn threshold_from_share_count(share_count: u32) -> u32 {
+    if share_count == 0 {
+        return 0;
+    }
     ((share_count * 2) - 1) / 3
 }
 
@@ -24,7 +27,7 @@ use core::convert::TryInto;
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
     let eth_address_hex_str = match dirty_eth_address.strip_prefix("0x") {
         Some(eth_address_stripped) => eth_address_stripped,
-        None => &dirty_eth_address,
+        None => dirty_eth_address,
     };
 
     let eth_address: [u8; 20] = hex::decode(eth_address_hex_str)

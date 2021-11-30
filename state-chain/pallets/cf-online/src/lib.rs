@@ -39,9 +39,6 @@ pub mod pallet {
 		/// A Heartbeat
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
-		/// Epoch info
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
-
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}

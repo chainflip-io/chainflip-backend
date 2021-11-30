@@ -1,4 +1,6 @@
-use crate::{self as pallet_cf_threshold_signature};
+use std::{collections::BTreeSet, iter::FromIterator};
+
+use crate::{self as pallet_cf_threshold_signature, EnsureThresholdSigned};
 use cf_chains::{eth, ChainCrypto};
 use cf_traits::{Chainflip, SigningContext};
 use codec::{Decode, Encode};
@@ -25,7 +27,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>},
 	}
 );
 
@@ -60,57 +62,78 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo};
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
 }
 
 // Mock SignerNomination
 
+thread_local! {
+	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Vec<u64>> = Default::default();
+}
+
 pub struct MockNominator;
-pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
+
+impl MockNominator {
+	pub fn set_nominees(nominees: Vec<u64>) {
+		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees)
+	}
+
+	pub fn get_nominees() -> Vec<u64> {
+		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
+	}
+}
 
 impl cf_traits::SignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		RANDOM_NOMINEE
+		unimplemented!("Single signer nomination not needed for these tests.")
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
-		vec![RANDOM_NOMINEE]
+		Self::get_nominees()
 	}
 }
 
 // Mock Callback
 
 thread_local! {
-	pub static SIGNED_MESSAGE: std::cell::RefCell<Option<String>> = Default::default()
+	pub static CALL_DISPATCHED: std::cell::RefCell<bool> = Default::default();
 }
 
-pub struct MockCallback<Ctx: SigningContext<Test>>(pub String, pub Ctx::Signature);
+pub struct MockCallback<C: ChainCrypto>(pub String, pub C::ThresholdSignature);
 
-impl<Ctx: SigningContext<Test>> MockCallback<Ctx> {
-	pub fn get_stored_callback() -> Option<String> {
-		SIGNED_MESSAGE.with(|cell| cell.borrow().clone())
+impl MockCallback<Doge> {
+	pub fn call() {
+		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = true);
+	}
+
+	pub fn has_executed() -> bool {
+		CALL_DISPATCHED.with(|cell| *cell.borrow())
+	}
+
+	pub fn reset() {
+		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = false);
 	}
 }
 
-impl UnfilteredDispatchable for MockCallback<DogeThresholdSignerContext> {
+impl UnfilteredDispatchable for MockCallback<Doge> {
 	type Origin = Origin;
 
 	fn dispatch_bypass_filter(
 		self,
 		origin: Self::Origin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		MockEnsureWitnessed::ensure_origin(origin)?;
-		SIGNED_MESSAGE
-			.with(|cell| *(cell.borrow_mut()) = Some(format!("So {} Such {}", self.0, self.1)));
+		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
+		Self::call();
 		Ok(().into())
 	}
 }
@@ -144,17 +167,24 @@ pub struct Doge;
 impl cf_chains::Chain for Doge {
 	const CHAIN_ID: cf_chains::ChainId = cf_chains::ChainId::Ethereum;
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum DogeSig {
+	Valid,
+	Invalid,
+}
+
 impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
-	type Payload = [u8; 4];
-	type ThresholdSignature = String;
+	type Payload = String;
+	type ThresholdSignature = DogeSig;
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,
-		payload: &Self::Payload,
+		_payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		*payload == DOGE_PAYLOAD && signature == "Wow!"
+		*signature == DogeSig::Valid
 	}
 }
 
@@ -163,21 +193,22 @@ pub struct DogeThresholdSignerContext {
 	pub message: String,
 }
 
-pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
-pub const VALID_SIGNATURE: &'static str = "Wow!";
-pub const INVALID_SIGNATURE: &'static str = "Pow!";
+pub const VALID_SIGNATURE: DogeSig = DogeSig::Valid;
+pub const INVALID_SIGNATURE: DogeSig = DogeSig::Invalid;
 
 impl SigningContext<Test> for DogeThresholdSignerContext {
 	type Chain = Doge;
-	type Payload = [u8; 4];
-	type Signature = String;
-	type Callback = MockCallback<Self>;
+	type Callback = MockCallback<Doge>;
+	type ThresholdSignatureOrigin = crate::Origin<Test, Instance1>;
 
-	fn get_payload(&self) -> Self::Payload {
-		DOGE_PAYLOAD
+	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+		self.message.clone()
 	}
 
-	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(
+		&self,
+		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+	) -> Self::Callback {
 		MockCallback(self.message.clone(), signature)
 	}
 }
@@ -189,6 +220,51 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
+}
+
+pub struct ExtBuilder {
+	ext: sp_io::TestExternalities,
+}
+
+impl ExtBuilder {
+	pub fn new() -> Self {
+		let ext = new_test_ext();
+		Self { ext }
+	}
+
+	pub fn with_nominees(mut self, nominees: impl IntoIterator<Item = u64>) -> Self {
+		self.ext.execute_with(|| {
+			MockNominator::set_nominees(Vec::from_iter(nominees));
+		});
+		self
+	}
+
+	pub fn with_validators(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
+		self.ext.execute_with(|| {
+			MockEpochInfo::set_validators(Vec::from_iter(validators));
+		});
+		self
+	}
+
+	pub fn with_pending_request(mut self, message: &'static str) -> Self {
+		self.ext.execute_with(|| {
+			// Initiate request
+			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
+				message: message.to_string(),
+			});
+			let pending = DogeThresholdSigner::pending_request(request_id).unwrap();
+			assert_eq!(pending.attempt, 0);
+			assert_eq!(
+				pending.remaining_respondents,
+				BTreeSet::from_iter(MockNominator::get_nominees())
+			);
+		});
+		self
+	}
+
+	pub fn build(self) -> sp_io::TestExternalities {
+		self.ext
+	}
 }
 
 // Build genesis storage according to the mock runtime.

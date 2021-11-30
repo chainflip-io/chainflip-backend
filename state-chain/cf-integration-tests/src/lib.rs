@@ -242,21 +242,21 @@ mod tests {
 								ref signers,
 								payload)) => {
 
-							// Participate in signing ceremony if requested
-							if signers.contains(&self.node_id) {
+							// Participate in signing ceremony if requested.
+							// We only need one node to submit the unsigned transaction.
+							if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
 								// Sign with current key
 								let verification_components = (&*self.signer).borrow_mut().sign(payload);
-								state_chain_runtime::WitnesserApi::witness_eth_signature_success(
-									Origin::signed(self.node_id.clone()),
+								state_chain_runtime::EthereumThresholdSigner::signature_success(
+									Origin::none(),
 									*ceremony_id,
 									verification_components,
-								).expect("should be able to ethereum signature for node");
-							}
+								).expect("should be able to submit threshold signature for Ethereum");
+							} };
 						},
 						Event::EthereumThresholdSigner(
 							// A threshold has been met for this signature
-							pallet_cf_threshold_signature::Event::ThresholdSignatureSuccess(
-								_ceremony_id)) => {
+							pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 								match self.engine_state {
 									// If we rotating let's witness the keys being rotated on the contract
 									EngineState::Rotation => {

@@ -280,13 +280,13 @@ fn signature_is_inserted() {
 			Event::Signer(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
 				// Insert a signature.
 				assert_ok!(Signer::signature_success(
-					Origin::root(),
+					Origin::none(),
 					id,
 					Default::default()));
 			}
 		);
 
-		assert_event_stack!(Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)));
+		assert_event_stack!(_, Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)));
 
 		// Check storage for the signature.
 		assert!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature());
