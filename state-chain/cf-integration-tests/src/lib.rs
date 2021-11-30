@@ -41,7 +41,11 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
-		use frame_support::traits::HandleLifetime;
+		use frame_support::{
+			dispatch::Dispatchable,
+			traits::HandleLifetime,
+			unsigned::{TransactionSource, ValidateUnsigned},
+		};
 		use libsecp256k1::PublicKey;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -246,12 +250,18 @@ mod tests {
 							// We only need one node to submit the unsigned transaction.
 							if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
 								// Sign with current key
-								let verification_components = (&*self.signer).borrow_mut().sign(payload);
-								state_chain_runtime::EthereumThresholdSigner::signature_success(
-									Origin::none(),
-									*ceremony_id,
-									verification_components,
-								).expect("should be able to submit threshold signature for Ethereum");
+								let call = state_chain_runtime::Call::EthereumThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success(
+										*ceremony_id,
+										(&*self.signer).borrow_mut().sign(payload),
+									)
+								);
+								<state_chain_runtime::Runtime as ValidateUnsigned>::validate_unsigned(
+									TransactionSource::External,
+									&call
+								).expect("Threshold signature should be valid.");
+								call.dispatch(Origin::none())
+									.expect("should be able to submit threshold signature for Ethereum");
 							} };
 						},
 						Event::EthereumThresholdSigner(
@@ -273,7 +283,7 @@ mod tests {
 											public_key,
 											ethereum_block_number,
 											tx_hash,
-										).expect("should be able to vault key rotation for node");
+										).expect("should be able to witness vault key rotation for node");
 									},
 									_ => {}
 								}
