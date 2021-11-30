@@ -1,7 +1,6 @@
 //! This tests integration with the StakeManager contract
 //! In order for these tests to work, nats and ganache with the preloaded db
 //! in `./eth-db` must be loaded in
-use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{
@@ -16,7 +15,7 @@ use chainflip_engine::{
 use futures::stream::StreamExt;
 use sp_core::H160;
 use sp_runtime::AccountId32;
-
+use std::str::FromStr;
 use web3::types::U256;
 
 mod common;
@@ -32,7 +31,9 @@ pub async fn test_all_stake_manager_events() {
         .unwrap();
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
-    let stake_manager = StakeManager::new(H160::default()).unwrap();
+    let stake_manager =
+        StakeManager::new(H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap())
+            .unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
@@ -60,15 +61,22 @@ pub async fn test_all_stake_manager_events() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                staker,
                 return_addr,
-                ..
             } => {
                 assert_eq!(
                     account_id,
-                    &AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
+                );
+                assert_eq!(amount, &40000000000000000000000u128);
+                assert_eq!(
+                    staker,
+                    &web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
                         .unwrap()
                 );
-                assert_eq!(amount, &40000000000000000000000);
                 assert_eq!(
                     return_addr,
                     &web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
@@ -87,12 +95,15 @@ pub async fn test_all_stake_manager_events() {
                 account_id,
                 amount,
                 staker,
-                ..
+                start_time,
+                expiry_time,
             } => {
                 assert_eq!(
                     account_id,
-                    &AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap()
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
                 );
                 assert_eq!(
                     amount,
@@ -103,6 +114,8 @@ pub async fn test_all_stake_manager_events() {
                     &web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
                         .unwrap()
                 );
+                assert!(start_time > &U256::from_str("0").unwrap());
+                assert!(expiry_time > start_time);
                 true
             }
             _ => false,
@@ -117,8 +130,10 @@ pub async fn test_all_stake_manager_events() {
             } => {
                 assert_eq!(
                     account_id,
-                    &AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap()
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
                 );
                 assert_eq!(amount, &13333333333333334032384);
                 true
@@ -133,7 +148,6 @@ pub async fn test_all_stake_manager_events() {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
-                ..
             } => {
                 assert_eq!(
                     old_min_stake,
@@ -155,7 +169,7 @@ pub async fn test_all_stake_manager_events() {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,
-                ..
+                block_number,
             } => {
                 assert_eq!(
                     old_supply,
@@ -165,9 +179,25 @@ pub async fn test_all_stake_manager_events() {
                     new_supply,
                     &U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
+                assert!(block_number > &U256::from_str("0").unwrap());
                 true
             }
             _ => false,
         })
         .expect("Didn't find the FlipSupplyUpdated event");
+
+    sm_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            StakeManagerEvent::GovernanceWithdrawal { to, amount, .. } => {
+                assert_eq!(
+                    to,
+                    &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                assert_eq!(amount, &10276666666666666665967616);
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the GovernanceWithdrawal event");
 }

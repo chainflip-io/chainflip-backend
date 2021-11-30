@@ -65,7 +65,7 @@
         "type": "uint256"
       },
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
         "name": "staker",
         "type": "address"
@@ -116,6 +116,25 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "GovernanceWithdrawal",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint256",
         "name": "oldMinStake",
         "type": "uint256"
@@ -134,7 +153,7 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
         "name": "to",
         "type": "address"
@@ -190,7 +209,7 @@
         "type": "address"
       },
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
         "name": "returnAddr",
         "type": "address"
@@ -227,10 +246,10 @@
   },
   {
     "inputs": [],
-    "name": "getFLIPAddress",
+    "name": "getFLIP",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "contract IFLIP",
         "name": "",
         "type": "address"
       }
@@ -319,6 +338,13 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "govWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -340,6 +366,16 @@
     "inputs": [
       {
         "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
           {
             "internalType": "uint256",
             "name": "msgHash",
@@ -392,34 +428,14 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "resume",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "nonce",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "kTimesGAddr",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
       {
         "internalType": "uint256",
         "name": "newMinStake",
@@ -452,6 +468,26 @@
     "name": "stake",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "suspend",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "suspended",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -496,6 +532,16 @@
     "inputs": [
       {
         "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
           {
             "internalType": "uint256",
             "name": "msgHash",
