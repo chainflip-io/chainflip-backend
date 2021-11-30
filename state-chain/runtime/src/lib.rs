@@ -490,7 +490,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );

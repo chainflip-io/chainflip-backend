@@ -283,9 +283,9 @@ mod unsigned_validation {
 			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
 				message: "Woof!".to_string(),
 			});
-			assert_ok!(DogeThresholdSigner::validate_unsigned(
+			assert_ok!(Test::validate_unsigned(
 				TransactionSource::External,
-				&DogeCall::signature_success(request_id, DogeSig::Valid)
+				&DogeCall::signature_success(request_id, DogeSig::Valid).into()
 			));
 		});
 	}
@@ -294,9 +294,9 @@ mod unsigned_validation {
 	fn reject_invalid_ceremony() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(
-				DogeThresholdSigner::validate_unsigned(
+				Test::validate_unsigned(
 					TransactionSource::External,
-					&DogeCall::signature_success(1234, DogeSig::Valid)
+					&DogeCall::signature_success(1234, DogeSig::Valid).into()
 				)
 				.unwrap_err(),
 				InvalidTransaction::Stale.into()
@@ -312,9 +312,9 @@ mod unsigned_validation {
 				message: "Woof!".to_string(),
 			});
 			assert_eq!(
-				DogeThresholdSigner::validate_unsigned(
+				Test::validate_unsigned(
 					TransactionSource::External,
-					&DogeCall::signature_success(request_id, DogeSig::Invalid)
+					&DogeCall::signature_success(request_id, DogeSig::Invalid).into()
 				)
 				.unwrap_err(),
 				InvalidTransaction::BadProof.into()
