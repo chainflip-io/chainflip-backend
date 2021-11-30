@@ -283,7 +283,7 @@ mod tests {
 											public_key,
 											ethereum_block_number,
 											tx_hash,
-										).expect("should be able to witness vault key rotation for node");
+										).expect("should be able to witness ethereum vault key rotation");
 									},
 									_ => {}
 								}
