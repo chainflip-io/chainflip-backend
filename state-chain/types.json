@@ -153,6 +153,7 @@
     "patch": "u8"
   },
   "Signature": "SchnorrVerificationComponents",
+  "SignatureFor": "SchnorrVerificationComponents",
   "SigData": {
     "msg_hash": "H256",
     "sig": "Uint",
@@ -198,9 +199,9 @@
   },
   "VaultRotationStatus": {
     "_enum": {
-      "AwaitingKeygen":"AwaitingKeygen",
-      "AwaitingRotation":"AwaitingRotation",
-      "Complete":"Complete"
+      "AwaitingKeygen": "AwaitingKeygen",
+      "AwaitingRotation": "AwaitingRotation",
+      "Complete": "Complete"
     }
   },
   "Version": "SemVer",
