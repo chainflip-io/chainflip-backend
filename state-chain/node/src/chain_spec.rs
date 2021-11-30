@@ -6,8 +6,8 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
 	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, VaultsConfig, WASM_BINARY,
+	GrandpaConfig, ReputationConfig, SS58Prefix, SessionConfig, Signature, StakingConfig,
+	SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -438,7 +438,7 @@ fn testnet_genesis(
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
 
-	properties.insert("ss58Format".into(), 28.into());
+	properties.insert("ss58Format".into(), SS58Prefix.into());
 	properties.insert("tokenDecimals".into(), 18.into());
 	properties.insert("tokenSymbol".into(), "FLIP".into());
 	properties.insert("color".into(), "#61CFAA".into());
