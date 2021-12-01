@@ -450,10 +450,10 @@ mod tests {
         let (_multisig_event_sender, multisig_event_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-        let web3 = eth::new_synced_web3_client(&settings, &logger)
+        let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .unwrap();
-        let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone()).unwrap();
 
         let (sm_window_sender, _sm_window_receiver) =
             tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();

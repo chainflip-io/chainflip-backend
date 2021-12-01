@@ -364,8 +364,10 @@ mod tests {
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_from_block: Some(1234),
-            eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-            eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            eth_opts: EthSharedOptions {
+                eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+                eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            },
             health_check_hostname: Some("health_check_hostname".to_owned()),
             health_check_port: Some(1337),
             signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
@@ -385,9 +387,12 @@ mod tests {
         );
 
         assert_eq!(opts.eth_from_block.unwrap(), settings.eth.from_block);
-        assert_eq!(opts.eth_node_endpoint.unwrap(), settings.eth.node_endpoint);
         assert_eq!(
-            opts.eth_private_key_file.unwrap(),
+            opts.eth_opts.eth_node_endpoint.unwrap(),
+            settings.eth.node_endpoint
+        );
+        assert_eq!(
+            opts.eth_opts.eth_private_key_file.unwrap(),
             settings.eth.private_key_file
         );
 

@@ -656,7 +656,9 @@ mod tests {
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let (_, mut block_stream, state_chain_client) =
-            connect_to_state_chain(&settings.state_chain).await.unwrap();
+            connect_to_state_chain(&settings.state_chain)
+                .await
+                .expect("Could not connect");
 
         println!("My account id is: {}", state_chain_client.our_account_id);
 
