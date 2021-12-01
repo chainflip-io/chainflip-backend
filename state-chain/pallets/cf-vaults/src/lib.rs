@@ -69,8 +69,20 @@ pub struct KeygenResponseStatus<T: Config> {
 }
 
 impl<T: Config> KeygenResponseStatus<T> {
+	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
+		Self {
+			candidate_count: candidates.len() as u32,
+			remaining_candidates: candidates,
+			success_votes: Default::default(),
+			blame_votes: Default::default(),
+		}
+	}
+
+	/// The threshold is the smallest number of respondents able to reach consensus.
+	/// 
+	/// Note this is not the same as the threshold defined in the signing literature.
 	pub fn threshold(&self) -> u32 {
-		utilities::threshold_from_share_count(self.candidate_count)
+		utilities::threshold_from_share_count(self.candidate_count) + 1
 	}
 
 	/// Accumulate a success vote into the keygen status.
@@ -119,7 +131,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 	fn success_result(&self) -> Option<&Vec<u8>> {
 		self.success_votes
 			.iter()
-			.find_map(|(key, votes)| if *votes > self.threshold() { Some(key) } else { None })
+			.find_map(|(key, votes)| if *votes >= self.threshold() { Some(key) } else { None })
 	}
 
 	/// Returns `Some(offenders)` **iff** we can reliably determine them based on the number of
@@ -130,7 +142,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 			.iter()
 			.filter_map(
 				|(id, vote_count)| {
-					if *vote_count > self.threshold() {
+					if *vote_count >= self.threshold() {
 						Some(id.clone())
 					} else {
 						None
@@ -173,12 +185,7 @@ impl<T: Config> VaultRotationStatus<T> {
 	fn new(id: CeremonyId, candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self::AwaitingKeygen {
 			keygen_ceremony_id: id,
-			response_status: KeygenResponseStatus {
-				candidate_count: candidates.len() as u32,
-				remaining_candidates: candidates,
-				success_votes: Default::default(),
-				blame_votes: Default::default(),
-			},
+			response_status: KeygenResponseStatus::new(candidates),
 		}
 	}
 }

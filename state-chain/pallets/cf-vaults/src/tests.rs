@@ -59,8 +59,7 @@ fn only_one_concurrent_request_per_chain() {
 #[test]
 fn keygen_success() {
 	new_test_ext().execute_with(|| {
-		let new_public_key: Vec<u8> =
-			GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+		let new_public_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
@@ -96,19 +95,14 @@ fn keygen_success() {
 #[test]
 fn keygen_failure() {
 	new_test_ext().execute_with(|| {
-		const BAD_CANDIDATES: &'static [<MockRuntime as Chainflip>::ValidatorId] =
-			&[BOB, CHARLIE];
+		const BAD_CANDIDATES: &'static [<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
 		// The ceremony failed.
-		VaultsPallet::on_keygen_failure(
-			ceremony_id,
-			ChainId::Ethereum,
-			BAD_CANDIDATES.to_vec()
-		);
+		VaultsPallet::on_keygen_failure(ceremony_id, ChainId::Ethereum, BAD_CANDIDATES.to_vec());
 
 		// KeygenAborted event emitted.
 		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id, ChainId::Ethereum).into());
@@ -146,8 +140,7 @@ fn vault_key_rotated() {
 	new_test_ext().execute_with(|| {
 		const ROTATION_BLOCK_NUMBER: u64 = 42;
 		const TX_HASH: [u8; 32] = [0xab; 32];
-		let new_public_key: Vec<u8> =
-			GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+		let new_public_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
@@ -220,10 +213,7 @@ fn vault_key_rotated() {
 
 		assert_eq!(
 			active_window,
-			BlockHeightWindow {
-				from: ROTATION_BLOCK_NUMBER.saturating_add(1),
-				to: None
-			},
+			BlockHeightWindow { from: ROTATION_BLOCK_NUMBER.saturating_add(1), to: None },
 			"we should have set the starting point for the new vault's active window as the next
 			after the reported block number"
 		);
@@ -234,4 +224,49 @@ fn vault_key_rotated() {
 			Some(VaultRotationStatus::Complete { tx_hash: TX_HASH.to_vec() }),
 		);
 	});
+}
+
+mod keygen_reporting {
+	use super::*;
+	use crate::{KeygenOutcome, KeygenResponseStatus};
+	use frame_support::assert_err;
+	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
+
+	#[test]
+	fn test_threshold() {
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..150)).threshold(),
+			100
+		);
+	}
+
+	#[test]
+	fn test_success_outcomes() {
+		const THRESHOLD: u64 = 4u64;
+		const NUM_CANDIDATES: u64 = 6u64;
+		let key: Vec<u8> = b"chainflip".to_vec();
+
+		let mut status =
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(1..=NUM_CANDIDATES));
+		for i in 1..=NUM_CANDIDATES {
+			assert_ok!(status.add_success_vote(&i, key.clone()));
+			assert_err!(
+				status.add_success_vote(&i, key.clone()),
+				Error::<MockRuntime>::InvalidRespondent
+			);
+			if i < THRESHOLD {
+				assert!(status.consensus_outcome().is_none());
+			} else {
+				matches!(
+					status.consensus_outcome().expect("Consensus should be reached"), 
+					KeygenOutcome::Success(k) if k == key
+				);
+			}
+		}
+	}
+
+	#[test]
+	fn test_failure_outcomes() {
+		// assert_eq!(KeygenResponseStatus::<MockRuntime>::new((0..150).into()).threshold(), 101);
+	}
 }
