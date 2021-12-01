@@ -460,6 +460,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
 
 construct_runtime!(
@@ -717,6 +718,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
 			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
+			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

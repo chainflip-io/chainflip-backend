@@ -2,12 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 use cf_chains::Chain;
 use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
@@ -172,6 +175,9 @@ pub mod pallet {
 		/// The timeout duration for the transmission stage, measured in number of blocks.
 		#[pallet::constant]
 		type TransmissionTimeout: Get<BlockNumberFor<Self>>;
+
+		/// The weights for the pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -303,7 +309,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::start_broadcast())]
 		pub fn start_broadcast(
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
@@ -334,7 +340,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		/// - [InvalidSigner](Error::InvalidSigner)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::transaction_ready_for_transmission())]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
@@ -397,7 +403,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::transmission_success())]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
@@ -426,7 +432,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
