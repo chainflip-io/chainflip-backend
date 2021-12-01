@@ -134,10 +134,10 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 }
 
 pub async fn new_synced_web3_client(
-    settings: &settings::Settings,
+    eth_settings: &settings::Eth,
     logger: &slog::Logger,
 ) -> Result<Web3<web3::transports::WebSocket>> {
-    let node_endpoint = &settings.eth.node_endpoint;
+    let node_endpoint = &eth_settings.node_endpoint;
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
     tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
@@ -176,15 +176,15 @@ pub struct EthBroadcaster {
 
 impl EthBroadcaster {
     pub fn new(
-        settings: &settings::Settings,
+        eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let key = read_to_string(settings.eth.private_key_file.as_path())
+        let key = read_to_string(eth_settings.private_key_file.as_path())
             .context("Failed to read eth.private_key_file")?;
         let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
             panic!(
                 "Should read in secret key from: {}: {}",
-                settings.eth.private_key_file.display(),
+                eth_settings.private_key_file.display(),
                 e,
             )
         });
@@ -195,6 +195,7 @@ impl EthBroadcaster {
         })
     }
 
+    // TODO: Rename this, doesn't do any encoding
     /// Encode and sign a transaction.
     pub async fn encode_and_sign_tx(
         &self,
@@ -241,6 +242,11 @@ impl EthBroadcaster {
             .context("Failed to send raw signed ETH transaction")?;
 
         Ok(tx_hash)
+    }
+
+    /// Get the secret key to use for signing
+    pub fn get_secret_key(&self) -> SecretKey {
+        self.secret_key
     }
 }
 

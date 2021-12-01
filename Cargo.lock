@@ -943,6 +943,7 @@ name = "chainflip-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-engine",
  "config",
  "futures 0.3.17",
@@ -956,6 +957,7 @@ dependencies = [
  "structopt",
  "tokio 1.13.0",
  "utilities",
+ "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
 ]
 
 [[package]]

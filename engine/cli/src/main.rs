@@ -1,7 +1,14 @@
-use chainflip_engine::state_chain::client::connect_to_state_chain;
+use std::convert::TryInto;
+
+use cf_chains::eth::H256;
+use chainflip_engine::{
+    eth::{self, EthBroadcaster},
+    state_chain::client::connect_to_state_chain,
+};
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use structopt::StructOpt;
+use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
@@ -36,7 +43,7 @@ async fn run_cli() -> Result<()> {
         Claim {
             amount,
             eth_address,
-        } => Ok(send_claim(
+        } => Ok(request_claim(
             amount,
             clean_eth_address(&eth_address)
                 .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
@@ -47,7 +54,7 @@ async fn run_cli() -> Result<()> {
     }
 }
 
-async fn send_claim(
+async fn request_claim(
     amount: f64,
     eth_address: [u8; 20],
     settings: &CLISettings,
@@ -112,11 +119,14 @@ async fn send_claim(
                     });
                 for (_phase, event, _) in events {
                     if let state_chain_runtime::Event::Staking(
-                        pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, _),
+                        pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
                     ) = event
                     {
                         if validator_id == state_chain_client.our_account_id {
                             println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
+
+                            println!("Now gonna submit this to eth boi haha.");
+                            register_claim(settings, logger, claim_cert).await.unwrap();
                             break 'outer;
                         }
                     }
@@ -125,6 +135,38 @@ async fn send_claim(
         }
     }
     Ok(())
+}
+
+/// Register the claim certificate on Ethereum
+async fn register_claim(
+    settings: &CLISettings,
+    logger: &slog::Logger,
+    claim_cert: Vec<u8>,
+) -> Result<H256> {
+    // Create the connection to web3
+
+    let web3_client = eth::new_synced_web3_client(&settings.eth, &logger)
+        .await
+        .expect("Failed to create Web3 WebSocket");
+
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3_client.clone())?;
+
+    let contract: [u8; 20] = hex::decode("FCB97e4423c8B981ae063b3B36794B56ED06B98e")?
+        .try_into()
+        .unwrap();
+
+    let contract = H160::from(contract);
+
+    let unsigned_tx = cf_chains::eth::UnsignedTransaction {
+        chain_id: 4,
+        contract,
+        data: claim_cert,
+        ..Default::default()
+    };
+
+    let claim_signed = eth_broadcaster.encode_and_sign_tx(unsigned_tx).await?;
+
+    eth_broadcaster.send(claim_signed.0).await
 }
 
 fn confirm_submit() -> bool {
