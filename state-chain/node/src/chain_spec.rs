@@ -6,8 +6,8 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
 	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
-	SystemConfig, ValidatorConfig, VaultsConfig, WASM_BINARY,
+	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
+	ValidatorConfig, VaultsConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
