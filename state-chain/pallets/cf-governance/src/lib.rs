@@ -28,9 +28,7 @@ pub mod pallet {
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
-		weights::PostDispatchInfo,
 	};
-	use sp_runtime::DispatchErrorWithPostInfo;
 
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
@@ -134,7 +132,7 @@ pub mod pallet {
 		/// A proposal was approved \[proposal_id\]
 		Approved(ProposalId),
 		/// The execution of a proposal failed \[dispatch_error\]
-		FailedExecution(DispatchErrorWithPostInfo<PostDispatchInfo>),
+		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
 	}
@@ -346,7 +344,7 @@ impl<T: Config> Pallet<T> {
 					// Emit events about the execution status
 					match result {
 						Ok(_) => Self::deposit_event(Event::Executed(id)),
-						Err(err) => Self::deposit_event(Event::FailedExecution(err)),
+						Err(err) => Self::deposit_event(Event::FailedExecution(err.error)),
 					}
 					execution_weight += call.get_dispatch_info().weight;
 				} else {
