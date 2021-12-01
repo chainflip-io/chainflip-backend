@@ -203,6 +203,8 @@ impl EthBroadcaster {
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
+            // TODO: Estimate the gas:
+            // https://github.com/chainflip-io/chainflip-backend/issues/916
             gas: U256::from(200_000),
             ..Default::default()
         };
