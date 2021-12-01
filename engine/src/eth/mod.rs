@@ -7,10 +7,11 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
+use cf_chains::eth::UnsignedTransaction;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
-use sp_core::H160;
+use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
@@ -20,12 +21,14 @@ use web3::{
 
 use crate::{
     common::Mutex,
-    logging::COMPONENT_KEY,
-    settings,
+    logging::{utils::new_discard_logger, COMPONENT_KEY},
+    settings::{self, Settings},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::{TryFutureExt, TryStreamExt};
-use std::{fmt::Debug, fs::read_to_string, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    convert::TryInto, fmt::Debug, fs::read_to_string, str::FromStr, sync::Arc, time::Duration,
+};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -242,6 +245,56 @@ impl EthBroadcaster {
 
         Ok(tx_hash)
     }
+}
+
+#[tokio::test]
+async fn gas_check() {
+    let settings = Settings::from_file("config/Local.toml").unwrap();
+    let logger = new_discard_logger();
+    let contract: [u8; 20] = hex::decode("D695056316E4b1b8aF1A595403d7008a5755CD34")
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let contract = H160::from(contract);
+    let unsigned_tx = UnsignedTransaction {
+        chain_id: 4,
+        max_priority_fee_per_gas: None,
+        max_fee_per_gas: None,
+        gas_limit: None,
+        contract,
+        value: U256::from(0),
+        data: vec![
+            124, 139, 135, 148, 4, 136, 182, 158, 239, 224, 19, 211, 96, 57, 227, 144, 21, 75, 3,
+            90, 50, 90, 70, 123, 108, 164, 179, 145, 232, 39, 114, 159, 149, 93, 131, 231, 24, 216,
+            21, 183, 224, 212, 232, 191, 46, 55, 193, 27, 79, 180, 252, 142, 252, 34, 85, 97, 84,
+            136, 171, 230, 130, 194, 241, 63, 75, 198, 146, 34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 164, 9, 123, 16, 166, 215, 155, 52, 102, 231, 20, 115, 203, 73, 2, 72, 112,
+            226, 159, 181, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 74, 114,
+            82, 50, 163, 22, 165, 204, 140, 238, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 220,
+        ],
+    };
+    let mut tx_params = TransactionParameters {
+        to: Some(unsigned_tx.contract),
+        data: unsigned_tx.data.into(),
+        chain_id: Some(unsigned_tx.chain_id),
+        value: unsigned_tx.value,
+        transaction_type: Some(web3::types::U64::from(2)),
+        ..Default::default()
+    };
+    let call_request: CallRequest = tx_params.into();
+
+    let web3 = new_synced_web3_client(&settings, &logger)
+        .await
+        .expect("Failed to create Web3 WebSocket");
+
+    let gas = web3
+        .eth()
+        .estimate_gas(call_request, None)
+        .await
+        .context("Failed to estimate gas")
+        .unwrap();
 }
 
 #[async_trait]
