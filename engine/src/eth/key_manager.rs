@@ -95,17 +95,89 @@ impl Tokenizable for ChainflipKey {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SigData {
+    pub key_man_addr: ethabi::Address,
+    pub chain_id: ethabi::Uint,
+    pub msg_hash: ethabi::Uint,
+    pub sig: ethabi::Uint,
+    pub nonce: ethabi::Uint,
+    pub k_times_g_addr: ethabi::Address,
+}
+
+impl Tokenizable for SigData {
+    fn from_token(token: ethabi::Token) -> Result<Self, web3::contract::Error>
+    where
+        Self: Sized,
+    {
+        if let Token::Tuple(members) = token {
+            if members.len() != 6 {
+                Err(web3::contract::Error::InvalidOutputType(
+                    stringify!(SigData).to_owned(),
+                ))
+            } else {
+                Ok(SigData {
+                    key_man_addr: ethabi::Address::from_token(members[0].clone())?,
+                    chain_id: ethabi::Uint::from_token(members[1].clone())?,
+                    msg_hash: ethabi::Uint::from_token(members[2].clone())?,
+                    sig: ethabi::Uint::from_token(members[3].clone())?,
+                    nonce: ethabi::Uint::from_token(members[4].clone())?,
+                    k_times_g_addr: ethabi::Address::from_token(members[5].clone())?,
+                })
+            }
+        } else {
+            Err(web3::contract::Error::InvalidOutputType(
+                stringify!(SigData).to_owned(),
+            ))
+        }
+    }
+
+    fn into_token(self) -> ethabi::Token {
+        Token::Tuple(vec![
+            // Key
+            Token::Address(self.key_man_addr),
+            Token::Uint(self.chain_id),
+            Token::Uint(self.msg_hash),
+            Token::Uint(self.sig),
+            Token::Uint(self.nonce),
+            Token::Address(self.k_times_g_addr),
+        ])
+    }
+}
+
 /// Represents the events that are expected from the KeyManager contract.
 #[derive(Debug)]
 pub enum KeyManagerEvent {
-    /// `Staked(nodeId, amount)`
-    KeyChange {
-        /// Whether the change was signed by the AggKey.
-        signed: bool,
+    /// `AggKeySetByAggKey(Key oldKey, Key newKey)`
+    AggKeySetByAggKey {
         /// The old key.
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
+    },
+
+    /// `AggKeySetByGovKey(Key oldKey, Key newKey)`
+    AggKeySetByGovKey {
+        /// The old key.
+        old_key: ChainflipKey,
+        /// The new key.
+        new_key: ChainflipKey,
+    },
+
+    /// `GovKeySetByGovKey(Key oldKey, Key newKey)`
+    GovKeySetByGovKey {
+        /// The old key.
+        old_key: ethabi::Address,
+        /// The new key.
+        new_key: ethabi::Address,
+    },
+
+    /// `SignatureAccepted(sigData, broadcaster);`
+    SignatureAccepted {
+        /// Contains a signature and the msgHash that the signature is over. Kept as a single struct.
+        sig_data: SigData,
+        /// Address of the origin of the broadcast.
+        broadcaster: ethabi::Address,
     },
 
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
@@ -125,7 +197,8 @@ impl EthObserver for KeyManager {
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
     {
         match event.event_parameters {
-            KeyManagerEvent::KeyChange { new_key, .. } => {
+            KeyManagerEvent::AggKeySetByAggKey { new_key, .. }
+            | KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
                 let _ = state_chain_client
                     .submit_signed_extrinsic(
                         logger,
@@ -138,6 +211,20 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
+            KeyManagerEvent::GovKeySetByGovKey { new_key, .. } => {
+                let _ = state_chain_client
+                    .submit_signed_extrinsic(
+                        logger,
+                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
+                            ChainId::Ethereum,
+                            new_key.as_bytes().to_vec(),
+                            event.block_number,
+                            event.tx_hash.to_vec(),
+                        ),
+                    )
+                    .await;
+            }
+            KeyManagerEvent::SignatureAccepted { .. } => {}
             KeyManagerEvent::Shared(shared_event) => match shared_event {
                 SharedEvent::Refunded { .. } => {}
                 SharedEvent::RefundFailed { .. } => {}
@@ -148,18 +235,38 @@ impl EthObserver for KeyManager {
     fn decode_log_closure(
         &self,
     ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
-        let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
+        let ak_set_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
+        let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
+        let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
+        let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(Box::new(
-            move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
-                Ok(if signature == key_change.signature {
-                    let log = key_change.event.parse_log(raw_log)?;
-                    KeyManagerEvent::KeyChange {
-                        signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
+            move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
+                Ok(if signature == ak_set_ak.signature {
+                    let log = ak_set_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeySetByAggKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                    }
+                } else if signature == ak_set_gk.signature {
+                    let log = ak_set_gk.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeySetByGovKey {
+                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
+                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                    }
+                } else if signature == gk_set_gk.signature {
+                    let log = gk_set_gk.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovKeySetByGovKey {
+                        old_key: utils::decode_log_param(&log, "oldKey")?,
+                        new_key: utils::decode_log_param(&log, "newKey")?,
+                    }
+                } else if signature == sig_accepted.signature {
+                    let log = sig_accepted.event.parse_log(raw_log)?;
+                    KeyManagerEvent::SignatureAccepted {
+                        sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
+                        broadcaster: utils::decode_log_param(&log, "broadcaster")?,
                     }
                 } else {
                     KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
@@ -191,100 +298,144 @@ mod tests {
     use super::*;
     use hex;
     use std::str::FromStr;
-    use web3::types::H256;
+    use web3::types::{H256, U256};
 
+    // All log data for these tests was obtained from the events in the `deploy_and` script:
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
+
+    // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+
+    // 🔑 Aggregate Key sets the new Aggregate Key 🔑
     #[test]
-    fn test_key_change_parsing() {
-        // All log data for these tests was obtained from the events in the `deploy_and` script:
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
-
-        // All the key strings in this test are decimal versions of the hex strings in the consts.py script
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-        // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
-
+    fn test_ak_set_ak_parsing() {
         let key_manager = KeyManager::new(H160::default()).unwrap();
-
         let decode_log = key_manager.decode_log_closure().unwrap();
-
-        let key_change_event_signature =
-            H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
+        let event_signature =
+            H256::from_str("0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521")
                 .unwrap();
 
-        // 🔑 Aggregate Key sets the new Aggregate Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
+        match decode_log(
+                event_signature,
                 RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                    topics : vec![event_signature],
+                    data : hex::decode("31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
-            ).expect("Failed parsing AGG_SET_AGG_LOG event") {
-                KeyManagerEvent::KeyChange {
-                    signed,
+            ).expect("Failed parsing KeyManagerEvent::AggKeySetByAggKey event") {
+                KeyManagerEvent::AggKeySetByAggKey {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, true);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                 }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+                _ => panic!("Expected KeyManagerEvent::AggKeySetByAggKey, got different variant"),
             }
-        }
+    }
 
-        // 🔑 Governance Key sets the new Aggregate Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
+    // 🔑 Governance Key sets the new Aggregate Key 🔑
+    #[test]
+    fn test_ak_set_gk_parsing() {
+        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e")
+                .unwrap();
+
+        match decode_log(
+                event_signature,
                 RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                    topics : vec![event_signature],
+                    data : hex::decode("1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
-            ).expect("Failed parsing GOV_SET_AGG_LOG event")
+            ).expect("Failed parsing KeyManagerEvent::AggKeySetByGovKey event")
             {
-                KeyManagerEvent::KeyChange {
-                    signed,
+                KeyManagerEvent::AggKeySetByGovKey {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+                _ => panic!("Expected KeyManagerEvent::AggKeySetByGovKey, got different variant"),
             }
-        }
+    }
 
-        // 🔑 Governance Key sets the new Governance Key 🔑
-        {
-            match decode_log(
-                key_change_event_signature,
+    // 🔑 Governance Key sets the new Governance Key 🔑
+    #[test]
+    fn test_gk_set_gk_parsing() {
+        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c")
+                .unwrap();
+
+        match decode_log(
+                event_signature,
                 RawLog {
-                    topics : vec![key_change_event_signature],
-                    data : hex::decode("0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
+                    topics : vec![event_signature],
+                    data : hex::decode("000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb922660000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap()
                 }
-            ).expect("Failed parsing GOV_SET_GOV_LOG event")
+            ).expect("Failed parsing KeyManagerEvent::GovKeySetByGovKey event")
             {
-                KeyManagerEvent::KeyChange {
-                    signed,
+                KeyManagerEvent::GovKeySetByGovKey {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
+                    assert_eq!(old_key, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+                    assert_eq!(new_key, H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap());
                 }
-                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
+                _ => panic!("Expected KeyManagerEvent::GovKeySetByGovKey, got different variant"),
             }
-        }
+    }
 
-        // Invalid sig test
+    #[test]
+    fn test_sig_accepted_parsing() {
+        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "000000000000000000000000e7f1725e7734ce288f8367e1bb143e90bb3f05120000000000000000000000000000000000000000000000000000000000007a69b918a2687d109fa0308fedb39f0dd091accd9edb80a9ddb2ccb1f0abaa6cfb64ed5ecfedaacc9bd0bcc5512e7fcf9650de5619acc0a747681f58d26f66468e7000000000000000000000000000000000000000000000000000000000000000030000000000000000000000007ceb2425ec324348ba69bd50205b11e29770fd96000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                )
+                .unwrap(),
+            },
+        )
+        .expect("Failed parsing KeyManagerEvent::SignatureAccepted event")
         {
-            let invalid_signature = H256::from_str(
-                "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
-            )
-            .unwrap();
-            let res = decode_log(
+            KeyManagerEvent::SignatureAccepted {
+                sig_data,
+                broadcaster,
+            } => {
+                assert_eq!(sig_data, SigData{
+                    key_man_addr: H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
+                    chain_id: U256::from_dec_str("31337").unwrap(),
+                    msg_hash: U256::from_dec_str("83721402217372471513450062042778477963861354613529233808466400078111064259428").unwrap(),
+                    sig: U256::from_dec_str("107365663807311708634605056423336732647043554150507905924516852373709157469808").unwrap(),
+                    nonce: U256::from_dec_str("3").unwrap(),
+                    k_times_g_addr: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
+                });
+                assert_eq!(broadcaster, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+            }
+            _ => panic!("Expected KeyManagerEvent::SignatureAccepted, got different variant"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_sig() {
+        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let invalid_signature =
+            H256::from_str("0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5")
+                .unwrap();
+
+        let res = decode_log(
                 invalid_signature,
                 RawLog {
                     topics : vec![invalid_signature],
@@ -297,8 +448,7 @@ mod tests {
                     panic!("Incorrect error parsing INVALID_SIG_LOG");
                 }
             });
-            assert!(res.is_err());
-        }
+        assert!(res.is_err());
     }
 
     #[test]
@@ -334,16 +484,16 @@ mod tests {
         let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let transaction_hash =
-            H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52")
+            H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
         let event = EventWithCommon::decode(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
-                topics: vec![H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
+                topics: vec![H256::from_str("0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521")
                 .unwrap()],
-                data: web3::types::Bytes(hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
+                data: web3::types::Bytes(hex::decode("31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
                 block_hash: None,
                 block_number: Some(web3::types::U64::zero()),
                 transaction_hash: Some(transaction_hash),

@@ -9,6 +9,8 @@ use chainflip_engine::{
 
 use futures::stream::StreamExt;
 use sp_core::H160;
+use std::str::FromStr;
+use web3::types::U256;
 
 mod common;
 
@@ -23,7 +25,9 @@ pub async fn test_all_key_manager_events() {
         .unwrap();
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
-    let key_manager = KeyManager::new(H160::default()).unwrap();
+    let key_manager =
+        KeyManager::new(H160::from_str("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512").unwrap())
+            .unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
@@ -45,50 +49,79 @@ pub async fn test_all_key_manager_events() {
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
+    // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
+    // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+
+    km_events
+            .iter()
+            .find(|event| match &event.event_parameters {
+            KeyManagerEvent::AggKeySetByAggKey {
+                old_key, new_key
+            } => {
+                assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                assert_eq!(new_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                true
+            },
+            _ => false,
+        }).expect("Didn't find AggKeySetByAggKey event");
+
     km_events
         .iter()
         .find(|event| match &event.event_parameters {
-            KeyManagerEvent::KeyChange {
-                signed,
-                old_key,
-                new_key,
-                ..
+            KeyManagerEvent::AggKeySetByGovKey {
+                old_key, new_key
             } => {
-                // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
-                // All the key strings in this test are decimal versions of the hex strings in the consts.py script
-                // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-                // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
-
-                if new_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap(){
-
-                    assert_eq!(signed,&true);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    true
-
-                } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap() && event.block_number==21{
-
-                    assert_eq!(signed,&false);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                    true
-
-                 } else if new_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap() && event.block_number==19{
-
-                    assert_eq!(signed,&false);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    true
-
-                 } else if new_key == &ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap(){
-
-                    assert_eq!(signed,&false);
-                    assert_eq!(old_key,&ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                    true
-
-                } else {
-                    panic!("KeyChange event with unexpected key: {:?}", new_key);
+                if old_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap() {
+                    assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                }else if old_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap() {
+                    assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                }else{
+                    panic!("Unexpected AggKeySetByGovKey event. The details did not match the 2 expected AggKeySetByGovKey events");
                 }
-            }
-            KeyManagerEvent::Shared(_) => {
                 true
             },
-        }).unwrap();
+            _ => false,
+        }).expect("Didn't find AggKeySetByGovKey event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::GovKeySetByGovKey { old_key, new_key } => {
+                assert_eq!(
+                    old_key,
+                    &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                assert_eq!(
+                    new_key,
+                    &H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find GovKeySetByGovKey event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::SignatureAccepted {
+                sig_data,
+                broadcaster,
+            } => {
+                assert_eq!(
+                    sig_data.key_man_addr,
+                    H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap()
+                );
+                assert_eq!(sig_data.chain_id, U256::from_dec_str("31337").unwrap());
+                assert_eq!(sig_data.nonce, U256::from_dec_str("0").unwrap());
+                assert_eq!(
+                    broadcaster,
+                    &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find SignatureAccepted event");
 }
