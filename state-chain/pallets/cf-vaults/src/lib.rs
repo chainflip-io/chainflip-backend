@@ -254,26 +254,12 @@ pub mod pallet {
 										keygen_ceremony_id, e
 									);
 									weight += T::WeightInfo::on_keygen_failure();
-									Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![])
-										.unwrap_or_else(|e| {
-											log::error!(
-												"Failed report failure of keygen ceremony {}: {:?}",
-												keygen_ceremony_id,
-												e
-											);
-										});
+									Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
 								});
 						},
 						Some(KeygenOutcome::Failure(offenders)) => {
 							weight += T::WeightInfo::on_keygen_failure();
-							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders)
-								.unwrap_or_else(|e| {
-									log::error!(
-										"Failed report failure of keygen ceremony {}: {:?}",
-										keygen_ceremony_id,
-										e
-									);
-								});
+							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
 							if current_block - since_block >
@@ -281,14 +267,7 @@ pub mod pallet {
 							{
 								weight += T::WeightInfo::on_keygen_failure();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
-								Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![])
-									.unwrap_or_else(|e| {
-										log::error!(
-											"Failed report failure of keygen ceremony {}: {:?}",
-											keygen_ceremony_id,
-											e
-										);
-									});
+								Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
 							}
 						},
 					}
@@ -578,18 +557,6 @@ impl<T: Config> NonceProvider<Ethereum> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Abort all pending rotations and notify the `VaultRotationHandler` trait of our decision to
-	/// abort.
-	fn abort_rotation() {
-		// TODO: Should disallow aborting if we have passed the keygen stage.
-		// TODO: Should also notify of the ceremony id for each aborted ceremony.
-		Self::deposit_event(Event::KeygenAborted(
-			PendingVaultRotations::<T>::iter().map(|(c, _)| c).collect(),
-		));
-		PendingVaultRotations::<T>::remove_all(None);
-		T::RotationHandler::vault_rotation_aborted();
-	}
-
 	fn no_active_chain_vault_rotations() -> bool {
 		// Returns true if the iterator is empty or if all rotations are complete.
 		PendingVaultRotations::<T>::iter()
@@ -628,7 +595,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id, chain_id));
 
-		// TODO: With stronger types we can avoid this check.
+		// TODO: With stronger types we can avoid this check and make this function infallible.
 		let agg_key = AggKey::try_from(&new_public_key[..]).map_err(|e| {
 			log::error!("Unable to decode new public key {:?}: {:?}", new_public_key, e);
 			Error::<T>::InvalidPublicKey
@@ -652,7 +619,7 @@ impl<T: Config> Pallet<T> {
 		ceremony_id: CeremonyId,
 		chain_id: ChainId,
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
-	) -> DispatchResult {
+	) {
 		for offender in offenders {
 			T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
 				.unwrap_or_else(|e| {
@@ -669,7 +636,6 @@ impl<T: Config> Pallet<T> {
 		PendingVaultRotations::<T>::remove(chain_id);
 		// TODO: Failure of one keygen should cause failure of all keygens.
 		T::RotationHandler::vault_rotation_aborted();
-		Ok(().into())
 	}
 }
 

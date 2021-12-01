@@ -165,56 +165,6 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		//*** Vaults pallet witness calls ***//
-
-		/// Witness a successful key generation.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_success(*ceremony_id, *chain_id, new_public_key.clone())
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_keygen_success(
-			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
-			chain_id: ChainId,
-			new_public_key: Vec<u8>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = VaultsCall::keygen_success(ceremony_id, chain_id, new_public_key);
-			T::Witnesser::witness(who, call.into())
-		}
-
-		/// Witness a keygen failure
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::keygen_failure(*ceremony_id, *chain_id, guilty_validators.clone())
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_keygen_failure(
-			origin: OriginFor<T>,
-			ceremony_id: CeremonyId,
-			chain_id: ChainId,
-			guilty_validators: Vec<T::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = VaultsCall::keygen_failure(ceremony_id, chain_id, guilty_validators);
-			T::Witnesser::witness(who, call.into())
-		}
-
 		/// Witness an on-chain vault key rotation
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
