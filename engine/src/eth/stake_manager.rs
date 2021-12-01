@@ -87,9 +87,9 @@ pub enum StakeManagerEvent {
 
     /// `GovernanceWithdrawal(to, amount)`
     GovernanceWithdrawal {
-        /// Old minimum stake
+        /// Withdrawal address
         to: ethabi::Address,
-        /// New minimum stake
+        /// Withdrawal amount
         amount: u128,
     },
 
