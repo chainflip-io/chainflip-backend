@@ -13,21 +13,21 @@ use std::str::FromStr;
 use web3::types::U256;
 
 mod common;
+use crate::common::IntegrationTestSettings;
 
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
     let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
+    let integration_test_settings =
+        IntegrationTestSettings::from_file("tests/config.toml").unwrap();
 
     let web3 = new_synced_web3_client(&settings, &root_logger)
         .await
         .unwrap();
 
-    // TODO: Get the address from environment variables, so we don't need to start the SC
-    let key_manager =
-        KeyManager::new(H160::from_str("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512").unwrap())
-            .unwrap();
+    let key_manager = KeyManager::new(integration_test_settings.eth.key_manager_address).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
@@ -49,7 +49,6 @@ pub async fn test_all_key_manager_events() {
     );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
-    // See if the key change event matches 1 of the 3 events in the 'deploy_and.py' script
     // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 

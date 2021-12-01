@@ -19,21 +19,22 @@ use std::str::FromStr;
 use web3::types::U256;
 
 mod common;
+use crate::common::IntegrationTestSettings;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
     let root_logger = utils::new_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
+    let integration_test_settings =
+        IntegrationTestSettings::from_file("tests/config.toml").unwrap();
 
     let web3 = new_synced_web3_client(&settings, &root_logger)
         .await
         .unwrap();
 
-    // TODO: Get the address from environment variables, so we don't need to start the SC
     let stake_manager =
-        StakeManager::new(H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap())
-            .unwrap();
+        StakeManager::new(integration_test_settings.eth.stake_manager_address).unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
