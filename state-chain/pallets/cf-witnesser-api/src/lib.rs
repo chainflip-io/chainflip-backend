@@ -23,7 +23,7 @@ pub mod pallet {
 		FlipBalance,
 	};
 	use pallet_cf_threshold_signature::{Call as SigningCall, Config as SigningConfig};
-	use pallet_cf_vaults::{Call as VaultsCall, CeremonyId, Config as VaultsConfig};
+	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig};
 	use pallet_cf_witnesser::WeightInfo;
 	use sp_std::prelude::*;
 

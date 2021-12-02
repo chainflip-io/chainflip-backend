@@ -233,6 +233,10 @@ impl VaultRotationHandler for Test {
 	fn vault_rotation_aborted() {}
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: u64 = 10;
+}
+
 impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
 	type RotationHandler = Self;
@@ -240,6 +244,8 @@ impl pallet_cf_vaults::Config for Test {
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
+	
 }
 
 impl pallet_cf_witness_api::Config for Test {

@@ -43,7 +43,8 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
-		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
+		use pallet_cf_vaults::KeygenOutcome;
+use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// Events from ethereum contract
@@ -213,11 +214,11 @@ mod tests {
 										// Propose a new key
 										let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
 
-										state_chain_runtime::WitnesserApi::witness_keygen_success(
+										state_chain_runtime::Vaults::report_keygen_outcome(
 											Origin::signed(self.node_id.clone()),
 											*ceremony_id,
 											ChainId::Ethereum,
-											public_key,
+											KeygenOutcome::Success(public_key),
 										).expect(&format!(
 											"should be able to witness keygen request from node: {:?}",
 											self.node_id)
