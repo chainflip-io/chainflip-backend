@@ -450,7 +450,7 @@ pub trait SignerNomination {
 	type SignerId;
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
-	fn nomination_with_seed(seed: u64) -> Self::SignerId;
+	fn nomination_with_seed(seed: u64) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.

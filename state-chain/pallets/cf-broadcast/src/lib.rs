@@ -480,28 +480,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Select a signer for this broadcast.
 		let nominated_signer = T::SignerNomination::nomination_with_seed(attempt_id);
 
-		AwaitingTransactionSignature::<T, I>::insert(
-			attempt_id,
-			TransactionSigningAttempt::<T, I> {
-				broadcast_id,
-				attempt_count,
-				unsigned_tx: unsigned_tx.clone(),
-				nominee: nominated_signer.clone(),
-			},
-		);
+		// Check if there is an nominated signer
+		if let Some(nominated_signer) = nominated_signer {
+			AwaitingTransactionSignature::<T, I>::insert(
+				attempt_id,
+				TransactionSigningAttempt::<T, I> {
+					broadcast_id,
+					attempt_count,
+					unsigned_tx: unsigned_tx.clone(),
+					nominee: nominated_signer.clone(),
+				},
+			);
 
-		// Schedule expiry.
-		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
-		Expiries::<T, I>::mutate(expiry_block, |entries| {
-			entries.push((BroadcastStage::TransactionSigning, attempt_id))
-		});
+			// Schedule expiry.
+			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
+			Expiries::<T, I>::mutate(expiry_block, |entries| {
+				entries.push((BroadcastStage::TransactionSigning, attempt_id))
+			});
 
-		// Emit the transaction signing request.
-		Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
-			attempt_id,
-			nominated_signer,
-			unsigned_tx,
-		));
+			// Emit the transaction signing request.
+			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
+				attempt_id,
+				nominated_signer,
+				unsigned_tx,
+			));
+		} else {
+			// In this case all validators are currently online. We just do
+			// nothing in this case and wait until someone comes up again.
+			log::warn!("No online validators at the moment.");
+		}
 	}
 
 	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
