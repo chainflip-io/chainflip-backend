@@ -1,10 +1,10 @@
 use crate::{
-	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome, PendingVaultRotations,
-	Vault, VaultRotationStatus, Vaults,
+	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome,
+	KeygenResolutionPending, PendingVaultRotations, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::ChainId;
 use cf_traits::{Chainflip, EpochInfo, VaultRotator};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
 fn last_event() -> Event {
@@ -124,16 +124,17 @@ fn no_active_rotation() {
 #[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
-		let new_public_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+		let new_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
 			ChainId::Ethereum,
-			KeygenOutcome::Success(new_public_key.clone())
+			KeygenOutcome::Success(new_key.clone())
 		));
 
 		// Can't report twice.
@@ -142,7 +143,7 @@ fn keygen_report_success() {
 				Origin::signed(ALICE),
 				ceremony_id,
 				ChainId::Ethereum,
-				KeygenOutcome::Success(new_public_key.clone())
+				KeygenOutcome::Success(new_key.clone())
 			),
 			Error::<MockRuntime>::InvalidRespondent
 		);
@@ -164,7 +165,7 @@ fn keygen_report_success() {
 				Origin::signed(u64::MAX),
 				ceremony_id,
 				ChainId::Ethereum,
-				KeygenOutcome::Success(new_public_key.clone())
+				KeygenOutcome::Success(new_key.clone())
 			),
 			Error::<MockRuntime>::InvalidRespondent
 		);
@@ -175,11 +176,146 @@ fn keygen_report_success() {
 				Origin::signed(ALICE),
 				ceremony_id + 1,
 				ChainId::Ethereum,
-				KeygenOutcome::Success(new_public_key.clone())
+				KeygenOutcome::Success(new_key.clone())
 			),
 			Error::<MockRuntime>::InvalidCeremonyId
 		);
+
+		// A resolution is now pending but no consensus is reached.
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		// Bob agrees.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(BOB),
+			ceremony_id,
+			ChainId::Ethereum,
+			KeygenOutcome::Success(new_key.clone())
+		));
+
+		// This time we should have enough votes for consensus.
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(1);
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		if let VaultRotationStatus::<MockRuntime>::AwaitingRotation { new_public_key } =
+			PendingVaultRotations::<MockRuntime>::get(ChainId::Ethereum).unwrap()
+		{
+			assert_eq!(new_public_key, new_key);
+		} else {
+			panic!("Expected AwaitingRotation rotation status.")
+		}
 	})
+}
+
+#[test]
+fn keygen_report_failure() {
+	new_test_ext().execute_with(|| {
+		let new_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+
+		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(ALICE),
+			ceremony_id,
+			ChainId::Ethereum,
+			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+		));
+
+		// Can't report twice.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
+
+		// Can't change our mind
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Success(new_key.clone())
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
+
+		// Only participants can respond.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(u64::MAX),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
+
+		// Wrong ceremony_id.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id + 1,
+				ChainId::Ethereum,
+				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			),
+			Error::<MockRuntime>::InvalidCeremonyId
+		);
+
+		// A resolution is now pending but no consensus is reached.
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		// Bob agrees.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(BOB),
+			ceremony_id,
+			ChainId::Ethereum,
+			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+		));
+
+		// This time we should have enough votes for consensus.
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(1);
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
+	})
+}
+
+#[test]
+fn test_grace_period() {
+	new_test_ext().execute_with(|| {
+		let new_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+
+		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(ALICE),
+			ceremony_id,
+			ChainId::Ethereum,
+			KeygenOutcome::Success(new_key.clone())
+		));
+
+		// > 10 blocks later we should resolve an error.
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(10);
+		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		VaultsPallet::on_initialize(11);
+		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+	});
 }
 
 #[test]

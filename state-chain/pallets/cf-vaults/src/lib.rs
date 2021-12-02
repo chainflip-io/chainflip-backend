@@ -268,6 +268,7 @@ pub mod pallet {
 			let mut weight = 0;
 
 			// Check if we need to finalize keygen
+			let mut unresolved = Vec::new();
 			for (chain_id, since_block) in KeygenResolutionPending::<T>::get() {
 				if let Some(VaultRotationStatus::<T>::AwaitingKeygen {
 					keygen_ceremony_id,
@@ -292,7 +293,7 @@ pub mod pallet {
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
-							if current_block - since_block > T::KeygenResponseGracePeriod::get() {
+							if current_block - since_block >= T::KeygenResponseGracePeriod::get() {
 								weight += T::WeightInfo::on_keygen_failure();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
 								Self::deposit_event(Event::<T>::KeygenGracePeriodElapsed(
@@ -300,11 +301,14 @@ pub mod pallet {
 									chain_id,
 								));
 								Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
+							} else {
+								unresolved.push((chain_id, since_block));
 							}
 						},
 					}
 				}
 			}
+			KeygenResolutionPending::<T>::put(unresolved);
 
 			weight
 		}
@@ -382,7 +386,8 @@ pub mod pallet {
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
-		/// A validator sent a response for a ceremony in which they weren't involved.
+		/// A validator sent a response for a ceremony in which they weren't involved, or to which
+		/// they have already submitted a response.
 		InvalidRespondent,
 	}
 
