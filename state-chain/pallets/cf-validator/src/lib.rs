@@ -30,7 +30,7 @@ use sp_std::prelude::*;
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode)]
 pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,
@@ -96,8 +96,8 @@ pub mod pallet {
 		ForceRotationRequested(),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
-		/// An validator has send his current CFE version
-		ValidatorCFEVersionRecorded(T::AccountId, Version),
+		/// The CFE version has been updated \[Validator, Old Version, New Version]
+		CFEVersionUpdated(T::ValidatorId, Version, Version),
 	}
 
 	#[pallet::error]
@@ -107,6 +107,8 @@ pub mod pallet {
 		InvalidEpoch,
 		/// During an auction we can't update certain state
 		AuctionInProgress,
+		/// Invalid CFE version has been submitted
+		InvalidCFEVersion,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -188,27 +190,42 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to send their current cfe version.
+		/// Allow a validator to send their current cfe version.  We validate that the version is a
+		/// subsequent version and if so it is stored with an event is emitted else we throw an
+		/// error.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
 		/// ## Events
 		///
-		/// - [ValidatorCFEVersionRecorded](Event::ValidatorCFEVersionRecorded)
+		/// - [CFEVersionUpdated](Event::CFEVersionUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
-		///
+		/// - [InvalidCFEVersion](Error::InvalidCFEVersion)
 		/// ## Dependencies
 		///
 		/// - None
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(origin: OriginFor<T>, semver: Version) -> DispatchResultWithPostInfo {
+		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ValidatorCFEVersion::<T>::insert(account_id.clone(), semver.clone());
-			Self::deposit_event(Event::ValidatorCFEVersionRecorded(account_id, semver));
-			Ok(().into())
+			let validator_id =
+				T::ValidatorIdOf::convert(account_id).expect("validator and account ids are one");
+
+			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
+				if *current_version < version {
+					Self::deposit_event(Event::CFEVersionUpdated(
+						validator_id,
+						current_version.clone(),
+						version.clone(),
+					));
+					*current_version = version;
+					Ok(().into())
+				} else {
+					Err(Error::<T>::InvalidCFEVersion)?
+				}
+			})
 		}
 	}
 
@@ -246,7 +263,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_cfe_version)]
 	pub type ValidatorCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, Version>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
