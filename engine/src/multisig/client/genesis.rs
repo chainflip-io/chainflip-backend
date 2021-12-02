@@ -27,9 +27,32 @@ pub async fn genesis_keys() {
     let dopey = AccountId(dopey);
     println!("dopey: {:?}", dopey);
 
-    let account_ids = vec![doc.clone(), dopey.clone(), bashful.clone()];
+    let account_ids = ensure_unsorted(vec![doc.clone(), dopey.clone(), bashful.clone()], 0);
     let mut keygen_context = KeygenContext::new_with_account_ids(account_ids.clone());
     let result = keygen_context.generate().await;
+
+    // Check that we can use the above keys
+    let active_ids: Vec<_> = {
+        use rand::prelude::*;
+
+        let mut rng = StdRng::seed_from_u64(0);
+        let active_count = utilities::threshold_from_share_count(account_ids.len() as u32) + 1;
+
+        ensure_unsorted(
+            account_ids
+                .choose_multiple(&mut rng, active_count as usize)
+                .cloned()
+                .collect(),
+            0,
+        )
+    };
+
+    let signing_result = keygen_context.sign_with_ids(&active_ids).await;
+
+    assert!(
+        signing_result.outcome.result.is_ok(),
+        "Signing ceremony failed"
+    );
 
     println!(
         "Pubkey is (66 chars, 33 bytes): {:?}",
@@ -54,24 +77,4 @@ pub async fn genesis_keys() {
     let dopey_secret = bincode::serialize(&dopey_secret).expect("Could not serialize dopey_secret");
     let dopey_secret = hex::encode(dopey_secret);
     println!("Dopey secret idx {:?}", dopey_secret);
-
-    // Check that we can use the above keys
-    let active_ids: Vec<_> = {
-        use rand::prelude::*;
-
-        let mut rng = StdRng::seed_from_u64(0);
-        let active_count = utilities::threshold_from_share_count(account_ids.len() as u32) + 1;
-
-        ensure_unsorted(
-            account_ids
-                .choose_multiple(&mut rng, active_count as usize)
-                .cloned()
-                .collect(),
-            0,
-        )
-    };
-
-    let signing_result = keygen_context.sign_with_ids(&active_ids).await;
-
-    assert!(signing_result.outcome.result.is_ok())
 }
