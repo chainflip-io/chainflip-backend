@@ -1,10 +1,11 @@
 use crate::{
-	mock::*, BlockHeightWindow, Error, Event as PalletEvent, PendingVaultRotations, Vault,
-	VaultRotationStatus, Vaults,
+	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome, PendingVaultRotations,
+	Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::ChainId;
 use cf_traits::{Chainflip, EpochInfo, VaultRotator};
 use frame_support::{assert_noop, assert_ok};
+use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
 fn last_event() -> Event {
 	frame_system::Pallet::<MockRuntime>::events()
@@ -69,26 +70,6 @@ fn keygen_success() {
 			ChainId::Ethereum,
 			new_public_key.clone()
 		));
-
-		// Can't be reported twice
-		// assert_noop!(
-		// 	VaultsPallet::on_keygen_success(
-		// 		ceremony_id,
-		// 		ChainId::Ethereum,
-		// 		new_public_key.clone()
-		// 	),
-		// 	Error::<MockRuntime>::InvalidRotationStatus
-		// );
-
-		// Can't change our mind
-		// assert_noop!(
-		// 	VaultsPallet::on_keygen_failure(
-		// 		ceremony_id,
-		// 		ChainId::Ethereum,
-		// 		vec![]
-		// 	),
-		// 	Error::<MockRuntime>::InvalidRotationStatus
-		// );
 	});
 }
 
@@ -112,27 +93,93 @@ fn keygen_failure() {
 
 		// Bad validators have been reported.
 		assert_eq!(MockOfflineReporter::get_reported(), BAD_CANDIDATES);
+	});
+}
 
-		// Can't be reported twice
-		// assert_noop!(
-		// 	VaultsPallet::on_keygen_failure(
-		// 		ceremony_id,
-		// 		ChainId::Ethereum,
-		// 		vec![]
-		// 	),
-		// 	Error::<MockRuntime>::NoActiveRotation
-		// );
+#[test]
+fn no_active_rotation() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				1,
+				ChainId::Ethereum,
+				KeygenOutcome::Success(Default::default())
+			),
+			Error::<MockRuntime>::NoActiveRotation
+		);
+
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				1,
+				ChainId::Ethereum,
+				KeygenOutcome::Failure(Default::default())
+			),
+			Error::<MockRuntime>::NoActiveRotation
+		);
+	})
+}
+
+#[test]
+fn keygen_report_success() {
+	new_test_ext().execute_with(|| {
+		let new_public_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
+
+		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
+
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(ALICE),
+			ceremony_id,
+			ChainId::Ethereum,
+			KeygenOutcome::Success(new_public_key.clone())
+		));
+
+		// Can't report twice.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Success(new_public_key.clone())
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
 
 		// Can't change our mind
-		// assert_noop!(
-		// 	VaultsPallet::on_keygen_success(
-		// 		ceremony_id,
-		// 		ChainId::Ethereum,
-		// 		vec![]
-		// 	),
-		// 	Error::<MockRuntime>::NoActiveRotation
-		// );
-	});
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Failure(BTreeSet::from_iter([BOB, CHARLIE]))
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
+
+		// Only participants can respond.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(u64::MAX),
+				ceremony_id,
+				ChainId::Ethereum,
+				KeygenOutcome::Success(new_public_key.clone())
+			),
+			Error::<MockRuntime>::InvalidRespondent
+		);
+
+		// Wrong ceremony_id.
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				Origin::signed(ALICE),
+				ceremony_id + 1,
+				ChainId::Ethereum,
+				KeygenOutcome::Success(new_public_key.clone())
+			),
+			Error::<MockRuntime>::InvalidCeremonyId
+		);
+	})
 }
 
 #[test]
@@ -244,21 +291,29 @@ mod keygen_reporting {
 	macro_rules! assert_success_outcome {
 		($ex:expr) => {
 			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
-			assert!(matches!(outcome, Some(KeygenOutcome::Success(_))));
+			assert!(
+				matches!(outcome, Some(KeygenOutcome::Success(_))),
+				"Expected success, got: {:?}",
+				outcome
+			);
 		};
 	}
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
 			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
-			assert!(matches!(outcome, Some(KeygenOutcome::Failure(_))));
+			assert!(
+				matches!(outcome, Some(KeygenOutcome::Failure(_))),
+				"Expected failure, got: {:?}",
+				outcome
+			);
 		};
 	}
 
 	macro_rules! assert_no_outcome {
 		($ex:expr) => {
 			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
-			assert!(matches!(outcome, None));
+			assert!(matches!(outcome, None), "Expected `None`, got: {:?}", outcome);
 		};
 	}
 
@@ -303,22 +358,38 @@ mod keygen_reporting {
 		num_candidates: u32,
 		num_successes: u32,
 	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
-		get_outcome(num_candidates, num_successes, 0, 0, None)
+		get_outcome_simple(num_candidates, num_successes, 0, 0)
 	}
 
 	fn simple_failure(
 		num_candidates: u32,
 		num_failures: u32,
 	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
-		get_outcome(num_candidates, 0, num_failures, 0, None)
+		get_outcome_simple(num_candidates, 0, num_failures, 0)
 	}
 
-	fn get_outcome(
+	fn get_outcome_simple(
+		num_candidates: u32,
+		num_successes: u32,
+		num_failures: u32,
+		num_bad_keys: u32,
+	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
+		get_outcome(num_candidates, num_successes, num_failures, num_bad_keys, |_| [1])
+	}
+
+	/// Generate a report given:
+	///   - the total number of candidates
+	///   - the total number of success reports
+	///   - the total number of failure reports
+	///   - the total number of false success reports
+	///   - a generator function `id -> [id]` for determining the blamed validators `[id]` for
+	///     validator `id`
+	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
 		num_candidates: u32,
 		mut num_successes: u32,
 		mut num_failures: u32,
 		mut num_bad_keys: u32,
-		report_one_in: Option<u64>,
+		report_gen: F,
 	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
 		let key = TEST_KEY.to_vec();
 		let mut status = KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(
@@ -336,22 +407,17 @@ mod keygen_reporting {
 		);
 
 		for id in 1..=(num_responses as u64) {
-			if num_failures > 0 {
-				assert_ok_no_repeat!(status.add_failure_vote(
-					&id,
-					// Report one in 5 unless specified otherwise.
-					BTreeSet::from_iter(
-						(1..=(num_candidates as u64))
-							.filter(|id| (id % report_one_in.unwrap_or(5) == 1))
-					)
-				));
-				num_failures -= 1;
+			if num_successes > 0 {
+				assert_ok_no_repeat!(status.add_success_vote(&id, key.clone()));
+				num_successes -= 1;
 			} else if num_bad_keys > 0 {
 				assert_ok_no_repeat!(status.add_success_vote(&id, b"wrong".to_vec()));
 				num_bad_keys -= 1;
-			} else if num_successes > 0 {
-				assert_ok_no_repeat!(status.add_success_vote(&id, key.clone()));
-				num_successes -= 1;
+			} else if num_failures > 0 {
+				assert_ok_no_repeat!(
+					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)))
+				);
+				num_failures -= 1;
 			} else {
 				panic!("Should not reach here.")
 			}
@@ -376,9 +442,9 @@ mod keygen_reporting {
 		assert_success_outcome!(simple_success(151, 151));
 
 		// Minority dissent has no effect.
-		assert_success_outcome!(get_outcome(6, 5, 1, 0, None));
-		assert_success_outcome!(get_outcome(6, 4, 1, 1, None));
-		assert_success_outcome!(get_outcome(6, 4, 2, 0, None));
+		assert_success_outcome!(get_outcome_simple(6, 5, 1, 0));
+		assert_success_outcome!(get_outcome_simple(6, 4, 1, 1));
+		assert_success_outcome!(get_outcome_simple(6, 4, 2, 0));
 	}
 
 	#[test]
@@ -398,33 +464,87 @@ mod keygen_reporting {
 		assert_failure_outcome!(simple_failure(151, 151));
 
 		// Minority dissent has no effect.
-		assert_failure_outcome!(get_outcome(6, 2, 4, 0, None));
-		assert_failure_outcome!(get_outcome(6, 1, 4, 1, None));
-		assert_failure_outcome!(get_outcome(6, 1, 5, 0, None));
-		assert_failure_outcome!(get_outcome(6, 0, 6, 0, None));
+		assert_failure_outcome!(get_outcome_simple(6, 2, 4, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 1, 4, 1));
+		assert_failure_outcome!(get_outcome_simple(6, 1, 5, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 0, 6, 0));
 	}
 
 	#[test]
 	fn test_no_consensus() {
-		// No outcome unless there is threshold agreement.
-		assert_no_outcome!(get_outcome(6, 3, 0, 3, None));
-		assert_no_outcome!(get_outcome(6, 3, 3, 0, None));
-		assert_no_outcome!(get_outcome(6, 3, 2, 1, None));
-		assert_no_outcome!(get_outcome(6, 3, 1, 2, None));
-		assert_no_outcome!(get_outcome(6, 2, 2, 2, None));
+		// No outcome until there is threshold agreement.
+		assert_no_outcome!(get_outcome_simple(6, 1, 0, 0));
+		assert_no_outcome!(get_outcome_simple(6, 2, 0, 0));
+		assert_no_outcome!(get_outcome_simple(6, 3, 0, 0));
+		assert_no_outcome!(get_outcome_simple(6, 3, 0, 1));
+		assert_success_outcome!(get_outcome_simple(6, 4, 0, 1));
+		assert_success_outcome!(get_outcome_simple(6, 6, 0, 0));
 
-		// Missing responses have no effect.
-		assert_no_outcome!(get_outcome(6, 0, 0, 0, None));
-		assert_no_outcome!(get_outcome(6, 1, 0, 0, None));
-		assert_no_outcome!(get_outcome(6, 0, 1, 0, None));
-		assert_no_outcome!(get_outcome(6, 0, 0, 1, None));
-		assert_no_outcome!(get_outcome(6, 3, 1, 1, None));
-		assert_no_outcome!(get_outcome(6, 1, 3, 1, None));
-		assert_no_outcome!(get_outcome(6, 3, 2, 0, None));
-		assert_no_outcome!(get_outcome(6, 2, 3, 1, None));
+		assert_no_outcome!(get_outcome_simple(6, 0, 1, 0));
+		assert_no_outcome!(get_outcome_simple(6, 0, 2, 0));
+		assert_no_outcome!(get_outcome_simple(6, 0, 3, 0));
+		assert_no_outcome!(get_outcome_simple(6, 1, 3, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 1, 4, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 0, 4, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 0, 5, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 0, 6, 0));
+
+		// Failure if there is no other option (ie. deadlock).
+		assert_no_outcome!(get_outcome_simple(6, 3, 0, 2));
+		assert_no_outcome!(get_outcome_simple(6, 3, 2, 0));
+		assert_no_outcome!(get_outcome_simple(6, 3, 1, 1));
+		assert_no_outcome!(get_outcome_simple(6, 3, 1, 1));
+		assert_no_outcome!(get_outcome_simple(6, 2, 3, 0));
+
+		// Failure if we reach full response count with no consensus.
+		assert_failure_outcome!(get_outcome_simple(6, 3, 0, 3));
+		assert_failure_outcome!(get_outcome_simple(6, 3, 1, 2));
+		assert_failure_outcome!(get_outcome_simple(6, 3, 2, 1));
+		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
+		assert_failure_outcome!(get_outcome_simple(6, 3, 3, 0));
+		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
 	}
 
+	#[test]
 	fn test_blaming_aggregation() {
-		todo!();
+		// First five candidates all report candidate 6.
+		let outcome = get_outcome(6, 0, 5, 1, |_| [6]);
+		assert!(
+			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6]))
+		);
+
+		// Candidates don't agree.
+		let outcome = get_outcome(6, 0, 5, 1, |id| [id + 1]);
+		assert!(matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed.is_empty()));
+
+		// Candidates agree but not enough to report.
+		let outcome = get_outcome(6, 0, 5, 1, |id| if id < 4 { [6] } else { [id + 1] });
+		assert!(matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed.is_empty()));
+
+		// Candidates agree on one but not all.
+		let outcome = get_outcome(6, 0, 5, 1, |id| if id < 5 { [6] } else { [id + 1] });
+		assert!(
+			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6]))
+		);
+
+		// Candidates agree on multiple offenders.
+		let outcome = get_outcome(12, 0, 12, 0, |id| if id < 9 { [11, 12] } else { [1, 2] });
+		assert!(
+			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([11, 12]))
+		);
+
+		// Overlapping agreement.
+		let outcome = get_outcome(12, 0, 12, 0, |id| {
+			if id < 5 {
+				[11, 12]
+			} else if id < 9 {
+				[1, 11]
+			} else {
+				[1, 2]
+			}
+		});
+		assert!(
+			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 11]))
+		);
 	}
 }

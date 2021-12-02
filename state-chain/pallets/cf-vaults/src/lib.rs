@@ -33,9 +33,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// The maximum number of blocks to wait after the first keygen response comes in.
-const KEYGEN_RESPONSE_GRACE_PERIOD: u32 = 10;
-
 /// Id type used for the Keygen ceremony.
 pub type CeremonyId = u64;
 
@@ -79,10 +76,10 @@ impl<T: Config> KeygenResponseStatus<T> {
 	}
 
 	/// The threshold is the smallest number of respondents able to reach consensus.
-	/// 
+	///
 	/// Note this is not the same as the threshold defined in the signing literature.
 	pub fn threshold(&self) -> u32 {
-		utilities::threshold_from_share_count(self.candidate_count) + 1
+		utilities::threshold_from_share_count(self.candidate_count).saturating_add(1)
 	}
 
 	/// Accumulate a success vote into the keygen status.
@@ -125,31 +122,46 @@ impl<T: Config> KeygenResponseStatus<T> {
 
 	/// Returns `Some(key)` *iff any* key has more than `self.threshold()` number of votes,
 	/// otherwise returns `None`.
-	fn success_result(&self) -> Option<&Vec<u8>> {
-		self.success_votes
-			.iter()
-			.find_map(|(key, votes)| if *votes >= self.threshold() { Some(key) } else { None })
+	fn success_result(&self) -> Option<Vec<u8>> {
+		self.success_votes.iter().find_map(|(key, votes)| {
+			if *votes >= self.threshold() {
+				Some(key.clone())
+			} else {
+				None
+			}
+		})
 	}
 
 	/// Returns `Some(offenders)` **iff** we can reliably determine them based on the number of
 	/// received votes, otherwise returns `None`.
+	///
+	/// "Reliably determine" means: Some of the validators have exceeded the threshold number of
+	/// reports, *and* there are no other validators who *might* still exceed the threshold.
+	///
+	/// For example if the threshold is 10 and there are 5 votes left, it is assumed that any
+	/// validators that have 6 or more votes *might still* pass the threshold, so we return
+	/// `None` to signal that no decision can be made yet.
+	///
+	/// If no-one passes the threshold, returns `None`.
 	fn failure_result(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		let mut blamed_by_majority = self
+		let remaining_votes = self.remaining_candidate_count();
+		let mut possible = self
 			.blame_votes
 			.iter()
-			.filter_map(
-				|(id, vote_count)| {
-					if *vote_count >= self.threshold() {
-						Some(id.clone())
-					} else {
-						None
-					}
-				},
-			)
+			.filter(|(_, vote_count)| **vote_count + remaining_votes >= self.threshold())
 			.peekable();
 
-		if blamed_by_majority.peek().is_some() {
-			Some(blamed_by_majority.collect())
+		if possible.peek().is_none() {
+			return None
+		}
+
+		let mut pending = possible
+			.clone()
+			.filter(|(_, vote_count)| **vote_count < self.threshold())
+			.peekable();
+
+		if pending.peek().is_none() {
+			Some(possible.map(|(id, _)| id).cloned().collect())
 		} else {
 			None
 		}
@@ -164,9 +176,19 @@ impl<T: Config> KeygenResponseStatus<T> {
 		}
 
 		self.success_result()
-			.cloned()
+			// If it's a success, return success.
 			.map(KeygenOutcome::Success)
+			// Otherwise check if we have consensus on failure.
 			.or_else(|| self.failure_result().map(KeygenOutcome::Failure))
+			// Otherwise, if everyone has reported, report a default failure
+			.or_else(|| {
+				if self.remaining_candidates.is_empty() {
+					Some(KeygenOutcome::Failure(Default::default()))
+				} else {
+					// Otherwise we have no consensus result.
+					None
+				}
+			})
 	}
 }
 
@@ -233,6 +255,10 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// The maximum number of blocks to wait after the first keygen response comes in.
+		#[pallet::constant]
+		type KeygenResponseGracePeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -254,7 +280,7 @@ pub mod pallet {
 							Self::on_keygen_success(keygen_ceremony_id, chain_id, new_public_key)
 								.unwrap_or_else(|e| {
 									log::error!(
-										"Failed report success of keygen ceremony {}: {:?}. Reporting failure instead.", 
+										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.", 
 										keygen_ceremony_id, e
 									);
 									weight += T::WeightInfo::on_keygen_failure();
@@ -266,11 +292,13 @@ pub mod pallet {
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
-							if current_block - since_block >
-								BlockNumberFor::<T>::from(KEYGEN_RESPONSE_GRACE_PERIOD)
-							{
+							if current_block - since_block > T::KeygenResponseGracePeriod::get() {
 								weight += T::WeightInfo::on_keygen_failure();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
+								Self::deposit_event(Event::<T>::KeygenGracePeriodElapsed(
+									keygen_ceremony_id,
+									chain_id,
+								));
 								Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
 							}
 						},
@@ -332,6 +360,8 @@ pub mod pallet {
 		KeygenSuccess(CeremonyId, ChainId),
 		/// Keygen has failed \[ceremony_id, chain_id\]
 		KeygenFailure(CeremonyId, ChainId),
+		/// Keygen grace period has elapsed \[ceremony_id, chain_id\]
+		KeygenGracePeriodElapsed(CeremonyId, ChainId),
 	}
 
 	#[pallet::error]
