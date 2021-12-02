@@ -232,41 +232,199 @@ mod keygen_reporting {
 	use frame_support::assert_err;
 	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
+	const TEST_KEY: &[u8; 9] = b"chainflip";
+
+	macro_rules! assert_ok_no_repeat {
+		($ex:expr) => {
+			assert_ok!($ex);
+			assert_err!($ex, Error::<MockRuntime>::InvalidRespondent);
+		};
+	}
+
+	macro_rules! assert_success_outcome {
+		($ex:expr) => {
+			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
+			assert!(matches!(outcome, Some(KeygenOutcome::Success(_))));
+		};
+	}
+
+	macro_rules! assert_failure_outcome {
+		($ex:expr) => {
+			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
+			assert!(matches!(outcome, Some(KeygenOutcome::Failure(_))));
+		};
+	}
+
+	macro_rules! assert_no_outcome {
+		($ex:expr) => {
+			let outcome: Option<KeygenOutcome<Vec<u8>, u64>> = $ex;
+			assert!(matches!(outcome, None));
+		};
+	}
+
 	#[test]
 	fn test_threshold() {
+		// The threshold is the smallest number of participants that *can* reach consensus.
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..144)).threshold(),
+			96
+		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..145)).threshold(),
+			97
+		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..146)).threshold(),
+			98
+		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..147)).threshold(),
+			98
+		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..148)).threshold(),
+			99
+		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..149)).threshold(),
+			100
+		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..150)).threshold(),
 			100
 		);
+		assert_eq!(
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..151)).threshold(),
+			101
+		);
 	}
 
-	#[test]
-	fn test_success_outcomes() {
-		const THRESHOLD: u64 = 4u64;
-		const NUM_CANDIDATES: u64 = 6u64;
-		let key: Vec<u8> = b"chainflip".to_vec();
+	fn simple_success(
+		num_candidates: u32,
+		num_successes: u32,
+	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
+		get_outcome(num_candidates, num_successes, 0, 0, None)
+	}
 
-		let mut status =
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(1..=NUM_CANDIDATES));
-		for i in 1..=NUM_CANDIDATES {
-			assert_ok!(status.add_success_vote(&i, key.clone()));
-			assert_err!(
-				status.add_success_vote(&i, key.clone()),
-				Error::<MockRuntime>::InvalidRespondent
-			);
-			if i < THRESHOLD {
-				assert!(status.consensus_outcome().is_none());
+	fn simple_failure(
+		num_candidates: u32,
+		num_failures: u32,
+	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
+		get_outcome(num_candidates, 0, num_failures, 0, None)
+	}
+
+	fn get_outcome(
+		num_candidates: u32,
+		mut num_successes: u32,
+		mut num_failures: u32,
+		mut num_bad_keys: u32,
+		report_one_in: Option<u64>,
+	) -> Option<KeygenOutcome<Vec<u8>, u64>> {
+		let key = TEST_KEY.to_vec();
+		let mut status = KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(
+			1..=(num_candidates as u64),
+		));
+
+		let num_responses = num_successes + num_failures + num_bad_keys;
+		assert!(
+			num_responses <= num_candidates,
+			"Can't have more responses than candidates: {} + {} + {} > {}.",
+			num_successes,
+			num_failures,
+			num_bad_keys,
+			num_candidates
+		);
+
+		for id in 1..=(num_responses as u64) {
+			if num_failures > 0 {
+				assert_ok_no_repeat!(status.add_failure_vote(
+					&id,
+					// Report one in 5 unless specified otherwise.
+					BTreeSet::from_iter(
+						(1..=(num_candidates as u64))
+							.filter(|id| (id % report_one_in.unwrap_or(5) == 1))
+					)
+				));
+				num_failures -= 1;
+			} else if num_bad_keys > 0 {
+				assert_ok_no_repeat!(status.add_success_vote(&id, b"wrong".to_vec()));
+				num_bad_keys -= 1;
+			} else if num_successes > 0 {
+				assert_ok_no_repeat!(status.add_success_vote(&id, key.clone()));
+				num_successes -= 1;
 			} else {
-				matches!(
-					status.consensus_outcome().expect("Consensus should be reached"), 
-					KeygenOutcome::Success(k) if k == key
-				);
+				panic!("Should not reach here.")
 			}
 		}
+		status.consensus_outcome()
 	}
 
 	#[test]
-	fn test_failure_outcomes() {
-		// assert_eq!(KeygenResponseStatus::<MockRuntime>::new((0..150).into()).threshold(), 101);
+	fn test_success_consensus() {
+		// Simple happy-path cases.
+		assert_success_outcome!(simple_success(6, 6));
+		assert_success_outcome!(simple_success(6, 5));
+		assert_success_outcome!(simple_success(6, 4));
+		assert_success_outcome!(simple_success(7, 7));
+		assert_success_outcome!(simple_success(8, 8));
+		assert_success_outcome!(simple_success(9, 9));
+
+		assert_success_outcome!(simple_success(147, 147));
+		assert_success_outcome!(simple_success(148, 148));
+		assert_success_outcome!(simple_success(149, 149));
+		assert_success_outcome!(simple_success(150, 150));
+		assert_success_outcome!(simple_success(151, 151));
+
+		// Minority dissent has no effect.
+		assert_success_outcome!(get_outcome(6, 5, 1, 0, None));
+		assert_success_outcome!(get_outcome(6, 4, 1, 1, None));
+		assert_success_outcome!(get_outcome(6, 4, 2, 0, None));
+	}
+
+	#[test]
+	fn test_failure_consensus() {
+		// Simple happy-path cases.
+		assert_failure_outcome!(simple_failure(6, 6));
+		assert_failure_outcome!(simple_failure(6, 5));
+		assert_failure_outcome!(simple_failure(6, 4));
+		assert_failure_outcome!(simple_failure(7, 7));
+		assert_failure_outcome!(simple_failure(8, 8));
+		assert_failure_outcome!(simple_failure(9, 9));
+
+		assert_failure_outcome!(simple_failure(147, 147));
+		assert_failure_outcome!(simple_failure(148, 148));
+		assert_failure_outcome!(simple_failure(149, 149));
+		assert_failure_outcome!(simple_failure(150, 150));
+		assert_failure_outcome!(simple_failure(151, 151));
+
+		// Minority dissent has no effect.
+		assert_failure_outcome!(get_outcome(6, 2, 4, 0, None));
+		assert_failure_outcome!(get_outcome(6, 1, 4, 1, None));
+		assert_failure_outcome!(get_outcome(6, 1, 5, 0, None));
+		assert_failure_outcome!(get_outcome(6, 0, 6, 0, None));
+	}
+
+	#[test]
+	fn test_no_consensus() {
+		// No outcome unless there is threshold agreement.
+		assert_no_outcome!(get_outcome(6, 3, 0, 3, None));
+		assert_no_outcome!(get_outcome(6, 3, 3, 0, None));
+		assert_no_outcome!(get_outcome(6, 3, 2, 1, None));
+		assert_no_outcome!(get_outcome(6, 3, 1, 2, None));
+		assert_no_outcome!(get_outcome(6, 2, 2, 2, None));
+
+		// Missing responses have no effect.
+		assert_no_outcome!(get_outcome(6, 0, 0, 0, None));
+		assert_no_outcome!(get_outcome(6, 1, 0, 0, None));
+		assert_no_outcome!(get_outcome(6, 0, 1, 0, None));
+		assert_no_outcome!(get_outcome(6, 0, 0, 1, None));
+		assert_no_outcome!(get_outcome(6, 3, 1, 1, None));
+		assert_no_outcome!(get_outcome(6, 1, 3, 1, None));
+		assert_no_outcome!(get_outcome(6, 3, 2, 0, None));
+		assert_no_outcome!(get_outcome(6, 2, 3, 1, None));
+	}
+
+	fn test_blaming_aggregation() {
+		todo!();
 	}
 }

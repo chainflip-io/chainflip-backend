@@ -125,9 +125,6 @@ impl<T: Config> KeygenResponseStatus<T> {
 
 	/// Returns `Some(key)` *iff any* key has more than `self.threshold()` number of votes,
 	/// otherwise returns `None`.
-	///
-	/// TODO: Is the signing threshold too conservative? Should we require more respondents
-	/// based on the emergency rotation bounds?
 	fn success_result(&self) -> Option<&Vec<u8>> {
 		self.success_votes
 			.iter()
