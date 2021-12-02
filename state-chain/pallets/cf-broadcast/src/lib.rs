@@ -505,7 +505,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				unsigned_tx,
 			));
 		} else {
-			// In this case all validators are currently online. We just do
+			// In this case all validators are currently offline. We just do
 			// nothing in this case and wait until someone comes up again.
 			log::warn!("No online validators at the moment.");
 		}
