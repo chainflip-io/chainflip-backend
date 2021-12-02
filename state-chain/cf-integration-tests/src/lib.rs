@@ -27,7 +27,7 @@ mod tests {
 	const TX_HASH: EthTransactionHash = [211u8; 32];
 
 	macro_rules! on_events {
-		($events:expr, $( $p:pat => $b:block ),*) => {
+		($events:expr, $( $p:pat => $b:block ),* $(,)?) => {
 			for event in $events {
 				$(if let $p = event { $b })*
 			}
@@ -85,14 +85,14 @@ mod tests {
 			agg_secret_key: SecretKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
-			proposals: i32,
+			proposed_seed: Option<u64>,
 		}
 
 		impl Default for Signer {
 			fn default() -> Self {
 				let key_seed = GENESIS_KEY;
 				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
-				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposals: 0 }
+				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposed_seed: None }
 			}
 		}
 
@@ -129,31 +129,27 @@ mod tests {
 				(secret_key, PublicKey::from_secret_key(&secret_key))
 			}
 
-			fn next_key(&self) -> u64 {
-				self.key_seed + 1
-			}
-
 			// The public key proposed
 			pub fn proposed_public_key(&mut self) -> Vec<u8> {
-				let (_, public) = Self::generate_keypair(self.next_key());
+				let (_, public) =
+					Self::generate_keypair(self.proposed_seed.expect("No key has been proposed"));
 				public.serialize_compressed().to_vec()
 			}
 
 			// Propose a new public key
 			pub fn propose_new_public_key(&mut self) -> Vec<u8> {
-				self.proposals += 1;
+				self.proposed_seed = Some(self.key_seed + 1);
 				self.proposed_public_key()
 			}
 
 			// Rotate to the current proposed key and clear cache
 			pub fn rotate_keys(&mut self) {
-				self.proposals -= 1;
-				if self.proposals == 0 {
-					self.key_seed = self.next_key();
-					let (secret, _) = Self::generate_keypair(self.key_seed);
-					self.agg_secret_key = secret;
+				if self.proposed_seed.is_some() {
+					self.key_seed += self.proposed_seed.expect("No key has been proposed");
+					let (secret_key, _) = Self::generate_keypair(self.key_seed);
+					self.agg_secret_key = secret_key;
 					self.signatures.clear();
-					self.proposals = 0;
+					self.proposed_seed = None;
 				}
 			}
 		}
@@ -206,30 +202,6 @@ mod tests {
 					// Handle events
 					on_events!(
 						events,
-						Event::Vaults(
-							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								match self.engine_state {
-									EngineState::None => {
-										// Propose a new key
-										let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
-
-										state_chain_runtime::Vaults::report_keygen_outcome(
-											Origin::signed(self.node_id.clone()),
-											*ceremony_id,
-											ChainId::Ethereum,
-											KeygenOutcome::Success(public_key),
-										).expect(&format!(
-											"should be able to witness keygen request from node: {:?}",
-											self.node_id)
-										);
-
-										// Engine is now in rotation state
-										self.engine_state = EngineState::Rotation;
-									},
-									_ => {}
-								}
-						},
 						Event::Validator(
 							// A new epoch
 							pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
@@ -261,8 +233,6 @@ mod tests {
 								match self.engine_state {
 									// If we rotating let's witness the keys being rotated on the contract
 									EngineState::Rotation => {
-										self.engine_state = EngineState::None;
-
 										let ethereum_block_number: u64 = 100;
 										let tx_hash = vec![1u8; 32];
 
@@ -278,7 +248,36 @@ mod tests {
 									},
 									_ => {}
 								}
-						}
+						},
+						Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
+							self.engine_state = EngineState::Rotation;
+						},
+						Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+							self.engine_state = EngineState::None;
+						},
+					);
+				} else {
+					// Handle events
+					on_events!(
+						events,
+						Event::Vaults(
+							// A keygen request has been made
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _, validators)) => {
+								if validators.contains(&self.node_id) {
+									// Propose a new key
+									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
+
+									state_chain_runtime::Vaults::report_keygen_outcome(
+										Origin::signed(self.node_id.clone()),
+										*ceremony_id,
+										ChainId::Ethereum,
+										KeygenOutcome::Success(public_key),
+									).expect(&format!(
+										"should be able to witness keygen request from node: {:?}",
+										self.node_id)
+									);
+								}
+						},
 					);
 				}
 			}
@@ -912,7 +911,7 @@ mod tests {
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
 					// Run things the amount needed for an auction
-					testnet.move_forward_blocks(2);
+					testnet.move_forward_blocks(5);
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
