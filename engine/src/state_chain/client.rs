@@ -250,7 +250,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 Ok(tx_hash) => {
                     slog::trace!(
                         logger,
-                        "{:?} submitted successfully with tx_hash: {}",
+                        "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
                         tx_hash
                     );
@@ -307,7 +307,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             Ok(tx_hash) => {
                 slog::trace!(
                     logger,
-                    "{:?} submitted successfully with tx_hash: {}",
+                    "{:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
