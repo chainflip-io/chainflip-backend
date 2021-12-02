@@ -106,7 +106,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                 tokio::spawn(async move {
                     slog::info!(
                         logger,
-                        "Starting witnessing from ETH block: {}",
+                        "Starting observing from ETH block: {}",
                         received_window.from
                     );
                     let mut event_stream = contract_observer
@@ -117,11 +117,12 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     // TOOD: Handle None on stream, and result event being an error
                     while let Some(result_event) = event_stream.next().await {
                         let event = result_event.expect("should be valid event type");
+                        slog::trace!(logger, "Observing ETH block: {}", event.block_number);
                         if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
                                 slog::info!(
                                     logger,
-                                    "Finished witnessing events at ETH block: {}",
+                                    "Finished observing events at ETH block: {}",
                                     event.block_number
                                 );
                                 // we have reached the block height we wanted to witness up to
