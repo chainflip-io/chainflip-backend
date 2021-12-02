@@ -585,31 +585,33 @@ pub async fn connect_to_state_chain(
             .map()?
             .key(&our_account_id);
 
+        let nonce = AtomicU32::new({
+            let nonce = if let Some(data) = &mut &state_chain_rpc_client
+                .state_rpc_client
+                .storage(account_storage_key.clone(), Some(latest_block_hash))
+                .await
+                .map_err(rpc_error_into_anyhow_error)?
+            {
+                let data = data.to_owned();
+                let account_info: frame_system::AccountInfo<
+                    <RuntimeImplForSigningExtrinsics as System>::Index,
+                    <RuntimeImplForSigningExtrinsics as System>::AccountData,
+                > = Decode::decode(&mut &data.0[..])?;
+
+                account_info.nonce
+            } else {
+                // if we can't find the account, then the nonce is 0
+                0
+            };
+            nonce
+        });
+
         Ok((
             latest_block_hash,
             block_header_stream,
             Arc::new(StateChainClient {
                 metadata,
-                nonce: AtomicU32::new({
-                    let account_info: frame_system::AccountInfo<
-                        <RuntimeImplForSigningExtrinsics as System>::Index,
-                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
-                    > = Decode::decode(
-                        &mut &state_chain_rpc_client
-                            .state_rpc_client
-                            .storage(account_storage_key.clone(), Some(latest_block_hash))
-                            .await
-                            .map_err(rpc_error_into_anyhow_error)?
-                            .ok_or_else(|| {
-                                anyhow::format_err!(
-                                    "AccountId {:?} doesn't exist on the state chain.",
-                                    our_account_id,
-                                )
-                            })?
-                            .0[..],
-                    )?;
-                    account_info.nonce
-                }),
+                nonce,
                 runtime_version: state_chain_rpc_client
                     .state_rpc_client
                     .runtime_version(Some(latest_block_hash))
