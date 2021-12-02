@@ -25,6 +25,9 @@ pub enum CFCommand {
         amount: f64,
         #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
         eth_address: String,
+
+        #[structopt(long = "register", hidden = true)]
+        should_register_claim: bool
     },
 }
 

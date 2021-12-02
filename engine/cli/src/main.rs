@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
@@ -43,14 +41,19 @@ async fn run_cli() -> Result<()> {
         Claim {
             amount,
             eth_address,
-        } => Ok(request_claim(
-            amount,
-            clean_eth_address(&eth_address)
-                .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
-            &cli_settings,
-            &logger,
-        )
-        .await?),
+            should_register_claim,
+        } => {
+            println!("Should register claim: {:?}", should_register_claim);
+            Ok(request_claim(
+                amount,
+                clean_eth_address(&eth_address)
+                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+                &cli_settings,
+                should_register_claim,
+                &logger,
+            )
+            .await?)
+        }
     }
 }
 
@@ -58,6 +61,7 @@ async fn request_claim(
     amount: f64,
     eth_address: [u8; 20],
     settings: &CLISettings,
+    should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
@@ -111,8 +115,9 @@ async fn request_claim(
             println!("Your claim request is on chain.\nWaiting for signed claim data...");
             'outer: while let Some(result_header) = block_stream.next().await {
                 let header = result_header.expect("Failed to get a valid block header");
+                let block_hash = header.hash();
                 let events = state_chain_client
-                    .get_events(header.hash())
+                    .get_events(block_hash)
                     .await
                     .unwrap_or_else(|e| {
                         panic!("Failed to fetch events for block: {}, {}", header.number, e)
@@ -123,11 +128,32 @@ async fn request_claim(
                     ) = event
                     {
                         if validator_id == state_chain_client.our_account_id {
-                            println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
+                            if should_register_claim {
+                                println!(
+                                    "Your claim certificate is: {:?}",
+                                    hex::encode(claim_cert.clone())
+                                );
+                                let stake_manager_address = state_chain_client
+                                    .get_environment_value(block_hash, "StakeManagerAddress")
+                                    .await
+                                    .expect("Failed to fetch StakeManagerAddress from State Chain");
+                                let tx_hash = register_claim(
+                                    settings,
+                                    stake_manager_address,
+                                    logger,
+                                    claim_cert,
+                                )
+                                .await
+                                .expect("Failed to register claim on ETH");
 
-                            println!("Now gonna submit this to eth boi haha.");
-                            register_claim(settings, logger, claim_cert).await.unwrap();
-                            break 'outer;
+                                println!(
+                                    "Submitted claim to Ethereum successfully with tx_hash: {:?}",
+                                    tx_hash
+                                );
+                                break 'outer;
+                            } else {
+                                println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
+                            }
                         }
                     }
                 }
@@ -140,10 +166,11 @@ async fn request_claim(
 /// Register the claim certificate on Ethereum
 async fn register_claim(
     settings: &CLISettings,
+    stake_manager_address: H160,
     logger: &slog::Logger,
     claim_cert: Vec<u8>,
 ) -> Result<H256> {
-    // Create the connection to web3
+    println!("Registering your claim on the Ethereum network.");
 
     let web3_client = eth::new_synced_web3_client(&settings.eth, &logger)
         .await
@@ -151,15 +178,9 @@ async fn register_claim(
 
     let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3_client.clone())?;
 
-    let contract: [u8; 20] = hex::decode("FCB97e4423c8B981ae063b3B36794B56ED06B98e")?
-        .try_into()
-        .unwrap();
-
-    let contract = H160::from(contract);
-
     let unsigned_tx = cf_chains::eth::UnsignedTransaction {
         chain_id: 4,
-        contract,
+        contract: stake_manager_address,
         data: claim_cert,
         ..Default::default()
     };
@@ -167,6 +188,23 @@ async fn register_claim(
     let claim_signed = eth_broadcaster.encode_and_sign_tx(unsigned_tx).await?;
 
     eth_broadcaster.send(claim_signed.0).await
+}
+
+#[tokio::test]
+async fn test_reg_claim() {
+    let claim_cert = "555530527c2dc37729cd775ca818ac62ae575bc2955b7edbeaa3e8be21c182b6b702cca250a578eac2c4be59a2c6079c3890fdad3ede705eddfb3a3200e1c563258f6421000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000b181919af901b0ab6d0e433536e72bf3a706dc7f8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f0400000000000000000000000000000000000000000000000000000002540be400000000000000000000000000f29ab9ebdb481be48b80699758e6e9a3dbd609c60000000000000000000000000000000000000000000000000000000061afbe60";
+    let claim_cert = hex::decode(claim_cert).unwrap();
+
+    let cli_settings = CLISettings::from_file(
+        "/Users/kylezs/Documents/cf-repos/chainflip-backend/engine/config/Local.toml",
+    )
+    .unwrap();
+
+    let logger = new_discard_logger();
+
+    register_claim(&cli_settings, &logger, claim_cert)
+        .await
+        .expect("Register claim failed");
 }
 
 fn confirm_submit() -> bool {
