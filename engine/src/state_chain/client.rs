@@ -531,7 +531,11 @@ pub async fn connect_to_state_chain(
                     // allow inserting the private key with or without the 0x
                     .replace("0x", ""),
             )
-            .map_err(anyhow::Error::new)?,
+            .map_err(anyhow::Error::new)
+            .context(format!(
+                "No key file located at: {:?}",
+                &state_chain_settings.signing_key_file
+            ))?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
