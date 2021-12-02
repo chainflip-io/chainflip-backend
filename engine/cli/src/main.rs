@@ -35,25 +35,20 @@ async fn run_cli() -> Result<()> {
         cli_settings.state_chain.signing_key_file.display()
     );
 
-    let logger = chainflip_engine::logging::utils::new_discard_logger();
-
     match command_line_opts.cmd {
         Claim {
             amount,
             eth_address,
             should_register_claim,
-        } => {
-            println!("Should register claim: {:?}", should_register_claim);
-            Ok(request_claim(
-                amount,
-                clean_eth_address(&eth_address)
-                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
-                &cli_settings,
-                should_register_claim,
-                &logger,
-            )
-            .await?)
-        }
+        } => Ok(request_claim(
+            amount,
+            clean_eth_address(&eth_address)
+                .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+            &cli_settings,
+            should_register_claim,
+            &chainflip_engine::logging::utils::new_discard_logger(),
+        )
+        .await?),
     }
 }
 
@@ -170,41 +165,26 @@ async fn register_claim(
     logger: &slog::Logger,
     claim_cert: Vec<u8>,
 ) -> Result<H256> {
-    println!("Registering your claim on the Ethereum network.");
+    println!(
+        "Registering your claim on the Ethereum network, to StakeManager address: {:?}",
+        stake_manager_address
+    );
 
-    let web3_client = eth::new_synced_web3_client(&settings.eth, &logger)
+    let eth_broadcaster = EthBroadcaster::new(
+        &settings.eth,
+        eth::new_synced_web3_client(&settings.eth, &logger)
+            .await
+            .expect("Failed to create Web3 WebSocket"),
+    )?;
+
+    eth_broadcaster
+        .send(eth_broadcaster.encode_and_sign_tx(cf_chains::eth::UnsignedTransaction {
+            chain_id: 4,
+            contract: stake_manager_address,
+            data: claim_cert,
+            ..Default::default()
+        }).await?.0)
         .await
-        .expect("Failed to create Web3 WebSocket");
-
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3_client.clone())?;
-
-    let unsigned_tx = cf_chains::eth::UnsignedTransaction {
-        chain_id: 4,
-        contract: stake_manager_address,
-        data: claim_cert,
-        ..Default::default()
-    };
-
-    let claim_signed = eth_broadcaster.encode_and_sign_tx(unsigned_tx).await?;
-
-    eth_broadcaster.send(claim_signed.0).await
-}
-
-#[tokio::test]
-async fn test_reg_claim() {
-    let claim_cert = "555530527c2dc37729cd775ca818ac62ae575bc2955b7edbeaa3e8be21c182b6b702cca250a578eac2c4be59a2c6079c3890fdad3ede705eddfb3a3200e1c563258f6421000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000b181919af901b0ab6d0e433536e72bf3a706dc7f8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f0400000000000000000000000000000000000000000000000000000002540be400000000000000000000000000f29ab9ebdb481be48b80699758e6e9a3dbd609c60000000000000000000000000000000000000000000000000000000061afbe60";
-    let claim_cert = hex::decode(claim_cert).unwrap();
-
-    let cli_settings = CLISettings::from_file(
-        "/Users/kylezs/Documents/cf-repos/chainflip-backend/engine/config/Local.toml",
-    )
-    .unwrap();
-
-    let logger = new_discard_logger();
-
-    register_claim(&cli_settings, &logger, claim_cert)
-        .await
-        .expect("Register claim failed");
 }
 
 fn confirm_submit() -> bool {
