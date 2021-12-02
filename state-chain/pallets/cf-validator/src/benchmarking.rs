@@ -30,8 +30,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(caller.clone()), version.clone())
 	verify {
-		let validator_id = <T as pallet_session::Config>::ValidatorIdOf::convert(caller)
-								.expect("validator is account");
+		let validator_id: T::ValidatorId = caller.into();
 		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
 	}
 }

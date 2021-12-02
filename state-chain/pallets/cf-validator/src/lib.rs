@@ -57,7 +57,10 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_session::Config {
+	pub trait Config:
+		frame_system::Config
+		+ pallet_session::Config<ValidatorId = <Self as frame_system::Config>::AccountId>
+	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -210,10 +213,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-
-			let validator_id = T::ValidatorIdOf::convert(account_id)
-				.ok_or(pallet_session::Error::<T>::NoAssociatedValidatorId)?;
-
+			let validator_id: T::ValidatorId = account_id.into();
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version < version {
 					Self::deposit_event(Event::CFEVersionUpdated(
