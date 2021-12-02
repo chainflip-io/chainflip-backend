@@ -96,6 +96,12 @@
       "Emissions": ""
     }
   },
+  "KeygenResponseStatus": {
+    "CandidateCount": "u32",
+    "RemainingCandidates": "BTreeSet<ValidatorId>",
+    "SuccessVotes": "BTreeMap<Vec<u8>, u32>",
+	  "BlameVotes": "BTreeMap<ValidatorId, u32>"
+  },
   "KeyId": "Vec<u8>",
   "LookupSource": "MultiAddress",
   "NetworkState": {
@@ -188,7 +194,7 @@
   "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
-    "candidates": "Vec<ValidatorId>"
+    "response_status": "KeygenResponseStatus"
   },
   "AwaitingRotation": {
     "new_public_key": "Vec<u8>"
