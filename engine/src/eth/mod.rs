@@ -229,11 +229,6 @@ impl EthBroadcaster {
 
         Ok(tx_hash)
     }
-
-    /// Get the secret key to use for signing
-    pub fn get_secret_key(&self) -> SecretKey {
-        self.secret_key
-    }
 }
 
 #[async_trait]
