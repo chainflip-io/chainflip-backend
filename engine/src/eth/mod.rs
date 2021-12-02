@@ -106,7 +106,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                 tokio::spawn(async move {
                     slog::info!(
                         logger,
-                        "Starting observing from ETH block: {}",
+                        "Start observing from ETH block: {}",
                         received_window.from
                     );
                     let mut event_stream = contract_observer
