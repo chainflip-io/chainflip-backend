@@ -586,7 +586,7 @@ pub async fn connect_to_state_chain(
             .key(&our_account_id);
 
         let nonce = AtomicU32::new({
-            let nonce = if let Some(data) = &mut &state_chain_rpc_client
+            if let Some(data) = &mut &state_chain_rpc_client
                 .state_rpc_client
                 .storage(account_storage_key.clone(), Some(latest_block_hash))
                 .await
@@ -602,8 +602,7 @@ pub async fn connect_to_state_chain(
             } else {
                 // if we can't find the account, then the nonce is 0
                 0
-            };
-            nonce
+            }
         });
 
         Ok((
