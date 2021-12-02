@@ -210,8 +210,9 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id =
-				T::ValidatorIdOf::convert(account_id).expect("validator and account ids are one");
+
+			let validator_id = T::ValidatorIdOf::convert(account_id)
+				.ok_or(pallet_session::Error::<T>::NoAssociatedValidatorId)?;
 
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version < version {
