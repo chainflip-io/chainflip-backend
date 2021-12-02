@@ -264,16 +264,70 @@ mod tests {
 	#[test]
 	fn send_cfe_version() {
 		new_test_ext().execute_with(|| {
-			let version = SemVer { major: 4, minor: 2, patch: 0 };
-			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(ALICE), version.clone()));
+			// We initially submit version
+			let validator = DUMMY_GENESIS_VALIDATORS[0];
+
+			let version = SemVer { major: 4, ..Default::default() };
+			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
+
 			assert_eq!(
 				last_event(),
-				mock::Event::ValidatorPallet(crate::Event::ValidatorCFEVersionRecorded(
-					ALICE,
+				mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+					validator,
+					SemVer::default(),
 					version.clone()
 				)),
+				"should emit event on updated version"
 			);
-			assert_eq!(ValidatorPallet::validator_cfe_version(ALICE), Some(version));
+
+			assert_eq!(
+				version.clone(),
+				ValidatorPallet::validator_cfe_version(validator),
+				"version should be stored"
+			);
+
+			// We submit a new version
+			let new_version = SemVer { major: 5, ..Default::default() };
+			assert_ok!(ValidatorPallet::cfe_version(
+				Origin::signed(validator),
+				new_version.clone()
+			));
+
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+					validator,
+					version.clone(),
+					new_version.clone()
+				)),
+				"should emit event on updated version"
+			);
+
+			assert_eq!(
+				new_version,
+				ValidatorPallet::validator_cfe_version(validator),
+				"new version should be stored"
+			);
+
+			// We shouldn't be able to go back a version.  We will reset the events as we expect
+			// to have no events emitted when the version is *not* updated
+			frame_system::Pallet::<Test>::reset_events();
+			assert_noop!(
+				ValidatorPallet::cfe_version(Origin::signed(validator), version),
+				Error::<Test>::InvalidCFEVersion
+			);
+
+			assert_eq!(
+				0,
+				frame_system::Pallet::<Test>::events().len(),
+				"We should have no events of an update"
+			);
+
+			assert_eq!(
+				new_version,
+				ValidatorPallet::validator_cfe_version(validator),
+				"we should be still on the same new version"
+			);
 		});
 	}
 }
