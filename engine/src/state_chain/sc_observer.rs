@@ -6,7 +6,7 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use std::{collections::BTreeSet, sync::Arc, iter::FromIterator};
+use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -228,9 +228,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                 pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
-                                                        bad_account_ids,
-                                                    )),
+                                                    pallet_cf_vaults::KeygenOutcome::Failure(
+                                                        BTreeSet::from_iter(bad_account_ids),
+                                                    ),
                                                 )
                                             }
                                         },

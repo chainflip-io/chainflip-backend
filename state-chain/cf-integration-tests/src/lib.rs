@@ -44,7 +44,7 @@ mod tests {
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
 		use pallet_cf_vaults::KeygenOutcome;
-use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
+		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// Events from ethereum contract

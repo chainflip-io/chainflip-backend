@@ -245,7 +245,6 @@ impl pallet_cf_vaults::Config for Test {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
-	
 }
 
 impl pallet_cf_witness_api::Config for Test {
