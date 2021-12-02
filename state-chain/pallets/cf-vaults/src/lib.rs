@@ -117,7 +117,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 
 	/// How many responses have we received so far?
 	fn response_count(&self) -> u32 {
-		self.candidate_count - self.remaining_candidate_count()
+		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
 	/// Returns `Some(key)` *iff any* key has more than `self.threshold()` number of votes,
@@ -229,7 +229,7 @@ pub struct Vault {
 pub mod pallet {
 	use super::*;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::BlockNumberProvider;
+	use sp_runtime::traits::{BlockNumberProvider, Saturating};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -293,7 +293,9 @@ pub mod pallet {
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
-							if current_block - since_block >= T::KeygenResponseGracePeriod::get() {
+							if current_block.saturating_sub(since_block) >=
+								T::KeygenResponseGracePeriod::get()
+							{
 								weight += T::WeightInfo::on_keygen_failure();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
 								Self::deposit_event(Event::<T>::KeygenGracePeriodElapsed(
