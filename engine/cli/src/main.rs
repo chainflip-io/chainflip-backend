@@ -178,12 +178,17 @@ async fn register_claim(
     )?;
 
     eth_broadcaster
-        .send(eth_broadcaster.encode_and_sign_tx(cf_chains::eth::UnsignedTransaction {
-            chain_id: 4,
-            contract: stake_manager_address,
-            data: claim_cert,
-            ..Default::default()
-        }).await?.0)
+        .send(
+            eth_broadcaster
+                .encode_and_sign_tx(cf_chains::eth::UnsignedTransaction {
+                    chain_id: 4,
+                    contract: stake_manager_address,
+                    data: claim_cert,
+                    ..Default::default()
+                })
+                .await?
+                .0,
+        )
         .await
 }
 

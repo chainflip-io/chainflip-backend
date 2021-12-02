@@ -27,7 +27,7 @@ pub enum CFCommand {
         eth_address: String,
 
         #[structopt(long = "register", hidden = true)]
-        should_register_claim: bool
+        should_register_claim: bool,
     },
 }
 
@@ -44,9 +44,7 @@ impl CLISettings {
         let mut cli_config = CLISettings::default();
 
         // check we have all the cli args. If we do, don't bother with the config file
-        let all_cl_args_set = 
-            // state chain options present
-            opts.state_chain_opts.state_chain_ws_endpoint.is_some()
+        let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
             && opts.state_chain_opts.state_chain_signing_key_file.is_some()
             // eth options present
             && opts.eth_opts.eth_node_endpoint.is_some()
