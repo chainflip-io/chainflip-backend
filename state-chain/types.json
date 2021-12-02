@@ -97,14 +97,14 @@
     }
   },
   "KeyId": "Vec<u8>",
+  "Liveness": {
+    "last_heartbeat": "BlockNumber",
+    "banned_until": "BlockNumber"
+  },
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
-  },
-  "Node": {
-    "last_heartbeat": "BlockNumber",
-    "ban": "BlockNumber"
   },
   "Nonce": "u64",
   "OfflineCondition": {

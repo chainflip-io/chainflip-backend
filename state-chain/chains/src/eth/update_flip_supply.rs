@@ -104,7 +104,7 @@ mod test_update_flip_supply {
 	}
 
 	#[test]
-	fn test_claim_payload() {
+	fn test_update_flip_supply_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const NONCE: u64 = 6;
