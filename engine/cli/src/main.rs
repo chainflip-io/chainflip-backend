@@ -128,12 +128,17 @@ async fn request_claim(
                                     "Your claim certificate is: {:?}",
                                     hex::encode(claim_cert.clone())
                                 );
+                                let chain_id = state_chain_client
+                                    .get_environment_value::<u64>(block_hash, "EthereumChainId")
+                                    .await
+                                    .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
                                     .get_environment_value(block_hash, "StakeManagerAddress")
                                     .await
                                     .expect("Failed to fetch StakeManagerAddress from State Chain");
                                 let tx_hash = register_claim(
                                     settings,
+                                    chain_id,
                                     stake_manager_address,
                                     logger,
                                     claim_cert,
@@ -161,6 +166,7 @@ async fn request_claim(
 /// Register the claim certificate on Ethereum
 async fn register_claim(
     settings: &CLISettings,
+    chain_id: u64,
     stake_manager_address: H160,
     logger: &slog::Logger,
     claim_cert: Vec<u8>,
@@ -181,7 +187,7 @@ async fn register_claim(
         .send(
             eth_broadcaster
                 .encode_and_sign_tx(cf_chains::eth::UnsignedTransaction {
-                    chain_id: 4,
+                    chain_id,
                     contract: stake_manager_address,
                     data: claim_cert,
                     ..Default::default()
