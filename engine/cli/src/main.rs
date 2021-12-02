@@ -84,7 +84,7 @@ async fn send_claim(
         .expect("Failed to submit claim extrinsic");
 
     println!(
-        "Your claim has transaction hash: `{:?}`. Waiting for your request to be confirmed...",
+        "Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
         tx_hash
     );
 
