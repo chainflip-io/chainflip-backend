@@ -606,7 +606,7 @@ pub async fn connect_to_state_chain(
                             .map_err(rpc_error_into_anyhow_error)?
                             .ok_or_else(|| {
                                 anyhow::format_err!(
-                                    "AccountId {:?} doesn't exist on the state chain.",
+                                    "AccountId {:?} doesn't exist on the state chain. Please ensure you have staked and can see your stake on chain.",
                                     our_account_id,
                                 )
                             })?
