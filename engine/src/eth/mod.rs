@@ -13,7 +13,10 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use web3::{ethabi::Address, types::U64};
+use web3::{
+    ethabi::Address,
+    types::{CallRequest, U64},
+};
 
 use crate::{
     common::Mutex,
@@ -220,6 +223,22 @@ impl EthBroadcaster {
             ..Default::default()
         };
 
+        println!("Tx params into gas estimate: {:?}", tx_params);
+
+        let call_request: CallRequest = tx_params.clone().into();
+
+        println!("Call request: {:?}", call_request);
+
+        let gas = self
+            .web3
+            .eth()
+            .estimate_gas(call_request, None)
+            .await
+            .context("Failed to estimate gas");
+
+        println!("here's the gas: {:?}", gas);
+        panic!();
+
         Ok(self
             .web3
             .accounts()
@@ -239,6 +258,131 @@ impl EthBroadcaster {
             .context("Failed to send raw signed ETH transaction")?;
 
         Ok(tx_hash)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::convert::TryInto;
+
+    use cf_chains::eth::UnsignedTransaction;
+    use web3::types::CallRequest;
+
+    use crate::{logging::utils::new_discard_logger, settings::Settings};
+
+    use super::*;
+
+    // data: vec![
+    //     124, 139, 135, 148, 4, 136, 182, 158, 239, 224, 19, 211, 96, 57, 227, 144, 21, 75,
+    //     3, 90, 50, 90, 70, 123, 108, 164, 179, 145, 232, 39, 114, 159, 149, 93, 131, 231,
+    //     24, 216, 21, 183, 224, 212, 232, 191, 46, 55, 193, 27, 79, 180, 252, 142, 252, 34,
+    //     85, 97, 84, 136, 171, 230, 130, 194, 241, 63, 75, 198, 146, 34, 0, 0, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 0,
+    //     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 164, 9, 123, 16, 166, 215, 155, 52, 102, 231, 20,
+    //     115, 203, 73, 2, 72, 112, 226, 159, 181, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0, 0, 74, 114, 82, 50, 163, 22, 165, 204, 140, 238, 68, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    //     220,
+    // ],
+
+    #[tokio::test]
+    async fn gas_check() {
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let logger = new_discard_logger();
+        let contract: [u8; 20] = hex::decode("D695056316E4b1b8aF1A595403d7008a5755CD34")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let contract = H160::from(contract);
+        let unsigned_tx = UnsignedTransaction {
+            chain_id: 4,
+            max_priority_fee_per_gas: None,
+            max_fee_per_gas: None,
+            gas_limit: None,
+            contract,
+            value: U256::from(0),
+            data: vec![
+                36, 150, 157, 93, 185, 142, 45, 156, 105, 170, 13, 116, 65, 237, 80, 171, 112, 151,
+                224, 206, 23, 210, 180, 183, 176, 96, 250, 174, 191, 70, 87, 244, 200, 117, 201,
+                172, 239, 157, 208, 40, 230, 208, 52, 125, 22, 223, 200, 25, 51, 166, 22, 160, 87,
+                57, 87, 96, 132, 223, 180, 167, 147, 4, 15, 131, 101, 81, 234, 48, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 247, 102, 176, 80, 56, 111, 165, 99, 116, 198,
+                202, 141, 217, 175, 28, 92, 33, 115, 55, 127, 71, 64, 167, 6, 111, 124, 27, 10, 72,
+                18, 88, 203, 246, 43, 163, 153, 33, 169, 202, 49, 173, 197, 157, 151, 159, 200,
+                189, 73, 58, 80, 0, 77, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            ..Default::default()
+        };
+        let mut tx_params = TransactionParameters {
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
+            transaction_type: Some(web3::types::U64::from(2)),
+            ..Default::default()
+        };
+        let call_request: CallRequest = tx_params.into();
+
+        let serialized = web3::helpers::serialize(&call_request);
+
+        println!("Serialized: {:?}", serialized);
+
+        let web3 = new_synced_web3_client(&settings, &logger)
+            .await
+            .expect("Failed to create Web3 WebSocket");
+
+        let gas = web3
+            .eth()
+            .estimate_gas(call_request, None)
+            .await
+            .context("Failed to estimate gas")
+            .unwrap();
+
+        println!("Gas: {:?}", gas);
+    }
+
+    #[tokio::test]
+    async fn tom_test() {
+        let node_endpoint = "wss://rinkeby.infura.io/ws/v3/14b74b81ba444c3580b9f31c6bea66d6"; // rivet endpoint from lastpass
+        let web3 = web3::Web3::new(
+            web3::transports::WebSocket::new(&node_endpoint)
+                .await
+                .unwrap(),
+        );
+        let data = Bytes::from([
+            36, 150, 157, 93, 185, 142, 45, 156, 105, 170, 13, 116, 65, 237, 80, 171, 112, 151,
+            224, 206, 23, 210, 180, 183, 176, 96, 250, 174, 191, 70, 87, 244, 200, 117, 201, 172,
+            239, 157, 208, 40, 230, 208, 52, 125, 22, 223, 200, 25, 51, 166, 22, 160, 87, 57, 87,
+            96, 132, 223, 180, 167, 147, 4, 15, 131, 101, 81, 234, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 247, 102, 176, 80, 56, 111, 165, 99, 116, 198, 202, 141, 217, 175,
+            28, 92, 33, 115, 55, 127, 71, 64, 167, 6, 111, 124, 27, 10, 72, 18, 88, 203, 246, 43,
+            163, 153, 33, 169, 202, 49, 173, 197, 157, 151, 159, 200, 189, 73, 58, 80, 0, 77, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+        ]);
+        let to: [u8; 20] = hex::decode("25cbf224514747372da229714167088b579d98e4")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let to = H160::from(to);
+
+        let mut tx_params = TransactionParameters {
+            to: Some(to),
+            data: data,
+            chain_id: Some(4),
+            value: U256::from(0),
+            transaction_type: Some(web3::types::U64::from(2)),
+            ..Default::default()
+        };
+
+        let call_request: CallRequest = tx_params.into();
+
+        let gas_estimate = web3.eth().estimate_gas(call_request, None).await.unwrap();
+        println!("{:?}", gas_estimate);
     }
 }
 
