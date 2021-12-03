@@ -286,6 +286,7 @@ mod tests {
     //     220,
     // ],
 
+    #[ignore]
     #[tokio::test]
     async fn gas_check() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
@@ -344,6 +345,7 @@ mod tests {
         println!("Gas: {:?}", gas);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn tom_test() {
         let node_endpoint = "wss://rinkeby.infura.io/ws/v3/14b74b81ba444c3580b9f31c6bea66d6"; // rivet endpoint from lastpass
