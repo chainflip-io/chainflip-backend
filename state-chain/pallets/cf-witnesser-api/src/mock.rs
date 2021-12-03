@@ -225,6 +225,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
+	type WeightInfo = ();
 }
 
 impl VaultRotationHandler for Test {

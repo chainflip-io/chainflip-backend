@@ -46,7 +46,7 @@ pub async fn start<BlockStream, RpcClient>(
     );
 
     state_chain_client
-        .sign_and_submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
         .await
         .expect("Should be able to submit first heartbeat");
 
@@ -145,7 +145,7 @@ pub async fn start<BlockStream, RpcClient>(
                         block_header.number
                     );
                     let _ = state_chain_client
-                        .sign_and_submit_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                         .await;
                 }
 
@@ -242,7 +242,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .sign_and_submit_extrinsic(&logger, response_extrinsic)
+                                        .submit_signed_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 state_chain_runtime::Event::EthereumThresholdSigner(
@@ -297,7 +297,7 @@ pub async fn start<BlockStream, RpcClient>(
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
                                                 let _ = state_chain_client
-                                                    .sign_and_submit_extrinsic(
+                                                    .submit_signed_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
                                                             ceremony_id,
@@ -330,7 +330,7 @@ pub async fn start<BlockStream, RpcClient>(
                                     );
                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                         Ok(raw_signed_tx) => {
-                                            let _ = state_chain_client.sign_and_submit_extrinsic(
+                                            let _ = state_chain_client.submit_signed_extrinsic(
                                                 &logger,
                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission(
@@ -376,7 +376,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Successful broadcast attempt {}, tx_hash: {}",
+                                                "Successful broadcast attempt {}, tx_hash: {:#x}",
                                                 attempt_id,
                                                 tx_hash
                                             );
@@ -398,7 +398,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         }
                                     };
                                     let _ = state_chain_client
-                                        .sign_and_submit_extrinsic(&logger, response_extrinsic)
+                                        .submit_signed_extrinsic(&logger, response_extrinsic)
                                         .await;
                                 }
                                 ignored_event => {

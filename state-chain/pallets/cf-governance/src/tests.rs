@@ -1,4 +1,6 @@
-use crate::{mock::*, ActiveProposals, Error, ExpiryTime, Members, ProposalCount, Proposals};
+use crate::{
+	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalCount,
+};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -77,18 +79,39 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
-		// Now execute the proposal
-		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
+		next_block();
 		// Expect the Executed event was fired
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
 		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
 		assert!(genesis_members.contains(&PETER));
-		assert!(genesis_members.contains(&MAX));
 		// Check if the storage was cleaned up
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
-		assert!(!Proposals::<Test>::contains_key(1));
+		assert_eq!(ExecutionPipeline::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
+fn already_executed() {
+	new_test_ext().execute_with(|| {
+		// Propose a governance extrinsic
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			mock_extrinsic()
+		));
+		// Assert the proposed event was fired
+		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		// Do the two needed approvals to reach majority
+		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// The third attempt in this block has to fail because the
+		// proposal is already in the execution pipeline
+		assert_noop!(
+			Governance::approve(Origin::signed(ALICE), 1),
+			<Error<Test>>::ProposalNotFound
+		);
+		assert_eq!(ExecutionPipeline::<Test>::decode_len().unwrap(), 1);
 	});
 }
 
@@ -121,6 +144,21 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		// Expect the Expired event to be fired
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Expired(1)),);
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
+fn can_not_vote_twice() {
+	new_test_ext().execute_with(|| {
+		// Propose a governance extrinsic
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			mock_extrinsic()
+		));
+		// Approve the proposal
+		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		// Try to approve it again and expect the extrinsic to fail
+		assert_noop!(Governance::approve(Origin::signed(BOB), 1), <Error<Test>>::AlreadyApproved);
 	});
 }
 
@@ -158,48 +196,8 @@ fn sudo_extrinsic() {
 		// Do the two necessary approvals
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
-		// Now execute the proposal
-		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
+		next_block();
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
-	});
-}
-
-#[test]
-fn execute_extrinsic() {
-	new_test_ext().execute_with(|| {
-		// Propose a governance extrinsic
-		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
-			mock_extrinsic()
-		));
-		// Try to execute the proposal - expect an MajorityNotReached error
-		assert_noop!(
-			Governance::execute(Origin::signed(BOB), 1),
-			<Error<Test>>::MajorityNotReached
-		);
-		// Approve the proposal
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
-		// Try to execute the proposal - expect an MajorityNotReached error
-		assert_noop!(
-			Governance::execute(Origin::signed(BOB), 1),
-			<Error<Test>>::MajorityNotReached
-		);
-		// Approve the proposal again
-		assert_ok!(Governance::approve(Origin::signed(ALICE), 1));
-		// Execute the proposal and expect an successful execution
-		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
-		// Expect the sudo extrinsic to be executed successfully
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
-		// Check if the storage was cleaned up
-		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
-	});
-}
-
-#[test]
-fn execute_not_existing_proposal() {
-	new_test_ext().execute_with(|| {
-		// Execute a proposal and expect a 404-Error
-		assert_noop!(Governance::execute(Origin::signed(BOB), 1), <Error<Test>>::ProposalNotFound);
 	});
 }

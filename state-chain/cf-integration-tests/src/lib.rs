@@ -882,7 +882,7 @@ mod tests {
 				.execute_with(|| {
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) =
-						network::Network::create(20, &Validator::current_validators());
+						network::Network::create(5, &Validator::current_validators());
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the

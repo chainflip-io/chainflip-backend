@@ -247,7 +247,4 @@ std = [
   'pallet-cf-threshold-signature/std',
   'pallet-cf-environment/std',
   'pallet-cf-online/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std'
 ]

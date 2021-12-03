@@ -103,14 +103,14 @@
 	  "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
   "KeyId": "Vec<u8>",
+  "Liveness": {
+    "last_heartbeat": "BlockNumber",
+    "banned_until": "BlockNumber"
+  },
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
-  },
-  "Node": {
-    "last_heartbeat": "BlockNumber",
-    "ban": "BlockNumber"
   },
   "Nonce": "u64",
   "OfflineCondition": {
@@ -159,6 +159,8 @@
     "patch": "u8"
   },
   "Signature": "SchnorrVerificationComponents",
+  "SignatureFor": "SchnorrVerificationComponents",
+  "SignerIdFor": "EthereumAddress",
   "SigData": {
     "msg_hash": "H256",
     "sig": "Uint",
@@ -169,6 +171,7 @@
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
   "TransactionHash": "Vec<u8>",
+  "TransactionHashFor": "[u8; 32]",
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",
@@ -204,9 +207,9 @@
   },
   "VaultRotationStatus": {
     "_enum": {
-      "AwaitingKeygen":"AwaitingKeygen",
-      "AwaitingRotation":"AwaitingRotation",
-      "Complete":"Complete"
+      "AwaitingKeygen": "AwaitingKeygen",
+      "AwaitingRotation": "AwaitingRotation",
+      "Complete": "Complete"
     }
   },
   "Version": "SemVer",

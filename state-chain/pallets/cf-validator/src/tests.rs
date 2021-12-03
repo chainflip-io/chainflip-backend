@@ -189,6 +189,61 @@ mod tests {
 	}
 
 	#[test]
+	fn should_repeat_auction_after_aborted_auction() {
+		new_test_ext().execute_with(|| {
+			let set_size = 10;
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			// Set block length of epoch to 100
+			let epoch = 100;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			// Confirm we are in the waiting state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Run to epoch, auction will start
+			run_to_block(epoch);
+			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
+			// Validators are selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			// Abort the current auction
+			<AuctionPallet as Auctioneer>::abort();
+			// Back to initial state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Move to next block, a new auction starts
+			run_to_block(epoch + 1);
+			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
+			// Another set of validators selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+		});
+	}
+
+	#[test]
+	fn should_repeat_auction_after_forcing_auction_and_then_aborted_auction() {
+		new_test_ext().execute_with(|| {
+			let set_size = 10;
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			// Set block length of epoch to 100
+			let epoch = 100;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			// Confirm we are in the waiting state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Force a rotation, auction will start
+			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+			run_to_block(System::block_number() + 1);
+			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
+			// Validators are selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			// Abort the current auction
+			<AuctionPallet as Auctioneer>::abort();
+			// Back to initial state
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			// Move to next block, a new auction starts
+			run_to_block(System::block_number() + 2);
+			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
+			// Another set of validators selected
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+		});
+	}
+
+	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
 			// We should have a set of 0 validators on genesis with a minimum bid of 0 set
@@ -209,16 +264,70 @@ mod tests {
 	#[test]
 	fn send_cfe_version() {
 		new_test_ext().execute_with(|| {
-			let version = SemVer { major: 4, minor: 2, patch: 0 };
-			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(ALICE), version.clone()));
+			// We initially submit version
+			let validator = DUMMY_GENESIS_VALIDATORS[0];
+
+			let version = SemVer { major: 4, ..Default::default() };
+			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
+
 			assert_eq!(
 				last_event(),
-				mock::Event::ValidatorPallet(crate::Event::ValidatorCFEVersionRecorded(
-					ALICE,
+				mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+					validator,
+					SemVer::default(),
 					version.clone()
 				)),
+				"should emit event on updated version"
 			);
-			assert_eq!(ValidatorPallet::validator_cfe_version(ALICE), Some(version));
+
+			assert_eq!(
+				version.clone(),
+				ValidatorPallet::validator_cfe_version(validator),
+				"version should be stored"
+			);
+
+			// We submit a new version
+			let new_version = SemVer { major: 5, ..Default::default() };
+			assert_ok!(ValidatorPallet::cfe_version(
+				Origin::signed(validator),
+				new_version.clone()
+			));
+
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+					validator,
+					version.clone(),
+					new_version.clone()
+				)),
+				"should emit event on updated version"
+			);
+
+			assert_eq!(
+				new_version,
+				ValidatorPallet::validator_cfe_version(validator),
+				"new version should be stored"
+			);
+
+			// We shouldn't be able to go back a version.  We will reset the events as we expect
+			// to have no events emitted when the version is *not* updated
+			frame_system::Pallet::<Test>::reset_events();
+			assert_noop!(
+				ValidatorPallet::cfe_version(Origin::signed(validator), version),
+				Error::<Test>::InvalidCFEVersion
+			);
+
+			assert_eq!(
+				0,
+				frame_system::Pallet::<Test>::events().len(),
+				"We should have no events of an update"
+			);
+
+			assert_eq!(
+				new_version,
+				ValidatorPallet::validator_cfe_version(validator),
+				"we should be still on the same new version"
+			);
 		});
 	}
 }

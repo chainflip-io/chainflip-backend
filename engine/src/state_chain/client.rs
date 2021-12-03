@@ -31,7 +31,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::into_anyhow_error;
+use crate::common::rpc_error_into_anyhow_error;
 use crate::settings;
 
 #[cfg(test)]
@@ -187,7 +187,7 @@ impl StateChainRpcApi for StateChainRpcClient {
         self.chain_rpc_client
             .block(Some(block_hash))
             .await
-            .map_err(into_anyhow_error)
+            .map_err(rpc_error_into_anyhow_error)
     }
 
     async fn storage_events_at(
@@ -198,7 +198,7 @@ impl StateChainRpcApi for StateChainRpcClient {
         self.state_rpc_client
             .query_storage_at(vec![storage_key], block_hash)
             .await
-            .map_err(into_anyhow_error)
+            .map_err(rpc_error_into_anyhow_error)
     }
 }
 
@@ -219,17 +219,16 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
-    pub async fn sign_and_submit_extrinsic<Extrinsic>(
+    pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
         logger: &slog::Logger,
         extrinsic: Extrinsic,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
-        let encoded_call =
-            substrate_subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode());
+        let extrinsic = state_chain_runtime::Call::from(extrinsic);
+        let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
@@ -240,7 +239,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         &self.runtime_version,
                         self.genesis_hash,
                         nonce,
-                        encoded_call.clone(),
+                        encoded_extrinsic.clone(),
                         &self.signer,
                     )
                     .await
@@ -251,7 +250,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 Ok(tx_hash) => {
                     slog::trace!(
                         logger,
-                        "{:?} submitted successfully with tx_hash: {}",
+                        "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
                         tx_hash
                     );
@@ -266,9 +265,15 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
                     }
                     err => {
-                        slog::error!(logger, "Error: {:?}", err);
+                        let err = rpc_error_into_anyhow_error(err);
+                        slog::error!(
+                            logger,
+                            "Extrinsic failed with error: {}. Extrinsic: {:?}",
+                            err,
+                            extrinsic
+                        );
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(into_anyhow_error(err));
+                        return Err(err);
                     }
                 },
             }
@@ -297,19 +302,20 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 state_chain_runtime::Call::from(extrinsic.clone()).encode(),
             )))
             .await
+            .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
                 slog::trace!(
                     logger,
-                    "{:?} submitted successfully with tx_hash: {}",
+                    "{:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
                 return Ok(tx_hash);
             }
             Err(err) => {
-                slog::error!(logger, "Error: {}", err);
-                return Err(into_anyhow_error(err));
+                slog::error!(logger, "{}", err);
+                return Err(err);
             }
         }
     }
@@ -525,7 +531,11 @@ pub async fn connect_to_state_chain(
                     // allow inserting the private key with or without the 0x
                     .replace("0x", ""),
             )
-            .map_err(anyhow::Error::new)?,
+            .map_err(anyhow::Error::new)
+            .context(format!(
+                "No key file located at: {:?}",
+                &state_chain_settings.signing_key_file
+            ))?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
@@ -534,7 +544,7 @@ pub async fn connect_to_state_chain(
         state_chain_settings.ws_endpoint.as_str(),
     )?)
     .await
-    .map_err(into_anyhow_error)
+    .map_err(rpc_error_into_anyhow_error)
     .context("Failed to establish rpc connection to substrate node")?;
 
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
@@ -543,8 +553,8 @@ pub async fn connect_to_state_chain(
 
     let mut block_header_stream = chain_rpc_client
         .subscribe_finalized_heads()
-        .map_err(into_anyhow_error)?
-        .map_err(into_anyhow_error);
+        .map_err(rpc_error_into_anyhow_error)?
+        .map_err(rpc_error_into_anyhow_error);
 
     // TODO It is possible to avoid this wait, but somewhat complex and probably not needed
     if let Some(Ok(block_header)) = block_header_stream.next().await {
@@ -554,7 +564,7 @@ pub async fn connect_to_state_chain(
                     sp_rpc::number::NumberOrHex::from(block_header.number).into(),
                 ))
                 .await
-                .map_err(into_anyhow_error)?,
+                .map_err(rpc_error_into_anyhow_error)?,
             anyhow::Error::msg("Failed to get latest block hash"),
         )?;
 
@@ -562,7 +572,7 @@ pub async fn connect_to_state_chain(
             &mut &state_rpc_client
                 .metadata(Some(latest_block_hash))
                 .await
-                .map_err(into_anyhow_error)?[..],
+                .map_err(rpc_error_into_anyhow_error)?[..],
         )?)?;
 
         let system_pallet_metadata = metadata.module("System")?.clone();
@@ -593,10 +603,10 @@ pub async fn connect_to_state_chain(
                             .state_rpc_client
                             .storage(account_storage_key.clone(), Some(latest_block_hash))
                             .await
-                            .map_err(into_anyhow_error)?
+                            .map_err(rpc_error_into_anyhow_error)?
                             .ok_or_else(|| {
                                 anyhow::format_err!(
-                                    "AccountId {:?} doesn't exist on the state chain.",
+                                    "AccountId {:?} doesn't exist on the state chain. Please ensure you have staked and can see your stake on chain.",
                                     our_account_id,
                                 )
                             })?
@@ -608,13 +618,13 @@ pub async fn connect_to_state_chain(
                     .state_rpc_client
                     .runtime_version(Some(latest_block_hash))
                     .await
-                    .map_err(into_anyhow_error)?,
+                    .map_err(rpc_error_into_anyhow_error)?,
                 genesis_hash: try_unwrap_value(
                     state_chain_rpc_client
                         .chain_rpc_client
                         .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
                         .await
-                        .map_err(into_anyhow_error)?,
+                        .map_err(rpc_error_into_anyhow_error)?,
                     anyhow::Error::msg("Genesis block doesn't exist?"),
                 )?,
                 signer: signer.clone(),
@@ -712,7 +722,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .sign_and_submit_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(&logger, force_rotation_call)
                 .await
         );
 
@@ -756,7 +766,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .sign_and_submit_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(&logger, force_rotation_call)
             .await
             .unwrap_err();
 
@@ -797,7 +807,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
+            .submit_signed_extrinsic(&logger, force_rotation_call.clone())
             .await
             .unwrap_err();
 
@@ -861,7 +871,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .sign_and_submit_extrinsic(&logger, force_rotation_call.clone())
+                .submit_signed_extrinsic(&logger, force_rotation_call.clone())
                 .await
         );
 

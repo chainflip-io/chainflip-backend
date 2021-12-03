@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
-use sp_core::H160;
+use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{ethabi::Address, types::U64};
@@ -104,6 +104,11 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
             let state_chain_client = state_chain_client.clone();
             option_handle_end_block = Some((
                 tokio::spawn(async move {
+                    slog::info!(
+                        logger,
+                        "Start observing from ETH block: {}",
+                        received_window.from
+                    );
                     let mut event_stream = contract_observer
                         .event_stream(&web3, received_window.from, &logger)
                         .await
@@ -112,8 +117,14 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     // TOOD: Handle None on stream, and result event being an error
                     while let Some(result_event) = event_stream.next().await {
                         let event = result_event.expect("should be valid event type");
+                        slog::trace!(logger, "Observing ETH block: {}", event.block_number);
                         if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
+                                slog::info!(
+                                    logger,
+                                    "Finished observing events at ETH block: {}",
+                                    event.block_number
+                                );
                                 // we have reached the block height we wanted to witness up to
                                 // so can stop the witness process
                                 break;
@@ -203,6 +214,9 @@ impl EthBroadcaster {
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
+            // TODO: Estimate the gas:
+            // https://github.com/chainflip-io/chainflip-backend/issues/916
+            gas: U256::from(200_000),
             ..Default::default()
         };
 
