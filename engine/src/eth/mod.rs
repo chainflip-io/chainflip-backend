@@ -239,13 +239,13 @@ impl EthBroadcaster {
         println!("here's the gas: {:?}", gas);
         panic!();
 
-        Ok(self
-            .web3
-            .accounts()
-            .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
-            .await
-            .context("Failed to sign ETH transaction")?
-            .raw_transaction)
+        // Ok(self
+        //     .web3
+        //     .accounts()
+        //     .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
+        //     .await
+        //     .context("Failed to sign ETH transaction")?
+        //     .raw_transaction)
     }
 
     /// Broadcast a transaction to the network
@@ -317,7 +317,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let mut tx_params = TransactionParameters {
+        let tx_params = TransactionParameters {
             to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
@@ -372,7 +372,7 @@ mod tests {
             .unwrap();
         let to = H160::from(to);
 
-        let mut tx_params = TransactionParameters {
+        let tx_params = TransactionParameters {
             to: Some(to),
             data: data,
             chain_id: Some(4),
