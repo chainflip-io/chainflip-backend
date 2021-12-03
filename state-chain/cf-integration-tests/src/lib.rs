@@ -198,66 +198,69 @@ mod tests {
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
-				if self.state() == ChainflipAccountState::Validator && self.active {
-					// Handle events
-					on_events!(
-						events,
-						Event::Validator(
-							// A new epoch
-							pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-								(&*self.signer).borrow_mut().rotate_keys();
-						},
-						Event::EthereumThresholdSigner(
-							// A signature request
-							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
-								ceremony_id,
-								_,
-								ref signers,
-								payload)) => {
+				// If active handle events
+				if self.active {
+					// Being a validator we would respond to certain events
+					if self.state() == ChainflipAccountState::Validator {
+						on_events!(
+							events,
+							Event::Validator(
+								// A new epoch
+								pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
+									(&*self.signer).borrow_mut().rotate_keys();
+							},
+							Event::EthereumThresholdSigner(
+								// A signature request
+								pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+									ceremony_id,
+									_,
+									ref signers,
+									payload)) => {
 
-							// Participate in signing ceremony if requested.
-							// We only need one node to submit the unsigned transaction.
-							if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
-								// Sign with current key
-								let verification_components = (&*self.signer).borrow_mut().sign(payload);
-								state_chain_runtime::EthereumThresholdSigner::signature_success(
-									Origin::none(),
-									*ceremony_id,
-									verification_components,
-								).expect("should be able to submit threshold signature for Ethereum");
-							} };
-						},
-						Event::EthereumThresholdSigner(
-							// A threshold has been met for this signature
-							pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
-								match self.engine_state {
-									// If we rotating let's witness the keys being rotated on the contract
-									EngineState::Rotation => {
-										let ethereum_block_number: u64 = 100;
-										let tx_hash = vec![1u8; 32];
+								// Participate in signing ceremony if requested.
+								// We only need one node to submit the unsigned transaction.
+								if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
+									// Sign with current key
+									let verification_components = (&*self.signer).borrow_mut().sign(payload);
+									state_chain_runtime::EthereumThresholdSigner::signature_success(
+										Origin::none(),
+										*ceremony_id,
+										verification_components,
+									).expect("should be able to submit threshold signature for Ethereum");
+								} };
+							},
+							Event::EthereumThresholdSigner(
+								// A threshold has been met for this signature
+								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
+									match self.engine_state {
+										// If we rotating let's witness the keys being rotated on the contract
+										EngineState::Rotation => {
+											let ethereum_block_number: u64 = 100;
+											let tx_hash = vec![1u8; 32];
 
-										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
+											let public_key = (&*self.signer).borrow_mut().proposed_public_key();
 
-										state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
-											Origin::signed(self.node_id.clone()),
-											ChainId::Ethereum,
-											public_key,
-											ethereum_block_number,
-											tx_hash,
-										).expect("should be able to vault key rotation for node");
-									},
-									_ => {}
-								}
-						},
-						Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
-							self.engine_state = EngineState::Rotation;
-						},
-						Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
-							self.engine_state = EngineState::None;
-						},
-					);
-				} else {
-					// Handle events
+											state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+												Origin::signed(self.node_id.clone()),
+												ChainId::Ethereum,
+												public_key,
+												ethereum_block_number,
+												tx_hash,
+											).expect("should be able to vault key rotation for node");
+										},
+										_ => {}
+									}
+							},
+							Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
+								self.engine_state = EngineState::Rotation;
+							},
+							Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+								self.engine_state = EngineState::None;
+							},
+						);
+					}
+
+					// Being staked we would be required to respond to keygen requests
 					on_events!(
 						events,
 						Event::Vaults(
@@ -273,7 +276,7 @@ mod tests {
 										ChainId::Ethereum,
 										KeygenOutcome::Success(public_key),
 									).expect(&format!(
-										"should be able to witness keygen request from node: {:?}",
+										"should be able to report keygen outcome from node: {:?}",
 										self.node_id)
 									);
 								}
@@ -401,12 +404,13 @@ mod tests {
 				self.move_forward_blocks(epoch - (current_block_number % epoch));
 			}
 
-			pub fn move_to_complete_auction(&mut self) {
-				self.move_forward_blocks(AUCTION_BLOCKS);
-			}
-
-			pub fn move_forward_heartbeat_interval(&mut self) {
-				self.move_forward_blocks(HeartbeatBlockInterval::get());
+			pub fn move_to_next_heartbeat_interval(&mut self) {
+				let current_block_number = System::block_number();
+				self.move_forward_blocks(
+					HeartbeatBlockInterval::get() -
+						(current_block_number % HeartbeatBlockInterval::get()) +
+						1,
+				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -764,8 +768,12 @@ mod tests {
 		}
 	}
 
-	// The number of blocks we expect an auction should last
-	const AUCTION_BLOCKS: BlockNumber = 3;
+	// The minimum number of blocks an auction will last
+	const AUCTION_BLOCKS: BlockNumber = 2;
+	// The minimum number of blocks a keygen ceremony will last
+	const KEYGEN_CEREMONY_BLOCKS: BlockNumber = 3;
+	// The minimum number of blocks a vault rotation should last
+	const VAULT_ROTATION_BLOCKS: BlockNumber = AUCTION_BLOCKS + KEYGEN_CEREMONY_BLOCKS;
 
 	mod epoch {
 		use super::*;
@@ -776,7 +784,6 @@ mod tests {
 		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
 
 		#[test]
-		#[ignore = "broken test!"]
 		// We have a test network which goes into the first epoch
 		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
 		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from
@@ -859,7 +866,6 @@ mod tests {
 		}
 
 		#[test]
-		#[ignore = "broken test!"]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are
 		// set to 100
 		// - When the epoch is reached an auction is started and completed
@@ -876,7 +882,7 @@ mod tests {
 				.execute_with(|| {
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) =
-						network::Network::create(5, &Validator::current_validators());
+						network::Network::create(20, &Validator::current_validators());
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -912,15 +918,15 @@ mod tests {
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
-					// Run things the amount needed for an auction
-					testnet.move_forward_blocks(5);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
 					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
+						"we should be back waiting for bids after a successful auction and rotation"
 					);
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
@@ -990,7 +996,6 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		#[ignore = "broken test!"]
 		// Stakers cannot unstake during the conclusion of the auction
 		// We have a set of nodes that are staked and that are included in the auction
 		// Moving block by block of an auction we shouldn't be able to claim stake
@@ -1056,8 +1061,8 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					// Complete auction
-					testnet.move_forward_blocks(AUCTION_BLOCKS - 1);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
 
@@ -1122,7 +1127,7 @@ mod tests {
 	}
 
 	mod validators {
-		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
+		use crate::tests::{genesis, network, NodeId, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1178,8 +1183,8 @@ mod tests {
 						"this should be the first auction"
 					);
 
-					// Complete auction over AUCTION_BLOCKS
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the next epoch");
 
 					// assert list of validators as being the new nodes
@@ -1220,7 +1225,6 @@ mod tests {
 		}
 
 		#[test]
-		#[ignore = "broken test!"]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
 		// with 20% going offline and forcing an emergency rotation in which a new set of validators
@@ -1256,12 +1260,9 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					// Start an auction and confirm
+					// Start an auction and wait for rotation
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-
-					// Complete auction
-					testnet.move_to_complete_auction();
-
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
 					let PercentageRange { top, bottom: _ } =
@@ -1277,7 +1278,7 @@ mod tests {
 					}
 
 					// We need to move forward one heartbeat interval to be regarded as offline
-					testnet.move_forward_heartbeat_interval();
+					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
@@ -1291,7 +1292,7 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(1, Validator::epoch_index(), "We should be in the same epoch");
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1302,8 +1303,8 @@ mod tests {
 						"this should be the second auction"
 					);
 
-					// Complete the 'Emergency rotation'
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 
 					// Emergency state reset
@@ -1316,7 +1317,7 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &nodes {
