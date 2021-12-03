@@ -13,7 +13,10 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use web3::{ethabi::Address, types::U64};
+use web3::{
+    ethabi::Address,
+    types::{CallRequest, U64},
+};
 
 use crate::{
     common::Mutex,
@@ -208,17 +211,30 @@ impl EthBroadcaster {
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
-        let tx_params = TransactionParameters {
+        let mut tx_params = TransactionParameters {
             to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
-            // TODO: Estimate the gas:
-            // https://github.com/chainflip-io/chainflip-backend/issues/916
-            gas: U256::from(200_000),
+            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+            // input at least as much gas as the estimate will return (stupid? yes)
+            gas: U256::from(15_000_000),
             ..Default::default()
         };
+        // query for the gas estimate if the SC didn't provide it
+        let gas_limit = if let Some(gas_limit) = unsigned_tx.gas_limit {
+            gas_limit
+        } else {
+            let call_request: CallRequest = tx_params.clone().into();
+            self.web3
+                .eth()
+                .estimate_gas(call_request, None)
+                .await
+                .context("Failed to estimate gas")?
+        };
+
+        tx_params.gas = gas_limit;
 
         Ok(self
             .web3
@@ -241,7 +257,6 @@ impl EthBroadcaster {
         Ok(tx_hash)
     }
 }
-
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
