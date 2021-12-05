@@ -28,18 +28,6 @@ state-chain-node = {path = "../../state-chain/node"}
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
 
-[dependencies.sc-consensus-aura]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
-[dependencies.sc-finality-grandpa]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
-[dependencies.sp-consensus]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
 [dependencies.sp-consensus-aura]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-09+1'
