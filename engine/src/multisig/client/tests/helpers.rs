@@ -289,7 +289,7 @@ impl ValidKeygenStates {
         self.key_ready.as_ref().expect("successful keygen")
     }
 
-    /// Get a clone of the client at index 0 from the specified stage
+    /// Get a clone of the client for `account_id` from the specified stage
     pub fn get_client_at_stage(&self, account_id: &AccountId, stage: usize) -> MultisigClientNoDB {
         match stage {
             0 => self.stage0.clients[account_id].clone(),
@@ -348,7 +348,7 @@ pub struct ValidSigningStates {
 }
 
 impl ValidSigningStates {
-    /// Get a clone of the client at index 0 from the specified stage
+    /// Get a clone of the client for `account_id` from the specified stage
     pub fn get_client_at_stage(&self, account_id: &AccountId, stage: usize) -> MultisigClientNoDB {
         match stage {
             1 => self.sign_phase1.clients[account_id].clone(),
