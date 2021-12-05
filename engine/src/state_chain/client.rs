@@ -32,7 +32,6 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-
 use crate::common::rpc_error_into_anyhow_error;
 use crate::settings;
 
@@ -170,8 +169,7 @@ pub trait StateChainRpcApi {
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
 
-    async fn rotate_keys(&self)
-        -> Result<Bytes>;
+    async fn rotate_keys(&self) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -206,9 +204,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .map_err(rpc_error_into_anyhow_error)
     }
 
-    async fn rotate_keys(
-        &self
-    ) -> Result<Bytes> {
+    async fn rotate_keys(&self) -> Result<Bytes> {
         self.author_rpc_client
             .rotate_keys()
             .await
@@ -518,10 +514,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     pub async fn rotate_session_keys(&self) -> Result<String> {
-        let session_key_bytes: Bytes = self.state_chain_rpc_client
-            .rotate_keys()
-            .await
-            .unwrap();
+        let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await.unwrap();
         Ok(session_key_bytes.to_vec().encode_hex::<String>())
     }
 }

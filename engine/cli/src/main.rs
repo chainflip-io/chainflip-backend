@@ -1,11 +1,11 @@
 use chainflip_engine::state_chain::client::connect_to_state_chain;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_node::chain_spec::get_from_seed;
 use state_chain_runtime::opaque::SessionKeys;
 use structopt::StructOpt;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
@@ -132,15 +132,9 @@ async fn send_claim(
     Ok(())
 }
 
-async fn rotate_keys(
-    settings: &CLISettings,
-    logger: &slog::Logger
-) -> Result<()> {
+async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
     let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
-    let seed = state_chain_client
-        .rotate_session_keys()
-        .await
-        .unwrap();
+    let seed = state_chain_client.rotate_session_keys().await.unwrap();
     println!("New session key {:?}", seed);
 
     let new_session_key = SessionKeys {
@@ -151,10 +145,10 @@ async fn rotate_keys(
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             logger,
-            pallet_cf_validator::Call::set_keys(new_session_key, [0; 8].to_vec())
+            pallet_cf_validator::Call::set_keys(new_session_key, [0; 8].to_vec()),
         )
-    .await
-    .expect("Failed to submit set_keys extrinsic");
+        .await
+        .expect("Failed to submit set_keys extrinsic");
 
     println!("Session key rotated at tx {:?}.", tx_hash);
 
