@@ -2,18 +2,14 @@ use std::collections::HashMap;
 
 use client::KeygenOutcome;
 use itertools::Itertools;
-use rand::{
-    prelude::{IteratorRandom, StdRng},
-    seq::SliceRandom,
-    SeedableRng,
-};
+use rand::prelude::*;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     logging,
     multisig::{
         client::{
-            self,
+            self, ensure_unsorted,
             keygen::{KeygenInfo, KeygenOptions},
             signing::SigningInfo,
             SigningOutcome,
@@ -46,21 +42,6 @@ lazy_static! {
 
         ensure_unsorted(ids, 0)
     };
-}
-
-fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
-where
-    T: Clone + Ord,
-{
-    assert!(v.len() > 1);
-    let mut rng = StdRng::seed_from_u64(seed);
-    let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
-
-    while v != sorted {
-        v.shuffle(&mut rng);
-    }
-
-    v
 }
 
 async fn coordinate_keygen_and_signing(

@@ -127,3 +127,22 @@ mod utils_tests {
         assert_eq!(map.get_id(3), Some(&c));
     }
 }
+
+#[cfg(test)]
+pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
+where
+    T: Clone + Ord,
+{
+    use itertools::Itertools;
+    use rand::prelude::*;
+
+    assert!(v.len() > 1);
+    let mut rng = StdRng::seed_from_u64(seed);
+    let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
+
+    while v != sorted {
+        v.shuffle(&mut rng);
+    }
+
+    v
+}

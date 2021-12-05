@@ -37,6 +37,9 @@ use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
 
+#[cfg(test)]
+pub use utils::ensure_unsorted;
+
 use self::{
     ceremony_manager::CeremonyManager,
     signing::{frost::SigningData, PendingSigningInfo},
