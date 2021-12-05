@@ -20,4 +20,31 @@ utilities = {path = "../../utilities"}
 pallet-cf-rewards = {path = "../../state-chain/pallets/cf-rewards"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
+pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
+state-chain-node = {path = "../../state-chain/node"}
+
+[dependencies.sp-core]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sc-consensus-aura]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sc-finality-grandpa]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-consensus]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-consensus-aura]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[dependencies.sp-finality-grandpa]
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+

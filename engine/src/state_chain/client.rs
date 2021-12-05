@@ -6,6 +6,7 @@ use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
+use hex::ToHex;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
@@ -30,6 +31,7 @@ use substrate_subxt::{
     system::System,
     Runtime, SignedExtension, SignedExtra,
 };
+
 
 use crate::common::rpc_error_into_anyhow_error;
 use crate::settings;
@@ -167,6 +169,9 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
+
+    async fn rotate_keys(&self)
+        -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -197,6 +202,15 @@ impl StateChainRpcApi for StateChainRpcClient {
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.state_rpc_client
             .query_storage_at(vec![storage_key], block_hash)
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+    }
+
+    async fn rotate_keys(
+        &self
+    ) -> Result<Bytes> {
+        self.author_rpc_client
+            .rotate_keys()
             .await
             .map_err(rpc_error_into_anyhow_error)
     }
@@ -501,6 +515,14 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             )
             .value::<u32>()
             .expect("Could not decode HeartbeatBlockInterval to u32")
+    }
+
+    pub async fn rotate_session_keys(&self) -> Result<String> {
+        let session_key_bytes: Bytes = self.state_chain_rpc_client
+            .rotate_keys()
+            .await
+            .unwrap();
+        Ok(session_key_bytes.to_vec().encode_hex::<String>())
     }
 }
 
