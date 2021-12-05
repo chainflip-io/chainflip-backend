@@ -24,15 +24,6 @@ pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
 state-chain-node = {path = "../../state-chain/node"}
 
-[dependencies.sp-core]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
-[dependencies.sp-consensus-aura]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
-[dependencies.sp-finality-grandpa]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
-
+# Substrate key types
+sp-consensus-aura = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
+sp-finality-grandpa = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
