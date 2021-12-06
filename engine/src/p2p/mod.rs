@@ -19,13 +19,7 @@ use serde::{Deserialize, Serialize};
 use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
 
-use crate::{
-    common::rpc_error_into_anyhow_error,
-    logging::COMPONENT_KEY,
-    multisig::MultisigMessage,
-    settings,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
-};
+use crate::{common::{read_and_decode_file, rpc_error_into_anyhow_error}, logging::COMPONENT_KEY, multisig::MultisigMessage, settings, state_chain::client::{StateChainClient, StateChainRpcApi}};
 
 // TODO REMOVE
 #[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
@@ -128,8 +122,10 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         let keypair: libp2p::identity::ed25519::Keypair =
             libp2p::identity::ed25519::SecretKey::from_bytes(
                 &mut Zeroizing::new(
-                    hex::decode(&std::fs::read_to_string(&settings.node_p2p.node_key_file)?)
-                        .map_err(anyhow::Error::new)?,
+                    read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+                        hex::decode(str)
+                        .map_err(anyhow::Error::new)
+                    })?
                 )[..],
             )?
             .into();
@@ -155,8 +151,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                         .unwrap(),
                     ),
                 )
-                .await
-                .expect("Failed to submit register_peer_id extrinsic");
+                .await?;
         }
     }
 

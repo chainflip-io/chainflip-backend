@@ -80,6 +80,7 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 }
 
 /// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
+#[derive(Default)]
 struct P2PValidatorNetworkNodeState {
 	/// Store all local rpc subscriber senders
 	p2p_message_rpc_subscribers:
@@ -183,10 +184,7 @@ pub fn new_p2p_validator_network_node<
 	p2p_network_service: Arc<PN>,
 	subscription_task_executor: impl Spawn + Send + Sync + 'static,
 ) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>) {
-	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState {
-		p2p_message_rpc_subscribers: Default::default(),
-		reserved_peers: Default::default(),
-	}));
+	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState::default()));
 
 	(
 		// RPC Request Handler
@@ -351,7 +349,7 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								log::error!(
+								log::info!(
 									"Connected and established {} with peer: {}",
 									protocol,
 									remote
@@ -360,7 +358,7 @@ pub fn new_p2p_validator_network_node<
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								log::error!(
+								log::info!(
 									"Disconnected and closed {} with peer: {}",
 									protocol,
 									remote

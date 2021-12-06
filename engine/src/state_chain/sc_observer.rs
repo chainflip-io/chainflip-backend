@@ -193,7 +193,6 @@ pub async fn start<BlockStream, RpcClient>(
                                             peer_id,
                                             AccountPeerMappingChange::Registered,
                                         ))
-                                        .map_err(anyhow::Error::new)
                                         .unwrap();
                                 }
                                 state_chain_runtime::Event::Validator(
@@ -208,7 +207,6 @@ pub async fn start<BlockStream, RpcClient>(
                                             peer_id,
                                             AccountPeerMappingChange::Unregistered,
                                         ))
-                                        .map_err(anyhow::Error::new)
                                         .unwrap();
                                 }
                                 state_chain_runtime::Event::Vaults(
