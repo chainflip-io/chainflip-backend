@@ -18,7 +18,7 @@ extern crate assert_matches;
 
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
-	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, IsOnline, RemainingBid, HasPeerMapping,
 	StakeHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
@@ -30,10 +30,7 @@ use sp_std::{cmp::min, prelude::*};
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		AuctionIndex, AuctionResult, ChainflipAccount, EmergencyRotation, RemainingBid,
-		VaultRotator,
-	};
+	use cf_traits::{AuctionIndex, AuctionResult, ChainflipAccount, EmergencyRotation, HasPeerMapping, RemainingBid, VaultRotator};
 	use frame_support::traits::ValidatorRegistration;
 
 	#[pallet::pallet]
@@ -71,6 +68,8 @@ pub mod pallet {
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// An online validator
 		type Online: IsOnline<ValidatorId = Self::ValidatorId>;
+		/// A validator register their peer id
+		type PeerMapping: HasPeerMapping<ValidatorId = Self::ValidatorId>; 
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
 		/// Minimum amount of validators
@@ -280,6 +279,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				bidders.retain(|(_, amount)| !amount.is_zero());
 				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
+
+				bidders.retain(|(id, _)| T::PeerMapping::has_peer_mapping(id));
 				// Rule #3 - Confirm that the validators are 'online'
 				bidders.retain(|(id, _)| T::Online::is_online(id));
 				// Rule #4 - Confirm we have our set size
