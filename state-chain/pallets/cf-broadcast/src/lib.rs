@@ -508,6 +508,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// In this case all validators are currently offline. We just do
 			// nothing in this case and wait until someone comes up again.
 			log::warn!("No online validators at the moment.");
+			let failed = FailedBroadcastAttempt::<T, I> {
+				broadcast_id,
+				attempt_count,
+				unsigned_tx: unsigned_tx.clone(),
+			};
+			Self::schedule_retry(failed);
 		}
 	}
 

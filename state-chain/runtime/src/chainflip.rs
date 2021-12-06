@@ -245,11 +245,7 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
 			.take(1)
 			.collect::<Vec<_>>();
-		if let Some(validator) = validators.first() {
-			Some(validator.0.clone())
-		} else {
-			None
-		}
+		validators.first().map(|(id, _)| id.clone())
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
