@@ -4,7 +4,10 @@ use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{multisig::client::{MultisigMessage, utils::PartyIdxMapping}, p2p::AccountId};
+use crate::{
+    multisig::client::{utils::PartyIdxMapping, MultisigMessage},
+    p2p::AccountId,
+};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result> {

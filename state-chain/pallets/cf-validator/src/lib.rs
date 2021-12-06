@@ -20,7 +20,10 @@ mod benchmarking;
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
 };
-use frame_support::{pallet_prelude::*, traits::{EstimateNextSessionRotation, OnKilledAccount}};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{EstimateNextSessionRotation, OnKilledAccount},
+};
 pub use pallet::*;
 use sp_runtime::traits::{
 	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
@@ -106,7 +109,7 @@ pub mod pallet {
 		/// A validator has register her current PeerId
 		PeerIdRegistered(T::AccountId, ed25519::Public),
 		/// A validator has unregistered her current PeerId
-		PeerIdUnregistered(T::AccountId, ed25519::Public)
+		PeerIdUnregistered(T::AccountId, ed25519::Public),
 	}
 
 	#[pallet::error]
@@ -121,7 +124,7 @@ pub mod pallet {
 		/// Validator Peer mapping overlaps with an existing mapping
 		AccountPeerMappingOverlap,
 		/// Invalid signature
-		InvalidAccountPeerMappingSignature
+		InvalidAccountPeerMappingSignature,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -221,11 +224,25 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::weight(10_000)]
-		pub fn register_peer_id(origin: OriginFor<T>, peer_id: ed25519::Public, signature: ed25519::Signature) -> DispatchResultWithPostInfo {
+		pub fn register_peer_id(
+			origin: OriginFor<T>,
+			peer_id: ed25519::Public,
+			signature: ed25519::Signature,
+		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ensure!(RuntimePublic::verify(&peer_id, &account_id.encode(), &signature), Error::<T>::InvalidAccountPeerMappingSignature);
-			ensure!(!AccountPeerMapping::<T>::contains_key(&account_id) && !MappedPeers::<T>::contains_key(&peer_id), Error::<T>::AccountPeerMappingOverlap);
-			AccountPeerMapping::<T>::insert(account_id.clone(), (account_id.clone(), peer_id.clone()));
+			ensure!(
+				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
+				Error::<T>::InvalidAccountPeerMappingSignature
+			);
+			ensure!(
+				!AccountPeerMapping::<T>::contains_key(&account_id) &&
+					!MappedPeers::<T>::contains_key(&peer_id),
+				Error::<T>::AccountPeerMappingOverlap
+			);
+			AccountPeerMapping::<T>::insert(
+				account_id.clone(),
+				(account_id.clone(), peer_id.clone()),
+			);
 			MappedPeers::<T>::insert(peer_id.clone(), ());
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
 			Ok(().into())
@@ -301,7 +318,8 @@ pub mod pallet {
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
-	pub type AccountPeerMapping<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, ed25519::Public)>;
+	pub type AccountPeerMapping<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, ed25519::Public)>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]

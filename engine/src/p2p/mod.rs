@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, convert::{TryFrom, TryInto}, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use cf_p2p::{PeerId, PeerIdTransferable};
@@ -75,7 +79,12 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
     // Use StateChainClient's RpcChannel
     let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
-        &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| format!("Should be valid ws endpoint: {}", settings.state_chain.ws_endpoint))?,
+        &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
+            format!(
+                "Should be valid ws endpoint: {}",
+                settings.state_chain.ws_endpoint
+            )
+        })?,
     )
     .await
     .map_err(rpc_error_into_anyhow_error)?;
@@ -116,24 +125,38 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     );
 
     {
-        let keypair: libp2p::identity::ed25519::Keypair = 
-            libp2p::identity::ed25519::SecretKey::from_bytes(&mut Zeroizing::new(hex::decode(
-                &std::fs::read_to_string(&settings.node_p2p.node_key_file)?
-            )
-            .map_err(anyhow::Error::new)?)[..])?.into();
+        let keypair: libp2p::identity::ed25519::Keypair =
+            libp2p::identity::ed25519::SecretKey::from_bytes(
+                &mut Zeroizing::new(
+                    hex::decode(&std::fs::read_to_string(&settings.node_p2p.node_key_file)?)
+                        .map_err(anyhow::Error::new)?,
+                )[..],
+            )?
+            .into();
         let cfe_peer_id = libp2p::identity::PublicKey::Ed25519(keypair.public()).into_peer_id();
 
         let sc_node_peer_id = state_chain_client.get_local_peer_id().await?;
 
         assert_eq!(cfe_peer_id, sc_node_peer_id);
 
-        if let Some(on_chain_peer_id) = account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref())) {
+        if let Some(on_chain_peer_id) =
+            account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
+        {
             assert_eq!(on_chain_peer_id, &sc_node_peer_id);
         } else {
-            state_chain_client.submit_signed_extrinsic(&logger, pallet_cf_validator::Call::register_peer_id(
-                sp_core::ed25519::Public(keypair.public().encode()),
-                sp_core::ed25519::Signature::try_from(&keypair.sign(&state_chain_client.our_account_id.encode()[..])[..]).unwrap()
-            )).await.expect("Failed to submit register_peer_id extrinsic");
+            state_chain_client
+                .submit_signed_extrinsic(
+                    &logger,
+                    pallet_cf_validator::Call::register_peer_id(
+                        sp_core::ed25519::Public(keypair.public().encode()),
+                        sp_core::ed25519::Signature::try_from(
+                            &keypair.sign(&state_chain_client.our_account_id.encode()[..])[..],
+                        )
+                        .unwrap(),
+                    ),
+                )
+                .await
+                .expect("Failed to submit register_peer_id extrinsic");
         }
     }
 
@@ -142,7 +165,11 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
             .keys()
             .map(PeerIdTransferable::from)
             .collect();
-        client.set_peers(peers.clone()).await.map_err(rpc_error_into_anyhow_error).with_context(|| format!("Failed to add peers to reserved set: {:#?}", peers))?;
+        client
+            .set_peers(peers.clone())
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .with_context(|| format!("Failed to add peers to reserved set: {:#?}", peers))?;
         slog::info!(logger, "Added peers to reserved set: {:#?}", peers);
     }
 

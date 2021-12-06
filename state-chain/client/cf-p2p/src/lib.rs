@@ -17,11 +17,19 @@ use futures::{
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use sc_network::{Event, ExHashT, NetworkService, multiaddr};
+use sc_network::{multiaddr, Event, ExHashT, NetworkService};
 use serde::{self, Deserialize, Serialize};
-use sp_runtime::{sp_std::sync::Arc, traits::Block as BlockT};
-use sp_runtime::sp_std::sync::RwLock;
-use std::{borrow::Cow, collections::{BTreeSet, HashMap}, convert::TryInto, marker::Send, pin::Pin};
+use sp_runtime::{
+	sp_std::sync::{Arc, RwLock},
+	traits::Block as BlockT,
+};
+use std::{
+	borrow::Cow,
+	collections::{BTreeSet, HashMap},
+	convert::TryInto,
+	marker::Send,
+	pin::Pin,
+};
 
 /// The identifier for our protocol, required to distinguish it from other protocols running on the
 /// substrate p2p network.
@@ -51,7 +59,8 @@ impl TryInto<PeerId> for PeerIdTransferable {
 	type Error = jsonrpc_core::Error;
 
 	fn try_into(self) -> std::result::Result<PeerId, Self::Error> {
-		PeerId::from_bytes(&self.0[..]).map_err(|err| jsonrpc_core::Error::invalid_params(format!("{}", err)))
+		PeerId::from_bytes(&self.0[..])
+			.map_err(|err| jsonrpc_core::Error::invalid_params(format!("{}", err)))
 	}
 }
 
@@ -73,16 +82,17 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 /// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
 struct P2PValidatorNetworkNodeState {
 	/// Store all local rpc subscriber senders
-	p2p_message_rpc_subscribers: HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
-	reserved_peers: BTreeSet<PeerId>
+	p2p_message_rpc_subscribers:
+		HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
+	reserved_peers: BTreeSet<PeerId>,
 }
 
 /// An abstration of the underlying network of peers.
 pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn reserve_peers<Peers : Iterator<Item=PeerId>>(&self, peers: Peers);
+	fn reserve_peers<Peers: Iterator<Item = PeerId>>(&self, peers: Peers);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
-	fn remove_reserved_peers<Peers : Iterator<Item=PeerId>>(&self, peers: Peers);
+	fn remove_reserved_peers<Peers: Iterator<Item = PeerId>>(&self, peers: Peers);
 	/// Write notification to network to peer id, over protocol
 	fn write_notification(&self, who: PeerId, message: Vec<u8>);
 	/// Network event stream
@@ -91,23 +101,29 @@ pub trait PeerNetwork {
 
 /// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
 impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
-	fn reserve_peers<Peers : Iterator<Item=PeerId>>(&self, peers: Peers) {
+	fn reserve_peers<Peers: Iterator<Item = PeerId>>(&self, peers: Peers) {
 		if let Err(err) = self.add_peers_to_reserved_set(
 			CHAINFLIP_P2P_PROTOCOL_NAME,
-			peers.map(|peer| {
-				iter::once(multiaddr::Protocol::P2p(peer.into())).collect::<multiaddr::Multiaddr>()
-			}).collect()
+			peers
+				.map(|peer| {
+					iter::once(multiaddr::Protocol::P2p(peer.into()))
+						.collect::<multiaddr::Multiaddr>()
+				})
+				.collect(),
 		) {
 			log::error!(target: "p2p", "add_peers_to_reserved_set failed: {}", err);
 		}
 	}
 
-	fn remove_reserved_peers<Peers : Iterator<Item=PeerId>>(&self, peers: Peers) {
+	fn remove_reserved_peers<Peers: Iterator<Item = PeerId>>(&self, peers: Peers) {
 		if let Err(err) = self.remove_peers_from_reserved_set(
 			CHAINFLIP_P2P_PROTOCOL_NAME,
-			peers.map(|peer| {
-				iter::once(multiaddr::Protocol::P2p(peer.into())).collect::<multiaddr::Multiaddr>()
-			}).collect()
+			peers
+				.map(|peer| {
+					iter::once(multiaddr::Protocol::P2p(peer.into()))
+						.collect::<multiaddr::Multiaddr>()
+				})
+				.collect(),
 		) {
 			log::error!(target: "p2p", "remove_peers_from_reserved_set failed: {}", err);
 		}
@@ -144,19 +160,15 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
 
 	/// Subscribe to receive p2p messages
-	#[pubsub(
-		subscription = "cf_p2p_messages",
-		subscribe,
-		name = "cf_p2p_subscribeMessages"
-	)]
-	fn subscribe_messages(&self, metadata: Self::Metadata, subscriber: Subscriber<(PeerIdTransferable, Vec<u8>)>);
+	#[pubsub(subscription = "cf_p2p_messages", subscribe, name = "cf_p2p_subscribeMessages")]
+	fn subscribe_messages(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<(PeerIdTransferable, Vec<u8>)>,
+	);
 
 	/// Unsubscribe from receiving p2p messages
-	#[pubsub(
-		subscription = "cf_p2p_messages",
-		unsubscribe,
-		name = "cf_p2p_unsubscribeMessages"
-	)]
+	#[pubsub(subscription = "cf_p2p_messages", unsubscribe, name = "cf_p2p_unsubscribeMessages")]
 	fn unsubscribe_messages(
 		&self,
 		metadata: Option<Self::Metadata>,
@@ -180,20 +192,24 @@ pub fn new_p2p_validator_network_node<
 		// RPC Request Handler
 		{
 			impl<
-				MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
+					MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
 					PN: PeerNetwork + Send + Sync + 'static,
 				> P2PValidatorNetworkNodeRpcApi for RpcRequestHandler<MetaData, PN>
 			{
 				type Metadata = MetaData;
 
 				/// Connect to validators
-				fn set_peers(&self, peers: Vec<PeerIdTransferable>) -> Result<u64> {		
-					let mut peers = peers.into_iter().map(PeerIdTransferable::try_into).collect::<std::result::Result<BTreeSet<_>, _>>()?;
+				fn set_peers(&self, peers: Vec<PeerIdTransferable>) -> Result<u64> {
+					let mut peers = peers
+						.into_iter()
+						.map(PeerIdTransferable::try_into)
+						.collect::<std::result::Result<BTreeSet<_>, _>>()?;
 
 					let mut state = self.state.write().unwrap();
 					std::mem::swap(&mut state.reserved_peers, &mut peers);
 
-					// TODO: Investigate why adding multiple reserved peers in a single reserve_peers call doesn't work
+					// TODO: Investigate why adding multiple reserved peers in a single
+					// reserve_peers call doesn't work
 					for peer in state.reserved_peers.difference(&peers).into_iter().cloned() {
 						self.p2p_network_service.reserve_peers(std::iter::once(peer));
 					}
@@ -212,7 +228,10 @@ pub fn new_p2p_validator_network_node<
 						self.p2p_network_service.reserve_peers(std::iter::once(peer_id));
 						Ok(200)
 					} else {
-						Err(jsonrpc_core::Error::invalid_params(format!("Tried to add peer {} which is already reserved", peer_id)))
+						Err(jsonrpc_core::Error::invalid_params(format!(
+							"Tried to add peer {} which is already reserved",
+							peer_id
+						)))
 					}
 				}
 
@@ -224,13 +243,23 @@ pub fn new_p2p_validator_network_node<
 						self.p2p_network_service.remove_reserved_peers(std::iter::once(peer_id));
 						Ok(200)
 					} else {
-						Err(jsonrpc_core::Error::invalid_params(format!("Tried to remove peer {} which is not reserved", peer_id)))
+						Err(jsonrpc_core::Error::invalid_params(format!(
+							"Tried to remove peer {} which is not reserved",
+							peer_id
+						)))
 					}
 				}
 
 				/// Send message to peer
-				fn send_message(&self, peers: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64> {
-					let peers = peers.into_iter().map(PeerIdTransferable::try_into).collect::<std::result::Result<BTreeSet<_>, _>>()?;
+				fn send_message(
+					&self,
+					peers: Vec<PeerIdTransferable>,
+					message: Vec<u8>,
+				) -> Result<u64> {
+					let peers = peers
+						.into_iter()
+						.map(PeerIdTransferable::try_into)
+						.collect::<std::result::Result<BTreeSet<_>, _>>()?;
 
 					let state = self.state.read().unwrap();
 					if peers.iter().all(|peer| state.reserved_peers.contains(peer)) {
@@ -239,7 +268,9 @@ pub fn new_p2p_validator_network_node<
 						}
 						Ok(200)
 					} else {
-						Err(jsonrpc_core::Error::invalid_params("Request to send message to an unset peer"))
+						Err(jsonrpc_core::Error::invalid_params(
+							"Request to send message to an unset peer",
+						))
 					}
 				}
 
@@ -253,14 +284,14 @@ pub fn new_p2p_validator_network_node<
 					let subscription_id = self.notification_rpc_subscription_manager.add(
 						subscriber,
 						move |sink| async move {
-							sink.sink_map_err(|e| log::warn!("Error sending notifications: {:?}", e))
-								.send_all(
-									&mut receiver
-										.map(Ok::<_, jsonrpc_core::Error>)
-										.map(Ok::<_, ()>),
-								)
-								.map(|_| ())
-								.await
+							sink.sink_map_err(|e| {
+								log::warn!("Error sending notifications: {:?}", e)
+							})
+							.send_all(
+								&mut receiver.map(Ok::<_, jsonrpc_core::Error>).map(Ok::<_, ()>),
+							)
+							.map(|_| ())
+							.await
 						},
 					);
 					self.state
@@ -320,12 +351,20 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								log::error!("Connected and established {} with peer: {}", protocol, remote);
+								log::error!(
+									"Connected and established {} with peer: {}",
+									protocol,
+									remote
+								);
 							},
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								log::error!("Disconnected and closed {} with peer: {}", protocol, remote);
+								log::error!(
+									"Disconnected and closed {} with peer: {}",
+									protocol,
+									remote
+								);
 							}
 						},
 						/* Received p2p messages from a peer */
@@ -342,12 +381,17 @@ pub fn new_p2p_validator_network_node<
 								.peekable();
 							if messages.peek().is_some() {
 								let state = state.read().unwrap();
-								let remote : PeerIdTransferable = From::from(&remote);
+								let remote: PeerIdTransferable = From::from(&remote);
 								for message in messages {
 									let message = message.into_iter().collect::<Vec<u8>>();
 									for sender in state.p2p_message_rpc_subscribers.values() {
-										if let Err(e) = sender.unbounded_send((remote.clone(), message.clone())) {
-											log::error!("Failed to forward message to rpc subscriber: {}", e);
+										if let Err(e) =
+											sender.unbounded_send((remote.clone(), message.clone()))
+										{
+											log::error!(
+												"Failed to forward message to rpc subscriber: {}",
+												e
+											);
 										}
 									}
 								}

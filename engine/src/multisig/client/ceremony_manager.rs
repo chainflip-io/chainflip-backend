@@ -20,8 +20,8 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
-use super::MultisigMessage;
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
+use super::MultisigMessage;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 

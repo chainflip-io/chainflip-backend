@@ -9,17 +9,27 @@ use sp_runtime::AccountId32;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::{eth::EthBroadcaster, logging::COMPONENT_KEY, multisig::{
+use crate::{
+    eth::EthBroadcaster,
+    logging::COMPONENT_KEY,
+    multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
-    }, p2p::{self, AccountId, AccountPeerMappingChange}, state_chain::client::{StateChainClient, StateChainRpcApi}};
+    },
+    p2p::{self, AccountId, AccountPeerMappingChange},
+    state_chain::client::{StateChainClient, StateChainRpcApi},
+};
 
 pub async fn start<BlockStream, RpcClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
-    account_peer_mapping_change_sender: UnboundedSender<(AccountId, sp_core::ed25519::Public, AccountPeerMappingChange)>,
+    account_peer_mapping_change_sender: UnboundedSender<(
+        AccountId,
+        sp_core::ed25519::Public,
+        AccountPeerMappingChange,
+    )>,
     mut multisig_event_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
@@ -172,14 +182,34 @@ pub async fn start<BlockStream, RpcClient>(
                                     should_refetch_account_data = true;
                                 }
                                 state_chain_runtime::Event::Validator(
-                                    pallet_cf_validator::Event::PeerIdRegistered(account_id, peer_id)
+                                    pallet_cf_validator::Event::PeerIdRegistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
                                 ) => {
-                                    account_peer_mapping_change_sender.send((AccountId(*account_id.as_ref()), peer_id, AccountPeerMappingChange::Registered)).map_err(anyhow::Error::new).unwrap();
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Registered,
+                                        ))
+                                        .map_err(anyhow::Error::new)
+                                        .unwrap();
                                 }
                                 state_chain_runtime::Event::Validator(
-                                    pallet_cf_validator::Event::PeerIdUnregistered(account_id, peer_id)
+                                    pallet_cf_validator::Event::PeerIdUnregistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
                                 ) => {
-                                    account_peer_mapping_change_sender.send((AccountId(*account_id.as_ref()), peer_id, AccountPeerMappingChange::Unregistered)).map_err(anyhow::Error::new).unwrap();
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Unregistered,
+                                        ))
+                                        .map_err(anyhow::Error::new)
+                                        .unwrap();
                                 }
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(

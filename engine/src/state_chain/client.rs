@@ -236,9 +236,11 @@ impl StateChainRpcApi for StateChainRpcClient {
     }
 
     async fn system_local_peer_id(&self) -> Result<PeerId> {
-        self.system_rpc_client.system_local_peer_id().await.map_err(rpc_error_into_anyhow_error).and_then(|bs58| {
-            Ok(PeerId::from_str(&bs58)?)
-        })
+        self.system_rpc_client
+            .system_local_peer_id()
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .and_then(|bs58| Ok(PeerId::from_str(&bs58)?))
     }
 }
 
