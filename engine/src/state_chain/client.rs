@@ -582,6 +582,20 @@ pub async fn connect_to_state_chain(
             anyhow::Error::msg("Failed to get latest block hash"),
         )?;
 
+        println!("Latest block hash from stream: {:?}", latest_block_hash);
+
+        let block_hash = try_unwrap_value(
+            chain_rpc_client.block_hash(None).await.unwrap(),
+            anyhow::Error::msg("Hello"),
+        )
+        .unwrap();
+
+        println!("Block hash: {:?}", block_hash);
+
+        let finalised_head = chain_rpc_client.finalized_head().await.unwrap();
+
+        println!("Here's the finalised head: {:?}", finalised_head);
+
         let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
             &mut &state_rpc_client
                 .metadata(Some(latest_block_hash))
