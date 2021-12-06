@@ -16,11 +16,11 @@ macro_rules! impl_mock_signer_nomination {
 		impl cf_traits::SignerNomination for MockSignerNomination {
 			type SignerId = $account_id;
 
-			fn nomination_with_seed(seed: u64) -> Self::SignerId {
-				CANDIDATES.with(|cell| {
+			fn nomination_with_seed(seed: u64) -> Option<Self::SignerId> {
+				Some(CANDIDATES.with(|cell| {
 					let candidates = cell.borrow();
 					candidates[seed as usize % candidates.len()].clone()
-				})
+				}))
 			}
 
 			fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
