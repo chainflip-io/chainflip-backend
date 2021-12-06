@@ -482,10 +482,11 @@ jobs:
             sops -d Default.enc.toml > config/Default.toml
             echo -n $BASHFUL_SIGNING_KEY > signing_key_file
             echo -n $ETH_PRIVATE_KEY > private_key_file
+            echo -n $NODE_KEY_FILE > node_key_file
       - run:
           name: Start Node
           background: true
-          command: ./target/release/state-chain-node --chain cf-dev
+          command: ./target/release/state-chain-node --chain cf-dev --node-key-file=node_key_file
       - run: sleep 3
       - run:
           name: Start Engine
