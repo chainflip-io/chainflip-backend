@@ -120,7 +120,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
     slog::info!(
         logger,
-        "Loaded peer account id maapping from chain:{:#?}",
+        "Loaded peer account id mapping from chain: {:#?}",
         peer_to_account
     );
 
