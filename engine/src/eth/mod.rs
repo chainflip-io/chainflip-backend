@@ -19,13 +19,13 @@ use web3::{
 };
 
 use crate::{
-    common::Mutex,
+    common::{read_and_decode_file, Mutex},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::{TryFutureExt, TryStreamExt};
-use std::{fmt::Debug, fs::read_to_string, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -190,15 +190,12 @@ impl EthBroadcaster {
         eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let key = read_to_string(eth_settings.private_key_file.as_path())
-            .context("Failed to read eth.private_key_file")?;
-        let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
-            panic!(
-                "Should read in secret key from: {}: {}",
-                eth_settings.private_key_file.display(),
-                e,
-            )
-        });
+        let secret_key = read_and_decode_file(
+            &eth_settings.private_key_file,
+            "Ethereum Private Key",
+            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
+        )
+        .unwrap();
         Ok(Self {
             web3,
             secret_key,

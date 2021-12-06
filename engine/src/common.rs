@@ -1,5 +1,9 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
+use anyhow::Context;
 use jsonrpc_core_client::RpcError;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -95,4 +99,16 @@ mod tests {
 // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
 pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
     anyhow::Error::msg(format!("{:?}", error))
+}
+
+pub fn read_and_decode_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
+    file: &Path,
+    context: &str,
+    t: T,
+) -> Result<V, anyhow::Error> {
+    std::fs::read_to_string(&file)
+        .map_err(anyhow::Error::new)
+        .with_context(|| format!("Failed to read {} file at {}", context, file.display()))
+        .and_then(t)
+        .with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
 }

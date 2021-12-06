@@ -143,6 +143,16 @@ impl EmergencyRotation for MockEmergencyRotation {
 
 impl_mock_online!(ValidatorId);
 
+pub struct MockPeerMapping;
+
+impl HasPeerMapping for MockPeerMapping {
+	type ValidatorId = ValidatorId;
+
+	fn has_peer_mapping(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -153,6 +163,7 @@ impl Config for Test {
 	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type Online = MockOnline;
+	type PeerMapping = MockPeerMapping;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;

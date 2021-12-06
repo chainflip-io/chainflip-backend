@@ -334,6 +334,13 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
+pub trait HasPeerMapping {
+	/// The validator id used
+	type ValidatorId;
+	/// The existence of this validators peer mapping
+	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool;
+}
+
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.  
