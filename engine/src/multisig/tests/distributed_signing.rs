@@ -1,3 +1,5 @@
+/*
+
 use std::collections::HashMap;
 
 use client::KeygenOutcome;
@@ -249,3 +251,6 @@ async fn distributed_signing() {
         test_fut
     );
 }
+
+
+*/
