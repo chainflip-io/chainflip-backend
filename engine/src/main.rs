@@ -54,7 +54,8 @@ async fn main() {
     let (multisig_instruction_sender, multisig_instruction_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     // TODO: Merge this into the MultisigInstruction channel
-    let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
 
     let (multisig_event_sender, multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
@@ -112,8 +113,10 @@ async fn main() {
                 incoming_p2p_message_sender,
                 outgoing_p2p_message_receiver,
                 account_peer_mapping_change_receiver,
-                &root_logger
-            ).await.unwrap()
+                &root_logger,
+            )
+            .await
+            .unwrap()
         },
         // Start state chain components
         state_chain::sc_observer::start(

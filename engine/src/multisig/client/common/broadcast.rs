@@ -99,8 +99,7 @@ where
                         self.common
                             .outgoing_p2p_message_sender
                             .send((
-                                self
-                                    .common
+                                self.common
                                     .validator_mapping
                                     .get_id(*destination_idx)
                                     .expect("Unknown account index")
@@ -123,8 +122,7 @@ where
                         self.common
                             .outgoing_p2p_message_sender
                             .send((
-                                self
-                                    .common
+                                self.common
                                     .validator_mapping
                                     .get_id(destination_idx)
                                     .expect("Unknown account index")

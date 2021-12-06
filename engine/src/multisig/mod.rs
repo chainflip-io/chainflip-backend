@@ -21,7 +21,8 @@ use futures::StreamExt;
 use slog::o;
 
 pub use client::{
-    KeygenOptions, KeygenOutcome, MultisigClient, MultisigOutcome, SchnorrSignature, SigningOutcome, MultisigMessage
+    KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,
+    SchnorrSignature, SigningOutcome,
 };
 
 pub use db::{KeyDB, PersistentKeyDB};

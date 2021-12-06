@@ -233,7 +233,8 @@ async fn should_delay_rts_until_key_is_ready() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let (sender_id, message) = helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
+            let (sender_id, message) =
+                helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
             c1.process_p2p_message(sender_id, message);
         }
     }
@@ -336,7 +337,8 @@ async fn pending_rts_should_expire() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let (sender_id, message) = helpers::keygen_data_to_p2p(ver5.clone(), &sender_id, KEYGEN_CEREMONY_ID);
+            let (sender_id, message) =
+                helpers::keygen_data_to_p2p(ver5.clone(), &sender_id, KEYGEN_CEREMONY_ID);
             c1.process_p2p_message(sender_id, message);
         }
     }

@@ -125,9 +125,13 @@ macro_rules! distribute_data_keygen_custom {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_message);
 
-                    let (sender_id, message) = keygen_data_to_p2p(message, sender_id, KEYGEN_CEREMONY_ID);
+                    let (sender_id, message) =
+                        keygen_data_to_p2p(message, sender_id, KEYGEN_CEREMONY_ID);
 
-                    $clients.get_mut(receiver_id).unwrap().process_p2p_message(sender_id.clone(), message.clone());
+                    $clients
+                        .get_mut(receiver_id)
+                        .unwrap()
+                        .process_p2p_message(sender_id.clone(), message.clone());
                 }
             }
         }
@@ -137,7 +141,8 @@ macro_rules! distribute_data_keygen_custom {
 macro_rules! distribute_data_keygen {
     ($clients:expr, $account_ids: expr, $messages: expr) => {{
         for sender_id in &$account_ids {
-            let (sender_id, message) = keygen_data_to_p2p($messages[sender_id].clone(), sender_id, KEYGEN_CEREMONY_ID);
+            let (sender_id, message) =
+                keygen_data_to_p2p($messages[sender_id].clone(), sender_id, KEYGEN_CEREMONY_ID);
 
             for receiver_id in &$account_ids {
                 if receiver_id != &sender_id {
@@ -197,7 +202,8 @@ macro_rules! distribute_data_signing_custom {
 pub(super) type MultisigOutcomeReceiver =
     Pin<Box<Peekable<UnboundedReceiverStream<MultisigOutcome>>>>;
 
-pub(super) type P2PMessageReceiver = Pin<Box<Peekable<UnboundedReceiverStream<(AccountId, MultisigMessage)>>>>;
+pub(super) type P2PMessageReceiver =
+    Pin<Box<Peekable<UnboundedReceiverStream<(AccountId, MultisigMessage)>>>>;
 
 pub struct Stage0Data {
     pub clients: HashMap<AccountId, MultisigClientNoDB>,
@@ -779,9 +785,13 @@ impl KeygenContext {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_sec3.clone());
 
-                    let (sender_id, message) = keygen_data_to_p2p(sec3.clone(), sender_id, KEYGEN_CEREMONY_ID);
+                    let (sender_id, message) =
+                        keygen_data_to_p2p(sec3.clone(), sender_id, KEYGEN_CEREMONY_ID);
 
-                    clients.get_mut(receiver_id).unwrap().process_p2p_message(sender_id, message);
+                    clients
+                        .get_mut(receiver_id)
+                        .unwrap()
+                        .process_p2p_message(sender_id, message);
                 }
             }
         }
@@ -1268,13 +1278,16 @@ async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen:
     }
 }
 
-pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> (AccountId, MultisigMessage) {
+pub fn sig_data_to_p2p(
+    data: impl Into<SigningData>,
+    sender_id: &AccountId,
+) -> (AccountId, MultisigMessage) {
     (
         sender_id.clone(),
         MultisigMessage {
             ceremony_id: SIGN_CEREMONY_ID,
             data: MultisigData::Signing(data.into()),
-        }
+        },
     )
 }
 
@@ -1288,7 +1301,7 @@ pub fn keygen_data_to_p2p(
         MultisigMessage {
             ceremony_id,
             data: MultisigData::Keygen(data.into()),
-        }
+        },
     )
 }
 
@@ -1359,7 +1372,8 @@ impl MultisigClientNoDB {
         keygen_states: &ValidKeygenStates,
         sender_id: &AccountId,
     ) {
-        let (sender_id, message) = self.get_keygen_p2p_message_for_stage(stage, keygen_states, sender_id);
+        let (sender_id, message) =
+            self.get_keygen_p2p_message_for_stage(stage, keygen_states, sender_id);
         self.process_p2p_message(sender_id, message);
     }
 
@@ -1438,11 +1452,8 @@ impl MultisigClientNoDB {
         sign_states: &ValidSigningStates,
         sender_id: &AccountId,
     ) {
-        let (sender_id, message) = self.get_signing_p2p_message_for_stage(
-            stage,
-            sign_states,
-            sender_id
-        );
+        let (sender_id, message) =
+            self.get_signing_p2p_message_for_stage(stage, sign_states, sender_id);
         self.process_p2p_message(sender_id, message);
     }
 

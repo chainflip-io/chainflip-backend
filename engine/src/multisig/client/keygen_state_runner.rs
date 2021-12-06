@@ -4,12 +4,16 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    logging::KEYGEN_REQUEST_IGNORED,
-    multisig::client::ThresholdParameters,
-    p2p::AccountId,
+    logging::KEYGEN_REQUEST_IGNORED, multisig::client::ThresholdParameters, p2p::AccountId,
 };
 
-use super::{KeygenResultInfo, MultisigMessage, MultisigOutcomeSender, common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult}, keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions}, state_runner::StateRunner, utils::PartyIdxMapping};
+use super::{
+    common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
+    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions},
+    state_runner::StateRunner,
+    utils::PartyIdxMapping,
+    KeygenResultInfo, MultisigMessage, MultisigOutcomeSender,
+};
 
 #[derive(Clone)]
 pub struct KeygenStateRunner {
