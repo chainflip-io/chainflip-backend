@@ -69,6 +69,8 @@
     ]
   },
   "Duration": "(u64,u32)",
+  "Ed25519PublicKey": "[u8;32]",
+  "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
