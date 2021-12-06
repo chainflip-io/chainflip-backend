@@ -12,6 +12,12 @@ use url::Url;
 
 use structopt::StructOpt;
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct P2P {
+    #[serde(deserialize_with = "deser_path")]
+    pub node_key_file: PathBuf,
+}
+
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct StateChain {
     pub ws_endpoint: String,
@@ -54,6 +60,7 @@ pub struct Log {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
+    pub node_p2p: P2P,
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
@@ -79,6 +86,10 @@ pub struct CommandLineOptions {
     log_whitelist: Option<Vec<String>>,
     #[structopt(short = "b", long = "log-blacklist")]
     log_blacklist: Option<Vec<String>>,
+
+    // P2P Settings
+    #[structopt(long = "p2p.node_key_file", parse(from_os_str))]
+    node_key_file: Option<PathBuf>,
 
     #[structopt(flatten)]
     state_chain_opts: StateChainOptions,
@@ -109,6 +120,7 @@ impl CommandLineOptions {
             config_path: None,
             log_whitelist: None,
             log_blacklist: None,
+            node_key_file: None,
             state_chain_opts: StateChainOptions::default(),
             eth_from_block: None,
             eth_node_endpoint: None,
@@ -162,6 +174,12 @@ impl Settings {
         };
 
         // Override the settings with the cmd line options
+
+        // P2P
+        if let Some(opt) = opts.node_key_file {
+            settings.node_p2p.node_key_file = opt
+        };
+
         // State Chain
         if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
             settings.state_chain.ws_endpoint = opt
@@ -355,6 +373,7 @@ mod tests {
             config_path: None,
             log_whitelist: Some(vec!["test1".to_owned()]),
             log_blacklist: Some(vec!["test2".to_owned()]),
+            node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
             state_chain_opts: StateChainOptions {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
@@ -371,6 +390,8 @@ mod tests {
         let settings = Settings::new(opts.clone()).unwrap();
 
         // Compare the opts and the settings
+        assert_eq!(opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+
         assert_eq!(
             opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
             settings.state_chain.ws_endpoint

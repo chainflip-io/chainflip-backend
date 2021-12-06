@@ -38,6 +38,11 @@ default-features = false
 features = ['derive']
 version = '1.0'
 
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
@@ -81,6 +86,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'sp-std/std',
+    'sp-core/std',
     'sp-runtime/std',
     'pallet-session/std',
     'pallet-cf-auction/std',

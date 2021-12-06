@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, MultisigOutcome};
+use crate::p2p::AccountId;
 
 use client::{
     keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
@@ -19,8 +20,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
-use crate::p2p::{AccountId, P2PMessage};
-
+use super::MultisigMessage;
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
@@ -31,7 +31,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 pub struct CeremonyManager {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
@@ -41,7 +41,7 @@ impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
         outcome_sender: MultisigOutcomeSender,
-        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {

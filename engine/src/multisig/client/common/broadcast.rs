@@ -4,10 +4,7 @@ use std::{
     fmt::Display,
 };
 
-use crate::{
-    multisig::client::{MultisigData, MultisigMessage},
-    p2p::P2PMessage,
-};
+use crate::multisig::client::{MultisigData, MultisigMessage};
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
@@ -101,19 +98,18 @@ where
                         let data: D = data.clone().into();
                         self.common
                             .outgoing_p2p_message_sender
-                            .send(P2PMessage {
-                                account_id: self
+                            .send((
+                                self
                                     .common
                                     .validator_mapping
                                     .get_id(*destination_idx)
                                     .expect("Unknown account index")
                                     .clone(),
-                                data: bincode::serialize(&MultisigMessage {
+                                MultisigMessage {
                                     ceremony_id: self.common.ceremony_id,
                                     data: data.into(),
-                                })
-                                .unwrap(),
-                            })
+                                },
+                            ))
                             .expect("Could not send p2p message.");
                     }
                 }
@@ -126,19 +122,18 @@ where
                         let data: D = data.clone().into();
                         self.common
                             .outgoing_p2p_message_sender
-                            .send(P2PMessage {
-                                account_id: self
+                            .send((
+                                self
                                     .common
                                     .validator_mapping
                                     .get_id(destination_idx)
                                     .expect("Unknown account index")
                                     .clone(),
-                                data: bincode::serialize(&MultisigMessage {
+                                MultisigMessage {
                                     ceremony_id: self.common.ceremony_id,
                                     data: data.into(),
-                                })
-                                .unwrap(),
-                            })
+                                },
+                            ))
                             .expect("Could not send p2p message.");
                     }
                 }

@@ -317,17 +317,12 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a message from an unknown AccountId
-        let message = {
-            let mut m = c1.get_keygen_p2p_message_for_stage(
-                current_stage,
-                &keygen_states,
-                &ctx.get_account_id(1),
-            );
-            m.account_id = unknown_id.clone();
-            m
-        };
-
-        c1.process_p2p_message(message);
+        let (_, message) = c1.get_keygen_p2p_message_for_stage(
+            current_stage,
+            &keygen_states,
+            &ctx.get_account_id(1),
+        );
+        c1.process_p2p_message(unknown_id.clone(), message);
         assert!(
             c1.ensure_at_keygen_stage(current_stage).is_ok(),
             "Failed to ignore a message from an non=participant"
