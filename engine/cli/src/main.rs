@@ -134,7 +134,10 @@ async fn send_claim(
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
     let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
-    let seed = state_chain_client.rotate_session_keys().await.expect("Could not rotate session keys.");
+    let seed = state_chain_client
+        .rotate_session_keys()
+        .await
+        .expect("Could not rotate session keys.");
 
     println!("New session key {:?}.", seed);
 
