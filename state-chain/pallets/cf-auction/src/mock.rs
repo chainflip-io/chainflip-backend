@@ -143,6 +143,16 @@ impl EmergencyRotation for MockEmergencyRotation {
 
 impl_mock_online!(ValidatorId);
 
+pub struct MockPeerMapping;
+
+impl HasPeerMapping for MockPeerMapping {
+	type ValidatorId = ValidatorId;
+
+	fn has_peer_mapping(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
