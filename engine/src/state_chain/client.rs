@@ -589,20 +589,21 @@ pub async fn connect_to_state_chain(
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
-    >::new(sp_core::sr25519::Pair::from_seed(
-        &read_and_decode_file(&state_chain_settings.signing_key_file, "State Chain Signing Key", |str| {
+    >::new(sp_core::sr25519::Pair::from_seed(&read_and_decode_file(
+        &state_chain_settings.signing_key_file,
+        "State Chain Signing Key",
+        |str| {
             <[u8; 32]>::try_from(
                 hex::decode(
-                    str
-                        .replace("\"", "")
+                    str.replace("\"", "")
                         // allow inserting the private key with or without the 0x
                         .replace("0x", ""),
                 )
                 .map_err(anyhow::Error::new)?,
             )
             .map_err(|_err| anyhow::Error::msg("Wrong length"))
-        })?
-    ));
+        },
+    )?));
 
     let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
         state_chain_settings.ws_endpoint.as_str(),

@@ -18,7 +18,12 @@ use web3::{
     types::{CallRequest, U64},
 };
 
-use crate::{common::{Mutex, read_and_decode_file}, logging::COMPONENT_KEY, settings, state_chain::client::{StateChainClient, StateChainRpcApi}};
+use crate::{
+    common::{read_and_decode_file, Mutex},
+    logging::COMPONENT_KEY,
+    settings,
+    state_chain::client::{StateChainClient, StateChainRpcApi},
+};
 use futures::{TryFutureExt, TryStreamExt};
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
@@ -185,9 +190,12 @@ impl EthBroadcaster {
         eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let secret_key = read_and_decode_file(&eth_settings.private_key_file, "Ethereum Private Key", |key| {
-            SecretKey::from_str(&key[..]).map_err(anyhow::Error::new)
-        }).unwrap();
+        let secret_key = read_and_decode_file(
+            &eth_settings.private_key_file,
+            "Ethereum Private Key",
+            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
+        )
+        .unwrap();
         Ok(Self {
             web3,
             secret_key,
