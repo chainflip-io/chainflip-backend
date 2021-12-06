@@ -17,12 +17,15 @@ pub struct CLICommandLineOptions {
 
 #[derive(StructOpt, Clone)]
 pub enum CFCommand {
+    #[structopt(about = "Submit an extrinsic to request generation of a claim certificate")]
     Claim {
         #[structopt(help = "Amount to claim in FLIP")]
         amount: f64,
         #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
         eth_address: String,
     },
+    #[structopt(about = "Rotate your session keys")]
+    Rotate {},
 }
 
 #[derive(Deserialize, Debug, Default)]

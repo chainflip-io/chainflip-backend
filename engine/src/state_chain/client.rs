@@ -167,6 +167,8 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
+
+    async fn rotate_keys(&self) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -197,6 +199,13 @@ impl StateChainRpcApi for StateChainRpcClient {
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.state_rpc_client
             .query_storage_at(vec![storage_key], block_hash)
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+    }
+
+    async fn rotate_keys(&self) -> Result<Bytes> {
+        self.author_rpc_client
+            .rotate_keys()
             .await
             .map_err(rpc_error_into_anyhow_error)
     }
@@ -501,6 +510,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             )
             .value::<u32>()
             .expect("Could not decode HeartbeatBlockInterval to u32")
+    }
+
+    pub async fn rotate_session_keys(&self) -> Result<String> {
+        let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
+        Ok(hex::encode(session_key_bytes.0))
     }
 }
 
