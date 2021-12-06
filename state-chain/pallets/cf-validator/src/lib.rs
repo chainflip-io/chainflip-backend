@@ -29,6 +29,7 @@ use sp_runtime::traits::{
 	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
+use sp_core::ed25519;
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -41,6 +42,8 @@ pub struct SemVer {
 }
 
 type Version = SemVer;
+type Ed25519PublicKey = ed25519::Public;
+type Ed25519Signature = ed25519::Signature;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -54,7 +57,6 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
-	use sp_core::ed25519;
 	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
@@ -107,9 +109,9 @@ pub mod pallet {
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
 		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, ed25519::Public),
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey),
 		/// A validator has unregistered her current PeerId
-		PeerIdUnregistered(T::AccountId, ed25519::Public),
+		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
 
 	#[pallet::error]
@@ -226,8 +228,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
-			peer_id: ed25519::Public,
-			signature: ed25519::Signature,
+			peer_id: Ed25519PublicKey,
+			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
@@ -319,12 +321,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
 	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, ed25519::Public)>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey)>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
-	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, ed25519::Public, ()>;
+	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
 
 	/// Validator CFE version
 	#[pallet::storage]
