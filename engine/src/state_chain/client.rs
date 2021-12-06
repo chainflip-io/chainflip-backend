@@ -6,7 +6,6 @@ use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
-use hex::ToHex;
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
