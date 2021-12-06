@@ -515,7 +515,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
     pub async fn rotate_session_keys(&self) -> Result<String> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
-        Ok(session_key_bytes.to_vec().encode_hex::<String>())
+        Ok(hex::encode(session_key_bytes.0))
     }
 }
 
