@@ -145,10 +145,10 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 }
 
 pub async fn new_synced_web3_client(
-    settings: &settings::Settings,
+    eth_settings: &settings::Eth,
     logger: &slog::Logger,
 ) -> Result<Web3<web3::transports::WebSocket>> {
-    let node_endpoint = &settings.eth.node_endpoint;
+    let node_endpoint = &eth_settings.node_endpoint;
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
     tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
@@ -187,15 +187,15 @@ pub struct EthBroadcaster {
 
 impl EthBroadcaster {
     pub fn new(
-        settings: &settings::Settings,
+        eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let key = read_to_string(settings.eth.private_key_file.as_path())
+        let key = read_to_string(eth_settings.private_key_file.as_path())
             .context("Failed to read eth.private_key_file")?;
         let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
             panic!(
                 "Should read in secret key from: {}: {}",
-                settings.eth.private_key_file.display(),
+                eth_settings.private_key_file.display(),
                 e,
             )
         });

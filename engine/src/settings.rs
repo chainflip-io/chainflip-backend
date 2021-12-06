@@ -26,14 +26,13 @@ impl StateChain {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Eth {
     pub from_block: u64,
     pub node_endpoint: String,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct HealthCheck {
     pub hostname: String,
@@ -70,6 +69,14 @@ pub struct StateChainOptions {
     pub state_chain_signing_key_file: Option<PathBuf>,
 }
 
+#[derive(StructOpt, Debug, Clone, Default)]
+pub struct EthSharedOptions {
+    #[structopt(long = "eth.node_endpoint")]
+    pub eth_node_endpoint: Option<String>,
+    #[structopt(long = "eth.private_key_file")]
+    pub eth_private_key_file: Option<PathBuf>,
+}
+
 #[derive(StructOpt, Debug, Clone)]
 pub struct CommandLineOptions {
     // Misc Options
@@ -83,13 +90,11 @@ pub struct CommandLineOptions {
     #[structopt(flatten)]
     state_chain_opts: StateChainOptions,
 
-    // Eth Settings
+    #[structopt(flatten)]
+    eth_opts: EthSharedOptions,
+
     #[structopt(long = "eth.from_block")]
     eth_from_block: Option<u64>,
-    #[structopt(long = "eth.node_endpoint")]
-    eth_node_endpoint: Option<String>,
-    #[structopt(long = "eth.private_key_file", parse(from_os_str))]
-    eth_private_key_file: Option<PathBuf>,
 
     // Health Check Settings
     #[structopt(long = "health_check.hostname")]
@@ -111,8 +116,7 @@ impl CommandLineOptions {
             log_blacklist: None,
             state_chain_opts: StateChainOptions::default(),
             eth_from_block: None,
-            eth_node_endpoint: None,
-            eth_private_key_file: None,
+            eth_opts: EthSharedOptions::default(),
             health_check_hostname: None,
             health_check_port: None,
             signing_db_file: None,
@@ -174,10 +178,10 @@ impl Settings {
         if let Some(opt) = opts.eth_from_block {
             settings.eth.from_block = opt
         };
-        if let Some(opt) = opts.eth_node_endpoint {
+        if let Some(opt) = opts.eth_opts.eth_node_endpoint {
             settings.eth.node_endpoint = opt
         };
-        if let Some(opt) = opts.eth_private_key_file {
+        if let Some(opt) = opts.eth_opts.eth_private_key_file {
             settings.eth.private_key_file = opt
         };
 
@@ -360,8 +364,10 @@ mod tests {
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_from_block: Some(1234),
-            eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-            eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            eth_opts: EthSharedOptions {
+                eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+                eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            },
             health_check_hostname: Some("health_check_hostname".to_owned()),
             health_check_port: Some(1337),
             signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
@@ -381,9 +387,12 @@ mod tests {
         );
 
         assert_eq!(opts.eth_from_block.unwrap(), settings.eth.from_block);
-        assert_eq!(opts.eth_node_endpoint.unwrap(), settings.eth.node_endpoint);
         assert_eq!(
-            opts.eth_private_key_file.unwrap(),
+            opts.eth_opts.eth_node_endpoint.unwrap(),
+            settings.eth.node_endpoint
+        );
+        assert_eq!(
+            opts.eth_opts.eth_private_key_file.unwrap(),
             settings.eth.private_key_file
         );
 

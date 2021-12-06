@@ -16,7 +16,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let web3 = new_synced_web3_client(&settings, &root_logger)
+    let web3 = new_synced_web3_client(&settings.eth, &root_logger)
         .await
         .unwrap();
 
