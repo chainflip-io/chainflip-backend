@@ -233,8 +233,8 @@ async fn should_delay_rts_until_key_is_ready() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let m = helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
-            c1.process_p2p_message(m);
+            let (sender_id, message) = helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
+            c1.process_p2p_message(sender_id, message);
         }
     }
 
@@ -336,8 +336,8 @@ async fn pending_rts_should_expire() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let m = helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
-            c1.process_p2p_message(m);
+            let (sender_id, message) = helpers::keygen_data_to_p2p(ver5.clone(), &sender_id, KEYGEN_CEREMONY_ID);
+            c1.process_p2p_message(sender_id, message);
         }
     }
 
@@ -387,16 +387,12 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a message from an unknown AccountId
-        let message = {
-            let mut m = c1.get_signing_p2p_message_for_stage(
-                current_stage,
-                &sign_states,
-                &ctx.get_account_id(1),
-            );
-            m.account_id = unknown_id.clone();
-            m
-        };
-        c1.process_p2p_message(message);
+        let (_, message) = c1.get_signing_p2p_message_for_stage(
+            current_stage,
+            &sign_states,
+            &ctx.get_account_id(1),
+        );
+        c1.process_p2p_message(unknown_id.clone(), message);
         assert!(
             c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from an unknown id"
@@ -407,18 +403,12 @@ async fn should_ignore_unexpected_message_for_stage() {
         let non_participant_id = ctx.get_account_id(3);
 
         assert!(!SIGNER_IDS.contains(&non_participant_id));
-        let message = {
-            let mut m = c1.get_signing_p2p_message_for_stage(
-                current_stage,
-                &sign_states,
-                &ctx.get_account_id(1),
-            );
-
-            m.account_id = non_participant_id.clone();
-            m
-        };
-
-        c1.process_p2p_message(message);
+        let (_, message) = c1.get_signing_p2p_message_for_stage(
+            current_stage,
+            &sign_states,
+            &ctx.get_account_id(1),
+        );
+        c1.process_p2p_message(non_participant_id.clone(), message);
         assert!(
             c1.ensure_at_signing_stage(current_stage).is_ok(),
             "Failed to ignore a message from an non-participant"

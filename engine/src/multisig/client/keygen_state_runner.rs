@@ -6,16 +6,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     logging::KEYGEN_REQUEST_IGNORED,
     multisig::client::ThresholdParameters,
-    p2p::{AccountId, P2PMessage},
+    p2p::AccountId,
 };
 
-use super::{
-    common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},
-    keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions},
-    state_runner::StateRunner,
-    utils::PartyIdxMapping,
-    KeygenResultInfo, MultisigOutcomeSender,
-};
+use super::{KeygenResultInfo, MultisigMessage, MultisigOutcomeSender, common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult}, keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions}, state_runner::StateRunner, utils::PartyIdxMapping};
 
 #[derive(Clone)]
 pub struct KeygenStateRunner {
@@ -37,7 +31,7 @@ impl KeygenStateRunner {
         &mut self,
         ceremony_id: CeremonyId,
         outcome_sender: MultisigOutcomeSender,
-        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
         idx_mapping: Arc<PartyIdxMapping>,
         own_idx: usize,
         all_idxs: BTreeSet<usize>,

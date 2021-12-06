@@ -20,10 +20,8 @@ use crate::{logging::COMPONENT_KEY, p2p::AccountId};
 use futures::StreamExt;
 use slog::o;
 
-use crate::p2p::P2PMessage;
-
 pub use client::{
-    KeygenOptions, KeygenOutcome, MultisigClient, MultisigOutcome, SchnorrSignature, SigningOutcome,
+    KeygenOptions, KeygenOutcome, MultisigClient, MultisigOutcome, SchnorrSignature, SigningOutcome, MultisigMessage
 };
 
 pub use db::{KeyDB, PersistentKeyDB};
@@ -64,8 +62,8 @@ pub fn start_client<S>(
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
-    mut incoming_p2p_message_receiver: UnboundedReceiver<P2PMessage>,
-    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
+    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
@@ -94,8 +92,8 @@ where
 
         loop {
             tokio::select! {
-                Some(p2p_message) = incoming_p2p_message_receiver.recv() => {
-                    client.process_p2p_message(p2p_message);
+                Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
+                    client.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     client.process_multisig_instruction(msg);

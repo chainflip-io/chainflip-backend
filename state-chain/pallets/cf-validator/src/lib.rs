@@ -20,7 +20,7 @@ mod benchmarking;
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
 };
-use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
+use frame_support::{pallet_prelude::*, traits::{EstimateNextSessionRotation, OnKilledAccount}};
 pub use pallet::*;
 use sp_runtime::traits::{
 	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
@@ -51,6 +51,8 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
+	use sp_core::ed25519;
+	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -101,6 +103,10 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
+		/// A validator has register her current PeerId
+		PeerIdRegistered(T::AccountId, ed25519::Public),
+		/// A validator has unregistered her current PeerId
+		PeerIdUnregistered(T::AccountId, ed25519::Public)
 	}
 
 	#[pallet::error]
@@ -112,6 +118,10 @@ pub mod pallet {
 		AuctionInProgress,
 		/// Invalid CFE version has been submitted
 		InvalidCFEVersion,
+		/// Validator Peer mapping overlaps with an existing mapping
+		AccountPeerMappingOverlap,
+		/// Invalid signature
+		InvalidAccountPeerMappingSignature
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -193,6 +203,34 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Allow a validator to link their validator id to a peer id
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [PeerIdRegistered](Event::PeerIdRegistered)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [InvalidAccountPeerMappingSignature](Error::InvalidAccountPeerMappingSignature)
+		/// - [AccountPeerMappingOverlap](Error::AccountPeerMappingOverlap)
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::weight(10_000)]
+		pub fn register_peer_id(origin: OriginFor<T>, peer_id: ed25519::Public, signature: ed25519::Signature) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ensure!(RuntimePublic::verify(&peer_id, &account_id.encode(), &signature), Error::<T>::InvalidAccountPeerMappingSignature);
+			ensure!(!AccountPeerMapping::<T>::contains_key(&account_id) && !MappedPeers::<T>::contains_key(&peer_id), Error::<T>::AccountPeerMappingOverlap);
+			AccountPeerMapping::<T>::insert(account_id.clone(), (account_id.clone(), peer_id.clone()));
+			MappedPeers::<T>::insert(peer_id.clone(), ());
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
+			Ok(().into())
+		}
+
 		/// Allow a validator to send their current cfe version.  We validate that the version is a
 		/// subsequent version and if so it is stored with an event is emitted else we throw an
 		/// error.
@@ -259,6 +297,16 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
+
+	/// Account to Peer Mapping
+	#[pallet::storage]
+	#[pallet::getter(fn validator_peer_id)]
+	pub type AccountPeerMapping<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, ed25519::Public)>;
+
+	/// Peers that are associated with account ids
+	#[pallet::storage]
+	#[pallet::getter(fn mapped_peer)]
+	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, ed25519::Public, ()>;
 
 	/// Validator CFE version
 	#[pallet::storage]
@@ -497,6 +545,19 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 	fn emergency_rotation_completed() {
 		if Self::emergency_rotation_in_progress() {
 			EmergencyRotationRequested::<T>::set(false);
+		}
+	}
+}
+
+pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
+
+/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the
+/// account by burning it.
+impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		if let Some((_, peer_id)) = AccountPeerMapping::<T>::take(&account_id) {
+			MappedPeers::<T>::remove(&peer_id);
+			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
 	}
 }
