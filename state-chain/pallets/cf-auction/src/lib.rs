@@ -282,11 +282,11 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				bidders.retain(|(_, amount)| !amount.is_zero());
 				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-
+				// Rule #3 - They have a registered peer id
 				bidders.retain(|(id, _)| T::PeerMapping::has_peer_mapping(id));
-				// Rule #3 - Confirm that the validators are 'online'
+				// Rule #4 - Confirm that the validators are 'online'
 				bidders.retain(|(id, _)| T::Online::is_online(id));
-				// Rule #4 - Confirm we have our set size
+				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
