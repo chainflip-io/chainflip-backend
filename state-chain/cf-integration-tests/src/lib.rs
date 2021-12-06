@@ -307,10 +307,8 @@ mod tests {
 		}
 
 		// Create an account, generate and register the session keys
-		fn setup_account(node_id: &NodeId) {
+		fn setup_account(node_id: &NodeId, seed: &String) {
 			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
-
-			let seed = &node_id.clone().to_string();
 
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
@@ -321,6 +319,17 @@ mod tests {
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				key,
 				vec![]
+			));
+		}
+
+		fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
+			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
+
+			use sp_core::Encode;
+			assert_ok!(state_chain_runtime::Validator::register_peer_id(
+				state_chain_runtime::Origin::signed(node_id.clone()),
+				peer_keypair.public(),
+				peer_keypair.sign(&node_id.encode()[..])
 			));
 		}
 
@@ -348,6 +357,7 @@ mod tests {
 				// Include any nodes already *created* to the test network
 				for node in nodes_to_include {
 					network.add_node(node);
+					setup_peer_mapping(node, &node.clone().to_string());
 				}
 
 				let remaining_nodes = number_of_nodes.saturating_sub(nodes_to_include.len() as u8);
@@ -356,7 +366,9 @@ mod tests {
 				for _ in 0..remaining_nodes {
 					let node_id = network.next_node_id();
 					nodes.push(node_id.clone());
-					setup_account(&node_id);
+					let seed = node_id.clone().to_string();
+					setup_account(&node_id, &seed);
+					setup_peer_mapping(&node_id, &seed);
 					network
 						.engines
 						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
