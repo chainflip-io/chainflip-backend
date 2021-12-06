@@ -7,28 +7,27 @@ use std::{
 
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::oneshot;
 
 use crate::{
     multisig::client::common::{ProcessMessageResult, StageResult},
     p2p::AccountId,
 };
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
+use super::{CeremonyAbortReason, MultisigOutcomeSender, common::CeremonyStage, utils::PartyIdxMapping};
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
 
-#[derive(Clone)]
 pub struct StateAuthorised<CeremonyData, CeremonyResult>
 where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
     pub ceremony_id: CeremonyId,
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: MultisigOutcomeSender,
+    pub result_sender: oneshot::Sender<Result<CeremonyResult, (CeremonyAbortReason, Vec<AccountId>)>>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
-#[derive(Clone)]
 pub struct StateRunner<CeremonyData, CeremonyResult>
 where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
@@ -66,7 +65,7 @@ where
         ceremony_id: CeremonyId,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: MultisigOutcomeSender,
+        result_sender: oneshot::Sender<Result<CeremonyResult, (CeremonyAbortReason, Vec<AccountId>)>>,
     ) -> Result<()> {
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
@@ -98,7 +97,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> bool {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -106,9 +105,10 @@ where
             sender_id
         );
 
-        match &mut self.inner {
+        if let Some(result) = match &mut self.inner {
             None => {
                 self.add_delayed(sender_id, data);
+                None
             }
             Some(authorised_state) => {
                 let stage = authorised_state.stage.as_mut().expect(
@@ -116,61 +116,67 @@ where
                 );
 
                 // Check that the sender is a possible participant in the ceremony
-                let sender_idx = match authorised_state.idx_mapping.get_idx(&sender_id) {
-                    Some(idx) => idx,
+                match authorised_state.idx_mapping.get_idx(&sender_id) {
+                    Some(idx) => {
+                        // Check if we should delay this message for the next stage to use
+                        if stage.should_delay(&data) {
+                            self.add_delayed(sender_id, data);
+                            None
+                        } else {
+                            if let ProcessMessageResult::Ready = stage.process_message(idx, data) {
+                                let stage = authorised_state.stage.take().unwrap();
+
+                                match stage.finalize() {
+                                    StageResult::NextStage(mut next_stage) => {
+                                        slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
+            
+                                        next_stage.init();
+            
+                                        authorised_state.stage = Some(next_stage);
+            
+                                        // Instead of resetting the expiration time, we simply extend
+                                        // it (any remaining time carries over to the next stage).
+                                        // Doing it otherwise would allow other parties to influence
+                                        // when stages in individual nodes time out (by sending their
+                                        // data at specific times) thus making some attacks possible.
+                                        self.should_expire_at += MAX_STAGE_DURATION;
+            
+                                        self.process_delayed();
+            
+                                        None
+                                    }
+                                    StageResult::Error(bad_validators, reason) => {
+                                        Some(Err((
+                                            reason,
+                                            authorised_state.idx_mapping.get_ids(bad_validators),
+                                        )))
+                                    }
+                                    StageResult::Done(result) => {
+                                        Some(Ok(result))
+                                    }
+                                }
+                            } else {
+                                None
+                            }
+                        }
+                    },
                     None => {
                         slog::debug!(
                             self.logger,
                             "Sender {} is not a valid participant",
                             sender_id
                         );
-                        return None;
-                    }
-                };
-
-                // Check if we should delay this message for the next stage to use
-                if stage.should_delay(&data) {
-                    self.add_delayed(sender_id, data);
-                    return None;
-                }
-
-                if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
-                    let stage = authorised_state.stage.take().unwrap();
-
-                    match stage.finalize() {
-                        StageResult::NextStage(mut next_stage) => {
-                            slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
-
-                            next_stage.init();
-
-                            authorised_state.stage = Some(next_stage);
-
-                            // Instead of resetting the expiration time, we simply extend
-                            // it (any remaining time carries over to the next stage).
-                            // Doing it otherwise would allow other parties to influence
-                            // when stages in individual nodes time out (by sending their
-                            // data at specific times) thus making some attacks possible.
-                            self.should_expire_at += MAX_STAGE_DURATION;
-
-                            self.process_delayed();
-                        }
-                        StageResult::Error(bad_validators, reason) => {
-                            return Some(Err((
-                                authorised_state.idx_mapping.get_ids(bad_validators),
-                                reason,
-                            )));
-                        }
-                        StageResult::Done(result) => {
-                            slog::debug!(self.logger, "Ceremony reached the final stage!");
-
-                            return Some(Ok(result));
-                        }
+                        None
                     }
                 }
             }
+        } {
+            // TODO This take leaves this state runner in a bad state (As if the ceremony hadn't been started). This odd behaviour could cause people to introduce bugs, it can be avoided though via a refactor
+            self.inner.take().unwrap().result_sender.send(result.map_err(|(_, blamed)| (CeremonyAbortReason::Invalid, blamed))); // TODO unwrap
+            true
+        } else {
+            false
         }
-
-        None
     }
 
     /// Process previously delayed messages (which arrived one stage too early)

@@ -16,21 +16,23 @@ pub use keygen_data::{
 pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
+use tokio::sync::oneshot;
 
 use crate::p2p::AccountId;
 
-dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
+dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResultInfo>);
 
-use super::common::{CeremonyStage, KeygenResult};
+use super::{CeremonyAbortReason, KeygenResultInfo, common::{CeremonyStage, KeygenResult}};
 
 /// Information necessary for the multisig client to start a new keygen ceremony
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Debug)]
 pub struct KeygenInfo {
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
+    pub result_sender: oneshot::Sender<Result<KeygenResultInfo, (CeremonyAbortReason, Vec<AccountId>)>>
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug)]
 pub struct KeygenOptions {
     /// This is intentionally private to ensure that the only
     /// way to unset this flag with via test-only constructor
@@ -59,10 +61,11 @@ impl KeygenOptions {
 }
 
 impl KeygenInfo {
-    pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
+    pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>, result_sender: oneshot::Sender<Result<KeygenResultInfo, (CeremonyAbortReason, Vec<AccountId>)>>) -> Self {
         KeygenInfo {
             ceremony_id,
             signers,
+            result_sender,
         }
     }
 }

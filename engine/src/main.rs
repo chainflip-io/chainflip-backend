@@ -1,12 +1,4 @@
-use chainflip_engine::{
-    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
-    health::HealthMonitor,
-    logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, AccountId},
-    settings::{CommandLineOptions, Settings},
-    state_chain,
-};
+use chainflip_engine::{eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster}, health::HealthMonitor, logging, multisig::{self, MultisigClient, MultisigInstruction, MultisigOutcome, PersistentKeyDB}, p2p::{self, AccountId}, settings::{CommandLineOptions, Settings}, state_chain};
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
 use structopt::StructOpt;
@@ -50,15 +42,9 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
 
-    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
-    let (multisig_instruction_sender, multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     // TODO: Merge this into the MultisigInstruction channel
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-
-    let (multisig_event_sender, multisig_event_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -92,19 +78,18 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
+    let (multisig_client, ceremony_processing_future) = MultisigClient::new(
+        account_id.clone(),
+        db,
+        incoming_p2p_message_receiver,
+        outgoing_p2p_message_sender,
+        multisig::KeygenOptions::default(),
+        &root_logger,
+    );
+
     tokio::join!(
         // Start signing components
-        multisig::start_client(
-            account_id.clone(),
-            db,
-            multisig_instruction_receiver,
-            multisig_event_sender,
-            incoming_p2p_message_receiver,
-            outgoing_p2p_message_sender,
-            shutdown_client_rx,
-            multisig::KeygenOptions::default(),
-            &root_logger,
-        ),
+        ceremony_processing_future,
         async {
             p2p::start(
                 &settings,
@@ -123,9 +108,8 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_instruction_sender,
+            multisig_client,
             account_peer_mapping_change_sender,
-            multisig_event_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,

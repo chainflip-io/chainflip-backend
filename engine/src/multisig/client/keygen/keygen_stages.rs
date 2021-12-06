@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
+use crate::{logging::KEYGEN_REJECTED_INCOMPATIBLE, multisig::client::KeygenResultInfo};
 use crate::multisig::client;
 
 use client::{
@@ -64,7 +65,7 @@ impl AwaitCommitments1 {
 
 derive_display_as_type_name!(AwaitCommitments1);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1 {
     type Message = Comm1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -78,7 +79,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
     fn process(
         self,
         messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         // We have received commitments from everyone, for now just need to
         // go through another round to verify consistent broadcasts
 
@@ -119,7 +120,7 @@ fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
     x < half_order
 }
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroadcast2 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -135,7 +136,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
     fn process(
         self,
         messages: std::collections::HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         let commitments = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
@@ -210,7 +211,7 @@ struct SecretSharesStage3 {
 
 derive_display_as_type_name!(SecretSharesStage3);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage3 {
     type Message = SecretShare3;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -227,7 +228,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
     fn process(
         self,
         incoming_shares: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         // As the messages for this stage are sent in secret, it is possible
         // for a malicious party to send us invalid data without us being able to prove
         // that. Because of that, we can't simply terminate our protocol here.
@@ -277,7 +278,7 @@ struct ComplaintsStage4 {
 
 derive_display_as_type_name!(ComplaintsStage4);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 {
     type Message = Complaints4;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -291,7 +292,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
     fn process(
         self,
         messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
@@ -317,7 +318,7 @@ struct VerifyComplaintsBroadcastStage5 {
 
 derive_display_as_type_name!(VerifyComplaintsBroadcastStage5);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroadcastStage5 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsBroadcastStage5 {
     type Message = VerifyComplaints5;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -333,7 +334,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
     fn process(
         self,
         messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         let verified_complaints = match verify_broadcasts(&messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
@@ -349,7 +350,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
             let keygen_result =
                 compute_keygen_result(self.common.all_idxs.len(), self.shares, &self.commitments);
 
-            return StageResult::Done(keygen_result);
+            return StageResult::Done(KeygenResultInfo {
+                params: ThresholdParameters::from_share_count(keygen_result.party_public_keys.len()),
+                key: Arc::new(keygen_result),
+                validator_map: self.common.validator_mapping,
+            });
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -456,7 +461,7 @@ struct BlameResponsesStage6 {
 
 derive_display_as_type_name!(BlameResponsesStage6);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for BlameResponsesStage6 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesStage6 {
     type Message = BlameResponse6;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -504,7 +509,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for BlameResponsesStage6 
     fn process(
         self,
         blame_responses: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         // verify broadcasts of blame responses
 
         let processor = VerifyBlameResponsesBroadcastStage7 {
@@ -531,7 +536,7 @@ struct VerifyBlameResponsesBroadcastStage7 {
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesBroadcastStage7 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -547,7 +552,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
     fn process(
         mut self,
         messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         slog::debug!(
             self.common.logger,
             "Processing verifications for blame responses"
@@ -594,7 +599,12 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
             let keygen_result =
                 compute_keygen_result(self.common.all_idxs.len(), self.shares, &self.commitments);
 
-            StageResult::Done(keygen_result)
+            // TODO Factor out
+            StageResult::Done(KeygenResultInfo {
+                params: ThresholdParameters::from_share_count(keygen_result.party_public_keys.len()),
+                key: Arc::new(keygen_result),
+                validator_map: self.common.validator_mapping,
+            })
         } else {
             StageResult::Error(
                 bad_parties,

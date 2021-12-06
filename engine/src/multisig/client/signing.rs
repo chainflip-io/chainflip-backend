@@ -19,17 +19,15 @@ use crate::{
 
 use self::frost::SigningData;
 
-use super::{
-    common::{CeremonyStage, KeygenResult},
-    SchnorrSignature,
-};
+use super::{CeremonyAbortReason, SchnorrSignature, common::{CeremonyStage, KeygenResult}};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Debug)]
 pub struct SigningInfo {
     pub data: MessageHash,
     pub ceremony_id: CeremonyId,
     pub key_id: KeyId,
     pub signers: Vec<AccountId>,
+    pub result_sender: tokio::sync::oneshot::Sender<Result<SchnorrSignature, (CeremonyAbortReason, Vec<AccountId>)>>
 }
 
 impl SigningInfo {
@@ -38,12 +36,14 @@ impl SigningInfo {
         key_id: KeyId,
         data: MessageHash,
         signers: Vec<AccountId>,
+        result_sender: tokio::sync::oneshot::Sender<Result<SchnorrSignature, (CeremonyAbortReason, Vec<AccountId>)>>
     ) -> Self {
         SigningInfo {
             data,
             ceremony_id,
             key_id,
             signers,
+            result_sender,
         }
     }
 }
@@ -51,7 +51,7 @@ impl SigningInfo {
 const PENDING_SIGN_DURATION: Duration = Duration::from_secs(120);
 
 /// A wrapper around SigningInfo that contains the timeout info for cleanup
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PendingSigningInfo {
     pub should_expire_at: Instant,
     pub signing_info: SigningInfo,

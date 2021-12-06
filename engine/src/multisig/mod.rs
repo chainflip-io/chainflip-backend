@@ -30,6 +30,7 @@ pub use db::{KeyDB, PersistentKeyDB};
 #[cfg(test)]
 pub use db::KeyDBMock;
 
+use self::client::KeygenResultInfo;
 pub use self::client::{keygen::KeygenInfo, signing::SigningInfo};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
@@ -51,63 +52,8 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub enum MultisigInstruction {
-    Keygen(KeygenInfo),
-    Sign(SigningInfo),
-}
-
-/// Start the multisig client, which listens for p2p messages and instructions from the SC
-pub fn start_client<S>(
-    my_account_id: AccountId,
-    db: S,
-    mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
-    multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
-    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
-    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    keygen_options: KeygenOptions,
-    logger: &slog::Logger,
-) -> impl futures::Future
-where
-    S: KeyDB,
-{
-    let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
-
-    slog::info!(logger, "Starting");
-
-    let mut client = MultisigClient::new(
-        my_account_id,
-        db,
-        multisig_outcome_sender,
-        outgoing_p2p_message_sender,
-        keygen_options,
-        &logger,
-    );
-
-    async move {
-        // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
-            Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))
-        }));
-
-        loop {
-            tokio::select! {
-                Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
-                    client.process_p2p_message(sender_id, message);
-                }
-                Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg);
-                }
-                Some(()) = cleanup_stream.next() => {
-                    slog::trace!(logger, "Cleaning up multisig states");
-                    client.cleanup();
-                }
-                Ok(()) = &mut shutdown_rx => {
-                    slog::info!(logger, "MultisigClient stopped due to shutdown request!");
-                    break;
-                }
-            }
-        }
-    }
+    Keygen((KeygenInfo, KeygenOptions)),
+    Sign((SigningInfo, KeygenResultInfo)),
 }
