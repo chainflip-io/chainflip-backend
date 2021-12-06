@@ -20,8 +20,10 @@ async fn check_signing_db() {
     // 1. Generate a key. It should automatically be written to a database
     let _ = ctx.generate().await;
 
+    let account_id = ctx.get_account_id(0);
+
     // 2. Extract the clients' database
-    let client1 = ctx.get_client(0);
+    let client1 = ctx.get_client(&account_id);
     let db = client1.get_db().clone();
 
     // 3. Create a new multisig client using the extracted database
@@ -40,7 +42,7 @@ async fn check_signing_db() {
 
     // 4. Replace the client
     ctx.substitute_client_at(
-        0,
+        &account_id,
         restarted_client,
         Box::pin(UnboundedReceiverStream::new(rx).peekable()),
         Box::pin(UnboundedReceiverStream::new(p2p_rx).peekable()),

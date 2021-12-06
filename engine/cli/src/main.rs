@@ -5,6 +5,10 @@ use chainflip_engine::{
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_finality_grandpa::AuthorityId as GrandpaId;
+use state_chain_node::chain_spec::get_from_seed;
+use state_chain_runtime::opaque::SessionKeys;
 use structopt::StructOpt;
 use web3::types::H160;
 
@@ -29,6 +33,8 @@ async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::from_args();
     let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|_| anyhow::Error::msg("Please ensure your config file path is configured correctly. Or set all required command line arguments."))?;
 
+    let logger = chainflip_engine::logging::utils::new_discard_logger();
+
     println!(
         "Connecting to state chain node at: `{}` and using private key located at: `{}`",
         cli_settings.state_chain.ws_endpoint,
@@ -40,15 +46,18 @@ async fn run_cli() -> Result<()> {
             amount,
             eth_address,
             should_register_claim,
-        } => Ok(request_claim(
-            amount,
-            clean_eth_address(&eth_address)
-                .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
-            &cli_settings,
-            should_register_claim,
-            &chainflip_engine::logging::utils::new_discard_logger(),
-        )
-        .await?),
+        } => {
+            request_claim(
+                amount,
+                clean_eth_address(&eth_address)
+                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+                &cli_settings,
+                should_register_claim,
+                &logger,
+            )
+            .await
+        }
+        Rotate {} => rotate_keys(&cli_settings, &logger).await,
     }
 }
 
@@ -90,7 +99,7 @@ async fn request_claim(
         .expect("Failed to submit claim extrinsic");
 
     println!(
-        "Your claim has transaction hash: `{:?}`. Waiting for your request to be confirmed...",
+        "Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
         tx_hash
     );
 
@@ -196,6 +205,33 @@ async fn register_claim(
                 .0,
         )
         .await
+}
+
+async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let seed = state_chain_client
+        .rotate_session_keys()
+        .await
+        .expect("Could not rotate session keys.");
+
+    println!("New session key {:?}.", seed);
+
+    let new_session_key = SessionKeys {
+        aura: get_from_seed::<AuraId>(&seed),
+        grandpa: get_from_seed::<GrandpaId>(&seed),
+    };
+
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(
+            logger,
+            pallet_cf_validator::Call::set_keys(new_session_key, [0; 8].to_vec()),
+        )
+        .await
+        .expect("Failed to submit set_keys extrinsic");
+
+    println!("Session key rotated at tx {:?}.", tx_hash);
+
+    Ok(())
 }
 
 fn confirm_submit() -> bool {

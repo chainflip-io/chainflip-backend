@@ -167,6 +167,8 @@ pub trait StateChainRpcApi {
 
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
+
+    async fn rotate_keys(&self) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -197,6 +199,13 @@ impl StateChainRpcApi for StateChainRpcClient {
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.state_rpc_client
             .query_storage_at(vec![storage_key], block_hash)
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+    }
+
+    async fn rotate_keys(&self) -> Result<Bytes> {
+        self.author_rpc_client
+            .rotate_keys()
             .await
             .map_err(rpc_error_into_anyhow_error)
     }
@@ -250,7 +259,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 Ok(tx_hash) => {
                     slog::trace!(
                         logger,
-                        "{:?} submitted successfully with tx_hash: {}",
+                        "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
                         tx_hash
                     );
@@ -307,7 +316,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             Ok(tx_hash) => {
                 slog::trace!(
                     logger,
-                    "{:?} submitted successfully with tx_hash: {}",
+                    "{:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
@@ -502,6 +511,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .value::<u32>()
             .expect("Could not decode HeartbeatBlockInterval to u32")
     }
+
+    pub async fn rotate_session_keys(&self) -> Result<String> {
+        let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
+        Ok(hex::encode(session_key_bytes.0))
+    }
 }
 
 fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
@@ -531,7 +545,11 @@ pub async fn connect_to_state_chain(
                     // allow inserting the private key with or without the 0x
                     .replace("0x", ""),
             )
-            .map_err(anyhow::Error::new)?,
+            .map_err(anyhow::Error::new)
+            .context(format!(
+                "No key file located at: {:?}",
+                &state_chain_settings.signing_key_file
+            ))?,
         )
         .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
     ));
@@ -602,7 +620,7 @@ pub async fn connect_to_state_chain(
                             .map_err(rpc_error_into_anyhow_error)?
                             .ok_or_else(|| {
                                 anyhow::format_err!(
-                                    "AccountId {:?} doesn't exist on the state chain.",
+                                    "AccountId {:?} doesn't exist on the state chain. Please ensure you have staked and can see your stake on chain.",
                                     our_account_id,
                                 )
                             })?

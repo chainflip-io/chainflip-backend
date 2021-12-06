@@ -374,7 +374,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Successful broadcast attempt {}, tx_hash: {}",
+                                                "Successful broadcast attempt {}, tx_hash: {:#x}",
                                                 attempt_id,
                                                 tx_hash
                                             );

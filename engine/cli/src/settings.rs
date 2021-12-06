@@ -20,6 +20,7 @@ pub struct CLICommandLineOptions {
 
 #[derive(StructOpt, Clone)]
 pub enum CFCommand {
+    #[structopt(about = "Submit an extrinsic to request generation of a claim certificate")]
     Claim {
         #[structopt(help = "Amount to claim in FLIP")]
         amount: f64,
@@ -29,6 +30,8 @@ pub enum CFCommand {
         #[structopt(long = "register", hidden = true)]
         should_register_claim: bool,
     },
+    #[structopt(about = "Rotate your session keys")]
+    Rotate {},
 }
 
 #[derive(Deserialize, Debug, Default)]

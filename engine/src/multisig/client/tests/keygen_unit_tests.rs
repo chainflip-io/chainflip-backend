@@ -33,17 +33,23 @@ async fn should_report_on_timeout_before_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.get_client_at_stage(0);
+    let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 0);
 
-    let bad_party_idx = 1;
+    let bad_party_id = ctx.get_account_id(1);
 
-    c1.receive_keygen_stage_data(1, &keygen_states, bad_party_idx);
+    c1.receive_keygen_stage_data(1, &keygen_states, &bad_party_id);
 
     // Force all ceremonies to time out
     c1.expire_all();
     c1.cleanup();
 
-    check_blamed_paries(&mut ctx.outcome_receivers[0], &[bad_party_idx]).await;
+    check_blamed_paries(
+        ctx.outcome_receivers
+            .get_mut(&ctx.get_account_id(0))
+            .unwrap(),
+        &[bad_party_id],
+    )
+    .await;
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
 }
 
@@ -54,26 +60,33 @@ async fn should_report_on_timeout_stage() {
     let mut ctx = helpers::KeygenContext::new();
 
     // Use invalid secret share so the ceremony will go all the way to the blaming stages
-    ctx.use_invalid_secret_share(2, 0);
+    // (It doesn't matter who sends this invalid share)
+    ctx.use_invalid_secret_share(&ctx.get_account_id(2), &ctx.get_account_id(0));
     let keygen_states = ctx.generate().await;
 
-    let bad_party_idxs = [1, 2];
-    let good_party_idx = 3;
+    let bad_party_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
+    let good_party_id = ctx.get_account_id(3);
 
     // Test the timeout for all stages
     for stage in 1..=KEYGEN_STAGES {
         // Get a client at the correct stage
-        let mut c1 = keygen_states.get_client_at_stage(stage);
+        let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), stage);
 
         // Receive data from one client but not the others
-        c1.receive_keygen_stage_data(stage, &keygen_states, good_party_idx);
+        c1.receive_keygen_stage_data(stage, &keygen_states, &good_party_id);
 
         // Trigger timeout
         c1.expire_all();
         c1.cleanup();
 
         // Check that the late 2 clients are correctly reported
-        check_blamed_paries(&mut ctx.outcome_receivers[0], &bad_party_idxs).await;
+        check_blamed_paries(
+            ctx.outcome_receivers
+                .get_mut(&ctx.get_account_id(0))
+                .unwrap(),
+            &bad_party_ids,
+        )
+        .await;
         assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
     }
 }
@@ -83,10 +96,10 @@ async fn should_delay_comm1_before_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.get_client_at_stage(0);
+    let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 0);
 
     // Receive an early stage1 message, should be delayed
-    c1.receive_keygen_stage_data(1, &keygen_states, 1);
+    c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(1));
 
     assert_ok!(c1.ensure_at_keygen_stage(0));
 
@@ -96,8 +109,8 @@ async fn should_delay_comm1_before_keygen_request() {
 
     // Receive the remaining stage1 messages. Provided that the first
     // message was properly delayed, this should advance us to the next stage
-    c1.receive_keygen_stage_data(1, &keygen_states, 2);
-    c1.receive_keygen_stage_data(1, &keygen_states, 3);
+    c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(2));
+    c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(3));
 
     assert_ok!(c1.ensure_at_keygen_stage(2));
 }
@@ -109,28 +122,28 @@ async fn should_delay_stage_data() {
     let mut ctx = helpers::KeygenContext::new();
 
     // Use invalid secret share so the ceremony will go all the way to the blaming stages
-    ctx.use_invalid_secret_share(2, 0);
+    ctx.use_invalid_secret_share(&ctx.get_account_id(2), &ctx.get_account_id(0));
     let keygen_states = ctx.generate().await;
 
     // Test the delay functionality for all stages except the last stage
     for stage in 1..KEYGEN_STAGES {
         // Get a client at the correct stage
-        let mut c1 = keygen_states.get_client_at_stage(stage);
+        let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), stage);
 
         // Receive the data of this stage and the next from all but 1 client
-        c1.receive_keygen_stage_data(stage, &keygen_states, 1);
-        c1.receive_keygen_stage_data(stage, &keygen_states, 2);
-        c1.receive_keygen_stage_data(stage + 1, &keygen_states, 1);
-        c1.receive_keygen_stage_data(stage + 1, &keygen_states, 2);
+        c1.receive_keygen_stage_data(stage, &keygen_states, &ctx.get_account_id(1));
+        c1.receive_keygen_stage_data(stage, &keygen_states, &ctx.get_account_id(2));
+        c1.receive_keygen_stage_data(stage + 1, &keygen_states, &ctx.get_account_id(1));
+        c1.receive_keygen_stage_data(stage + 1, &keygen_states, &ctx.get_account_id(2));
         assert_ok!(c1.ensure_at_keygen_stage(stage));
 
         // Now receive the final clients data to advance the stage
-        c1.receive_keygen_stage_data(stage, &keygen_states, 3);
+        c1.receive_keygen_stage_data(stage, &keygen_states, &ctx.get_account_id(3));
         assert_ok!(c1.ensure_at_keygen_stage(stage + 1));
 
         // If the messages were delayed properly, then receiving
         // the last clients data will advance the stage again
-        c1.receive_keygen_stage_data(stage + 1, &keygen_states, 3);
+        c1.receive_keygen_stage_data(stage + 1, &keygen_states, &ctx.get_account_id(3));
 
         // Check that the stage correctly advanced or finished
         if stage + 2 > KEYGEN_STAGES {
@@ -150,7 +163,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     let mut ctx = helpers::KeygenContext::new();
 
     // Instruct (1) to send an invalid secret share to (2)
-    ctx.use_invalid_secret_share(1, 2);
+    ctx.use_invalid_secret_share(&ctx.get_account_id(1), &ctx.get_account_id(2));
 
     let keygen_states = ctx.generate().await;
 
@@ -169,22 +182,22 @@ async fn should_report_on_invalid_blame_response() {
     let mut ctx = helpers::KeygenContext::new();
     ctx.auto_clear_tag_cache = false;
 
-    let bad_node_idx = 1;
+    let bad_node_id = ctx.get_account_id(1);
 
-    // Node (bad_node_idx) sends an invalid secret share to (2) and
+    // Node (bad_node_id) sends an invalid secret share to (2) and
     // also sends an invalid blame response later on
-    ctx.use_invalid_secret_share(bad_node_idx, 2);
-    ctx.use_invalid_blame_response(bad_node_idx, 2);
+    ctx.use_invalid_secret_share(&bad_node_id, &ctx.get_account_id(2));
+    ctx.use_invalid_blame_response(&bad_node_id, &ctx.get_account_id(2));
 
-    // Node (bad_node_idx + 1) sends an invalid secret share to (3),
+    // Node (2) sends an invalid secret share to (3),
     // but later sends a valid blame response (sent by default)
-    ctx.use_invalid_secret_share(bad_node_idx + 1, 3);
+    ctx.use_invalid_secret_share(&ctx.get_account_id(2), &ctx.get_account_id(3));
 
     // Run the keygen ceremony and check that the failure details match
     let keygen_states = ctx
         .run_keygen_and_check_failure(
             CeremonyAbortReason::Invalid,
-            vec![AccountId([bad_node_idx as u8 + 1; 32])],
+            vec![bad_node_id],
             KEYGEN_CEREMONY_FAILED,
         )
         .await
@@ -199,15 +212,15 @@ async fn should_abort_on_blames_at_invalid_indexes() {
     let mut ctx = helpers::KeygenContext::new();
     ctx.auto_clear_tag_cache = false;
 
-    let bad_node_idx = 1;
+    let bad_node_id = ctx.get_account_id(1);
 
-    ctx.use_invalid_complaint(bad_node_idx);
+    ctx.use_invalid_complaint(&bad_node_id);
 
     // Run the keygen ceremony and check that the failure details match
     assert_ok!(
         ctx.run_keygen_and_check_failure(
             CeremonyAbortReason::Invalid,
-            vec![AccountId([bad_node_idx as u8 + 1; 32])],
+            vec![bad_node_id],
             KEYGEN_CEREMONY_FAILED,
         )
         .await
@@ -219,7 +232,7 @@ async fn should_ignore_keygen_request_if_not_participating() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.get_client_at_stage(0);
+    let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 0);
 
     // Get an id that is not `c1`s id
     let unknown_id = AccountId([0; 32]);
@@ -242,7 +255,7 @@ async fn should_ignore_duplicate_keygen_request() {
     let keygen_states = ctx.generate().await;
 
     // Get a client that is already in the middle of a keygen
-    let mut c1 = keygen_states.get_client_at_stage(2);
+    let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 2);
 
     // Create a list of accounts that is different from the default Keygen
     let unknown_id = AccountId([0; 32]);
@@ -268,7 +281,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     let mut ctx = helpers::KeygenContext::new();
 
     // Use invalid secret share so the ceremony will go all the way to the blaming stages
-    ctx.use_invalid_secret_share(2, 0);
+    ctx.use_invalid_secret_share(&ctx.get_account_id(2), &ctx.get_account_id(0));
     let keygen_states = ctx.generate().await;
 
     // Get an id that is not in the keygen ceremony
@@ -278,16 +291,16 @@ async fn should_ignore_unexpected_message_for_stage() {
     // Test for all keygen stages
     for current_stage in 1..=KEYGEN_STAGES {
         // Get a client at the correct stage
-        let mut c1 = keygen_states.get_client_at_stage(current_stage);
+        let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), current_stage);
 
         // Get the correct data from 2 clients so that we only need one more to advance
-        c1.receive_keygen_stage_data(current_stage, &keygen_states, 1);
-        c1.receive_keygen_stage_data(current_stage, &keygen_states, 2);
+        c1.receive_keygen_stage_data(current_stage, &keygen_states, &ctx.get_account_id(1));
+        c1.receive_keygen_stage_data(current_stage, &keygen_states, &ctx.get_account_id(2));
 
         // Receive messages from all unexpected stages (not the current stage or the next)
         for stage in 1..=KEYGEN_STAGES {
             if stage != current_stage && stage != current_stage + 1 {
-                c1.receive_keygen_stage_data(stage, &keygen_states, 3);
+                c1.receive_keygen_stage_data(stage, &keygen_states, &ctx.get_account_id(3));
             }
         }
         assert!(
@@ -296,16 +309,24 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a duplicate message
-        c1.receive_keygen_stage_data(current_stage, &keygen_states, 1);
-        c1.receive_keygen_stage_data(current_stage, &keygen_states, 2);
+        c1.receive_keygen_stage_data(current_stage, &keygen_states, &ctx.get_account_id(1));
+        c1.receive_keygen_stage_data(current_stage, &keygen_states, &ctx.get_account_id(2));
         assert!(
             c1.ensure_at_keygen_stage(current_stage).is_ok(),
             "Failed to ignore a message from a duplicate sender id"
         );
 
         // Receive a message from an unknown AccountId
-        let message =
-            c1.get_keygen_p2p_message_for_stage(current_stage, &keygen_states, 1, &unknown_id);
+        let message = {
+            let mut m = c1.get_keygen_p2p_message_for_stage(
+                current_stage,
+                &keygen_states,
+                &ctx.get_account_id(1),
+            );
+            m.account_id = unknown_id.clone();
+            m
+        };
+
         c1.process_p2p_message(message);
         assert!(
             c1.ensure_at_keygen_stage(current_stage).is_ok(),
@@ -313,7 +334,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive the last message and advance the stage
-        c1.receive_keygen_stage_data(current_stage, &keygen_states, 3);
+        c1.receive_keygen_stage_data(current_stage, &keygen_states, &ctx.get_account_id(3));
         if current_stage + 1 > KEYGEN_STAGES {
             // The keygen finished
             assert_ok!(c1.ensure_at_keygen_stage(0));
@@ -333,15 +354,15 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 
     // Make one of the nodes send different comm1 to most of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    let bad_node_idx = 1;
-    ctx.use_inconsistent_broadcast_for_keygen_comm1(bad_node_idx, 0);
-    ctx.use_inconsistent_broadcast_for_keygen_comm1(bad_node_idx, 2);
+    let bad_node_id = ctx.get_account_id(1);
+    ctx.use_inconsistent_broadcast_for_keygen_comm1(&bad_node_id, &ctx.get_account_id(0));
+    ctx.use_inconsistent_broadcast_for_keygen_comm1(&bad_node_id, &ctx.get_account_id(2));
 
     // Run the keygen ceremony and check that the failure details match
     assert_ok!(
         ctx.run_keygen_and_check_failure(
             CeremonyAbortReason::Invalid,
-            vec![AccountId([bad_node_idx as u8 + 1; 32])],
+            vec![bad_node_id],
             KEYGEN_CEREMONY_FAILED,
         )
         .await
@@ -358,18 +379,16 @@ async fn should_handle_invalid_commitments() {
     // Make a node send a bad commitment to the others
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
-    let bad_node_idxs = [1, 2];
-    ctx.use_invalid_keygen_comm1(bad_node_idxs[0]);
-    ctx.use_invalid_keygen_comm1(bad_node_idxs[1]);
+    let bad_node_ids = vec![ctx.get_account_id(1), ctx.get_account_id(2)];
+    for id in &bad_node_ids {
+        ctx.use_invalid_keygen_comm1(id.clone());
+    }
 
     // Run the keygen ceremony and check that the failure details match
     assert_ok!(
         ctx.run_keygen_and_check_failure(
             CeremonyAbortReason::Invalid,
-            vec![
-                AccountId([bad_node_idxs[0] as u8 + 1; 32]),
-                AccountId([bad_node_idxs[1] as u8 + 1; 32]),
-            ],
+            bad_node_ids,
             KEYGEN_CEREMONY_FAILED,
         )
         .await
@@ -417,7 +436,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     let keygen_states = ctx.generate().await;
 
     // Get a client that hasn't gotten a keygen request yet
-    let mut c1 = keygen_states.get_client_at_stage(0);
+    let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 0);
 
     // Create a duplicate in the list of signers
     let mut keygen_ids = ACCOUNT_IDS.clone();
