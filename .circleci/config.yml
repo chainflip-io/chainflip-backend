@@ -358,6 +358,7 @@ jobs:
           paths:
             - target/release/state-chain-node
             - target/release/chainflip-engine
+            - target/release/chainflip-cli
       - send_notification:
           only_for_branches: "develop"
 
@@ -371,7 +372,7 @@ jobs:
       - checkout
       - merge_target
       - run: sccache --show-stats
-      - run: 
+      - run:
           environment:
               RUSTFLAGS: -D warnings
           command: |
