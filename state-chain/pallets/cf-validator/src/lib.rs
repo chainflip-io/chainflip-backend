@@ -17,9 +17,7 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-};
+use cf_traits::{AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, HasPeerMapping};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
@@ -579,5 +577,13 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
+	}
+}
+
+impl<T: Config> HasPeerMapping for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
+		AccountPeerMapping::<T>::contains_key(validator_id)
 	}
 }
