@@ -17,17 +17,20 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, HasPeerMapping};
+use cf_traits::{
+	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	HasPeerMapping,
+};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 pub use pallet::*;
+use sp_core::ed25519;
 use sp_runtime::traits::{
 	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
-use sp_core::ed25519;
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
