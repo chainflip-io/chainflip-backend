@@ -391,7 +391,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                             // TODO: Fill in the transaction hash with the real one
                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
+                                                attempt_id, TransmissionFailure::TransactionRejected, [0u8; 32]
                                             )
                                         }
                                     };
