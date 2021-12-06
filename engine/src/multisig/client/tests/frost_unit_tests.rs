@@ -233,9 +233,8 @@ async fn should_delay_rts_until_key_is_ready() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let (sender_id, message) =
-                helpers::keygen_data_to_p2p(ver5, sender_id, KEYGEN_CEREMONY_ID);
-            c1.process_p2p_message(sender_id, message);
+            let message = helpers::keygen_data_to_p2p(ver5, KEYGEN_CEREMONY_ID);
+            c1.process_p2p_message(sender_id.clone(), message);
         }
     }
 
@@ -337,9 +336,8 @@ async fn pending_rts_should_expire() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let (sender_id, message) =
-                helpers::keygen_data_to_p2p(ver5.clone(), &sender_id, KEYGEN_CEREMONY_ID);
-            c1.process_p2p_message(sender_id, message);
+            let message = helpers::keygen_data_to_p2p(ver5.clone(), KEYGEN_CEREMONY_ID);
+            c1.process_p2p_message(sender_id.clone(), message);
         }
     }
 
@@ -389,7 +387,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a message from an unknown AccountId
-        let (_, message) = c1.get_signing_p2p_message_for_stage(
+        let message = c1.get_signing_p2p_message_for_stage(
             current_stage,
             &sign_states,
             &ctx.get_account_id(1),
@@ -405,7 +403,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         let non_participant_id = ctx.get_account_id(3);
 
         assert!(!SIGNER_IDS.contains(&non_participant_id));
-        let (_, message) = c1.get_signing_p2p_message_for_stage(
+        let message = c1.get_signing_p2p_message_for_stage(
             current_stage,
             &sign_states,
             &ctx.get_account_id(1),

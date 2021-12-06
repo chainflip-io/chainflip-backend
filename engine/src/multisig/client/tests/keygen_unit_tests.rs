@@ -317,7 +317,7 @@ async fn should_ignore_unexpected_message_for_stage() {
         );
 
         // Receive a message from an unknown AccountId
-        let (_, message) = c1.get_keygen_p2p_message_for_stage(
+        let message = c1.get_keygen_p2p_message_for_stage(
             current_stage,
             &keygen_states,
             &ctx.get_account_id(1),

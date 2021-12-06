@@ -125,8 +125,7 @@ macro_rules! distribute_data_keygen_custom {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_message);
 
-                    let (sender_id, message) =
-                        keygen_data_to_p2p(message, sender_id, KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p(message, KEYGEN_CEREMONY_ID);
 
                     $clients
                         .get_mut(receiver_id)
@@ -141,11 +140,10 @@ macro_rules! distribute_data_keygen_custom {
 macro_rules! distribute_data_keygen {
     ($clients:expr, $account_ids: expr, $messages: expr) => {{
         for sender_id in &$account_ids {
-            let (sender_id, message) =
-                keygen_data_to_p2p($messages[sender_id].clone(), sender_id, KEYGEN_CEREMONY_ID);
+            let message = keygen_data_to_p2p($messages[sender_id].clone(), KEYGEN_CEREMONY_ID);
 
             for receiver_id in &$account_ids {
-                if receiver_id != &sender_id {
+                if receiver_id != sender_id {
                     $clients
                         .get_mut(receiver_id)
                         .unwrap()
@@ -162,9 +160,9 @@ macro_rules! distribute_data_signing {
 
         for sender_id in &ids {
             for receiver_id in &ids {
-                let (sender_id, message) = sig_data_to_p2p($messages[sender_id].clone(), sender_id);
+                let message = sig_data_to_p2p($messages[sender_id].clone());
 
-                if receiver_id != &sender_id {
+                if receiver_id != sender_id {
                     $clients
                         .get_mut(receiver_id)
                         .unwrap()
@@ -186,9 +184,9 @@ macro_rules! distribute_data_signing_custom {
                     .remove(&(sender_id.clone(), receiver_id.clone()))
                     .unwrap_or(valid_message);
 
-                let (sender_id, message) = sig_data_to_p2p(message, sender_id);
+                let message = sig_data_to_p2p(message);
 
-                if receiver_id != &sender_id {
+                if receiver_id != sender_id {
                     $clients
                         .get_mut(receiver_id)
                         .unwrap()
@@ -785,13 +783,12 @@ impl KeygenContext {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_sec3.clone());
 
-                    let (sender_id, message) =
-                        keygen_data_to_p2p(sec3.clone(), sender_id, KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID);
 
                     clients
                         .get_mut(receiver_id)
                         .unwrap()
-                        .process_p2p_message(sender_id, message);
+                        .process_p2p_message(sender_id.clone(), message);
                 }
             }
         }
@@ -1278,31 +1275,18 @@ async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen:
     }
 }
 
-pub fn sig_data_to_p2p(
-    data: impl Into<SigningData>,
-    sender_id: &AccountId,
-) -> (AccountId, MultisigMessage) {
-    (
-        sender_id.clone(),
-        MultisigMessage {
-            ceremony_id: SIGN_CEREMONY_ID,
-            data: MultisigData::Signing(data.into()),
-        },
-    )
+pub fn sig_data_to_p2p(data: impl Into<SigningData>) -> MultisigMessage {
+    MultisigMessage {
+        ceremony_id: SIGN_CEREMONY_ID,
+        data: MultisigData::Signing(data.into()),
+    }
 }
 
-pub fn keygen_data_to_p2p(
-    data: impl Into<KeygenData>,
-    sender_id: &AccountId,
-    ceremony_id: CeremonyId,
-) -> (AccountId, MultisigMessage) {
-    (
-        sender_id.clone(),
-        MultisigMessage {
-            ceremony_id,
-            data: MultisigData::Keygen(data.into()),
-        },
-    )
+pub fn keygen_data_to_p2p(data: impl Into<KeygenData>, ceremony_id: CeremonyId) -> MultisigMessage {
+    MultisigMessage {
+        ceremony_id,
+        data: MultisigData::Keygen(data.into()),
+    }
 }
 
 pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> {
@@ -1372,9 +1356,8 @@ impl MultisigClientNoDB {
         keygen_states: &ValidKeygenStates,
         sender_id: &AccountId,
     ) {
-        let (sender_id, message) =
-            self.get_keygen_p2p_message_for_stage(stage, keygen_states, sender_id);
-        self.process_p2p_message(sender_id, message);
+        let message = self.get_keygen_p2p_message_for_stage(stage, keygen_states, sender_id);
+        self.process_p2p_message(sender_id.clone(), message);
     }
 
     /// Makes a P2PMessage using the keygen data for the specified stage
@@ -1383,23 +1366,21 @@ impl MultisigClientNoDB {
         stage: usize,
         keygen_states: &ValidKeygenStates,
         sender_id: &AccountId,
-    ) -> (AccountId, MultisigMessage) {
+    ) -> MultisigMessage {
         match stage {
             1 => keygen_data_to_p2p(
                 keygen_states.comm_stage1.comm1s[sender_id].clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             2 => keygen_data_to_p2p(
                 keygen_states.ver_com_stage2.ver2s[sender_id].clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             3 => {
                 let sec3 = keygen_states.sec_stage3.as_ref().expect("No stage 3").sec3[sender_id]
                     .get(&self.get_my_account_id())
                     .unwrap();
-                keygen_data_to_p2p(sec3.clone(), sender_id, KEYGEN_CEREMONY_ID)
+                keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID)
             }
             4 => keygen_data_to_p2p(
                 keygen_states
@@ -1408,7 +1389,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 4")
                     .comp4s[sender_id]
                     .clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             5 => keygen_data_to_p2p(
@@ -1418,7 +1398,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 5")
                     .ver5[sender_id]
                     .clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             6 => keygen_data_to_p2p(
@@ -1428,7 +1407,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 6")
                     .resp6[sender_id]
                     .clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             7 => keygen_data_to_p2p(
@@ -1438,7 +1416,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 7")
                     .ver7[sender_id]
                     .clone(),
-                sender_id,
                 KEYGEN_CEREMONY_ID,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
@@ -1452,9 +1429,8 @@ impl MultisigClientNoDB {
         sign_states: &ValidSigningStates,
         sender_id: &AccountId,
     ) {
-        let (sender_id, message) =
-            self.get_signing_p2p_message_for_stage(stage, sign_states, sender_id);
-        self.process_p2p_message(sender_id, message);
+        let message = self.get_signing_p2p_message_for_stage(stage, sign_states, sender_id);
+        self.process_p2p_message(sender_id.clone(), message);
     }
 
     /// Makes a P2PMessage using the signing data for the specified stage
@@ -1463,10 +1439,10 @@ impl MultisigClientNoDB {
         stage: usize,
         sign_states: &ValidSigningStates,
         sender_id: &AccountId,
-    ) -> (AccountId, MultisigMessage) {
+    ) -> MultisigMessage {
         match stage {
-            1 => sig_data_to_p2p(sign_states.sign_phase1.comm1s[sender_id].clone(), sender_id),
-            2 => sig_data_to_p2p(sign_states.sign_phase2.ver2s[sender_id].clone(), sender_id),
+            1 => sig_data_to_p2p(sign_states.sign_phase1.comm1s[sender_id].clone()),
+            2 => sig_data_to_p2p(sign_states.sign_phase2.ver2s[sender_id].clone()),
             3 => sig_data_to_p2p(
                 sign_states
                     .sign_phase3
@@ -1474,7 +1450,6 @@ impl MultisigClientNoDB {
                     .expect("No signing stage 3")
                     .local_sigs[sender_id]
                     .clone(),
-                sender_id,
             ),
             4 => sig_data_to_p2p(
                 sign_states
@@ -1483,7 +1458,6 @@ impl MultisigClientNoDB {
                     .expect("No signing stage 4")
                     .ver4s[sender_id]
                     .clone(),
-                sender_id,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
         }
