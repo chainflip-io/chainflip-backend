@@ -65,12 +65,12 @@ async fn main() {
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let web3 = eth::new_synced_web3_client(&settings, &root_logger)
+    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
         .await
         .expect("Failed to create Web3 WebSocket");
 
     let eth_broadcaster =
-        EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
+        EthBroadcaster::new(&settings.eth, web3.clone()).expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =
