@@ -153,6 +153,7 @@ impl Config for Test {
 	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type Online = MockOnline;
+	type PeerMapping = MockPeerMapping;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;

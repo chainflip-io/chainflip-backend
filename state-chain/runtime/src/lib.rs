@@ -127,6 +127,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Handler = Vaults;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Online;
+	type PeerMapping = pallet_cf_validator::Pallet<Self>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
