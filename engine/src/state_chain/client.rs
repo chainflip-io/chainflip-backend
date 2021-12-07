@@ -17,7 +17,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{Index, SignedBlock};
+use state_chain_runtime::{Header, Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -570,15 +570,21 @@ pub async fn connect_to_state_chain(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    // TODO It is possible to avoid this wait, but somewhat complex and probably not needed
-    let (mut latest_block_hash, stream_block_number) =
-        if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
+    async fn next_hash_and_number_from_stream(
+        stream: impl futures::Stream<Item = Result<Header>>,
+    ) -> Result<(H256, u32)> {
+        let mut stream = Box::pin(stream);
+        if let Some(Ok(stream_block_header)) = stream.next().await {
             Ok((stream_block_header.hash(), stream_block_header.number))
         } else {
             Err(anyhow::Error::msg(
                 "Couldn't get first block from block header stream",
             ))
-        }?;
+        }
+    }
+
+    let (mut latest_block_hash, stream_block_number) =
+        next_hash_and_number_from_stream(&mut block_header_stream).await?;
 
     // often this call returns a more accurate hash than the stream returns
     // so we check and compare this to what the end of the stream is
@@ -599,7 +605,9 @@ pub async fn connect_to_state_chain(
         for _ in 0..(fin_minus_stream - 1) {
             block_header_stream.next().await;
         }
-        latest_block_hash = block_header_stream.next().await.unwrap().unwrap().hash();
+        let (next_block_hash, _) =
+            next_hash_and_number_from_stream(&mut block_header_stream).await?;
+        latest_block_hash = next_block_hash;
     }
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
