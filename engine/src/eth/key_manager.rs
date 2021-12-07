@@ -138,10 +138,9 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::Shared(shared_event) => match shared_event {
-                SharedEvent::Refunded { .. } => {}
-                SharedEvent::RefundFailed { .. } => {}
-            },
+            ignored_event => {
+                slog::trace!(logger, "Ignoring unused event: {:?}", ignored_event);
+            }
         }
     }
 
