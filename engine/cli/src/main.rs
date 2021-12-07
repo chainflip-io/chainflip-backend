@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
@@ -6,11 +5,12 @@ use chainflip_engine::{
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
-use sp_core::sr25519::Public as SrPublic;
-use sp_core::ed25519::Public as EdPublic;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::ed25519::Public as EdPublic;
+use sp_core::sr25519::Public as SrPublic;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
+use std::convert::TryInto;
 use structopt::StructOpt;
 use web3::types::H160;
 
