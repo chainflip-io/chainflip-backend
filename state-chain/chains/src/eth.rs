@@ -648,6 +648,19 @@ pub trait ChainflipContractCall {
 	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]
+pub struct TransactionHash(H256);
+impl core::fmt::Debug for TransactionHash {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+		f.write_fmt(format_args!("{:#?}", self.0))
+	}
+}
+impl From<H256> for TransactionHash {
+	fn from(x: H256) -> Self {
+		Self(x)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
