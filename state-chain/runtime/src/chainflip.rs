@@ -351,7 +351,7 @@ impl BroadcastConfig for EthereumBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
-	type TransactionHash = [u8; 32];
+	type TransactionHash = eth::TransactionHash;
 	type SignerId = eth::Address;
 
 	fn verify_transaction(
