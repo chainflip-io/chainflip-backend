@@ -463,6 +463,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type Randomness = RandomnessCollectiveFlip;
 }
 
 construct_runtime!(

@@ -1,7 +1,9 @@
+use std::cell::RefCell;
+
 use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
-use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
-use codec::{Decode, Encode};
+use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, BlockNumber, Chainflip};
+use codec::{Decode, Encode, Output};
 use frame_support::parameter_types;
 use frame_system;
 use sp_core::H256;
@@ -9,6 +11,9 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+
+use frame_support::traits::Randomness;
+use std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -121,6 +126,20 @@ parameter_types! {
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
 }
 
+thread_local! {
+	static RANDOM_PAYLOAD: RefCell<H256>  = RefCell::new(Default::default());
+}
+
+pub struct RandomnessMock;
+
+impl Randomness<H256, u64> for RandomnessMock {
+	fn random(_subject: &[u8]) -> (H256, u64) {
+		let f =
+			H256::from_str("0xff4b7a426623972c3945dc44d809008e2e1105180d110fd63986e841f15eb2ad");
+		(f.unwrap(), 0 as u64)
+	}
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
@@ -131,6 +150,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
+	type Randomness = RandomnessMock;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -240,7 +240,7 @@ pub struct BasicSignerNomination;
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
-	fn nomination_with_seed(_seed: u64) -> Option<Self::SignerId> {
+	fn nomination_with_seed(seed: u64) -> Option<Self::SignerId> {
 		let validators = pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
 			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
 			.take(1)
