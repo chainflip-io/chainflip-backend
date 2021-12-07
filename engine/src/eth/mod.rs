@@ -231,7 +231,11 @@ impl EthBroadcaster {
                 .context("Failed to estimate gas")?
         };
 
-        tx_params.gas = gas_limit;
+        // increase the estimate by 50%
+        let uint256_2 = U256::from(2);
+        tx_params.gas = gas_limit
+            .saturating_mul(uint256_2)
+            .saturating_sub(gas_limit.checked_div(uint256_2).unwrap());
 
         Ok(self
             .web3
