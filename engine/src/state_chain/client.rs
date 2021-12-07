@@ -10,6 +10,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
+use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
 use sp_core::{
@@ -35,6 +36,7 @@ use substrate_subxt::{
 };
 
 use crate::common::{read_and_decode_file, rpc_error_into_anyhow_error};
+use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
 #[cfg(test)]
@@ -580,12 +582,14 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
+    logger: &slog::Logger,
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
 )> {
     use substrate_subxt::Signer;
+    let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
@@ -622,47 +626,76 @@ pub async fn connect_to_state_chain(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    // TODO It is possible to avoid this wait, but somewhat complex and probably not needed
-    if let Some(Ok(block_header)) = block_header_stream.next().await {
-        let latest_block_hash = try_unwrap_value(
-            chain_rpc_client
-                .block_hash(Some(
-                    sp_rpc::number::NumberOrHex::from(block_header.number).into(),
+    let (latest_block_hash, latest_block_number) = {
+        let (stream_block_hash, stream_block_number) =
+            if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
+                Ok((stream_block_header.hash(), stream_block_header.number))
+            } else {
+                Err(anyhow::Error::msg(
+                    "Couldn't get first block from block header stream",
                 ))
-                .await
-                .map_err(rpc_error_into_anyhow_error)?,
-            anyhow::Error::msg("Failed to get latest block hash"),
-        )?;
+            }?;
 
-        let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-            &mut &state_rpc_client
-                .metadata(Some(latest_block_hash))
-                .await
-                .map_err(rpc_error_into_anyhow_error)?[..],
-        )?)?;
+        // often this call returns a more accurate hash than the stream returns
+        // so we check and compare this to what the end of the stream is
+        let finalised_head_hash = chain_rpc_client
+            .finalized_head()
+            .await
+            .map_err(rpc_error_into_anyhow_error)?;
+        let finalised_head_number = chain_rpc_client
+            .header(Some(finalised_head_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)?
+            .expect("We have the hash from the chain, so there should definitely be a header for this block")
+            .number;
 
-        let system_pallet_metadata = metadata.module("System")?.clone();
-        let state_chain_rpc_client = StateChainRpcClient {
-            author_rpc_client,
-            state_rpc_client,
-            chain_rpc_client,
-            system_rpc_client,
-        };
+        // if the finalised head number is > stream_block_number, loop the stream
+        if stream_block_number < finalised_head_number {
+            for _i in stream_block_number..finalised_head_number {
+                block_header_stream.next().await;
+            }
+            (finalised_head_hash, finalised_head_number)
+        } else {
+            (stream_block_hash, stream_block_number)
+        }
+    };
 
-        let our_account_id = signer.account_id().to_owned();
+    slog::info!(
+        logger,
+        "Initalising State Chain state at block `{}`; block hash: `{:#x}`",
+        latest_block_number,
+        latest_block_hash
+    );
 
-        let account_storage_key = system_pallet_metadata
-            .storage("Account")?
-            .map()?
-            .key(&our_account_id);
+    let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
+        &mut &state_rpc_client
+            .metadata(Some(latest_block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)?[..],
+    )?)?;
 
-        Ok((
-            latest_block_hash,
-            block_header_stream,
-            Arc::new(StateChainClient {
-                metadata,
-                nonce: AtomicU32::new({
-                    let account_info: frame_system::AccountInfo<
+    let system_pallet_metadata = metadata.module("System")?.clone();
+    let state_chain_rpc_client = StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    };
+
+    let our_account_id = signer.account_id().to_owned();
+
+    let account_storage_key = system_pallet_metadata
+        .storage("Account")?
+        .map()?
+        .key(&our_account_id);
+
+    Ok((
+        latest_block_hash,
+        block_header_stream,
+        Arc::new(StateChainClient {
+            metadata,
+            nonce: AtomicU32::new({
+                let account_info: frame_system::AccountInfo<
                         <RuntimeImplForSigningExtrinsics as System>::Index,
                         <RuntimeImplForSigningExtrinsics as System>::AccountData,
                     > = Decode::decode(
@@ -679,33 +712,28 @@ pub async fn connect_to_state_chain(
                             })?
                             .0[..],
                     )?;
-                    account_info.nonce
-                }),
-                runtime_version: state_chain_rpc_client
-                    .state_rpc_client
-                    .runtime_version(Some(latest_block_hash))
+                account_info.nonce
+            }),
+            runtime_version: state_chain_rpc_client
+                .state_rpc_client
+                .runtime_version(Some(latest_block_hash))
+                .await
+                .map_err(rpc_error_into_anyhow_error)?,
+            genesis_hash: try_unwrap_value(
+                state_chain_rpc_client
+                    .chain_rpc_client
+                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
                     .await
                     .map_err(rpc_error_into_anyhow_error)?,
-                genesis_hash: try_unwrap_value(
-                    state_chain_rpc_client
-                        .chain_rpc_client
-                        .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                        .await
-                        .map_err(rpc_error_into_anyhow_error)?,
-                    anyhow::Error::msg("Genesis block doesn't exist?"),
-                )?,
-                signer: signer.clone(),
-                state_chain_rpc_client,
-                our_account_id,
-                account_storage_key,
-                events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
-            }),
-        ))
-    } else {
-        Err(anyhow::Error::msg(
-            "Couldn't get first block from block header stream",
-        ))
-    }
+                anyhow::Error::msg("Genesis block doesn't exist?"),
+            )?,
+            signer: signer.clone(),
+            state_chain_rpc_client,
+            our_account_id,
+            account_storage_key,
+            events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
+        }),
+    ))
 }
 
 #[cfg(test)]
@@ -717,7 +745,11 @@ mod tests {
     use sp_version::RuntimeVersion;
     use substrate_subxt::PairSigner;
 
-    use crate::{logging::test_utils::new_test_logger, settings::Settings, testing::assert_ok};
+    use crate::{
+        logging::{self, test_utils::new_test_logger},
+        settings::Settings,
+        testing::assert_ok,
+    };
 
     use super::*;
 
@@ -726,8 +758,9 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings = Settings::from_file("config/Local.toml").unwrap();
+        let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
-            connect_to_state_chain(&settings.state_chain)
+            connect_to_state_chain(&settings.state_chain, &logger)
                 .await
                 .expect("Could not connect");
 

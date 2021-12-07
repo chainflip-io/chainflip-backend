@@ -29,7 +29,7 @@ async fn main() {
         .await;
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
             .await
             .unwrap();
 
