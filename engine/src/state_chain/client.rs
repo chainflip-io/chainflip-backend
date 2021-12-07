@@ -10,6 +10,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
+use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
 use sp_core::{
@@ -35,6 +36,7 @@ use substrate_subxt::{
 };
 
 use crate::common::{read_and_decode_file, rpc_error_into_anyhow_error};
+use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
 #[cfg(test)]
@@ -580,12 +582,14 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
+    logger: &slog::Logger,
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
 )> {
     use substrate_subxt::Signer;
+    let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
@@ -635,7 +639,7 @@ pub async fn connect_to_state_chain(
         }
     }
 
-    let (mut latest_block_hash, stream_block_number) =
+    let (mut latest_block_hash, mut stream_block_number) =
         next_hash_and_number_from_stream(&mut block_header_stream).await?;
 
     // often this call returns a more accurate hash than the stream returns
@@ -657,10 +661,18 @@ pub async fn connect_to_state_chain(
         for _ in 0..(fin_minus_stream - 1) {
             block_header_stream.next().await;
         }
-        let (next_block_hash, _) =
+        let (next_block_hash, next_block_number) =
             next_hash_and_number_from_stream(&mut block_header_stream).await?;
         latest_block_hash = next_block_hash;
+        stream_block_number = next_block_number;
     }
+
+    slog::info!(
+        logger,
+        "Initalising State Chain state at block `{}`; block hash: `{:?}`",
+        stream_block_number,
+        latest_block_hash
+    );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_rpc_client

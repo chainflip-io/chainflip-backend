@@ -81,7 +81,7 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
@@ -208,7 +208,7 @@ async fn register_claim(
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let seed = state_chain_client
         .rotate_session_keys()
         .await
