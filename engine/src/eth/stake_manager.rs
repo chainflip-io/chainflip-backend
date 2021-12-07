@@ -134,11 +134,7 @@ impl EthObserver for StakeManager {
                     .await;
             }
             ignored_event => {
-                slog::warn!(
-                    logger,
-                    "{:?} is not to be submitted to the State Chain",
-                    ignored_event
-                );
+                slog::trace!(logger, "Ignoring unused event: {:?}", ignored_event);
             }
         }
     }
