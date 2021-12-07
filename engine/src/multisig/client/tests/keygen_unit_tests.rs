@@ -468,10 +468,13 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
     // Get a client that has already completed keygen
     let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
 
     // Receive a comm1 with a used ceremony id (same default keygen ceremony id)
     c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(1));
 
-    // It should have been ignored and not started a new ceremony
-    assert_ok!(c1.ensure_at_keygen_stage(0));
+    // The message should have been ignored and no ceremony was started
+    // In this case, the ceremony would be unauthorised, so we must check how many keygen states exist
+    // to see if a unauthorised state was created.
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
 }

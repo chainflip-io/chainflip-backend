@@ -398,10 +398,18 @@ where
             .and_then(|s| s.get_stage())
     }
 
+    pub fn get_signing_states_len(&self) -> usize {
+        self.signing_states.len()
+    }
+
     pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
         self.keygen_states
             .get(&ceremony_id)
             .and_then(|s| s.get_stage())
+    }
+
+    pub fn get_keygen_states_len(&self) -> usize {
+        self.keygen_states.len()
     }
 
     pub fn set_ceremony_id_tracker(&mut self, ceremony_id_tracker: CeremonyIdTracker<S>)

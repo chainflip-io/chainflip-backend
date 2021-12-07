@@ -473,6 +473,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     let sign_states = ctx.sign().await;
 
     let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
     // Receive comm1 from a used ceremony id (the keygen ceremony id)
     let used_ceremony_id = KEYGEN_CEREMONY_ID;
@@ -487,8 +488,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 
     // The message should have been ignored and no ceremony was started
-    assert!(c1
-        .ceremony_manager
-        .get_signing_stage_for(used_ceremony_id)
-        .is_none());
+    // In this case, the ceremony would be unauthorised, so we must check how many signing states exist
+    // to see if a unauthorised state was created.
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 }
