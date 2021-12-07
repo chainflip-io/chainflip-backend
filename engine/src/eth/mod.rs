@@ -93,7 +93,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     handle.await.unwrap();
                 }
             } else {
-                // NB: If we receive another start event, then we just keep the current one going
+                // NB: If we receive another start event, then we just keep the current task going
                 panic!("Received two 'end' events in a row. This should not occur.");
             }
         } else {
@@ -189,7 +189,6 @@ impl EthBroadcaster {
     pub fn new(
         eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
-        logger:
     ) -> Result<Self> {
         let secret_key = read_and_decode_file(
             &eth_settings.private_key_file,
