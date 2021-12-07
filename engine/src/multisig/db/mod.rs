@@ -2,10 +2,11 @@
 mod mock;
 mod persistent;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 pub use mock::KeyDBMock;
+use pallet_cf_vaults::CeremonyId;
 pub use persistent::PersistentKeyDB;
 
 use super::{client::KeygenResultInfo, KeyId};
@@ -16,4 +17,19 @@ pub trait KeyDB {
 
     /// Load all existing keys from the underlying storage
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo>;
+
+    /// Save a new (or update an existing) used ceremony id window from the underlying storage
+    fn update_used_ceremony_id_window(&mut self, window: (CeremonyId, CeremonyId));
+
+    /// Save a new unused ceremony id to the underlying storage
+    fn save_unused_ceremony_id(&mut self, ceremony_id: CeremonyId);
+
+    /// Delete the unused ceremony id from the underlying storage
+    fn remove_unused_ceremony_id(&mut self, ceremony_id: &CeremonyId);
+
+    /// Load all the unused ceremony ids from the underlying storage
+    fn load_unused_ceremony_ids(&self) -> HashSet<CeremonyId>;
+
+    /// Load the used ceremony id window
+    fn load_used_ceremony_id_window(&self) -> Option<(CeremonyId, CeremonyId)>;
 }

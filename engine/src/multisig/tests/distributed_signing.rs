@@ -1,6 +1,6 @@
 /*
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use client::KeygenOutcome;
 use itertools::Itertools;
@@ -118,7 +118,7 @@ async fn coordinate_keygen_and_signing(
 
         n.multisig_instruction_tx
             .send(MultisigInstruction::Sign(SigningInfo::new(
-                0, /* ceremony_id */
+                1, /* ceremony_id */
                 key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE.clone()),
                 ensure_unsorted(signer_ids.clone(), i as u64),
@@ -128,7 +128,7 @@ async fn coordinate_keygen_and_signing(
 
         n.multisig_instruction_tx
             .send(MultisigInstruction::Sign(SigningInfo::new(
-                1, /* ceremony_id */
+                2, /* ceremony_id */
                 key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE2.clone()),
                 ensure_unsorted(signer_ids.clone(), i as u64),
@@ -145,29 +145,37 @@ async fn coordinate_keygen_and_signing(
         // go through each node and get the multisig events from the receiver
         for id in &signer_ids {
             let multisig_events = &mut nodes.get_mut(id).unwrap().multisig_event_rx;
-
-            match multisig_events.recv().await {
-                Some(MultisigOutcome::Signing(SigningOutcome { result: Ok(_), .. })) => {
-                    slog::info!(logger, "Message is signed from {}", id);
-                    signed_count = signed_count + 1;
-                }
-                Some(MultisigOutcome::Signing(_)) => {
-                    slog::error!(logger, "Messaging signing result failed :(");
-                    return Err(());
-                }
-                None => slog::error!(
-                    logger,
-                    "Unexpected error: client stream returned early: {}",
-                    id
-                ),
-                Some(res) => slog::error!(logger, "Unexpected result: {:?} from {}", res, id),
-            };
+            if let Ok(message) =
+                tokio::time::timeout(Duration::from_millis(1), multisig_events.recv()).await
+            {
+                match message {
+                    Some(MultisigOutcome::Signing(SigningOutcome { result: Ok(_), .. })) => {
+                        slog::info!(
+                            logger,
+                            "Message is signed from {}, ({}/{})",
+                            id,
+                            signed_count,
+                            signer_ids.len() * 2
+                        );
+                        signed_count = signed_count + 1;
+                    }
+                    Some(MultisigOutcome::Signing(_)) => {
+                        slog::error!(logger, "Messaging signing result failed :(");
+                        return Err(());
+                    }
+                    None => slog::error!(
+                        logger,
+                        "Unexpected error: client stream returned early: {}",
+                        id
+                    ),
+                    Some(res) => slog::error!(logger, "Unexpected result: {:?} from {}", res, id),
+                };
+            }
         }
         // stop the test when all of the MessageSigned have come in
         if signed_count >= signer_ids.len() * 2 {
             break;
         }
-        slog::info!(logger, "Not all messages signed, go around again");
     }
     slog::info!(logger, "All messages have been signed");
     return Ok(());

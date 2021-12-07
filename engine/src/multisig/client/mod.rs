@@ -15,7 +15,11 @@ mod ceremony_manager;
 #[cfg(test)]
 mod genesis;
 
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use crate::{
     eth::utils::pubkey_to_eth_addr,
@@ -168,7 +172,7 @@ where
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
-    pub ceremony_manager: CeremonyManager,
+    pub ceremony_manager: CeremonyManager<S>,
     multisig_outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     /// Requests awaiting a key
@@ -189,14 +193,16 @@ where
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
+        let db = Arc::new(Mutex::new(db));
         MultisigClient {
             my_account_id: my_account_id.clone(),
-            key_store: KeyStore::new(db),
+            key_store: KeyStore::new(db.clone()),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 multisig_outcome_sender.clone(),
                 outgoing_p2p_message_sender.clone(),
                 logger,
+                db,
             ),
             multisig_outcome_sender,
             outgoing_p2p_message_sender,
@@ -378,8 +384,19 @@ where
         self.key_store.get_key(key_id)
     }
 
-    pub fn get_db(&self) -> &S {
+    pub fn get_db(&self) -> Arc<Mutex<S>> {
         self.key_store.get_db()
+    }
+
+    /// Overrides the `key_store` and `ceremony_manager.ceremony_id_tracker` using the specified db
+    pub fn set_db(&mut self, db: Arc<Mutex<S>>) {
+        self.key_store = KeyStore::new(db.clone());
+
+        self.ceremony_manager
+            .set_ceremony_id_tracker(ceremony_manager::CeremonyIdTracker::new(
+                self.logger.clone(),
+                db.clone(),
+            ));
     }
 
     pub fn get_my_account_id(&self) -> AccountId {

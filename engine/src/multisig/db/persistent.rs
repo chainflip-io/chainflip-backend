@@ -1,13 +1,22 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
     multisig::{client::KeygenResultInfo, KeyId},
 };
+
+pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
+pub const DB_COL_USED_ID_WINDOW: u32 = 1;
+pub const DB_COL_USED_ID_WINDOW_KEY: &[u8] = &[0];
+pub const DB_COL_UNUSED_IDS: u32 = 2;
 
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
@@ -18,7 +27,7 @@ pub struct PersistentKeyDB {
 
 impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::default();
+        let config = DatabaseConfig::with_columns(3);
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
@@ -38,7 +47,11 @@ impl KeyDB for PersistentKeyDB {
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
+        tx.put_vec(
+            DB_COL_KEYGEN_RESULT_INFO,
+            &key_id.0,
+            keygen_result_info_encoded,
+        );
 
         // commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -51,7 +64,7 @@ impl KeyDB for PersistentKeyDB {
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
-            .iter(0)
+            .iter(DB_COL_KEYGEN_RESULT_INFO)
             .filter_map(|(key_id, key_info)| {
                 let key_id: KeyId = KeyId(key_id.into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
@@ -75,6 +88,101 @@ impl KeyDB for PersistentKeyDB {
                 }
             })
             .collect()
+    }
+
+    fn update_used_ceremony_id_window(&mut self, window: (CeremonyId, CeremonyId)) {
+        let mut tx = self.db.transaction();
+
+        tx.put_vec(
+            DB_COL_USED_ID_WINDOW,
+            DB_COL_USED_ID_WINDOW_KEY,
+            bincode::serialize(&window).unwrap(),
+        );
+
+        // Commit the tx to the database
+        self.db.write(tx).unwrap_or_else(|e| {
+            panic!(
+                "Could not write used_ceremony_id `{:?}` to database: {}",
+                window, e,
+            )
+        });
+    }
+
+    fn save_unused_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+        let mut tx = self.db.transaction();
+
+        let ceremony_id_encoded =
+            bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
+
+        tx.put_vec(
+            DB_COL_UNUSED_IDS,
+            &ceremony_id_encoded.clone(),
+            ceremony_id_encoded,
+        );
+
+        // Commit the tx to the database
+        self.db.write(tx).unwrap_or_else(|e| {
+            panic!(
+                "Could not write ceremony_id `{:?}` to database: {}",
+                ceremony_id, e,
+            )
+        });
+    }
+
+    fn remove_unused_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
+        let mut tx = self.db.transaction();
+        let ceremony_id_encoded =
+            bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
+        tx.delete(DB_COL_UNUSED_IDS, &ceremony_id_encoded);
+
+        // Commit the tx to the database
+        self.db.write(tx).unwrap_or_else(|e| {
+            panic!(
+                "Could not delete ceremony_id `{:?}` from database: {}",
+                ceremony_id, e,
+            )
+        });
+    }
+
+    fn load_unused_ceremony_ids(&self) -> HashSet<CeremonyId> {
+        self.db
+            .iter(DB_COL_UNUSED_IDS)
+            .filter_map(
+                |(_, data)| match bincode::deserialize::<CeremonyId>(&data) {
+                    Ok(ceremony_id) => Some(ceremony_id),
+                    Err(_) => None,
+                },
+            )
+            .collect()
+    }
+
+    fn load_used_ceremony_id_window(&self) -> Option<(CeremonyId, CeremonyId)> {
+        match self
+            .db
+            .get(DB_COL_USED_ID_WINDOW, DB_COL_USED_ID_WINDOW_KEY)
+        {
+            Ok(Some(data)) => match bincode::deserialize::<(CeremonyId, CeremonyId)>(&data) {
+                Ok(window) => Some(window),
+                Err(err) => {
+                    slog::error!(
+                        self.logger,
+                        "Could not deserialize used_ceremony_id_window (used_ceremony_id_window: {:?}) from database: {}",
+                        data,
+                        err
+                    );
+                    None
+                }
+            },
+            Ok(None) => None,
+            Err(err) => {
+                slog::error!(
+                    self.logger,
+                    "Could not read used_ceremony_id_window from database: {}",
+                    err
+                );
+                None
+            }
+        }
     }
 }
 
@@ -108,7 +216,6 @@ mod tests {
         let key_id = KeyId(key.into());
         let db_path = Path::new("db1");
         {
-            // Insert the key into the database
             let p_db = PersistentKeyDB::new(&db_path, &logger);
             let db = p_db.db;
 
@@ -149,6 +256,43 @@ mod tests {
             assert!(keys_before.get(&key_id).is_some());
         }
         // clean up
+        std::fs::remove_dir_all(db_path).unwrap();
+    }
+
+    #[test]
+    fn can_save_and_load_used_ceremony_id_data() {
+        let logger = new_test_logger();
+        let db_path = Path::new("db3");
+
+        let test_window: (CeremonyId, CeremonyId) = (10, 100);
+
+        let mut p_db = PersistentKeyDB::new(&db_path, &logger);
+
+        // Save and load the used id window
+        p_db.update_used_ceremony_id_window(test_window);
+        let loaded_window = p_db.load_used_ceremony_id_window();
+
+        assert_eq!(loaded_window, Some(test_window));
+
+        // Save and load the id hash set
+        let mut test_unused_ids: HashSet<CeremonyId> = HashSet::new();
+        test_unused_ids.insert(42);
+        test_unused_ids.insert(50);
+
+        p_db.save_unused_ceremony_id(42);
+        p_db.save_unused_ceremony_id(50);
+
+        let loaded_unused_ids = p_db.load_unused_ceremony_ids();
+
+        assert_eq!(loaded_unused_ids, test_unused_ids);
+
+        // Remove an entry
+        p_db.remove_unused_ceremony_id(&50);
+        test_unused_ids.remove(&50);
+        let loaded_unused_ids = p_db.load_unused_ceremony_ids();
+
+        assert_eq!(loaded_unused_ids, test_unused_ids);
+
         std::fs::remove_dir_all(db_path).unwrap();
     }
 }

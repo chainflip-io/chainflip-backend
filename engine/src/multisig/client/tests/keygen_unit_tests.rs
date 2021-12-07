@@ -445,3 +445,33 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     assert_ok!(c1.ensure_at_keygen_stage(0));
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
+
+#[tokio::test]
+async fn should_ignore_keygen_request_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+
+    // Send another keygen request with the same ceremony_id
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
+
+    // Check that the keygen request was ignored
+    assert_ok!(c1.ensure_at_keygen_stage(0));
+    assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
+}
+
+#[tokio::test]
+async fn should_ignore_stage_data_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    // Get a client that has already completed keygen
+    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+
+    // Receive a comm1 with a used ceremony id (same default keygen ceremony id)
+    c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(1));
+
+    // It should have been ignored and not started a new ceremony
+    assert_ok!(c1.ensure_at_keygen_stage(0));
+}

@@ -444,3 +444,51 @@ async fn should_ignore_rts_with_duplicate_signer() {
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
+
+#[tokio::test]
+async fn should_ignore_rts_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    // Get a client and finish a signing ceremony
+    let mut c1 = sign_states.get_client_at_stage(&ctx.get_account_id(0), 4);
+    c1.receive_signing_stage_data(4, &sign_states, &ctx.get_account_id(1));
+    c1.receive_signing_stage_data(4, &sign_states, &ctx.get_account_id(2));
+
+    // Send an rts with the same ceremony id (the default signing ceremony id for tests)
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // The rts should have been ignored
+    assert_ok!(c1.ensure_at_signing_stage(0));
+    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
+
+#[tokio::test]
+async fn should_ignore_stage_data_with_used_ceremony_id() {
+    use crate::multisig::client::{MultisigData, MultisigMessage};
+
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+
+    // Receive comm1 from a used ceremony id (the keygen ceremony id)
+    let used_ceremony_id = KEYGEN_CEREMONY_ID;
+    let message = MultisigMessage {
+        ceremony_id: used_ceremony_id,
+        data: MultisigData::Signing(
+            sign_states.sign_phase1.comm1s[&ctx.get_account_id(1)]
+                .clone()
+                .into(),
+        ),
+    };
+    c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
+
+    // The message should have been ignored and no ceremony was started
+    assert!(c1
+        .ceremony_manager
+        .get_signing_stage_for(used_ceremony_id)
+        .is_none());
+}
