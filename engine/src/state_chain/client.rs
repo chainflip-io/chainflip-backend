@@ -20,7 +20,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{Header, Index, SignedBlock};
+use state_chain_runtime::{Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -626,51 +626,43 @@ pub async fn connect_to_state_chain(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    async fn next_hash_and_number_from_stream(
-        stream: impl futures::Stream<Item = Result<Header>>,
-    ) -> Result<(H256, u32)> {
-        let mut stream = Box::pin(stream);
-        if let Some(Ok(stream_block_header)) = stream.next().await {
+    let (latest_block_hash, latest_block_number) = {
+        let (stream_block_hash, stream_block_number) = if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
             Ok((stream_block_header.hash(), stream_block_header.number))
         } else {
             Err(anyhow::Error::msg(
                 "Couldn't get first block from block header stream",
             ))
+        }?;
+
+        // often this call returns a more accurate hash than the stream returns
+        // so we check and compare this to what the end of the stream is
+        let finalised_head_hash = chain_rpc_client
+            .finalized_head()
+            .await
+            .map_err(rpc_error_into_anyhow_error)?;
+        let finalised_head_number = chain_rpc_client
+            .header(Some(finalised_head_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)?
+            .expect("We have the hash from the chain, so there should definitely be a header for this block")
+            .number;
+
+        // if the finalised head number is > stream_block_number, loop the stream
+        if stream_block_number < finalised_head_number {
+            for _i in stream_block_number..finalised_head_number {
+                block_header_stream.next().await;
+            }
+            (finalised_head_hash, finalised_head_number)
+        } else {
+            (stream_block_hash, stream_block_number)
         }
-    }
-
-    let (mut latest_block_hash, mut stream_block_number) =
-        next_hash_and_number_from_stream(&mut block_header_stream).await?;
-
-    // often this call returns a more accurate hash than the stream returns
-    // so we check and compare this to what the end of the stream is
-    let finalised_head_hash = chain_rpc_client
-        .finalized_head()
-        .await
-        .map_err(rpc_error_into_anyhow_error)?;
-    let finalised_head_number = chain_rpc_client
-        .header(Some(finalised_head_hash))
-        .await
-        .map_err(rpc_error_into_anyhow_error)?
-        .expect("We have the hash from the chain, so there should definitely be a header for this block")
-        .number;
-
-    // if the finalised head number is > stream_block_number, loop the stream
-    let fin_minus_stream = finalised_head_number - stream_block_number;
-    if fin_minus_stream > 0 {
-        for _ in 0..(fin_minus_stream - 1) {
-            block_header_stream.next().await;
-        }
-        let (next_block_hash, next_block_number) =
-            next_hash_and_number_from_stream(&mut block_header_stream).await?;
-        latest_block_hash = next_block_hash;
-        stream_block_number = next_block_number;
-    }
+    };
 
     slog::info!(
         logger,
-        "Initalising State Chain state at block `{}`; block hash: `{:?}`",
-        stream_block_number,
+        "Initalising State Chain state at block `{}`; block hash: `{:#x}`",
+        latest_block_number,
         latest_block_hash
     );
 
