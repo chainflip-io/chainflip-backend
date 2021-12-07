@@ -74,7 +74,6 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
 {
-    println!("Starting the observer");
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
@@ -94,6 +93,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     handle.await.unwrap();
                 }
             } else {
+                // NB: If we receive another start event, then we just keep the current one going
                 panic!("Received two 'end' events in a row. This should not occur.");
             }
         } else {
@@ -189,6 +189,7 @@ impl EthBroadcaster {
     pub fn new(
         eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
+        logger:
     ) -> Result<Self> {
         let secret_key = read_and_decode_file(
             &eth_settings.private_key_file,

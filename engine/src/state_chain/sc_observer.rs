@@ -91,6 +91,9 @@ pub async fn start<BlockStream, RpcClient>(
                     Ok(())
                 }
 
+                // this should run on:
+                // 1. First iteration (option_account_data_epoch.is_none() == true)
+                // 2. After a NewEpoch event (should_refetch_account_data == true)
                 if should_refetch_account_data || option_account_data_epoch.is_none() {
                     let account_data = state_chain_client
                         .get_account_data(block_hash)
@@ -162,23 +165,8 @@ pub async fn start<BlockStream, RpcClient>(
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(_),
                                 ) => {
-                                    if is_outgoing
-                                        || matches!(
-                                            account_data.state,
-                                            ChainflipAccountState::Validator
-                                        )
-                                    {
-                                        init_eth_witnessing(
-                                            state_chain_client.clone(),
-                                            block_hash,
-                                            account_data,
-                                            &sm_window_sender,
-                                            &km_window_sender,
-                                        )
-                                        .await
-                                        .expect("should initiate eth witnessing");
-                                    }
                                     // now that we have entered a new epoch, we want to check our state again
+                                    // and start up the witnessing modules for the next round
                                     should_refetch_account_data = true;
                                 }
                                 state_chain_runtime::Event::Validator(
