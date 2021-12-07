@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, MultisigOutcome};
+use crate::p2p::AccountId;
 
 use client::{
     keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
@@ -19,9 +20,8 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
-use crate::p2p::{AccountId, P2PMessage};
-
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
+use super::MultisigMessage;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
@@ -31,7 +31,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 pub struct CeremonyManager {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
@@ -41,7 +41,7 @@ impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
         outcome_sender: MultisigOutcomeSender,
-        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
@@ -241,7 +241,7 @@ impl CeremonyManager {
     pub fn process_signing_data(
         &mut self,
         sender_id: AccountId,
-        ceremony_id: u64,
+        ceremony_id: CeremonyId,
         data: SigningData,
     ) {
         // Check if we have state for this data and delegate message to that state
@@ -290,7 +290,7 @@ impl CeremonyManager {
     pub fn process_keygen_data(
         &mut self,
         sender_id: AccountId,
-        ceremony_id: u64,
+        ceremony_id: CeremonyId,
         data: KeygenData,
     ) -> Option<KeygenResultInfo> {
         let logger = &self.logger;

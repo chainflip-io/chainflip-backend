@@ -156,7 +156,7 @@ async fn request_claim(
                                 .expect("Failed to register claim on ETH");
 
                                 println!(
-                                    "Submitted claim to Ethereum successfully with tx_hash: {:?}",
+                                    "Submitted claim to Ethereum successfully with tx_hash: {:#x}",
                                     tx_hash
                                 );
                                 break 'outer;
@@ -229,7 +229,7 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
         .await
         .expect("Failed to submit set_keys extrinsic");
 
-    println!("Session key rotated at tx {:?}.", tx_hash);
+    println!("Session key rotated at tx {:#x}.", tx_hash);
 
     Ok(())
 }

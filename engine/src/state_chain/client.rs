@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use cf_chains::ChainId;
+use cf_p2p::PeerId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -9,6 +10,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use pallet_cf_vaults::Vault;
+use sp_core::storage::StorageData;
 use sp_core::H256;
 use sp_core::{
     storage::{StorageChangeSet, StorageKey},
@@ -20,6 +22,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{Header, Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
 use substrate_subxt::UncheckedExtrinsic;
@@ -31,7 +34,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::rpc_error_into_anyhow_error;
+use crate::common::{read_and_decode_file, rpc_error_into_anyhow_error};
 use crate::settings;
 
 #[cfg(test)]
@@ -130,6 +133,8 @@ type ChainRpcClient = sc_rpc_api::chain::ChainClient<
     state_chain_runtime::SignedBlock,
 >;
 type StateRpcClient = sc_rpc_api::state::StateClient<state_chain_runtime::Hash>;
+type SystemRpcClient =
+    sc_rpc_api::system::SystemClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>;
 
 pub type EventInfo = (
     Phase,
@@ -146,6 +151,7 @@ pub struct StateChainRpcClient {
     author_rpc_client: AuthorRpcClient,
     state_rpc_client: StateRpcClient,
     chain_rpc_client: ChainRpcClient,
+    system_rpc_client: SystemRpcClient,
 }
 
 /// Wraps the substrate client library methods
@@ -165,10 +171,18 @@ pub trait StateChainRpcApi {
         storage_key: StorageKey,
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 
+    async fn storage_pairs(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Vec<(StorageKey, StorageData)>>;
+
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
 
     async fn rotate_keys(&self) -> Result<Bytes>;
+
+    async fn system_local_peer_id(&self) -> Result<PeerId>;
 }
 
 #[async_trait]
@@ -208,6 +222,25 @@ impl StateChainRpcApi for StateChainRpcClient {
             .rotate_keys()
             .await
             .map_err(rpc_error_into_anyhow_error)
+    }
+
+    async fn storage_pairs(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Vec<(StorageKey, StorageData)>> {
+        self.state_rpc_client
+            .storage_pairs(storage_key, Some(block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+    }
+
+    async fn system_local_peer_id(&self) -> Result<PeerId> {
+        self.system_rpc_client
+            .system_local_peer_id()
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .and_then(|bs58| Ok(PeerId::from_str(&bs58)?))
     }
 }
 
@@ -399,6 +432,25 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(storage_updates)
     }
 
+    pub async fn get_storage_pairs<StorageType: Decode + Debug>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Vec<StorageType>> {
+        self.state_chain_rpc_client
+            .storage_pairs(block_hash, storage_key)
+            .await?
+            .into_iter()
+            .map(|(_, storage_data)| {
+                StorageType::decode(&mut &storage_data.0[..]).map_err(anyhow::Error::msg)
+            })
+            .collect()
+    }
+
+    pub async fn get_local_peer_id(&self) -> Result<PeerId> {
+        self.state_chain_rpc_client.system_local_peer_id().await
+    }
+
     // TODO: work out how to get all vaults with a single query... not sure if possible
     pub async fn get_vault(
         &self,
@@ -537,22 +589,21 @@ pub async fn connect_to_state_chain(
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
-    >::new(sp_core::sr25519::Pair::from_seed(
-        &(<[u8; 32]>::try_from(
-            hex::decode(
-                &std::fs::read_to_string(&state_chain_settings.signing_key_file)?
-                    .replace("\"", "")
-                    // allow inserting the private key with or without the 0x
-                    .replace("0x", ""),
+    >::new(sp_core::sr25519::Pair::from_seed(&read_and_decode_file(
+        &state_chain_settings.signing_key_file,
+        "State Chain Signing Key",
+        |str| {
+            <[u8; 32]>::try_from(
+                hex::decode(
+                    str.replace("\"", "")
+                        // allow inserting the private key with or without the 0x
+                        .replace("0x", ""),
+                )
+                .map_err(anyhow::Error::new)?,
             )
-            .map_err(anyhow::Error::new)
-            .context(format!(
-                "No key file located at: {:?}",
-                &state_chain_settings.signing_key_file
-            ))?,
-        )
-        .map_err(|_err| anyhow::Error::msg("Signing key seed is the wrong length."))?),
-    ));
+            .map_err(|_err| anyhow::Error::msg("Wrong length"))
+        },
+    )?));
 
     let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
         state_chain_settings.ws_endpoint.as_str(),
@@ -564,6 +615,7 @@ pub async fn connect_to_state_chain(
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
 
     let mut block_header_stream = chain_rpc_client
         .subscribe_finalized_heads()
@@ -619,6 +671,7 @@ pub async fn connect_to_state_chain(
 
     let system_pallet_metadata = metadata.module("System")?.clone();
     let state_chain_rpc_client = StateChainRpcClient {
+        system_rpc_client,
         author_rpc_client,
         state_rpc_client,
         chain_rpc_client,

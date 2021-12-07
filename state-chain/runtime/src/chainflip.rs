@@ -240,15 +240,12 @@ pub struct BasicSignerNomination;
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
-	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
+	fn nomination_with_seed(_seed: u64) -> Option<Self::SignerId> {
+		let validators = pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
 			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
 			.take(1)
-			.collect::<Vec<_>>()
-			.first()
-			.expect("Can only panic if all validators are offline.")
-			.0
-			.clone()
+			.collect::<Vec<_>>();
+		validators.first().map(|(id, _)| id.clone())
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
@@ -354,7 +351,7 @@ impl BroadcastConfig for EthereumBroadcastConfig {
 	type Chain = Ethereum;
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
-	type TransactionHash = [u8; 32];
+	type TransactionHash = eth::TransactionHash;
 	type SignerId = eth::Address;
 
 	fn verify_transaction(

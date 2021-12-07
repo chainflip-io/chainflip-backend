@@ -73,8 +73,8 @@ pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
-	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
-		RANDOM_NOMINEE
+	fn nomination_with_seed(_seed: u64) -> Option<Self::SignerId> {
+		Some(RANDOM_NOMINEE)
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {

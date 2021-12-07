@@ -16,7 +16,7 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
-    p2p,
+    p2p::{self, AccountId, AccountPeerMappingChange},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
@@ -25,6 +25,11 @@ pub async fn start<BlockStream, RpcClient>(
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    account_peer_mapping_change_sender: UnboundedSender<(
+        AccountId,
+        sp_core::ed25519::Public,
+        AccountPeerMappingChange,
+    )>,
     mut multisig_event_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
@@ -175,6 +180,34 @@ pub async fn start<BlockStream, RpcClient>(
                                     }
                                     // now that we have entered a new epoch, we want to check our state again
                                     should_refetch_account_data = true;
+                                }
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::PeerIdRegistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
+                                ) => {
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Registered,
+                                        ))
+                                        .unwrap();
+                                }
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::PeerIdUnregistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
+                                ) => {
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Unregistered,
+                                        ))
+                                        .unwrap();
                                 }
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
@@ -391,7 +424,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                             // TODO: Fill in the transaction hash with the real one
                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
+                                                attempt_id, TransmissionFailure::TransactionFailed, Default::default()
                                             )
                                         }
                                     };
@@ -447,6 +480,8 @@ mod tests {
 
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
         let (_multisig_event_sender, multisig_event_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
@@ -465,6 +500,7 @@ mod tests {
             block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
+            account_peer_mapping_change_sender,
             multisig_event_receiver,
             sm_window_sender,
             km_window_sender,

@@ -997,6 +997,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "kvdb-rocksdb",
  "lazy_static",
+ "libp2p",
  "log 0.4.14",
  "mockall",
  "num",
