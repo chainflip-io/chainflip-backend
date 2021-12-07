@@ -55,8 +55,7 @@ pub async fn start<BlockStream, RpcClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    // on the first block we get, we want to check our state
-    // let mut should_refetch_account_data = true;
+    // We'll get our initial state on the first iteration (at the bottom of this loop)
     // (account_data, is_outgoing)
     let mut option_account_data_epoch: Option<(ChainflipAccountData, bool)> = None;
 
@@ -387,7 +386,7 @@ pub async fn start<BlockStream, RpcClient>(
                             block_hash,
                             account_data
                                 .last_active_epoch
-                                .expect("we are active our outgoing"),
+                                .expect("we are active or outgoing"),
                             ChainId::Ethereum,
                         )
                         .await?;
@@ -437,7 +436,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 .await;
                         }
 
-                        // only if we receive a new epoch, do we want to update the witnessing processes
+                        // only if we received a new epoch this block, do we want to update the witnessing processes
                         if received_new_epoch
                             && matches!(new_account_data.state, ChainflipAccountState::Validator)
                         {
@@ -449,7 +448,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 &km_window_sender,
                             )
                             .await
-                            .unwrap();
+                            .expect("Should send windows to witness processes");
                         }
                     }
                 } else {
@@ -468,7 +467,7 @@ pub async fn start<BlockStream, RpcClient>(
                             &km_window_sender,
                         )
                         .await
-                        .unwrap();
+                        .expect("Should send windows to witness processes");
                     }
 
                     option_account_data_epoch = Some((new_account_data, is_outgoing));
