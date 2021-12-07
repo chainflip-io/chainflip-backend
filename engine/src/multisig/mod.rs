@@ -25,10 +25,10 @@ pub use client::{
     SchnorrSignature, SigningOutcome,
 };
 
-pub use db::{KeyDB, PersistentKeyDB};
+pub use db::{MultisigDB, PersistentMultisigDB};
 
 #[cfg(test)]
-pub use db::KeyDBMock;
+pub use db::MultisigDBMock;
 
 pub use self::client::{keygen::KeygenInfo, signing::SigningInfo};
 
@@ -70,7 +70,7 @@ pub fn start_client<S>(
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
 

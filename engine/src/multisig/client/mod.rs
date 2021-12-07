@@ -24,7 +24,7 @@ use std::{
 use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{KeyDB, KeyId, MultisigInstruction},
+    multisig::{KeyId, MultisigDB, MultisigInstruction},
     p2p::AccountId,
 };
 
@@ -168,7 +168,7 @@ pub enum MultisigOutcome {
 #[derive(Clone)]
 pub struct MultisigClient<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
@@ -183,7 +183,7 @@ where
 
 impl<S> MultisigClient<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     pub fn new(
         my_account_id: AccountId,
@@ -378,7 +378,7 @@ where
 #[cfg(test)]
 impl<S> MultisigClient<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
         self.key_store.get_key(key_id)

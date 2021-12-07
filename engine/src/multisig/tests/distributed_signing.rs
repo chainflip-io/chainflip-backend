@@ -16,7 +16,7 @@ use crate::{
             signing::SigningInfo,
             SigningOutcome,
         },
-        KeyDBMock, KeyId, MessageHash, MultisigInstruction, MultisigOutcome,
+        MultisigDBMock, KeyId, MessageHash, MultisigInstruction, MultisigOutcome,
     },
     p2p::{
         self,
@@ -196,7 +196,7 @@ async fn distributed_signing() {
         let p2p_client = network.new_client(id.clone());
         let logger = logger.clone();
 
-        let db = KeyDBMock::new();
+        let db = MultisigDBMock::new();
 
         let (multisig_instruction_tx, multisig_instruction_rx) =
             tokio::sync::mpsc::unbounded_channel();

@@ -32,12 +32,12 @@ use crate::{
             KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome, SigningOutcome,
         },
         crypto::Point,
-        KeyDBMock, KeygenInfo, SigningInfo,
+        KeygenInfo, MultisigDBMock, SigningInfo,
     },
     p2p::AccountId,
 };
 
-pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
+pub type MultisigClientNoDB = MultisigClient<MultisigDBMock>;
 
 use super::{ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGN_CEREMONY_ID};
 
@@ -463,7 +463,7 @@ impl KeygenContext {
             let (p2p_tx, p2p_rx) = tokio::sync::mpsc::unbounded_channel();
             let client = MultisigClient::new(
                 id.clone(),
-                KeyDBMock::new(),
+                MultisigDBMock::new(),
                 tx,
                 p2p_tx,
                 keygen_options,

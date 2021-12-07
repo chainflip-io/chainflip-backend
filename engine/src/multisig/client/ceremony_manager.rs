@@ -18,7 +18,7 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeyDB, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, MultisigDB, SigningOutcome};
 
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
 use super::MultisigMessage;
@@ -30,7 +30,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
@@ -43,7 +43,7 @@ where
 
 impl<S> CeremonyManager<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     pub fn new(
         my_account_id: AccountId,
@@ -380,7 +380,7 @@ where
 #[cfg(test)]
 impl<S> CeremonyManager<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     pub fn expire_all(&mut self) {
         for (_, state) in &mut self.signing_states {
@@ -406,7 +406,7 @@ where
 
     pub fn set_ceremony_id_tracker(&mut self, ceremony_id_tracker: CeremonyIdTracker<S>)
     where
-        S: KeyDB,
+        S: MultisigDB,
     {
         self.ceremony_id_tracker = ceremony_id_tracker;
     }
@@ -441,7 +441,7 @@ pub fn generate_keygen_context(
 #[derive(Clone)]
 pub struct CeremonyIdTracker<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     // (lowest_used_id, Highest_used_id)d
     used_id_window: Option<(CeremonyId, CeremonyId)>,
@@ -453,7 +453,7 @@ where
 
 impl<S> CeremonyIdTracker<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     /// Create a new `CeremonyIdTracker` and load the persistent information
     pub fn new(logger: slog::Logger, ceremony_id_db: Arc<Mutex<S>>) -> Self {
@@ -543,11 +543,11 @@ where
 
 #[test]
 fn test_ceremony_id_tracker() {
-    use crate::multisig::db::KeyDBMock;
+    use crate::multisig::db::MultisigDBMock;
 
     let logger = crate::logging::test_utils::new_test_logger();
 
-    let mut tracker = CeremonyIdTracker::new(logger, Arc::new(Mutex::new(KeyDBMock::new())));
+    let mut tracker = CeremonyIdTracker::new(logger, Arc::new(Mutex::new(MultisigDBMock::new())));
 
     // Test the starting condition (starting from non-zero)
     assert!(!tracker.is_ceremony_id_used(&0));

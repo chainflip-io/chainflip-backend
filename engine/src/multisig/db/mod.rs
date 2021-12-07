@@ -5,13 +5,13 @@ mod persistent;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
-pub use mock::KeyDBMock;
+pub use mock::MultisigDBMock;
 use pallet_cf_vaults::CeremonyId;
-pub use persistent::PersistentKeyDB;
+pub use persistent::PersistentMultisigDB;
 
 use super::{client::KeygenResultInfo, KeyId};
 
-pub trait KeyDB {
+pub trait MultisigDB {
     /// Save a new (or update an existing) entry from the underlying storage
     fn update_key(&mut self, key_id: &KeyId, key: &KeygenResultInfo);
 

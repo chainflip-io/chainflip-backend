@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::multisig::{KeyDB, KeyId};
+use crate::multisig::{KeyId, MultisigDB};
 
 use super::common::KeygenResultInfo;
 
@@ -11,7 +11,7 @@ use super::common::KeygenResultInfo;
 #[derive(Clone)]
 pub struct KeyStore<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     keys: HashMap<KeyId, KeygenResultInfo>,
     db: Arc<Mutex<S>>,
@@ -19,7 +19,7 @@ where
 
 impl<S> KeyStore<S>
 where
-    S: KeyDB,
+    S: MultisigDB,
 {
     pub fn new(db: Arc<Mutex<S>>) -> Self {
         let keys = db.lock().unwrap().load_keys();

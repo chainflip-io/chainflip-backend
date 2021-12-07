@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentMultisigDB},
     p2p::{self, AccountId},
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -48,7 +48,7 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
+    let db = PersistentMultisigDB::new(settings.signing.db_file.as_path(), &root_logger);
 
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =

@@ -4,19 +4,19 @@ use pallet_cf_vaults::CeremonyId;
 
 use crate::multisig::{client::KeygenResultInfo, KeyId};
 
-use super::KeyDB;
+use super::MultisigDB;
 
 #[derive(Clone)]
-pub struct KeyDBMock {
+pub struct MultisigDBMock {
     // Represents a key-value database
     kv_db: HashMap<KeyId, Vec<u8>>,
     used_id_window: Option<(CeremonyId, CeremonyId)>,
     unused_id_db: HashSet<CeremonyId>,
 }
 
-impl KeyDBMock {
+impl MultisigDBMock {
     pub fn new() -> Self {
-        KeyDBMock {
+        MultisigDBMock {
             kv_db: HashMap::new(),
             used_id_window: None,
             unused_id_db: HashSet::new(),
@@ -24,7 +24,7 @@ impl KeyDBMock {
     }
 }
 
-impl KeyDB for KeyDBMock {
+impl MultisigDB for MultisigDBMock {
     fn update_key(&mut self, key_id: &KeyId, key: &KeygenResultInfo) {
         let val = bincode::serialize(key).expect("Should be serializable key");
 

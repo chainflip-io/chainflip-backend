@@ -5,7 +5,7 @@ use crate::{
     logging,
     multisig::{
         client::{keygen::KeygenOptions, MultisigClient},
-        KeyDBMock,
+        MultisigDBMock,
     },
 };
 
@@ -36,7 +36,7 @@ async fn check_signing_db() {
     let logger = logging::test_utils::new_test_logger();
     let mut restarted_client = MultisigClient::new(
         id,
-        KeyDBMock::new(),
+        MultisigDBMock::new(),
         tx,
         p2p_tx,
         KeygenOptions::allowing_high_pubkey(),

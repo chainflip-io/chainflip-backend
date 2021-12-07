@@ -3,7 +3,7 @@ use std::{
     path::Path,
 };
 
-use super::KeyDB;
+use super::MultisigDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use pallet_cf_vaults::CeremonyId;
 use slog::o;
@@ -19,27 +19,27 @@ pub const DB_COL_USED_ID_WINDOW_KEY: &[u8] = &[0];
 pub const DB_COL_UNUSED_IDS: u32 = 2;
 
 /// Database for keys that uses rocksdb
-pub struct PersistentKeyDB {
+pub struct PersistentMultisigDB {
     /// Rocksdb database instance
     db: Database,
     logger: slog::Logger,
 }
 
-impl PersistentKeyDB {
+impl PersistentMultisigDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::with_columns(3);
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
 
-        PersistentKeyDB {
+        PersistentMultisigDB {
             db,
-            logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
+            logger: logger.new(o!(COMPONENT_KEY => "PersistentMultisigDB")),
         }
     }
 }
 
-impl KeyDB for PersistentKeyDB {
+impl MultisigDB for PersistentMultisigDB {
     fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo) {
         let mut tx = self.db.transaction();
 
@@ -192,7 +192,8 @@ mod tests {
     use super::*;
 
     use crate::{
-        logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
+        logging::test_utils::new_test_logger, multisig::db::PersistentMultisigDB,
+        testing::assert_ok,
     };
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
@@ -216,7 +217,7 @@ mod tests {
         let key_id = KeyId(key.into());
         let db_path = Path::new("db1");
         {
-            let p_db = PersistentKeyDB::new(&db_path, &logger);
+            let p_db = PersistentMultisigDB::new(&db_path, &logger);
             let db = p_db.db;
 
             // Add the keyshare to the database
@@ -225,7 +226,7 @@ mod tests {
             db.write(tx).unwrap();
         }
 
-        let p_db = PersistentKeyDB::new(&db_path, &logger);
+        let p_db = PersistentMultisigDB::new(&db_path, &logger);
         let keys = p_db.load_keys();
         let key = keys.get(&key_id).expect("Should have an entry for key");
         assert_eq!(key.params.threshold, 1);
@@ -239,7 +240,7 @@ mod tests {
         let key_id = KeyId(vec![0; 33]);
         let db_path = Path::new("db2");
         {
-            let mut p_db = PersistentKeyDB::new(&db_path, &logger);
+            let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
             let keys_before = p_db.load_keys();
             // there should be no key [0; 33] yet
@@ -266,7 +267,7 @@ mod tests {
 
         let test_window: (CeremonyId, CeremonyId) = (10, 100);
 
-        let mut p_db = PersistentKeyDB::new(&db_path, &logger);
+        let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
         // Save and load the used id window
         p_db.update_used_ceremony_id_window(test_window);
