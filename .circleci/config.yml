@@ -7,7 +7,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-        - fix/nonce-too-early
+        # - update/epic-ci-1
 ignore_main_branches: &ignore_main_branches
   filters:
     branches:
@@ -16,7 +16,7 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
-        - fix/nonce-too-early
+        # - update/epic-ci-1
 
 auth: &dockerconfig
   username: $DOCKER_USERNAME
@@ -482,10 +482,11 @@ jobs:
             sops -d Default.enc.toml > config/Default.toml
             echo -n $BASHFUL_SIGNING_KEY > signing_key_file
             echo -n $ETH_PRIVATE_KEY > private_key_file
+            echo -n $NODE_KEY_FILE > node_key_file
       - run:
           name: Start Node
           background: true
-          command: ./target/release/state-chain-node --chain cf-dev
+          command: ./target/release/state-chain-node --chain cf-dev --node-key-file=node_key_file
       - run: sleep 3
       - run:
           name: Start Engine
