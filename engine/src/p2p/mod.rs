@@ -205,7 +205,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                         bincode::serialize(&message).unwrap()
                     ).map_err(rpc_error_into_anyhow_error)
                 }).await {
-                    Ok(account_id) => slog::info!(logger, "Sent P2P message to: {}", account_id),
+                    Ok(_) => slog::info!(logger, "Sent P2P message to: {}", account_id),
                     Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", account_id, error)
                 }
             }
