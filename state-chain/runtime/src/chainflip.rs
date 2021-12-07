@@ -229,6 +229,13 @@ impl Heartbeat for ChainflipHeartbeat {
 	}
 }
 
+/// Returns a scaled index based on an input seed
+fn get_random_id_by_seed_in_range(seed: Vec<u8>, max: usize) -> usize {
+	let random = seed.iter().fold(0, |acc, x| acc + x.clone() as u64);
+	let id = random % max as u64;
+	(id as u64).try_into().unwrap_or(0)
+}
+
 /// A very basic but working implementation of signer nomination.
 ///
 /// For a single signer, takes the first online validator in the validator lookup map.
@@ -240,12 +247,23 @@ pub struct BasicSignerNomination;
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
-	fn nomination_with_seed(seed: u64) -> Option<Self::SignerId> {
+	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
+		// Get all currently online validators
 		let validators = pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
 			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
-			.take(1)
 			.collect::<Vec<_>>();
-		validators.first().map(|(id, _)| id.clone())
+
+		let number_of_online_validators = validators.len();
+		// Check if there is someone online
+		if number_of_online_validators != 0 {
+			// Generate an id based on an seed in the range of the validators array
+			let the_chosen_one = get_random_id_by_seed_in_range(seed, number_of_online_validators);
+			// Get the signer id of the chosen validator
+			let signer_id = validators.get(the_chosen_one).unwrap().clone().0;
+			Some(signer_id)
+		} else {
+			None
+		}
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
@@ -414,5 +432,15 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::ParticipateSigningFailed => 15,
 			OfflineCondition::NotEnoughPerformanceCredits => 100,
 		}
+	}
+}
+
+mod test {
+	use crate::chainflip::get_random_id_by_seed_in_range;
+	#[test]
+	fn test_get_random_id() {
+		assert!(get_random_id_by_seed_in_range(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
+		assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) == 0);
+		assert!(get_random_id_by_seed_in_range(vec![180, 200, 240], 10) < 10);
 	}
 }

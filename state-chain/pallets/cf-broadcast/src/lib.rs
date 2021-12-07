@@ -10,7 +10,6 @@ mod mock;
 mod tests;
 
 pub mod weights;
-use sp_core::H256;
 pub use weights::WeightInfo;
 
 use cf_chains::Chain;
@@ -20,8 +19,6 @@ use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Parameter
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{marker::PhantomData, prelude::*};
-
-use frame_support::traits::Randomness;
 
 // const RANDOM_CONTEXT: &[u8; 10] = &b"a very secret thing"[..];
 
@@ -183,9 +180,6 @@ pub mod pallet {
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
-
-		/// Randomness provider
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -485,11 +479,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
-		// Random seed
-		let seed = T::Randomness::random(&b"a very secret thing"[..]).0;
+		// Seed based on the input data of the extrinsic
+		let seed = unsigned_tx.encode();
 
 		// Select a signer for this broadcast.
-		let nominated_signer = T::SignerNomination::nomination_with_seed(attempt_id);
+		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
 
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = nominated_signer {
