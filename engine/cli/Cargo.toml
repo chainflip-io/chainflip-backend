@@ -27,5 +27,6 @@ cf-chains = {path = "../../state-chain/chains"}
 state-chain-node = {path = "../../state-chain/node"}
 
 # Substrate key types
+sp-core = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
 sp-consensus-aura = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
 sp-finality-grandpa = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}

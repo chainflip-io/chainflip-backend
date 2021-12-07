@@ -955,6 +955,7 @@ dependencies = [
  "serde 1.0.130",
  "slog",
  "sp-consensus-aura",
+ "sp-core",
  "sp-finality-grandpa",
  "state-chain-node",
  "state-chain-runtime",

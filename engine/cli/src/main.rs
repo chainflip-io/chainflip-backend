@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
@@ -5,9 +6,10 @@ use chainflip_engine::{
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
+use sp_core::sr25519::Public as SrPublic;
+use sp_core::ed25519::Public as EdPublic;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use state_chain_node::chain_spec::get_from_seed;
 use state_chain_runtime::opaque::SessionKeys;
 use structopt::StructOpt;
 use web3::types::H160;
@@ -214,23 +216,23 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
         .await
         .expect("Could not rotate session keys.");
 
-    println!("New session key {:?}.", seed);
+    let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
+    let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
 
     let new_session_key = SessionKeys {
-        aura: get_from_seed::<AuraId>(&seed),
-        grandpa: get_from_seed::<GrandpaId>(&seed),
+        aura: AuraId::from(SrPublic::from_raw(aura_key)),
+        grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
     };
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             logger,
-            pallet_cf_validator::Call::set_keys(new_session_key, [0; 8].to_vec()),
+            pallet_cf_validator::Call::set_keys(new_session_key, [0; 1].to_vec()),
         )
         .await
         .expect("Failed to submit set_keys extrinsic");
 
     println!("Session key rotated at tx {:#x}.", tx_hash);
-
     Ok(())
 }
 
