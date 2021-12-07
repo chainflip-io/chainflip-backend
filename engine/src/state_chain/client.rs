@@ -627,13 +627,14 @@ pub async fn connect_to_state_chain(
         .map_err(rpc_error_into_anyhow_error);
 
     let (latest_block_hash, latest_block_number) = {
-        let (stream_block_hash, stream_block_number) = if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
-            Ok((stream_block_header.hash(), stream_block_header.number))
-        } else {
-            Err(anyhow::Error::msg(
-                "Couldn't get first block from block header stream",
-            ))
-        }?;
+        let (stream_block_hash, stream_block_number) =
+            if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
+                Ok((stream_block_header.hash(), stream_block_header.number))
+            } else {
+                Err(anyhow::Error::msg(
+                    "Couldn't get first block from block header stream",
+                ))
+            }?;
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
@@ -744,7 +745,11 @@ mod tests {
     use sp_version::RuntimeVersion;
     use substrate_subxt::PairSigner;
 
-    use crate::{logging::{self, test_utils::new_test_logger}, settings::Settings, testing::assert_ok};
+    use crate::{
+        logging::{self, test_utils::new_test_logger},
+        settings::Settings,
+        testing::assert_ok,
+    };
 
     use super::*;
 
