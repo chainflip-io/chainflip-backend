@@ -133,15 +133,14 @@ impl EthObserver for KeyManager {
                             ChainId::Ethereum,
                             new_key.serialize().to_vec(),
                             event.block_number,
-                            event.tx_hash.to_vec(),
+                            event.tx_hash.to_fixed_bytes().to_vec(),
                         ),
                     )
                     .await;
             }
-            KeyManagerEvent::Shared(shared_event) => match shared_event {
-                SharedEvent::Refunded { .. } => {}
-                SharedEvent::RefundFailed { .. } => {}
-            },
+            _ => {
+                slog::trace!(logger, "Ignoring unused event: {}", event);
+            }
         }
     }
 
@@ -355,7 +354,7 @@ mod tests {
             }
         ).unwrap();
 
-        assert_eq!(event.tx_hash, transaction_hash.to_fixed_bytes());
+        assert_eq!(event.tx_hash, transaction_hash);
     }
 
     #[test]

@@ -4,7 +4,10 @@ use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{multisig::client::utils::PartyIdxMapping, p2p::P2PMessage};
+use crate::{
+    multisig::client::{utils::PartyIdxMapping, MultisigMessage},
+    p2p::AccountId,
+};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result> {
@@ -60,7 +63,7 @@ pub struct CeremonyCommon {
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
     pub all_idxs: BTreeSet<usize>,
-    pub outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    pub outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     pub validator_mapping: Arc<PartyIdxMapping>,
     pub logger: slog::Logger,
 }

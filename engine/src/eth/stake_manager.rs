@@ -116,7 +116,7 @@ impl EthObserver for StakeManager {
                             account_id,
                             amount,
                             return_addr.0,
-                            event.tx_hash,
+                            event.tx_hash.into(),
                         ),
                     )
                     .await;
@@ -128,17 +128,13 @@ impl EthObserver for StakeManager {
                         pallet_cf_witnesser_api::Call::witness_claimed(
                             account_id,
                             amount,
-                            event.tx_hash,
+                            event.tx_hash.to_fixed_bytes(),
                         ),
                     )
                     .await;
             }
-            ignored_event => {
-                slog::warn!(
-                    logger,
-                    "{:?} is not to be submitted to the State Chain",
-                    ignored_event
-                );
+            _ => {
+                slog::trace!(logger, "Ignoring unused event: {}", event);
             }
         }
     }

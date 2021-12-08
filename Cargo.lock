@@ -955,6 +955,7 @@ dependencies = [
  "serde 1.0.130",
  "slog",
  "sp-consensus-aura",
+ "sp-core",
  "sp-finality-grandpa",
  "state-chain-node",
  "state-chain-runtime",
@@ -997,6 +998,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "kvdb-rocksdb",
  "lazy_static",
+ "libp2p",
  "log 0.4.14",
  "mockall",
  "num",
@@ -5110,6 +5112,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]

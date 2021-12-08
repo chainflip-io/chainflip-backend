@@ -6,7 +6,7 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
-    p2p,
+    p2p::{self, AccountId, AccountPeerMappingChange},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
@@ -25,6 +25,11 @@ pub async fn start<BlockStream, RpcClient>(
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    account_peer_mapping_change_sender: UnboundedSender<(
+        AccountId,
+        sp_core::ed25519::Public,
+        AccountPeerMappingChange,
+    )>,
     mut multisig_event_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
@@ -176,6 +181,34 @@ pub async fn start<BlockStream, RpcClient>(
                                     // now that we have entered a new epoch, we want to check our state again
                                     should_refetch_account_data = true;
                                 }
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::PeerIdRegistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
+                                ) => {
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Registered,
+                                        ))
+                                        .unwrap();
+                                }
+                                state_chain_runtime::Event::Validator(
+                                    pallet_cf_validator::Event::PeerIdUnregistered(
+                                        account_id,
+                                        peer_id,
+                                    ),
+                                ) => {
+                                    account_peer_mapping_change_sender
+                                        .send((
+                                            AccountId(*account_id.as_ref()),
+                                            peer_id,
+                                            AccountPeerMappingChange::Unregistered,
+                                        ))
+                                        .unwrap();
+                                }
                                 state_chain_runtime::Event::Vaults(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
@@ -207,10 +240,12 @@ pub async fn start<BlockStream, RpcClient>(
                                             result,
                                         }) => match result {
                                             Ok(pubkey) => {
-                                                pallet_cf_witnesser_api::Call::witness_keygen_success(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pubkey.serialize().to_vec(),
+                                                    pallet_cf_vaults::KeygenOutcome::Success(
+                                                        pubkey.serialize().to_vec(),
+                                                    ),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -223,16 +258,16 @@ pub async fn start<BlockStream, RpcClient>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                pallet_cf_witnesser_api::Call::witness_keygen_failure(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    bad_account_ids,
+                                                    pallet_cf_vaults::KeygenOutcome::Failure(
+                                                        BTreeSet::from_iter(bad_account_ids),
+                                                    ),
                                                 )
                                             }
                                         },
-                                        MultisigOutcome::Signing(
-                                            message_signing_result,
-                                        ) => {
+                                        MultisigOutcome::Signing(message_signing_result) => {
                                             panic!(
                                                 "Expecting KeygenResult, got: {:?}",
                                                 message_signing_result
@@ -391,7 +426,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                             // TODO: Fill in the transaction hash with the real one
                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                attempt_id, TransmissionFailure::TransactionRejected, [0u8; 32]
+                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
                                             )
                                         }
                                     };
@@ -441,12 +476,14 @@ mod tests {
         let logger = logging::test_utils::new_test_logger();
 
         let (_, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
                 .await
                 .unwrap();
 
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
         let (_multisig_event_sender, multisig_event_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
@@ -465,6 +502,7 @@ mod tests {
             block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
+            account_peer_mapping_change_sender,
             multisig_event_receiver,
             sm_window_sender,
             km_window_sender,

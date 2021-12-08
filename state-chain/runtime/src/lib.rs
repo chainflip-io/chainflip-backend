@@ -127,6 +127,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Handler = Vaults;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Online;
+	type PeerMapping = pallet_cf_validator::Pallet<Self>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
@@ -156,6 +157,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
+}
+
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -163,6 +168,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -246,7 +252,8 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
+	type OnKilledAccount =
+		(pallet_cf_flip::BurnFlipAccount<Self>, pallet_cf_validator::DeletePeerMapping<Self>);
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.

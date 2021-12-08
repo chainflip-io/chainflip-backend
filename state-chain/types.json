@@ -69,6 +69,8 @@
     ]
   },
   "Duration": "(u64,u32)",
+  "Ed25519PublicKey": "[u8;32]",
+  "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
@@ -95,6 +97,12 @@
       "Internal": "(InternalSource)",
       "Emissions": ""
     }
+  },
+  "KeygenResponseStatus": {
+    "CandidateCount": "u32",
+    "RemainingCandidates": "BTreeSet<ValidatorId>",
+    "SuccessVotes": "BTreeMap<Vec<u8>, u32>",
+	  "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
   "KeyId": "Vec<u8>",
   "Liveness": {
@@ -191,7 +199,7 @@
   "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
-    "candidates": "Vec<ValidatorId>"
+    "response_status": "KeygenResponseStatus"
   },
   "AwaitingRotation": {
     "new_public_key": "Vec<u8>"
