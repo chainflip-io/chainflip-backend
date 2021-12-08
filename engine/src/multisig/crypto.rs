@@ -10,17 +10,19 @@ pub use curv::{
     arithmetic::traits::Converter as BigIntConverter, elliptic::curves::ECPoint, BigInt,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Zeroize)]
 pub struct Point(pub Secp256k1Point);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scalar(Secp256k1Scalar);
 
-// impl zeroize::Zeroize for Scalar {
-//     fn zeroize(&mut self) {
-//         self.0.zeroize()
-//     }
-// }
+impl zeroize::Zeroize for Scalar {
+    fn zeroize(&mut self) {
+        // Secp256k1Point doesn't expose a way to "zeroize" it
+        // explicitly, but dropping the value will zeroize it
+        self.0 = Secp256k1Scalar::zero();
+    }
+}
 
 impl<'de> Deserialize<'de> for Point {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -67,6 +69,7 @@ impl Serialize for Scalar {
 }
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyShare {

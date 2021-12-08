@@ -163,12 +163,11 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             &self.common.all_idxs,
         ));
 
-        // use zeroize::Zeroize;
+        use zeroize::Zeroize;
 
         // Secret nonces are deleted here (according to
         // step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
-        // TODO: make this work (though it will be zeroized on drop)
-        // self.nonces.zeroize();
+        self.nonces.zeroize();
 
         data
     }

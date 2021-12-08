@@ -12,6 +12,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;
+use zeroize::Zeroize;
 
 use crate::multisig::{
     client::common::BroadcastVerificationMessage,
@@ -26,7 +27,7 @@ use sha2::{Digest, Sha256};
 /// generated during the preprocessing stage in Section 5.3 (page 13)
 // TODO: Not sure if it is a good idea to to make
 // the secret values clonable
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Zeroize)]
 pub struct SecretNoncePair {
     pub d: Scalar,
     pub d_pub: Point,
