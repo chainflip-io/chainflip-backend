@@ -2,9 +2,10 @@ use anyhow::{Context, Result};
 use cf_chains::ChainId;
 use cf_p2p::PeerId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, FullCodec, WrapperTypeEncode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::unsigned::TransactionValidityError;
+use frame_support::StorageValue;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
@@ -475,13 +476,19 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
-    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
+    pub async fn get_environment_value<StorageType, ValueType>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<ValueType> {
+    ) -> Result<ValueType>
+    where
+        StorageType: StorageValue<ValueType>,
+        ValueType: Debug + FullCodec + Clone,
+    {
         let value_changes = self
-            .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
+            .get_from_storage_with_key::<ValueType>(
+                block_hash,
+                StorageKey(StorageType::hashed_key().into()),
+            )
             .await?;
 
         Ok(value_changes

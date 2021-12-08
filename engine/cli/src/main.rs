@@ -1,6 +1,7 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
+    logging::utils::new_discard_logger,
     state_chain::client::connect_to_state_chain,
 };
 use futures::StreamExt;
@@ -140,31 +141,17 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_environment_value::<u64>(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::EthereumChainId::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_environment_value::<pallet_cf_environment::EthereumChainId<
+                                        state_chain_runtime::Runtime,
+                                    >, u64>(block_hash)
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_environment_value(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::StakeManagerAddress::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_environment_value::<pallet_cf_environment::StakeManagerAddress<
+                                        state_chain_runtime::Runtime,
+                                    >, H160>(block_hash)
                                     .await
-                                    .expect("Failed to fetch StakeManagerAddress from State Chain");
+                                    .expect("Failed to fetch StakeManager from the State Chain");
                                 let tx_hash = register_claim(
                                     settings,
                                     chain_id,

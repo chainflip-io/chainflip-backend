@@ -9,7 +9,7 @@ use chainflip_engine::{
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
-use sp_core::storage::StorageKey;
+use sp_core::{storage::StorageKey, H160};
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -80,11 +80,8 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     let stake_manager_address = state_chain_client
-        .get_environment_value(
+        .get_environment_value::<pallet_cf_environment::StakeManagerAddress::<state_chain_runtime::Runtime>, H160>(
             latest_block_hash,
-            StorageKey(pallet_cf_environment::StakeManagerAddress::<
-                state_chain_runtime::Runtime,
-            >::hashed_key().into()),
         )
         .await
         .expect("Should get StakeManager address from SC");
@@ -92,9 +89,9 @@ async fn main() {
         StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_environment_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
-            state_chain_runtime::Runtime,
-        >::hashed_key().into()))
+        .get_environment_value::<pallet_cf_environment::KeyManagerAddress::<state_chain_runtime::Runtime>, H160>(
+            latest_block_hash,
+        )
         .await
         .expect("Should get KeyManager address from SC");
     let key_manager_contract =
