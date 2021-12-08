@@ -14,7 +14,6 @@ use crate::{
 };
 
 pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
-pub const DB_COL_USED_IDS: u32 = 1;
 
 /// Database for keys that uses rocksdb
 pub struct PersistentMultisigDB {
@@ -88,17 +87,13 @@ impl MultisigDB for PersistentMultisigDB {
             .collect()
     }
 
-    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId, db_colum: u32) {
         let mut tx = self.db.transaction();
 
         let ceremony_id_encoded =
             bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
 
-        tx.put_vec(
-            DB_COL_USED_IDS,
-            &ceremony_id_encoded.clone(),
-            ceremony_id_encoded,
-        );
+        tx.put_vec(db_colum, &ceremony_id_encoded.clone(), ceremony_id_encoded);
 
         // Commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -109,11 +104,11 @@ impl MultisigDB for PersistentMultisigDB {
         });
     }
 
-    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
+    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId, db_colum: u32) {
         let mut tx = self.db.transaction();
         let ceremony_id_encoded =
             bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
-        tx.delete(DB_COL_USED_IDS, &ceremony_id_encoded);
+        tx.delete(db_colum, &ceremony_id_encoded);
 
         // Commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -124,9 +119,9 @@ impl MultisigDB for PersistentMultisigDB {
         });
     }
 
-    fn load_used_ceremony_ids(&self) -> HashSet<CeremonyId> {
+    fn load_used_ceremony_ids(&self, db_colum: u32) -> HashSet<CeremonyId> {
         self.db
-            .iter(DB_COL_USED_IDS)
+            .iter(db_colum)
             .filter_map(
                 |(_, data)| match bincode::deserialize::<CeremonyId>(&data) {
                     Ok(ceremony_id) => Some(ceremony_id),
@@ -215,6 +210,7 @@ mod tests {
     fn can_save_and_load_used_ceremony_id_data() {
         let logger = new_test_logger();
         let db_path = Path::new("db3");
+        let db_colum = 1;
 
         let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
@@ -223,17 +219,17 @@ mod tests {
         test_used_ids.insert(42);
         test_used_ids.insert(50);
 
-        p_db.save_used_ceremony_id(42);
-        p_db.save_used_ceremony_id(50);
+        p_db.save_used_ceremony_id(42, db_colum);
+        p_db.save_used_ceremony_id(50, db_colum);
 
-        let loaded_unused_ids = p_db.load_used_ceremony_ids();
+        let loaded_unused_ids = p_db.load_used_ceremony_ids(db_colum);
 
         assert_eq!(loaded_unused_ids, test_used_ids);
 
         // Remove an entry
-        p_db.remove_used_ceremony_id(&50);
+        p_db.remove_used_ceremony_id(&50, db_colum);
         test_used_ids.remove(&50);
-        let loaded_unused_ids = p_db.load_used_ceremony_ids();
+        let loaded_unused_ids = p_db.load_used_ceremony_ids(db_colum);
 
         assert_eq!(loaded_unused_ids, test_used_ids);
 

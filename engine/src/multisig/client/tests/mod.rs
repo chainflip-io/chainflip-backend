@@ -20,7 +20,7 @@ use crate::{
 use std::convert::TryInto;
 
 pub const KEYGEN_CEREMONY_ID: CeremonyId = 0;
-pub const SIGN_CEREMONY_ID: CeremonyId = 1;
+pub const SIGN_CEREMONY_ID: CeremonyId = 0;
 pub const KEYGEN_STAGES: usize = 7;
 pub const SIGNING_STAGES: usize = 4;
 

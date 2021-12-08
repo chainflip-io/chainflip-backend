@@ -26,6 +26,9 @@ use super::MultisigMessage;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
+const KEYGEN_DB_COLUM: u32 = 1;
+const SIGNING_DB_COLUM: u32 = 2;
+
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
 #[derive(Clone)]
@@ -39,7 +42,8 @@ where
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
-    ceremony_id_tracker: CeremonyIdTracker<S>,
+    keygen_id_tracker: CeremonyIdTracker<S>,
+    signing_id_tracker: CeremonyIdTracker<S>,
 }
 
 impl<S> CeremonyManager<S>
@@ -60,7 +64,16 @@ where
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
-            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone(), ceremony_id_db),
+            keygen_id_tracker: CeremonyIdTracker::new(
+                logger.clone(),
+                ceremony_id_db.clone(),
+                KEYGEN_DB_COLUM,
+            ),
+            signing_id_tracker: CeremonyIdTracker::new(
+                logger.clone(),
+                ceremony_id_db,
+                SIGNING_DB_COLUM,
+            ),
         }
     }
 
@@ -69,14 +82,20 @@ where
     // and cleaning up any relevant data
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
+        let mut signing_ceremony_ids_to_consume = vec![];
+        let mut keygen_ceremony_ids_to_consume = vec![];
 
         let logger = &self.logger;
         self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
                 slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
                 let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
-
                 events_to_send.push(MultisigOutcome::Signing(outcome));
+                
+                // Only consume the ceremony id if it has been authorized
+                if state.is_authorized(){
+                    signing_ceremony_ids_to_consume.push(ceremony_id.clone());
+                }
 
                 false
             } else {
@@ -88,8 +107,12 @@ where
             if let Some(bad_nodes) = state.try_expiring() {
                 slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
                 let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
-
                 events_to_send.push(MultisigOutcome::Keygen(outcome));
+
+                // Only consume the ceremony id if it has been authorized
+                if state.is_authorized(){
+                    keygen_ceremony_ids_to_consume.push(ceremony_id.clone());
+                }
 
                 false
             } else {
@@ -97,9 +120,17 @@ where
             }
         });
 
+        for id in signing_ceremony_ids_to_consume {
+            self.signing_id_tracker.consume_ceremony_id(&id);
+        }
+
+        for id in keygen_ceremony_ids_to_consume {
+            self.keygen_id_tracker.consume_ceremony_id(&id);
+        }
+
         for event in events_to_send {
             if let Err(err) = self.outcome_sender.send(event) {
-                slog::error!(self.logger, "Unable to send event, error: {}", err);
+                slog::error!(self.logger, "Unable to send event: {}", err);
             }
         }
     }
@@ -153,7 +184,7 @@ where
 
         let logger = &self.logger;
 
-        if !self.ceremony_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self.keygen_id_tracker.is_ceremony_id_used(&ceremony_id) {
             let state = self
                 .keygen_states
                 .entry(ceremony_id)
@@ -212,7 +243,7 @@ where
 
         // We have the key and have received a request to sign
         let logger = &self.logger;
-        if !self.ceremony_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self.signing_id_tracker.is_ceremony_id_used(&ceremony_id) {
             let state = self
                 .signing_states
                 .entry(ceremony_id)
@@ -267,7 +298,7 @@ where
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
-        if !self.ceremony_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self.signing_id_tracker.is_ceremony_id_used(&ceremony_id) {
             let state = self
                 .signing_states
                 .entry(ceremony_id)
@@ -320,7 +351,7 @@ where
         data: KeygenData,
     ) -> Option<KeygenResultInfo> {
         let logger = &self.logger;
-        if !self.ceremony_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self.keygen_id_tracker.is_ceremony_id_used(&ceremony_id) {
             let state = self
                 .keygen_states
                 .entry(ceremony_id)
@@ -363,7 +394,7 @@ where
     // Removed a finished keygen ceremony and mark its id as used
     fn remove_keygen_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.keygen_states.remove(ceremony_id);
-        self.ceremony_id_tracker.consume_ceremony_id(ceremony_id);
+        self.keygen_id_tracker.consume_ceremony_id(ceremony_id);
 
         slog::debug!(
             self.logger, "Removed a finished keygen ceremony";
@@ -374,7 +405,7 @@ where
     // Removed a finished signing ceremony and mark its id as used
     fn remove_signing_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.signing_states.remove(ceremony_id);
-        self.ceremony_id_tracker.consume_ceremony_id(ceremony_id);
+        self.signing_id_tracker.consume_ceremony_id(ceremony_id);
     }
 }
 
@@ -411,13 +442,6 @@ where
 
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
-    }
-
-    pub fn set_ceremony_id_tracker(&mut self, ceremony_id_tracker: CeremonyIdTracker<S>)
-    where
-        S: MultisigDB,
-    {
-        self.ceremony_id_tracker = ceremony_id_tracker;
     }
 }
 

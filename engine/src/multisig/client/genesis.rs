@@ -50,7 +50,7 @@ pub async fn genesis_keys() {
     let signing_result = keygen_context.sign_with_ids(&active_ids).await;
 
     assert!(
-        signing_result.outcome.result.is_ok(),
+        signing_result.sign_finished.outcome.result.is_ok(),
         "Signing ceremony failed"
     );
 

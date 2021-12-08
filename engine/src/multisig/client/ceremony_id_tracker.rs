@@ -17,6 +17,7 @@ where
 {
     // All used id's
     used_ids: HashSet<CeremonyId>,
+    db_colum: u32,
     db: Arc<Mutex<S>>,
     logger: slog::Logger,
 }
@@ -26,12 +27,16 @@ where
     S: MultisigDB,
 {
     /// Create a new `CeremonyIdTracker` and load the persistent information
-    pub fn new(logger: slog::Logger, ceremony_id_db: Arc<Mutex<S>>) -> Self {
-        let used_ids = ceremony_id_db.lock().unwrap().load_used_ceremony_ids();
+    pub fn new(logger: slog::Logger, ceremony_id_db: Arc<Mutex<S>>, db_colum: u32) -> Self {
+        let used_ids = ceremony_id_db
+            .lock()
+            .unwrap()
+            .load_used_ceremony_ids(db_colum);
         CeremonyIdTracker {
             used_ids,
             db: ceremony_id_db,
             logger,
+            db_colum,
         }
     }
 
@@ -71,12 +76,18 @@ where
                 ceremony_id
             );
         }
-        self.db.lock().unwrap().remove_used_ceremony_id(ceremony_id);
+        self.db
+            .lock()
+            .unwrap()
+            .remove_used_ceremony_id(ceremony_id, self.db_colum);
     }
 
     fn insert_used_ceremony_id(&mut self, ceremony_id: CeremonyId) {
         self.used_ids.insert(ceremony_id);
-        self.db.lock().unwrap().save_used_ceremony_id(ceremony_id);
+        self.db
+            .lock()
+            .unwrap()
+            .save_used_ceremony_id(ceremony_id, self.db_colum);
     }
 }
 
@@ -86,7 +97,8 @@ fn test_ceremony_id_tracker() {
 
     let logger = crate::logging::test_utils::new_test_logger();
 
-    let mut tracker = CeremonyIdTracker::new(logger, Arc::new(Mutex::new(MultisigDBMock::new())));
+    let mut tracker =
+        CeremonyIdTracker::new(logger, Arc::new(Mutex::new(MultisigDBMock::new())), 1);
 
     // Test the starting condition (starting from non-zero)
     assert!(!tracker.is_ceremony_id_used(&0));

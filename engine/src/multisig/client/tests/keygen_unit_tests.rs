@@ -23,7 +23,7 @@ async fn happy_path_results_in_valid_key() {
     assert!(keygen_states.blame_responses6.is_none());
 
     // Able to generate a valid signature
-    assert!(ctx.sign().await.outcome.result.is_ok());
+    assert!(ctx.sign().await.sign_finished.outcome.result.is_ok());
 }
 
 /// If keygen state expires before a formal request to keygen
@@ -171,7 +171,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     assert!(keygen_states.blame_responses6.is_some());
 
     // Check that we are still able to sign
-    assert!(ctx.sign().await.outcome.result.is_ok());
+    assert!(ctx.sign().await.sign_finished.outcome.result.is_ok());
 }
 
 /// If one or more parties send an invalid secret share both the first

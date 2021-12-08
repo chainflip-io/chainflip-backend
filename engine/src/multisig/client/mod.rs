@@ -389,15 +389,9 @@ where
         self.key_store.get_db()
     }
 
-    /// Overrides the `key_store` and `ceremony_manager.ceremony_id_tracker` using the specified db
-    pub fn set_db(&mut self, db: Arc<Mutex<S>>) {
+    /// Overrides the `key_store` using the specified db
+    pub fn set_key_store_db(&mut self, db: Arc<Mutex<S>>) {
         self.key_store = KeyStore::new(db.clone());
-
-        self.ceremony_manager
-            .set_ceremony_id_tracker(ceremony_id_tracker::CeremonyIdTracker::new(
-                self.logger.clone(),
-                db.clone(),
-            ));
     }
 
     pub fn get_my_account_id(&self) -> AccountId {

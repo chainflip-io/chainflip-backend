@@ -43,7 +43,7 @@ async fn check_signing_db() {
         &logger,
     );
 
-    restarted_client.set_db(db);
+    restarted_client.set_key_store_db(db);
 
     // 4. Replace the client
     ctx.substitute_client_at(

@@ -85,7 +85,7 @@ async fn should_handle_invalid_local_sig() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -106,7 +106,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -128,7 +128,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -469,14 +469,14 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     use crate::multisig::client::{MultisigData, MultisigMessage};
 
     let mut ctx = helpers::KeygenContext::new();
-    let keygen_states = ctx.generate().await;
+    let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
 
-    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+    let mut c1 = sign_states.sign_finished.clients[&ctx.get_account_id(0)].clone();
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
-    // Receive comm1 from a used ceremony id (the keygen ceremony id)
-    let used_ceremony_id = KEYGEN_CEREMONY_ID;
+    // Receive comm1 from a used ceremony id (the default signing ceremony id)
+    let used_ceremony_id = SIGN_CEREMONY_ID;
     let message = MultisigMessage {
         ceremony_id: used_ceremony_id,
         data: MultisigData::Signing(

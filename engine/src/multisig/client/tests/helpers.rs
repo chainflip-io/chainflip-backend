@@ -340,12 +340,19 @@ pub struct SigningPhase4Data {
     pub ver4s: HashMap<AccountId, frost::VerifyLocalSig4>,
 }
 
+/// The outcome of the ceremony and the Clients at the state
+/// when the outcome was generated,
+pub struct SigningFinishedData {
+    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub outcome: SigningOutcome,
+}
+
 pub struct ValidSigningStates {
     pub sign_phase1: SigningPhase1Data,
     pub sign_phase2: SigningPhase2Data,
     pub sign_phase3: Option<SigningPhase3Data>,
     pub sign_phase4: Option<SigningPhase4Data>,
-    pub outcome: SigningOutcome,
+    pub sign_finished: SigningFinishedData,
 }
 
 impl ValidSigningStates {
@@ -1049,7 +1056,10 @@ impl KeygenContext {
                 sign_phase2,
                 sign_phase3: None,
                 sign_phase4: None,
-                outcome: outcome,
+                sign_finished: SigningFinishedData {
+                    outcome,
+                    clients: clients.clone(),
+                },
             };
         }
 
@@ -1098,7 +1108,10 @@ impl KeygenContext {
                 sign_phase2,
                 sign_phase3: Some(sign_phase3),
                 sign_phase4: Some(sign_phase4),
-                outcome: outcome,
+                sign_finished: SigningFinishedData {
+                    outcome,
+                    clients: clients.clone(),
+                },
             }
         } else {
             panic!("No Signing Outcome")
