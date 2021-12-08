@@ -14,9 +14,7 @@ use crate::{
 };
 
 pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
-pub const DB_COL_USED_ID_WINDOW: u32 = 1;
-pub const DB_COL_USED_ID_WINDOW_KEY: &[u8] = &[0];
-pub const DB_COL_UNUSED_IDS: u32 = 2;
+pub const DB_COL_USED_IDS: u32 = 1;
 
 /// Database for keys that uses rocksdb
 pub struct PersistentMultisigDB {
@@ -27,7 +25,7 @@ pub struct PersistentMultisigDB {
 
 impl PersistentMultisigDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::with_columns(3);
+        let config = DatabaseConfig::with_columns(2);
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
@@ -90,32 +88,14 @@ impl MultisigDB for PersistentMultisigDB {
             .collect()
     }
 
-    fn update_used_ceremony_id_window(&mut self, window: (CeremonyId, CeremonyId)) {
-        let mut tx = self.db.transaction();
-
-        tx.put_vec(
-            DB_COL_USED_ID_WINDOW,
-            DB_COL_USED_ID_WINDOW_KEY,
-            bincode::serialize(&window).unwrap(),
-        );
-
-        // Commit the tx to the database
-        self.db.write(tx).unwrap_or_else(|e| {
-            panic!(
-                "Could not write used_ceremony_id `{:?}` to database: {}",
-                window, e,
-            )
-        });
-    }
-
-    fn save_unused_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId) {
         let mut tx = self.db.transaction();
 
         let ceremony_id_encoded =
             bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
 
         tx.put_vec(
-            DB_COL_UNUSED_IDS,
+            DB_COL_USED_IDS,
             &ceremony_id_encoded.clone(),
             ceremony_id_encoded,
         );
@@ -129,11 +109,11 @@ impl MultisigDB for PersistentMultisigDB {
         });
     }
 
-    fn remove_unused_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
+    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
         let mut tx = self.db.transaction();
         let ceremony_id_encoded =
             bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
-        tx.delete(DB_COL_UNUSED_IDS, &ceremony_id_encoded);
+        tx.delete(DB_COL_USED_IDS, &ceremony_id_encoded);
 
         // Commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -144,9 +124,9 @@ impl MultisigDB for PersistentMultisigDB {
         });
     }
 
-    fn load_unused_ceremony_ids(&self) -> HashSet<CeremonyId> {
+    fn load_used_ceremony_ids(&self) -> HashSet<CeremonyId> {
         self.db
-            .iter(DB_COL_UNUSED_IDS)
+            .iter(DB_COL_USED_IDS)
             .filter_map(
                 |(_, data)| match bincode::deserialize::<CeremonyId>(&data) {
                     Ok(ceremony_id) => Some(ceremony_id),
@@ -154,35 +134,6 @@ impl MultisigDB for PersistentMultisigDB {
                 },
             )
             .collect()
-    }
-
-    fn load_used_ceremony_id_window(&self) -> Option<(CeremonyId, CeremonyId)> {
-        match self
-            .db
-            .get(DB_COL_USED_ID_WINDOW, DB_COL_USED_ID_WINDOW_KEY)
-        {
-            Ok(Some(data)) => match bincode::deserialize::<(CeremonyId, CeremonyId)>(&data) {
-                Ok(window) => Some(window),
-                Err(err) => {
-                    slog::error!(
-                        self.logger,
-                        "Could not deserialize used_ceremony_id_window (used_ceremony_id_window: {:?}) from database: {}",
-                        data,
-                        err
-                    );
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(err) => {
-                slog::error!(
-                    self.logger,
-                    "Could not read used_ceremony_id_window from database: {}",
-                    err
-                );
-                None
-            }
-        }
     }
 }
 
@@ -265,34 +216,26 @@ mod tests {
         let logger = new_test_logger();
         let db_path = Path::new("db3");
 
-        let test_window: (CeremonyId, CeremonyId) = (10, 100);
-
         let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
-        // Save and load the used id window
-        p_db.update_used_ceremony_id_window(test_window);
-        let loaded_window = p_db.load_used_ceremony_id_window();
-
-        assert_eq!(loaded_window, Some(test_window));
-
         // Save and load the id hash set
-        let mut test_unused_ids: HashSet<CeremonyId> = HashSet::new();
-        test_unused_ids.insert(42);
-        test_unused_ids.insert(50);
+        let mut test_used_ids: HashSet<CeremonyId> = HashSet::new();
+        test_used_ids.insert(42);
+        test_used_ids.insert(50);
 
-        p_db.save_unused_ceremony_id(42);
-        p_db.save_unused_ceremony_id(50);
+        p_db.save_used_ceremony_id(42);
+        p_db.save_used_ceremony_id(50);
 
-        let loaded_unused_ids = p_db.load_unused_ceremony_ids();
+        let loaded_unused_ids = p_db.load_used_ceremony_ids();
 
-        assert_eq!(loaded_unused_ids, test_unused_ids);
+        assert_eq!(loaded_unused_ids, test_used_ids);
 
         // Remove an entry
-        p_db.remove_unused_ceremony_id(&50);
-        test_unused_ids.remove(&50);
-        let loaded_unused_ids = p_db.load_unused_ceremony_ids();
+        p_db.remove_used_ceremony_id(&50);
+        test_used_ids.remove(&50);
+        let loaded_unused_ids = p_db.load_used_ceremony_ids();
 
-        assert_eq!(loaded_unused_ids, test_unused_ids);
+        assert_eq!(loaded_unused_ids, test_used_ids);
 
         std::fs::remove_dir_all(db_path).unwrap();
     }

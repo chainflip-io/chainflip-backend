@@ -1,5 +1,6 @@
 #[macro_use]
 mod utils;
+mod ceremony_id_tracker;
 mod common;
 mod key_store;
 pub mod keygen;
@@ -393,7 +394,7 @@ where
         self.key_store = KeyStore::new(db.clone());
 
         self.ceremony_manager
-            .set_ceremony_id_tracker(ceremony_manager::CeremonyIdTracker::new(
+            .set_ceremony_id_tracker(ceremony_id_tracker::CeremonyIdTracker::new(
                 self.logger.clone(),
                 db.clone(),
             ));

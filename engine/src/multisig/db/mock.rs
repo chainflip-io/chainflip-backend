@@ -10,16 +10,14 @@ use super::MultisigDB;
 pub struct MultisigDBMock {
     // Represents a key-value database
     kv_db: HashMap<KeyId, Vec<u8>>,
-    used_id_window: Option<(CeremonyId, CeremonyId)>,
-    unused_id_db: HashSet<CeremonyId>,
+    used_id_db: HashSet<CeremonyId>,
 }
 
 impl MultisigDBMock {
     pub fn new() -> Self {
         MultisigDBMock {
             kv_db: HashMap::new(),
-            used_id_window: None,
-            unused_id_db: HashSet::new(),
+            used_id_db: HashSet::new(),
         }
     }
 }
@@ -44,23 +42,15 @@ impl MultisigDB for MultisigDBMock {
             .collect()
     }
 
-    fn update_used_ceremony_id_window(&mut self, window: (CeremonyId, CeremonyId)) {
-        self.used_id_window = Some(window);
+    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+        self.used_id_db.insert(ceremony_id);
     }
 
-    fn save_unused_ceremony_id(&mut self, ceremony_id: CeremonyId) {
-        self.unused_id_db.insert(ceremony_id);
+    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
+        self.used_id_db.remove(ceremony_id);
     }
 
-    fn remove_unused_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
-        self.unused_id_db.remove(ceremony_id);
-    }
-
-    fn load_unused_ceremony_ids(&self) -> HashSet<CeremonyId> {
-        self.unused_id_db.clone()
-    }
-
-    fn load_used_ceremony_id_window(&self) -> Option<(CeremonyId, CeremonyId)> {
-        self.used_id_window
+    fn load_used_ceremony_ids(&self) -> HashSet<CeremonyId> {
+        self.used_id_db.clone()
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use crate::multisig::client::{self, MultisigOutcome};
@@ -20,6 +20,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, MultisigDB, SigningOutcome};
 
+use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
 use super::MultisigMessage;
 
@@ -442,141 +443,4 @@ pub fn generate_keygen_context(
     }
 
     HashContext(*hasher.finalize().as_ref())
-}
-
-/// Used to track every ceremony id that has been used in the past,
-/// so we can make sure they are not reused.
-#[derive(Clone)]
-pub struct CeremonyIdTracker<S>
-where
-    S: MultisigDB,
-{
-    // (lowest_used_id, Highest_used_id)d
-    used_id_window: Option<(CeremonyId, CeremonyId)>,
-    // All unused id's within the `used_id_window`
-    unused_ids: HashSet<CeremonyId>,
-    db: Arc<Mutex<S>>,
-    logger: slog::Logger,
-}
-
-impl<S> CeremonyIdTracker<S>
-where
-    S: MultisigDB,
-{
-    /// Create a new `CeremonyIdTracker` and load the persistent information
-    pub fn new(logger: slog::Logger, ceremony_id_db: Arc<Mutex<S>>) -> Self {
-        let tracker = CeremonyIdTracker {
-            used_id_window: None,
-            unused_ids: HashSet::new(),
-            db: ceremony_id_db,
-            logger,
-        };
-        {
-            // Load values from the db
-            let db = tracker.db.lock().unwrap();
-            db.load_unused_ceremony_ids();
-            db.load_used_ceremony_id_window();
-        }
-        tracker
-    }
-
-    /// Mark this ceremony id as used
-    pub fn consume_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
-        match self.used_id_window {
-            Some((lowest, highest)) => {
-                if *ceremony_id > highest {
-                    // new highest ceremony id, so push it up and record any gaps
-                    for c in (highest + 1)..*ceremony_id {
-                        self.insert_unused_ceremony_id(c);
-                    }
-                    self.update_used_ceremony_id_window((lowest, *ceremony_id));
-                } else if *ceremony_id < lowest {
-                    // new lowest ceremony id, so push it down and record any gaps
-                    for c in (*ceremony_id + 1)..lowest {
-                        self.insert_unused_ceremony_id(c);
-                    }
-                    self.update_used_ceremony_id_window((*ceremony_id, highest));
-                } else {
-                    // Its within the used id window, remove the ceremony id from the list of unused id's
-                    self.remove_unused_ceremony_id(ceremony_id);
-                }
-            }
-            None => {
-                self.update_used_ceremony_id_window((*ceremony_id, *ceremony_id));
-            }
-        }
-    }
-
-    /// Check if the ceremony id has already been used (false = never seen before, safe to continue)
-    pub fn is_ceremony_id_used(&self, ceremony_id: &CeremonyId) -> bool {
-        match self.used_id_window {
-            Some((lowest, highest)) => {
-                if ceremony_id > &highest || ceremony_id < &lowest {
-                    false
-                } else {
-                    !self.unused_ids.contains(ceremony_id)
-                }
-            }
-            None => false,
-        }
-    }
-
-    fn update_used_ceremony_id_window(&mut self, window: (CeremonyId, CeremonyId)) {
-        self.used_id_window = Some(window);
-        self.db
-            .lock()
-            .unwrap()
-            .update_used_ceremony_id_window(window);
-    }
-
-    fn remove_unused_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
-        if !self.unused_ids.remove(ceremony_id) {
-            slog::warn!(
-                self.logger,
-                "Ceremony id tracking error: already consumed id {}",
-                ceremony_id
-            );
-        }
-        self.db
-            .lock()
-            .unwrap()
-            .remove_unused_ceremony_id(ceremony_id);
-    }
-
-    fn insert_unused_ceremony_id(&mut self, ceremony_id: CeremonyId) {
-        self.unused_ids.insert(ceremony_id);
-        self.db.lock().unwrap().save_unused_ceremony_id(ceremony_id);
-    }
-}
-
-#[test]
-fn test_ceremony_id_tracker() {
-    use crate::multisig::db::MultisigDBMock;
-
-    let logger = crate::logging::test_utils::new_test_logger();
-
-    let mut tracker = CeremonyIdTracker::new(logger, Arc::new(Mutex::new(MultisigDBMock::new())));
-
-    // Test the starting condition (starting from non-zero)
-    assert!(!tracker.is_ceremony_id_used(&0));
-    tracker.consume_ceremony_id(&10);
-    assert!(tracker.is_ceremony_id_used(&10));
-    assert!(!tracker.is_ceremony_id_used(&0));
-
-    // Large set with a gap
-    for i in 11..=99 {
-        if i != 42 {
-            tracker.consume_ceremony_id(&i);
-        }
-    }
-
-    // Setting the lowest used id
-    tracker.consume_ceremony_id(&5);
-
-    assert!(!tracker.is_ceremony_id_used(&4));
-    assert!(tracker.is_ceremony_id_used(&5));
-    assert!(tracker.is_ceremony_id_used(&50));
-    assert!(tracker.is_ceremony_id_used(&99));
-    assert!(!tracker.is_ceremony_id_used(&42));
-    assert!(!tracker.is_ceremony_id_used(&100));
 }
