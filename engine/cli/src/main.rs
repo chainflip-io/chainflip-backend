@@ -143,7 +143,7 @@ async fn request_claim(
                                     .get_environment_value::<u64>(
                                         block_hash,
                                         StorageKey(
-                                            pallet_cf_environment::KeyManagerAddress::<
+                                            pallet_cf_environment::EthereumChainId::<
                                                 state_chain_runtime::Runtime,
                                             >::hashed_key(
                                             )
@@ -156,7 +156,7 @@ async fn request_claim(
                                     .get_environment_value(
                                         block_hash,
                                         StorageKey(
-                                            pallet_cf_environment::KeyManagerAddress::<
+                                            pallet_cf_environment::StakeManagerAddress::<
                                                 state_chain_runtime::Runtime,
                                             >::hashed_key(
                                             )
