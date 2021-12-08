@@ -15,21 +15,18 @@ use cf_chains::eth::AggKey;
 
 use crate::multisig::{
     client::common::BroadcastVerificationMessage,
-    crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, KeyShare, Point, Scalar},
+    crypto::{KeyShare, Point, Scalar},
     SchnorrSignature,
 };
 
 use sha2::{Digest, Sha256};
-
-use zeroize::Zeroize;
 
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Section 5.3 (page 13)
 // TODO: Not sure if it is a good idea to to make
 // the secret values clonable
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Debug, Clone)]
 pub struct SecretNoncePair {
     pub d: Scalar,
     pub d_pub: Point,
@@ -41,11 +38,11 @@ impl SecretNoncePair {
     /// Generate a random pair of nonces (in a Box,
     /// to avoid them being copied on move)
     pub fn sample_random() -> Box<Self> {
-        let d = Scalar::new_random();
-        let e = Scalar::new_random();
+        let d = Scalar::random();
+        let e = Scalar::random();
 
-        let d_pub = Point::generator() * d;
-        let e_pub = Point::generator() * e;
+        let d_pub = Point::from_scalar(&d);
+        let e_pub = Point::from_scalar(&e);
 
         Box::new(SecretNoncePair { d, d_pub, e, e_pub })
     }
@@ -114,7 +111,7 @@ fn gen_group_commitment(
     signing_commitments
         .iter()
         .map(|(idx, comm)| {
-            let rho_i = bindings[idx];
+            let rho_i = &bindings[idx];
             comm.d + comm.e * rho_i
         })
         .reduce(|a, b| a + b)
@@ -127,24 +124,24 @@ pub fn get_lagrange_coeff(
     signer_index: usize,
     all_signer_indices: &BTreeSet<usize>,
 ) -> Result<Scalar, &'static str> {
-    let mut num: Scalar = ECScalar::from(&BigInt::from(1));
-    let mut den: Scalar = ECScalar::from(&BigInt::from(1));
+    let mut num: Scalar = Scalar::from_usize(1);
+    let mut den: Scalar = Scalar::from_usize(1);
 
     for j in all_signer_indices {
         if *j == signer_index {
             continue;
         }
-        let j: Scalar = ECScalar::from(&BigInt::from(*j as u32));
-        let signer_index: Scalar = ECScalar::from(&BigInt::from(signer_index as u32));
-        num = num * j;
-        den = den * (j.sub(&signer_index.get_element()));
+        let j: Scalar = Scalar::from_usize(*j);
+        let signer_index: Scalar = Scalar::from_usize(signer_index);
+        num = &num * &j;
+        den = den * (j - signer_index);
     }
 
     if den == Scalar::zero() {
         return Err("Duplicate shares provided");
     }
 
-    let lagrange_coeff = num * den.invert();
+    let lagrange_coeff = num * den.invert().expect("Non-zero scalar expected");
 
     Ok(lagrange_coeff)
 }
@@ -166,17 +163,15 @@ fn gen_rho_i(
     for idx in all_idxs {
         let com = &signing_commitments[idx];
         hasher.update(idx.to_be_bytes());
-        hasher.update(com.d.get_element().serialize());
-        hasher.update(com.e.get_element().serialize());
+        hasher.update(com.d.as_bytes());
+        hasher.update(com.e.as_bytes());
     }
 
     let result = hasher.finalize();
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    let x_bi = BigInt::from_bytes(&x);
-
-    ECScalar::from(&x_bi)
+    Scalar::from_bytes(&x)
 }
 
 type SigningResponse = LocalSig3;
@@ -214,11 +209,11 @@ pub fn generate_local_sig(
 
     let lambda_i = get_lagrange_coeff(own_idx, all_idxs).expect("lagrange coeff");
 
-    let rho_i = bindings[&own_idx];
+    let rho_i = &bindings[&own_idx];
 
-    let nonce_share = *d + (*e * rho_i);
+    let nonce_share = d + &(e * rho_i);
 
-    let key_share = lambda_i * key.x_i;
+    let key_share = &lambda_i * &key.x_i;
 
     let response =
         generate_contract_schnorr_sig(key_share, key.y, group_commitment, nonce_share, msg);
@@ -240,7 +235,7 @@ fn generate_contract_schnorr_sig(
         message,
     );
 
-    nonce.sub(&(private_key * challenge).get_element())
+    nonce - private_key * challenge
 }
 
 /// Check the validity of a signature response share.
@@ -252,8 +247,7 @@ fn is_party_response_valid(
     challenge: &Scalar,
     signature_response: &Scalar,
 ) -> bool {
-    (Point::generator() * signature_response)
-        == (commitment.sub_point(&(y_i * challenge * lambda_i).get_element()))
+    Point::from_scalar(signature_response) == commitment - y_i * challenge * lambda_i
 }
 
 /// Combine local signatures received from all parties into the final
@@ -280,7 +274,7 @@ pub fn aggregate_signature(
     let mut invalid_idxs = vec![];
 
     for signer_idx in signer_idxs {
-        let rho_i = bindings[signer_idx];
+        let rho_i = &bindings[signer_idx];
         let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
         let commitment = &commitments[signer_idx];
@@ -306,10 +300,10 @@ pub fn aggregate_signature(
         // add them together (see step 7.c in Figure 3, page 15).
         let z = responses
             .iter()
-            .fold(Scalar::zero(), |acc, (_idx, sig)| acc + sig.response);
+            .fold(Scalar::zero(), |acc, (_idx, sig)| &acc + &sig.response);
 
         Ok(SchnorrSignature {
-            s: *z.get_element().as_ref(),
+            s: *z.as_bytes(),
             r: group_commitment.get_element(),
         })
     } else {
@@ -319,8 +313,6 @@ pub fn aggregate_signature(
 
 #[cfg(test)]
 mod tests {
-
-    use std::str::FromStr;
 
     use super::*;
 
@@ -332,17 +324,6 @@ mod tests {
     // to be deemed valid by the contract for the data above
     const EXPECTED_SIGMA: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
 
-    fn scalar_from_secretkey(secret_key: secp256k1::SecretKey) -> Scalar {
-        let mut scalar = Scalar::new_random();
-        scalar.set_element(secret_key);
-        scalar
-    }
-
-    fn scalar_from_secretkey_hex(secret_key_hex: &str) -> Scalar {
-        let sk = secp256k1::SecretKey::from_str(secret_key_hex).expect("invalid hex");
-        scalar_from_secretkey(sk)
-    }
-
     #[test]
     fn signature_is_contract_compatible() {
         // Given the signing key, nonce and message hash, check that
@@ -350,16 +331,16 @@ mod tests {
         // (by the KeyManager contract) value
         let message = hex::decode(MESSAGE_HASH).unwrap();
 
-        let nonce = scalar_from_secretkey_hex(NONCE_KEY);
-        let commitment = Point::generator() * nonce;
+        let nonce = Scalar::from_hex(NONCE_KEY);
+        let commitment = Point::from_scalar(&nonce);
 
-        let private_key = scalar_from_secretkey_hex(SECRET_KEY);
-        let public_key = Point::generator() * private_key;
+        let private_key = Scalar::from_hex(SECRET_KEY);
+        let public_key = Point::from_scalar(&private_key);
 
         let response =
             generate_contract_schnorr_sig(private_key, public_key, commitment, nonce, &message);
 
-        assert_eq!(hex::encode(response.get_element().as_ref()), EXPECTED_SIGMA);
+        assert_eq!(hex::encode(response.as_bytes()), EXPECTED_SIGMA);
 
         // Build the challenge again to match how it is done on the receiving side
         let challenge =
@@ -367,7 +348,7 @@ mod tests {
 
         // A lambda that has no effect on the computation (as a way to adapt multi-party
         // signing to work for a single party)
-        let dummy_lambda = ECScalar::from(&BigInt::from(1));
+        let dummy_lambda = Scalar::from_usize(1);
 
         assert!(is_party_response_valid(
             &public_key,
@@ -393,6 +374,5 @@ fn build_challenge(
     let e =
         AggKey::from(&pubkey).message_challenge(&msg_hash, &pubkey_to_eth_addr(nonce_commitment));
 
-    let e_bn = BigInt::from_bytes(&e[..]);
-    ECScalar::from(&e_bn)
+    Scalar::from_bytes(&e)
 }

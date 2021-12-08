@@ -11,7 +11,7 @@ use client::{
     keygen, ThresholdParameters,
 };
 
-use crate::multisig::crypto::{BigInt, BigIntConverter, ECPoint, KeyShare};
+use crate::multisig::crypto::{BigInt, BigIntConverter, KeyShare};
 
 use keygen::{
     keygen_data::{
@@ -423,7 +423,7 @@ fn compute_keygen_result(
         .0
         .values()
         .into_iter()
-        .map(|share| share.value)
+        .map(|share| share.value.clone())
         .reduce(|acc, share| acc + share)
         .expect("shares should be non-empty");
 

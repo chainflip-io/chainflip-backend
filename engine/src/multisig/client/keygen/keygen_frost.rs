@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::multisig::{
     client::ThresholdParameters,
-    crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, Point, Scalar, ScalarExt},
+    crypto::{Point, Scalar},
 };
 
 /// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
@@ -16,14 +16,12 @@ fn evaluate_polynomial<'a, T>(
 where
     T: 'a + Clone,
     T: std::ops::Mul<Scalar, Output = T>,
-    T: std::ops::Add<Output = T>,
+    T: std::ops::Add<T, Output = T>,
 {
-    let index = Scalar::from_usize(index);
-
     coefficients
         .rev()
         .cloned()
-        .reduce(|acc, coefficient| acc * index + coefficient)
+        .reduce(|acc, coefficient| acc * Scalar::from_usize(index) + coefficient)
         .unwrap()
 }
 
@@ -38,12 +36,9 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
-use zeroize::Zeroize;
-
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
-#[zeroize(drop)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ShamirShare {
     /// the result of polynomial evaluation
     pub value: Scalar,
@@ -53,7 +48,7 @@ pub struct ShamirShare {
 impl ShamirShare {
     pub fn create_random() -> Self {
         ShamirShare {
-            value: Scalar::new_random(),
+            value: Scalar::random(),
         }
     }
 }
@@ -87,8 +82,9 @@ fn generate_dkg_challenge(
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
-    hasher.update(public.get_element().to_string());
-    hasher.update(commitment.get_element().to_string());
+
+    hasher.update(public.as_bytes());
+    hasher.update(commitment.as_bytes());
 
     hasher.update(index.to_be_bytes());
     hasher.update(context.0);
@@ -97,15 +93,15 @@ fn generate_dkg_challenge(
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    ECScalar::from(&BigInt::from_bytes(&x))
+    Scalar::from_bytes(&x)
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
 fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -> ZKPSignature {
-    let nonce = Scalar::new_random();
-    let nonce_commitment = Point::generator() * nonce;
+    let nonce = Scalar::random();
+    let nonce_commitment = Point::from_scalar(&nonce);
 
-    let secret_commitment = Point::generator() * secret;
+    let secret_commitment = Point::from_scalar(&secret);
 
     let challenge = generate_dkg_challenge(index, context, secret_commitment, nonce_commitment);
 
@@ -137,7 +133,7 @@ pub fn generate_shares_and_commitment(
     // Zero-knowledge proof of `secret`
     let zkp = generate_zkp_of_secret(secret, context, index);
 
-    // TODO: zeroize secret here
+    // Secret will be zeroized on drop here
 
     (
         OutgoingShares(shares),
@@ -151,17 +147,17 @@ fn generate_secret_and_shares(
     t: usize,
 ) -> (Scalar, CoefficientCommitments, HashMap<usize, ShamirShare>) {
     // Our secret contribution to the aggregate key
-    let secret = Scalar::new_random();
+    let secret = Scalar::random();
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::new_random()).collect();
+    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::random()).collect();
 
     // (Figure 1: Round 1, Step 3)
-    let commitments: Vec<_> = [secret]
+    let commitments: Vec<_> = [secret.clone()]
         .iter()
         .chain(&coefficients)
-        .map(|scalar| Point::generator() * scalar)
+        .map(|scalar| Point::from_scalar(&scalar))
         .collect();
 
     // Generate shares
@@ -171,23 +167,28 @@ fn generate_secret_and_shares(
             (
                 index,
                 ShamirShare {
-                    value: evaluate_polynomial([secret].iter().chain(coefficients.iter()), index),
+                    // TODO: Make this work on references
+                    value: evaluate_polynomial(
+                        [secret.clone()].iter().chain(coefficients.iter()),
+                        index,
+                    ),
                 },
             )
         })
         .collect();
 
-    // TODO: we should probably zeroize coefficients here, and remove the secret?
+    // Coefficients should be zeroized on drop here
+
     (secret, CoefficientCommitments(commitments), shares)
 }
 
 fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitments) -> bool {
-    zkp.r + comm.0[0] * challenge == Point::generator() * zkp.z
+    zkp.r + comm.0[0] * challenge == Point::from_scalar(&zkp.z)
 }
 
 // (Figure 1: Round 2, Step 2)
 pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: usize) -> bool {
-    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), index)
+    Point::from_scalar(&share.value) == evaluate_polynomial(com.commitments.0.iter(), index)
 }
 
 /// Commitments to the sharing polynomial coefficient
@@ -354,11 +355,9 @@ mod tests {
             // (Round 2, Step 3)
             let secret_share = received_shares
                 .iter()
-                .map(|share| share.value)
+                .map(|share| share.value.clone())
                 .reduce(|acc, share| acc + share)
                 .unwrap();
-
-            // TODO: delete all received_shares
 
             secret_shares.push(secret_share);
         }
