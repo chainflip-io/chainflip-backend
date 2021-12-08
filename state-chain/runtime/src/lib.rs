@@ -157,6 +157,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
+}
+
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -164,6 +168,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
