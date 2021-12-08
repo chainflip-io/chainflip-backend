@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use cf_p2p::{PeerId, PeerIdTransferable};
 use futures::TryStreamExt;
 use slog::o;
-use sp_core::H256;
+use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub use cf_p2p::P2PRpcClient;
@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 
 use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
+
+use frame_support::StoragePrefixedMap;
 
 use crate::{
     common::{read_and_decode_file, rpc_error_into_anyhow_error},
@@ -92,11 +94,10 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     let account_peer_mapping = state_chain_client
         .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public)>(
             latest_block_hash,
-            state_chain_client
-                .get_metadata()
-                .module("Validator")?
-                .storage("AccountPeerMapping")?
-                .prefix(),
+            StorageKey(
+                pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
+                    .into(),
+            ),
         )
         .await?
         .into_iter()

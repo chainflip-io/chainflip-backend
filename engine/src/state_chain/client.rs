@@ -460,15 +460,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
         chain_id: ChainId,
     ) -> Result<Vault> {
-        let vault_for_epoch_key = self
-            .get_metadata()
-            .module("Vaults")?
-            .storage("Vaults")?
-            .double_map()?
-            .key(&epoch_index, &chain_id);
-
         let vaults = self
-            .get_from_storage_with_key::<Vault>(block_hash, vault_for_epoch_key)
+            .get_from_storage_with_key::<Vault>(
+                block_hash,
+                StorageKey(
+                    pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+                        &epoch_index,
+                        &chain_id,
+                    ),
+                ),
+            )
             .await?;
 
         Ok(vaults.last().expect("should have a vault").to_owned())
@@ -477,16 +478,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        value: &'static str,
+        storage_key: StorageKey,
     ) -> Result<ValueType> {
-        let value_key = self
-            .get_metadata()
-            .module("Environment")?
-            .storage(value)?
-            .plain()?
-            .key();
         let value_changes = self
-            .get_from_storage_with_key::<ValueType>(block_hash, value_key)
+            .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
             .await?;
 
         Ok(value_changes
@@ -537,14 +532,14 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
-        let epoch_storage_key = self
-            .get_metadata()
-            .module("Validator")?
-            .storage("CurrentEpoch")?
-            .plain()?
-            .key();
         let epoch = self
-            .get_from_storage_with_key::<EpochIndex>(block_hash, epoch_storage_key)
+            .get_from_storage_with_key::<EpochIndex>(
+                block_hash,
+                StorageKey(
+                    pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                        .into(),
+                ),
+            )
             .await?;
 
         Ok(epoch.last().expect("should have epoch").to_owned())
@@ -684,10 +679,9 @@ pub async fn connect_to_state_chain(
 
     let our_account_id = signer.account_id().to_owned();
 
-    let account_storage_key = system_pallet_metadata
-        .storage("Account")?
-        .map()?
-        .key(&our_account_id);
+    let account_storage_key = StorageKey(
+        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+    );
 
     Ok((
         latest_block_hash,
@@ -775,7 +769,9 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_environment_value::<H160>(block_hash, "KeyManagerAddress")
+                .get_environment_value::<H160>(block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
+                    state_chain_runtime::Runtime,
+                >::hashed_key().into()))
                 .await
                 .unwrap();
 

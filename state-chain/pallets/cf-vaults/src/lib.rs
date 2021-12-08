@@ -324,7 +324,7 @@ pub mod pallet {
 	/// A map of vaults by epoch and chain
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
-	pub(super) type Vaults<T: Config> =
+	pub type Vaults<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, EpochIndex, Blake2_128Concat, ChainId, Vault>;
 
 	/// Vault rotation statuses for the current epoch rotation.
