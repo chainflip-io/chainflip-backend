@@ -18,7 +18,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
-    let web3 = new_synced_web3_client(&settings, &root_logger)
+    let web3 = new_synced_web3_client(&settings.eth, &root_logger)
         .await
         .unwrap();
 

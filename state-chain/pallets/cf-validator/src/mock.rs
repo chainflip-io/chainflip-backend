@@ -127,6 +127,7 @@ impl pallet_cf_auction::Config for Test {
 	type Handler = MockHandler;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type Online = MockOnline;
+	type PeerMapping = MockPeerMapping;
 	type EmergencyRotation = ValidatorPallet;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
@@ -150,6 +151,15 @@ impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
 
 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
+}
+
+pub struct MockPeerMapping;
+impl HasPeerMapping for MockPeerMapping {
+	type ValidatorId = ValidatorId;
+
+	fn has_peer_mapping(_validator_id: &Self::ValidatorId) -> bool {
 		true
 	}
 }

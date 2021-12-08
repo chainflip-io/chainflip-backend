@@ -21,7 +21,7 @@ use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
-    p2p::{AccountId, P2PMessage},
+    p2p::AccountId,
 };
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,9 @@ use utilities::threshold_from_share_count;
 use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
+
+#[cfg(test)]
+pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::CeremonyManager,
@@ -78,7 +81,7 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MultisigData {
     Keygen(KeygenData),
     Signing(SigningData),
@@ -96,7 +99,7 @@ impl From<KeygenData> for MultisigData {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MultisigMessage {
     ceremony_id: CeremonyId,
     data: MultisigData,
@@ -167,7 +170,7 @@ where
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
     multisig_outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -182,7 +185,7 @@ where
         my_account_id: AccountId,
         db: S,
         multisig_outcome_sender: MultisigOutcomeSender,
-        outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+        outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
@@ -332,18 +335,12 @@ where
     }
 
     /// Process message from another validator
-    pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
-        let P2PMessage {
-            account_id: sender_id,
-            data,
-        } = p2p_message;
-        let multisig_message: Result<MultisigMessage, _> = bincode::deserialize(&data);
-
-        match multisig_message {
-            Ok(MultisigMessage {
+    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
+        match message {
+            MultisigMessage {
                 ceremony_id,
                 data: MultisigData::Keygen(data),
-            }) => {
+            } => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
@@ -357,23 +354,16 @@ where
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage {
+            MultisigMessage {
                 ceremony_id,
                 data: MultisigData::Signing(data),
-            }) => {
+            } => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
                 self.ceremony_manager
                     .process_signing_data(sender_id, ceremony_id, data);
-            }
-            Err(_) => {
-                slog::warn!(
-                    self.logger,
-                    "Cannot parse multisig message from {}, discarding",
-                    sender_id
-                );
             }
         }
     }

@@ -3,7 +3,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage},
+    p2p::{self, AccountId},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -29,7 +29,7 @@ async fn main() {
         .await;
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
             .await
             .unwrap();
 
@@ -50,25 +50,27 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
 
-    let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    // TODO: Merge this into the MultisigInstruction channel
+    let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
 
     let (multisig_event_sender, multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
+        tokio::sync::mpsc::unbounded_channel();
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
+        tokio::sync::mpsc::unbounded_channel();
 
-    let web3 = eth::new_synced_web3_client(&settings, &root_logger)
+    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
         .await
         .expect("Failed to create Web3 WebSocket");
 
     let eth_broadcaster =
-        EthBroadcaster::new(&settings, web3.clone()).expect("Failed to create ETH broadcaster");
+        EthBroadcaster::new(&settings.eth, web3.clone()).expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =
@@ -103,29 +105,26 @@ async fn main() {
             multisig::KeygenOptions::default(),
             &root_logger,
         ),
-        p2p::conductor::start(
-            p2p_rpc::connect(
-                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).unwrap_or_else(
-                    |e| panic!(
-                        "Should be valid ws endpoint: {}: {}",
-                        settings.state_chain.ws_endpoint, e
-                    )
-                ),
-                account_id
+        async {
+            p2p::start(
+                &settings,
+                state_chain_client.clone(),
+                latest_block_hash,
+                incoming_p2p_message_sender,
+                outgoing_p2p_message_receiver,
+                account_peer_mapping_change_receiver,
+                &root_logger,
             )
             .await
-            .expect("unable to connect p2p rpc client"),
-            incoming_p2p_message_sender,
-            outgoing_p2p_message_receiver,
-            p2p_shutdown_rx,
-            &root_logger
-        ),
+            .unwrap()
+        },
         // Start state chain components
         state_chain::sc_observer::start(
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
             multisig_instruction_sender,
+            account_peer_mapping_change_sender,
             multisig_event_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,

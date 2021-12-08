@@ -13,16 +13,19 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use web3::{ethabi::Address, types::U64};
+use web3::{
+    ethabi::Address,
+    types::{CallRequest, U64},
+};
 
 use crate::{
-    common::Mutex,
+    common::{read_and_decode_file, Mutex},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::{TryFutureExt, TryStreamExt};
-use std::{fmt::Debug, fs::read_to_string, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -142,10 +145,10 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
 }
 
 pub async fn new_synced_web3_client(
-    settings: &settings::Settings,
+    eth_settings: &settings::Eth,
     logger: &slog::Logger,
 ) -> Result<Web3<web3::transports::WebSocket>> {
-    let node_endpoint = &settings.eth.node_endpoint;
+    let node_endpoint = &eth_settings.node_endpoint;
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
     tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
@@ -184,18 +187,15 @@ pub struct EthBroadcaster {
 
 impl EthBroadcaster {
     pub fn new(
-        settings: &settings::Settings,
+        eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let key = read_to_string(settings.eth.private_key_file.as_path())
-            .context("Failed to read eth.private_key_file")?;
-        let secret_key = SecretKey::from_str(&key[..]).unwrap_or_else(|e| {
-            panic!(
-                "Should read in secret key from: {}: {}",
-                settings.eth.private_key_file.display(),
-                e,
-            )
-        });
+        let secret_key = read_and_decode_file(
+            &eth_settings.private_key_file,
+            "Ethereum Private Key",
+            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
+        )
+        .unwrap();
         Ok(Self {
             web3,
             secret_key,
@@ -208,17 +208,34 @@ impl EthBroadcaster {
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
-        let tx_params = TransactionParameters {
+        let mut tx_params = TransactionParameters {
             to: Some(unsigned_tx.contract),
             data: unsigned_tx.data.into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
-            // TODO: Estimate the gas:
-            // https://github.com/chainflip-io/chainflip-backend/issues/916
-            gas: U256::from(200_000),
+            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+            // input at least as much gas as the estimate will return (stupid? yes)
+            gas: U256::from(15_000_000),
             ..Default::default()
         };
+        // query for the gas estimate if the SC didn't provide it
+        let gas_limit = if let Some(gas_limit) = unsigned_tx.gas_limit {
+            gas_limit
+        } else {
+            let call_request: CallRequest = tx_params.clone().into();
+            self.web3
+                .eth()
+                .estimate_gas(call_request, None)
+                .await
+                .context("Failed to estimate gas")?
+        };
+
+        // increase the estimate by 50%
+        let uint256_2 = U256::from(2);
+        tx_params.gas = gas_limit
+            .saturating_mul(uint256_2)
+            .saturating_sub(gas_limit.checked_div(uint256_2).unwrap());
 
         Ok(self
             .web3
@@ -241,7 +258,6 @@ impl EthBroadcaster {
         Ok(tx_hash)
     }
 }
-
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;

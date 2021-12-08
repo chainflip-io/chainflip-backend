@@ -12,6 +12,12 @@ use url::Url;
 
 use structopt::StructOpt;
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct P2P {
+    #[serde(deserialize_with = "deser_path")]
+    pub node_key_file: PathBuf,
+}
+
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct StateChain {
     pub ws_endpoint: String,
@@ -26,14 +32,13 @@ impl StateChain {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Eth {
     pub from_block: u64,
     pub node_endpoint: String,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct HealthCheck {
     pub hostname: String,
@@ -54,6 +59,7 @@ pub struct Log {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
+    pub node_p2p: P2P,
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
@@ -70,6 +76,14 @@ pub struct StateChainOptions {
     pub state_chain_signing_key_file: Option<PathBuf>,
 }
 
+#[derive(StructOpt, Debug, Clone, Default)]
+pub struct EthSharedOptions {
+    #[structopt(long = "eth.node_endpoint")]
+    pub eth_node_endpoint: Option<String>,
+    #[structopt(long = "eth.private_key_file")]
+    pub eth_private_key_file: Option<PathBuf>,
+}
+
 #[derive(StructOpt, Debug, Clone)]
 pub struct CommandLineOptions {
     // Misc Options
@@ -80,16 +94,18 @@ pub struct CommandLineOptions {
     #[structopt(short = "b", long = "log-blacklist")]
     log_blacklist: Option<Vec<String>>,
 
+    // P2P Settings
+    #[structopt(long = "p2p.node_key_file", parse(from_os_str))]
+    node_key_file: Option<PathBuf>,
+
     #[structopt(flatten)]
     state_chain_opts: StateChainOptions,
 
-    // Eth Settings
+    #[structopt(flatten)]
+    eth_opts: EthSharedOptions,
+
     #[structopt(long = "eth.from_block")]
     eth_from_block: Option<u64>,
-    #[structopt(long = "eth.node_endpoint")]
-    eth_node_endpoint: Option<String>,
-    #[structopt(long = "eth.private_key_file", parse(from_os_str))]
-    eth_private_key_file: Option<PathBuf>,
 
     // Health Check Settings
     #[structopt(long = "health_check.hostname")]
@@ -109,10 +125,10 @@ impl CommandLineOptions {
             config_path: None,
             log_whitelist: None,
             log_blacklist: None,
+            node_key_file: None,
             state_chain_opts: StateChainOptions::default(),
             eth_from_block: None,
-            eth_node_endpoint: None,
-            eth_private_key_file: None,
+            eth_opts: EthSharedOptions::default(),
             health_check_hostname: None,
             health_check_port: None,
             signing_db_file: None,
@@ -162,6 +178,12 @@ impl Settings {
         };
 
         // Override the settings with the cmd line options
+
+        // P2P
+        if let Some(opt) = opts.node_key_file {
+            settings.node_p2p.node_key_file = opt
+        };
+
         // State Chain
         if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
             settings.state_chain.ws_endpoint = opt
@@ -174,10 +196,10 @@ impl Settings {
         if let Some(opt) = opts.eth_from_block {
             settings.eth.from_block = opt
         };
-        if let Some(opt) = opts.eth_node_endpoint {
+        if let Some(opt) = opts.eth_opts.eth_node_endpoint {
             settings.eth.node_endpoint = opt
         };
-        if let Some(opt) = opts.eth_private_key_file {
+        if let Some(opt) = opts.eth_opts.eth_private_key_file {
             settings.eth.private_key_file = opt
         };
 
@@ -355,13 +377,16 @@ mod tests {
             config_path: None,
             log_whitelist: Some(vec!["test1".to_owned()]),
             log_blacklist: Some(vec!["test2".to_owned()]),
+            node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
             state_chain_opts: StateChainOptions {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_from_block: Some(1234),
-            eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-            eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            eth_opts: EthSharedOptions {
+                eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+                eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+            },
             health_check_hostname: Some("health_check_hostname".to_owned()),
             health_check_port: Some(1337),
             signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
@@ -371,6 +396,8 @@ mod tests {
         let settings = Settings::new(opts.clone()).unwrap();
 
         // Compare the opts and the settings
+        assert_eq!(opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+
         assert_eq!(
             opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
             settings.state_chain.ws_endpoint
@@ -381,9 +408,12 @@ mod tests {
         );
 
         assert_eq!(opts.eth_from_block.unwrap(), settings.eth.from_block);
-        assert_eq!(opts.eth_node_endpoint.unwrap(), settings.eth.node_endpoint);
         assert_eq!(
-            opts.eth_private_key_file.unwrap(),
+            opts.eth_opts.eth_node_endpoint.unwrap(),
+            settings.eth.node_endpoint
+        );
+        assert_eq!(
+            opts.eth_opts.eth_private_key_file.unwrap(),
             settings.eth.private_key_file
         );
 

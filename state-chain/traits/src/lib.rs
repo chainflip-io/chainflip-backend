@@ -334,6 +334,13 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
+pub trait HasPeerMapping {
+	/// The validator id used
+	type ValidatorId;
+	/// The existence of this validators peer mapping
+	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool;
+}
+
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.  
@@ -450,7 +457,8 @@ pub trait SignerNomination {
 	type SignerId;
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
-	fn nomination_with_seed(seed: u64) -> Self::SignerId;
+	/// Returns None if no signers are live.
+	fn nomination_with_seed(seed: u64) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.

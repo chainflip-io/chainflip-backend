@@ -943,6 +943,7 @@ name = "chainflip-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-engine",
  "config",
  "futures 0.3.17",
@@ -950,12 +951,18 @@ dependencies = [
  "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
+ "pallet-cf-validator",
  "serde 1.0.130",
  "slog",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-finality-grandpa",
+ "state-chain-node",
  "state-chain-runtime",
  "structopt",
  "tokio 1.13.0",
  "utilities",
+ "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
 ]
 
 [[package]]
@@ -991,6 +998,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "kvdb-rocksdb",
  "lazy_static",
+ "libp2p",
  "log 0.4.14",
  "mockall",
  "num",

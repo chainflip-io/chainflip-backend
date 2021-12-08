@@ -127,6 +127,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Handler = Vaults;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Online;
+	type PeerMapping = pallet_cf_validator::Pallet<Self>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
@@ -251,7 +252,8 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
+	type OnKilledAccount =
+		(pallet_cf_flip::BurnFlipAccount<Self>, pallet_cf_validator::DeletePeerMapping<Self>);
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
