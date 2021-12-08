@@ -354,7 +354,6 @@ pub fn new_p2p_validator_network_node<
 		{
 			let mut network_event_stream = p2p_network_service.event_stream();
 
-			
 			async move {
 				let mut total_connected_peers: usize = 0;
 				while let Some(event) = network_event_stream.next().await {
