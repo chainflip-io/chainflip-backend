@@ -12,8 +12,8 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [build-dependencies.substrate-wasm-builder]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies]
 # Required to get wasm to compile.
@@ -43,13 +43,13 @@ pallet-cf-environment = { path = "../pallets/cf-environment", default-features =
 # Additional FRAME pallets
 [dependencies.pallet-authorship]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.pallet-session]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 features = ['historical']
 
 # Substrate dependencies
@@ -61,35 +61,35 @@ version = '2.3.1'
 
 [dependencies.frame-benchmarking]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
+git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'monthly-2021-09+1'
+tag = 'merge-config-option'
 
 [dependencies.frame-executive]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.frame-support]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.frame-system]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.frame-system-benchmarking]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
+git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'monthly-2021-09+1'
+tag = 'merge-config-option'
 
 [dependencies.frame-system-rpc-runtime-api]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.hex-literal]
 optional = true
@@ -97,28 +97,28 @@ version = '0.3.1'
 
 [dependencies.pallet-aura]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.pallet-grandpa]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.pallet-randomness-collective-flip]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.pallet-timestamp]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.pallet-transaction-payment]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.scale-info]
 default-features = false
@@ -127,59 +127,59 @@ version = '1.0'
 
 [dependencies.sp-api]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-block-builder]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-consensus-aura]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 version = '0.10.0-dev'
 
 [dependencies.sp-core]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-inherents]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-offchain]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-runtime]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-session]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-std]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-transaction-pool]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-version]
 default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [features]
 default = ['std']
