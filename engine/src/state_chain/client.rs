@@ -566,9 +566,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .expect("Could not decode HeartbeatBlockInterval to u32")
     }
 
-    pub async fn rotate_session_keys(&self) -> Result<String> {
+    pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
-        Ok(hex::encode(session_key_bytes.0))
+        Ok(session_key_bytes)
     }
 }
 
