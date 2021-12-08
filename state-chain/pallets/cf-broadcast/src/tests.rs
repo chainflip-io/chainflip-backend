@@ -390,3 +390,14 @@ fn test_transmission_request_expiry() {
 		check_end_state();
 	})
 }
+
+#[test]
+fn no_validators_available() {
+	new_test_ext().execute_with(|| {
+		// Simulate that no validator is currently online
+		NOMINATION_SUCCESS.with(|cell| *cell.borrow_mut() = false);
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		// Check the retry queue
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
+	});
+}

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
 use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
@@ -28,6 +30,10 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+}
+
+thread_local! {
+	pub static NOMINATION_SUCCESS: std::cell::RefCell<bool>  = RefCell::new(true);
 }
 
 impl frame_system::Config for Test {
@@ -74,7 +80,11 @@ impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed(_seed: Vec<u8>) -> Option<Self::SignerId> {
-		Some(RANDOM_NOMINEE)
+		if NOMINATION_SUCCESS.with(|cell| cell.borrow().clone()) {
+			Some(RANDOM_NOMINEE)
+		} else {
+			None
+		}
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
