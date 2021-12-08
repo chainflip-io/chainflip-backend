@@ -438,7 +438,7 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 mod test {
 	use crate::chainflip::get_random_id_by_seed_in_range;
 	#[test]
-	fn test_get_random_id() {
+	fn test_generate_id() {
 		assert!(get_random_id_by_seed_in_range(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
 		assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) == 0);
 		assert!(get_random_id_by_seed_in_range(vec![180, 200, 240], 10) < 10);
