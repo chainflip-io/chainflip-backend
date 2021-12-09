@@ -15,11 +15,11 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, IsOnline, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::*, weights::Weight};
+use frame_support::{instances::*, storage::PrefixIterator, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -27,7 +27,13 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+use sp_std::{
+	borrow::{Borrow, ToOwned},
+	cmp::min,
+	convert::TryInto,
+	marker::PhantomData,
+	prelude::*,
+};
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -236,6 +242,27 @@ fn get_random_id_by_seed_in_range(seed: Vec<u8>, max: usize) -> usize {
 	(id as u64).try_into().unwrap_or(0)
 }
 
+/// Select the next signer
+fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
+	validators: Vec<(SignerId, ())>,
+	seed: Vec<u8>,
+) -> Option<SignerId> {
+	// Get all online validators
+	let online_validators =
+		validators.iter().filter(|(id, _)| T::is_online(id)).collect::<Vec<_>>();
+	let number_of_online_validators = online_validators.len();
+	// Check if there is someone online
+	if number_of_online_validators == 0 {
+		return None
+	}
+	// Get a a pseudo random id by which we choose the next validator
+	let the_chosen_one = get_random_id_by_seed_in_range(seed, number_of_online_validators);
+	if let Some(signer) = online_validators.get(the_chosen_one) {
+		Some(signer.0.clone())
+	} else {
+		None
+	}
+}
 /// A very basic but working implementation of signer nomination.
 ///
 /// For a single signer, takes the first online validator in the validator lookup map.
@@ -248,22 +275,9 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
 	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
-		// Get all currently online validators
-		let validators = pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
-			.collect::<Vec<_>>();
-
-		let number_of_online_validators = validators.len();
-		// Check if there is someone online
-		if number_of_online_validators != 0 {
-			// Generate an id based on an seed in the range of the validators array
-			let the_chosen_one = get_random_id_by_seed_in_range(seed, number_of_online_validators);
-			// Get the signer id of the chosen validator
-			let signer_id = validators.get(the_chosen_one).unwrap().clone().0;
-			Some(signer_id)
-		} else {
-			None
-		}
+		let validators =
+			pallet_cf_validator::ValidatorLookup::<Runtime>::iter().collect::<Vec<_>>();
+		select_signer::<Self::SignerId, Online>(validators, seed)
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
@@ -435,12 +449,61 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 	}
 }
 
+/// Unit test suite for runtime code
 mod test {
-	use crate::chainflip::get_random_id_by_seed_in_range;
+	use sp_std::cell::RefCell;
+
+	use cf_traits::IsOnline;
+	use frame_support::storage::PrefixIterator;
+
+	use crate::chainflip::{get_random_id_by_seed_in_range, select_signer};
 	#[test]
 	fn test_generate_id() {
 		assert!(get_random_id_by_seed_in_range(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
 		assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) == 0);
 		assert!(get_random_id_by_seed_in_range(vec![180, 200, 240], 10) < 10);
+	}
+	#[test]
+	fn test_select_signer() {
+		thread_local! {
+			// Switch to control the mock
+			pub static ONLINE: RefCell<bool>  = RefCell::new(true);
+		}
+		struct MockIsOnline;
+		impl IsOnline for MockIsOnline {
+			type ValidatorId = u64;
+
+			fn is_online(validator_id: &Self::ValidatorId) -> bool {
+				ONLINE.with(|cell| cell.borrow().clone())
+			}
+		}
+		// Expect an Some validator
+		assert_eq!(
+			select_signer::<u64, MockIsOnline>(
+				vec![(4, ()), (6, ()), (7, ()), (9, ())],
+				vec![2, 5, 7, 3]
+			),
+			Some(6)
+		);
+		// Expect a different validator with a different seed
+		assert_eq!(
+			select_signer::<u64, MockIsOnline>(
+				vec![(4, ()), (6, ()), (7, ()), (9, ())],
+				vec![2, 5, 9, 3]
+			),
+			Some(9)
+		);
+		// Switch the mock to simulate an situation where all
+		// validators are offline
+		ONLINE.with(|cell| *cell.borrow_mut() = false);
+		// Expect the select_signer function to return None
+		// if there is currently no online validator
+		assert_eq!(
+			select_signer::<u64, MockIsOnline>(
+				vec![(14, ()), (3, ()), (2, ()), (6, ())],
+				vec![2, 5, 9, 3]
+			),
+			None
+		);
 	}
 }
