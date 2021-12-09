@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
 use cf_chains::Ethereum;
 use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
-use codec::{Decode, Encode, Output};
+use codec::{Decode, Encode};
 use frame_support::parameter_types;
 use frame_system;
 use sp_core::H256;
