@@ -19,7 +19,7 @@ use cf_traits::{
 	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::*, storage::PrefixIterator, weights::Weight};
+use frame_support::{instances::*, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -27,13 +27,9 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{
-	borrow::{Borrow, ToOwned},
-	cmp::min,
-	convert::TryInto,
-	marker::PhantomData,
-	prelude::*,
-};
+use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+
+use sp_io::hashing::twox_128;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -237,8 +233,10 @@ impl Heartbeat for ChainflipHeartbeat {
 
 /// Returns a scaled index based on an input seed
 fn get_random_id_by_seed_in_range(seed: Vec<u8>, max: usize) -> usize {
-	let random = seed.iter().fold(0, |acc, x| acc + x.clone() as u64);
-	let id = random % max as u64;
+	let seed = twox_128(&seed)
+		.iter()
+		.fold(0, |acc: u64, x| acc.saturating_add(x.clone() as u64));
+	let id = seed % max as u64;
 	(id as u64).try_into().unwrap_or(0)
 }
 
@@ -449,18 +447,16 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 	}
 }
 
-/// Unit test suite for runtime code
+/// Unit tests for runtime code
 mod test {
-	use sp_std::cell::RefCell;
-
 	use cf_traits::IsOnline;
-	use frame_support::storage::PrefixIterator;
+	use sp_std::cell::RefCell;
 
 	use crate::chainflip::{get_random_id_by_seed_in_range, select_signer};
 	#[test]
 	fn test_generate_id() {
 		assert!(get_random_id_by_seed_in_range(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
-		assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) == 0);
+		assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) < 5);
 		assert!(get_random_id_by_seed_in_range(vec![180, 200, 240], 10) < 10);
 	}
 	#[test]
@@ -473,7 +469,7 @@ mod test {
 		impl IsOnline for MockIsOnline {
 			type ValidatorId = u64;
 
-			fn is_online(validator_id: &Self::ValidatorId) -> bool {
+			fn is_online(_validator_id: &Self::ValidatorId) -> bool {
 				ONLINE.with(|cell| cell.borrow().clone())
 			}
 		}
@@ -491,7 +487,7 @@ mod test {
 				vec![(4, ()), (6, ()), (7, ()), (9, ())],
 				vec![2, 5, 9, 3]
 			),
-			Some(9)
+			Some(4)
 		);
 		// Switch the mock to simulate an situation where all
 		// validators are offline

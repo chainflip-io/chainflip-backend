@@ -20,8 +20,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{marker::PhantomData, prelude::*};
 
-// const RANDOM_CONTEXT: &[u8; 10] = &b"a very secret thing"[..];
-
 /// The reasons for which a broadcast might fail.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum TransmissionFailure {
@@ -480,7 +478,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Seed based on the input data of the extrinsic
-		let seed = unsigned_tx.encode();
+		let seed = (attempt_id, unsigned_tx.clone()).encode();
 
 		// Select a signer for this broadcast.
 		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
