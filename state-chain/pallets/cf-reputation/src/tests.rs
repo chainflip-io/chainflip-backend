@@ -267,4 +267,19 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn reporting_participate_in_signing_offline_condition_should_also_ban_validator() {
+		new_test_ext().execute_with(|| {
+			// The condition is irrelevant here, we are interested in making sure a ban is called for
+			// this validator
+			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
+			assert_ok!(ReputationPallet::report(
+				OfflineCondition::ParticipateSigningFailed,
+				&ALICE
+			));
+
+			assert!(MockBanned::is_banned(&ALICE));
+		});
+	}
 }
