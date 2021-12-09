@@ -102,6 +102,7 @@ impl EthObserver for StakeManager {
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
     {
+        slog::info!(logger, "Handling event: {:?}", event);
         match event.event_parameters {
             StakeManagerEvent::Staked {
                 account_id,

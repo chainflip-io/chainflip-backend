@@ -168,7 +168,11 @@ pub async fn new_synced_web3_client(
             .await
             .context("Failure while syncing web3 client")?
         {
-            slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
+            slog::info!(
+                logger,
+                "Waiting for eth node to sync. Sync state is: {:?}. Checking again in 4 seconds...",
+                info
+            );
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
         slog::info!(logger, "ETH node is synced.");
