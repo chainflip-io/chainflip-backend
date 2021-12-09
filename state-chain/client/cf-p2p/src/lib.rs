@@ -14,7 +14,7 @@ use futures::{
 	task::Spawn,
 	FutureExt, SinkExt, StreamExt,
 };
-use jsonrpc_core::Result;
+use jsonrpc_core::{Result, BoxFuture};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService};
@@ -76,6 +76,7 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	notification_rpc_subscription_manager: SubscriptionManager,
 	state: Arc<RwLock<P2PValidatorNetworkNodeState>>,
 	p2p_network_service: Arc<P2PNetworkService>,
+	outgoing_p2p_message_sender: UnboundedSender<(BTreeSet<PeerId>, Vec<u8>)>,
 	_phantom: std::marker::PhantomData<MetaData>,
 }
 
@@ -158,7 +159,7 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 
 	/// Send a message to validators returning a HTTP status code
 	#[rpc(name = "p2p_send_message")]
-	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
+	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> BoxFuture<Result<u64>>;
 
 	/// Subscribe to receive p2p messages
 	#[pubsub(subscription = "cf_p2p_messages", subscribe, name = "cf_p2p_subscribeMessages")]
@@ -183,8 +184,9 @@ pub fn new_p2p_validator_network_node<
 >(
 	p2p_network_service: Arc<PN>,
 	subscription_task_executor: impl Spawn + Send + Sync + 'static,
-) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>) {
+) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>, impl futures::Future<Output = ()>) {
 	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState::default()));
+	let (outgoing_p2p_message_sender, mut outgoing_p2p_message_receiver) = unbounded();
 
 	(
 		// RPC Request Handler
@@ -269,22 +271,29 @@ pub fn new_p2p_validator_network_node<
 					&self,
 					peers: Vec<PeerIdTransferable>,
 					message: Vec<u8>,
-				) -> Result<u64> {
-					let peers = peers
+				) -> jsonrpc_core::BoxFuture<Result<u64>> {
+					match peers
 						.into_iter()
 						.map(PeerIdTransferable::try_into)
-						.collect::<std::result::Result<BTreeSet<_>, _>>()?;
-
-					let state = self.state.read().unwrap();
-					if peers.iter().all(|peer| state.reserved_peers.contains(peer)) {
-						for peer in peers {
-							self.p2p_network_service.write_notification(peer, message.clone());
+						.collect::<std::result::Result<BTreeSet<_>, _>>()
+					{
+						Ok(peers) => {
+							let state = self.state.read().unwrap();
+							if peers.iter().all(|peer| state.reserved_peers.contains(peer)) {
+								let mut outgoing_p2p_message_sender = self.outgoing_p2p_message_sender.clone();
+								Box::pin(async move {
+									outgoing_p2p_message_sender.send((peers, message)).await.unwrap();
+									Ok(200)
+								})
+							} else {
+								Box::pin(std::future::ready(Err(jsonrpc_core::Error::invalid_params(
+									"Request to send message to an unset peer",
+								))))
+							}
+						},
+						Err(error) => {
+							Box::pin(std::future::ready(Err(error)))
 						}
-						Ok(200)
-					} else {
-						Err(jsonrpc_core::Error::invalid_params(
-							"Request to send message to an unset peer",
-						))
 					}
 				}
 
@@ -344,10 +353,21 @@ pub fn new_p2p_validator_network_node<
 			RpcRequestHandler {
 				state: state.clone(),
 				p2p_network_service: p2p_network_service.clone(),
+				outgoing_p2p_message_sender,
 				notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
 					subscription_task_executor,
 				)),
 				_phantom: std::marker::PhantomData::<MetaData>::default(),
+			}
+		},
+		{
+			let p2p_network_service = p2p_network_service.clone();
+			async move {
+				while let Some((peers, message)) = outgoing_p2p_message_receiver.next().await {
+					for peer in peers {
+						p2p_network_service.write_notification(peer, message.clone());
+					}
+				}
 			}
 		},
 		// P2P Event Handler
