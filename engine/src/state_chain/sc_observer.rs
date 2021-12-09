@@ -66,6 +66,13 @@ pub async fn start<BlockStream, RpcClient>(
             Ok(block_header) => {
                 let block_hash = block_header.hash();
 
+                slog::debug!(
+                    logger,
+                    "Processing SC block {} with block hash: {:#x}",
+                    block_header.number,
+                    block_hash
+                );
+
                 // get the eth vault we were last active for and start the witness processes
                 // for this window
                 async fn init_eth_witnessing<RpcClient: StateChainRpcApi>(
@@ -355,9 +362,9 @@ pub async fn start<BlockStream, RpcClient>(
                                         unsigned_tx,
                                     ),
                                 ) if validator_id == state_chain_client.our_account_id => {
-                                    slog::debug!(
+                                    slog::trace!(
                                         logger,
-                                        "Received signing request {} for transaction: {:?}",
+                                        "Received signing request with attempt_id {} for transaction: {:?}",
                                         attempt_id,
                                         unsigned_tx,
                                     );
@@ -383,7 +390,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             // infallible.
                                             slog::error!(
                                                 logger,
-                                                "Transaction signing attempt {} failed: {:?}",
+                                                "TransactionSigningRequest attempt_id {} failed: {:?}",
                                                 attempt_id,
                                                 e
                                             );
@@ -396,12 +403,6 @@ pub async fn start<BlockStream, RpcClient>(
                                         signed_tx,
                                     ),
                                 ) => {
-                                    slog::debug!(
-                                        logger,
-                                        "Sending signed tx for broadcast attempt {}: {:?}",
-                                        attempt_id,
-                                        hex::encode(&signed_tx),
-                                    );
                                     let response_extrinsic = match eth_broadcaster
                                         .send(signed_tx)
                                         .await
@@ -409,7 +410,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Successful broadcast attempt {}, tx_hash: {:#x}",
+                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
                                                 attempt_id,
                                                 tx_hash
                                             );
@@ -420,7 +421,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Err(e) => {
                                             slog::error!(
                                                 logger,
-                                                "Broadcast attempt {} failed: {:?}",
+                                                "TransmissionRequest attempt_id {} failed: {:?}",
                                                 attempt_id,
                                                 e
                                             );
