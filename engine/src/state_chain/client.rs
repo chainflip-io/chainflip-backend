@@ -206,6 +206,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .block(Some(block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("get_block RPC API failed")
     }
 
     async fn storage_events_at(
@@ -217,6 +218,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .query_storage_at(vec![storage_key], block_hash)
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("storage_events_at RPC API failed")
     }
 
     async fn rotate_keys(&self) -> Result<Bytes> {
@@ -235,6 +237,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .storage_pairs(storage_key, Some(block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("storage_pairs RPC API failed")
     }
 
     async fn system_local_peer_id(&self) -> Result<PeerId> {
@@ -242,6 +245,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .system_local_peer_id()
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("system_local_peer_id RPC API failed")
             .and_then(|bs58| Ok(PeerId::from_str(&bs58)?))
     }
 }
@@ -351,14 +355,14 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             Ok(tx_hash) => {
                 slog::trace!(
                     logger,
-                    "{:?} submitted successfully with tx_hash: {:#x}",
+                    "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
                 return Ok(tx_hash);
             }
             Err(err) => {
-                slog::error!(logger, "{}", err);
+                slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
                 return Err(err);
             }
         }
