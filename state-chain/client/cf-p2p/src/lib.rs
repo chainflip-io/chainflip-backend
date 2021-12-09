@@ -216,7 +216,7 @@ pub fn new_p2p_validator_network_node<
 					}
 
 					log::info!(
-						"Set reserved {} peers: {}",
+						"Set reserved peers (Total Reserved: {})",
 						CHAINFLIP_P2P_PROTOCOL_NAME,
 						state.reserved_peers.len()
 					);
