@@ -88,6 +88,12 @@ impl MultisigDB for PersistentMultisigDB {
     }
 
     fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId, db_colum: u32) {
+        assert_ne!(
+            db_colum, DB_COL_KEYGEN_RESULT_INFO,
+            "Db colum {} is reserved for keys",
+            db_colum
+        );
+
         let mut tx = self.db.transaction();
 
         let ceremony_id_encoded =
@@ -105,6 +111,12 @@ impl MultisigDB for PersistentMultisigDB {
     }
 
     fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId, db_colum: u32) {
+        assert_ne!(
+            db_colum, DB_COL_KEYGEN_RESULT_INFO,
+            "Db colum {} is reserved for keys",
+            db_colum
+        );
+
         let mut tx = self.db.transaction();
         let ceremony_id_encoded =
             bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
@@ -120,6 +132,12 @@ impl MultisigDB for PersistentMultisigDB {
     }
 
     fn load_used_ceremony_ids(&self, db_colum: u32) -> HashSet<CeremonyId> {
+        assert_ne!(
+            db_colum, DB_COL_KEYGEN_RESULT_INFO,
+            "Db colum {} is reserved for keys",
+            db_colum
+        );
+
         self.db
             .iter(db_colum)
             .filter_map(

@@ -408,7 +408,7 @@ pub struct KeygenContext {
     /// This clients will match the ones in `key_ready`,
     /// but stored separately so we could substitute
     /// them in more advanced tests
-    clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: HashMap<AccountId, MultisigClientNoDB>,
     /// Maps AccountId to the corresponding signer index
     /// (and vice versa)
     idx_mapping: PartyIdxMapping,
@@ -426,7 +426,7 @@ fn gen_invalid_local_sig() -> LocalSig3 {
     }
 }
 
-fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
         &HashContext([0; 32]),
         0,
@@ -436,6 +436,14 @@ fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
         },
     );
     fake_comm1
+}
+
+pub fn gen_invalid_signing_comm1() -> SigningCommitment {
+    SigningCommitment {
+        index: 0,
+        d: Point::random_point(),
+        e: Point::random_point(),
+    }
 }
 
 impl KeygenContext {
@@ -595,15 +603,10 @@ impl KeygenContext {
         // It doesn't matter what kind of commitment we create here,
         // the main idea is that the commitment doesn't match what we
         // send to all other parties
-        let fake_comm1 = SigningCommitment {
-            index: 0,
-            d: Point::random_point(),
-            e: Point::random_point(),
-        };
-
-        self.custom_data
-            .comm1_signing
-            .insert((sender_id.clone(), receiver_id.clone()), fake_comm1);
+        self.custom_data.comm1_signing.insert(
+            (sender_id.clone(), receiver_id.clone()),
+            gen_invalid_signing_comm1(),
+        );
     }
 
     /// Make the specified node send a new random commitment to the receiver
@@ -1214,7 +1217,12 @@ async fn check_and_get_signing_outcome(
     }
 
     if !outcomes.is_empty() {
-        assert_eq!(outcomes.len(), rxs.len(), "Not all signers got an outcome");
+        assert_eq!(
+            outcomes.len(),
+            rxs.len(),
+            "Not all signers got an outcome: {:?}",
+            outcomes[0].result
+        );
 
         for outcome in outcomes.iter() {
             assert_eq!(outcome, &outcomes[0], "Outcome different between signers");

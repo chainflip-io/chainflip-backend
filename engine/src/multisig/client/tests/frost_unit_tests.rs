@@ -1,4 +1,7 @@
-use crate::multisig::client::{self, tests::helpers::check_blamed_paries};
+use crate::multisig::client::{
+    self,
+    tests::helpers::{check_blamed_paries, gen_invalid_signing_comm1, next_with_timeout},
+};
 
 use client::tests::*;
 
@@ -491,4 +494,42 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     // In this case, the ceremony would be unauthorised, so we must check how many signing states exist
     // to see if a unauthorised state was created.
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
+}
+
+#[tokio::test]
+async fn should_not_consume_ceremony_id_if_unauthorised() {
+    use crate::multisig::client::{MultisigData, MultisigMessage};
+
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    // Get a client that has not used the default signing ceremony id yet
+    let id0 = ctx.get_account_id(0);
+    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    assert_ok!(c1.ensure_at_signing_stage(0));
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
+
+    // Receive comm1 with the default signing ceremony id
+    let used_ceremony_id = SIGN_CEREMONY_ID;
+    let message = MultisigMessage {
+        ceremony_id: used_ceremony_id,
+        data: MultisigData::Signing(gen_invalid_signing_comm1().into()),
+    };
+    c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
+
+    // Check that the unauthorised ceremony was created
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 1);
+
+    // Timeout the unauthorised ceremony
+    c1.expire_all();
+    c1.cleanup();
+
+    // Clear out the timeout outcome
+    next_with_timeout(ctx.outcome_receivers.get_mut(&id0).unwrap()).await;
+
+    // Sign as normal using the default ceremony id
+    let sign_states = ctx.sign().await;
+
+    // Should not of been rejected because of a used ceremony id
+    assert!(sign_states.sign_finished.outcome.result.is_ok());
 }
