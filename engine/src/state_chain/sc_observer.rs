@@ -35,6 +35,7 @@ pub async fn start<BlockStream, RpcClient>(
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
     km_window_sender: UnboundedSender<BlockHeightWindow>,
+    latest_block_hash: H256,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
@@ -55,9 +56,67 @@ pub async fn start<BlockStream, RpcClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    // We'll get our initial state on the first iteration (at the bottom of this loop)
-    // (account_data, is_outgoing)
-    let mut option_account_data_epoch: Option<(ChainflipAccountData, bool)> = None;
+    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        block_hash: H256,
+    ) -> (ChainflipAccountData, bool) {
+        let new_account_data = state_chain_client
+            .get_account_data(block_hash)
+            .await
+            .expect("Could not get account data");
+
+        let current_epoch = state_chain_client
+            .epoch_at_block(block_hash)
+            .await
+            .expect("Could not get current epoch");
+
+        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
+            last_active_epoch + 1 == current_epoch
+        } else {
+            false
+        };
+
+        (new_account_data, is_outgoing)
+    }
+
+    async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        block_hash: H256,
+        account_data: ChainflipAccountData,
+        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
+        km_window_sender: &UnboundedSender<BlockHeightWindow>,
+    ) -> anyhow::Result<()> {
+        let eth_vault = state_chain_client
+            .get_vault(
+                block_hash,
+                account_data
+                    .last_active_epoch
+                    .expect("we are active or outgoing"),
+                ChainId::Ethereum,
+            )
+            .await?;
+        sm_window_sender
+            .send(eth_vault.active_window.clone())
+            .unwrap();
+        km_window_sender.send(eth_vault.active_window).unwrap();
+        Ok(())
+    }
+
+    let (mut account_data, mut is_outgoing) =
+        get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
+
+    // Initialise the account state
+    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
+        send_windows_to_witness_processes(
+            state_chain_client.clone(),
+            latest_block_hash,
+            account_data,
+            &sm_window_sender,
+            &km_window_sender,
+        )
+        .await
+        .expect("Failed to send windows to the witness processes");
+    }
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -350,127 +409,61 @@ pub async fn start<BlockStream, RpcClient>(
                     }
                 }
 
-                async fn get_current_account_state<RpcClient: StateChainRpcApi>(
-                    state_chain_client: Arc<StateChainClient<RpcClient>>,
-                    block_hash: H256,
-                ) -> (ChainflipAccountData, bool) {
-                    let new_account_data = state_chain_client
-                        .get_account_data(block_hash)
-                        .await
-                        .expect("Could not get account data");
-
-                    let current_epoch = state_chain_client
-                        .epoch_at_block(block_hash)
-                        .await
-                        .expect("Could not get current epoch");
-
-                    let is_outgoing =
-                        if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-                            last_active_epoch + 1 == current_epoch
-                        } else {
-                            false
-                        };
-
-                    (new_account_data, is_outgoing)
-                }
-
-                async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
-                    state_chain_client: Arc<StateChainClient<RpcClient>>,
-                    block_hash: H256,
-                    account_data: ChainflipAccountData,
-                    sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-                    km_window_sender: &UnboundedSender<BlockHeightWindow>,
-                ) -> anyhow::Result<()> {
-                    let eth_vault = state_chain_client
-                        .get_vault(
-                            block_hash,
-                            account_data
-                                .last_active_epoch
-                                .expect("we are active or outgoing"),
-                            ChainId::Ethereum,
-                        )
-                        .await?;
-                    sm_window_sender
-                        .send(eth_vault.active_window.clone())
-                        .unwrap();
-                    km_window_sender.send(eth_vault.active_window).unwrap();
-                    Ok(())
-                }
-
-                // this should run on:
-                // 1. First iteration (option_account_data_epoch.is_none() == true)
-                // 2. After a NewEpoch event (received_new_epoch == true)
-                if let Some((chainflip_account_data, is_outgoing)) = option_account_data_epoch {
-                    if matches!(chainflip_account_data.state, ChainflipAccountState::Backup)
-                        || matches!(chainflip_account_data.state, ChainflipAccountState::Passive)
-                        || received_new_epoch
-                    {
-                        let (new_account_data, new_is_outgoing) =
-                            get_current_account_state(state_chain_client.clone(), block_hash).await;
-
-                        option_account_data_epoch = Some((new_account_data, new_is_outgoing));
-
-                        // We want to submit the heartbeat when we are:
-                        // - active
-                        // - outgoing
-                        // - backup
-                        // NOT Passive (unless we are outgoing + passive)
-                        if (matches!(new_account_data.state, ChainflipAccountState::Validator)
-                            || matches!(new_account_data.state, ChainflipAccountState::Backup)
-                            || is_outgoing)
-                            // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                            && ((block_header.number + (heartbeat_block_interval / 2))
-                                % heartbeat_block_interval
-                                == 0)
-                        {
-                            slog::info!(
-                                logger,
-                                "Sending heartbeat at block: {}",
-                                block_header.number
-                            );
-                            let _ = state_chain_client
-                                .submit_signed_extrinsic(
-                                    &logger,
-                                    pallet_cf_online::Call::heartbeat(),
-                                )
-                                .await;
-                        }
-
-                        // only if we received a new epoch this block, do we want to update the witnessing processes
-                        if received_new_epoch
-                            && matches!(new_account_data.state, ChainflipAccountState::Validator)
-                        {
-                            send_windows_to_witness_processes(
-                                state_chain_client.clone(),
-                                block_hash,
-                                chainflip_account_data,
-                                &sm_window_sender,
-                                &km_window_sender,
-                            )
-                            .await
-                            .expect("Should send windows to witness processes");
-                        }
-                    }
-                } else {
-                    // run on node start up
-                    let (new_account_data, is_outgoing) =
+                // if we receive a new epoch, there are a few scenarios:
+                // 1. Validators in the last epoch couuld now be outgoing, so we should send the windows to them (as they now contain the end)
+                // 2. New validators need to receive their start point windows, so send windows to them
+                // 3. Validators from the previous epoch that continue to be validators, we can send to them (has no impact, they'll just keep going)
+                // 4. Note: Nodes that were outgoing in the last epoch (active 2 epochs ago) have already received their end window, so we don't
+                // need to send anything to them
+                if received_new_epoch {
+                    let (new_account_data, new_is_outgoing) =
                         get_current_account_state(state_chain_client.clone(), block_hash).await;
+                    account_data = new_account_data;
+                    is_outgoing = new_is_outgoing;
 
-                    if is_outgoing
-                        || matches!(new_account_data.state, ChainflipAccountState::Validator)
+                    if matches!(account_data.state, ChainflipAccountState::Validator)
+                        || is_outgoing == true
                     {
                         send_windows_to_witness_processes(
                             state_chain_client.clone(),
-                            block_hash,
-                            new_account_data,
+                            latest_block_hash,
+                            account_data,
                             &sm_window_sender,
                             &km_window_sender,
                         )
                         .await
-                        .expect("Should send windows to witness processes");
+                        .expect("Failed to send windows to the witness processes");
                     }
+                } else if matches!(
+                    account_data.state,
+                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
+                ) {
+                    // If we are Backup or Passive, we must update our state on every block, since it's possible
+                    // we move between Backup and Passive on every block
+                    let (new_account_data, new_is_outgoing) =
+                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                    account_data = new_account_data;
+                    is_outgoing = new_is_outgoing;
+                }
 
-                    option_account_data_epoch = Some((new_account_data, is_outgoing));
+                // If we are Backup, Validator or outoing, we need to send a heartbeat
+                // we send it in the middle of the online interval (so any node sync issues don't
+                // cause issues (if we tried to send on one of the interval boundaries)
+                if (matches!(account_data.state, ChainflipAccountState::Backup)
+                    || matches!(account_data.state, ChainflipAccountState::Validator)
+                    || is_outgoing)
+                    && ((block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0)
+                {
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat at block: {}",
+                        block_header.number
+                    );
+                    let _ = state_chain_client
+                        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .await;
                 }
             }
             Err(error) => {
