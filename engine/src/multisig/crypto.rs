@@ -18,9 +18,12 @@ pub struct Scalar(Secp256k1Scalar);
 
 impl zeroize::Zeroize for Scalar {
     fn zeroize(&mut self) {
-        // Secp256k1Point doesn't expose a way to "zeroize" it
-        // explicitly, but dropping the value will zeroize it
-        self.0 = Secp256k1Scalar::zero();
+        // Secp256k1Scalar doesn't expose a way to "zeroize" it apart from dropping, so have
+        // to do it manually (I think assigning a different value would be sufficient to drop
+        // and zeroize the value, but we are not 100% sure that it won't get optimised away).
+        use core::sync::atomic;
+        unsafe { std::ptr::write_volatile(&mut self.0, Secp256k1Scalar::zero()) };
+        atomic::compiler_fence(atomic::Ordering::SeqCst);
     }
 }
 
@@ -46,6 +49,12 @@ impl Serialize for Point {
     }
 }
 
+impl std::iter::Sum for Point {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Point(Secp256k1Point::zero()), |a, b| a + b)
+    }
+}
+
 impl<'de> Deserialize<'de> for Scalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -68,6 +77,13 @@ impl Serialize for Scalar {
     }
 }
 
+impl std::iter::Sum for Scalar {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Scalar(Secp256k1Scalar::zero()), |a, b| a + b)
+    }
+}
+
+use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -98,8 +114,8 @@ impl Point {
             .0
     }
 
-    pub fn as_bytes(&self) -> Vec<u8> {
-        self.0.serialize_compressed().to_vec()
+    pub fn as_bytes(&self) -> GenericArray<u8, <Secp256k1Point as ECPoint>::CompressedPointLength> {
+        self.0.serialize_compressed()
     }
 }
 

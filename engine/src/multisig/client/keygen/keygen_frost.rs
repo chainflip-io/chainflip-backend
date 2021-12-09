@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::multisig::{
     client::ThresholdParameters,
@@ -38,7 +39,8 @@ fn test_simple_polynomial() {
 
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
+#[zeroize(drop)]
 pub struct ShamirShare {
     /// the result of polynomial evaluation
     pub value: Scalar,
@@ -177,8 +179,7 @@ fn generate_secret_and_shares(
         })
         .collect();
 
-    // Coefficients should be zeroized on drop here
-
+    // Coefficients are zeroized on drop here
     (secret, CoefficientCommitments(commitments), shares)
 }
 
@@ -255,11 +256,7 @@ pub fn validate_commitments(
 
 /// Derive aggregate pubkey from party commitments
 pub fn derive_aggregate_pubkey(commitments: &HashMap<usize, DKGCommitment>) -> Point {
-    commitments
-        .iter()
-        .map(|(_idx, c)| c.commitments.0[0])
-        .reduce(|acc, x| acc + x)
-        .unwrap()
+    commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
 }
 
 /// Derive each party's "local" pubkey
@@ -285,8 +282,7 @@ pub fn derive_local_pubkeys_for_parties(
                 .map(|j| {
                     evaluate_polynomial((0..=t).map(|k| &commitments[&j].commitments.0[k]), idx)
                 })
-                .reduce(|acc, x| acc + x)
-                .unwrap()
+                .sum()
         })
         .collect()
 }
@@ -334,11 +330,10 @@ mod tests {
 
         // Now it is okay to distribute the shares
 
-        let _agg_pubkey = coeff_commitments
+        let _agg_pubkey: Point = coeff_commitments
             .iter()
             .map(|(_idx, c)| c.commitments.0[0])
-            .reduce(|acc, x| acc + x)
-            .unwrap();
+            .sum();
 
         let mut secret_shares = vec![];
 
@@ -353,11 +348,10 @@ mod tests {
                 .collect();
 
             // (Round 2, Step 3)
-            let secret_share = received_shares
+            let secret_share: Scalar = received_shares
                 .iter()
                 .map(|share| share.value.clone())
-                .reduce(|acc, share| acc + share)
-                .unwrap();
+                .sum();
 
             secret_shares.push(secret_share);
         }

@@ -115,8 +115,7 @@ fn gen_group_commitment(
             let rho_i = &bindings[idx];
             comm.d + comm.e * rho_i
         })
-        .reduce(|a, b| a + b)
-        .expect("non empty list")
+        .sum()
 }
 
 /// Generate a lagrange coefficient for party `signer_index`
@@ -124,7 +123,9 @@ fn gen_group_commitment(
 pub fn get_lagrange_coeff(
     signer_index: usize,
     all_signer_indices: &BTreeSet<usize>,
-) -> Result<Scalar, &'static str> {
+) -> anyhow::Result<Scalar> {
+    use anyhow::Context;
+
     let mut num: Scalar = Scalar::from_usize(1);
     let mut den: Scalar = Scalar::from_usize(1);
 
@@ -138,11 +139,10 @@ pub fn get_lagrange_coeff(
         den = den * (j - signer_index);
     }
 
-    if den == Scalar::zero() {
-        return Err("Duplicate shares provided");
-    }
-
-    let lagrange_coeff = num * den.invert().expect("Non-zero scalar expected");
+    let lagrange_coeff = num
+        * den
+            .invert()
+            .context("Can't invert a zero scalar. Processing duplicate shares?")?;
 
     Ok(lagrange_coeff)
 }

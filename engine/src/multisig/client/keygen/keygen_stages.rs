@@ -424,8 +424,7 @@ fn compute_keygen_result(
         .values()
         .into_iter()
         .map(|share| share.value.clone())
-        .reduce(|acc, share| acc + share)
-        .expect("shares should be non-empty");
+        .sum();
 
     // The shares are no longer needed so we zeroize them
     drop(secret_shares);
