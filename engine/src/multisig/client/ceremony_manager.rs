@@ -94,7 +94,7 @@ where
 
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized(){
-                    signing_ceremony_ids_to_consume.push(ceremony_id.clone());
+                    signing_ceremony_ids_to_consume.push(*ceremony_id);
                 }
 
                 false
@@ -111,7 +111,7 @@ where
 
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized(){
-                    keygen_ceremony_ids_to_consume.push(ceremony_id.clone());
+                    keygen_ceremony_ids_to_consume.push(*ceremony_id);
                 }
 
                 false

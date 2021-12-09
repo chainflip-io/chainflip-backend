@@ -42,7 +42,7 @@ where
 
     /// Mark this ceremony id as used
     pub fn consume_ceremony_id(&mut self, ceremony_id: &CeremonyId) {
-        self.insert_used_ceremony_id(ceremony_id.clone());
+        self.insert_used_ceremony_id(*ceremony_id);
 
         // Cleanup ceremonies that are more then `USED_CEREMONY_IDS_AGE_LIMIT` old.
         let old_ceremonies: Vec<CeremonyId> = self
@@ -50,7 +50,7 @@ where
             .iter()
             .filter(|id| {
                 if ceremony_id > &USED_CEREMONY_IDS_AGE_LIMIT {
-                    *id < &(ceremony_id - &USED_CEREMONY_IDS_AGE_LIMIT)
+                    *id < &(ceremony_id - USED_CEREMONY_IDS_AGE_LIMIT)
                 } else {
                     false
                 }
