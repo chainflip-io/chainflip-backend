@@ -186,7 +186,6 @@ pub mod pallet {
 	impl<T: Config> OfflineReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 		type Penalty = T::Penalty;
-		type Banned = T::Banned;
 
 		fn report(
 			condition: OfflineCondition,
@@ -202,7 +201,7 @@ pub mod pallet {
 				penalty,
 			));
 
-			Self::apply_ban(validator_id);
+			T::Banned::ban(validator_id);
 
 			Ok(Self::update_reputation(validator_id, penalty.neg()))
 		}

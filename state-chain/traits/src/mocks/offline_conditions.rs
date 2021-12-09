@@ -48,7 +48,6 @@ macro_rules! impl_mock_offline_conditions {
 		impl $crate::offline_conditions::OfflineReporter for MockOfflineReporter {
 			type ValidatorId = $account_id;
 			type Penalty = MockOfflinePenalty;
-			type Banned = MockBanned;
 
 			fn report(
 				_condition: $crate::offline_conditions::OfflineCondition,
