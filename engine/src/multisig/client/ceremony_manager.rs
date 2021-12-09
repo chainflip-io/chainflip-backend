@@ -91,7 +91,7 @@ where
                 slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
                 let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
                 events_to_send.push(MultisigOutcome::Signing(outcome));
-                
+
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized(){
                     signing_ceremony_ids_to_consume.push(ceremony_id.clone());
