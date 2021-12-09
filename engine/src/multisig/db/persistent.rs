@@ -24,7 +24,7 @@ pub struct PersistentMultisigDB {
 
 impl PersistentMultisigDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::with_columns(2);
+        let config = DatabaseConfig::with_columns(3);
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
@@ -228,7 +228,7 @@ mod tests {
     fn can_save_and_load_used_ceremony_id_data() {
         let logger = new_test_logger();
         let db_path = Path::new("db3");
-        let db_colum = 1;
+        let db_colum = 2;
 
         let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
