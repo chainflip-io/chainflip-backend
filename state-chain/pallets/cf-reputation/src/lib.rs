@@ -79,6 +79,9 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// Ban validators
+		type Banned: Banned<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -183,6 +186,7 @@ pub mod pallet {
 	impl<T: Config> OfflineReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 		type Penalty = T::Penalty;
+		type Banned = T::Banned;
 
 		fn report(
 			condition: OfflineCondition,
@@ -197,6 +201,8 @@ pub mod pallet {
 				condition,
 				penalty,
 			));
+
+			Self::apply_ban(validator_id);
 
 			Ok(Self::update_reputation(validator_id, penalty.neg()))
 		}

@@ -552,6 +552,12 @@ pub mod offline_conditions {
 	pub trait OfflineReporter {
 		type ValidatorId;
 		type Penalty: OfflinePenalty;
+		type Banned: Banned<ValidatorId = Self::ValidatorId>;
+
+		/// Apply an automatic ban on validator
+		fn apply_ban(validator_id: &Self::ValidatorId) {
+			Self::Banned::ban(validator_id);
+		}
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
 		fn report(
