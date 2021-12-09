@@ -8768,7 +8768,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=compat/substrate-monthly-2021-09#0dc04dfad611c371980d0df4d4c4647d11d3339b"
+source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=chore/merge-config-option#230ccc3ca8fb8fa6c3176bfa2dce4d24cc344f56"
 dependencies = [
  "async-trait",
  "dyn-clone",
@@ -8801,7 +8801,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=compat/substrate-monthly-2021-09#0dc04dfad611c371980d0df4d4c4647d11d3339b"
+source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=chore/merge-config-option#230ccc3ca8fb8fa6c3176bfa2dce4d24cc344f56"
 dependencies = [
  "async-trait",
  "heck",
