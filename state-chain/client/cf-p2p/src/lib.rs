@@ -385,9 +385,9 @@ pub fn new_p2p_validator_network_node<
 		// P2P Event Handler
 		{
 			let mut network_event_stream = p2p_network_service.event_stream();
+			let mut connected_peer_ids = BTreeSet::new();
 
 			async move {
-				let mut total_connected_peers: usize = 0;
 				while let Some(event) = network_event_stream.next().await {
 					match event {
 						/* A peer has connected to us */
@@ -398,23 +398,25 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers = total_connected_peers + 1;
+								connected_peer_ids.insert(remote);
 								log::info!(
-									"Connected and established {} with peer: {} (Total Connected: {})",
+									"Connected and established {} with peer: {} (Total Connected: {} - Not connected to these reserved peers: {:?})",
 									protocol,
 									remote,
-									total_connected_peers
+									connected_peer_ids.len(),
+									state.read().unwrap().reserved_peers.difference(&connected_peer_ids).collect::<Vec<_>>()
 								);
 							},
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers = total_connected_peers - 1;
+								connected_peer_ids.remove(&remote);
 								log::info!(
-									"Disconnected and closed {} with peer: {} (Total Connected: {})",
+									"Disconnected and closed {} with peer: {} (Total Connected: {} - Not connected to these reserved peers: {:?})",
 									protocol,
 									remote,
-									total_connected_peers
+									connected_peer_ids.len(),
+									state.read().unwrap().reserved_peers.difference(&connected_peer_ids).collect::<Vec<_>>()
 								);
 							}
 						},
