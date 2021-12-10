@@ -1,12 +1,12 @@
 use crate::chainflip::{get_random_id_by_seed_in_range, select_signer};
 use cf_traits::IsOnline;
 use sp_std::cell::RefCell;
+// use std::ops::Range;
 
 /// Generates a set of validators with the SignerId = index + 1
 fn validator_set(len: usize) -> Vec<(u64, ())> {
 	let mut id: u64 = 0;
-	vec![(0, ()); len]
-		.iter()
+	(0..len)
 		.map(|_| {
 			id += 1;
 			(id, ())
@@ -43,18 +43,18 @@ fn test_select_signer() {
 			vec![(4, ()), (6, ()), (7, ()), (9, ())],
 			vec![2, 5, 7, 3]
 		),
-		Some(6)
+		Some(9)
 	);
 	// Expect a validator in a set of 150 validators
 	assert_eq!(
 		select_signer::<u64, MockIsOnline>(validator_set(150), String::from("seed").into_bytes()),
-		Some(75)
+		Some(45)
 	);
 	// Expect an comparable big change in the value
 	// distribution for an small input seed change
 	assert_eq!(
 		select_signer::<u64, MockIsOnline>(validator_set(150), String::from("seeed").into_bytes()),
-		Some(147)
+		Some(53)
 	);
 	// Expect an reasonable SignerId for an bigger input seed
 	assert_eq!(
@@ -62,7 +62,7 @@ fn test_select_signer() {
 			validator_set(150),
 			String::from("west1_north_south_east:_berlin_zonk").into_bytes(),
 		),
-		Some(48)
+		Some(97)
 	);
 	// Switch the mock to simulate an situation where all
 	// validators are offline

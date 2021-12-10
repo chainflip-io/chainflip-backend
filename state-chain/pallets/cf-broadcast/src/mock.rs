@@ -33,7 +33,7 @@ parameter_types! {
 }
 
 thread_local! {
-	pub static NOMINATION_SUCCESS: std::cell::RefCell<bool>  = RefCell::new(true);
+	pub static NOMINATION: std::cell::RefCell<Option<u64>>  = RefCell::new(Some(RANDOM_NOMINEE));
 }
 
 impl frame_system::Config for Test {
@@ -80,11 +80,7 @@ impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed(_seed: Vec<u8>) -> Option<Self::SignerId> {
-		if NOMINATION_SUCCESS.with(|cell| cell.borrow().clone()) {
-			Some(RANDOM_NOMINEE)
-		} else {
-			None
-		}
+		NOMINATION.with(|cell| cell.borrow().clone())
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {

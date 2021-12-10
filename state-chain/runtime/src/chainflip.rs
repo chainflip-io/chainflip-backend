@@ -233,11 +233,10 @@ impl Heartbeat for ChainflipHeartbeat {
 
 /// Returns a scaled index based on an input seed
 pub fn get_random_id_by_seed_in_range(seed: Vec<u8>, max: usize) -> usize {
-	let seed = twox_128(&seed)
-		.iter()
-		.fold(0, |acc: u64, x| acc.saturating_add(x.clone() as u64));
-	let id = seed % max as u64;
-	(id as u64).try_into().unwrap_or(0)
+	let hash = twox_128(&seed);
+	let seed = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
+	let id = seed % max as u32;
+	id as usize
 }
 
 /// Select the next signer
