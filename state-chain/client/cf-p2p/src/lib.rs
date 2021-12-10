@@ -14,7 +14,7 @@ use futures::{
 	task::Spawn,
 	FutureExt, SinkExt, StreamExt,
 };
-use jsonrpc_core::{Result, BoxFuture};
+use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService};
@@ -159,7 +159,11 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 
 	/// Send a message to validators returning a HTTP status code
 	#[rpc(name = "p2p_send_message")]
-	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> BoxFuture<Result<u64>>;
+	fn send_message(
+		&self,
+		peer_ids: Vec<PeerIdTransferable>,
+		message: Vec<u8>,
+	) -> BoxFuture<Result<u64>>;
 
 	/// Subscribe to receive p2p messages
 	#[pubsub(subscription = "cf_p2p_messages", subscribe, name = "cf_p2p_subscribeMessages")]
@@ -184,7 +188,11 @@ pub fn new_p2p_validator_network_node<
 >(
 	p2p_network_service: Arc<PN>,
 	subscription_task_executor: impl Spawn + Send + Sync + 'static,
-) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>, impl futures::Future<Output = ()>) {
+) -> (
+	RpcRequestHandler<MetaData, PN>,
+	impl futures::Future<Output = ()>,
+	impl futures::Future<Output = ()>,
+) {
 	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState::default()));
 	let (outgoing_p2p_message_sender, mut outgoing_p2p_message_receiver) = unbounded();
 
@@ -280,20 +288,24 @@ pub fn new_p2p_validator_network_node<
 						Ok(peers) => {
 							let state = self.state.read().unwrap();
 							if peers.iter().all(|peer| state.reserved_peers.contains(peer)) {
-								let mut outgoing_p2p_message_sender = self.outgoing_p2p_message_sender.clone();
+								let mut outgoing_p2p_message_sender =
+									self.outgoing_p2p_message_sender.clone();
 								Box::pin(async move {
-									outgoing_p2p_message_sender.send((peers, message)).await.unwrap();
+									outgoing_p2p_message_sender
+										.send((peers, message))
+										.await
+										.unwrap();
 									Ok(200)
 								})
 							} else {
-								Box::pin(std::future::ready(Err(jsonrpc_core::Error::invalid_params(
-									"Request to send message to an unset peer",
-								))))
+								Box::pin(std::future::ready(Err(
+									jsonrpc_core::Error::invalid_params(
+										"Request to send message to an unset peer",
+									),
+								)))
 							}
 						},
-						Err(error) => {
-							Box::pin(std::future::ready(Err(error)))
-						}
+						Err(error) => Box::pin(std::future::ready(Err(error))),
 					}
 				}
 

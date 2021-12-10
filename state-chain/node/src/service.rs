@@ -211,10 +211,11 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (rpc_request_handler, p2p_message_sender_future, p2p_message_handler_future) = cf_p2p::new_p2p_validator_network_node(
-		network.clone(),
-		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
-	);
+	let (rpc_request_handler, p2p_message_sender_future, p2p_message_handler_future) =
+		cf_p2p::new_p2p_validator_network_node(
+			network.clone(),
+			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
+		);
 
 	let rpc_extensions_builder = {
 		let mut io = MetaIoHandler::default();
@@ -322,7 +323,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	task_manager
 		.spawn_essential_handle()
 		.spawn_blocking("cf-p2p-sender", p2p_message_sender_future);
-
 
 	if enable_grandpa {
 		// start the full GRANDPA voter
