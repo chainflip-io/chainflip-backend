@@ -413,9 +413,9 @@ pub struct KeygenContext {
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
-    use crate::multisig::crypto::{ECScalar, Scalar};
+    use crate::multisig::crypto::Scalar;
     frost::LocalSig3 {
-        response: Scalar::new_random(),
+        response: Scalar::random(),
     }
 }
 
@@ -590,8 +590,8 @@ impl KeygenContext {
         // send to all other parties
         let fake_comm1 = SigningCommitment {
             index: 0,
-            d: Point::random_point(),
-            e: Point::random_point(),
+            d: Point::random(),
+            e: Point::random(),
         };
 
         self.custom_data

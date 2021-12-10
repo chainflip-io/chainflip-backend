@@ -6,8 +6,8 @@ use chainflip_engine::{
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::ed25519::Public as EdPublic;
 use sp_core::sr25519::Public as SrPublic;
+use sp_core::{ed25519::Public as EdPublic, storage::StorageKey};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
@@ -140,11 +140,29 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_environment_value::<u64>(block_hash, "EthereumChainId")
+                                    .get_environment_value::<u64>(
+                                        block_hash,
+                                        StorageKey(
+                                            pallet_cf_environment::EthereumChainId::<
+                                                state_chain_runtime::Runtime,
+                                            >::hashed_key(
+                                            )
+                                            .into(),
+                                        ),
+                                    )
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_environment_value(block_hash, "StakeManagerAddress")
+                                    .get_environment_value(
+                                        block_hash,
+                                        StorageKey(
+                                            pallet_cf_environment::StakeManagerAddress::<
+                                                state_chain_runtime::Runtime,
+                                            >::hashed_key(
+                                            )
+                                            .into(),
+                                        ),
+                                    )
                                     .await
                                     .expect("Failed to fetch StakeManagerAddress from State Chain");
                                 let tx_hash = register_claim(
