@@ -311,8 +311,6 @@ where
     }
 
     fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
-        use crate::multisig::crypto::ECPoint;
-
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
         self.process_pending_requests_to_sign(key_info.clone());

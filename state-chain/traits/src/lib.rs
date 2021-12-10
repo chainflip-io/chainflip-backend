@@ -552,6 +552,7 @@ pub mod offline_conditions {
 	pub trait OfflineReporter {
 		type ValidatorId;
 		type Penalty: OfflinePenalty;
+
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
 		fn report(
