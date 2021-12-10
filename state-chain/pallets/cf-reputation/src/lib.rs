@@ -79,6 +79,9 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// Ban validators
+		type Banned: Banned<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -197,6 +200,8 @@ pub mod pallet {
 				condition,
 				penalty,
 			));
+
+			T::Banned::ban(validator_id);
 
 			Ok(Self::update_reputation(validator_id, penalty.neg()))
 		}

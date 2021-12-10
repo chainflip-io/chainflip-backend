@@ -22,10 +22,12 @@ pallet-cf-rewards = {path = "../../state-chain/pallets/cf-rewards"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
+pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
 cf-chains = {path = "../../state-chain/chains"}
 state-chain-node = {path = "../../state-chain/node"}
 
 # Substrate key types
+sp-core = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
 sp-consensus-aura = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
 sp-finality-grandpa = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}

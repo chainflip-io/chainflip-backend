@@ -215,6 +215,12 @@ pub fn new_p2p_validator_network_node<
 						self.p2p_network_service.remove_reserved_peers(std::iter::once(peer));
 					}
 
+					log::info!(
+						"Set {} reserved peers (Total Reserved: {})",
+						CHAINFLIP_P2P_PROTOCOL_NAME,
+						state.reserved_peers.len()
+					);
+
 					Ok(200)
 				}
 
@@ -224,6 +230,11 @@ pub fn new_p2p_validator_network_node<
 					let mut state = self.state.write().unwrap();
 					if state.reserved_peers.insert(peer_id.clone()) {
 						self.p2p_network_service.reserve_peers(std::iter::once(peer_id));
+						log::info!(
+							"Added reserved {} peer (Total Reserved: {})",
+							CHAINFLIP_P2P_PROTOCOL_NAME,
+							state.reserved_peers.len()
+						);
 						Ok(200)
 					} else {
 						Err(jsonrpc_core::Error::invalid_params(format!(
@@ -239,6 +250,11 @@ pub fn new_p2p_validator_network_node<
 					let mut state = self.state.write().unwrap();
 					if state.reserved_peers.remove(&peer_id) {
 						self.p2p_network_service.remove_reserved_peers(std::iter::once(peer_id));
+						log::info!(
+							"Removed reserved {} peer (Total Reserved: {})",
+							CHAINFLIP_P2P_PROTOCOL_NAME,
+							state.reserved_peers.len()
+						);
 						Ok(200)
 					} else {
 						Err(jsonrpc_core::Error::invalid_params(format!(
@@ -339,6 +355,7 @@ pub fn new_p2p_validator_network_node<
 			let mut network_event_stream = p2p_network_service.event_stream();
 
 			async move {
+				let mut total_connected_peers: usize = 0;
 				while let Some(event) = network_event_stream.next().await {
 					match event {
 						/* A peer has connected to us */
@@ -349,19 +366,23 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								total_connected_peers = total_connected_peers + 1;
 								log::info!(
-									"Connected and established {} with peer: {}",
+									"Connected and established {} with peer: {} (Total Connected: {})",
 									protocol,
-									remote
+									remote,
+									total_connected_peers
 								);
 							},
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								total_connected_peers = total_connected_peers - 1;
 								log::info!(
-									"Disconnected and closed {} with peer: {}",
+									"Disconnected and closed {} with peer: {} (Total Connected: {})",
 									protocol,
-									remote
+									remote,
+									total_connected_peers
 								);
 							}
 						},

@@ -27,7 +27,7 @@ mod tests {
 	const TX_HASH: EthTransactionHash = [211u8; 32];
 
 	macro_rules! on_events {
-		($events:expr, $( $p:pat => $b:block ),*) => {
+		($events:expr, $( $p:pat => $b:block ),* $(,)?) => {
 			for event in $events {
 				$(if let $p = event { $b })*
 			}
@@ -41,12 +41,9 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
-		use frame_support::{
-			dispatch::Dispatchable,
-			traits::HandleLifetime,
-			unsigned::{TransactionSource, ValidateUnsigned},
-		};
+		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
+		use pallet_cf_vaults::KeygenOutcome;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -88,14 +85,14 @@ mod tests {
 			agg_secret_key: SecretKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
-			proposals: i32,
+			proposed_seed: Option<u64>,
 		}
 
 		impl Default for Signer {
 			fn default() -> Self {
 				let key_seed = GENESIS_KEY;
 				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
-				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposals: 0 }
+				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposed_seed: None }
 			}
 		}
 
@@ -132,31 +129,27 @@ mod tests {
 				(secret_key, PublicKey::from_secret_key(&secret_key))
 			}
 
-			fn next_key(&self) -> u64 {
-				self.key_seed + 1
-			}
-
 			// The public key proposed
 			pub fn proposed_public_key(&mut self) -> Vec<u8> {
-				let (_, public) = Self::generate_keypair(self.next_key());
+				let (_, public) =
+					Self::generate_keypair(self.proposed_seed.expect("No key has been proposed"));
 				public.serialize_compressed().to_vec()
 			}
 
 			// Propose a new public key
 			pub fn propose_new_public_key(&mut self) -> Vec<u8> {
-				self.proposals += 1;
+				self.proposed_seed = Some(self.key_seed + 1);
 				self.proposed_public_key()
 			}
 
 			// Rotate to the current proposed key and clear cache
 			pub fn rotate_keys(&mut self) {
-				self.proposals -= 1;
-				if self.proposals == 0 {
-					self.key_seed = self.next_key();
-					let (secret, _) = Self::generate_keypair(self.key_seed);
-					self.agg_secret_key = secret;
+				if self.proposed_seed.is_some() {
+					self.key_seed += self.proposed_seed.expect("No key has been proposed");
+					let (secret_key, _) = Self::generate_keypair(self.key_seed);
+					self.agg_secret_key = secret_key;
 					self.signatures.clear();
-					self.proposals = 0;
+					self.proposed_seed = None;
 				}
 			}
 		}
@@ -205,89 +198,89 @@ mod tests {
 			// Handle events coming in from the state chain
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
-				if self.state() == ChainflipAccountState::Validator && self.active {
-					// Handle events
+				// If active handle events
+				if self.active {
+					// Being a validator we would respond to certain events
+					if self.state() == ChainflipAccountState::Validator {
+						on_events!(
+							events,
+							Event::Validator(
+								// A new epoch
+								pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
+									(&*self.signer).borrow_mut().rotate_keys();
+							},
+							Event::EthereumThresholdSigner(
+								// A signature request
+								pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+									ceremony_id,
+									_,
+									ref signers,
+									payload)) => {
+
+								// Participate in signing ceremony if requested.
+								// We only need one node to submit the unsigned transaction.
+								if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
+									// Sign with current key
+									let verification_components = (&*self.signer).borrow_mut().sign(payload);
+									state_chain_runtime::EthereumThresholdSigner::signature_success(
+										Origin::none(),
+										*ceremony_id,
+										verification_components,
+									).expect("should be able to submit threshold signature for Ethereum");
+								} };
+							},
+							Event::EthereumThresholdSigner(
+								// A threshold has been met for this signature
+								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
+									match self.engine_state {
+										// If we rotating let's witness the keys being rotated on the contract
+										EngineState::Rotation => {
+											let ethereum_block_number: u64 = 100;
+											let tx_hash = vec![1u8; 32];
+
+											let public_key = (&*self.signer).borrow_mut().proposed_public_key();
+
+											state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+												Origin::signed(self.node_id.clone()),
+												ChainId::Ethereum,
+												public_key,
+												ethereum_block_number,
+												tx_hash,
+											).expect("should be able to vault key rotation for node");
+										},
+										_ => {}
+									}
+							},
+							Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
+								self.engine_state = EngineState::Rotation;
+							},
+							Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+								self.engine_state = EngineState::None;
+							},
+						);
+					}
+
+					// Being staked we would be required to respond to keygen requests
 					on_events!(
 						events,
 						Event::Vaults(
 							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, ..)) => {
-								match self.engine_state {
-									EngineState::None => {
-										// Propose a new key
-										let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _, validators)) => {
+								if validators.contains(&self.node_id) {
+									// Propose a new key
+									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
 
-										state_chain_runtime::WitnesserApi::witness_keygen_success(
-											Origin::signed(self.node_id.clone()),
-											*ceremony_id,
-											ChainId::Ethereum,
-											public_key,
-										).expect(&format!(
-											"should be able to witness keygen request from node: {:?}",
-											self.node_id)
-										);
-
-										// Engine is now in rotation state
-										self.engine_state = EngineState::Rotation;
-									},
-									_ => {}
-								}
-						},
-						Event::Validator(
-							// A new epoch
-							pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-								(&*self.signer).borrow_mut().rotate_keys();
-						},
-						Event::EthereumThresholdSigner(
-							// A signature request
-							pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
-								ceremony_id,
-								_,
-								ref signers,
-								payload)) => {
-
-							// Participate in signing ceremony if requested.
-							// We only need one node to submit the unsigned transaction.
-							if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
-								// Sign with current key
-								let call = state_chain_runtime::Call::EthereumThresholdSigner(
-									pallet_cf_threshold_signature::Call::signature_success(
+									state_chain_runtime::Vaults::report_keygen_outcome(
+										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
-										(&*self.signer).borrow_mut().sign(payload),
-									)
-								);
-								<state_chain_runtime::Runtime as ValidateUnsigned>::validate_unsigned(
-									TransactionSource::External,
-									&call
-								).expect("Threshold signature should be valid.");
-								call.dispatch(Origin::none())
-									.expect("should be able to submit threshold signature for Ethereum");
-							} };
-						},
-						Event::EthereumThresholdSigner(
-							// A threshold has been met for this signature
-							pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
-								match self.engine_state {
-									// If we rotating let's witness the keys being rotated on the contract
-									EngineState::Rotation => {
-										self.engine_state = EngineState::None;
-
-										let ethereum_block_number: u64 = 100;
-										let tx_hash = vec![1u8; 32];
-
-										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
-
-										state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
-											Origin::signed(self.node_id.clone()),
-											ChainId::Ethereum,
-											public_key,
-											ethereum_block_number,
-											tx_hash,
-										).expect("should be able to witness ethereum vault key rotation");
-									},
-									_ => {}
+										ChainId::Ethereum,
+										KeygenOutcome::Success(public_key),
+									).expect(&format!(
+										"should be able to report keygen outcome from node: {:?}",
+										self.node_id)
+									);
 								}
-						}
+						},
 					);
 				}
 			}
@@ -423,12 +416,13 @@ mod tests {
 				self.move_forward_blocks(epoch - (current_block_number % epoch));
 			}
 
-			pub fn move_to_complete_auction(&mut self) {
-				self.move_forward_blocks(AUCTION_BLOCKS);
-			}
-
-			pub fn move_forward_heartbeat_interval(&mut self) {
-				self.move_forward_blocks(HeartbeatBlockInterval::get());
+			pub fn move_to_next_heartbeat_interval(&mut self) {
+				let current_block_number = System::block_number();
+				self.move_forward_blocks(
+					HeartbeatBlockInterval::get() -
+						(current_block_number % HeartbeatBlockInterval::get()) +
+						1,
+				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -786,8 +780,12 @@ mod tests {
 		}
 	}
 
-	// The number of blocks we expect an auction should last
-	const AUCTION_BLOCKS: BlockNumber = 3;
+	// The minimum number of blocks an auction will last
+	const AUCTION_BLOCKS: BlockNumber = 2;
+	// The minimum number of blocks a keygen ceremony will last
+	const KEYGEN_CEREMONY_BLOCKS: BlockNumber = 3;
+	// The minimum number of blocks a vault rotation should last
+	const VAULT_ROTATION_BLOCKS: BlockNumber = AUCTION_BLOCKS + KEYGEN_CEREMONY_BLOCKS;
 
 	mod epoch {
 		use super::*;
@@ -932,15 +930,15 @@ mod tests {
 					);
 					// For each subsequent block the state chain will check if the vault has rotated
 					// until then we stay in the `ValidatorsSelected`
-					// Run things the amount needed for an auction
-					testnet.move_forward_blocks(2);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					// The vault rotation should have proceeded and we should now be back
 					// at `WaitingForBids` with a new set of winners; the genesis validators and
 					// the new nodes we staked into the network
 					assert_matches::assert_matches!(
 						Auction::current_phase(),
 						AuctionPhase::WaitingForBids,
-						"we should back waiting for bids after a successful auction and rotation"
+						"we should be back waiting for bids after a successful auction and rotation"
 					);
 
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
@@ -1075,8 +1073,8 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					// Complete auction
-					testnet.move_forward_blocks(AUCTION_BLOCKS - 1);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
 
@@ -1141,7 +1139,7 @@ mod tests {
 	}
 
 	mod validators {
-		use crate::tests::{genesis, network, NodeId, AUCTION_BLOCKS};
+		use crate::tests::{genesis, network, NodeId, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1197,8 +1195,8 @@ mod tests {
 						"this should be the first auction"
 					);
 
-					// Complete auction over AUCTION_BLOCKS
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(1, Validator::epoch_index(), "We should still be in the next epoch");
 
 					// assert list of validators as being the new nodes
@@ -1274,12 +1272,9 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					// Start an auction and confirm
+					// Start an auction and wait for rotation
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-
-					// Complete auction
-					testnet.move_to_complete_auction();
-
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 
 					let PercentageRange { top, bottom: _ } =
@@ -1295,7 +1290,7 @@ mod tests {
 					}
 
 					// We need to move forward one heartbeat interval to be regarded as offline
-					testnet.move_forward_heartbeat_interval();
+					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
@@ -1309,7 +1304,7 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(1, Validator::epoch_index(), "We should be in the same epoch");
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1320,8 +1315,8 @@ mod tests {
 						"this should be the second auction"
 					);
 
-					// Complete the 'Emergency rotation'
-					testnet.move_forward_blocks(AUCTION_BLOCKS);
+					// Run things to a successful vault rotation
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 
 					// Emergency state reset
@@ -1334,7 +1329,7 @@ mod tests {
 						testnet.set_active(node, false);
 					}
 
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
 					for node in &nodes {

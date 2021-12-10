@@ -28,18 +28,22 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_vaults.
 pub trait WeightInfo {
-	fn keygen_success() -> Weight;
-	fn keygen_failure() -> Weight;
+	fn report_keygen_outcome() -> Weight;
+	fn on_keygen_success() -> Weight;
+	fn on_keygen_failure() -> Weight;
 	fn vault_key_rotated() -> Weight;
 }
 
 /// Weights for pallet_cf_vaults using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	fn keygen_success() -> Weight {
+	fn report_keygen_outcome() -> Weight {
 		(2_000_000 as Weight)
 	}
-	fn keygen_failure() -> Weight {
+	fn on_keygen_success() -> Weight {
+		(2_000_000 as Weight)
+	}
+	fn on_keygen_failure() -> Weight {
 		(2_000_000 as Weight)
 	}
 	fn vault_key_rotated() -> Weight {
@@ -49,10 +53,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn keygen_success() -> Weight {
+	fn report_keygen_outcome() -> Weight {
 		(2_000_000 as Weight)
 	}
-	fn keygen_failure() -> Weight {
+	fn on_keygen_success() -> Weight {
+		(2_000_000 as Weight)
+	}
+	fn on_keygen_failure() -> Weight {
 		(2_000_000 as Weight)
 	}
 	fn vault_key_rotated() -> Weight {

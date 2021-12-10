@@ -6,7 +6,7 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -195,10 +195,12 @@ pub async fn start<BlockStream, RpcClient>(
                                             result,
                                         }) => match result {
                                             Ok(pubkey) => {
-                                                pallet_cf_witnesser_api::Call::witness_keygen_success(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pubkey.serialize().to_vec(),
+                                                    pallet_cf_vaults::KeygenOutcome::Success(
+                                                        pubkey.serialize().to_vec(),
+                                                    ),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -211,16 +213,16 @@ pub async fn start<BlockStream, RpcClient>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                pallet_cf_witnesser_api::Call::witness_keygen_failure(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    bad_account_ids,
+                                                    pallet_cf_vaults::KeygenOutcome::Failure(
+                                                        BTreeSet::from_iter(bad_account_ids),
+                                                    ),
                                                 )
                                             }
                                         },
-                                        MultisigOutcome::Signing(
-                                            message_signing_result,
-                                        ) => {
+                                        MultisigOutcome::Signing(message_signing_result) => {
                                             panic!(
                                                 "Expecting KeygenResult, got: {:?}",
                                                 message_signing_result
@@ -379,7 +381,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                             // TODO: Fill in the transaction hash with the real one
                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                attempt_id, TransmissionFailure::TransactionFailed, Default::default()
+                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
                                             )
                                         }
                                     };
@@ -486,7 +488,7 @@ mod tests {
         let logger = logging::test_utils::new_test_logger();
 
         let (latest_block_hash, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
                 .await
                 .unwrap();
 
