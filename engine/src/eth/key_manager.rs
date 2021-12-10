@@ -124,7 +124,7 @@ impl EthObserver for KeyManager {
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
     {
-        slog::info!(logger, "Handing event: {:?}", event);
+        slog::info!(logger, "Handing event: {}", event);
         match event.event_parameters {
             KeyManagerEvent::KeyChange { new_key, .. } => {
                 let _ = state_chain_client
