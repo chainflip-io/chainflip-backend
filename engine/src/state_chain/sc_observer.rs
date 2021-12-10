@@ -423,8 +423,7 @@ pub async fn start<BlockStream, RpcClient>(
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
 
-                    if matches!(account_data.state, ChainflipAccountState::Validator)
-                        || is_outgoing == true
+                    if matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing
                     {
                         send_windows_to_witness_processes(
                             state_chain_client.clone(),

@@ -63,6 +63,7 @@ impl SignatureAndEvent {
     }
 }
 
+// TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     contract_observer: ContractObserver,
