@@ -137,6 +137,7 @@ async fn main() {
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,
+            latest_block_hash,
             &root_logger
         ),
         // Start eth observors
