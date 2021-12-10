@@ -173,6 +173,17 @@ where
             return ProcessMessageResult::NotReady;
         }
 
+        slog::trace!(
+            self.common.logger,
+            "{} is waiting for messages from: {:?}",
+            self,
+            self.common
+                .all_idxs
+                .difference(&self.messages.keys().cloned().collect())
+                .map(|idx| { self.common.validator_mapping.get_id(*idx) })
+                .collect::<Vec<_>>()
+        );
+
         self.messages.insert(signer_idx, m);
 
         if self.messages.len() == self.common.all_idxs.len() {
