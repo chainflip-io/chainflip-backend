@@ -94,7 +94,7 @@ impl MockNominator {
 impl cf_traits::SignerNomination for MockNominator {
 	type SignerId = u64;
 
-	fn nomination_with_seed(_seed: u64) -> Option<Self::SignerId> {
+	fn nomination_with_seed(_seed: Vec<u8>) -> Option<Self::SignerId> {
 		unimplemented!("Single signer nomination not needed for these tests.")
 	}
 

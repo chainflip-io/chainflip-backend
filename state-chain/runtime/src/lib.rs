@@ -3,6 +3,8 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
+#[cfg(test)]
+mod tests;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
