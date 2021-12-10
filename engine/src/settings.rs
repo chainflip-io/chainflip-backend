@@ -22,6 +22,8 @@ pub struct P2P {
 pub struct StateChain {
     pub ws_endpoint: String,
     #[serde(deserialize_with = "deser_path")]
+    pub ipc_path: PathBuf,
+    #[serde(deserialize_with = "deser_path")]
     pub signing_key_file: PathBuf,
 }
 
@@ -72,6 +74,8 @@ pub struct Settings {
 pub struct StateChainOptions {
     #[structopt(long = "state_chain.ws_endpoint")]
     pub state_chain_ws_endpoint: Option<String>,
+    #[structopt(long = "state_chain.ipc_path")]
+    pub state_chain_ipc_path: Option<PathBuf>,
     #[structopt(long = "state_chain.signing_key_file")]
     pub state_chain_signing_key_file: Option<PathBuf>,
 }
@@ -187,6 +191,9 @@ impl Settings {
         // State Chain
         if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
             settings.state_chain.ws_endpoint = opt
+        };
+        if let Some(opt) = opts.state_chain_opts.state_chain_ipc_path {
+            settings.state_chain.ipc_path = opt
         };
         if let Some(opt) = opts.state_chain_opts.state_chain_signing_key_file {
             settings.state_chain.signing_key_file = opt
@@ -380,6 +387,7 @@ mod tests {
             node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
             state_chain_opts: StateChainOptions {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
+                state_chain_ipc_path: Some(PathBuf::from_str("./state-chain-rpc.ipc").unwrap()),
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_from_block: Some(1234),

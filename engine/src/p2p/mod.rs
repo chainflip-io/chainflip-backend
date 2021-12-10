@@ -79,14 +79,10 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
-    // Use StateChainClient's RpcChannel
-    let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
-        &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
-            format!(
-                "Should be valid ws endpoint: {}",
-                settings.state_chain.ws_endpoint
-            )
-        })?,
+    // Use StateChainClient's RpcChannel over IPC.
+    // TODO: Fall back to websocket if IPC is not defined?
+    let client = jsonrpc_core_client::transports::ipc::connect::<_, P2PRpcClient>(
+        &settings.state_chain.ipc_path,
     )
     .await
     .map_err(rpc_error_into_anyhow_error)?;
