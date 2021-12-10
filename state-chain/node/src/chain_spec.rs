@@ -21,7 +21,7 @@ const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 // 50k FLIP in Fliperinos
-const GENESIS_STAKE_AMOUNT_DEFAULT: u128 = 50_000_000_000_000_000_000_000;
+const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
