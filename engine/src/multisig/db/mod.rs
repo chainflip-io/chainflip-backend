@@ -19,11 +19,10 @@ pub trait MultisigDB {
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo>;
 
     /// Save a new unused ceremony id to the underlying storage
-    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId, db_colum: u32);
-
-    /// Delete the unused ceremony id from the underlying storage
-    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId, db_colum: u32);
+    fn update_tracking_for_signing(&mut self, data: &HashSet<CeremonyId>);
+    fn update_tracking_for_keygen(&mut self, data: &HashSet<CeremonyId>);
 
     /// Load all the unused ceremony ids from the underlying storage
-    fn load_used_ceremony_ids(&self, db_colum: u32) -> HashSet<CeremonyId>;
+    fn load_tracking_for_signing(&self) -> HashSet<CeremonyId>;
+    fn load_tracking_for_keygen(&self) -> HashSet<CeremonyId>;
 }

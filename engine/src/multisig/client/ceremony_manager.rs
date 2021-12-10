@@ -26,9 +26,6 @@ use super::MultisigMessage;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 
-const KEYGEN_DB_COLUM: u32 = 1;
-const SIGNING_DB_COLUM: u32 = 2;
-
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
 #[derive(Clone)]
@@ -42,8 +39,7 @@ where
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
-    keygen_id_tracker: CeremonyIdTracker<S>,
-    signing_id_tracker: CeremonyIdTracker<S>,
+    ceremony_id_tracker: CeremonyIdTracker<S>,
 }
 
 impl<S> CeremonyManager<S>
@@ -64,16 +60,7 @@ where
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
-            keygen_id_tracker: CeremonyIdTracker::new(
-                logger.clone(),
-                ceremony_id_db.clone(),
-                KEYGEN_DB_COLUM,
-            ),
-            signing_id_tracker: CeremonyIdTracker::new(
-                logger.clone(),
-                ceremony_id_db,
-                SIGNING_DB_COLUM,
-            ),
+            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone(), ceremony_id_db.clone()),
         }
     }
 
@@ -121,11 +108,11 @@ where
         });
 
         for id in signing_ceremony_ids_to_consume {
-            self.signing_id_tracker.consume_ceremony_id(&id);
+            self.ceremony_id_tracker.consume_signing_id(&id);
         }
 
         for id in keygen_ceremony_ids_to_consume {
-            self.keygen_id_tracker.consume_ceremony_id(&id);
+            self.ceremony_id_tracker.consume_keygen_id(&id);
         }
 
         for event in events_to_send {
@@ -184,7 +171,10 @@ where
 
         let logger = &self.logger;
 
-        if !self.keygen_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self
+            .ceremony_id_tracker
+            .is_keygen_ceremony_id_used(&ceremony_id)
+        {
             let state = self
                 .keygen_states
                 .entry(ceremony_id)
@@ -243,7 +233,10 @@ where
 
         // We have the key and have received a request to sign
         let logger = &self.logger;
-        if !self.signing_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self
+            .ceremony_id_tracker
+            .is_signing_ceremony_id_used(&ceremony_id)
+        {
             let state = self
                 .signing_states
                 .entry(ceremony_id)
@@ -298,7 +291,10 @@ where
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
-        if !self.signing_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self
+            .ceremony_id_tracker
+            .is_signing_ceremony_id_used(&ceremony_id)
+        {
             let state = self
                 .signing_states
                 .entry(ceremony_id)
@@ -351,7 +347,10 @@ where
         data: KeygenData,
     ) -> Option<KeygenResultInfo> {
         let logger = &self.logger;
-        if !self.keygen_id_tracker.is_ceremony_id_used(&ceremony_id) {
+        if !self
+            .ceremony_id_tracker
+            .is_keygen_ceremony_id_used(&ceremony_id)
+        {
             let state = self
                 .keygen_states
                 .entry(ceremony_id)
@@ -394,7 +393,7 @@ where
     // Removed a finished keygen ceremony and mark its id as used
     fn remove_keygen_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.keygen_states.remove(ceremony_id);
-        self.keygen_id_tracker.consume_ceremony_id(ceremony_id);
+        self.ceremony_id_tracker.consume_keygen_id(ceremony_id);
 
         slog::debug!(
             self.logger, "Removed a finished keygen ceremony";
@@ -405,7 +404,7 @@ where
     // Removed a finished signing ceremony and mark its id as used
     fn remove_signing_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.signing_states.remove(ceremony_id);
-        self.signing_id_tracker.consume_ceremony_id(ceremony_id);
+        self.ceremony_id_tracker.consume_signing_id(ceremony_id);
     }
 }
 

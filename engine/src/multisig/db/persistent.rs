@@ -3,6 +3,8 @@ use std::{
     path::Path,
 };
 
+use anyhow;
+
 use super::MultisigDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use pallet_cf_vaults::CeremonyId;
@@ -14,6 +16,10 @@ use crate::{
 };
 
 pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
+pub const DB_COL_CEREMONY_TRACKING: u32 = 1;
+
+pub const DB_KEY_SIGNING_TRACKING_DATA: &[u8] = b"signing_tracking_data";
+pub const DB_KEY_KEYGEN_TRACKING_DATA: &[u8] = b"keygen_tracking_data";
 
 /// Database for keys that uses rocksdb
 pub struct PersistentMultisigDB {
@@ -24,7 +30,7 @@ pub struct PersistentMultisigDB {
 
 impl PersistentMultisigDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::with_columns(3);
+        let config = DatabaseConfig::with_columns(2);
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
@@ -87,66 +93,50 @@ impl MultisigDB for PersistentMultisigDB {
             .collect()
     }
 
-    fn save_used_ceremony_id(&mut self, ceremony_id: CeremonyId, db_colum: u32) {
-        assert_ne!(
-            db_colum, DB_COL_KEYGEN_RESULT_INFO,
-            "Db colum {} is reserved for keys",
-            db_colum
-        );
-
-        let mut tx = self.db.transaction();
-
-        let ceremony_id_encoded =
-            bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
-
-        tx.put_vec(db_colum, &ceremony_id_encoded.clone(), ceremony_id_encoded);
-
-        // Commit the tx to the database
-        self.db.write(tx).unwrap_or_else(|e| {
-            panic!(
-                "Could not write ceremony_id `{:?}` to database: {}",
-                ceremony_id, e,
-            )
-        });
+    fn update_tracking_for_signing(&mut self, data: &HashSet<CeremonyId>) {
+        save_ceremony_tracking(&mut self.db, data, DB_KEY_SIGNING_TRACKING_DATA);
     }
 
-    fn remove_used_ceremony_id(&mut self, ceremony_id: &CeremonyId, db_colum: u32) {
-        assert_ne!(
-            db_colum, DB_COL_KEYGEN_RESULT_INFO,
-            "Db colum {} is reserved for keys",
-            db_colum
-        );
-
-        let mut tx = self.db.transaction();
-        let ceremony_id_encoded =
-            bincode::serialize(&ceremony_id).expect("Could not serialize ceremony_id");
-        tx.delete(db_colum, &ceremony_id_encoded);
-
-        // Commit the tx to the database
-        self.db.write(tx).unwrap_or_else(|e| {
-            panic!(
-                "Could not delete ceremony_id `{:?}` from database: {}",
-                ceremony_id, e,
-            )
-        });
+    fn load_tracking_for_signing(&self) -> HashSet<CeremonyId> {
+        load_ceremony_tracking(&self.db, DB_KEY_SIGNING_TRACKING_DATA)
+            .expect("should load signing tacking data")
     }
 
-    fn load_used_ceremony_ids(&self, db_colum: u32) -> HashSet<CeremonyId> {
-        assert_ne!(
-            db_colum, DB_COL_KEYGEN_RESULT_INFO,
-            "Db colum {} is reserved for keys",
-            db_colum
-        );
+    fn update_tracking_for_keygen(&mut self, data: &HashSet<CeremonyId>) {
+        save_ceremony_tracking(&mut self.db, data, DB_KEY_KEYGEN_TRACKING_DATA);
+    }
 
-        self.db
-            .iter(db_colum)
-            .filter_map(
-                |(_, data)| match bincode::deserialize::<CeremonyId>(&data) {
-                    Ok(ceremony_id) => Some(ceremony_id),
-                    Err(_) => None,
-                },
-            )
-            .collect()
+    fn load_tracking_for_keygen(&self) -> HashSet<CeremonyId> {
+        load_ceremony_tracking(&self.db, DB_KEY_KEYGEN_TRACKING_DATA)
+            .expect("should load keygen tacking data")
+    }
+}
+
+fn save_ceremony_tracking(db: &mut Database, data: &HashSet<CeremonyId>, key: &[u8]) {
+    let mut tx = db.transaction();
+
+    let data_encoded = bincode::serialize(data).expect("Could not serialize hashset");
+
+    tx.put_vec(DB_COL_CEREMONY_TRACKING, key, data_encoded);
+
+    // Commit the tx to the database
+    db.write(tx)
+        .unwrap_or_else(|e| panic!("Could not write hashset `{:?}` to database: {}", data, e,));
+}
+
+fn load_ceremony_tracking(db: &Database, key: &[u8]) -> anyhow::Result<HashSet<CeremonyId>> {
+    match db
+        .get(DB_COL_CEREMONY_TRACKING, key)
+        .expect("should load ceremony tracking hashset")
+    {
+        Some(data) => match bincode::deserialize::<HashSet<CeremonyId>>(&data) {
+            Ok(ceremony_tracking_data) => Ok(ceremony_tracking_data),
+            Err(e) => Err(anyhow::Error::msg(format!(
+                "Could not deserialize ceremony tracking data: {}",
+                e
+            ))),
+        },
+        None => Ok(HashSet::new()),
     }
 }
 
@@ -228,29 +218,33 @@ mod tests {
     fn can_save_and_load_used_ceremony_id_data() {
         let logger = new_test_logger();
         let db_path = Path::new("db3");
-        let db_colum = 2;
+        // TODO: cleanup on startup.
+        // If this test fails, the path will be dirty and need manual cleaning
 
         let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
-        // Save and load the id hash set
-        let mut test_used_ids: HashSet<CeremonyId> = HashSet::new();
-        test_used_ids.insert(42);
-        test_used_ids.insert(50);
+        // Save some ids
+        // TODO: use different hashsets for signing and keygen so we can test for interference
+        let test_ids = vec![42, 69];
+        let mut test_hashset: HashSet<CeremonyId> = HashSet::new();
+        test_hashset.insert(test_ids[0]);
+        test_hashset.insert(test_ids[1]);
 
-        p_db.save_used_ceremony_id(42, db_colum);
-        p_db.save_used_ceremony_id(50, db_colum);
+        p_db.update_tracking_for_signing(&test_hashset);
+        p_db.update_tracking_for_keygen(&test_hashset);
 
-        let loaded_unused_ids = p_db.load_used_ceremony_ids(db_colum);
+        assert_eq!(p_db.load_tracking_for_signing(), test_hashset);
+        assert_eq!(p_db.load_tracking_for_keygen(), test_hashset);
 
-        assert_eq!(loaded_unused_ids, test_used_ids);
+        // Remove an id and save again
+        test_hashset.remove(&test_ids[1]);
+        p_db.update_tracking_for_signing(&test_hashset);
+        p_db.update_tracking_for_keygen(&test_hashset);
 
-        // Remove an entry
-        p_db.remove_used_ceremony_id(&50, db_colum);
-        test_used_ids.remove(&50);
-        let loaded_unused_ids = p_db.load_used_ceremony_ids(db_colum);
+        assert_eq!(p_db.load_tracking_for_signing(), test_hashset);
+        assert_eq!(p_db.load_tracking_for_keygen(), test_hashset);
 
-        assert_eq!(loaded_unused_ids, test_used_ids);
-
+        // Cleanup
         std::fs::remove_dir_all(db_path).unwrap();
     }
 }
