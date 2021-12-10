@@ -187,12 +187,14 @@ pub struct EthBroadcaster {
     web3: Web3<web3::transports::WebSocket>,
     secret_key: SecretKey,
     pub address: Address,
+    logger: slog::Logger,
 }
 
 impl EthBroadcaster {
     pub fn new(
         eth_settings: &settings::Eth,
         web3: Web3<web3::transports::WebSocket>,
+        logger: &slog::Logger,
     ) -> Result<Self> {
         let secret_key = read_and_decode_file(
             &eth_settings.private_key_file,
@@ -204,6 +206,7 @@ impl EthBroadcaster {
             web3,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
+            logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
         })
     }
 
@@ -214,7 +217,7 @@ impl EthBroadcaster {
     ) -> Result<Bytes> {
         let mut tx_params = TransactionParameters {
             to: Some(unsigned_tx.contract),
-            data: unsigned_tx.data.into(),
+            data: unsigned_tx.data.clone().into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
             transaction_type: Some(web3::types::U64::from(2)),
@@ -224,7 +227,7 @@ impl EthBroadcaster {
             ..Default::default()
         };
         // query for the gas estimate if the SC didn't provide it
-        let gas_limit = if let Some(gas_limit) = unsigned_tx.gas_limit {
+        let gas_estimate = if let Some(gas_limit) = unsigned_tx.gas_limit {
             gas_limit
         } else {
             let call_request: CallRequest = tx_params.clone().into();
@@ -237,9 +240,17 @@ impl EthBroadcaster {
 
         // increase the estimate by 50%
         let uint256_2 = U256::from(2);
-        tx_params.gas = gas_limit
+        tx_params.gas = gas_estimate
             .saturating_mul(uint256_2)
-            .saturating_sub(gas_limit.checked_div(uint256_2).unwrap());
+            .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
+
+        slog::trace!(
+            self.logger,
+            "Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
+            unsigned_tx,
+            gas_estimate,
+            tx_params.gas
+        );
 
         Ok(self
             .web3

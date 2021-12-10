@@ -210,6 +210,7 @@ async fn register_claim(
         eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .expect("Failed to create Web3 WebSocket"),
+        logger,
     )?;
 
     eth_broadcaster

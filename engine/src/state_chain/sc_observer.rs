@@ -491,7 +491,7 @@ mod tests {
         let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .unwrap();
-        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone()).unwrap();
+        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &logger).unwrap();
 
         let (sm_window_sender, _sm_window_receiver) =
             tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();

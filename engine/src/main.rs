@@ -70,8 +70,8 @@ async fn main() {
         .await
         .expect("Failed to create Web3 WebSocket");
 
-    let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, web3.clone()).expect("Failed to create ETH broadcaster");
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+        .expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =
