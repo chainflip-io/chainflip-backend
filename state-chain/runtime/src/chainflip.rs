@@ -232,11 +232,10 @@ impl Heartbeat for ChainflipHeartbeat {
 }
 
 /// Returns a scaled index based on an input seed
-pub fn get_random_id_by_seed_in_range(seed: Vec<u8>, max: usize) -> usize {
+pub fn get_random_index(seed: Vec<u8>, max: usize) -> usize {
 	let hash = twox_128(&seed);
-	let seed = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
-	let id = seed % max as u32;
-	id as usize
+	let index = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]) % max as u32;
+	index as usize
 }
 
 /// Select the next signer
@@ -253,12 +252,8 @@ pub fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
 		return None
 	}
 	// Get a a pseudo random id by which we choose the next validator
-	let the_chosen_one = get_random_id_by_seed_in_range(seed, number_of_online_validators);
-	if let Some(signer) = online_validators.get(the_chosen_one) {
-		Some(signer.0.clone())
-	} else {
-		None
-	}
+	let the_chosen_one = get_random_index(seed, number_of_online_validators);
+	online_validators.get(the_chosen_one).map(|f| f.0.clone())
 }
 /// A very basic but working implementation of signer nomination.
 ///

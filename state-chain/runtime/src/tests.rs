@@ -1,4 +1,4 @@
-use crate::chainflip::{get_random_id_by_seed_in_range, select_signer};
+use crate::chainflip::{get_random_index, select_signer};
 use cf_traits::IsOnline;
 use sp_std::cell::RefCell;
 // use std::ops::Range;
@@ -29,10 +29,10 @@ impl IsOnline for MockIsOnline {
 }
 
 #[test]
-fn test_generate_id() {
-	assert!(get_random_id_by_seed_in_range(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
-	assert!(get_random_id_by_seed_in_range(vec![0, 0, 0], 5) < 5);
-	assert!(get_random_id_by_seed_in_range(vec![180, 200, 240], 10) < 10);
+fn test_get_random_index() {
+	assert!(get_random_index(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
+	assert!(get_random_index(vec![0, 0, 0], 5) < 5);
+	assert!(get_random_index(vec![180, 200, 240], 10) < 10);
 }
 
 #[test]
