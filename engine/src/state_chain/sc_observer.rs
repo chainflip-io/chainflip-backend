@@ -485,7 +485,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
-        let (_, block_stream, state_chain_client) =
+        let (latest_block_hash, block_stream, state_chain_client) =
             crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
                 .await
                 .unwrap();
@@ -516,6 +516,7 @@ mod tests {
             multisig_event_receiver,
             sm_window_sender,
             km_window_sender,
+            latest_block_hash,
             &logger,
         )
         .await;
