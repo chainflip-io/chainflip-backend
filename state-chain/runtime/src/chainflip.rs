@@ -15,8 +15,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, IsOnline, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -28,6 +28,8 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+
+use sp_io::hashing::twox_128;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -229,6 +231,30 @@ impl Heartbeat for ChainflipHeartbeat {
 	}
 }
 
+/// Returns a scaled index based on an input seed
+pub fn get_random_index(seed: Vec<u8>, max: usize) -> usize {
+	let hash = twox_128(&seed);
+	let index = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]) % max as u32;
+	index as usize
+}
+
+/// Select the next signer
+pub fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
+	validators: Vec<(SignerId, ())>,
+	seed: Vec<u8>,
+) -> Option<SignerId> {
+	// Get all online validators
+	let online_validators =
+		validators.iter().filter(|(id, _)| T::is_online(id)).collect::<Vec<_>>();
+	let number_of_online_validators = online_validators.len();
+	// Check if there is someone online
+	if number_of_online_validators == 0 {
+		return None
+	}
+	// Get a a pseudo random id by which we choose the next validator
+	let the_chosen_one = get_random_index(seed, number_of_online_validators);
+	online_validators.get(the_chosen_one).map(|f| f.0.clone())
+}
 /// A very basic but working implementation of signer nomination.
 ///
 /// For a single signer, takes the first online validator in the validator lookup map.
@@ -240,12 +266,10 @@ pub struct BasicSignerNomination;
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
-	fn nomination_with_seed(_seed: u64) -> Option<Self::SignerId> {
-		let validators = pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-			.skip_while(|(id, _)| !<Online as cf_traits::IsOnline>::is_online(id))
-			.take(1)
-			.collect::<Vec<_>>();
-		validators.first().map(|(id, _)| id.clone())
+	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
+		let validators =
+			pallet_cf_validator::ValidatorLookup::<Runtime>::iter().collect::<Vec<_>>();
+		select_signer::<Self::SignerId, Online>(validators, seed)
 	}
 
 	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {

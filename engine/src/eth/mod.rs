@@ -63,6 +63,7 @@ impl SignatureAndEvent {
     }
 }
 
+// TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     contract_observer: ContractObserver,
@@ -74,7 +75,6 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
 {
-    println!("Starting the observer");
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
     slog::info!(logger, "Starting");
 
@@ -94,6 +94,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                     handle.await.unwrap();
                 }
             } else {
+                // NB: If we receive another start event, then we just keep the current task going
                 panic!("Received two 'end' events in a row. This should not occur.");
             }
         } else {

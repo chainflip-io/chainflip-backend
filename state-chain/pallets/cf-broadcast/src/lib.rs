@@ -477,8 +477,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
+		// Seed based on the input data of the extrinsic
+		let seed = (attempt_id, unsigned_tx.clone()).encode();
+
 		// Select a signer for this broadcast.
-		let nominated_signer = T::SignerNomination::nomination_with_seed(attempt_id);
+		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
 
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = nominated_signer {
