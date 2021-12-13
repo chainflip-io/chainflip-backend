@@ -6,7 +6,7 @@ node_key_file = "/run/secrets/node_key_file"
 # 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "./tests/test_keystore/alice_key"
 ws_endpoint = "ws://localhost:9944"
-ipc_path = ""
+ipc_path = "/tmp/state-chain.ipc"
 
 [eth]
 from_block = 0
