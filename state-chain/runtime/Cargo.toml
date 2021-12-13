@@ -26,6 +26,7 @@ nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
 # Chainflip local dependencies
 cf-traits = { path = "../traits", default-features = false }
 cf-chains = { path = "../chains", default-features = false }
+cf-runtime-benchmark-utilities = { path = "../runtime-benchmark-utilities", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
@@ -186,6 +187,9 @@ tag = 'merge-config-option'
 [features]
 default = ['std']
 runtime-benchmarks = [
+  'cf-traits/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
+  'cf-runtime-benchmark-utilities/runtime-benchmarks',
   'hex-literal',
   'frame-benchmarking',
   'frame-support/runtime-benchmarks',
@@ -211,6 +215,7 @@ runtime-benchmarks = [
 std = [
   'cf-traits/std',
   'cf-chains/std',
+  'cf-runtime-benchmark-utilities/std',
   'codec/std',
   'scale-info/std',
   'frame-executive/std',

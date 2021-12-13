@@ -5,6 +5,8 @@ mod chainflip;
 pub mod constants;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -687,6 +689,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
 			list_benchmark!(list, extra, pallet_cf_vaults, Vaults);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
+			list_benchmark!(list, extra, pallet_cf_threshold_signature, EthereumThresholdSigner);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -730,8 +733,8 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
+			add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
-			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

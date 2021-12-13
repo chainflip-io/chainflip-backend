@@ -4,8 +4,12 @@
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
 use sp_std::{convert::TryFrom, prelude::*};
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 
 pub mod eth;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
@@ -18,7 +22,7 @@ pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	type AggKey: TryFrom<Vec<u8>> + Member + Parameter;
 	type Payload: Member + Parameter;
-	type ThresholdSignature: Member + Parameter;
+	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

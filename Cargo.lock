@@ -779,6 +779,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-benchmark-utilities",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
  "ethereum",
  "frame-support",
@@ -852,11 +853,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-runtime-benchmark-utilities"
+version = "0.1.0"
+dependencies = [
+ "sp-std",
+]
+
+[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -5045,6 +5052,7 @@ name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -8510,6 +8518,7 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",

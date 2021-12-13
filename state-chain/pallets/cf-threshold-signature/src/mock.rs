@@ -174,6 +174,12 @@ pub enum DogeSig {
 	Invalid,
 }
 
+impl Default for DogeSig {
+	fn default() -> Self {
+		Self::Valid
+	}
+}
+
 impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
 	type Payload = String;

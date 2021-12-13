@@ -8,8 +8,8 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 use codec::{Decode, Encode};
 
@@ -20,6 +20,7 @@ use cf_traits::{
 };
 use frame_support::traits::{EnsureOrigin, Get};
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 pub use pallet::*;
 use sp_runtime::{
 	traits::{BlockNumberProvider, Saturating},
@@ -143,8 +144,9 @@ pub mod pallet {
 				Chain = Self::TargetChain,
 				ThresholdSignatureOrigin = Origin<Self, I>,
 			> + Member
-			+ FullCodec;
-
+			+ FullCodec
+			+ BenchmarkDefault;
+			
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
