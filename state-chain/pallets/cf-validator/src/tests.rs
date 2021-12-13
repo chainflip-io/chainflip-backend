@@ -122,10 +122,6 @@ mod tests {
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				&DUMMY_GENESIS_VALIDATORS[..]
 			);
-			assert_eq!(
-				<ValidatorPallet as EpochInfo>::next_validators(),
-				&DUMMY_GENESIS_VALIDATORS[..]
-			);
 			// Run to the epoch
 			run_to_block(10);
 			// We should have now completed an auction have a set of winners to pass as validators
@@ -134,8 +130,6 @@ mod tests {
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				&DUMMY_GENESIS_VALIDATORS[..]
 			);
-			// and the winners are
-			assert!(!<ValidatorPallet as EpochInfo>::next_validators().is_empty());
 			// run more block to make them validators
 			run_to_block(11);
 			// Continue with our current validator set, as we had none should still be the genesis
@@ -144,8 +138,6 @@ mod tests {
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				&DUMMY_GENESIS_VALIDATORS[..]
 			);
-			// We do now see our winners lined up to be the next set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Complete the cycle
 			run_to_block(12);
 			// As we haven't confirmed the auction we would still be in the same phase
@@ -160,8 +152,6 @@ mod tests {
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-			// Our old winners remain
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			run_to_block(15);
@@ -171,7 +161,6 @@ mod tests {
 			// Our new winners are
 			// We should still see the old winners validating
 			let winners = assert_winners();
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(16);
