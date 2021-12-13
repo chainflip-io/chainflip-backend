@@ -502,12 +502,12 @@ jobs:
             --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:9933'
             -vv
-      - run:
-          name: Check Engine Health
-          command: >
-            curl
-            --url 'http://localhost:5555/health'
-            -vv
+#      - run:
+#          name: Check Engine Health
+#          command: >
+#            curl
+#            --url 'http://localhost:5555/health'
+#            -vv
       - store_artifacts:
           path: target/release
 
