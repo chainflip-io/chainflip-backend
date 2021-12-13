@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 
 use super::tests::KeygenContext;
+use crate::multisig::KeygenOptions;
 use crate::{multisig::client::ensure_unsorted, p2p::AccountId};
 
 // Generate the keys for genesis
@@ -28,8 +29,9 @@ pub async fn genesis_keys() {
     println!("dopey: {:?}", dopey);
 
     let account_ids = ensure_unsorted(vec![doc.clone(), dopey.clone(), bashful.clone()], 0);
-    let mut keygen_context = KeygenContext::new_with_account_ids(account_ids.clone());
-    let result = keygen_context.generate().await;
+    let mut keygen_context =
+        KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
+    let valid_keygen_states = keygen_context.generate().await;
 
     // Check that we can use the above keys
     let active_ids: Vec<_> = {
@@ -56,10 +58,10 @@ pub async fn genesis_keys() {
 
     println!(
         "Pubkey is (66 chars, 33 bytes): {:?}",
-        hex::encode(result.key_ready_data().pubkey.serialize())
+        hex::encode(valid_keygen_states.key_ready_data().pubkey.serialize())
     );
 
-    let secret_keys = &result.key_ready_data().sec_keys;
+    let secret_keys = &valid_keygen_states.key_ready_data().sec_keys;
 
     // pretty print the output :)
     let bashful_secret = secret_keys[&bashful].clone();
