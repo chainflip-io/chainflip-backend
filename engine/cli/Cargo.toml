@@ -10,6 +10,7 @@ chainflip-engine = {path = "../../engine/"}
 config = "0.11.0"
 futures = "0.3.14"
 hex = "0.4.3"
+jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
 serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 structopt = "0.3.23"
@@ -17,12 +18,15 @@ tokio = {version = "1.5.0", features = ["full"]}
 utilities = {path = "../../utilities"}
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 
+
 # State chain
 pallet-cf-rewards = {path = "../../state-chain/pallets/cf-rewards"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
+pallet-cf-vaults = {path = "../../state-chain/pallets/cf-vaults"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
+pallet-cf-witnesser-api = {path = "../../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
 cf-chains = {path = "../../state-chain/chains"}
 state-chain-node = {path = "../../state-chain/node"}

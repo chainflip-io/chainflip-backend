@@ -1,6 +1,11 @@
-use cf_chains::eth::H256;
+use cf_chains::{
+    eth::{SchnorrVerificationComponents, H256},
+    ChainId,
+};
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
+    logging::utils::new_discard_logger,
+    settings::Settings,
     state_chain::client::connect_to_state_chain,
 };
 use futures::StreamExt;
@@ -13,6 +18,8 @@ use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
 use structopt::StructOpt;
 use web3::types::H160;
+
+use jsonrpc_core_client::RpcError;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
@@ -87,10 +94,22 @@ async fn request_claim(
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
-    let _tx_hash_redeem = state_chain_client
+    match state_chain_client
         .submit_signed_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
         .await
-        .expect("Failed to submit redeem extrinsic");
+    {
+        Ok(tx_hash) => {
+            println!("Here's the tx_hash of the redeem: {}", tx_hash);
+            panic!("Submitted correctly but STOP HERE");
+        }
+        Err(err) => {
+            // todo handle this unwrap
+            let rpc_error = err.is::<RpcError>();
+            println!("Is this an RPC error?");
+            // println!("Here's the error: {}", err);
+            // panic!("Fuck");
+        }
+    }
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
