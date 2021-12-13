@@ -13,9 +13,6 @@ pub use tests::KeygenContext;
 
 mod ceremony_manager;
 
-// #[cfg(test)]
-mod genesis;
-
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
