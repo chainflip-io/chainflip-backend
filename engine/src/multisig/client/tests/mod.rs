@@ -1,6 +1,10 @@
 mod db_tests;
+
+#[cfg(test)]
 mod frost_unit_tests;
 mod helpers;
+
+#[cfg(test)]
 mod keygen_unit_tests;
 
 pub use helpers::KeygenContext;
@@ -19,7 +23,10 @@ use std::convert::TryInto;
 
 pub const KEYGEN_CEREMONY_ID: CeremonyId = 0;
 pub const SIGN_CEREMONY_ID: CeremonyId = 0;
+
+#[cfg(test)]
 pub const KEYGEN_STAGES: usize = 7;
+#[cfg(test)]
 pub const SIGNING_STAGES: usize = 4;
 
 lazy_static! {

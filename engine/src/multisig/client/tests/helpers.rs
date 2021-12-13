@@ -1464,6 +1464,7 @@ impl MultisigClientNoDB {
     }
 }
 
+#[cfg(test)]
 pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[AccountId]) {
     let blamed_parties = match peek_with_timeout(rx)
         .await
