@@ -420,9 +420,9 @@ pub struct KeygenContext {
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
-    use crate::multisig::crypto::{ECScalar, Scalar};
+    use crate::multisig::crypto::Scalar;
     frost::LocalSig3 {
-        response: Scalar::new_random(),
+        response: Scalar::random(),
     }
 }
 
@@ -441,8 +441,8 @@ pub fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
 pub fn gen_invalid_signing_comm1() -> SigningCommitment {
     SigningCommitment {
         index: 0,
-        d: Point::random_point(),
-        e: Point::random_point(),
+        d: Point::random(),
+        e: Point::random(),
     }
 }
 

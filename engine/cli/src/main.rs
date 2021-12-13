@@ -6,9 +6,11 @@ use chainflip_engine::{
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::sr25519::Public as SrPublic;
+use sp_core::{ed25519::Public as EdPublic, storage::StorageKey};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use state_chain_node::chain_spec::get_from_seed;
 use state_chain_runtime::opaque::SessionKeys;
+use std::convert::TryInto;
 use structopt::StructOpt;
 use web3::types::H160;
 
@@ -81,7 +83,7 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
@@ -138,11 +140,29 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_environment_value::<u64>(block_hash, "EthereumChainId")
+                                    .get_environment_value::<u64>(
+                                        block_hash,
+                                        StorageKey(
+                                            pallet_cf_environment::EthereumChainId::<
+                                                state_chain_runtime::Runtime,
+                                            >::hashed_key(
+                                            )
+                                            .into(),
+                                        ),
+                                    )
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_environment_value(block_hash, "StakeManagerAddress")
+                                    .get_environment_value(
+                                        block_hash,
+                                        StorageKey(
+                                            pallet_cf_environment::StakeManagerAddress::<
+                                                state_chain_runtime::Runtime,
+                                            >::hashed_key(
+                                            )
+                                            .into(),
+                                        ),
+                                    )
                                     .await
                                     .expect("Failed to fetch StakeManagerAddress from State Chain");
                                 let tx_hash = register_claim(
@@ -156,7 +176,7 @@ async fn request_claim(
                                 .expect("Failed to register claim on ETH");
 
                                 println!(
-                                    "Submitted claim to Ethereum successfully with tx_hash: {:?}",
+                                    "Submitted claim to Ethereum successfully with tx_hash: {:#x}",
                                     tx_hash
                                 );
                                 break 'outer;
@@ -208,29 +228,29 @@ async fn register_claim(
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let seed = state_chain_client
         .rotate_session_keys()
         .await
         .expect("Could not rotate session keys.");
 
-    println!("New session key {:?}.", seed);
+    let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
+    let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
 
     let new_session_key = SessionKeys {
-        aura: get_from_seed::<AuraId>(&seed),
-        grandpa: get_from_seed::<GrandpaId>(&seed),
+        aura: AuraId::from(SrPublic::from_raw(aura_key)),
+        grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
     };
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             logger,
-            pallet_cf_validator::Call::set_keys(new_session_key, [0; 8].to_vec()),
+            pallet_cf_validator::Call::set_keys(new_session_key, [0; 1].to_vec()),
         )
         .await
         .expect("Failed to submit set_keys extrinsic");
 
-    println!("Session key rotated at tx {:?}.", tx_hash);
-
+    println!("Session key rotated at tx {:#x}.", tx_hash);
     Ok(())
 }
 

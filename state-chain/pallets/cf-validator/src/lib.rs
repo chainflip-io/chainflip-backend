@@ -311,7 +311,7 @@ pub mod pallet {
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
 	/// Validator lookup
 	#[pallet::storage]

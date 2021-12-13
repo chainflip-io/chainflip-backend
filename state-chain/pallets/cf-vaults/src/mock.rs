@@ -132,6 +132,10 @@ impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
 	}
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: u64 = 10;
+}
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type RotationHandler = MockRotationHandler;
@@ -139,6 +143,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
 	type WeightInfo = ();
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

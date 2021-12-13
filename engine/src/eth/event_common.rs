@@ -10,7 +10,7 @@ use web3::{
 #[derive(Debug)]
 pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
-    pub tx_hash: [u8; 32],
+    pub tx_hash: H256,
     /// The block number at which the event occurred
     pub block_number: u64,
     /// The event specific parameters
@@ -21,10 +21,8 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EventParameters: {:?}; block_number: {}; tx_hash: 0x{}",
-            self.event_parameters,
-            self.block_number,
-            hex::encode(self.tx_hash)
+            "EventParameters: {:?}; block_number: {}; tx_hash: {:#x}",
+            self.event_parameters, self.block_number, self.tx_hash
         )
     }
 }
@@ -37,8 +35,7 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
         Ok(Self {
             tx_hash: log
                 .transaction_hash
-                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?
-                .to_fixed_bytes(),
+                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
             block_number: log
                 .block_number
                 .expect("Should have a block number")

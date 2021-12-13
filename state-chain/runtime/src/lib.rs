@@ -3,6 +3,8 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
+#[cfg(test)]
+mod tests;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -157,6 +159,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
+}
+
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -164,6 +170,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -427,6 +434,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Penalty = OfflinePenalty;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
+	type Banned = pallet_cf_online::Pallet<Self>;
 }
 
 impl pallet_cf_online::Config for Runtime {

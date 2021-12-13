@@ -9,6 +9,7 @@ use chainflip_engine::{
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
+use sp_core::storage::StorageKey;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -29,7 +30,7 @@ async fn main() {
         .await;
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
             .await
             .unwrap();
 
@@ -79,14 +80,21 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     let stake_manager_address = state_chain_client
-        .get_environment_value(latest_block_hash, "StakeManagerAddress")
+        .get_environment_value(
+            latest_block_hash,
+            StorageKey(pallet_cf_environment::StakeManagerAddress::<
+                state_chain_runtime::Runtime,
+            >::hashed_key().into()),
+        )
         .await
         .expect("Should get StakeManager address from SC");
     let stake_manager_contract =
         StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_environment_value(latest_block_hash, "KeyManagerAddress")
+        .get_environment_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
+            state_chain_runtime::Runtime,
+        >::hashed_key().into()))
         .await
         .expect("Should get KeyManager address from SC");
     let key_manager_contract =
@@ -129,6 +137,7 @@ async fn main() {
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,
+            latest_block_hash,
             &root_logger
         ),
         // Start eth observors

@@ -20,6 +20,8 @@ const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf6641
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
+// 50k FLIP in Fliperinos
+const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -48,6 +50,7 @@ pub struct StateChainEnvironment {
 	key_manager_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
+	genesis_stake_amount: u128,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
@@ -62,18 +65,24 @@ pub fn get_environment() -> StateChainEnvironment {
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
 		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
-		.expect("chain id is no unsigned int");
+		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
 	let eth_init_agg_key =
 		hex::decode(env::var("ETH_INIT_AGG_KEY").unwrap_or(String::from(ETH_INIT_AGG_KEY_DEFAULT)))
 			.unwrap()
 			.try_into()
-			.expect("Cast to agg pub key failed");
+			.expect("ETH_INIT_AGG_KEY Cast to agg pub key failed");
+
+	let genesis_stake_amount = env::var("GENESIS_STAKE")
+		.unwrap_or(format!("{}", GENESIS_STAKE_AMOUNT_DEFAULT))
+		.parse::<u128>()
+		.expect("GENESIS_STAKE env var could not be parsed to u128");
 
 	StateChainEnvironment {
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		genesis_stake_amount,
 	}
 }
 
@@ -95,6 +104,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		genesis_stake_amount,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -117,6 +127,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				1,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 				eth_init_agg_key,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -146,6 +157,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		genesis_stake_amount,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -174,6 +186,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				1,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 				eth_init_agg_key,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -206,6 +219,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		genesis_stake_amount,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
@@ -258,6 +272,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 				2,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 				eth_init_agg_key,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -294,6 +309,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		genesis_stake_amount,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -368,6 +384,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				3,
 				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
 				eth_init_agg_key,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -393,6 +410,7 @@ fn testnet_genesis(
 	min_validators: u32,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
+	genesis_stake_amount: u128,
 ) -> GenesisConfig {
 	GenesisConfig {
 		system: SystemConfig {
@@ -411,7 +429,7 @@ fn testnet_genesis(
 		staking: StakingConfig {
 			genesis_stakers: genesis_stakers
 				.iter()
-				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
+				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		},
 		auction: AuctionConfig {
@@ -420,7 +438,7 @@ fn testnet_genesis(
 				.iter()
 				.map(|(validator_id, ..)| validator_id.clone())
 				.collect::<Vec<AccountId>>(),
-			minimum_active_bid: TOTAL_ISSUANCE / 100,
+			minimum_active_bid: genesis_stake_amount,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

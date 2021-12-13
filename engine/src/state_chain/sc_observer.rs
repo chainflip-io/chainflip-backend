@@ -6,7 +6,7 @@ use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -35,6 +35,7 @@ pub async fn start<BlockStream, RpcClient>(
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
     km_window_sender: UnboundedSender<BlockHeightWindow>,
+    latest_block_hash: H256,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
@@ -55,10 +56,67 @@ pub async fn start<BlockStream, RpcClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    // on the first block we get, we want to check our state
-    let mut should_refetch_account_data = true;
-    // (account_data, is_outgoing)
-    let mut option_account_data_epoch: Option<(ChainflipAccountData, bool)> = None;
+    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        block_hash: H256,
+    ) -> (ChainflipAccountData, bool) {
+        let new_account_data = state_chain_client
+            .get_account_data(block_hash)
+            .await
+            .expect("Could not get account data");
+
+        let current_epoch = state_chain_client
+            .epoch_at_block(block_hash)
+            .await
+            .expect("Could not get current epoch");
+
+        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
+            last_active_epoch + 1 == current_epoch
+        } else {
+            false
+        };
+
+        (new_account_data, is_outgoing)
+    }
+
+    async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        block_hash: H256,
+        account_data: ChainflipAccountData,
+        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
+        km_window_sender: &UnboundedSender<BlockHeightWindow>,
+    ) -> anyhow::Result<()> {
+        let eth_vault = state_chain_client
+            .get_vault(
+                block_hash,
+                account_data
+                    .last_active_epoch
+                    .expect("we are active or outgoing"),
+                ChainId::Ethereum,
+            )
+            .await?;
+        sm_window_sender
+            .send(eth_vault.active_window.clone())
+            .unwrap();
+        km_window_sender.send(eth_vault.active_window).unwrap();
+        Ok(())
+    }
+
+    let (mut account_data, mut is_outgoing) =
+        get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
+
+    // Initialise the account state
+    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
+        send_windows_to_witness_processes(
+            state_chain_client.clone(),
+            latest_block_hash,
+            account_data,
+            &sm_window_sender,
+            &km_window_sender,
+        )
+        .await
+        .expect("Failed to send windows to the witness processes");
+    }
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
@@ -66,93 +124,7 @@ pub async fn start<BlockStream, RpcClient>(
             Ok(block_header) => {
                 let block_hash = block_header.hash();
 
-                // get the eth vault we were last active for and start the witness processes
-                // for this window
-                async fn init_eth_witnessing<RpcClient: StateChainRpcApi>(
-                    state_chain_client: Arc<StateChainClient<RpcClient>>,
-                    block_hash: H256,
-                    account_data: ChainflipAccountData,
-                    sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-                    km_window_sender: &UnboundedSender<BlockHeightWindow>,
-                ) -> anyhow::Result<()> {
-                    let eth_vault = state_chain_client
-                        .get_vault(
-                            block_hash,
-                            account_data
-                                .last_active_epoch
-                                .expect("we are active our outgoing"),
-                            ChainId::Ethereum,
-                        )
-                        .await?;
-                    sm_window_sender
-                        .send(eth_vault.active_window.clone())
-                        .unwrap();
-                    km_window_sender.send(eth_vault.active_window).unwrap();
-                    Ok(())
-                }
-
-                if should_refetch_account_data || option_account_data_epoch.is_none() {
-                    let account_data = state_chain_client
-                        .get_account_data(block_hash)
-                        .await
-                        .expect("Could not get account data");
-
-                    let current_epoch = state_chain_client
-                        .epoch_at_block(block_hash)
-                        .await
-                        .expect("Could not get current epoch");
-
-                    let is_outgoing =
-                        if let Some(last_active_epoch) = account_data.last_active_epoch {
-                            last_active_epoch + 1 == current_epoch
-                        } else {
-                            false
-                        };
-
-                    if is_outgoing || matches!(account_data.state, ChainflipAccountState::Validator)
-                    {
-                        init_eth_witnessing(
-                            state_chain_client.clone(),
-                            block_hash,
-                            account_data,
-                            &sm_window_sender,
-                            &km_window_sender,
-                        )
-                        .await
-                        .expect("should initiate the ethereum witnessing");
-                    }
-
-                    option_account_data_epoch = Some((account_data, is_outgoing));
-                    should_refetch_account_data =
-                        matches!(account_data.state, ChainflipAccountState::Backup)
-                            || matches!(account_data.state, ChainflipAccountState::Passive);
-                };
-
-                let (account_data, is_outgoing) =
-                    option_account_data_epoch.expect("always initialised on first iteration");
-
-                // We want to submit the heartbeat when we are:
-                // - active
-                // - outgoing
-                // - backup
-                // NOT Passive (unless we are outgoing + passive)
-                if (matches!(account_data.state, ChainflipAccountState::Validator)
-                    || matches!(account_data.state, ChainflipAccountState::Backup)
-                    || is_outgoing)
-                    // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
-                    && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
-                        == 0)
-                {
-                    slog::info!(
-                        logger,
-                        "Sending heartbeat at block: {}",
-                        block_header.number
-                    );
-                    let _ = state_chain_client
-                        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-                        .await;
-                }
+                let mut received_new_epoch = false;
 
                 // Process this block's events
                 match state_chain_client.get_events(block_hash).await {
@@ -162,24 +134,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::NewEpoch(_),
                                 ) => {
-                                    if is_outgoing
-                                        || matches!(
-                                            account_data.state,
-                                            ChainflipAccountState::Validator
-                                        )
-                                    {
-                                        init_eth_witnessing(
-                                            state_chain_client.clone(),
-                                            block_hash,
-                                            account_data,
-                                            &sm_window_sender,
-                                            &km_window_sender,
-                                        )
-                                        .await
-                                        .expect("should initiate eth witnessing");
-                                    }
-                                    // now that we have entered a new epoch, we want to check our state again
-                                    should_refetch_account_data = true;
+                                    received_new_epoch = true;
                                 }
                                 state_chain_runtime::Event::Validator(
                                     pallet_cf_validator::Event::PeerIdRegistered(
@@ -240,10 +195,12 @@ pub async fn start<BlockStream, RpcClient>(
                                             result,
                                         }) => match result {
                                             Ok(pubkey) => {
-                                                pallet_cf_witnesser_api::Call::witness_keygen_success(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    pubkey.serialize().to_vec(),
+                                                    pallet_cf_vaults::KeygenOutcome::Success(
+                                                        pubkey.serialize().to_vec(),
+                                                    ),
                                                 )
                                             }
                                             Err((err, bad_account_ids)) => {
@@ -256,16 +213,16 @@ pub async fn start<BlockStream, RpcClient>(
                                                     .iter()
                                                     .map(|v| AccountId32::from(v.0))
                                                     .collect();
-                                                pallet_cf_witnesser_api::Call::witness_keygen_failure(
+                                                pallet_cf_vaults::Call::report_keygen_outcome(
                                                     ceremony_id,
                                                     chain_id,
-                                                    bad_account_ids,
+                                                    pallet_cf_vaults::KeygenOutcome::Failure(
+                                                        BTreeSet::from_iter(bad_account_ids),
+                                                    ),
                                                 )
                                             }
                                         },
-                                        MultisigOutcome::Signing(
-                                            message_signing_result,
-                                        ) => {
+                                        MultisigOutcome::Signing(message_signing_result) => {
                                             panic!(
                                                 "Expecting KeygenResult, got: {:?}",
                                                 message_signing_result
@@ -424,7 +381,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             );
                                             // TODO: Fill in the transaction hash with the real one
                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                attempt_id, TransmissionFailure::TransactionFailed, [0u8; 32]
+                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
                                             )
                                         }
                                     };
@@ -453,6 +410,62 @@ pub async fn start<BlockStream, RpcClient>(
                         );
                     }
                 }
+
+                // if we receive a new epoch, there are a few scenarios:
+                // 1. Validators in the last epoch couuld now be outgoing, so we should send the windows to them (as they now contain the end)
+                // 2. New validators need to receive their start point windows, so send windows to them
+                // 3. Validators from the previous epoch that continue to be validators, we can send to them (has no impact, they'll just keep going)
+                // 4. Note: Nodes that were outgoing in the last epoch (active 2 epochs ago) have already received their end window, so we don't
+                // need to send anything to them
+                if received_new_epoch {
+                    let (new_account_data, new_is_outgoing) =
+                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                    account_data = new_account_data;
+                    is_outgoing = new_is_outgoing;
+
+                    if matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing
+                    {
+                        send_windows_to_witness_processes(
+                            state_chain_client.clone(),
+                            latest_block_hash,
+                            account_data,
+                            &sm_window_sender,
+                            &km_window_sender,
+                        )
+                        .await
+                        .expect("Failed to send windows to the witness processes");
+                    }
+                } else if matches!(
+                    account_data.state,
+                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
+                ) {
+                    // If we are Backup or Passive, we must update our state on every block, since it's possible
+                    // we move between Backup and Passive on every block
+                    let (new_account_data, new_is_outgoing) =
+                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                    account_data = new_account_data;
+                    is_outgoing = new_is_outgoing;
+                }
+
+                // If we are Backup, Validator or outoing, we need to send a heartbeat
+                // we send it in the middle of the online interval (so any node sync issues don't
+                // cause issues (if we tried to send on one of the interval boundaries)
+                if (matches!(account_data.state, ChainflipAccountState::Backup)
+                    || matches!(account_data.state, ChainflipAccountState::Validator)
+                    || is_outgoing)
+                    && ((block_header.number + (heartbeat_block_interval / 2))
+                        % heartbeat_block_interval
+                        == 0)
+                {
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat at block: {}",
+                        block_header.number
+                    );
+                    let _ = state_chain_client
+                        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                        .await;
+                }
             }
             Err(error) => {
                 slog::error!(logger, "Failed to decode block header: {}", error,);
@@ -473,8 +486,8 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
-        let (_, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain)
+        let (latest_block_hash, block_stream, state_chain_client) =
+            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
                 .await
                 .unwrap();
 
@@ -504,6 +517,7 @@ mod tests {
             multisig_event_receiver,
             sm_window_sender,
             km_window_sender,
+            latest_block_hash,
             &logger,
         )
         .await;
