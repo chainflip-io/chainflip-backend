@@ -169,32 +169,33 @@ where
             }
         };
 
-        let logger = &self.logger;
-
-        if !self
+        if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
-            let state = self
-                .keygen_states
-                .entry(ceremony_id)
-                .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
-
-            let context = generate_keygen_context(ceremony_id, signers);
-
-            state.on_keygen_request(
-                ceremony_id,
-                self.outcome_sender.clone(),
-                self.outgoing_p2p_message_sender.clone(),
-                validator_map,
-                our_idx,
-                signer_idxs,
-                keygen_options,
-                context,
-            );
-        } else {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
+            return;
         }
+
+        let logger = &self.logger;
+
+        let state = self
+            .keygen_states
+            .entry(ceremony_id)
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
+
+        let context = generate_keygen_context(ceremony_id, signers);
+
+        state.on_keygen_request(
+            ceremony_id,
+            self.outcome_sender.clone(),
+            self.outgoing_p2p_message_sender.clone(),
+            validator_map,
+            our_idx,
+            signer_idxs,
+            keygen_options,
+            context,
+        );
     }
 
     /// Process a request to sign
@@ -231,50 +232,52 @@ where
             }
         };
 
-        // We have the key and have received a request to sign
-        let logger = &self.logger;
-        if !self
+        if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
         {
-            let state = self
-                .signing_states
-                .entry(ceremony_id)
-                .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
+            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            return;
+        }
 
-            let initial_stage = {
-                use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
+        // We have the key and have received a request to sign
+        let logger = &self.logger;
 
-                let common = CeremonyCommon {
-                    ceremony_id,
-                    outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
-                    validator_mapping: key_info.validator_map.clone(),
-                    own_idx,
-                    all_idxs: signer_idxs,
-                    logger: self.logger.clone(),
-                };
+        let state = self
+            .signing_states
+            .entry(ceremony_id)
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
-                let processor = AwaitCommitments1::new(
-                    common.clone(),
-                    SigningStateCommonInfo {
-                        data,
-                        key: key_info.key.clone(),
-                    },
-                );
+        let initial_stage = {
+            use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
 
-                Box::new(BroadcastStage::new(processor, common))
+            let common = CeremonyCommon {
+                ceremony_id,
+                outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
+                validator_mapping: key_info.validator_map.clone(),
+                own_idx,
+                all_idxs: signer_idxs,
+                logger: self.logger.clone(),
             };
 
-            if let Err(reason) = state.on_ceremony_request(
-                ceremony_id,
-                initial_stage,
-                key_info.validator_map,
-                self.outcome_sender.clone(),
-            ) {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-            }
-        } else {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            let processor = AwaitCommitments1::new(
+                common.clone(),
+                SigningStateCommonInfo {
+                    data,
+                    key: key_info.key.clone(),
+                },
+            );
+
+            Box::new(BroadcastStage::new(processor, common))
+        };
+
+        if let Err(reason) = state.on_ceremony_request(
+            ceremony_id,
+            initial_stage,
+            key_info.validator_map,
+            self.outcome_sender.clone(),
+        ) {
+            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
         }
     }
 
@@ -290,52 +293,53 @@ where
 
         slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
-        let logger = &self.logger;
-        if !self
+        if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
         {
-            let state = self
-                .signing_states
-                .entry(ceremony_id)
-                .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
-
-            if let Some(result) = state.process_message(sender_id, data) {
-                self.remove_signing_ceremony(&ceremony_id);
-
-                match result {
-                    Ok(schnorr_sig) => {
-                        self.outcome_sender
-                            .send(MultisigOutcome::Signing(SigningOutcome {
-                                id: ceremony_id,
-                                result: Ok(schnorr_sig),
-                            }))
-                            .unwrap();
-                    }
-                    Err((blamed_parties, reason)) => {
-                        slog::warn!(
-                            self.logger,
-                            #SIGNING_CEREMONY_FAILED,
-                            "Signing ceremony failed: {}",
-                            reason; "blamed parties" =>
-                            format!("{:?}",blamed_parties)
-                        );
-
-                        self.outcome_sender
-                            .send(MultisigOutcome::Signing(SigningOutcome {
-                                id: ceremony_id,
-                                result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                            }))
-                            .unwrap();
-                    }
-                }
-            }
-        } else {
             slog::debug!(
-                logger,
-                "Ignoring signing data from old ceremony {}",
+                self.logger,
+                "Ignoring signing data from old ceremony id {}",
                 ceremony_id
             );
+            return;
+        }
+
+        let logger = &self.logger;
+        let state = self
+            .signing_states
+            .entry(ceremony_id)
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
+
+        if let Some(result) = state.process_message(sender_id, data) {
+            self.remove_signing_ceremony(&ceremony_id);
+
+            match result {
+                Ok(schnorr_sig) => {
+                    self.outcome_sender
+                        .send(MultisigOutcome::Signing(SigningOutcome {
+                            id: ceremony_id,
+                            result: Ok(schnorr_sig),
+                        }))
+                        .unwrap();
+                }
+                Err((blamed_parties, reason)) => {
+                    slog::warn!(
+                        self.logger,
+                        #SIGNING_CEREMONY_FAILED,
+                        "Signing ceremony failed: {}",
+                        reason; "blamed parties" =>
+                        format!("{:?}",blamed_parties)
+                    );
+
+                    self.outcome_sender
+                        .send(MultisigOutcome::Signing(SigningOutcome {
+                            id: ceremony_id,
+                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                        }))
+                        .unwrap();
+                }
+            }
         }
     }
 
@@ -346,48 +350,48 @@ where
         ceremony_id: CeremonyId,
         data: KeygenData,
     ) -> Option<KeygenResultInfo> {
-        let logger = &self.logger;
-        if !self
+        if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
-            let state = self
-                .keygen_states
-                .entry(ceremony_id)
-                .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
-
-            state.process_message(sender_id, data).and_then(|res| {
-                self.remove_keygen_ceremony(&ceremony_id);
-
-                match res {
-                    Ok(keygen_result_info) => Some(keygen_result_info),
-                    Err((blamed_parties, reason)) => {
-                        slog::warn!(
-                            self.logger,
-                            #KEYGEN_CEREMONY_FAILED,
-                            "Keygen ceremony failed: {}",
-                            reason; "blamed parties" =>
-                            format!("{:?}",blamed_parties)
-                        );
-
-                        self.outcome_sender
-                            .send(MultisigOutcome::Keygen(KeygenOutcome {
-                                id: ceremony_id,
-                                result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                            }))
-                            .unwrap();
-                        None
-                    }
-                }
-            })
-        } else {
             slog::debug!(
-                logger,
-                "Ignoring keygen data from old ceremony {}",
+                self.logger,
+                "Ignoring keygen data from old ceremony id {}",
                 ceremony_id
             );
-            None
+            return None;
         }
+
+        let logger = &self.logger;
+        let state = self
+            .keygen_states
+            .entry(ceremony_id)
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
+
+        state.process_message(sender_id, data).and_then(|res| {
+            self.remove_keygen_ceremony(&ceremony_id);
+
+            match res {
+                Ok(keygen_result_info) => Some(keygen_result_info),
+                Err((blamed_parties, reason)) => {
+                    slog::warn!(
+                        self.logger,
+                        #KEYGEN_CEREMONY_FAILED,
+                        "Keygen ceremony failed: {}",
+                        reason; "blamed parties" =>
+                        format!("{:?}",blamed_parties)
+                    );
+
+                    self.outcome_sender
+                        .send(MultisigOutcome::Keygen(KeygenOutcome {
+                            id: ceremony_id,
+                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                        }))
+                        .unwrap();
+                    None
+                }
+            }
+        })
     }
 
     // Removed a finished keygen ceremony and mark its id as used

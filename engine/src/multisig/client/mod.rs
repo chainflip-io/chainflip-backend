@@ -389,11 +389,6 @@ where
         self.key_store.get_db()
     }
 
-    /// Overrides the `key_store` using the specified db
-    pub fn set_key_store_db(&mut self, db: Arc<Mutex<S>>) {
-        self.key_store = KeyStore::new(db.clone());
-    }
-
     pub fn get_my_account_id(&self) -> AccountId {
         self.my_account_id.clone()
     }
