@@ -2,7 +2,7 @@ mod keygen_data;
 mod keygen_frost;
 mod keygen_stages;
 
-#[cfg(test)]
+// #[cfg(test)]
 pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use pallet_cf_vaults::CeremonyId;
@@ -50,7 +50,7 @@ impl KeygenOptions {
     /// result in pubkeys incompatible with the KeyManager
     /// contract, but it is useful in tests that need to be
     /// deterministic and don't interact with the contract
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn allowing_high_pubkey() -> Self {
         Self {
             low_pubkey_only: false,

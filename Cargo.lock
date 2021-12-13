@@ -2494,6 +2494,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "genesis-key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "chainflip-engine",
+ "hex",
+ "rand 0.8.4",
+ "tokio 1.13.0",
+ "utilities",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

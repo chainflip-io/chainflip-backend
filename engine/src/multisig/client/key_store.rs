@@ -24,7 +24,7 @@ where
         KeyStore { keys, db }
     }
 
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn get_db(&self) -> &S {
         &self.db
     }

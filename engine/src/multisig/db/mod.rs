@@ -1,10 +1,11 @@
-#[cfg(test)]
+// #[cfg(test)]
 mod mock;
 mod persistent;
 
 use std::collections::HashMap;
 
-#[cfg(test)]
+// #[cfg(test)]
+// TODO: Delete this mock.
 pub use mock::KeyDBMock;
 pub use persistent::PersistentKeyDB;
 

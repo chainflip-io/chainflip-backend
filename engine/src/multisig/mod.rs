@@ -2,12 +2,16 @@
 
 /// Multisig client
 mod client;
+
+// For use in Keygen genesis
+pub use client::{ensure_unsorted, KeygenContext};
+
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
 mod db;
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -27,7 +31,7 @@ pub use client::{
 
 pub use db::{KeyDB, PersistentKeyDB};
 
-#[cfg(test)]
+// #[cfg(test)]
 pub use db::KeyDBMock;
 
 pub use self::client::{keygen::KeygenInfo, signing::SigningInfo};

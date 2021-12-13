@@ -65,7 +65,7 @@ impl PendingSigningInfo {
         }
     }
 
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn set_expiry_time(&mut self, expiry_time: Instant) {
         self.should_expire_at = expiry_time;
     }

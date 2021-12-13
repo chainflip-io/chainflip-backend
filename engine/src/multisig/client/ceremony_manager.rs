@@ -330,7 +330,7 @@ impl CeremonyManager {
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl CeremonyManager {
     pub fn expire_all(&mut self) {
         for (_, state) in &mut self.signing_states {

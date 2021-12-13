@@ -26,5 +26,6 @@ members = [
   'state-chain/traits',
   'engine',
   'engine/cli',
+  'engine/genesis-key',
   'utilities',
 ]

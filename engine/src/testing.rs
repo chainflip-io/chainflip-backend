@@ -1,4 +1,4 @@
-#![cfg(test)]
+// #![cfg(test)]
 
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing

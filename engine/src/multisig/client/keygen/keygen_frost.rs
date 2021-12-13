@@ -46,7 +46,7 @@ pub struct ShamirShare {
     pub value: Scalar,
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl ShamirShare {
     pub fn create_random() -> Self {
         ShamirShare {

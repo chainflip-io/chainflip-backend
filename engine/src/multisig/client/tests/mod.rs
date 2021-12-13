@@ -7,10 +7,8 @@ pub use helpers::KeygenContext;
 
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
-use log::*;
+// use log::*;
 use pallet_cf_vaults::CeremonyId;
-
-// use helpers::*;
 
 use crate::{
     multisig::{KeygenInfo, MessageHash},

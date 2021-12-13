@@ -128,7 +128,6 @@ mod utils_tests {
     }
 }
 
-#[cfg(test)]
 pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
 where
     T: Clone + Ord,

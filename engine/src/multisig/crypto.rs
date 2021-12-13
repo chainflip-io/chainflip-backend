@@ -93,7 +93,7 @@ pub struct KeyShare {
     pub x_i: Scalar,
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl Point {
     pub fn random() -> Self {
         Point::from_scalar(&Scalar::random())

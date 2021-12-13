@@ -7,12 +7,13 @@ mod keygen_state_runner;
 pub mod signing;
 mod state_runner;
 
-#[cfg(test)]
 mod tests;
+
+pub use tests::KeygenContext;
 
 mod ceremony_manager;
 
-#[cfg(test)]
+// #[cfg(test)]
 mod genesis;
 
 use std::{collections::HashMap, time::Instant};
@@ -37,7 +38,7 @@ use keygen::KeygenData;
 
 pub use common::KeygenResultInfo;
 
-#[cfg(test)]
+// #[cfg(test)]
 pub use utils::ensure_unsorted;
 
 use self::{
@@ -367,7 +368,7 @@ where
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl<S> MultisigClient<S>
 where
     S: KeyDB,

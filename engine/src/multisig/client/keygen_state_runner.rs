@@ -95,13 +95,12 @@ impl KeygenStateRunner {
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl KeygenStateRunner {
     pub fn get_stage(&self) -> Option<String> {
         self.inner.get_stage()
     }
 
-    #[cfg(test)]
     pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
         self.inner.set_expiry_time(expiry_time)
     }

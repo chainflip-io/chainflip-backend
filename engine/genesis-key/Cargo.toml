@@ -1,0 +1,16 @@
+[package]
+authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
+edition = "2018"
+name = "genesis-key"
+version = "0.1.0"
+
+[dependencies]
+anyhow = "1.0"
+tokio = {version = "1.5.0", features = ["full"]}
+hex = "0.4.3"
+bincode = "1.3.3"
+rand = "0.8.4"
+
+# local deps
+chainflip-engine = {path = "../../engine/"}
+utilities = {path = "../../utilities"}

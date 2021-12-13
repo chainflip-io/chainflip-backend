@@ -204,7 +204,7 @@ pub mod utils {
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 pub mod test_utils {
     use super::utils::*;
     use slog::{o, Drain, Fuse, OwnedKVList, Record};

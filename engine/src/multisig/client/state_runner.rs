@@ -268,14 +268,14 @@ where
         }
     }
 
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn get_stage(&self) -> Option<String> {
         self.inner
             .as_ref()
             .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
     }
 
-    #[cfg(test)]
+    // #[cfg(test)]
     pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
         self.should_expire_at = expiry_time;
     }
