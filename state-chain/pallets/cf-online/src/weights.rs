@@ -12,7 +12,7 @@
 // --pallet
 // pallet_cf_online
 // --output
-// temp-online.rs
+// state-chain/pallets/cf-online/src/weights.rs
 // --execution=wasm
 // --steps=20
 // --repeat=10
