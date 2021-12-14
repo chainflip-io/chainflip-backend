@@ -193,15 +193,16 @@ pub mod pallet {
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
 			ensure!(Reputations::<T>::contains_key(validator_id), ReportError::UnknownValidator);
+
 			let penalty = Self::Penalty::penalty(&condition);
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
-				condition,
+				condition.clone(),
 				penalty,
 			));
 
-			T::Banned::ban(validator_id);
+			T::Banned::ban_on_condition(condition, &validator_id);
 
 			Ok(Self::update_reputation(validator_id, penalty.neg()))
 		}
