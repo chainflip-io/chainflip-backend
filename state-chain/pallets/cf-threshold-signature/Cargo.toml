@@ -19,6 +19,9 @@ cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', d
 
 log = { version = '0.4.14', default-features = false }
 
+# Required for bechmarking
+pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }
+
 # Parity deps
 [dependencies.codec]
 default-features = false
@@ -92,5 +95,6 @@ runtime-benchmarks = [
 	'cf-traits/runtime-benchmarks',
 	'cf-chains/runtime-benchmarks',
 	'cf-runtime-benchmark-utilities/runtime-benchmarks',
+	'pallet-cf-validator',
 ]
 try-runtime = ['frame-support/try-runtime'] 

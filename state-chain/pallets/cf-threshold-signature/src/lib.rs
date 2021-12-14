@@ -336,7 +336,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
 				id,
 				dispatch_result.map(|_| ()).map_err(|e| {
-					log::error!("Threshold dispatch failed for ceremony {}.", id);
+					log::error!("Threshold dispatch failed for ceremony {}: {:?}.", id, e.error);
 					e.error
 				}),
 			));
