@@ -439,8 +439,11 @@ impl KeygenContext {
         KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
     }
 
-    pub fn new_with_account_ids(account_ids: Vec<AccountId>) -> Self {
-        KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
+    pub fn new_with_account_ids(
+        account_ids: Vec<AccountId>,
+        keygen_options: KeygenOptions,
+    ) -> Self {
+        KeygenContext::inner_new(account_ids, keygen_options)
     }
 
     /// Generate context with the KeygenOptions as default, (No `allowing_high_pubkey`)
