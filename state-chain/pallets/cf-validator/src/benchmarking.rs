@@ -5,10 +5,6 @@ use super::*;
 
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
-use hex_literal::hex;
-use scale_info::prelude::string::String;
-use sp_runtime::{app_crypto::RuntimePublic, KeyTypeId};
-use sp_std::{convert::TryFrom, str::FromStr};
 
 #[allow(unused)]
 use crate::Pallet as Validator;
@@ -39,7 +35,7 @@ benchmarks! {
 	}
 	register_peer_id {
 		let caller: T::AccountId = account("doogle", 0, 0);
-		let raw_pub_key: [u8; 32] = [47, 140, 97, 41, 216, 22, 207, 81, 195, 116, 188, 1 27, 8, 195, 230, 62, 209, 86, 207, 120, 174, 251, 74, 101, 80, 217, 123, 135, 153, 121, 119, 238];
+		let raw_pub_key: [u8; 32] = [47, 140, 97, 41, 216, 22, 207, 81, 195, 116, 188, 127, 8, 195, 230, 62, 209, 86, 207, 120, 174, 251, 74, 101, 80, 217, 123, 135, 153, 121, 119, 238];
 		let raw_signature: [u8; 64] = [73, 222, 125, 246, 56, 244, 79, 99, 156, 245, 104, 9, 97, 26, 121, 81, 200, 130, 43, 31, 70, 42, 251, 107, 92, 134, 225, 187, 149, 124, 188, 132, 170, 9, 33, 118, 111, 56, 185, 167, 218, 58, 125, 60, 88, 20, 103, 12, 123, 11, 79, 107, 214, 126, 219, 231, 96, 106, 227, 246, 241, 226, 33, 8];
 		let message = caller.encode();
 		let public = Ed25519PublicKey::from_raw(raw_pub_key);

@@ -224,7 +224,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
