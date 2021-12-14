@@ -466,16 +466,25 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     match multiaddr.pop() {
                         Some(Protocol::P2p(multihash)) => Ok(PeerId::from_multihash(multihash)
                             .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))?),
-                        protocol => Err(anyhow::Error::msg(format!("Expected P2p Protocol, got {:?}", protocol)))
+                        protocol => Err(anyhow::Error::msg(format!(
+                            "Expected P2p Protocol, got {:?}",
+                            protocol
+                        ))),
                     }?,
                     match multiaddr.pop() {
                         Some(Protocol::Tcp(port)) => Ok(port),
-                        protocol => Err(anyhow::Error::msg(format!("Expected Tcp Protocol, got {:?}", protocol)))
+                        protocol => Err(anyhow::Error::msg(format!(
+                            "Expected Tcp Protocol, got {:?}",
+                            protocol
+                        ))),
                     }?,
                     match multiaddr.pop() {
                         Some(Protocol::Ip6(address)) => Ok(address),
                         Some(Protocol::Ip4(address)) => Ok(address.to_ipv6_mapped()),
-                        protocol => Err(anyhow::Error::msg(format!("Expected Ip Protocol, got {:?}", protocol))),
+                        protocol => Err(anyhow::Error::msg(format!(
+                            "Expected Ip Protocol, got {:?}",
+                            protocol
+                        ))),
                     }?,
                 ))
             })
