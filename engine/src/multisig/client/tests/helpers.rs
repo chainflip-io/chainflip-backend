@@ -3,7 +3,6 @@ use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 use anyhow::Result;
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
-use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -125,7 +124,7 @@ macro_rules! distribute_data_keygen_custom {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_message);
 
-                    let message = keygen_data_to_p2p(message, KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p(message);
 
                     $clients
                         .get_mut(receiver_id)
@@ -140,7 +139,7 @@ macro_rules! distribute_data_keygen_custom {
 macro_rules! distribute_data_keygen {
     ($clients:expr, $account_ids: expr, $messages: expr) => {{
         for sender_id in &$account_ids {
-            let message = keygen_data_to_p2p($messages[sender_id].clone(), KEYGEN_CEREMONY_ID);
+            let message = keygen_data_to_p2p($messages[sender_id].clone());
 
             for receiver_id in &$account_ids {
                 if receiver_id != sender_id {
@@ -793,7 +792,7 @@ impl KeygenContext {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_sec3.clone());
 
-                    let message = keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p(sec3.clone());
 
                     clients
                         .get_mut(receiver_id)
@@ -1303,9 +1302,9 @@ pub fn sig_data_to_p2p(data: impl Into<SigningData>) -> MultisigMessage {
     }
 }
 
-pub fn keygen_data_to_p2p(data: impl Into<KeygenData>, ceremony_id: CeremonyId) -> MultisigMessage {
+pub fn keygen_data_to_p2p(data: impl Into<KeygenData>) -> MultisigMessage {
     MultisigMessage {
-        ceremony_id,
+        ceremony_id: KEYGEN_CEREMONY_ID,
         data: MultisigData::Keygen(data.into()),
     }
 }
@@ -1389,19 +1388,13 @@ impl MultisigClientNoDB {
         sender_id: &AccountId,
     ) -> MultisigMessage {
         match stage {
-            1 => keygen_data_to_p2p(
-                keygen_states.comm_stage1.comm1s[sender_id].clone(),
-                KEYGEN_CEREMONY_ID,
-            ),
-            2 => keygen_data_to_p2p(
-                keygen_states.ver_com_stage2.ver2s[sender_id].clone(),
-                KEYGEN_CEREMONY_ID,
-            ),
+            1 => keygen_data_to_p2p(keygen_states.comm_stage1.comm1s[sender_id].clone()),
+            2 => keygen_data_to_p2p(keygen_states.ver_com_stage2.ver2s[sender_id].clone()),
             3 => {
                 let sec3 = keygen_states.sec_stage3.as_ref().expect("No stage 3").sec3[sender_id]
                     .get(&self.get_my_account_id())
                     .unwrap();
-                keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID)
+                keygen_data_to_p2p(sec3.clone())
             }
             4 => keygen_data_to_p2p(
                 keygen_states
@@ -1410,7 +1403,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 4")
                     .comp4s[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             5 => keygen_data_to_p2p(
                 keygen_states
@@ -1419,7 +1411,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 5")
                     .ver5[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             6 => keygen_data_to_p2p(
                 keygen_states
@@ -1428,7 +1419,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 6")
                     .resp6[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             7 => keygen_data_to_p2p(
                 keygen_states
@@ -1437,7 +1427,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 7")
                     .ver7[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
         }

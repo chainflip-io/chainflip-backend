@@ -62,12 +62,12 @@ where
 
     /// Check if the ceremony id has already been used
     pub fn is_signing_ceremony_id_used(&self, ceremony_id: &CeremonyId) -> bool {
-        self.used_signing_ids.check(ceremony_id)
+        self.used_signing_ids.is_used(ceremony_id)
     }
 
     /// Check if the ceremony id has already been used
     pub fn is_keygen_ceremony_id_used(&self, ceremony_id: &CeremonyId) -> bool {
-        self.used_keygen_ids.check(ceremony_id)
+        self.used_keygen_ids.is_used(ceremony_id)
     }
 }
 
@@ -83,14 +83,14 @@ impl UsedCeremonyIds {
     pub fn add(&mut self, ceremony_id: &CeremonyId) {
         // Cleanup ceremonies that are more then `USED_CEREMONY_IDS_AGE_LIMIT` old.
         self.ids
-            .retain(|id| *id < ceremony_id.saturating_sub(USED_CEREMONY_IDS_AGE_LIMIT));
+            .retain(|id| *id > ceremony_id.saturating_sub(USED_CEREMONY_IDS_AGE_LIMIT));
 
         // Mark the ceremony id as used by adding it to the hashset
         self.ids.insert(*ceremony_id);
     }
 
     /// Check if the ceremony id has already been used (false = never seen before, safe to continue)
-    pub fn check(&self, ceremony_id: &CeremonyId) -> bool {
+    pub fn is_used(&self, ceremony_id: &CeremonyId) -> bool {
         self.ids.contains(ceremony_id)
     }
 }
@@ -104,34 +104,36 @@ fn test_ceremony_id_consumption() {
         crate::logging::test_utils::new_test_logger(),
         Arc::new(Mutex::new(MultisigDBMock::new())),
     );
-    let test_id = 69;
-    assert!(!tracker.is_signing_ceremony_id_used(&test_id));
-    tracker.consume_signing_id(&test_id);
-    assert!(tracker.is_signing_ceremony_id_used(&test_id));
 
-    assert!(!tracker.is_keygen_ceremony_id_used(&test_id));
-    tracker.consume_keygen_id(&test_id);
-    assert!(tracker.is_keygen_ceremony_id_used(&test_id));
+    let signing_test_id = 1;
+    assert!(!tracker.is_signing_ceremony_id_used(&signing_test_id));
+    tracker.consume_signing_id(&signing_test_id);
+    assert!(tracker.is_signing_ceremony_id_used(&signing_test_id));
+
+    // Using a different id for keygen, to confirm no cross contamination with signing
+    let keygen_test_id = 2;
+    assert_ne!(signing_test_id, keygen_test_id);
+    assert!(!tracker.is_keygen_ceremony_id_used(&keygen_test_id));
+    tracker.consume_keygen_id(&keygen_test_id);
+    assert!(tracker.is_keygen_ceremony_id_used(&keygen_test_id));
 }
 
 // Test that the age limit is enforced
 #[test]
 fn test_ceremony_id_age_limit() {
-    use crate::multisig::db::MultisigDBMock;
+    let mut used_ids = UsedCeremonyIds {
+        ids: HashSet::new(),
+    };
 
-    let mut tracker = CeremonyIdTracker::new(
-        crate::logging::test_utils::new_test_logger(),
-        Arc::new(Mutex::new(MultisigDBMock::new())),
-    );
+    // Consume an id and the id +1
+    let test_id = 100;
+    used_ids.add(&test_id);
+    used_ids.add(&(test_id + 1));
+    assert!(used_ids.is_used(&(test_id + 1)));
+    assert!(used_ids.is_used(&test_id));
 
-    let test_id = 69;
-    tracker.consume_signing_id(&test_id);
-    assert!(tracker.is_signing_ceremony_id_used(&test_id));
-    tracker.consume_signing_id(&(test_id + USED_CEREMONY_IDS_AGE_LIMIT));
-    assert!(!tracker.is_signing_ceremony_id_used(&test_id));
-
-    tracker.consume_keygen_id(&test_id);
-    assert!(tracker.is_keygen_ceremony_id_used(&test_id));
-    tracker.consume_keygen_id(&(test_id + USED_CEREMONY_IDS_AGE_LIMIT));
-    assert!(!tracker.is_keygen_ceremony_id_used(&test_id));
+    // Now consume an id that is past the age limit for the id, but not the id+1
+    used_ids.add(&(test_id + USED_CEREMONY_IDS_AGE_LIMIT));
+    assert!(!used_ids.is_used(&test_id));
+    assert!(used_ids.is_used(&(test_id + 1)));
 }

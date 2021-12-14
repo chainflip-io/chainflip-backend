@@ -1,6 +1,8 @@
 use crate::multisig::client::{
     self,
-    tests::helpers::{check_blamed_paries, gen_invalid_signing_comm1, next_with_timeout},
+    tests::helpers::{
+        check_blamed_paries, gen_invalid_signing_comm1, next_with_timeout, sig_data_to_p2p,
+    },
 };
 
 use client::tests::*;
@@ -236,7 +238,7 @@ async fn should_delay_rts_until_key_is_ready() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let message = helpers::keygen_data_to_p2p(ver5, KEYGEN_CEREMONY_ID);
+            let message = helpers::keygen_data_to_p2p(ver5);
             c1.process_p2p_message(sender_id.clone(), message);
         }
     }
@@ -339,7 +341,7 @@ async fn pending_rts_should_expire() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let message = helpers::keygen_data_to_p2p(ver5.clone(), KEYGEN_CEREMONY_ID);
+            let message = helpers::keygen_data_to_p2p(ver5.clone());
             c1.process_p2p_message(sender_id.clone(), message);
         }
     }
@@ -469,8 +471,6 @@ async fn should_ignore_rts_with_used_ceremony_id() {
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_used_ceremony_id() {
-    use crate::multisig::client::{MultisigData, MultisigMessage};
-
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
@@ -479,15 +479,8 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
     // Receive comm1 from a used ceremony id (the default signing ceremony id)
-    let used_ceremony_id = SIGN_CEREMONY_ID;
-    let message = MultisigMessage {
-        ceremony_id: used_ceremony_id,
-        data: MultisigData::Signing(
-            sign_states.sign_phase1.comm1s[&ctx.get_account_id(1)]
-                .clone()
-                .into(),
-        ),
-    };
+    let message = sig_data_to_p2p(sign_states.sign_phase1.comm1s[&ctx.get_account_id(1)].clone());
+    assert_eq!(message.ceremony_id, SIGN_CEREMONY_ID);
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 
     // The message should have been ignored and no ceremony was started
@@ -498,8 +491,6 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
 #[tokio::test]
 async fn should_not_consume_ceremony_id_if_unauthorised() {
-    use crate::multisig::client::{MultisigData, MultisigMessage};
-
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
@@ -510,11 +501,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
     // Receive comm1 with the default signing ceremony id
-    let used_ceremony_id = SIGN_CEREMONY_ID;
-    let message = MultisigMessage {
-        ceremony_id: used_ceremony_id,
-        data: MultisigData::Signing(gen_invalid_signing_comm1().into()),
-    };
+    let message = sig_data_to_p2p(gen_invalid_signing_comm1());
+    assert_eq!(message.ceremony_id, SIGN_CEREMONY_ID);
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 
     // Check that the unauthorised ceremony was created
@@ -530,6 +518,6 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     // Sign as normal using the default ceremony id
     let sign_states = ctx.sign().await;
 
-    // Should not of been rejected because of a used ceremony id
+    // Should not have been rejected because of a used ceremony id
     assert!(sign_states.sign_finished.outcome.result.is_ok());
 }

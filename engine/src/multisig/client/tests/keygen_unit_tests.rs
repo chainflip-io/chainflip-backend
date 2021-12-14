@@ -1,5 +1,5 @@
 use crate::multisig::client::{
-    tests::helpers::{gen_invalid_keygen_comm1, next_with_timeout},
+    tests::helpers::{gen_invalid_keygen_comm1, keygen_data_to_p2p, next_with_timeout},
     CeremonyAbortReason,
 };
 use crate::multisig::MultisigInstruction;
@@ -484,8 +484,6 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
 #[tokio::test]
 async fn should_not_consume_ceremony_id_if_unauthorised() {
-    use crate::multisig::client::{MultisigData, MultisigMessage};
-
     let mut ctx = helpers::KeygenContext::new();
 
     // Get a client that has not used the default keygen ceremony id yet
@@ -494,11 +492,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
 
     // Receive comm1 with the default keygen ceremony id
-    let used_ceremony_id = KEYGEN_CEREMONY_ID;
-    let message = MultisigMessage {
-        ceremony_id: used_ceremony_id,
-        data: MultisigData::Keygen(gen_invalid_keygen_comm1().into()),
-    };
+    let message = keygen_data_to_p2p(gen_invalid_keygen_comm1());
+    assert_eq!(message.ceremony_id, KEYGEN_CEREMONY_ID);
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 
     // Check that the unauthorised ceremony was created

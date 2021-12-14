@@ -3,7 +3,7 @@ use std::{
     path::Path,
 };
 
-use anyhow;
+use anyhow::Context;
 
 use super::MultisigDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -129,19 +129,17 @@ fn load_ceremony_tracking(db: &Database, key: &[u8]) -> anyhow::Result<HashSet<C
         .get(DB_COL_CEREMONY_TRACKING, key)
         .expect("should load ceremony tracking hashset")
     {
-        Some(data) => match bincode::deserialize::<HashSet<CeremonyId>>(&data) {
-            Ok(ceremony_tracking_data) => Ok(ceremony_tracking_data),
-            Err(e) => Err(anyhow::Error::msg(format!(
-                "Could not deserialize ceremony tracking data: {}",
-                e
-            ))),
-        },
+        Some(data) => bincode::deserialize::<HashSet<CeremonyId>>(&data)
+            .map_err(anyhow::Error::new)
+            .with_context(|| "Could not deserialize ceremony tracking data"),
         None => Ok(HashSet::new()),
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use std::iter::FromIterator;
 
     use super::*;
 
@@ -170,6 +168,7 @@ mod tests {
         ];
         let key_id = KeyId(key.into());
         let db_path = Path::new("db1");
+        let _ = std::fs::remove_dir_all(db_path);
         {
             let p_db = PersistentMultisigDB::new(&db_path, &logger);
             let db = p_db.db;
@@ -193,6 +192,7 @@ mod tests {
         let logger = new_test_logger();
         let key_id = KeyId(vec![0; 33]);
         let db_path = Path::new("db2");
+        let _ = std::fs::remove_dir_all(db_path);
         {
             let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
@@ -218,31 +218,31 @@ mod tests {
     fn can_save_and_load_used_ceremony_id_data() {
         let logger = new_test_logger();
         let db_path = Path::new("db3");
-        // TODO: cleanup on startup.
-        // If this test fails, the path will be dirty and need manual cleaning
+        let _ = std::fs::remove_dir_all(db_path);
 
         let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
 
         // Save some ids
-        // TODO: use different hashsets for signing and keygen so we can test for interference
-        let test_ids = vec![42, 69];
-        let mut test_hashset: HashSet<CeremonyId> = HashSet::new();
-        test_hashset.insert(test_ids[0]);
-        test_hashset.insert(test_ids[1]);
+        let mut signing_hashset: HashSet<CeremonyId> =
+            HashSet::from_iter(vec![1, 2].iter().cloned());
+        p_db.update_tracking_for_signing(&signing_hashset);
+        assert_eq!(p_db.load_tracking_for_signing(), signing_hashset);
 
-        p_db.update_tracking_for_signing(&test_hashset);
-        p_db.update_tracking_for_keygen(&test_hashset);
+        // Remove an id and load again
+        signing_hashset.remove(&signing_hashset.iter().last().unwrap().clone());
+        p_db.update_tracking_for_signing(&signing_hashset);
+        assert_eq!(p_db.load_tracking_for_signing(), signing_hashset);
 
-        assert_eq!(p_db.load_tracking_for_signing(), test_hashset);
-        assert_eq!(p_db.load_tracking_for_keygen(), test_hashset);
+        // Save some ids
+        let mut keygen_hashset: HashSet<CeremonyId> =
+            HashSet::from_iter(vec![3, 4].iter().cloned());
+        p_db.update_tracking_for_keygen(&keygen_hashset);
+        assert_eq!(p_db.load_tracking_for_keygen(), keygen_hashset);
 
-        // Remove an id and save again
-        test_hashset.remove(&test_ids[1]);
-        p_db.update_tracking_for_signing(&test_hashset);
-        p_db.update_tracking_for_keygen(&test_hashset);
-
-        assert_eq!(p_db.load_tracking_for_signing(), test_hashset);
-        assert_eq!(p_db.load_tracking_for_keygen(), test_hashset);
+        // Remove an id and load again
+        keygen_hashset.remove(&keygen_hashset.iter().last().unwrap().clone());
+        p_db.update_tracking_for_keygen(&keygen_hashset);
+        assert_eq!(p_db.load_tracking_for_keygen(), keygen_hashset);
 
         // Cleanup
         std::fs::remove_dir_all(db_path).unwrap();
