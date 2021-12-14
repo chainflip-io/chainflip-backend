@@ -9,6 +9,8 @@ use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -23,6 +25,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
@@ -184,7 +187,7 @@ pub trait StateChainRpcApi {
 
     async fn rotate_keys(&self) -> Result<Bytes>;
 
-    async fn system_local_peer_id(&self) -> Result<PeerId>;
+    async fn system_local_listen_addresses(&self) -> Result<Vec<String>>;
 }
 
 #[async_trait]
@@ -240,13 +243,12 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("storage_pairs RPC API failed")
     }
 
-    async fn system_local_peer_id(&self) -> Result<PeerId> {
+    async fn system_local_listen_addresses(&self) -> Result<Vec<String>> {
         self.system_rpc_client
-            .system_local_peer_id()
+            .system_local_listen_addresses()
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("system_local_peer_id RPC API failed")
-            .and_then(|bs58| Ok(PeerId::from_str(&bs58)?))
+            .context("system_local_listen_addresses RPC API failed")
     }
 }
 
@@ -464,8 +466,33 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect()
     }
 
-    pub async fn get_local_peer_id(&self) -> Result<PeerId> {
-        self.state_chain_rpc_client.system_local_peer_id().await
+    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, u16, Ipv6Addr)>> {
+        self.state_chain_rpc_client
+            .system_local_listen_addresses()
+            .await?
+            .into_iter()
+            .map(|multiaddr| {
+                let mut multiaddr = Multiaddr::from_str(&multiaddr)?;
+                Ok((
+                    if let Some(Protocol::P2p(multihash)) = multiaddr.pop() {
+                        Ok(PeerId::from_multihash(multihash)
+                            .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))?)
+                    } else {
+                        Err(anyhow::Error::msg("Expected P2p Protocol"))
+                    }?,
+                    if let Some(Protocol::Tcp(port)) = multiaddr.pop() {
+                        Ok(port)
+                    } else {
+                        Err(anyhow::Error::msg("Expected Tcp Protocol"))
+                    }?,
+                    match multiaddr.pop() {
+                        Some(Protocol::Ip6(address)) => Ok(address),
+                        Some(Protocol::Ip4(address)) => Ok(address.to_ipv6_mapped()),
+                        _ => Err(anyhow::Error::msg("Expected Ip Protocol")),
+                    }?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
