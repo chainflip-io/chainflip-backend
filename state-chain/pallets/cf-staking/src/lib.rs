@@ -381,13 +381,13 @@ pub mod pallet {
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
 			// Make sure the expiry time is still sane.
-			let min_ttl = T::MinClaimTTL::get();
-			let _ = claim_details
-				.expiry
-				.low_u64()
-				.checked_sub(T::TimeSource::now().as_secs())
-				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
-				.ok_or(Error::<T>::SignatureTooLate)?;
+			// let min_ttl = T::MinClaimTTL::get();
+			// let _ = claim_details
+			// 	.expiry
+			// 	.low_u64()
+			// 	.checked_sub(T::TimeSource::now().as_secs())
+			// 	.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
+			// 	.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
