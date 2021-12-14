@@ -463,21 +463,19 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map(|multiaddr| {
                 let mut multiaddr = Multiaddr::from_str(&multiaddr)?;
                 Ok((
-                    if let Some(Protocol::P2p(multihash)) = multiaddr.pop() {
-                        Ok(PeerId::from_multihash(multihash)
-                            .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))?)
-                    } else {
-                        Err(anyhow::Error::msg("Expected P2p Protocol"))
+                    match multiaddr.pop() {
+                        Some(Protocol::P2p(multihash)) => Ok(PeerId::from_multihash(multihash)
+                            .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))?),
+                        protocol => Err(anyhow::Error::msg(format!("Expected P2p Protocol, got {:?}", protocol)))
                     }?,
-                    if let Some(Protocol::Tcp(port)) = multiaddr.pop() {
-                        Ok(port)
-                    } else {
-                        Err(anyhow::Error::msg("Expected Tcp Protocol"))
+                    match multiaddr.pop() {
+                        Some(Protocol::Tcp(port)) => Ok(port),
+                        protocol => Err(anyhow::Error::msg(format!("Expected Tcp Protocol, got {:?}", protocol)))
                     }?,
                     match multiaddr.pop() {
                         Some(Protocol::Ip6(address)) => Ok(address),
                         Some(Protocol::Ip4(address)) => Ok(address.to_ipv6_mapped()),
-                        _ => Err(anyhow::Error::msg("Expected Ip Protocol")),
+                        protocol => Err(anyhow::Error::msg(format!("Expected Ip Protocol, got {:?}", protocol))),
                     }?,
                 ))
             })
