@@ -126,7 +126,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer
     );
 
-    {
+    let our_peer_id = {
         let keypair: libp2p::identity::ed25519::Keypair =
             read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
                 libp2p::identity::ed25519::SecretKey::from_bytes(
@@ -167,14 +167,20 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 )
                 .await?;
         }
-    }
+
+        peer_id
+    };
 
     client
         .set_peers(
             account_to_peer
                 .values()
-                .map(|(peer_id, port, ip_address)| {
-                    (PeerIdTransferable::from(peer_id), *port, *ip_address)
+                .filter_map(|(peer_id, port, ip_address)| {
+                    if our_peer_id != *peer_id {
+                        Some((PeerIdTransferable::from(peer_id), *port, *ip_address))
+                    } else {
+                        None
+                    }
                 })
                 .collect(),
         )
@@ -240,10 +246,12 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                                 } else {
                                     account_to_peer.insert(account_id.clone(), (peer_id.clone(), port, ip_address));
                                     peer_to_account.insert(peer_id, account_id);
-                                    if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
-                                        slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
-                                    } else {
-                                        slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                    if our_peer_id != peer_id {
+                                        if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                            slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
+                                        } else {
+                                            slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                        }
                                     }
                                 }
                             }
@@ -251,10 +259,12 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                                 if Some(&account_id) == peer_to_account.get(&peer_id) {
                                     account_to_peer.remove(&account_id);
                                     peer_to_account.remove(&peer_id);
-                                    if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                        slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
-                                    } else {
-                                        slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                    if our_peer_id != peer_id {
+                                        if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                            slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
+                                        } else {
+                                            slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                        }
                                     }
                                 } else {
                                     // This is currently possible, but can be avoided. TODO Resolve
