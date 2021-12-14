@@ -1475,6 +1475,9 @@ pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[A
     {
         MultisigOutcome::Signing(outcome) => &outcome.result.as_ref().unwrap_err().1,
         MultisigOutcome::Keygen(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        MultisigOutcome::Ignore => {
+            panic!("Cannot check blamed parties on an ignored request");
+        }
     };
 
     assert_eq!(&blamed_parties[..], expected);
