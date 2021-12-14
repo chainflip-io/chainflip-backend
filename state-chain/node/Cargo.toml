@@ -5,13 +5,13 @@ description = 'The Chainflip State Chain node, based on substrate-node-template'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
-name = 'state-chain-node'
+name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
 [[bin]]
-name = 'state-chain-node'
+name = 'chainflip-node'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -155,6 +155,6 @@ depends = "$auto"
 extended-description = """\
 Chainflip Validator Node Package"""
 maintainer = "Chainflip UG <dev@chainflip.io>"
-name = "state-chain-node"
+name = "chainflip-node"
 priority = "required"
 section = "rust"
