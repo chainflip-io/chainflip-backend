@@ -168,7 +168,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 .await?;
         }
     }
-    
+
     client
         .set_peers(
             account_to_peer
