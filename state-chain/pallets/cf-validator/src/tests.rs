@@ -2,7 +2,12 @@ mod tests {
 	use crate::{mock::*, Error, *};
 	use cf_traits::{mocks::vault_rotation::clear_confirmation, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
-	use sp_runtime::traits::{BadOrigin, Zero};
+	use hex_literal::hex;
+	use sp_runtime::{
+		app_crypto::RuntimePublic,
+		traits::{BadOrigin, Zero},
+		KeyTypeId,
+	};
 
 	const ALICE: u64 = 100;
 
@@ -328,6 +333,16 @@ mod tests {
 				ValidatorPallet::validator_cfe_version(validator),
 				"we should be still on the same new version"
 			);
+		});
+	}
+
+	#[test]
+	fn sign_a_message_and_verify() {
+		new_test_ext().execute_with(|| {
+			let public = Ed25519PublicKey::from_raw(hex!(
+				"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+			));
+			let signature = RuntimePublic::sign(&public, KeyTypeId(*b"dumy"), b"a_message");
 		});
 	}
 }

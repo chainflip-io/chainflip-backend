@@ -5,6 +5,9 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
+use hex_literal::hex;
+use sp_runtime::{app_crypto::RuntimePublic, KeyTypeId};
+use sp_std::{convert::TryFrom, str::FromStr};
 
 #[allow(unused)]
 use crate::Pallet as Validator;
@@ -33,6 +36,13 @@ benchmarks! {
 		let validator_id: T::ValidatorId = caller.into();
 		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
 	}
+	register_peer_id {
+		let caller: T::AccountId = whitelisted_caller();
+		let public = Ed25519PublicKey::from_raw(hex!(
+			"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+		));
+		let signature = RuntimePublic::sign(&public, KeyTypeId(*b"dumy"), &caller.encode()).unwrap();
+	}: _(RawOrigin::Signed(caller.clone()), public, signature)
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
