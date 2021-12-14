@@ -31,7 +31,22 @@ pub async fn genesis_keys() {
     let account_ids = ensure_unsorted(vec![doc.clone(), dopey.clone(), bashful.clone()], 0);
     let mut keygen_context =
         KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
-    let valid_keygen_states = keygen_context.generate().await;
+
+    let valid_keygen_states = {
+        let mut count = 0;
+        let value = loop {
+            if count > 20 {
+                panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
+            }
+            let valid_keygen_states = keygen_context.generate().await;
+
+            if valid_keygen_states.key_ready_data().is_some() {
+                break valid_keygen_states;
+            }
+            count += 1;
+        };
+        value
+    };
 
     // Check that we can use the above keys
     let active_ids: Vec<_> = {
@@ -58,10 +73,19 @@ pub async fn genesis_keys() {
 
     println!(
         "Pubkey is (66 chars, 33 bytes): {:?}",
-        hex::encode(valid_keygen_states.key_ready_data().pubkey.serialize())
+        hex::encode(
+            valid_keygen_states
+                .key_ready_data()
+                .expect("successful_keygen")
+                .pubkey
+                .serialize()
+        )
     );
 
-    let secret_keys = &valid_keygen_states.key_ready_data().sec_keys;
+    let secret_keys = &valid_keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .sec_keys;
 
     // pretty print the output :)
     let bashful_secret = secret_keys[&bashful].clone();

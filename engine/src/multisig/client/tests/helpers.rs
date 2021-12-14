@@ -286,8 +286,8 @@ pub struct ValidKeygenStates {
 impl ValidKeygenStates {
     /// Get the key and associated data asserting
     /// that the ceremony has been successful
-    pub fn key_ready_data(&self) -> &KeyReadyData {
-        self.key_ready.as_ref().expect("successful keygen")
+    pub fn key_ready_data(&self) -> Option<&KeyReadyData> {
+        self.key_ready.as_ref().ok()
     }
 
     /// Get a clone of the client for `account_id` from the specified stage
