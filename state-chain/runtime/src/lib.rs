@@ -348,8 +348,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 }
 
 parameter_types! {
-	/// 4 days. When a claim is signed, there needs to be enough time left to be able to cash it in.
-	pub const MinClaimTTL: Duration = Duration::from_secs(2 * CLAIM_DELAY);
 	/// 6 days.
 	pub const ClaimTTL: Duration = Duration::from_secs(3 * CLAIM_DELAY);
 }
@@ -365,7 +363,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
-	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
