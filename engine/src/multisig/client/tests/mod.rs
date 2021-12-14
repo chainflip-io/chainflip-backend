@@ -10,8 +10,6 @@ use lazy_static::lazy_static;
 use log::*;
 use pallet_cf_vaults::CeremonyId;
 
-// use helpers::*;
-
 use crate::{
     multisig::{KeygenInfo, MessageHash},
     p2p::AccountId,
