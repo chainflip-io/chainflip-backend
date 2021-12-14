@@ -60,6 +60,7 @@ async fn run_cli() -> Result<()> {
             .await
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
+        Retire {} => retire_account(&cli_settings, &logger).await,
     }
 }
 
@@ -251,6 +252,16 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
         .expect("Failed to submit set_keys extrinsic");
 
     println!("Session key rotated at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(logger, pallet_cf_staking::Call::retire_account())
+        .await
+        .expect("Could not retire account");
+    println!("Account retired at tx {:#x}.", tx_hash);
     Ok(())
 }
 
