@@ -503,7 +503,7 @@ mod tests {
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
         let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
             tokio::sync::mpsc::unbounded_channel();
-        let (_multisig_event_sender, multisig_outcome_receiver) =
+        let (_multisig_outcome_sender, multisig_outcome_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
         let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
