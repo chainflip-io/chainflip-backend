@@ -186,9 +186,6 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Signature posted too close to expiry time or for an already-expired claim.
-		SignatureTooLate,
-
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
 
