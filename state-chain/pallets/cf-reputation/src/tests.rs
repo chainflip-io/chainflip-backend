@@ -196,7 +196,15 @@ mod tests {
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, &BOB),
+				ReputationPallet::report(OfflineCondition::ParticipateKeygenFailed, &BOB),
+				ReportError::UnknownValidator
+			);
+			assert_noop!(
+				ReputationPallet::report(OfflineCondition::TransactionFailedOnTransmission, &BOB),
+				ReportError::UnknownValidator
+			);
+			assert_noop!(
+				ReputationPallet::report(OfflineCondition::InvalidTransactionAuthored, &BOB),
 				ReportError::UnknownValidator
 			);
 		});
@@ -211,7 +219,15 @@ mod tests {
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, &ALICE),
+				ReputationPallet::report(OfflineCondition::ParticipateKeygenFailed, &ALICE),
+				ReportError::UnknownValidator
+			);
+			assert_noop!(
+				ReputationPallet::report(OfflineCondition::TransactionFailedOnTransmission, &ALICE),
+				ReportError::UnknownValidator
+			);
+			assert_noop!(
+				ReputationPallet::report(OfflineCondition::InvalidTransactionAuthored, &ALICE),
 				ReportError::UnknownValidator
 			);
 		});
@@ -223,7 +239,7 @@ mod tests {
 			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
 			let offline_test = |offline_condition: OfflineCondition,
 			                    who: <Test as frame_system::Config>::AccountId| {
-				let penalty = MockOfflinePenalty::penalty(&offline_condition);
+				let (penalty, _) = MockOfflinePenalty::penalty(&offline_condition);
 				let points_before = reputation_points(who);
 				assert_ok!(ReputationPallet::report(offline_condition.clone(), &who));
 				assert_eq!(
@@ -241,8 +257,9 @@ mod tests {
 			};
 			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
 			offline_test(OfflineCondition::ParticipateSigningFailed, ALICE);
-			offline_test(OfflineCondition::BroadcastOutputFailed, ALICE);
-			offline_test(OfflineCondition::NotEnoughPerformanceCredits, ALICE);
+			offline_test(OfflineCondition::ParticipateKeygenFailed, ALICE);
+			offline_test(OfflineCondition::InvalidTransactionAuthored, ALICE);
+			offline_test(OfflineCondition::TransactionFailedOnTransmission, ALICE);
 		});
 	}
 
@@ -255,7 +272,8 @@ mod tests {
 				OfflineCondition::ParticipateSigningFailed,
 				&ALICE
 			));
-			let penalty = MockOfflinePenalty::penalty(&OfflineCondition::ParticipateSigningFailed);
+			let (penalty, _) =
+				MockOfflinePenalty::penalty(&OfflineCondition::ParticipateSigningFailed);
 			assert_eq!(reputation_points(ALICE), points_before - penalty);
 			assert_eq!(
 				last_event(),
@@ -283,12 +301,12 @@ mod tests {
 	}
 
 	#[test]
-	fn reporting_not_enough_performance_credits_offline_condition_should_not_ban_validator() {
+	fn reporting_invalid_transaction_authored_offline_condition_should_not_ban_validator() {
 		new_test_ext().execute_with(|| {
-			// We do not ban validators for not having enough performance credits
+			// We do not ban validators for authoring an invalid transaction
 			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 			assert_ok!(ReputationPallet::report(
-				OfflineCondition::NotEnoughPerformanceCredits,
+				OfflineCondition::InvalidTransactionAuthored,
 				&ALICE
 			));
 
