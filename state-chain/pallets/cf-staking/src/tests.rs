@@ -5,10 +5,12 @@ use crate::{
 use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use pallet_cf_threshold_signature::Instance1;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
+type FlipEvent = pallet_cf_flip::Event<Test>;
 type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance1>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
@@ -362,6 +364,73 @@ fn test_retirement() {
 		assert_event_stack!(
 			Event::Staking(crate::Event::AccountActivated(_)),
 			Event::Staking(crate::Event::AccountRetired(_))
+		);
+	});
+}
+
+#[test]
+fn claim_expiry() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+		const START_TIME: Duration = Duration::from_secs(10);
+
+		// Start the time at the 10-second mark.
+		time_source::Mock::reset_to(START_TIME);
+
+		// Stake some FLIP.
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+
+		// Alice claims immediately.
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+
+		// Bob claims a little later.
+		time_source::Mock::tick(Duration::from_secs(3));
+		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
+
+		// If we stay within the defined bounds, we can claim.
+		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::tick(Duration::from_secs(4));
+		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG));
+
+		// Trigger expiry.
+		Pallet::<Test>::expire_pending_claims();
+
+		// Nothing should have expired yet.
+		assert!(PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+
+		// Tick the clock forward and expire.
+		time_source::Mock::tick(Duration::from_secs(7));
+		Pallet::<Test>::expire_pending_claims();
+
+		// Alice should have expired but not Bob.
+		assert!(!PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+		assert_event_stack!(
+			Event::Flip(FlipEvent::BalanceSettled(
+				ImbalanceSource::External,
+				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
+				STAKE,
+				0
+			)),
+			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE))
+		);
+
+		// Tick forward again and expire.
+		time_source::Mock::tick(Duration::from_secs(10));
+		Pallet::<Test>::expire_pending_claims();
+
+		// Bob's (unsigned) claim should now be expired too.
+		assert!(!PendingClaims::<Test>::contains_key(BOB));
+		assert_event_stack!(
+			Event::Flip(FlipEvent::BalanceSettled(
+				ImbalanceSource::External,
+				ImbalanceSource::Internal(InternalSource::Account(BOB)),
+				STAKE,
+				0
+			)),
+			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE))
 		);
 	});
 }
