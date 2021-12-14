@@ -1,14 +1,8 @@
 mod tests {
 	use crate::{mock::*, Error, *};
 	use cf_traits::{mocks::vault_rotation::clear_confirmation, IsOutgoing};
-	use frame_support::{assert_noop, assert_ok, log};
-	use hex_literal::hex;
-	use sp_core::Pair;
-	use sp_runtime::{
-		app_crypto::RuntimePublic,
-		traits::{BadOrigin, Zero},
-		KeyTypeId,
-	};
+	use frame_support::{assert_noop, assert_ok};
+	use sp_runtime::traits::{BadOrigin, Zero};
 
 	const ALICE: u64 = 100;
 
@@ -334,22 +328,6 @@ mod tests {
 				ValidatorPallet::validator_cfe_version(validator),
 				"we should be still on the same new version"
 			);
-		});
-	}
-
-	#[test]
-	fn sign_a_message_and_verify() {
-		new_test_ext().execute_with(|| {
-			let (pair, _) = ed25519::Pair::generate();
-			let public = pair.public();
-			let key = public.0;
-			let m: [u8; 32] = [
-				45, 180, 48, 2, 104, 163, 145, 193, 169, 156, 60, 189, 142, 215, 20, 45, 50, 221,
-				152, 18, 250, 203, 154, 133, 248, 30, 23, 223, 166, 233, 195, 245,
-			];
-			let message = b"Something important";
-			let signature = pair.sign(&m[..]);
-			let sig = signature.0;
 		});
 	}
 }

@@ -5018,7 +5018,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal",
  "pallet-cf-auction",
  "pallet-session",
  "parity-scale-codec",
