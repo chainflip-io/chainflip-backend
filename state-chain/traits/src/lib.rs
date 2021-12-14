@@ -566,8 +566,8 @@ pub mod offline_conditions {
 		type ValidatorId;
 		/// A validator to be banned
 		fn ban(validator_id: &Self::ValidatorId);
-		/// If the offline condition warrants a ban. We currently ban those that have been reported
-		/// for `OfflineCondition::ParticipateSigningFailed` and
+		/// Ban a validator based on an offline condition. We currently ban those
+		/// that have been reported for `OfflineCondition::ParticipateSigningFailed` and
 		/// `OfflineCondition::BroadcastOutputFailed`
 		fn ban_on_condition(offline_condition: OfflineCondition, validator_id: &Self::ValidatorId) {
 			if offline_condition != OfflineCondition::NotEnoughPerformanceCredits {
