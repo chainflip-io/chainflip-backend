@@ -432,11 +432,12 @@ impl cf_traits::WaivedFees for WaivedFees {
 pub struct OfflinePenalty;
 
 impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
-	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
+	fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool) {
 		match condition {
-			OfflineCondition::BroadcastOutputFailed => 15,
-			OfflineCondition::ParticipateSigningFailed => 15,
-			OfflineCondition::NotEnoughPerformanceCredits => 100,
+			OfflineCondition::ParticipateSigningFailed => (15, true),
+			OfflineCondition::ParticipateKeygenFailed => (15, true),
+			OfflineCondition::InvalidTransactionAuthored => (15, false),
+			OfflineCondition::TransactionFailedOnTransmission => (15, false),
 		}
 	}
 }
