@@ -146,8 +146,8 @@ pub async fn start<BlockStream, RpcClient>(
                                     pallet_cf_validator::Event::PeerIdRegistered(
                                         account_id,
                                         peer_id,
-                                        address,
                                         port,
+                                        ip_address,
                                     ),
                                 ) => {
                                     account_peer_mapping_change_sender
@@ -155,8 +155,8 @@ pub async fn start<BlockStream, RpcClient>(
                                             AccountId(*account_id.as_ref()),
                                             peer_id,
                                             AccountPeerMappingChange::Registered(
-                                                address.into(),
                                                 port,
+                                                ip_address.into(),
                                             ),
                                         ))
                                         .unwrap();
