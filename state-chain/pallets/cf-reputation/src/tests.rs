@@ -271,8 +271,7 @@ mod tests {
 	#[test]
 	fn reporting_participate_in_signing_offline_condition_should_also_ban_validator() {
 		new_test_ext().execute_with(|| {
-			// The condition is irrelevant here, we are interested in making sure a ban is called
-			// for this validator
+			// Confirm a ban is called for this validator for this condition
 			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 			assert_ok!(ReputationPallet::report(
 				OfflineCondition::ParticipateSigningFailed,
@@ -280,6 +279,20 @@ mod tests {
 			));
 
 			assert!(MockBanned::is_banned(&ALICE));
+		});
+	}
+
+	#[test]
+	fn reporting_not_enough_performance_credits_offline_condition_should_not_ban_validator() {
+		new_test_ext().execute_with(|| {
+			// We do not ban validators for not having enough performance credits
+			<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
+			assert_ok!(ReputationPallet::report(
+				OfflineCondition::NotEnoughPerformanceCredits,
+				&ALICE
+			));
+
+			assert_eq!(false, MockBanned::is_banned(&ALICE));
 		});
 	}
 }
