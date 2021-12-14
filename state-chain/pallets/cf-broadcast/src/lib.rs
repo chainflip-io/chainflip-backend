@@ -388,6 +388,7 @@ pub mod pallet {
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.into(),
+					OfflineCondition::InvalidTransactionAuthored,
 				)
 			}
 
@@ -431,7 +432,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
@@ -449,6 +450,7 @@ pub mod pallet {
 					Self::report_and_schedule_retry(
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
+						OfflineCondition::TransactionFailedOnTransmission,
 					);
 				},
 				TransmissionFailure::TransactionFailed => {
@@ -520,13 +522,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
-		T::OfflineReporter::report(OfflineCondition::TransactionFailedOnTransmission, signer)
-			.unwrap_or_else(|_| {
-				// Should never fail unless the validator doesn't exist.
-				log::error!("Unable to report unknown validator {:?}", signer);
-				0
-			});
+	fn report_and_schedule_retry(
+		signer: &T::ValidatorId,
+		failed: FailedBroadcastAttempt<T, I>,
+		offline_condition: OfflineCondition,
+	) {
+		T::OfflineReporter::report(offline_condition, signer).unwrap_or_else(|_| {
+			// Should never fail unless the validator doesn't exist.
+			log::error!("Unable to report unknown validator {:?}", signer);
+			0
+		});
 		Self::schedule_retry(failed);
 	}
 
