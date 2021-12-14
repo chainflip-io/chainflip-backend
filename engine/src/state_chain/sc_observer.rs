@@ -106,7 +106,7 @@ pub async fn start<BlockStream, RpcClient>(
     let (mut account_data, mut is_outgoing) =
         get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
 
-    if matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing {
+    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
             latest_block_hash,
