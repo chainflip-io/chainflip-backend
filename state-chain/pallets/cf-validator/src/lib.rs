@@ -244,6 +244,7 @@ pub mod pallet {
 				account_id.clone(),
 				(account_id.clone(), peer_id.clone()),
 			);
+
 			MappedPeers::<T>::insert(peer_id.clone(), ());
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
 			Ok(().into())
