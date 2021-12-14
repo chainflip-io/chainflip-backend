@@ -4,7 +4,7 @@
 # --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWFSbrfEwABMAt8pYGv6GFGjC1ALcwyTPzD6woa1gmt7Xk
 # where the IP address for the bootnode and its identity is provided
 
-cargo run -p state-chain-node -- \
+cargo run -p chainflip-node -- \
   --base-path /tmp/node \
   --chain chainflip-local \
   --port 30333 \

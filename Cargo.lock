@@ -934,6 +934,7 @@ dependencies = [
  "anyhow",
  "cf-chains",
  "chainflip-engine",
+ "chainflip-node",
  "config",
  "futures 0.3.17",
  "hex",
@@ -947,7 +948,6 @@ dependencies = [
  "sp-consensus-aura",
  "sp-core",
  "sp-finality-grandpa",
- "state-chain-node",
  "state-chain-runtime",
  "structopt",
  "tokio 1.13.0",
@@ -1035,6 +1035,49 @@ dependencies = [
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
  "websocket",
  "zeroize",
+]
+
+[[package]]
+name = "chainflip-node"
+version = "0.1.0"
+dependencies = [
+ "cf-p2p",
+ "frame-benchmarking",
+ "frame-benchmarking-cli",
+ "futures 0.3.17",
+ "hex",
+ "hex-literal",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "sc-basic-authorship",
+ "sc-cli",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-executor",
+ "sc-finality-grandpa",
+ "sc-keystore",
+ "sc-rpc",
+ "sc-rpc-api",
+ "sc-service",
+ "sc-telemetry",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-finality-grandpa",
+ "sp-runtime",
+ "sp-timestamp",
+ "state-chain-runtime",
+ "structopt",
+ "substrate-build-script-utils",
+ "substrate-frame-rpc-system",
+ "utilities",
 ]
 
 [[package]]
@@ -8453,49 +8496,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "state-chain-node"
-version = "0.1.0"
-dependencies = [
- "cf-p2p",
- "frame-benchmarking",
- "frame-benchmarking-cli",
- "futures 0.3.17",
- "hex",
- "hex-literal",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "sc-basic-authorship",
- "sc-cli",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-aura",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-keystore",
- "sc-rpc",
- "sc-rpc-api",
- "sc-service",
- "sc-telemetry",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-aura",
- "sp-core",
- "sp-finality-grandpa",
- "sp-runtime",
- "sp-timestamp",
- "state-chain-runtime",
- "structopt",
- "substrate-build-script-utils",
- "substrate-frame-rpc-system",
- "utilities",
-]
 
 [[package]]
 name = "state-chain-runtime"

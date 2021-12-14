@@ -98,8 +98,8 @@ pub mod opaque {
 //   https://substrate.dev/docs/en/knowledgebase/runtime/upgrades#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("state-chain-node"),
-	impl_name: create_runtime_str!("state-chain-node"),
+	spec_name: create_runtime_str!("chainflip-node"),
+	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
 	spec_version: 100,
 	impl_version: 1,

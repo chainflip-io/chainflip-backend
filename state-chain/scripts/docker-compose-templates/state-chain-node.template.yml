@@ -4,7 +4,7 @@ services:
 
   cf-substrate-node-${NODE_NAME}:
     build: ./.
-    image: cf-state-chain-node
+    image: cf-chainflip-node
     networks:
       chainflip:
         ipv4_address: "${SUBNET_BASE}.${NETWORK_SUFFIX}"
@@ -22,4 +22,4 @@ services:
       - "9933"
       - "9944"
       - "30333"
-    command: ./target/release/state-chain-node --dev --ws-external --${NODE_NAME}
+    command: ./target/release/chainflip-node --dev --ws-external --${NODE_NAME}
