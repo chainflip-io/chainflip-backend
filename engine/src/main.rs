@@ -58,7 +58,7 @@ async fn main() {
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (multisig_event_sender, multisig_event_receiver) =
+    let (multisig_outcome_sender, multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
@@ -106,7 +106,7 @@ async fn main() {
             account_id.clone(),
             db,
             multisig_instruction_receiver,
-            multisig_event_sender,
+            multisig_outcome_sender,
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
             shutdown_client_rx,
