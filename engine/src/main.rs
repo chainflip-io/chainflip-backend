@@ -32,7 +32,7 @@ async fn main() {
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
             .await
-            .unwrap();
+            .expect("Failed to connect to state chain");
 
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
@@ -70,8 +70,8 @@ async fn main() {
         .await
         .expect("Failed to create Web3 WebSocket");
 
-    let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, web3.clone()).expect("Failed to create ETH broadcaster");
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+        .expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =
@@ -124,7 +124,7 @@ async fn main() {
                 &root_logger,
             )
             .await
-            .unwrap()
+            .expect("Error in P2P component")
         },
         // Start state chain components
         state_chain::sc_observer::start(

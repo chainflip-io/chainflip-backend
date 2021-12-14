@@ -140,6 +140,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
         assert_eq!(cfe_peer_id, sc_node_peer_id);
 
+        slog::info!(logger, "Peer id is: {}", cfe_peer_id);
+
         if let Some(on_chain_peer_id) =
             account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
         {

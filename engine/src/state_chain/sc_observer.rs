@@ -102,10 +102,10 @@ pub async fn start<BlockStream, RpcClient>(
         Ok(())
     }
 
+    // Initialise the account state
     let (mut account_data, mut is_outgoing) =
         get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
 
-    // Initialise the account state
     if account_data.state == ChainflipAccountState::Validator || is_outgoing {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
@@ -123,6 +123,12 @@ pub async fn start<BlockStream, RpcClient>(
         match result_block_header {
             Ok(block_header) => {
                 let block_hash = block_header.hash();
+                slog::debug!(
+                    logger,
+                    "Processing SC block {} with block hash: {:#x}",
+                    block_header.number,
+                    block_hash
+                );
 
                 let mut received_new_epoch = false;
 
@@ -310,9 +316,9 @@ pub async fn start<BlockStream, RpcClient>(
                                         unsigned_tx,
                                     ),
                                 ) if validator_id == state_chain_client.our_account_id => {
-                                    slog::debug!(
+                                    slog::trace!(
                                         logger,
-                                        "Received signing request {} for transaction: {:?}",
+                                        "Received signing request with attempt_id {} for transaction: {:?}",
                                         attempt_id,
                                         unsigned_tx,
                                     );
@@ -338,7 +344,7 @@ pub async fn start<BlockStream, RpcClient>(
                                             // infallible.
                                             slog::error!(
                                                 logger,
-                                                "Transaction signing attempt {} failed: {:?}",
+                                                "TransactionSigningRequest attempt_id {} failed: {:?}",
                                                 attempt_id,
                                                 e
                                             );
@@ -351,12 +357,6 @@ pub async fn start<BlockStream, RpcClient>(
                                         signed_tx,
                                     ),
                                 ) => {
-                                    slog::debug!(
-                                        logger,
-                                        "Sending signed tx for broadcast attempt {}: {:?}",
-                                        attempt_id,
-                                        hex::encode(&signed_tx),
-                                    );
                                     let response_extrinsic = match eth_broadcaster
                                         .send(signed_tx)
                                         .await
@@ -364,7 +364,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Ok(tx_hash) => {
                                             slog::debug!(
                                                 logger,
-                                                "Successful broadcast attempt {}, tx_hash: {:#x}",
+                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
                                                 attempt_id,
                                                 tx_hash
                                             );
@@ -375,7 +375,7 @@ pub async fn start<BlockStream, RpcClient>(
                                         Err(e) => {
                                             slog::error!(
                                                 logger,
-                                                "Broadcast attempt {} failed: {:?}",
+                                                "TransmissionRequest attempt_id {} failed: {:?}",
                                                 attempt_id,
                                                 e
                                             );
@@ -501,7 +501,7 @@ mod tests {
         let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .unwrap();
-        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone()).unwrap();
+        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &logger).unwrap();
 
         let (sm_window_sender, _sm_window_receiver) =
             tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
