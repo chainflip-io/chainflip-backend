@@ -35,7 +35,7 @@ pub async fn genesis_keys() {
     let valid_keygen_states = {
         let mut count = 0;
         let value = loop {
-            if count > 20 {
+            if count >= 20 {
                 panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
             }
             let valid_keygen_states = keygen_context.generate().await;
