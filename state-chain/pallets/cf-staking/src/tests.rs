@@ -5,12 +5,10 @@ use crate::{
 use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use pallet_cf_threshold_signature::Instance1;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
-type FlipEvent = pallet_cf_flip::Event<Test>;
 type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance1>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];

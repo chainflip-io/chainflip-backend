@@ -159,7 +159,6 @@ impl pallet_cf_staking::Config for Test {
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
-	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
 	type StakerId = AccountIdU64;
 	type NonceProvider = Self;

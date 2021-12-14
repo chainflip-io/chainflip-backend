@@ -96,12 +96,6 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
-		/// The minimum period before a claim should expire. The main purpose is to make sure
-		/// we have some margin for error between the signature being issued and the extrinsic
-		/// actually being processed.
-		#[pallet::constant]
-		type MinClaimTTL: Get<Duration>;
-
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
@@ -379,15 +373,6 @@ pub mod pallet {
 
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
-
-			// Make sure the expiry time is still sane.
-			// let min_ttl = T::MinClaimTTL::get();
-			// let _ = claim_details
-			// 	.expiry
-			// 	.low_u64()
-			// 	.checked_sub(T::TimeSource::now().as_secs())
-			// 	.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
-			// 	.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
