@@ -110,7 +110,7 @@ pub mod pallet {
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
 		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey),
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u128, u16),
 		/// A validator has unregistered her current PeerId
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
@@ -228,6 +228,8 @@ pub mod pallet {
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
+			address: u128,
+			port: u16,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -242,11 +244,11 @@ pub mod pallet {
 			);
 			AccountPeerMapping::<T>::insert(
 				account_id.clone(),
-				(account_id.clone(), peer_id.clone()),
+				(account_id.clone(), peer_id.clone(), address, port),
 			);
 
 			MappedPeers::<T>::insert(peer_id.clone(), ());
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, address, port));
 			Ok(().into())
 		}
 
@@ -317,7 +319,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
 	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey)>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey, u128, u16)>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
@@ -571,7 +573,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

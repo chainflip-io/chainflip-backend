@@ -322,7 +322,9 @@ mod tests {
 			assert_ok!(state_chain_runtime::Validator::register_peer_id(
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				peer_keypair.public(),
-				peer_keypair.sign(&node_id.encode()[..])
+				0,
+				0,
+				peer_keypair.sign(&node_id.encode()[..]),
 			));
 		}
 
