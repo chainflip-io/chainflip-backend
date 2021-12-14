@@ -137,6 +137,7 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -184,6 +185,7 @@ impl CeremonyManager {
                 "Request to sign ignored: incorrect number of signers {}/{}",
                 signers.len(), signers_expected
             );
+            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -193,6 +195,7 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };

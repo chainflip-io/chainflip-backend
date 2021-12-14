@@ -157,6 +157,7 @@ pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutc
 pub enum MultisigOutcome {
     Signing(SigningOutcome),
     Keygen(KeygenOutcome),
+    Ignore,
 }
 
 /// Multisig client is is responsible for persistently storing generated keys and
