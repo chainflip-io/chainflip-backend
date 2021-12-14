@@ -471,32 +471,42 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .local_listen_addresses()
             .await?
             .into_iter()
-            .map(|multiaddr| {
-                let mut multiaddr = Multiaddr::from_str(&multiaddr)?;
+            .map(|string_multiaddr| {
+                let multiaddr = Multiaddr::from_str(&string_multiaddr)?;
+                let protocols = multiaddr.into_iter().collect::<Vec<_>>();
+
+                // Note: Nodes started without validator argument will also listen with a WebSocket (Therefore their protocol list will also contain a WS element)
+
                 Ok((
-                    match multiaddr.pop() {
-                        Some(Protocol::P2p(multihash)) => Ok(PeerId::from_multihash(multihash)
-                            .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))?),
-                        protocol => Err(anyhow::Error::msg(format!(
-                            "Expected P2p Protocol, got {:?}",
-                            protocol
-                        ))),
-                    }?,
-                    match multiaddr.pop() {
-                        Some(Protocol::Tcp(port)) => Ok(port),
-                        protocol => Err(anyhow::Error::msg(format!(
-                            "Expected Tcp Protocol, got {:?}",
-                            protocol
-                        ))),
-                    }?,
-                    match multiaddr.pop() {
-                        Some(Protocol::Ip6(ip_address)) => Ok(ip_address),
-                        Some(Protocol::Ip4(ip_address)) => Ok(ip_address.to_ipv6_mapped()),
-                        protocol => Err(anyhow::Error::msg(format!(
-                            "Expected Ip Protocol, got {:?}",
-                            protocol
-                        ))),
-                    }?,
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::P2p(multihash) => Some(multihash),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected P2p Protocol"))
+                        .and_then(|multihash| {
+                            PeerId::from_multihash(*multihash)
+                                .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))
+                        })
+                        .with_context(|| string_multiaddr.clone())?,
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::Tcp(port) => Some(*port),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected Tcp Protocol"))
+                        .with_context(|| string_multiaddr.clone())?,
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::Ip6(ip_address) => Some(*ip_address),
+                            Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected Ip Protocol"))
+                        .with_context(|| string_multiaddr.clone())?,
                 ))
             })
             .collect::<Result<Vec<_>>>()
