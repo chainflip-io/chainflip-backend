@@ -75,7 +75,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
 {
-    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
+    let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
 
     type TaskEndBlock = Arc<Mutex<Option<u64>>>;

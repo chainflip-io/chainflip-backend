@@ -312,6 +312,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     }) => {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
                     }
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
+                        code: ErrorCode::ServerError(1010),
+                        ..
+                    }) => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                    }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
                         slog::error!(
