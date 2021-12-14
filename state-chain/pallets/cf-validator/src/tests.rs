@@ -311,7 +311,10 @@ mod tests {
 
 			// When we submit the same version we should see no `CFEVersionUpdated` event
 			frame_system::Pallet::<Test>::reset_events();
-			assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
+			assert_ok!(ValidatorPallet::cfe_version(
+				Origin::signed(validator),
+				new_version.clone()
+			));
 
 			assert_eq!(
 				0,
