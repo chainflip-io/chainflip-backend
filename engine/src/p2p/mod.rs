@@ -47,7 +47,7 @@ impl std::fmt::Debug for AccountId {
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
-    Registered(std::net::Ipv6Addr, u16),
+    Registered(u16, Ipv6Addr),
     Unregistered,
 }
 
@@ -94,7 +94,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer = state_chain_client
-        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u128, u16)>(
+        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u16, u128)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
@@ -103,13 +103,13 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await?
         .into_iter()
-        .map(|(account_id, public_key, ip_address, port)| {
+        .map(|(account_id, public_key, port, ip_address)| {
             Ok((
                 AccountId(*account_id.as_ref()),
                 (
                     public_key_to_peer_id(&public_key)?,
-                    Ipv6Addr::from(ip_address),
-                    port
+                    port,
+                    ip_address.into(),
                 )
             ))
         })
@@ -149,7 +149,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
         assert_eq!(cfe_peer_id, peer_id); // TODO
 
-        if Some(&(peer_id, ip_address, port))
+        if Some(&(peer_id, port, ip_address))
             != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
         {
             state_chain_client
@@ -157,8 +157,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                     &logger,
                     pallet_cf_validator::Call::register_peer_id(
                         sp_core::ed25519::Public(keypair.public().encode()),
-                        ip_address.into(),
                         port,
+                        ip_address.into(),
                         sp_core::ed25519::Signature::try_from(
                             &keypair.sign(&state_chain_client.our_account_id.encode()[..])[..],
                         )
@@ -168,31 +168,29 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 .await?;
         }
     }
-
-    {
-        client
-            .set_peers(
-                account_to_peer
-                    .values()
-                    .map(|(peer_id, address, port)| {
-                        (PeerIdTransferable::from(peer_id), *address, *port)
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(rpc_error_into_anyhow_error)
-            .with_context(|| {
-                format!(
-                    "Failed to add peers to reserved set: {:#?}",
-                    account_to_peer
-                )
-            })?;
-        slog::info!(
-            logger,
-            "Added peers to reserved set: {:#?}",
+    
+    client
+        .set_peers(
             account_to_peer
-        );
-    }
+                .values()
+                .map(|(peer_id, port, ip_address)| {
+                    (PeerIdTransferable::from(peer_id), *port, *ip_address)
+                })
+                .collect(),
+        )
+        .await
+        .map_err(rpc_error_into_anyhow_error)
+        .with_context(|| {
+            format!(
+                "Failed to add peers to reserved set: {:#?}",
+                account_to_peer
+            )
+        })?;
+    slog::info!(
+        logger,
+        "Added peers to reserved set: {:#?}",
+        account_to_peer
+    );
 
     let mut incoming_p2p_message_stream = client
         .subscribe_messages()
@@ -235,14 +233,14 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 match public_key_to_peer_id(&peer_public_key) {
                     Ok(peer_id) => {
                         match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(address, port) => {
+                            AccountPeerMappingChange::Registered(port, ip_address) => {
                                 if account_to_peer.contains_key(&account_id) || peer_to_account.contains_key(&peer_id) {
                                     // This is currently possible, but can be avoided. TODO Resolve
                                     slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 } else {
-                                    account_to_peer.insert(account_id.clone(), (peer_id.clone(), address.into(), port));
+                                    account_to_peer.insert(account_id.clone(), (peer_id.clone(), port, ip_address));
                                     peer_to_account.insert(peer_id, account_id);
-                                    if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), address, port).await.map_err(rpc_error_into_anyhow_error) {
+                                    if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
                                         slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
                                     } else {
                                         slog::info!(logger, "Added peer {} to reserved set", peer_id);

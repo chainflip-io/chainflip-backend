@@ -85,13 +85,13 @@ struct P2PValidatorNetworkNodeState {
 	/// Store all local rpc subscriber senders
 	p2p_message_rpc_subscribers:
 		HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
-	reserved_peers: BTreeMap<PeerId, (Ipv6Addr, u16)>,
+	reserved_peers: BTreeMap<PeerId, (u16, Ipv6Addr)>,
 }
 
 /// An abstration of the underlying network of peers.
 pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn reserve_peer(&self, peer_id: PeerId, address: Ipv6Addr, port: u16);
+	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 	/// Write notification to network to peer id, over protocol
@@ -102,7 +102,7 @@ pub trait PeerNetwork {
 
 /// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
 impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
-	fn reserve_peer(&self, peer_id: PeerId, address: Ipv6Addr, port: u16) {
+	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr) {
 		if let Err(err) = self.add_peers_to_reserved_set(
 			CHAINFLIP_P2P_PROTOCOL_NAME,
 			std::iter::once(
@@ -152,11 +152,11 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 
 	/// Connect to validators and disconnect from old validators
 	#[rpc(name = "p2p_set_peers")]
-	fn set_peers(&self, peers: Vec<(PeerIdTransferable, Ipv6Addr, u16)>) -> Result<u64>;
+	fn set_peers(&self, peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>) -> Result<u64>;
 
 	/// Connect to a validator
 	#[rpc(name = "p2p_add_peer")]
-	fn add_peer(&self, peer_id: PeerIdTransferable, address: Ipv6Addr, port: u16) -> Result<u64>;
+	fn add_peer(&self, peer_id: PeerIdTransferable, port: u16, address: Ipv6Addr) -> Result<u64>;
 
 	/// Disconnect from a validator
 	#[rpc(name = "p2p_remove_peer")]
@@ -205,11 +205,11 @@ pub fn new_p2p_validator_network_node<
 				/// Connect to validators
 				fn set_peers(
 					&self,
-					peers: Vec<(PeerIdTransferable, Ipv6Addr, u16)>,
+					peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>,
 				) -> Result<u64> {
 					let mut peers = peers
 						.into_iter()
-						.map(|(peer_id, address, port)| Ok((peer_id.try_into()?, (address, port))))
+						.map(|(peer_id, port, address)| Ok((peer_id.try_into()?, (port, address))))
 						.collect::<std::result::Result<BTreeMap<_, _>, _>>()?;
 
 					let mut state = self.state.write().unwrap();
@@ -220,18 +220,18 @@ pub fn new_p2p_validator_network_node<
 
 					// TODO Check that removing then adding a peer is enough
 
-					for (peer_id, _) in peers.iter().filter(|(peer_id, addr_port)| {
-						state.reserved_peers.get(peer_id) != Some(addr_port)
+					for (peer_id, _) in peers.iter().filter(|(peer_id, port_addr)| {
+						state.reserved_peers.get(peer_id) != Some(port_addr)
 					}) {
 						self.p2p_network_service.remove_reserved_peer(peer_id.clone());
 					}
 
-					for (peer_id, (addr, port)) in state
+					for (peer_id, (port, addr)) in state
 						.reserved_peers
 						.iter()
 						.filter(|(peer_id, addr_port)| peers.get(peer_id) != Some(addr_port))
 					{
-						self.p2p_network_service.reserve_peer(peer_id.clone(), *addr, *port);
+						self.p2p_network_service.reserve_peer(peer_id.clone(), *port, *addr);
 					}
 
 					log::info!(
@@ -247,13 +247,13 @@ pub fn new_p2p_validator_network_node<
 				fn add_peer(
 					&self,
 					peer_id: PeerIdTransferable,
-					address: Ipv6Addr,
 					port: u16,
+					ip_address: Ipv6Addr,
 				) -> Result<u64> {
 					let peer_id: PeerId = peer_id.try_into()?;
 					let mut state = self.state.write().unwrap();
-					if let Some(address_port) = state.reserved_peers.get(&peer_id) {
-						if address_port == &(address, port) {
+					if let Some(port_addr) = state.reserved_peers.get(&peer_id) {
+						if port_addr == &(port, ip_address) {
 							return Err(jsonrpc_core::Error::invalid_params(format!(
 								"Tried to add peer {} which is already reserved",
 								peer_id
@@ -262,8 +262,8 @@ pub fn new_p2p_validator_network_node<
 							self.p2p_network_service.remove_reserved_peer(peer_id);
 						}
 					}
-					state.reserved_peers.insert(peer_id, (address, port));
-					self.p2p_network_service.reserve_peer(peer_id, address, port);
+					state.reserved_peers.insert(peer_id, (port, ip_address));
+					self.p2p_network_service.reserve_peer(peer_id, port, ip_address);
 					log::info!(
 						"Added reserved {} peer (Total Reserved: {})",
 						CHAINFLIP_P2P_PROTOCOL_NAME,

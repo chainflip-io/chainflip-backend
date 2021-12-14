@@ -110,7 +110,7 @@ pub mod pallet {
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
 		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u128, u16),
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, u128),
 		/// A validator has unregistered her current PeerId
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
@@ -228,8 +228,8 @@ pub mod pallet {
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
-			address: u128,
 			port: u16,
+			ip_address: u128,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -244,11 +244,11 @@ pub mod pallet {
 			);
 			AccountPeerMapping::<T>::insert(
 				account_id.clone(),
-				(account_id.clone(), peer_id.clone(), address, port),
+				(account_id.clone(), peer_id.clone(), port, ip_address),
 			);
 
 			MappedPeers::<T>::insert(peer_id.clone(), ());
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, address, port));
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
@@ -319,7 +319,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
 	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey, u128, u16)>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey, u16, u128)>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]

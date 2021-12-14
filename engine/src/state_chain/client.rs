@@ -187,7 +187,7 @@ pub trait StateChainRpcApi {
 
     async fn rotate_keys(&self) -> Result<Bytes>;
 
-    async fn system_local_listen_addresses(&self) -> Result<Vec<String>>;
+    async fn local_listen_addresses(&self) -> Result<Vec<String>>;
 }
 
 #[async_trait]
@@ -243,7 +243,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("storage_pairs RPC API failed")
     }
 
-    async fn system_local_listen_addresses(&self) -> Result<Vec<String>> {
+    async fn local_listen_addresses(&self) -> Result<Vec<String>> {
         self.system_rpc_client
             .system_local_listen_addresses()
             .await
@@ -457,7 +457,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
     pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, u16, Ipv6Addr)>> {
         self.state_chain_rpc_client
-            .system_local_listen_addresses()
+            .local_listen_addresses()
             .await?
             .into_iter()
             .map(|multiaddr| {
@@ -479,8 +479,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         ))),
                     }?,
                     match multiaddr.pop() {
-                        Some(Protocol::Ip6(address)) => Ok(address),
-                        Some(Protocol::Ip4(address)) => Ok(address.to_ipv6_mapped()),
+                        Some(Protocol::Ip6(ip_address)) => Ok(ip_address),
+                        Some(Protocol::Ip4(ip_address)) => Ok(ip_address.to_ipv6_mapped()),
                         protocol => Err(anyhow::Error::msg(format!(
                             "Expected Ip Protocol, got {:?}",
                             protocol
