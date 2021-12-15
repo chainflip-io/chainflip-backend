@@ -32,7 +32,7 @@ async fn main() {
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
             .await
-            .unwrap();
+            .expect("Failed to connect to state chain");
 
     let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
@@ -58,7 +58,7 @@ async fn main() {
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (multisig_event_sender, multisig_event_receiver) =
+    let (multisig_outcome_sender, multisig_outcome_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
@@ -70,8 +70,8 @@ async fn main() {
         .await
         .expect("Failed to create Web3 WebSocket");
 
-    let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, web3.clone()).expect("Failed to create ETH broadcaster");
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+        .expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =
@@ -106,7 +106,7 @@ async fn main() {
             account_id.clone(),
             db,
             multisig_instruction_receiver,
-            multisig_event_sender,
+            multisig_outcome_sender,
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
             shutdown_client_rx,
@@ -124,7 +124,7 @@ async fn main() {
                 &root_logger,
             )
             .await
-            .unwrap()
+            .expect("Error in P2P component")
         },
         // Start state chain components
         state_chain::sc_observer::start(
@@ -133,7 +133,7 @@ async fn main() {
             eth_broadcaster,
             multisig_instruction_sender,
             account_peer_mapping_change_sender,
-            multisig_event_receiver,
+            multisig_outcome_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,

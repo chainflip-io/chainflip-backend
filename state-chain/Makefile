@@ -1,10 +1,10 @@
 .PHONY: run-tmp
 run-tmp:
-	SKIP_WASM_BUILD= cargo run --bin state-chain-node -- --dev --tmp -lruntime=debug
+	SKIP_WASM_BUILD= cargo run --bin chainflip-node -- --dev --tmp -lruntime=debug
 
 .PHONY: run
 run:
-	SKIP_WASM_BUILD= cargo run --bin state-chain-node -- --dev -lruntime=debug
+	SKIP_WASM_BUILD= cargo run --bin chainflip-node -- --dev -lruntime=debug
 
 .PHONY: toolchain
 toolchain:
@@ -12,15 +12,15 @@ toolchain:
 
 .PHONY: build-full
 build-full:
-	cargo build -p state-chain-node
+	cargo build -p chainflip-node
 
 .PHONY: check
 check:
-	SKIP_WASM_BUILD= cargo check -p state-chain-node
+	SKIP_WASM_BUILD= cargo check -p chainflip-node
 
 .PHONY: build
 build:
-	SKIP_WASM_BUILD= cargo build -p state-chain-node
+	SKIP_WASM_BUILD= cargo build -p chainflip-node
 
 .PHONY: test
 test:

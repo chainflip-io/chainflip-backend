@@ -1,6 +1,6 @@
 # Setting up Docker Compose
 
-First, generate a `docker-compose.yml` file using the `gen-chain-docker-compose.sh` utility script. As arguments, pass valid `--name` arguments (alice, bob, charlie etc... see `state-chain-node --help` for a full list). The script should output a valid docker-compose config to `stdout`. Pipe this to a custom `docker-compose` configuration file:
+First, generate a `docker-compose.yml` file using the `gen-chain-docker-compose.sh` utility script. As arguments, pass valid `--name` arguments (alice, bob, charlie etc... see `chainflip-node --help` for a full list). The script should output a valid docker-compose config to `stdout`. Pipe this to a custom `docker-compose` configuration file:
 
 ```bash
 ./scripts/gen-chain-docker-compose.sh alice bob eve > docker-compose.yml
@@ -25,7 +25,7 @@ Note which of the named nodes this ID corresponds to (*Alice*, in this case) - w
 Now, open the `docker-compose` config generated above and for each of the *other* nodes in the config, add `--bootnodes /ip4/${bootnode-ip-address}/tcp/30333/p2p/${bootnode-peer-id}` to the end of the command, replacing `${boootnode-ip-address}` and `${bootnode-peer-id}` with the bootstrap node's ip and the id from the log. It should look like this: 
 
 ```yaml
-  command: ./target/release/state-chain-node --dev --ws-external --eve --bootnodes /ip4/172.28.0.2/tcp/30333/p2p/12D3KooWJo19xzLH4QFxCo8YE6ZHbA9L8SH6MZbLGaWRC4UZLQj5
+  command: ./target/release/chainflip-node --dev --ws-external --eve --bootnodes /ip4/172.28.0.2/tcp/30333/p2p/12D3KooWJo19xzLH4QFxCo8YE6ZHbA9L8SH6MZbLGaWRC4UZLQj5
 ```
 
 Save this file and run `docker-compose up` again, and the nodes should connect! Something like this:

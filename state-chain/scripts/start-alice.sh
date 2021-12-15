@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Start Alice's node
-cargo run -p state-chain-node -- \
+cargo run -p chainflip-node -- \
   --base-path /tmp/alice \
   --chain local \
   --alice \

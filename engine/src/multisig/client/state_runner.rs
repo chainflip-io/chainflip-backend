@@ -15,7 +15,7 @@ use crate::{
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
 
-const MAX_STAGE_DURATION: Duration = Duration::from_secs(15);
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(300); // TODO Look at this value
 
 #[derive(Clone)]
 pub struct StateAuthorised<CeremonyData, CeremonyResult>

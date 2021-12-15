@@ -1,6 +1,6 @@
 #!/bin/sh
 
-cargo run -p state-chain-node -- \
+cargo run -p chainflip-node -- \
   --base-path /tmp/charlie \
   --chain local \
   --charlie \

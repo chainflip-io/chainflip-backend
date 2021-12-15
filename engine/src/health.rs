@@ -90,7 +90,7 @@ impl HealthMonitor {
                             }
                         },
                         Err(error) => {
-                            slog::warn!(logger, "Could not open CFE health check TCP stream: {}", error);
+                            slog::error!(logger, "Could not open CFE health check TCP stream: {}", error);
                         }
                     },
                 };

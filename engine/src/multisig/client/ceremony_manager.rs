@@ -165,6 +165,8 @@ where
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                // TODO: Look at better way of releasing the lock on the sc_observer
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -219,6 +221,8 @@ where
                 "Request to sign ignored: incorrect number of signers {}/{}",
                 signers.len(), signers_expected
             );
+            // TODO: Look at better way of releasing the lock on the sc_observer
+            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -228,6 +232,8 @@ where
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                // TODO: Look at better way of releasing the lock on the sc_observer
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
