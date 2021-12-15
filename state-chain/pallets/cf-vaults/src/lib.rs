@@ -576,7 +576,7 @@ pub mod pallet {
 				.expect("Can't build genesis without a valid ethereum vault key.");
 
 			Vaults::<T>::insert(
-				0,
+				T::EpochInfo::epoch_index(),
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
