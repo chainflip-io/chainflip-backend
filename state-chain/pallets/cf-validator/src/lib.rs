@@ -239,7 +239,7 @@ pub mod pallet {
 			);
 
 			if AccountPeerMapping::<T>::get(&account_id)
-				.filter(|(_, existing_peer_id, _, _)| existing_peer_id == peer_id)
+				.filter(|(_, existing_peer_id, _, _)| *existing_peer_id == peer_id)
 				.is_none()
 			{
 				ensure!(
