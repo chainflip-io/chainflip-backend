@@ -1,4 +1,7 @@
-use crate::multisig::client::{self, tests::helpers::check_blamed_paries};
+use crate::multisig::client::{
+    self,
+    tests::helpers::{check_blamed_paries, verify_sig_with_aggkey},
+};
 
 use client::tests::*;
 
@@ -462,10 +465,12 @@ async fn should_ignore_rts_with_duplicate_signer() {
 #[tokio::test]
 async fn should_sign_with_all_parties() {
     let mut ctx = helpers::KeygenContext::new();
-    let _ = ctx.generate().await;
+    let keygen_states = ctx.generate().await;
 
     // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
     let sign_states = ctx.sign_with_ids(&ACCOUNT_IDS).await;
 
-    assert_ok!(sign_states.outcome.result);
+    // Signing should complete and produce a valid signature
+    assert_ok!(sign_states.outcome.result.clone());
+    assert_ok!(verify_sig_with_aggkey(keygen_states, sign_states));
 }
