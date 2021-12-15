@@ -73,8 +73,8 @@ pub trait EpochInfo {
 	/// Checks if the account is currently a validator.
 	fn is_validator(account: &Self::ValidatorId) -> bool;
 
-	/// The amount to be used as bond, this is the minimum stake needed to get into the
-	/// candidate validator set
+	/// The amount to be used as bond, this is the minimum stake needed to be included in the
+	/// current candidate validator set
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
