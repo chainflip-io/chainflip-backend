@@ -13,7 +13,6 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal deps
-pallet-cf-auction = { path = '../cf-auction', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 log = { version = '0.4.14', default-features = false }
 
@@ -90,7 +89,6 @@ std = [
     'sp-core/std',
     'sp-runtime/std',
     'pallet-session/std',
-    'pallet-cf-auction/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
