@@ -138,14 +138,18 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
         let sc_node_peer_id = state_chain_client.get_local_peer_id().await?;
 
-        assert_eq!(cfe_peer_id, sc_node_peer_id);
+        if cfe_peer_id != sc_node_peer_id {
+            return Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file configuration option.", sc_node_peer_id, cfe_peer_id)));
+        }
 
         slog::info!(logger, "Peer id is: {}", cfe_peer_id);
 
         if let Some(on_chain_peer_id) =
             account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
         {
-            assert_eq!(on_chain_peer_id, &sc_node_peer_id);
+            if on_chain_peer_id != &sc_node_peer_id {
+                return Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you registered on the Chainflip Blockchain ({}).", sc_node_peer_id, on_chain_peer_id)));
+            }
         } else {
             state_chain_client
                 .submit_signed_extrinsic(
