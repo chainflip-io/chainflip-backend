@@ -31,9 +31,9 @@ pub const BID_TO_BE_USED: Amount = 101;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
-	pub static OLD_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
-	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static OLD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
+	pub static BIDDERS: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static WINNERS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
@@ -284,11 +284,12 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+pub const DUMMY_GENESIS_VALIDATORS: &'static [ValidatorId] = &[ValidatorId::MAX];
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	// Initialise the auctioneer with an auction result
+	// This would be the genesis validators and a bid
 	MockAuctioneer::set_auction_result(AuctionResult {
 		winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
 		minimum_active_bid: BID_TO_BE_USED
@@ -314,7 +315,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn old_validators() -> Vec<u64> {
+pub fn old_validators() -> Vec<ValidatorId> {
 	OLD_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 

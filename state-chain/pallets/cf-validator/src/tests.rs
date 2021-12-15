@@ -4,7 +4,7 @@ mod tests {
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
-	const ALICE: u64 = 100;
+	const ALICE: ValidatorId = 100;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
