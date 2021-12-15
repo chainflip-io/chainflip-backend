@@ -392,7 +392,7 @@ mod tests {
         };
 
         // Load the junk opts into the settings
-        let settings = Settings::new(opts.clone()).unwrap();
+        let settings = Settings::from_default_file("config/Default.toml", opts.clone()).unwrap();
 
         // Compare the opts and the settings
         assert_eq!(opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
