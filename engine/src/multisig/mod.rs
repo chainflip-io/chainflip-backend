@@ -100,7 +100,6 @@ where
                     client.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
-                    slog::trace!(logger, "Cleaning up multisig states");
                     client.cleanup();
                 }
                 Ok(()) = &mut shutdown_rx => {

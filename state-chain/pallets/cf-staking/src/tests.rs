@@ -388,22 +388,6 @@ fn claim_expiry() {
 		time_source::Mock::tick(Duration::from_secs(3));
 		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
 
-		// We can't insert a sig if the claim has expired.
-		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_secs(10));
-		assert_noop!(
-			Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG),
-			<Error<Test>>::SignatureTooLate
-		);
-
-		// We can't insert a sig if expiry is too close either.
-		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_secs(8));
-		assert_noop!(
-			Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG),
-			<Error<Test>>::SignatureTooLate
-		);
-
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_secs(4));

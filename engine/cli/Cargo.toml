@@ -25,9 +25,9 @@ pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
 cf-chains = {path = "../../state-chain/chains"}
-state-chain-node = {path = "../../state-chain/node"}
+chainflip-node = {path = "../../state-chain/node"}
 
 # Substrate key types
-sp-core = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
-sp-consensus-aura = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
-sp-finality-grandpa = {git='https://github.com/paritytech/substrate.git', tag="monthly-2021-09+1"}
+sp-core = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}
+sp-consensus-aura = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}
+sp-finality-grandpa = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}

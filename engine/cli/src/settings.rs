@@ -32,6 +32,8 @@ pub enum CFCommand {
     },
     #[structopt(about = "Rotate your session keys")]
     Rotate {},
+    #[structopt(about = "Retire from Auction participation")]
+    Retire {},
 }
 
 #[derive(Deserialize, Debug, Default)]

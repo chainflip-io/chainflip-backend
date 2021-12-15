@@ -18,20 +18,20 @@ bs58 = '0.4.0'
 futures = { version = '0.3.4', features = ['compat'] }
 
 [dependencies.sp-runtime]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sc-network]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-core]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sc-rpc]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 features = ['test-helpers']
 
 [dev-dependencies]
