@@ -227,7 +227,7 @@ mod tests {
 	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
-			// We should have a set of 0 validators on genesis with a minimum bid of 0 set
+			// We should have a set of validators on genesis with a minimum bid of 0 set
 			assert_eq!(
 				current_validators().len(),
 				DUMMY_GENESIS_VALIDATORS.len(),
