@@ -942,7 +942,11 @@ mod tests {
 						"we should be back waiting for bids after a successful auction and rotation"
 					);
 
-					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					let AuctionResult { mut winners, minimum_active_bid } =
 						Auction::last_auction_result().expect("last auction result");
@@ -999,7 +1003,11 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(2);
-					assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 				});
 		}
 	}
@@ -1034,7 +1042,11 @@ mod tests {
 					// Move forward one block to process events
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(GENESIS_EPOCH, Validator::epoch_index(), "We should be in the genesis epoch");
+					assert_eq!(
+						GENESIS_EPOCH,
+						Validator::epoch_index(),
+						"We should be in the genesis epoch"
+					);
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
@@ -1140,7 +1152,7 @@ mod tests {
 	}
 
 	mod validators {
-		use crate::tests::{genesis, GENESIS_EPOCH, network, NodeId, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1198,7 +1210,11 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in a new epoch"
+					);
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
@@ -1276,7 +1292,11 @@ mod tests {
 					// Start an auction and wait for rotation
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
@@ -1305,7 +1325,11 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the same epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the same epoch"
+					);
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1318,7 +1342,11 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					// Emergency state reset
 					assert!(

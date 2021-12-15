@@ -256,7 +256,6 @@ impl BidderProvider for MockBidderProvider {
 	}
 }
 
-
 thread_local! {
 	pub static OLD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 }
