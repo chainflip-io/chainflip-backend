@@ -231,7 +231,7 @@ fn chainflip_three_node_testnet_config_from_env(
 	environment: StateChainEnvironment,
 ) -> Result<ChainSpec, String> {
 	let wasm_binary =
-		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+		WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let doc_sr25519 =
