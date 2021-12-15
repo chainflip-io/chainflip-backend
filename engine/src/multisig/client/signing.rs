@@ -48,7 +48,7 @@ impl SigningInfo {
     }
 }
 
-const PENDING_SIGN_DURATION: Duration = Duration::from_secs(120);
+const PENDING_SIGN_DURATION: Duration = Duration::from_secs(500); // TODO Look at this value
 
 /// A wrapper around SigningInfo that contains the timeout info for cleanup
 #[derive(Clone, Debug)]

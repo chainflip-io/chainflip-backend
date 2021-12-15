@@ -186,10 +186,10 @@ workflows:
             - ghcr-credentials
           <<: *only_main_branches
       - docker-build:
-          name: docker-build-state-chain-node
-          image: chainflip-io/chainflip-backend/state-chain-node
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
-          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
+          name: docker-build-chainflip-node
+          image: chainflip-io/chainflip-backend/chainflip-node
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
+          extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
             - test-single-node
           context:
@@ -215,10 +215,10 @@ workflows:
             - ghcr-credentials
           <<: *only_main_branches
       - docker-build:
-          name: docker-build-state-chain-node
-          image: chainflip-io/chainflip-backend/state-chain-node
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
-          extra_build_args: "--build-arg SERVICE=state-chain-node --build-arg REV=<<pipeline.git.revision>>"
+          name: docker-build-chainflip-node
+          image: chainflip-io/chainflip-backend/chainflip-node
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
+          extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
             - cargo-build-and-test-validator-package
           context:
@@ -231,7 +231,7 @@ workflows:
           requires:
             - clone-cluster-repo
             - docker-build-chainflip-engine
-            - docker-build-state-chain-node
+            - docker-build-chainflip-node
           context:
             - ghcr-credentials
             - do-credentials
@@ -336,7 +336,7 @@ jobs:
       - persist_to_workspace:
           root: ./
           paths:
-            - target/release/state-chain-node
+            - target/release/chainflip-node
             - target/release/chainflip-engine
       - send_notification:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
@@ -356,7 +356,7 @@ jobs:
       - persist_to_workspace:
           root: ./
           paths:
-            - target/release/state-chain-node
+            - target/release/chainflip-node
             - target/release/chainflip-engine
             - target/release/chainflip-cli
       - send_notification:
@@ -487,7 +487,7 @@ jobs:
       - run:
           name: Start Node
           background: true
-          command: ./target/release/state-chain-node --chain cf-dev --node-key-file=node_key_file
+          command: ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file
       - run: sleep 3
       - run:
           name: Start Engine
