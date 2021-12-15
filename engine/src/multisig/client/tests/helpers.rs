@@ -1098,7 +1098,7 @@ impl KeygenContext {
             }
 
             // Verify the signature with the key
-            if let Ok(sig) = outcome.result.clone() {
+            if let Ok(sig) = &outcome.result {
                 verify_sig_with_aggkey(sig, self.key_id.as_ref().expect("should have key"))
                     .expect("Should be valid signature");
             }
@@ -1491,14 +1491,17 @@ pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[A
 }
 
 /// Using the given key_id, verify the signature is correct
-pub fn verify_sig_with_aggkey(sig: SchnorrSignature, key_id: &KeyId) -> Result<()> {
+pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<()> {
     // Get the aggkey
     let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
     let agg_key = AggKey::from_pubkey_compressed(pk_ser.clone());
 
     // Verify the signature with the aggkey
     agg_key
-        .verify(&MESSAGE_HASH.0, &SchnorrVerificationComponents::from(sig))
+        .verify(
+            &MESSAGE_HASH.0,
+            &SchnorrVerificationComponents::from(sig.clone()),
+        )
         .map_err(|e| anyhow::Error::msg(format!("Failed to verify signature: {:?}", e)))?;
 
     Ok(())
