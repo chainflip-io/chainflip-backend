@@ -237,17 +237,22 @@ pub mod pallet {
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
-			ensure!(
-				!AccountPeerMapping::<T>::contains_key(&account_id) &&
+
+			if AccountPeerMapping::<T>::get(&account_id)
+				.filter(|(_, existing_peer_id, _, _)| existing_peer_id == peer_id)
+				.is_none()
+			{
+				ensure!(
 					!MappedPeers::<T>::contains_key(&peer_id),
-				Error::<T>::AccountPeerMappingOverlap
-			);
+					Error::<T>::AccountPeerMappingOverlap
+				);
+				MappedPeers::<T>::insert(peer_id.clone(), ());
+			}
 			AccountPeerMapping::<T>::insert(
 				account_id.clone(),
 				(account_id.clone(), peer_id.clone(), port, ip_address),
 			);
 
-			MappedPeers::<T>::insert(peer_id.clone(), ());
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
