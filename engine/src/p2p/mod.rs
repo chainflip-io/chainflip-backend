@@ -3,6 +3,7 @@ use std::{
     convert::{TryFrom, TryInto},
     net::Ipv6Addr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -24,7 +25,7 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{read_and_decode_file, rpc_error_into_anyhow_error},
+    common::{self, read_and_decode_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
@@ -57,6 +58,50 @@ primarily to avoid the problem where multisig sends messages before the mapping
 has been updated, which is possible at the moment.
 TODO: Batch outgoing messages
 */
+
+async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+    cfe_peer_id: &PeerId,
+    cfe_peer_keypair: &libp2p::identity::ed25519::Keypair,
+    state_chain_client: &Arc<StateChainClient<RPCClient>>,
+    account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (peer_id, port, ip_address) = state_chain_client
+        .get_local_listen_addresses()
+        .await?
+        .into_iter()
+        .sorted()
+        .dedup()
+        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
+        .next()
+        .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
+
+    if *cfe_peer_id == peer_id {
+        if Some(&(peer_id, port, ip_address))
+            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
+        {
+            state_chain_client
+                .submit_signed_extrinsic(
+                    logger,
+                    pallet_cf_validator::Call::register_peer_id(
+                        sp_core::ed25519::Public(cfe_peer_keypair.public().encode()),
+                        port,
+                        ip_address.into(),
+                        sp_core::ed25519::Signature::try_from(
+                            &cfe_peer_keypair.sign(&state_chain_client.our_account_id.encode()[..])
+                                [..],
+                        )
+                        .unwrap(),
+                    ),
+                )
+                .await?;
+        }
+
+        Ok(())
+    } else {
+        Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to the Chainflip Engine ({})", peer_id, cfe_peer_id)))
+    }
+}
 
 fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
     Ok(PeerId::from_public_key(
@@ -126,57 +171,31 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer
     );
 
-    let our_peer_id = {
-        let keypair: libp2p::identity::ed25519::Keypair =
-            read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
-                libp2p::identity::ed25519::SecretKey::from_bytes(
-                    &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
-                )
-                .map_err(anyhow::Error::new)
-            })?
-            .into();
-        let cfe_peer_id = libp2p::identity::PublicKey::Ed25519(keypair.public()).into_peer_id();
-
-        let (peer_id, port, ip_address) = state_chain_client
-            .get_local_listen_addresses()
-            .await?
-            .into_iter()
-            .sorted()
-            .dedup()
-            .filter(|(_, _, ip_address)| !ip_address.is_loopback())
-            .next()
-            .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
-
-        assert_eq!(cfe_peer_id, peer_id); // TODO
-
-        if Some(&(peer_id, port, ip_address))
-            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
-        {
-            state_chain_client
-                .submit_signed_extrinsic(
-                    &logger,
-                    pallet_cf_validator::Call::register_peer_id(
-                        sp_core::ed25519::Public(keypair.public().encode()),
-                        port,
-                        ip_address.into(),
-                        sp_core::ed25519::Signature::try_from(
-                            &keypair.sign(&state_chain_client.our_account_id.encode()[..])[..],
-                        )
-                        .unwrap(),
-                    ),
-                )
-                .await?;
-        }
-
-        peer_id
-    };
+    let cfe_peer_keypair: libp2p::identity::ed25519::Keypair =
+        read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+            libp2p::identity::ed25519::SecretKey::from_bytes(
+                &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
+            )
+            .map_err(anyhow::Error::new)
+        })?
+        .into();
+    let cfe_peer_id =
+        libp2p::identity::PublicKey::Ed25519(cfe_peer_keypair.public()).into_peer_id();
+    update_registered_peer_id(
+        &cfe_peer_id,
+        &cfe_peer_keypair,
+        &state_chain_client,
+        &account_to_peer,
+        &logger,
+    )
+    .await?;
 
     client
         .set_peers(
             account_to_peer
                 .values()
                 .filter_map(|(peer_id, port, ip_address)| {
-                    if our_peer_id != *peer_id {
+                    if cfe_peer_id != *peer_id {
                         Some((PeerIdTransferable::from(peer_id), *port, *ip_address))
                     } else {
                         None
@@ -202,6 +221,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         .subscribe_messages()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
+
+    let mut check_listener_address_stream = common::make_periodic_stream(Duration::from_secs(60));
 
     loop {
         tokio::select! {
@@ -246,7 +267,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                                 } else {
                                     account_to_peer.insert(account_id.clone(), (peer_id.clone(), port, ip_address));
                                     peer_to_account.insert(peer_id, account_id);
-                                    if our_peer_id != peer_id {
+                                    if cfe_peer_id != peer_id {
                                         if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
                                             slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
                                         } else {
@@ -259,7 +280,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                                 if Some(&account_id) == peer_to_account.get(&peer_id) {
                                     account_to_peer.remove(&account_id);
                                     peer_to_account.remove(&peer_id);
-                                    if our_peer_id != peer_id {
+                                    if cfe_peer_id != peer_id {
                                         if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
                                             slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
                                         } else {
@@ -275,6 +296,9 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                     },
                     Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
                 }
+            },
+            Some(()) = check_listener_address_stream.next() => {
+                update_registered_peer_id(&cfe_peer_id, &cfe_peer_keypair, &state_chain_client, &account_to_peer, &logger).await?;
             }
         }
     }
