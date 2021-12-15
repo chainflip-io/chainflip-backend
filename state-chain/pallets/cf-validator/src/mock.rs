@@ -245,7 +245,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
 		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: vec![],
+			winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
 			minimum_active_bid: 0,
 		},
 	};

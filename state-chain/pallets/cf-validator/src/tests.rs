@@ -109,19 +109,11 @@ mod tests {
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
-			// At genesis we have 0 valdiators
-			assert_eq!(mock::current_validators().len(), 0);
+			// At genesis we should have our dummy validators
+			assert_eq!(mock::current_validators().len(), DUMMY_GENESIS_VALIDATORS.len());
 			// ---------- Run Auction
 			// Confirm we are in the waiting state
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// Move forward 2 blocks
-			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// Only the genesis dummy validators as we are nice and fresh
-			assert_eq!(
-				<ValidatorPallet as EpochInfo>::current_validators(),
-				&DUMMY_GENESIS_VALIDATORS[..]
-			);
 			// Run to the epoch
 			run_to_block(10);
 			// We should have now completed an auction have a set of winners to pass as validators
@@ -149,7 +141,7 @@ mod tests {
 			clear_confirmation();
 			run_to_block(14);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
+			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
 			// Force an auction at the next block
@@ -171,7 +163,7 @@ mod tests {
 			}
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
+			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 3);
 			// We have the new set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
 		});
@@ -238,14 +230,14 @@ mod tests {
 			// We should have a set of 0 validators on genesis with a minimum bid of 0 set
 			assert_eq!(
 				current_validators().len(),
-				0,
-				"We shouldn't have a set of validators at genesis"
+				DUMMY_GENESIS_VALIDATORS.len(),
+				"We shouldn have a set of validators at genesis"
 			);
 			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
 			assert_eq!(
 				ValidatorPallet::current_epoch(),
-				0,
-				"the first epoch should be the zeroth epoch"
+				1,
+				"the first epoch should be the first epoch"
 			);
 		});
 	}
