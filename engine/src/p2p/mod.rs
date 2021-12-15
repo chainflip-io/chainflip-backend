@@ -22,7 +22,7 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{read_and_decode_file, rpc_error_into_anyhow_error},
+    common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
@@ -126,14 +126,17 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     );
 
     {
-        let keypair: libp2p::identity::ed25519::Keypair =
-            read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+        let keypair: libp2p::identity::ed25519::Keypair = read_clean_and_decode_hex_str_file(
+            &settings.node_p2p.node_key_file,
+            "Node Key",
+            |str| {
                 libp2p::identity::ed25519::SecretKey::from_bytes(
                     &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
                 )
                 .map_err(anyhow::Error::new)
-            })?
-            .into();
+            },
+        )?
+        .into();
         let cfe_peer_id = libp2p::identity::PublicKey::Ed25519(keypair.public()).into_peer_id();
 
         let sc_node_peer_id = state_chain_client.get_local_peer_id().await?;
