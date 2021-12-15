@@ -238,7 +238,8 @@ pub mod pallet {
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			// Note: Care has been taken to avoid extra reads and writes to MappedPeers if the peer id of the account hasn't changed
+			// Note: Care has been taken to avoid extra reads and writes to MappedPeers if the peer
+			// id of the account hasn't changed
 			if match AccountPeerMapping::<T>::get(&account_id) {
 				Some((_, existing_peer_id, _, _)) if existing_peer_id != peer_id => {
 					MappedPeers::<T>::remove(&existing_peer_id);

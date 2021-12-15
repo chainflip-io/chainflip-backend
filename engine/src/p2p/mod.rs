@@ -260,12 +260,12 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 match public_key_to_peer_id(&peer_public_key) {
                     Ok(peer_id) => {
                         match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(port, ip_address) => {                   
+                            AccountPeerMappingChange::Registered(port, ip_address) => {
                                 if let Some((existing_peer_id, _, _)) = account_to_peer.get(&account_id) {
                                     peer_to_account.remove(&existing_peer_id);
-                                }     
+                                }
                                 if peer_to_account.contains_key(&peer_id) {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);   
+                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 } else {
                                     peer_to_account.insert(peer_id.clone(), account_id.clone());
                                     account_to_peer.insert(account_id, (peer_id.clone(), port, ip_address));
