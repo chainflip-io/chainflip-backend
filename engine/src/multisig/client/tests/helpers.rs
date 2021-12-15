@@ -1,9 +1,11 @@
 use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
 
 use anyhow::Result;
+use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
+use std::convert::TryFrom;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -1481,4 +1483,35 @@ pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[A
     };
 
     assert_eq!(&blamed_parties[..], expected);
+}
+
+/// Using the outcome from the keygen and signing, verify the signature is correct
+pub fn verify_sig_with_aggkey(
+    keygen_states: ValidKeygenStates,
+    sign_states: ValidSigningStates,
+) -> Result<()> {
+    // Get the aggkey
+    let key_ready = keygen_states
+        .key_ready
+        .map_err(|e| anyhow::Error::msg(format!("Keygen unsuccessful: {:?}", e)))?;
+
+    let pk_ser = key_ready.pubkey.serialize().to_vec();
+
+    let agg_key = AggKey::try_from(&pk_ser[..])
+        .map_err(|e| anyhow::Error::msg(format!("Failed to create aggkey: {:?}", e)))?;
+
+    // Get the signature
+    let sig = sign_states
+        .outcome
+        .result
+        .map_err(|e| anyhow::Error::msg(format!("Signing unsuccessful: {:?}", e)))?;
+
+    let sig = SchnorrVerificationComponents::from(sig);
+
+    // Verify the signature with the aggkey
+    agg_key
+        .verify(&MESSAGE_HASH.0, &sig)
+        .map_err(|e| anyhow::Error::msg(format!("Failed to verify signature: {:?}", e)))?;
+
+    Ok(())
 }

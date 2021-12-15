@@ -1,4 +1,4 @@
-use crate::multisig::client::CeremonyAbortReason;
+use crate::multisig::client::{tests::helpers::verify_sig_with_aggkey, CeremonyAbortReason};
 use crate::multisig::MultisigInstruction;
 
 use super::helpers::{self, check_blamed_paries};
@@ -22,8 +22,12 @@ async fn happy_path_results_in_valid_key() {
     // No blaming stage
     assert!(keygen_states.blame_responses6.is_none());
 
-    // Able to generate a valid signature
-    assert!(ctx.sign().await.outcome.result.is_ok());
+    // Able to generate a signature
+    let sign_states = ctx.sign().await;
+    assert_ok!(sign_states.outcome.result.clone());
+
+    // Make sure the signature is valid
+    assert_ok!(verify_sig_with_aggkey(keygen_states, sign_states));
 }
 
 /// If keygen state expires before a formal request to keygen
