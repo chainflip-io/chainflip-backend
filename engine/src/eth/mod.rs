@@ -202,7 +202,13 @@ impl EthBroadcaster {
         let secret_key = read_and_decode_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
-            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
+            |key| {
+                SecretKey::from_str(&key.replace("0x", "")[..])
+                    .map_err(anyhow::Error::new)
+                    .context(
+                        "Failed to read secret key. Malformed key could be due to newline at EOF",
+                    )
+            },
         )
         .unwrap();
         Ok(Self {
