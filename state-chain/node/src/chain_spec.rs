@@ -12,6 +12,8 @@ use state_chain_runtime::{
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
 
+mod network_env;
+
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
@@ -202,8 +204,32 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-/// Initialise a Chainflip testnet
+/// Initialise a Chainflip three-node testnet from the environment. 
 pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
+	chainflip_three_node_testnet_config_from_env(
+		"Three node testnet",
+		"three-node-testnet",
+		ChainType::Local,
+		get_environment(),
+	)
+}
+
+/// Build the chainspec for Soundcheck public testnet.
+pub fn chainflip_soundcheck_config() -> Result<ChainSpec, String> {
+	chainflip_three_node_testnet_config_from_env(
+		"Chainflip Soundcheck",
+		"soundcheck",
+		ChainType::Live,
+		network_env::SOUNDCHECK,
+	)
+}
+
+fn chainflip_three_node_testnet_config_from_env(
+	name: &str,
+	id: &str,
+	chain_type: ChainType,
+	environment: StateChainEnvironment,
+) -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let bashful_sr25519 =
@@ -220,11 +246,11 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		ethereum_chain_id,
 		eth_init_agg_key,
 		genesis_stake_amount,
-	} = get_environment();
+	} = environment;
 	Ok(ChainSpec::from_genesis(
-		"Three node testnet",
-		"three-node-test",
-		ChainType::Local,
+		name,
+		id,
+		chain_type,
 		move || {
 			testnet_genesis(
 				wasm_binary,
