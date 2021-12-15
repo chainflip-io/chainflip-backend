@@ -567,7 +567,10 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { ethereum_vault_key: Default::default(), ethereum_deployment_block: Default::default() }
+			Self {
+				ethereum_vault_key: Default::default(),
+				ethereum_deployment_block: Default::default(),
+			}
 		}
 	}
 
