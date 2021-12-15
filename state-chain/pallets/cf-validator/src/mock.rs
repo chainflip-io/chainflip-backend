@@ -34,13 +34,6 @@ pub const ALICE: ValidatorId = 100;
 pub const BOB: ValidatorId = 101;
 pub const CHARLIE: ValidatorId = 102;
 
-thread_local! {
-	pub static OLD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static BIDDERS: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
-	pub static WINNERS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
-}
-
 construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -177,30 +170,28 @@ impl Auctioneer for MockAuctioneer {
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
 		let auction_error = MockAuctioneer::auction_error();
 		match auction_error {
-			None => {
-				AUCTION_PHASE.with(|cell| {
-					let mut phase = cell.borrow_mut();
-					*phase = match &*phase {
-						AuctionPhase::WaitingForBids => {
-							MockAuctioneer::next_auction();
-							AuctionPhase::BidsTaken(Self::BidderProvider::get_bidders())
-						},
-						AuctionPhase::BidsTaken(bids) => AuctionPhase::ValidatorsSelected(
-							bids.iter().map(|bid| bid.0.clone()).collect(),
-							BID_TO_BE_USED,
+			None => AUCTION_PHASE.with(|cell| {
+				let mut phase = cell.borrow_mut();
+				*phase = match &*phase {
+					AuctionPhase::WaitingForBids => {
+						MockAuctioneer::next_auction();
+						AuctionPhase::BidsTaken(Self::BidderProvider::get_bidders())
+					},
+					AuctionPhase::BidsTaken(bids) => AuctionPhase::ValidatorsSelected(
+						bids.iter().map(|bid| bid.0.clone()).collect(),
+						BID_TO_BE_USED,
+					),
+					AuctionPhase::ValidatorsSelected(validator_ids, minimum_active_bid) =>
+						AuctionPhase::ConfirmedValidators(
+							validator_ids.to_vec(),
+							*minimum_active_bid,
 						),
-						AuctionPhase::ValidatorsSelected(validator_ids, minimum_active_bid) =>
-							AuctionPhase::ConfirmedValidators(validator_ids.to_vec(), *minimum_active_bid),
-						AuctionPhase::ConfirmedValidators(_, _) => AuctionPhase::WaitingForBids,
-					};
-					Ok((*phase).clone())
-				})
-			}
-			Some(err) => {
-				Err(err)
-			}
+					AuctionPhase::ConfirmedValidators(_, _) => AuctionPhase::WaitingForBids,
+				};
+				Ok((*phase).clone())
+			}),
+			Some(err) => Err(err),
 		}
-
 	}
 
 	fn abort() {
@@ -263,6 +254,11 @@ impl BidderProvider for MockBidderProvider {
 			.map(|validator_id| (validator_id.clone(), NEW_BID_TO_BE_USED))
 			.collect()
 	}
+}
+
+
+thread_local! {
+	pub static OLD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 }
 
 pub struct TestEpochTransitionHandler;
