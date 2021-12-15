@@ -454,7 +454,11 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&ctx.get_account_id(0)]
+        .clone();
 
     // Send another keygen request with the same ceremony_id
     c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
@@ -470,7 +474,11 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     let keygen_states = ctx.generate().await;
 
     // Get a client that has already completed keygen
-    let mut c1 = keygen_states.key_ready_data().clients[&ctx.get_account_id(0)].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&ctx.get_account_id(0)]
+        .clone();
     assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
 
     // Receive a comm1 with a used ceremony id (same default keygen ceremony id)

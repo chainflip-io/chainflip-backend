@@ -520,7 +520,11 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     // Get a client that has not used the default signing ceremony id yet
     let id0 = ctx.get_account_id(0);
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
