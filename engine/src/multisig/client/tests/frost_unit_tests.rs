@@ -458,3 +458,14 @@ async fn should_ignore_rts_with_duplicate_signer() {
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
+
+#[tokio::test]
+async fn should_sign_with_all_parties() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
+    let sign_states = ctx.sign_with_ids(&ACCOUNT_IDS).await;
+
+    assert_ok!(sign_states.outcome.result);
+}
