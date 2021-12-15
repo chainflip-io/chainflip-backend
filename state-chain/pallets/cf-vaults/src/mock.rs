@@ -156,7 +156,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
-			ethereum_block_number: 0,
+			ethereum_deployment_block: 0,
 		},
 	};
 
