@@ -153,6 +153,8 @@ pub trait Auctioneer {
 	type Amount;
 	type BidderProvider;
 
+	/// The current auction index
+	fn auction_index() -> AuctionIndex;
 	/// Range describing auction set size
 	fn active_range() -> ActiveValidatorRange;
 	/// Set new auction range, returning on success the old value

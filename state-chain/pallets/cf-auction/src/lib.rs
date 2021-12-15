@@ -253,6 +253,10 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		Ok(old)
 	}
 
+	fn auction_index() -> AuctionIndex {
+		CurrentAuctionIndex::<T>::get()
+	}
+
 	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>> {
 		LastAuctionResult::<T>::get()
 	}
