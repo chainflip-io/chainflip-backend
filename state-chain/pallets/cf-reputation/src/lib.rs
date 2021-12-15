@@ -20,9 +20,7 @@ mod benchmarking;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		offline_conditions::*, Chainflip, EpochInfo, Heartbeat, NetworkState, Slashing,
-	};
+	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -73,9 +71,6 @@ pub mod pallet {
 
 		/// Penalise
 		type Penalty: OfflinePenalty;
-
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
