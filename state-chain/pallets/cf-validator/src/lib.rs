@@ -255,7 +255,7 @@ pub mod pallet {
 			}
 
 			AccountPeerMapping::<T>::insert(
-				account_id.clone(),
+				&account_id,
 				(account_id.clone(), peer_id.clone(), port, ip_address),
 			);
 
