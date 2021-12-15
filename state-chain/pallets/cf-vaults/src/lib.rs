@@ -662,10 +662,10 @@ impl<T: Config> Pallet<T> {
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
 		for offender in offenders {
-			T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
+			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender)
 				.unwrap_or_else(|e| {
 					log::error!(
-						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+						"Unable to report ParticipateKeygenFailed for signer {:?}: {:?}",
 						offender,
 						e
 					);
