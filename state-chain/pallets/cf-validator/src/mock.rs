@@ -28,6 +28,7 @@ pub type ValidatorId = u64;
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BID_TO_BE_USED: Amount = 1000;
+pub const NEW_BID_TO_BE_USED: Amount = 1000;
 
 pub const ALICE: ValidatorId = 100;
 pub const BOB: ValidatorId = 101;
@@ -116,9 +117,18 @@ thread_local! {
 	pub static AUCTION_INDEX: RefCell<AuctionIndex> = RefCell::new(0);
 	pub static AUCTION_PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> = RefCell::new(AuctionPhase::default());
 	pub static AUCTION_RESULT: RefCell<AuctionResult<ValidatorId, Amount>> = RefCell::new(AuctionResult {minimum_active_bid: 0, winners: vec![] });
+	pub static AUCTION_ERROR: RefCell<Option<AuctionError>> = RefCell::new(None);
 }
 
 impl MockAuctioneer {
+	pub fn auction_error() -> Option<AuctionError> {
+		AUCTION_ERROR.with(|cell| *cell.borrow())
+	}
+
+	pub fn set_auction_error(error: Option<AuctionError>) {
+		AUCTION_ERROR.with(|cell| *cell.borrow_mut() = error);
+	}
+
 	pub fn set_auction_result(result: AuctionResult<ValidatorId, Amount>) {
 		AUCTION_RESULT.with(|cell| *cell.borrow_mut() = result);
 	}
@@ -165,28 +175,35 @@ impl Auctioneer for MockAuctioneer {
 	}
 
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
-		AUCTION_PHASE.with(|cell| {
-			let mut phase = cell.borrow_mut();
-			*phase = match &*phase {
-				AuctionPhase::WaitingForBids =>
-					AuctionPhase::BidsTaken(Self::BidderProvider::get_bidders()),
-				AuctionPhase::BidsTaken(bids) => AuctionPhase::ValidatorsSelected(
-					bids.iter().map(|bid| bid.0.clone()).collect(),
-					BID_TO_BE_USED,
-				),
-				AuctionPhase::ValidatorsSelected(validator_ids, minimum_active_bid) =>
-					AuctionPhase::ConfirmedValidators(validator_ids.to_vec(), *minimum_active_bid),
-				AuctionPhase::ConfirmedValidators(_, _) => {
-					MockAuctioneer::next_auction();
-					AuctionPhase::WaitingForBids
-				},
-			};
-			Ok((*phase).clone())
-		})
+		let auction_error = MockAuctioneer::auction_error();
+		match auction_error {
+			None => {
+				AUCTION_PHASE.with(|cell| {
+					let mut phase = cell.borrow_mut();
+					*phase = match &*phase {
+						AuctionPhase::WaitingForBids => {
+							MockAuctioneer::next_auction();
+							AuctionPhase::BidsTaken(Self::BidderProvider::get_bidders())
+						},
+						AuctionPhase::BidsTaken(bids) => AuctionPhase::ValidatorsSelected(
+							bids.iter().map(|bid| bid.0.clone()).collect(),
+							BID_TO_BE_USED,
+						),
+						AuctionPhase::ValidatorsSelected(validator_ids, minimum_active_bid) =>
+							AuctionPhase::ConfirmedValidators(validator_ids.to_vec(), *minimum_active_bid),
+						AuctionPhase::ConfirmedValidators(_, _) => AuctionPhase::WaitingForBids,
+					};
+					Ok((*phase).clone())
+				})
+			}
+			Some(err) => {
+				Err(err)
+			}
+		}
+
 	}
 
 	fn abort() {
-		MockAuctioneer::next_auction();
 		MockAuctioneer::set_phase(AuctionPhase::default())
 	}
 }
@@ -243,7 +260,7 @@ impl BidderProvider for MockBidderProvider {
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		MockBidderProvider::bidders()
 			.iter()
-			.map(|validator_id| (validator_id.clone(), BID_TO_BE_USED))
+			.map(|validator_id| (validator_id.clone(), NEW_BID_TO_BE_USED))
 			.collect()
 	}
 }
@@ -329,4 +346,8 @@ pub fn run_to_block(n: u64) {
 		System::set_block_number(System::block_number() + 1);
 		Session::on_initialize(System::block_number());
 	}
+}
+
+pub fn move_forward_by_blocks(n: u64) {
+	run_to_block(System::block_number() + n)
 }
