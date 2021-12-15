@@ -19,7 +19,7 @@ use web3::{
 };
 
 use crate::{
-    common::{read_and_decode_file, Mutex},
+    common::{read_clean_and_decode_hex_str_file, Mutex},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -199,16 +199,10 @@ impl EthBroadcaster {
         web3: Web3<web3::transports::WebSocket>,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        let secret_key = read_and_decode_file(
+        let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
-            |key| {
-                SecretKey::from_str(&key.replace("0x", "")[..])
-                    .map_err(anyhow::Error::new)
-                    .context(
-                        "Failed to read secret key. Malformed key could be due to newline at EOF",
-                    )
-            },
+            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
         )
         .unwrap();
         Ok(Self {
