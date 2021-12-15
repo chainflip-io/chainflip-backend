@@ -607,7 +607,7 @@ mod tests {
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_vaults::GenesisConfig { ethereum_vault_key },
+				&pallet_cf_vaults::GenesisConfig { ethereum_vault_key, ethereum_deployment_block: 0 },
 				storage,
 			)
 			.unwrap();
