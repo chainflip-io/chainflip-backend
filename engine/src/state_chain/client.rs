@@ -35,7 +35,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::{read_and_decode_file, rpc_error_into_anyhow_error};
+use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -308,13 +308,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     RpcError::JsonRpcError(Error {
                         // this is the error returned when the "priority is too low" i.e. nonce is too low
                         code: ErrorCode::ServerError(1014),
-                        ..
-                    }) => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
-                    }
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
-                        code: ErrorCode::ServerError(1010),
                         ..
                     }) => {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
@@ -599,21 +592,16 @@ pub async fn connect_to_state_chain(
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
-    >::new(sp_core::sr25519::Pair::from_seed(&read_and_decode_file(
-        &state_chain_settings.signing_key_file,
-        "State Chain Signing Key",
-        |str| {
-            <[u8; 32]>::try_from(
-                hex::decode(
-                    str.replace("\"", "")
-                        // allow inserting the private key with or without the 0x
-                        .replace("0x", ""),
-                )
-                .map_err(anyhow::Error::new)?,
-            )
-            .map_err(|_err| anyhow::Error::msg("Wrong length"))
-        },
-    )?));
+    >::new(sp_core::sr25519::Pair::from_seed(
+        &read_clean_and_decode_hex_str_file(
+            &state_chain_settings.signing_key_file,
+            "State Chain Signing Key",
+            |str| {
+                <[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
+                    .map_err(|_err| anyhow::Error::msg("Wrong length"))
+            },
+        )?,
+    ));
 
     let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
         state_chain_settings.ws_endpoint.as_str(),
@@ -753,7 +741,7 @@ mod tests {
 
     use crate::{
         logging::{self, test_utils::new_test_logger},
-        settings::Settings,
+        settings::{CommandLineOptions, Settings},
         testing::assert_ok,
     };
 
@@ -763,7 +751,9 @@ mod tests {
     #[tokio::main]
     #[test]
     async fn test_finalised_storage_subs() {
-        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let settings =
+            Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
+                .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
             connect_to_state_chain(&settings.state_chain, &logger)
