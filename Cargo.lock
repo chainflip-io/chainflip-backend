@@ -4527,6 +4527,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nanorand"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "729eb334247daa1803e0a094d0a5c55711b85571179f5ec6e53eccfdf7008958"
+
+[[package]]
 name = "native-tls"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8512,6 +8518,7 @@ dependencies = [
  "getrandom 0.2.3",
  "hex-literal",
  "log 0.4.14",
+ "nanorand",
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",

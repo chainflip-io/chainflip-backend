@@ -445,7 +445,7 @@ use pallet_cf_validator::PercentageRange;
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::EthereumKeyProvider;
@@ -461,7 +461,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

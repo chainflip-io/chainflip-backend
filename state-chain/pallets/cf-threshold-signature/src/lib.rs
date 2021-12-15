@@ -19,7 +19,7 @@ use cf_traits::{
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
 use frame_support::traits::EnsureOrigin;
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::{OriginFor, BlockNumberFor};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{BlockNumberProvider, Saturating},
@@ -449,26 +449,47 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let payload = context.get_payload();
 
 		// Select nominees for threshold signature.
-		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
+		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed((id, attempt)) {
+			// Store the context.
+			PendingRequests::<T, I>::insert(
+				id,
+				RequestContext {
+					attempt,
+					retry_scheduled: false,
+					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
+					blame_counts: Default::default(),
+					participant_count: nominees.len() as u32,
+					chain_signing_context: context,
+				},
+			);
 
-		// Store the context.
-		PendingRequests::<T, I>::insert(
-			id,
-			RequestContext {
-				attempt,
-				retry_scheduled: false,
-				remaining_respondents: BTreeSet::from_iter(nominees.clone()),
-				blame_counts: Default::default(),
-				participant_count: nominees.len() as u32,
-				chain_signing_context: context,
-			},
-		);
+			// Emit the request to the CFE.
+			Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
+				id, key_id, nominees, payload,
+			));
+		} else {
+			// Store the context, schedule a retry for the next block.
+			PendingRequests::<T, I>::insert(
+				id,
+				RequestContext {
+					attempt,
+					retry_scheduled: true,
+					remaining_respondents: Default::default(),
+					blame_counts: Default::default(),
+					participant_count: 0,
+					chain_signing_context: context,
+				},
+			);
 
-		// Emit the request to the CFE.
-		Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-			id, key_id, nominees, payload,
-		));
-
+			// Schedule the retry for the next block.
+			RetryQueues::<T, I>::append(
+				frame_system::Pallet::<T>::current_block_number().saturating_add(
+					BlockNumberFor::<T>::from(1u32),
+				),
+				id,
+			);
+		}
+		
 		id
 	}
 }

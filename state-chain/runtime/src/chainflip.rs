@@ -31,6 +31,9 @@ use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 use sp_io::hashing::twox_128;
 
+mod signer_nomination;
+pub use signer_nomination::RandomSignerNomination;
+
 impl Chainflip for Runtime {
 	type Call = Call;
 	type Amount = FlipBalance;
@@ -231,61 +234,6 @@ impl Heartbeat for ChainflipHeartbeat {
 	}
 }
 
-/// Returns a scaled index based on an input seed
-pub fn get_random_index(seed: Vec<u8>, max: usize) -> usize {
-	let hash = twox_128(&seed);
-	let index = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]) % max as u32;
-	index as usize
-}
-
-/// Select the next signer
-pub fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
-	validators: Vec<(SignerId, ())>,
-	seed: Vec<u8>,
-) -> Option<SignerId> {
-	// Get all online validators
-	let online_validators =
-		validators.iter().filter(|(id, _)| T::is_online(id)).collect::<Vec<_>>();
-	let number_of_online_validators = online_validators.len();
-	// Check if there is someone online
-	if number_of_online_validators == 0 {
-		return None
-	}
-	// Get a a pseudo random id by which we choose the next validator
-	let the_chosen_one = get_random_index(seed, number_of_online_validators);
-	online_validators.get(the_chosen_one).map(|f| f.0.clone())
-}
-/// A very basic but working implementation of signer nomination.
-///
-/// For a single signer, takes the first online validator in the validator lookup map.
-///
-/// For multiple signers, takes the first N online validators where N is signing consensus
-/// threshold.
-pub struct BasicSignerNomination;
-
-impl cf_traits::SignerNomination for BasicSignerNomination {
-	type SignerId = AccountId;
-
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
-		let validators =
-			pallet_cf_validator::ValidatorLookup::<Runtime>::iter().collect::<Vec<_>>();
-		select_signer::<Self::SignerId, Online>(validators, seed)
-	}
-
-	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
-		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
-		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-			.filter_map(|(id, _)| {
-				if <Online as cf_traits::IsOnline>::is_online(&id) {
-					Some(id)
-				} else {
-					None
-				}
-			})
-			.take(threshold as usize)
-			.collect()
-	}
-}
 
 // Supported Ethereum signing operations.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
