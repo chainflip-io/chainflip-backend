@@ -174,7 +174,7 @@ impl Settings {
         // Load settings from the default file or from the path specified from cmd line options
         let mut settings = match opts.config_path {
             Some(path) => Self::from_file(&path)?,
-            None => Self::from_file("config/Default.toml")?,
+            None => Self::from_file("~/.chainflip/default_engine_config.toml")?,
         };
 
         // Override the settings with the cmd line options
