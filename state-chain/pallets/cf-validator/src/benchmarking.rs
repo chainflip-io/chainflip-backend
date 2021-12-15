@@ -54,7 +54,11 @@ benchmarks! {
 		// Build an public key object as well as the signature from raw data.
 		let public = Ed25519PublicKey::from_raw(raw_pub_key);
 		let signature = Ed25519Signature::from_raw(raw_signature);
-	}: _(RawOrigin::Signed(caller.into()), public, signature)
+	}: _(RawOrigin::Signed(caller.clone().into()), public, signature)
+	verify {
+		assert!(MappedPeers::<T>::contains_key(&public));
+		assert!(AccountPeerMapping::<T>::contains_key(&caller));
+	}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
