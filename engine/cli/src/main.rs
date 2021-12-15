@@ -100,14 +100,14 @@ async fn request_claim(
         .await
     {
         Ok(tx_hash) => {
-            println!("Here's the tx_hash of the redeem: {}", tx_hash);
-            panic!("Submitted correctly but STOP HERE");
+            println!("Here's the tx_hash of the redeem: {:?}", tx_hash);
+            // panic!("Submitted correctly but STOP HERE");
         }
         Err(err) => {
             // todo handle this unwrap
-            let rpc_error = err.is::<RpcError>();
+            // let rpc_error = err.is::<RpcError>();
             println!("Is this an RPC error?");
-            // println!("Here's the error: {}", err);
+            println!("Here's the error: {}", err);
             // panic!("Fuck");
         }
     }
@@ -202,11 +202,14 @@ async fn request_claim(
                                 break 'outer;
                             } else {
                                 println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
+                                break 'outer;
                             }
                         }
                     }
                 }
             }
+        } else {
+            println!("Stopped watching because we found event: {:?}", event);
         }
     }
     Ok(())
