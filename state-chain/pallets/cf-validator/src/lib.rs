@@ -11,7 +11,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
-#[macro_use]
 extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
