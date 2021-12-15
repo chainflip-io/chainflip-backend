@@ -3,6 +3,8 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
+#[cfg(test)]
+mod tests;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -96,8 +98,8 @@ pub mod opaque {
 //   https://substrate.dev/docs/en/knowledgebase/runtime/upgrades#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("state-chain-node"),
-	impl_name: create_runtime_str!("state-chain-node"),
+	spec_name: create_runtime_str!("chainflip-node"),
+	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
 	spec_version: 100,
 	impl_version: 1,
@@ -346,8 +348,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 }
 
 parameter_types! {
-	/// 4 days. When a claim is signed, there needs to be enough time left to be able to cash it in.
-	pub const MinClaimTTL: Duration = Duration::from_secs(2 * CLAIM_DELAY);
 	/// 6 days.
 	pub const ClaimTTL: Duration = Duration::from_secs(3 * CLAIM_DELAY);
 }
@@ -363,7 +363,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
-	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }

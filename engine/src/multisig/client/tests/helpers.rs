@@ -286,8 +286,8 @@ pub struct ValidKeygenStates {
 impl ValidKeygenStates {
     /// Get the key and associated data asserting
     /// that the ceremony has been successful
-    pub fn key_ready_data(&self) -> &KeyReadyData {
-        self.key_ready.as_ref().expect("successful keygen")
+    pub fn key_ready_data(&self) -> Option<&KeyReadyData> {
+        self.key_ready.as_ref().ok()
     }
 
     /// Get a clone of the client for `account_id` from the specified stage
@@ -439,8 +439,11 @@ impl KeygenContext {
         KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
     }
 
-    pub fn new_with_account_ids(account_ids: Vec<AccountId>) -> Self {
-        KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
+    pub fn new_with_account_ids(
+        account_ids: Vec<AccountId>,
+        keygen_options: KeygenOptions,
+    ) -> Self {
+        KeygenContext::inner_new(account_ids, keygen_options)
     }
 
     /// Generate context with the KeygenOptions as default, (No `allowing_high_pubkey`)
@@ -1472,6 +1475,9 @@ pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[A
     {
         MultisigOutcome::Signing(outcome) => &outcome.result.as_ref().unwrap_err().1,
         MultisigOutcome::Keygen(outcome) => &outcome.result.as_ref().unwrap_err().1,
+        MultisigOutcome::Ignore => {
+            panic!("Cannot check blamed parties on an ignored request");
+        }
     };
 
     assert_eq!(&blamed_parties[..], expected);

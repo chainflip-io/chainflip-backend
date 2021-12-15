@@ -157,6 +157,7 @@ pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutc
 pub enum MultisigOutcome {
     Signing(SigningOutcome),
     Keygen(KeygenOutcome),
+    Ignore,
 }
 
 /// Multisig client is is responsible for persistently storing generated keys and
@@ -208,6 +209,7 @@ where
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
+        slog::trace!(self.logger, "Cleaning up multisig states");
         self.ceremony_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
