@@ -16,7 +16,7 @@ mod tests {
 	};
 
 	use cf_chains::ChainId;
-	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
@@ -485,6 +485,7 @@ mod tests {
 	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
+	const GENESIS_EPOCH: EpochIndex = 1;
 
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 		TPublic::Pair::from_string(&format!("//{}", seed), None)
@@ -603,6 +604,12 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
+			pallet_cf_validator::GenesisConfig::<Runtime> {
+				blocks_per_epoch: self.blocks_per_epoch,
+			}
+			.assimilate_storage(storage)
+			.unwrap();
+
 			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
@@ -610,12 +617,6 @@ mod tests {
 				&pallet_cf_vaults::GenesisConfig { ethereum_vault_key },
 				storage,
 			)
-			.unwrap();
-
-			pallet_cf_validator::GenesisConfig::<Runtime> {
-				blocks_per_epoch: self.blocks_per_epoch,
-			}
-			.assimilate_storage(storage)
 			.unwrap();
 		}
 
@@ -770,9 +771,9 @@ mod tests {
 				for account in accounts.iter() {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account);
 					assert_eq!(
-						Some(0),
+						Some(1),
 						account_data.last_active_epoch,
-						"validator should be active in the genesis epoch(0)"
+						"validator should be active in the genesis epoch(1)"
 					);
 					assert_eq!(ChainflipAccountState::Validator, account_data.state);
 				}
@@ -863,7 +864,7 @@ mod tests {
 						testnet.set_active(node, true);
 					}
 
-					assert_eq!(0, Validator::epoch_index());
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
@@ -873,7 +874,7 @@ mod tests {
 						"we should have ran several auctions"
 					);
 
-					assert_eq!(1, Validator::epoch_index());
+					assert_eq!(2, Validator::epoch_index());
 				});
 		}
 
@@ -941,7 +942,7 @@ mod tests {
 						"we should be back waiting for bids after a successful auction and rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the next epoch");
 
 					let AuctionResult { mut winners, minimum_active_bid } =
 						Auction::last_auction_result().expect("last auction result");
@@ -998,7 +999,7 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(2);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in the next epoch");
 				});
 		}
 	}
@@ -1033,7 +1034,7 @@ mod tests {
 					// Move forward one block to process events
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index(), "We should be in the genesis epoch");
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
@@ -1068,15 +1069,15 @@ mod tests {
 					}
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
-						"We should still be in the genesis epoch"
+						"We should still be in the first epoch"
 					);
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
-					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
+					assert_eq!(2, Validator::epoch_index(), "We should still be in the new epoch");
 
 					// We should be able to claim again outside of the auction
 					// At the moment we have a pending claim so we would expect an error here for
@@ -1139,7 +1140,7 @@ mod tests {
 	}
 
 	mod validators {
-		use crate::tests::{genesis, network, NodeId, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{genesis, GENESIS_EPOCH, network, NodeId, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1184,7 +1185,7 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
@@ -1197,7 +1198,7 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(1, Validator::epoch_index(), "We should still be in the next epoch");
+					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
@@ -1267,15 +1268,15 @@ mod tests {
 					}
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
-						"We should still be in the genesis epoch"
+						"We should still be in the first epoch"
 					);
 
 					// Start an auction and wait for rotation
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the next epoch");
 
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
@@ -1304,7 +1305,7 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the same epoch");
+					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in the same epoch");
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1317,7 +1318,7 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in the next epoch");
 
 					// Emergency state reset
 					assert!(
