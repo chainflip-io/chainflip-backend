@@ -238,16 +238,22 @@ pub mod pallet {
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if AccountPeerMapping::<T>::get(&account_id)
-				.filter(|(_, existing_peer_id, _, _)| *existing_peer_id == peer_id)
-				.is_none()
-			{
+			// Note: Care has been taken to avoid extra reads and writes to MappedPeers if the peer id of the account hasn't changed
+			if match AccountPeerMapping::<T>::get(&account_id) {
+				Some((_, existing_peer_id, _, _)) if existing_peer_id != peer_id => {
+					MappedPeers::<T>::remove(&existing_peer_id);
+					true
+				},
+				None => true,
+				_ => false,
+			} {
 				ensure!(
 					!MappedPeers::<T>::contains_key(&peer_id),
 					Error::<T>::AccountPeerMappingOverlap
 				);
 				MappedPeers::<T>::insert(peer_id.clone(), ());
 			}
+
 			AccountPeerMapping::<T>::insert(
 				account_id.clone(),
 				(account_id.clone(), peer_id.clone(), port, ip_address),
