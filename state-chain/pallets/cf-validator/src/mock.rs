@@ -1,15 +1,15 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{
-	mocks::vault_rotation::Mock as MockHandler, Bid, BidderProvider, ChainflipAccountData,
-	IsOnline, IsOutgoing,
-};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnFinalize, OnInitialize, ValidatorRegistration},
 };
 
-use cf_traits::{mocks::chainflip_account::MockChainflipAccount, ChainflipAccount};
+use cf_traits::{
+	mocks::{chainflip_account::MockChainflipAccount},
+	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionResult, Bid, BidderProvider,
+	ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing,
+};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -27,6 +27,7 @@ pub type ValidatorId = u64;
 
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
+pub const BID_TO_BE_USED: Amount = 101;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
@@ -47,7 +48,6 @@ construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
 		ValidatorPallet: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
@@ -110,27 +110,86 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
-	pub const BackupValidatorRatio: u32 = 3;
-	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+pub struct MockAuctioneer;
+
+thread_local! {
+	pub static AUCTION_INDEX: RefCell<AuctionIndex> = RefCell::new(0);
+	pub static AUCTION_PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> = RefCell::new(AuctionPhase::default());
+	pub static AUCTION_RESULT: RefCell<AuctionResult<ValidatorId, Amount>> = RefCell::new(AuctionResult {minimum_active_bid: 0, winners: vec![] });
 }
 
-impl pallet_cf_auction::Config for Test {
-	type Event = Event;
-	type Amount = Amount;
+impl MockAuctioneer {
+	pub fn set_auction_result(result: AuctionResult<ValidatorId, Amount>) {
+		AUCTION_RESULT.with(|cell| *cell.borrow_mut() = result);
+	}
+
+	pub fn set_phase(phase: AuctionPhase<ValidatorId, Amount>) {
+		AUCTION_PHASE.with(|cell| *cell.borrow_mut() = phase);
+	}
+
+	pub fn next_auction() {
+		AUCTION_INDEX.with(|cell| {
+			let mut current_auction = cell.borrow_mut();
+			*current_auction = *current_auction + 1;
+		});
+	}
+}
+
+impl Auctioneer for MockAuctioneer {
 	type ValidatorId = ValidatorId;
+	type Amount = Amount;
 	type BidderProvider = MockBidderProvider;
-	type Registrar = Test;
-	type MinValidators = MinValidators;
-	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Self>;
-	type Handler = MockHandler;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type Online = MockOnline;
-	type PeerMapping = MockPeerMapping;
-	type EmergencyRotation = ValidatorPallet;
-	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+
+	fn auction_index() -> AuctionIndex {
+		AUCTION_INDEX.with(|cell| *(*cell).borrow())
+	}
+
+	fn active_range() -> ActiveValidatorRange {
+		(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE)
+	}
+
+	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError> {
+		Ok(range)
+	}
+
+	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>> {
+		AUCTION_RESULT.with(|cell| Some((*cell.borrow()).clone()))
+	}
+
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> {
+		AUCTION_PHASE.with(|cell| (*cell.borrow()).clone())
+	}
+
+	fn waiting_on_bids() -> bool {
+		Self::phase() == AuctionPhase::WaitingForBids
+	}
+
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
+		AUCTION_PHASE.with(|cell| {
+			let mut phase = cell.borrow_mut();
+			*phase = match &*phase {
+				AuctionPhase::WaitingForBids => {
+					AuctionPhase::BidsTaken(Self::BidderProvider::get_bidders())
+				}
+				AuctionPhase::BidsTaken(bids) => {
+					AuctionPhase::ValidatorsSelected(bids.iter().map(|bid| bid.0.clone()).collect(), BID_TO_BE_USED)
+				}
+				AuctionPhase::ValidatorsSelected(validator_ids, minimum_active_bid) => {
+					AuctionPhase::ConfirmedValidators(validator_ids.to_vec(), *minimum_active_bid)
+				}
+				AuctionPhase::ConfirmedValidators(_, _) => {
+					MockAuctioneer::next_auction();
+					AuctionPhase::WaitingForBids
+				}
+			};
+			Ok((*phase).clone())
+		})
+	}
+
+	fn abort() {
+		MockAuctioneer::next_auction();
+		MockAuctioneer::set_phase(AuctionPhase::default())
+	}
 }
 
 pub struct MockIsOutgoing;
@@ -226,8 +285,7 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
-	// Use the pallet's implementation
-	type Auctioneer = AuctionPallet;
+	type Auctioneer = MockAuctioneer;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 }
 
@@ -235,8 +293,15 @@ impl Config for Test {
 pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+
+	// Initialise the auctioneer with an auction result
+	MockAuctioneer::set_auction_result(AuctionResult {
+		winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
+		minimum_active_bid: 0
+	});
+
 	let config = GenesisConfig {
-		system: Default::default(),
+		system: SystemConfig::default(),
 		session: SessionConfig {
 			keys: DUMMY_GENESIS_VALIDATORS
 				.iter()
@@ -244,11 +309,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				.collect(),
 		},
 		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
-		auction_pallet: AuctionPalletConfig {
-			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: vec![],
-			minimum_active_bid: 0,
-		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

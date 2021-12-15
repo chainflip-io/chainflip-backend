@@ -12,10 +12,10 @@ mod tests {
 	}
 
 	fn assert_winners() -> Vec<ValidatorId> {
-		if let AuctionPhase::ValidatorsSelected(winners, _) = AuctionPallet::phase() {
+		if let AuctionPhase::ValidatorsSelected(winners, _) = MockAuctioneer::phase() {
 			return winners
 		}
-		panic!("Expected `ValidatorsSelected` auction phase, got {:?}", AuctionPallet::phase());
+		panic!("Expected `ValidatorsSelected` auction phase, got {:?}", MockAuctioneer::phase());
 	}
 
 	#[test]
@@ -59,7 +59,7 @@ mod tests {
 	fn should_end_session() {
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			assert_ok!(MockAuctioneer::set_active_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
@@ -68,26 +68,26 @@ mod tests {
 			// Test force rotation
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			// Test we are in the bidder phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Move forward by 1 block, we have a block already
 			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Confirm the auction
 			clear_confirmation();
 			// Move forward by 1 block
 			run_to_block(3);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Move forward by 1 block, we should sit in the non-auction phase 'WaitingForBids'
 			run_to_block(5);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Epoch is block 10 so let's test an epoch cycle to provoke an auction
 			// This should be the same state
 			run_to_block(9);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			let next_epoch = ValidatorPallet::current_epoch_started_at() + epoch;
 			run_to_block(next_epoch);
 			// We should have started another auction
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			assert_noop!(
 				ValidatorPallet::set_blocks_for_epoch(Origin::root(), 10),
 				Error::<Test>::AuctionInProgress
@@ -96,7 +96,7 @@ mod tests {
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(next_epoch + 1);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 		});
 	}
 
@@ -106,7 +106,7 @@ mod tests {
 		// ran through an auction and that the winners of this auction become the validating set
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			assert_ok!(MockAuctioneer::set_active_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
@@ -114,10 +114,10 @@ mod tests {
 			assert_eq!(mock::current_validators().len(), 0);
 			// ---------- Run Auction
 			// Confirm we are in the waiting state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Move forward 2 blocks
 			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Only the genesis dummy validators as we are nice and fresh
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
@@ -150,15 +150,15 @@ mod tests {
 			// Complete the cycle
 			run_to_block(12);
 			// As we haven't confirmed the auction we would still be in the same phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			run_to_block(13);
 			// and still...
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(14);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
+			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
 			// Our old winners remain
@@ -182,37 +182,10 @@ mod tests {
 				assert!(MockIsOutgoing::is_outgoing(outgoer));
 			}
 			// Finalised auction, waiting for bids again
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
+			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 3);
 			// We have the new set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-		});
-	}
-
-	#[test]
-	fn should_repeat_auction_after_aborted_auction() {
-		new_test_ext().execute_with(|| {
-			let set_size = 10;
-			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
-			// Set block length of epoch to 100
-			let epoch = 100;
-			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
-			// Confirm we are in the waiting state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// Run to epoch, auction will start
-			run_to_block(epoch);
-			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
-			// Validators are selected
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
-			// Abort the current auction
-			<AuctionPallet as Auctioneer>::abort();
-			// Back to initial state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// Move to next block, a new auction starts
-			run_to_block(epoch + 1);
-			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
-			// Another set of validators selected
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 		});
 	}
 
@@ -220,27 +193,27 @@ mod tests {
 	fn should_repeat_auction_after_forcing_auction_and_then_aborted_auction() {
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
+			assert_ok!(MockAuctioneer::set_active_range((2, set_size)));
 			// Set block length of epoch to 100
 			let epoch = 100;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
 			// Confirm we are in the waiting state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Force a rotation, auction will start
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			run_to_block(System::block_number() + 1);
-			assert_eq!(AuctionPallet::current_auction_index(), 1, "should see a new auction");
+			assert_eq!(MockAuctioneer::auction_index(), 1, "should see a new auction");
 			// Validators are selected
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Abort the current auction
-			<AuctionPallet as Auctioneer>::abort();
+			<MockAuctioneer as Auctioneer>::abort();
 			// Back to initial state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::WaitingForBids);
 			// Move to next block, a new auction starts
 			run_to_block(System::block_number() + 2);
-			assert_eq!(AuctionPallet::current_auction_index(), 2, "should be at the next auction");
+			assert_eq!(MockAuctioneer::auction_index(), 2, "should be at the next auction");
 			// Another set of validators selected
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 		});
 	}
 
