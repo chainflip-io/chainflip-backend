@@ -99,7 +99,7 @@ async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync 
 
         Ok(())
     } else {
-        Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to the Chainflip Engine ({})", peer_id, cfe_peer_id)))
+        Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file confugration option.", peer_id, cfe_peer_id)))
     }
 }
 
@@ -260,13 +260,15 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 match public_key_to_peer_id(&peer_public_key) {
                     Ok(peer_id) => {
                         match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(port, ip_address) => {
-                                if account_to_peer.contains_key(&account_id) || peer_to_account.contains_key(&peer_id) {
-                                    // This is currently possible, but can be avoided. TODO Resolve
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
+                            AccountPeerMappingChange::Registered(port, ip_address) => {                   
+                                if let Some((existing_peer_id, _, _)) = account_to_peer.get(&account_id) {
+                                    peer_to_account.remove(&existing_peer_id);
+                                }     
+                                if peer_to_account.contains_key(&peer_id) {
+                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);   
                                 } else {
-                                    account_to_peer.insert(account_id.clone(), (peer_id.clone(), port, ip_address));
-                                    peer_to_account.insert(peer_id, account_id);
+                                    peer_to_account.insert(peer_id.clone(), account_id.clone());
+                                    account_to_peer.insert(account_id, (peer_id.clone(), port, ip_address));
                                     if cfe_peer_id != peer_id {
                                         if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
                                             slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
@@ -288,7 +290,6 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                                         }
                                     }
                                 } else {
-                                    // This is currently possible, but can be avoided. TODO Resolve
                                     slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
                                 }
                             }
