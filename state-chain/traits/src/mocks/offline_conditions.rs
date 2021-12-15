@@ -18,11 +18,12 @@ macro_rules! impl_mock_offline_conditions {
 		impl $crate::offline_conditions::OfflinePenalty for MockOfflinePenalty {
 			fn penalty(
 				condition: &$crate::offline_conditions::OfflineCondition,
-			) -> $crate::offline_conditions::ReputationPoints {
+			) -> ($crate::offline_conditions::ReputationPoints, bool) {
 				match condition {
-					$crate::offline_conditions::OfflineCondition::BroadcastOutputFailed => 10,
-					$crate::offline_conditions::OfflineCondition::ParticipateSigningFailed => 100,
-					$crate::offline_conditions::OfflineCondition::NotEnoughPerformanceCredits => 1000,
+					$crate::offline_conditions::OfflineCondition::ParticipateSigningFailed => (15, true),
+					$crate::offline_conditions::OfflineCondition::ParticipateKeygenFailed => (15, true),
+					$crate::offline_conditions::OfflineCondition::InvalidTransactionAuthored => (15, false),
+					$crate::offline_conditions::OfflineCondition::TransactionFailedOnTransmission => (15, false),
 				}
 			}
 		}
