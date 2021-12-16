@@ -124,9 +124,10 @@
   "Nonce": "u64",
   "OfflineCondition": {
     "_enum": [
-      "BroadcastOutputFailed",
       "ParticipateSigningFailed",
-      "NotEnoughPerformanceCredits"
+      "ParticipateKeygenFailed",
+      "InvalidTransactionAuthored",
+      "TransactionFailedOnTransmission",
     ]
   },
   "OnlineCredits": "BlockNumber",
