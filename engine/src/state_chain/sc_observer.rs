@@ -463,7 +463,7 @@ pub async fn start<BlockStream, RpcClient>(
                 // this is to fix an issue (on release/soundcheck) where an update of stake
                 // does not update status of the nodes to backup: https://github.com/chainflip-io/chainflip-backend/issues/1042
                 if ((block_header.number + (heartbeat_block_interval / 2))
-                    % heartbeat_block_interval)
+                    % (heartbeat_block_interval / 2))
                     == 0
                 {
                     slog::info!(
