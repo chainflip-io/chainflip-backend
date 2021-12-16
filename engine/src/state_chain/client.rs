@@ -305,9 +305,20 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     return Ok(tx_hash);
                 }
                 Err(rpc_err) => match rpc_err {
+                    // This occurs when a transaction with the same nonce is in the transaction pool (and the priority is
+                    // <= priority of that existing tx)
                     RpcError::JsonRpcError(Error {
                         // this is the error returned when the "priority is too low" i.e. nonce is too low
                         code: ErrorCode::ServerError(1014),
+                        ..
+                    }) => {
+                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                    }
+                    // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
+                    // is in a block
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
+                        code: ErrorCode::ServerError(1010),
                         ..
                     }) => {
                         slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
