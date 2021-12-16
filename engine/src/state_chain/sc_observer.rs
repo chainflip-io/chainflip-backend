@@ -458,16 +458,23 @@ pub async fn start<BlockStream, RpcClient>(
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
                 // cause issues (if we tried to send on one of the interval boundaries)
-                if (matches!(account_data.state, ChainflipAccountState::Backup)
-                    || matches!(account_data.state, ChainflipAccountState::Validator)
-                    || is_outgoing)
-                    && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
-                        == 0)
+
+                // TEMP: This should only submit if the account state is Validator, Backup or Passive.
+                // this is to fix an issue (on release/soundcheck) where an update of stake
+                // does not update status of the nodes to backup: https://github.com/chainflip-io/chainflip-backend/issues/1042
+                if ((block_header.number + (heartbeat_block_interval / 2))
+                    % (heartbeat_block_interval / 2))
+                    == 0
                 {
+                    let state = if is_outgoing {
+                        format!("{:?} + Outgoing", account_data.state)
+                    } else {
+                        format!("{:?}", account_data.state)
+                    };
                     slog::info!(
                         logger,
-                        "Sending heartbeat at block: {}",
+                        "({:?}) Sending heartbeat at block: {}",
+                        state,
                         block_header.number
                     );
                     let _ = state_chain_client
