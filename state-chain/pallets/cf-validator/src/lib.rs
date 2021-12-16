@@ -110,7 +110,8 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
-		/// A validator has register her current PeerId \[account_id, public_key, port, ip_address\]
+		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
 		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
@@ -331,8 +332,12 @@ pub mod pallet {
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
-	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey, u16, Ipv6Addr)>;
+	pub type AccountPeerMapping<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+	>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
