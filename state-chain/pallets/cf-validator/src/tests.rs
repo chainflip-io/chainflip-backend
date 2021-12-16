@@ -5,6 +5,7 @@ mod tests {
 	use sp_runtime::traits::{BadOrigin, Zero};
 
 	const ALICE: u64 = 100;
+	const BOB: u64 = 101;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
@@ -327,6 +328,128 @@ mod tests {
 				ValidatorPallet::validator_cfe_version(validator),
 				"we should be still on the same new version"
 			);
+		});
+	}
+
+	#[test]
+	fn register_peer_id() {
+		new_test_ext().execute_with(|| {
+			use sp_core::Encode;
+			use sp_core::Pair;
+
+			let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
+			let alice_peer_public_key = alice_peer_keypair.public();
+
+			assert_noop!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(ALICE),
+					alice_peer_public_key,
+					0,
+					0,
+					alice_peer_keypair.sign(&BOB.encode()[..]),
+				),
+				Error::<Test>::InvalidAccountPeerMappingSignature,
+				"Don't allow invalid signatures"
+			);
+
+			assert_ok!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(ALICE),
+					alice_peer_public_key,
+					40044,
+					10,
+					alice_peer_keypair.sign(&ALICE.encode()[..]),
+				),
+				"Non-overlaping peer ids and valid signatures"
+			);
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+					ALICE,
+					alice_peer_public_key,
+					40044,
+					10
+				)),
+				"should emit event on register peer id"
+			);
+			assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
+			assert_eq!(ValidatorPallet::validator_peer_id(&ALICE), Some((ALICE, alice_peer_public_key, 40044, 10)));
+
+			assert_noop!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(BOB),
+					alice_peer_public_key,
+					0,
+					0,
+					alice_peer_keypair.sign(&BOB.encode()[..]),
+				),
+				Error::<Test>::AccountPeerMappingOverlap,
+				"New mappings to overlapping peer id are disallowed"
+			);
+			
+			let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
+			let bob_peer_public_key = bob_peer_keypair.public();
+
+			assert_ok!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(BOB),
+					bob_peer_public_key,
+					40043,
+					11,
+					bob_peer_keypair.sign(&BOB.encode()[..]),
+				),
+				"New validator mapping works"
+			);
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+					BOB,
+					bob_peer_public_key,
+					40043,
+					11
+				)),
+				"should emit event on register peer id"
+			);
+			assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+			assert_eq!(ValidatorPallet::validator_peer_id(&BOB), Some((BOB, bob_peer_public_key, 40043, 11)));
+
+			assert_noop!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(BOB),
+					alice_peer_public_key,
+					0,
+					0,
+					alice_peer_keypair.sign(&BOB.encode()[..]),
+				),
+				Error::<Test>::AccountPeerMappingOverlap,
+				"Changing existing mapping to overlapping peer id is disallowed"
+			);
+
+			let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob2", None);
+			let bob_peer_public_key = bob_peer_keypair.public();
+
+			assert_ok!(
+				ValidatorPallet::register_peer_id(
+					Origin::signed(BOB),
+					bob_peer_public_key,
+					40043,
+					11,
+					bob_peer_keypair.sign(&BOB.encode()[..]),
+				),
+				"Changing to new peer id works"
+			);
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+					BOB,
+					bob_peer_public_key,
+					40043,
+					11
+				)),
+				"should emit event on register peer id"
+			);
+			assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+			assert_eq!(ValidatorPallet::validator_peer_id(&BOB), Some((BOB, bob_peer_public_key, 40043, 11)));
 		});
 	}
 }
