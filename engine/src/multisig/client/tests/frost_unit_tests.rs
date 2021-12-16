@@ -540,10 +540,17 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert!(sign_states.sign_finished.outcome.result.is_ok());
 }
 
+#[tokio::test]
 async fn should_sign_with_all_parties() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
 
     // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
-    assert_ok!(ctx.sign_with_ids(&ACCOUNT_IDS).await.outcome.result);
+    assert_ok!(
+        ctx.sign_with_ids(&ACCOUNT_IDS)
+            .await
+            .sign_finished
+            .outcome
+            .result
+    );
 }
