@@ -3,8 +3,6 @@ use std::{
     path::Path,
 };
 
-use anyhow::Context;
-
 use super::MultisigDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use pallet_cf_vaults::CeremonyId;
@@ -16,7 +14,7 @@ use crate::{
 };
 
 pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
-pub const DB_COL_CEREMONY_TRACKING: u32 = 1;
+//pub const DB_COL_CEREMONY_TRACKING: u32 = 1;
 
 pub const DB_KEY_SIGNING_TRACKING_DATA: &[u8] = b"signing_tracking_data";
 pub const DB_KEY_KEYGEN_TRACKING_DATA: &[u8] = b"keygen_tracking_data";
@@ -30,7 +28,7 @@ pub struct PersistentMultisigDB {
 
 impl PersistentMultisigDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::with_columns(2);
+        let config = DatabaseConfig::default();
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
@@ -112,7 +110,9 @@ impl MultisigDB for PersistentMultisigDB {
     }
 }
 
-fn save_ceremony_tracking(db: &mut Database, data: &HashSet<CeremonyId>, key: &[u8]) {
+fn save_ceremony_tracking(_db: &mut Database, _data: &HashSet<CeremonyId>, _key: &[u8]) {
+    // Disabled writing ceremony tracking data to disk until we have a better db solution.
+    /*
     let mut tx = db.transaction();
 
     let data_encoded = bincode::serialize(data).expect("Could not serialize hashset");
@@ -122,9 +122,12 @@ fn save_ceremony_tracking(db: &mut Database, data: &HashSet<CeremonyId>, key: &[
     // Commit the tx to the database
     db.write(tx)
         .unwrap_or_else(|e| panic!("Could not write hashset `{:?}` to database: {}", data, e,));
+    */
 }
 
-fn load_ceremony_tracking(db: &Database, key: &[u8]) -> anyhow::Result<HashSet<CeremonyId>> {
+fn load_ceremony_tracking(_db: &Database, _key: &[u8]) -> anyhow::Result<HashSet<CeremonyId>> {
+    // Disabled writing ceremony tracking data to disk until we have a better db solution.
+    /*
     match db
         .get(DB_COL_CEREMONY_TRACKING, key)
         .expect("should load ceremony tracking hashset")
@@ -134,6 +137,8 @@ fn load_ceremony_tracking(db: &Database, key: &[u8]) -> anyhow::Result<HashSet<C
             .with_context(|| "Could not deserialize ceremony tracking data"),
         None => Ok(HashSet::new()),
     }
+    */
+    Ok(HashSet::new())
 }
 
 #[cfg(test)]
@@ -187,6 +192,7 @@ mod tests {
         std::fs::remove_dir_all(db_path).unwrap();
     }
 
+    #[ignore = "Disabled writing ceremony tracking data to disk until we have a better db solution"]
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
@@ -214,6 +220,7 @@ mod tests {
         std::fs::remove_dir_all(db_path).unwrap();
     }
 
+    #[ignore = "Disabled writing ceremony tracking data to disk until we have a better db solution"]
     #[test]
     fn can_save_and_load_used_ceremony_id_data() {
         let logger = new_test_logger();
