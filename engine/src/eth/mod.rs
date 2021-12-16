@@ -444,16 +444,20 @@ type LogBlock = Vec<Log>;
 pub struct SafeEthStream {
     eth_block_head: U64,
     eth_stream: SubscriptionStream<WebSocket, Log>,
-    stream_block_head: U64,
+
+    // do we even need this?
+    safe_stream_block_head: U64,
 
     current_block_logs: LogBlock,
     // the block in the last_five_blocks array we are currently pointing to
     last_five_index: std::iter::Cycle<Range<u64>>,
     last_five_blocks: Vec<LogBlock>,
+
+    blocks_head_is_ahead: u64,
 }
 
 impl Stream for SafeEthStream {
-    type Item = Option<Result<Log>>;
+    type Item = Log;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -461,7 +465,7 @@ impl Stream for SafeEthStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         // first deal with the log at the HEAD of the stream to ensure we don't have reorg
 
-        let BLOCKS_AWAITED: u64 = 5;
+        const BLOCKS_AWAITED: u64 = 5;
         use futures_lite::stream::StreamExt;
         while let Poll::Ready(Some(Ok(log))) = self.eth_stream.poll_next(cx) {
             let log_block_number = log.block_number.unwrap();
@@ -471,12 +475,14 @@ impl Stream for SafeEthStream {
                 let num_reorged = self
                     .eth_block_head
                     .saturating_sub(log.block_number.unwrap());
-                let to_skip = BLOCKS_AWAITED - num_reorged.as_u64();
-                // get to the block that we want to remove
 
+                // because we've effectively reset the count, we now have fewer than BLOCKS_AWAITED actually
+                // awaited, because we have to go back to those blocks
+                self.blocks_head_is_ahead = BLOCKS_AWAITED.saturating_sub(num_reorged.as_u64());
+                // get to the block that we want to remove
                 // advance_by is an experimental api that makes this nicer
-                for _ in 0..to_skip {
-                    let index = self.last_five_index.next().unwrap();
+                for _ in 0..self.blocks_head_is_ahead {
+                    self.last_five_index.next().unwrap();
                 }
                 // we want to reset and then add this event, to start again
                 self.current_block_logs = Vec::new();
@@ -492,6 +498,11 @@ impl Stream for SafeEthStream {
                     .insert(index as usize, current_block_logs);
                 self.current_block_logs = Vec::new();
 
+                // we are catching up, zoom zoom
+                if self.blocks_head_is_ahead > 0 {
+                    self.blocks_head_is_ahead = self.blocks_head_is_ahead.saturating_sub(1);
+                }
+
                 // we want to add all the events in a single block
             } else if log.block_number.unwrap() == self.eth_block_head {
                 // keep appending to this current blocks worth of blocks
@@ -500,6 +511,14 @@ impl Stream for SafeEthStream {
 
             self.eth_block_head = log_block_number;
         }
+
+        // we are now 5 blocks ahead of the backlog we have stored
+        if self.blocks_head_is_ahead == 0 {
+            let next_log = self.last_five_blocks.clone().into_iter().flatten().next();
+
+            return Poll::Ready(next_log);
+        }
+
         Poll::Pending
     }
 }
