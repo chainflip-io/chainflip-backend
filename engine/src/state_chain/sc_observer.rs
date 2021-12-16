@@ -466,9 +466,15 @@ pub async fn start<BlockStream, RpcClient>(
                     % (heartbeat_block_interval / 2))
                     == 0
                 {
+                    let state = if is_outgoing {
+                        format!("{:?} + Outgoing", account_data.state)
+                    } else {
+                        format!("{:?}", account_data.state)
+                    };
                     slog::info!(
                         logger,
-                        "Sending heartbeat at block: {}",
+                        "({:?}) Sending heartbeat at block: {}",
+                        state,
                         block_header.number
                     );
                     let _ = state_chain_client
