@@ -213,8 +213,8 @@ pub trait EpochTransitionHandler {
 	type Amount: Copy;
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
-	/// a `_new_bond`
+	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
+	/// a `new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
