@@ -20,12 +20,15 @@ use web3::{
 
 use crate::{
     common::{read_and_decode_file, Mutex},
-    logging::COMPONENT_KEY,
-    settings,
+    eth,
+    logging::{test_utils::new_test_logger, COMPONENT_KEY},
+    settings::{self, Settings},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::{TryFutureExt, TryStreamExt};
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, convert::TryInto, fmt::Debug, str::FromStr, sync::Arc, time::Duration,
+};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -379,6 +382,72 @@ pub trait EthObserver {
         RPCClient: 'static + StateChainRpcApi + Sync + Send;
 
     fn get_deployed_address(&self) -> H160;
+}
+
+#[tokio::test]
+async fn test_sub_chainlink() -> Result<()> {
+    let settings = Settings::from_file("config/Local.toml").unwrap();
+
+    let logger = new_test_logger();
+    let deployed_address: [u8; 20] = hex::decode("01BE23585060835E02B77ef475b0Cc51aA1e0709")
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let deployed_address = H160::from(deployed_address);
+
+    let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
+        .await
+        .expect("Failed to create Web3 WebSocket");
+
+    slog::info!(
+        logger,
+        "Subscribing to Ethereum events from contract at address: {:?}",
+        hex::encode(deployed_address)
+    );
+    // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
+    let mut future_logs = web3
+        .eth_subscribe()
+        .subscribe_logs(
+            FilterBuilder::default()
+                .from_block(BlockNumber::Latest)
+                .address(vec![deployed_address])
+                .build(),
+        )
+        .await
+        .context("Error subscribing to ETH logs")?;
+    let mut current_block = web3.eth().block_number().await?;
+
+    println!("The current block we're at is: {}", current_block);
+
+    struct TxHolder {
+        block_number: U64,
+        block_hash: H256,
+    }
+
+    let mut tx_collection: HashMap<U64, TxHolder> = HashMap::new();
+
+    while let Some(Ok(log)) = future_logs.next().await {
+        println!("Block {:?}. Hash: {:?}", log.block_number, log.block_hash);
+        tx_collection.insert(
+            log.block_number.unwrap(),
+            TxHolder {
+                block_number: log.block_number.unwrap(),
+                block_hash: log.block_hash.unwrap(),
+            },
+        );
+
+        if log.block_number.unwrap() < current_block {
+            panic!("We went back in block time. REORG ALERT");
+        }
+
+        current_block = log.block_number.unwrap();
+
+        // Do some checks across the the collection of txs atm, to see what the fuck happened at previous blocks
+
+        // if we are inserting new txs
+    }
+
+    Ok(())
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
