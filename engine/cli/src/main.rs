@@ -1,11 +1,6 @@
-use cf_chains::{
-    eth::{SchnorrVerificationComponents, H256},
-    ChainId,
-};
+use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{self, EthBroadcaster},
-    logging::utils::new_discard_logger,
-    settings::Settings,
     state_chain::client::connect_to_state_chain,
 };
 use futures::StreamExt;
@@ -18,8 +13,6 @@ use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
 use structopt::StructOpt;
 use web3::types::H160;
-
-use jsonrpc_core_client::RpcError;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
