@@ -5,6 +5,7 @@ use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 
+use pallet_cf_vaults::CeremonyId;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::multisig::{
@@ -115,7 +116,7 @@ macro_rules! recv_all_data_signing {
 }
 
 macro_rules! distribute_data_keygen_custom {
-    ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr) => {{
+    ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr, $ceremony_id: expr) => {{
         for sender_id in &$account_ids {
             for receiver_id in &$account_ids {
                 if receiver_id != sender_id {
@@ -125,7 +126,7 @@ macro_rules! distribute_data_keygen_custom {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_message);
 
-                    let message = keygen_data_to_p2p(message);
+                    let message = keygen_data_to_p2p_with_ceremony_id(message, $ceremony_id);
 
                     $clients
                         .get_mut(receiver_id)
@@ -138,9 +139,10 @@ macro_rules! distribute_data_keygen_custom {
 }
 
 macro_rules! distribute_data_keygen {
-    ($clients:expr, $account_ids: expr, $messages: expr) => {{
+    ($clients:expr, $account_ids: expr, $messages: expr, $ceremony_id: expr) => {{
         for sender_id in &$account_ids {
-            let message = keygen_data_to_p2p($messages[sender_id].clone());
+            let message =
+                keygen_data_to_p2p_with_ceremony_id($messages[sender_id].clone(), $ceremony_id);
 
             for receiver_id in &$account_ids {
                 if receiver_id != sender_id {
@@ -368,10 +370,11 @@ impl ValidSigningStates {
     }
 }
 
-pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
-    client
-        .ceremony_manager
-        .get_keygen_stage_for(KEYGEN_CEREMONY_ID)
+pub fn get_stage_for_keygen_ceremony(
+    client: &MultisigClientNoDB,
+    ceremony_id: &CeremonyId,
+) -> Option<String> {
+    client.ceremony_manager.get_keygen_stage_for(ceremony_id)
 }
 
 #[derive(Default)]
@@ -659,6 +662,14 @@ impl KeygenContext {
     // resulting in `KeygenContext` which can be used
     // to sign messages
     pub async fn generate(&mut self) -> ValidKeygenStates {
+        self.generate_with_ceremony_id(KEYGEN_CEREMONY_ID).await
+    }
+
+    // Generate keygen states using the specified ceremony id
+    pub async fn generate_with_ceremony_id(
+        &mut self,
+        ceremony_id: CeremonyId,
+    ) -> ValidKeygenStates {
         let instant = std::time::Instant::now();
 
         let clients = &mut self.clients;
@@ -673,7 +684,7 @@ impl KeygenContext {
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
-            ceremony_id: KEYGEN_CEREMONY_ID,
+            ceremony_id,
             signers: account_ids.clone(),
         };
 
@@ -694,14 +705,15 @@ impl KeygenContext {
             clients,
             self.account_ids,
             &comm1s,
-            &mut self.custom_data.comm1_keygen
+            &mut self.custom_data.comm1_keygen,
+            ceremony_id.clone()
         );
 
         println!("Distributed all comm1");
 
         clients
             .values()
-            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(2)));
+            .for_each(|c| assert_ok!(c.ensure_ceremony_at_keygen_stage(2, &ceremony_id)));
 
         let ver2s = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
@@ -712,13 +724,13 @@ impl KeygenContext {
 
         // *** Distribute VerifyComm2s, so we can advance and generate Secret3 ***
 
-        distribute_data_keygen!(clients, self.account_ids, ver2s);
+        distribute_data_keygen!(clients, self.account_ids, ver2s, ceremony_id.clone());
 
         if !clients
             .values()
             .next()
             .unwrap()
-            .ensure_at_keygen_stage(3)
+            .ensure_ceremony_at_keygen_stage(3, &ceremony_id)
             .is_ok()
         {
             // The ceremony failed early, gather the result and reported_nodes, then return
@@ -760,7 +772,7 @@ impl KeygenContext {
 
         clients
             .values()
-            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(3)));
+            .for_each(|c| assert_ok!(c.ensure_ceremony_at_keygen_stage(3, &ceremony_id)));
 
         // *** Collect all Secret3
 
@@ -796,7 +808,7 @@ impl KeygenContext {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_sec3.clone());
 
-                    let message = keygen_data_to_p2p(sec3.clone());
+                    let message = keygen_data_to_p2p_with_ceremony_id(sec3.clone(), ceremony_id);
 
                     clients
                         .get_mut(receiver_id)
@@ -821,7 +833,8 @@ impl KeygenContext {
             clients,
             self.account_ids,
             complaints,
-            self.custom_data.complaints
+            self.custom_data.complaints,
+            ceremony_id.clone()
         );
 
         println!("Distributed all complaints");
@@ -835,13 +848,18 @@ impl KeygenContext {
 
         println!("Collected all verify complaints");
 
-        distribute_data_keygen!(clients, self.account_ids, ver_complaints);
+        distribute_data_keygen!(
+            clients,
+            self.account_ids,
+            ver_complaints,
+            ceremony_id.clone()
+        );
 
         println!("Distributed all verify complaints");
 
         // Now we are either done or have to enter the blaming stage
         let nodes_entered_blaming = clients.values().all(|c| {
-            get_stage_for_keygen_ceremony(&c).as_deref()
+            get_stage_for_keygen_ceremony(&c, &ceremony_id).as_deref()
                 == Some("BroadcastStage<BlameResponsesStage6>")
         });
 
@@ -862,7 +880,8 @@ impl KeygenContext {
                 clients,
                 self.account_ids,
                 responses6,
-                &mut self.custom_data.secret_shares_blaming
+                &mut self.custom_data.secret_shares_blaming,
+                ceremony_id.clone()
             );
 
             println!("Distributed all blame responses");
@@ -875,7 +894,7 @@ impl KeygenContext {
 
             println!("Collected all blame responses verification");
 
-            distribute_data_keygen!(clients, self.account_ids, ver7);
+            distribute_data_keygen!(clients, self.account_ids, ver7, ceremony_id.clone());
 
             println!("Distributed all blame responses verification");
         }
@@ -1312,9 +1331,18 @@ pub fn sig_data_to_p2p(data: impl Into<SigningData>) -> MultisigMessage {
     }
 }
 
+// Create a p2p MultisigMessage using the default ceremony id
 pub fn keygen_data_to_p2p(data: impl Into<KeygenData>) -> MultisigMessage {
+    keygen_data_to_p2p_with_ceremony_id(data, KEYGEN_CEREMONY_ID)
+}
+
+// Create a p2p MultisigMessage using the specified ceremony id
+pub fn keygen_data_to_p2p_with_ceremony_id(
+    data: impl Into<KeygenData>,
+    ceremony_id: CeremonyId,
+) -> MultisigMessage {
     MultisigMessage {
-        ceremony_id: KEYGEN_CEREMONY_ID,
+        ceremony_id,
         data: MultisigData::Keygen(data.into()),
     }
 }
@@ -1353,11 +1381,20 @@ impl MultisigClientNoDB {
         }
     }
 
-    /// Check is the client is at the specified keygen BroadcastStage (0-5).
+    /// Check is the default ceremony is at the specified keygen BroadcastStage (0-5).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
     pub fn ensure_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
-        let stage = get_stage_for_keygen_ceremony(self);
+        self.ensure_ceremony_at_keygen_stage(stage_number, &KEYGEN_CEREMONY_ID)
+    }
+
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-5).
+    pub fn ensure_ceremony_at_keygen_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: &CeremonyId,
+    ) -> Result<()> {
+        let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
         let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),

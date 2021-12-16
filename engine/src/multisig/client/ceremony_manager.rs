@@ -60,7 +60,7 @@ where
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
-            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone(), ceremony_id_db.clone()),
+            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone(), ceremony_id_db),
         }
     }
 
@@ -443,9 +443,9 @@ where
         self.signing_states.len()
     }
 
-    pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
+    pub fn get_keygen_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
         self.keygen_states
-            .get(&ceremony_id)
+            .get(ceremony_id)
             .and_then(|s| s.get_stage())
     }
 
