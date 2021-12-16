@@ -7,6 +7,7 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
+use num::iter::Range;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
@@ -22,7 +23,7 @@ use web3::{
 use crate::{
     common::{read_and_decode_file, Mutex},
     eth,
-    logging::{test_utils::new_test_logger, COMPONENT_KEY},
+    logging::COMPONENT_KEY,
     settings::{self, Settings},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
@@ -444,10 +445,10 @@ pub struct SafeEthStream {
     eth_block_head: U64,
     eth_stream: SubscriptionStream<WebSocket, Log>,
     stream_block_head: U64,
-    
+
     current_block_logs: LogBlock,
     // the block in the last_five_blocks array we are currently pointing to
-    last_five_index: std::iter::Cycle<u64>,
+    last_five_index: std::iter::Cycle<Range<u64>>,
     last_five_blocks: Vec<LogBlock>,
 }
 
@@ -455,7 +456,7 @@ impl Stream for SafeEthStream {
     type Item = Option<Result<Log>>;
 
     fn poll_next(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         // first deal with the log at the HEAD of the stream to ensure we don't have reorg
@@ -467,14 +468,15 @@ impl Stream for SafeEthStream {
             if log_block_number < self.eth_block_head {
                 // we have reorgd.
                 // we want to go back to the previous block, and use the events from there
-                let num_reorged = self.eth_block_head.saturating_sub(log.block_number.unwrap());
+                let num_reorged = self
+                    .eth_block_head
+                    .saturating_sub(log.block_number.unwrap());
                 let to_skip = BLOCKS_AWAITED - num_reorged.as_u64();
                 // get to the block that we want to remove
 
                 // advance_by is an experimental api that makes this nicer
                 for _ in 0..to_skip {
-                    let index =
-                    self.last_five_index.next().unwrap();
+                    let index = self.last_five_index.next().unwrap();
                 }
                 // we want to reset and then add this event, to start again
                 self.current_block_logs = Vec::new();
@@ -485,7 +487,9 @@ impl Stream for SafeEthStream {
                 // we have progressed through the head of the stream and we have not reorged
                 // add events to our backlog
                 let index = self.last_five_index.next().unwrap();
-                self.last_five_blocks.insert(index as usize, self.current_block_logs.clone());
+                let current_block_logs = self.current_block_logs.clone();
+                self.last_five_blocks
+                    .insert(index as usize, current_block_logs);
                 self.current_block_logs = Vec::new();
 
                 // we want to add all the events in a single block
@@ -495,9 +499,8 @@ impl Stream for SafeEthStream {
             }
 
             self.eth_block_head = log_block_number;
-        } else {
-            return Poll::Pending;
         }
+        Poll::Pending
     }
 }
 
