@@ -381,7 +381,7 @@ pub mod pallet {
 			if let Some(AuctionResult { minimum_active_bid, winners }) =
 				T::Auctioneer::auction_result()
 			{
-				Pallet::<T>::start_new_epoch(&winners.clone(), minimum_active_bid.clone());
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
 			} else {
 				log::warn!(
 					"Unavailable genesis auction so we have no current validating set! \
@@ -464,7 +464,7 @@ impl<T: Config> Pallet<T> {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 		// The new bond set
-		Bond::<T>::set(new_bond.clone());
+		Bond::<T>::set(new_bond);
 		// Set the block this epoch starts at
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
