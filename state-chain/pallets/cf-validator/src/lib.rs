@@ -224,7 +224,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
@@ -244,6 +244,7 @@ pub mod pallet {
 				account_id.clone(),
 				(account_id.clone(), peer_id.clone()),
 			);
+
 			MappedPeers::<T>::insert(peer_id.clone(), ());
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
 			Ok(().into())

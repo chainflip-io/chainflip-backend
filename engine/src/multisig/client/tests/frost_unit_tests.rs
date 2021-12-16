@@ -324,16 +324,6 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    ctx.tag_cache.clear();
-
-    // Send the request to sign with too many signers
-    let mut signer_ids = SIGNER_IDS.clone();
-    signer_ids.push(ACCOUNT_IDS[3].clone());
-    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
-
-    // The rts should not have started a ceremony and we should see an error tag
-    assert_ok!(c1.ensure_at_signing_stage(0));
-    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]
@@ -467,4 +457,13 @@ async fn should_ignore_rts_with_duplicate_signer() {
     // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
+
+#[tokio::test]
+async fn should_sign_with_all_parties() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
+    assert_ok!(ctx.sign_with_ids(&ACCOUNT_IDS).await.outcome.result);
 }

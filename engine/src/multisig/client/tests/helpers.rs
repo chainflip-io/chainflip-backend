@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt::Debug, pin::Pin, time::Duration};
+use std::{collections::HashMap, convert::TryInto, fmt::Debug, pin::Pin, time::Duration};
 
 use anyhow::Result;
+use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
@@ -14,7 +15,7 @@ use crate::multisig::{
         utils::PartyIdxMapping,
         CeremonyAbortReason, MultisigData, ThresholdParameters,
     },
-    KeyId, MultisigInstruction,
+    KeyId, MultisigInstruction, SchnorrSignature,
 };
 
 use crate::testing::assert_ok;
@@ -1096,6 +1097,12 @@ impl KeygenContext {
                 self.tag_cache.clear();
             }
 
+            // Verify the signature with the key
+            if let Ok(sig) = &outcome.result {
+                verify_sig_with_aggkey(sig, self.key_id.as_ref().expect("should have key"))
+                    .expect("Should be valid signature");
+            }
+
             ValidSigningStates {
                 sign_phase1,
                 sign_phase2,
@@ -1481,4 +1488,21 @@ pub async fn check_blamed_paries(rx: &mut MultisigOutcomeReceiver, expected: &[A
     };
 
     assert_eq!(&blamed_parties[..], expected);
+}
+
+/// Using the given key_id, verify the signature is correct
+pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<()> {
+    // Get the aggkey
+    let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
+    let agg_key = AggKey::from_pubkey_compressed(pk_ser.clone());
+
+    // Verify the signature with the aggkey
+    agg_key
+        .verify(
+            &MESSAGE_HASH.0,
+            &SchnorrVerificationComponents::from(sig.clone()),
+        )
+        .map_err(|e| anyhow::Error::msg(format!("Failed to verify signature: {:?}", e)))?;
+
+    Ok(())
 }
