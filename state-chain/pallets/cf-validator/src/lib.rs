@@ -109,7 +109,7 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
-		/// A validator has register her current PeerId
+		/// A validator has register her current PeerId \[account_id, public_key, port, ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, u128),
 		/// A validator has unregistered her current PeerId
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
