@@ -14,6 +14,7 @@ use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
+    api::SubscriptionStream,
     ethabi::Address,
     types::{CallRequest, U64},
 };
@@ -27,7 +28,8 @@ use crate::{
 };
 use futures::{TryFutureExt, TryStreamExt};
 use std::{
-    collections::HashMap, convert::TryInto, fmt::Debug, str::FromStr, sync::Arc, time::Duration,
+    collections::HashMap, convert::TryInto, fmt::Debug, str::FromStr, sync::Arc, task::Poll,
+    time::Duration,
 };
 use web3::{
     ethabi::{self, Contract, Event},
@@ -416,38 +418,87 @@ async fn test_sub_chainlink() -> Result<()> {
         .await
         .context("Error subscribing to ETH logs")?;
     let mut current_block = web3.eth().block_number().await?;
-
     println!("The current block we're at is: {}", current_block);
 
-    struct TxHolder {
-        block_number: U64,
-        block_hash: H256,
-    }
+    // each block contains an array of logs that we want to go back on
+    const BLOCKS_AWAITED: u64 = 5;
 
-    let mut tx_collection: HashMap<U64, TxHolder> = HashMap::new();
+    // TODO: Array holding 5 elems?
+    let mut last_five_blocks: Vec<LogBlock> = Vec::new();
 
-    while let Some(Ok(log)) = future_logs.next().await {
-        println!("Block {:?}. Hash: {:?}", log.block_number, log.block_hash);
-        tx_collection.insert(
-            log.block_number.unwrap(),
-            TxHolder {
-                block_number: log.block_number.unwrap(),
-                block_hash: log.block_hash.unwrap(),
-            },
-        );
+    // collect all the logs for the block we're scanning atm, into here.
+    let mut current_block_logs = Vec::<Log>::new();
 
-        if log.block_number.unwrap() < current_block {
-            panic!("We went back in block time. REORG ALERT");
-        }
+    // TODO: sort out types u64 / usize
 
-        current_block = log.block_number.unwrap();
-
-        // Do some checks across the the collection of txs atm, to see what the fuck happened at previous blocks
-
-        // if we are inserting new txs
-    }
+    // we want to wrap this whole thing. so we call next, only when we are BLOCKS_AWAITED
+    // blocks ahead. i.e. we have filled our last five blocks entry
 
     Ok(())
+}
+
+/// Contains a blocks worth of logs for a particular contract
+type LogBlock = Vec<Log>;
+
+pub struct SafeEthStream {
+    eth_block_head: U64,
+    eth_stream: SubscriptionStream<WebSocket, Log>,
+    stream_block_head: U64,
+    
+    current_block_logs: LogBlock,
+    // the block in the last_five_blocks array we are currently pointing to
+    last_five_index: std::iter::Cycle<u64>,
+    last_five_blocks: Vec<LogBlock>,
+}
+
+impl Stream for SafeEthStream {
+    type Item = Option<Result<Log>>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        // first deal with the log at the HEAD of the stream to ensure we don't have reorg
+
+        let BLOCKS_AWAITED: u64 = 5;
+        use futures_lite::stream::StreamExt;
+        while let Poll::Ready(Some(Ok(log))) = self.eth_stream.poll_next(cx) {
+            let log_block_number = log.block_number.unwrap();
+            if log_block_number < self.eth_block_head {
+                // we have reorgd.
+                // we want to go back to the previous block, and use the events from there
+                let num_reorged = self.eth_block_head.saturating_sub(log.block_number.unwrap());
+                let to_skip = BLOCKS_AWAITED - num_reorged.as_u64();
+                // get to the block that we want to remove
+
+                // advance_by is an experimental api that makes this nicer
+                for _ in 0..to_skip {
+                    let index =
+                    self.last_five_index.next().unwrap();
+                }
+                // we want to reset and then add this event, to start again
+                self.current_block_logs = Vec::new();
+                self.current_block_logs.push(log.clone());
+
+                // last_five_blocks.insert(last_five_index.next(), last_fice)
+            } else if log.block_number.unwrap() > self.eth_block_head {
+                // we have progressed through the head of the stream and we have not reorged
+                // add events to our backlog
+                let index = self.last_five_index.next().unwrap();
+                self.last_five_blocks.insert(index as usize, self.current_block_logs.clone());
+                self.current_block_logs = Vec::new();
+
+                // we want to add all the events in a single block
+            } else if log.block_number.unwrap() == self.eth_block_head {
+                // keep appending to this current blocks worth of blocks
+                self.current_block_logs.push(log.clone());
+            }
+
+            self.eth_block_head = log_block_number;
+        } else {
+            return Poll::Pending;
+        }
+    }
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
