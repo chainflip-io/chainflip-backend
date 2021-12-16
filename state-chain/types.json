@@ -98,11 +98,18 @@
       "Emissions": ""
     }
   },
+  "KeygenOutcome": {
+    "_enum": {
+      "Success": "Vec<u8>",
+      "Failure": "BTreeSet<ValidatorId>"
+    }
+  },
+  "KeygenOutcomeFor": "KeygenOutcome",
   "KeygenResponseStatus": {
     "CandidateCount": "u32",
     "RemainingCandidates": "BTreeSet<ValidatorId>",
     "SuccessVotes": "BTreeMap<Vec<u8>, u32>",
-	  "BlameVotes": "BTreeMap<ValidatorId, u32>"
+    "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
   "KeyId": "Vec<u8>",
   "Liveness": {

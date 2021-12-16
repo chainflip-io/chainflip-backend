@@ -40,7 +40,6 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const MinClaimTTL: Duration = Duration::from_secs(4);
 	pub const ClaimTTL: Duration = Duration::from_secs(10);
 }
 
@@ -174,7 +173,6 @@ impl SigningContext<Test> for ClaimSigningContext {
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
-	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;

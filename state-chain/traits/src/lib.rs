@@ -524,15 +524,17 @@ pub mod offline_conditions {
 	use super::*;
 	pub type ReputationPoints = i32;
 
-	/// Conditions that cause a validator to be knocked offline.
+	/// Conditions that cause a validator to be docked reputation points
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 	pub enum OfflineCondition {
-		/// A broadcast of an output has failed
-		BroadcastOutputFailed,
 		/// There was a failure in participation during a signing
 		ParticipateSigningFailed,
-		/// Not Enough Performance Credits
-		NotEnoughPerformanceCredits,
+		/// There was a failure in participation during a key generation ceremony
+		ParticipateKeygenFailed,
+		/// An invalid transaction was authored
+		InvalidTransactionAuthored,
+		/// A transaction failed on transmission
+		TransactionFailedOnTransmission,
 	}
 
 	/// Error on reporting an offline condition.
@@ -543,7 +545,7 @@ pub mod offline_conditions {
 	}
 
 	pub trait OfflinePenalty {
-		fn penalty(condition: &OfflineCondition) -> ReputationPoints;
+		fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool);
 	}
 
 	/// For reporting offline conditions.

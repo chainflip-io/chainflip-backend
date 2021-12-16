@@ -122,8 +122,6 @@ pub mod pallet {
 		InvalidEpoch,
 		/// During an auction we can't update certain state
 		AuctionInProgress,
-		/// Invalid CFE version has been submitted
-		InvalidCFEVersion,
 		/// Validator Peer mapping overlaps with an existing mapping
 		AccountPeerMappingOverlap,
 		/// Invalid signature
@@ -226,7 +224,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
@@ -246,14 +244,14 @@ pub mod pallet {
 				account_id.clone(),
 				(account_id.clone(), peer_id.clone()),
 			);
+
 			MappedPeers::<T>::insert(peer_id.clone(), ());
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
 			Ok(().into())
 		}
 
 		/// Allow a validator to send their current cfe version.  We validate that the version is a
-		/// subsequent version and if so it is stored with an event is emitted else we throw an
-		/// error.
+		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -264,7 +262,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidCFEVersion](Error::InvalidCFEVersion)
 		/// ## Dependencies
 		///
 		/// - None
@@ -273,17 +270,15 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			let validator_id: T::ValidatorId = account_id.into();
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
-				if *current_version < version {
+				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
 						validator_id,
 						current_version.clone(),
 						version.clone(),
 					));
 					*current_version = version;
-					Ok(().into())
-				} else {
-					Err(Error::<T>::InvalidCFEVersion)?
 				}
+				Ok(().into())
 			})
 		}
 	}

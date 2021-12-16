@@ -31,7 +31,7 @@ cargo build --release
 Once the project has been built, the following command can be used to explore all parameters and subcommands:
 
 ```sh
-./target/release/state-chain-node -h
+./target/release/chainflip-node -h
 ```
 
 ## Run
@@ -54,19 +54,19 @@ export ETHEREUM_CHAIN_ID=4
 This command will start the single-node development chain with persistent state:
 
 ```bash
-./target/release/state-chain-node --dev
+./target/release/chainflip-node --dev
 ```
 
 Purge the development chain's state:
 
 ```bash
-./target/release/state-chain-node purge-chain --dev
+./target/release/chainflip-node purge-chain --dev
 ```
 
 Start the development chain with detailed logging:
 
 ```bash
-RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/state-chain-node -lruntime=debug --dev
+RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/chainflip-node -lruntime=debug --dev
 ```
 
 ### Multi-Node Local Testnet
@@ -115,7 +115,7 @@ After the node has been [built](#build), refer to the embedded documentation to 
 capabilities and configuration parameters that it exposes:
 
 ```shell
-./target/release/state-chain-node --help
+./target/release/chainflip-node --help
 ```
 
 ### Runtime
@@ -174,15 +174,15 @@ Then run the following command to start a single node development chain.
 ```
 
 This command will firstly compile your code, and then start a local development network. You can also replace the
-default command (`cargo build --release && ./target/release/state-chain-node --dev --ws-external`)
+default command (`cargo build --release && ./target/release/chainflip-node --dev --ws-external`)
 by appending your own. A few useful ones are as follow.
 
 ```bash
 # Run Substrate node without re-compiling
-./scripts/docker_run.sh ./target/release/state-chain-node --dev --ws-external
+./scripts/docker_run.sh ./target/release/chainflip-node --dev --ws-external
 
 # Purge the local dev chain
-./scripts/docker_run.sh ./target/release/state-chain-node purge-chain --dev
+./scripts/docker_run.sh ./target/release/chainflip-node purge-chain --dev
 
 # Check whether the code is compilable
 ./scripts/docker_run.sh cargo check

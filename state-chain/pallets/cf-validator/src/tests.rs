@@ -234,13 +234,12 @@ mod tests {
 				"new version should be stored"
 			);
 
-			// We shouldn't be able to go back a version.  We will reset the events as we expect
-			// to have no events emitted when the version is *not* updated
+			// When we submit the same version we should see no `CFEVersionUpdated` event
 			frame_system::Pallet::<Test>::reset_events();
-			assert_noop!(
-				ValidatorPallet::cfe_version(Origin::signed(validator), version),
-				Error::<Test>::InvalidCFEVersion
-			);
+			assert_ok!(ValidatorPallet::cfe_version(
+				Origin::signed(validator),
+				new_version.clone()
+			));
 
 			assert_eq!(
 				0,

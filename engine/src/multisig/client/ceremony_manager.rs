@@ -137,6 +137,8 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                // TODO: Look at better way of releasing the lock on the sc_observer
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -175,15 +177,17 @@ impl CeremonyManager {
 
         slog::debug!(logger, "Processing a request to sign");
 
-        // Check that the number of signers is correct
-        let signers_expected = key_info.params.threshold + 1;
-        if signers.len() != signers_expected {
+        // Check that the number of signers is enough
+        let minimum_signers_needed = key_info.params.threshold + 1;
+        if signers.len() < minimum_signers_needed {
             slog::warn!(
                 logger,
                 #REQUEST_TO_SIGN_IGNORED,
-                "Request to sign ignored: incorrect number of signers {}/{}",
-                signers.len(), signers_expected
+                "Request to sign ignored: not enough signers {}/{}",
+                signers.len(), minimum_signers_needed
             );
+            // TODO: Look at better way of releasing the lock on the sc_observer
+            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -193,6 +197,8 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                // TODO: Look at better way of releasing the lock on the sc_observer
+                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };

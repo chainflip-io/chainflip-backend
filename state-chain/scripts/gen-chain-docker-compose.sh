@@ -33,13 +33,13 @@ CMD="${CMD} -f ${BASE_CONFIG_FILE}"
 # Names should be "alice", "bob", etc.
 for NODE_NAME in $@
 do
-    NODE_CONFIG_FILE=${TEMP_DIR}/state-chain-node-${NODE_NAME}.yml
+    NODE_CONFIG_FILE=${TEMP_DIR}/chainflip-node-${NODE_NAME}.yml
 
     # Substitute the args into the template and save to the temporary file.
     sed -e "s/\${SUBNET_BASE}/${SUBNET_BASE}/" \
         -e "s/\${NODE_NAME}/${NODE_NAME}/" \
         -e "s/\${NETWORK_SUFFIX}/${NETWORK_SUFFIX}/" \
-        ${TEMPLATE_DIR}/state-chain-node.template.yml \
+        ${TEMPLATE_DIR}/chainflip-node.template.yml \
     > ${NODE_CONFIG_FILE}
 
     # Append the file to the command using -f.

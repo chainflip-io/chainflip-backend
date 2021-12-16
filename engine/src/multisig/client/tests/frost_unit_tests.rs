@@ -58,7 +58,11 @@ async fn should_delay_comm1_before_rts() {
 
     let id0 = ctx.get_account_id(0);
 
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send comm1 from the other 2 clients before the request to sign
@@ -143,7 +147,11 @@ async fn should_report_on_timeout_before_request_to_sign() {
 
     let id0 = ctx.get_account_id(0);
 
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
 
     assert_ok!(c1.ensure_at_signing_stage(0));
 
@@ -249,7 +257,11 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
     let id0 = ctx.get_account_id(0);
 
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Get an id that was not in the keygen and substitute it in the signer list
@@ -273,7 +285,11 @@ async fn should_ignore_rts_if_not_participating() {
 
     let id3 = ctx.get_account_id(3);
 
-    let mut c1 = keygen_states.key_ready_data().clients[&id3].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id3]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Make sure our id is not in the signers list
@@ -293,22 +309,16 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     let keygen_states = ctx.generate().await;
 
     let id0 = ctx.get_account_id(0);
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the request to sign with not enough signers
     let mut signer_ids = SIGNER_IDS.clone();
     let _ = signer_ids.pop();
-    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
-
-    // The rts should not have started a ceremony and we should see an error tag
-    assert_ok!(c1.ensure_at_signing_stage(0));
-    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    ctx.tag_cache.clear();
-
-    // Send the request to sign with too many signers
-    let mut signer_ids = SIGNER_IDS.clone();
-    signer_ids.push(ACCOUNT_IDS[3].clone());
     c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
 
     // The rts should not have started a ceremony and we should see an error tag
@@ -432,7 +442,11 @@ async fn should_ignore_rts_with_duplicate_signer() {
     let keygen_states = ctx.generate().await;
 
     let id0 = ctx.get_account_id(0);
-    let mut c1 = keygen_states.key_ready_data().clients[&id0].clone();
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the request to sign with a duplicate ID in the signers
@@ -443,4 +457,13 @@ async fn should_ignore_rts_with_duplicate_signer() {
     // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(c1.ensure_at_signing_stage(0));
     assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
+
+#[tokio::test]
+async fn should_sign_with_all_parties() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
+    assert_ok!(ctx.sign_with_ids(&ACCOUNT_IDS).await.outcome.result);
 }
