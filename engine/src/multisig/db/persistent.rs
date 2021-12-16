@@ -112,39 +112,15 @@ impl MultisigDB for PersistentMultisigDB {
 
 fn save_ceremony_tracking(_db: &mut Database, _data: &HashSet<CeremonyId>, _key: &[u8]) {
     // Disabled writing ceremony tracking data to disk until we have a better db solution.
-    /*
-    let mut tx = db.transaction();
-
-    let data_encoded = bincode::serialize(data).expect("Could not serialize hashset");
-
-    tx.put_vec(DB_COL_CEREMONY_TRACKING, key, data_encoded);
-
-    // Commit the tx to the database
-    db.write(tx)
-        .unwrap_or_else(|e| panic!("Could not write hashset `{:?}` to database: {}", data, e,));
-    */
 }
 
 fn load_ceremony_tracking(_db: &Database, _key: &[u8]) -> anyhow::Result<HashSet<CeremonyId>> {
     // Disabled writing ceremony tracking data to disk until we have a better db solution.
-    /*
-    match db
-        .get(DB_COL_CEREMONY_TRACKING, key)
-        .expect("should load ceremony tracking hashset")
-    {
-        Some(data) => bincode::deserialize::<HashSet<CeremonyId>>(&data)
-            .map_err(anyhow::Error::new)
-            .with_context(|| "Could not deserialize ceremony tracking data"),
-        None => Ok(HashSet::new()),
-    }
-    */
     Ok(HashSet::new())
 }
 
 #[cfg(test)]
 mod tests {
-
-    use std::iter::FromIterator;
 
     use super::*;
 
@@ -192,7 +168,6 @@ mod tests {
         std::fs::remove_dir_all(db_path).unwrap();
     }
 
-    #[ignore = "Disabled writing ceremony tracking data to disk until we have a better db solution"]
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
@@ -217,41 +192,6 @@ mod tests {
             assert!(keys_before.get(&key_id).is_some());
         }
         // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
-    }
-
-    #[ignore = "Disabled writing ceremony tracking data to disk until we have a better db solution"]
-    #[test]
-    fn can_save_and_load_used_ceremony_id_data() {
-        let logger = new_test_logger();
-        let db_path = Path::new("db3");
-        let _ = std::fs::remove_dir_all(db_path);
-
-        let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
-
-        // Save some ids
-        let mut signing_hashset: HashSet<CeremonyId> =
-            HashSet::from_iter(vec![1, 2].iter().cloned());
-        p_db.update_tracking_for_signing(&signing_hashset);
-        assert_eq!(p_db.load_tracking_for_signing(), signing_hashset);
-
-        // Remove an id and load again
-        signing_hashset.remove(&signing_hashset.iter().last().unwrap().clone());
-        p_db.update_tracking_for_signing(&signing_hashset);
-        assert_eq!(p_db.load_tracking_for_signing(), signing_hashset);
-
-        // Save some ids
-        let mut keygen_hashset: HashSet<CeremonyId> =
-            HashSet::from_iter(vec![3, 4].iter().cloned());
-        p_db.update_tracking_for_keygen(&keygen_hashset);
-        assert_eq!(p_db.load_tracking_for_keygen(), keygen_hashset);
-
-        // Remove an id and load again
-        keygen_hashset.remove(&keygen_hashset.iter().last().unwrap().clone());
-        p_db.update_tracking_for_keygen(&keygen_hashset);
-        assert_eq!(p_db.load_tracking_for_keygen(), keygen_hashset);
-
-        // Cleanup
         std::fs::remove_dir_all(db_path).unwrap();
     }
 }
