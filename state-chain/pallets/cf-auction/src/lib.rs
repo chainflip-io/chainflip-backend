@@ -220,6 +220,10 @@ pub mod pallet {
 				);
 			}
 
+			BackupGroupSize::<T>::put(
+				self.winners.len() as u32 / T::ActiveToBackupValidatorRatio::get(),
+			);
+
 			LastAuctionResult::<T>::put(AuctionResult {
 				winners: self.winners.clone(),
 				minimum_active_bid: self.minimum_active_bid,
