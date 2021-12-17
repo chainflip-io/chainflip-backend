@@ -47,6 +47,13 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
+	fn on_epoch_ending() {
+		// Apportion rewards for the current validators
+		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
+			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
+		});
+	}
+
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
