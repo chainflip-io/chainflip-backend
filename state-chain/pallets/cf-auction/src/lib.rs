@@ -19,7 +19,7 @@ extern crate assert_matches;
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
 	ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping, IsOnline,
-	RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
+	QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -229,6 +229,19 @@ pub mod pallet {
 				minimum_active_bid: self.minimum_active_bid,
 			});
 		}
+	}
+}
+
+impl<T: Config> QualifyValidator for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		// Rule #1 - They are registered
+		// Rule #2 - They have a registered peer id
+		// Rule #3 - Confirm that the validators are 'online'
+		T::Registrar::is_registered(&validator_id) &&
+			T::PeerMapping::has_peer_mapping(&validator_id) &&
+			T::Online::is_online(&validator_id)
 	}
 }
 
