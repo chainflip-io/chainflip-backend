@@ -56,6 +56,7 @@ pub struct PercentageRange {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -313,6 +314,11 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// The current bond
+	#[pallet::storage]
+	#[pallet::getter(fn bond)]
+	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
@@ -346,12 +352,11 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			if let Some(auction_result) = T::Auctioneer::auction_result() {
-				T::EpochTransitionHandler::on_new_epoch(
-					&[],
-					&auction_result.winners,
-					auction_result.minimum_active_bid,
-				);
+			if let Some(AuctionResult { winners, minimum_active_bid }) =
+				T::Auctioneer::auction_result()
+			{
+				Bond::<T>::set(minimum_active_bid.clone());
+				T::EpochTransitionHandler::on_new_epoch(&[], &winners, minimum_active_bid);
 			}
 			CurrentEpoch::<T>::set(0);
 			Pallet::<T>::generate_lookup();
@@ -376,10 +381,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn bond() -> Self::Amount {
-		match T::Auctioneer::phase() {
-			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
-			_ => Zero::zero(),
-		}
+		Bond::<T>::get()
 	}
 
 	fn epoch_index() -> EpochIndex {
