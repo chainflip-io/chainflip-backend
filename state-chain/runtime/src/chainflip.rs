@@ -132,7 +132,7 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
 }
 
 struct BackupValidatorEmissions;
@@ -146,7 +146,10 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight {
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
+		if backup_validators.len() == 0 {
+			return 0
+		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
@@ -164,16 +167,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(&Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
 			.iter()
 			.map(|backup_validator| {
 				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(*backup_validator);
+					Self::StakeTransfer::stakeable_balance(backup_validator);
 				let reward_scaling_factor =
 					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
 				total_rewards += reward;
-				(*backup_validator, reward)
+				(backup_validator.clone(), reward)
 			})
 			.collect();
 
@@ -214,16 +217,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		// We pay rewards to online backup validators on each heartbeat interval
-		let backup_validators: Vec<&Self::ValidatorId> = network_state
-			.online
-			.iter()
-			.filter(|account_id| {
-				ChainflipAccountStore::<Runtime>::get(*account_id).state ==
-					ChainflipAccountState::Backup
-			})
-			.collect();
-
+		let backup_validators = <Auction as BackupValidators>::backup_validators();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are within the emergency rotation range
