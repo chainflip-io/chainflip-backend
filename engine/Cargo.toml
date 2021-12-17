@@ -28,6 +28,8 @@ futures = "0.3.14"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
 hex = "0.4.3"
+# todo; get version
+hex-literal = "*"
 httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
@@ -39,6 +41,8 @@ jsonrpc-core-client = {version = "18.0.0", default-features = false, features = 
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 websocket = "0.24"
+
+ethbloom = "*"
 
 dyn-clone = "1.0.4"
 # kvdb-rocksdb is tied to substrate deps

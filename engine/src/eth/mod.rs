@@ -391,57 +391,6 @@ pub trait EthObserver {
     fn get_deployed_address(&self) -> H160;
 }
 
-#[tokio::test]
-async fn test_sub_chainlink() -> Result<()> {
-    let settings = Settings::from_file("config/Local.toml").unwrap();
-
-    let logger = new_test_logger();
-    let deployed_address: [u8; 20] = hex::decode("01BE23585060835E02B77ef475b0Cc51aA1e0709")
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let deployed_address = H160::from(deployed_address);
-
-    let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
-        .await
-        .expect("Failed to create Web3 WebSocket");
-
-    slog::info!(
-        logger,
-        "Subscribing to Ethereum events from contract at address: {:?}",
-        hex::encode(deployed_address)
-    );
-    // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
-    let mut future_logs = web3
-        .eth_subscribe()
-        .subscribe_logs(
-            FilterBuilder::default()
-                .from_block(BlockNumber::Latest)
-                .address(vec![deployed_address])
-                .build(),
-        )
-        .await
-        .context("Error subscribing to ETH logs")?;
-    let mut current_block = web3.eth().block_number().await?;
-    println!("The current block we're at is: {}", current_block);
-
-    // each block contains an array of logs that we want to go back on
-    const BLOCKS_AWAITED: u64 = 5;
-
-    // TODO: Array holding 5 elems?
-    let mut last_five_blocks: Vec<LogBlock> = Vec::new();
-
-    // collect all the logs for the block we're scanning atm, into here.
-    let mut current_block_logs = Vec::<Log>::new();
-
-    // TODO: sort out types u64 / usize
-
-    // we want to wrap this whole thing. so we call next, only when we are BLOCKS_AWAITED
-    // blocks ahead. i.e. we have filled our last five blocks entry
-
-    Ok(())
-}
-
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
 #[derive(Debug)]
 pub enum SharedEvent {
