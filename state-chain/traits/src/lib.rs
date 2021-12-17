@@ -601,3 +601,10 @@ pub trait WaivedFees {
 	type Call;
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }
+
+/// Qualify what is considered as a potential validator for the network
+pub trait QualifyValidator {
+	type ValidatorId;
+	/// Is the validator qualified to be a validator and meet our expectations of one
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+}
