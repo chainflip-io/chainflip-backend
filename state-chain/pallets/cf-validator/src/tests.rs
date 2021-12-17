@@ -352,15 +352,13 @@ mod tests {
 			);
 
 			// Non-overlaping peer ids and valid signatures
-			assert_ok!(
-				ValidatorPallet::register_peer_id(
-					Origin::signed(ALICE),
-					alice_peer_public_key,
-					40044,
-					10,
-					alice_peer_keypair.sign(&ALICE.encode()[..]),
-				)
-			);
+			assert_ok!(ValidatorPallet::register_peer_id(
+				Origin::signed(ALICE),
+				alice_peer_public_key,
+				40044,
+				10,
+				alice_peer_keypair.sign(&ALICE.encode()[..]),
+			));
 			assert_eq!(
 				last_event(),
 				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
@@ -392,15 +390,13 @@ mod tests {
 			// New validator mapping works
 			let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
 			let bob_peer_public_key = bob_peer_keypair.public();
-			assert_ok!(
-				ValidatorPallet::register_peer_id(
-					Origin::signed(BOB),
-					bob_peer_public_key,
-					40043,
-					11,
-					bob_peer_keypair.sign(&BOB.encode()[..]),
-				),
-			);
+			assert_ok!(ValidatorPallet::register_peer_id(
+				Origin::signed(BOB),
+				bob_peer_public_key,
+				40043,
+				11,
+				bob_peer_keypair.sign(&BOB.encode()[..]),
+			),);
 			assert_eq!(
 				last_event(),
 				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
@@ -433,15 +429,13 @@ mod tests {
 			let bob_peer_public_key = bob_peer_keypair.public();
 
 			// Changing to new peer id works
-			assert_ok!(
-				ValidatorPallet::register_peer_id(
-					Origin::signed(BOB),
-					bob_peer_public_key,
-					40043,
-					11,
-					bob_peer_keypair.sign(&BOB.encode()[..]),
-				)
-			);
+			assert_ok!(ValidatorPallet::register_peer_id(
+				Origin::signed(BOB),
+				bob_peer_public_key,
+				40043,
+				11,
+				bob_peer_keypair.sign(&BOB.encode()[..]),
+			));
 			assert_eq!(
 				last_event(),
 				mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(

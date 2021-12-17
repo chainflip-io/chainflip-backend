@@ -246,7 +246,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
             Some((account_id, message)) = outgoing_p2p_message_receiver.recv() => {
                 match async {
                     account_to_peer.get(&account_id).ok_or_else(|| anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id)))
-                }.and_then(|(peer_id, _address, _port)| {
+                }.and_then(|(peer_id, _, _)| {
                     client.send_message(
                         vec![peer_id.into()],
                         bincode::serialize(&message).unwrap()
