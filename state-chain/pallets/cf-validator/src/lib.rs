@@ -401,6 +401,8 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// of the auction, validate and select winners, as one.  If this fails we force a
 				// new rotation attempt.
 				if Self::should_rotate(now) {
+					// The current epoch is on the way out
+					T::EpochTransitionHandler::on_epoch_ending();
 					let processed =
 						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
 					if !processed {
