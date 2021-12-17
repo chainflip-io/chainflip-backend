@@ -792,13 +792,12 @@ mod tests {
 
 	mod epoch {
 		use super::*;
+		use crate::tests::network::{setup_account, setup_peer_mapping};
 		use cf_traits::{
 			AuctionPhase, AuctionResult, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo,
 		};
 		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
-		use crate::tests::network::setup_account;
-		use crate::tests::network::setup_peer_mapping;
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -900,8 +899,10 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, nodes) =
-						network::Network::create(ACTIVE_SET_SIZE as u8, &Validator::current_validators());
+					let (mut testnet, nodes) = network::Network::create(
+						ACTIVE_SET_SIZE as u8,
+						&Validator::current_validators(),
+					);
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
