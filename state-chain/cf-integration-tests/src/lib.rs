@@ -1146,6 +1146,7 @@ mod tests {
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
 			Validator,
 		};
+		use std::collections::HashMap;
 
 		#[test]
 		// We have a set of backup validators who receive rewards
@@ -1174,7 +1175,9 @@ mod tests {
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
 					// An initial stake which is superior to the genesis stakes
-					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					// The current validators would have been rewarded on us leaving the current
+					// epoch so let's up the stakes for the passive nodes.
+					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
@@ -1225,13 +1228,22 @@ mod tests {
 						"we should have new backup validators"
 					);
 
+					let backup_validator_balances: HashMap<NodeId, FlipBalance> = current_backup_validators
+						.iter()
+						.map(|validator_id| {
+							(validator_id.clone(), Flip::stakeable_balance(&validator_id))
+						})
+						.collect::<Vec<(NodeId, FlipBalance)>>()
+						.into_iter()
+						.collect();
+
 					// Move forward a heartbeat, emissions should be shared to backup validators
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
-					for backup_validator in &current_backup_validators {
-						assert!(INITIAL_STAKE < Flip::stakeable_balance(backup_validator));
+					for (backup_validator, pre_balance) in backup_validator_balances {
+						assert!(pre_balance < Flip::stakeable_balance(&backup_validator));
 					}
 				});
 		}
