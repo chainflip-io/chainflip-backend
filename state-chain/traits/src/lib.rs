@@ -321,6 +321,12 @@ pub trait RewardRollover {
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
 }
 
+pub trait Rewarder {
+	type AccountId;
+	// Apportion rewards due to all beneficiaries
+	fn reward_all() -> Result<(), DispatchError>;
+}
+
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
