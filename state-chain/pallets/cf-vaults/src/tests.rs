@@ -294,8 +294,6 @@ fn keygen_report_failure() {
 #[test]
 fn test_grace_period() {
 	new_test_ext().execute_with(|| {
-		let new_key: Vec<u8> = GENESIS_ETHEREUM_AGG_PUB_KEY.iter().map(|x| x + 1).collect();
-
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
@@ -304,7 +302,7 @@ fn test_grace_period() {
 			Origin::signed(ALICE),
 			ceremony_id,
 			ChainId::Ethereum,
-			KeygenOutcome::Success(new_key.clone())
+			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// > 10 blocks later we should resolve an error.
@@ -315,6 +313,9 @@ fn test_grace_period() {
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
 		VaultsPallet::on_initialize(11);
 		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		// All non-responding candidates should have been reported.
+		assert_eq!(MockOfflineReporter::get_reported(), vec![BOB, CHARLIE]);
 	});
 }
 
@@ -455,37 +456,45 @@ mod keygen_reporting {
 
 	#[test]
 	fn test_threshold() {
-		// The threshold is the smallest number of participants that *can* reach consensus.
+		// The success threshold is the smallest number of participants that *can* reach consensus.
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..144)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..144))
+				.success_threshold(),
 			96
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..145)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..145))
+				.success_threshold(),
 			97
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..146)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..146))
+				.success_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..147)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..147))
+				.success_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..148)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..148))
+				.success_threshold(),
 			99
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..149)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..149))
+				.success_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..150)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..150))
+				.success_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..151)).threshold(),
+			KeygenResponseStatus::<MockRuntime>::new(BTreeSet::from_iter(0..151))
+				.success_threshold(),
 			101
 		);
 	}
@@ -613,6 +622,7 @@ mod keygen_reporting {
 		assert_no_outcome!(get_outcome_simple(6, 2, 0, 0));
 		assert_no_outcome!(get_outcome_simple(6, 3, 0, 0));
 		assert_no_outcome!(get_outcome_simple(6, 3, 0, 1));
+		assert_success_outcome!(get_outcome_simple(6, 4, 0, 0));
 		assert_success_outcome!(get_outcome_simple(6, 4, 0, 1));
 		assert_success_outcome!(get_outcome_simple(6, 6, 0, 0));
 
@@ -639,6 +649,10 @@ mod keygen_reporting {
 		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
 		assert_failure_outcome!(get_outcome_simple(6, 3, 3, 0));
 		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
+
+		// A keygen where more than `threshold` nodes have reported failure, but there is no final
+		// agreement on the guilty parties.
+		assert_no_outcome!(get_outcome(25, 0, 17, 0, |id| if id < 10 { 17..25 } else { 20..25 }));
 	}
 
 	#[test]
