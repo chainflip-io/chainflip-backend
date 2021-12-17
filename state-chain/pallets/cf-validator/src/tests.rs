@@ -339,6 +339,7 @@ mod tests {
 			let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 			let alice_peer_public_key = alice_peer_keypair.public();
 
+			// Don't allow invalid signatures
 			assert_noop!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(ALICE),
@@ -347,10 +348,10 @@ mod tests {
 					0,
 					alice_peer_keypair.sign(&BOB.encode()[..]),
 				),
-				Error::<Test>::InvalidAccountPeerMappingSignature,
-				"Don't allow invalid signatures"
+				Error::<Test>::InvalidAccountPeerMappingSignature
 			);
 
+			// Non-overlaping peer ids and valid signatures
 			assert_ok!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(ALICE),
@@ -358,8 +359,7 @@ mod tests {
 					40044,
 					10,
 					alice_peer_keypair.sign(&ALICE.encode()[..]),
-				),
-				"Non-overlaping peer ids and valid signatures"
+				)
 			);
 			assert_eq!(
 				last_event(),
@@ -377,6 +377,7 @@ mod tests {
 				Some((ALICE, alice_peer_public_key, 40044, 10))
 			);
 
+			// New mappings to overlapping peer id are disallowed
 			assert_noop!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(BOB),
@@ -385,13 +386,12 @@ mod tests {
 					0,
 					alice_peer_keypair.sign(&BOB.encode()[..]),
 				),
-				Error::<Test>::AccountPeerMappingOverlap,
-				"New mappings to overlapping peer id are disallowed"
+				Error::<Test>::AccountPeerMappingOverlap
 			);
 
+			// New validator mapping works
 			let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
 			let bob_peer_public_key = bob_peer_keypair.public();
-
 			assert_ok!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(BOB),
@@ -400,7 +400,6 @@ mod tests {
 					11,
 					bob_peer_keypair.sign(&BOB.encode()[..]),
 				),
-				"New validator mapping works"
 			);
 			assert_eq!(
 				last_event(),
@@ -418,6 +417,7 @@ mod tests {
 				Some((BOB, bob_peer_public_key, 40043, 11))
 			);
 
+			// Changing existing mapping to overlapping peer id is disallowed
 			assert_noop!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(BOB),
@@ -426,13 +426,13 @@ mod tests {
 					0,
 					alice_peer_keypair.sign(&BOB.encode()[..]),
 				),
-				Error::<Test>::AccountPeerMappingOverlap,
-				"Changing existing mapping to overlapping peer id is disallowed"
+				Error::<Test>::AccountPeerMappingOverlap
 			);
 
 			let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob2", None);
 			let bob_peer_public_key = bob_peer_keypair.public();
 
+			// Changing to new peer id works
 			assert_ok!(
 				ValidatorPallet::register_peer_id(
 					Origin::signed(BOB),
@@ -440,8 +440,7 @@ mod tests {
 					40043,
 					11,
 					bob_peer_keypair.sign(&BOB.encode()[..]),
-				),
-				"Changing to new peer id works"
+				)
 			);
 			assert_eq!(
 				last_event(),
