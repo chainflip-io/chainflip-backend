@@ -176,6 +176,13 @@ pub trait Auctioneer {
 	fn abort();
 }
 
+pub trait BackupValidators {
+	type ValidatorId;
+
+	/// The current set of backup validators.  The set may change at anytime.
+	fn backup_validators() -> Vec<Self::ValidatorId>;
+}
+
 /// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
