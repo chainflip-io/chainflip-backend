@@ -30,6 +30,7 @@ use sp_runtime::{
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 use sp_io::hashing::twox_128;
+use sp_runtime::helpers_128bit::multiply_by_rational;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -187,7 +188,11 @@ impl RewardDistribution for BackupValidatorEmissions {
 			rewards = rewards
 				.into_iter()
 				.map(|(validator_id, reward)| {
-					(validator_id, (reward * emissions_cap) / total_rewards)
+					(
+						validator_id,
+						multiply_by_rational(reward, emissions_cap, total_rewards)
+							.unwrap_or_default(),
+					)
 				})
 				.collect();
 		}
