@@ -295,15 +295,13 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				let mut bidders = T::BidderProvider::get_bidders();
-				// Rule #1 - If we have a bid at 0 then please leave
+				// Number one rule - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
-				// Rule #2 - They are registered
-				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #3 - They have a registered peer id
-				bidders.retain(|(id, _)| T::PeerMapping::has_peer_mapping(id));
-				// Rule #4 - Confirm that the validators are 'online'
-				bidders.retain(|(id, _)| T::Online::is_online(id));
-				// Rule #5 - Confirm we have our set size
+				// Determine if this validator is qualified for bidding
+				bidders.retain(|(validator_id, _)| {
+					<Pallet<T> as QualifyValidator>::is_qualified(validator_id)
+				});
+				// Final rule - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
@@ -573,7 +571,14 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	type Amount = T::Amount;
 
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+		// This would only happen if we had a active set of less than 3, not likely
 		if BackupGroupSize::<T>::get() == 0 {
+			return
+		}
+
+		// We validate that the staker is qualified and can be considered to be a BV if the stake
+		// meets the requirements
+		if !<Pallet<T> as QualifyValidator>::is_qualified(validator_id) {
 			return
 		}
 
