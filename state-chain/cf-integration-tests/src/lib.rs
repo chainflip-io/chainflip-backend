@@ -300,7 +300,7 @@ mod tests {
 		}
 
 		// Create an account, generate and register the session keys
-		fn setup_account(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_account(node_id: &NodeId, seed: &String) {
 			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
 
 			let key = SessionKeys {
@@ -315,7 +315,7 @@ mod tests {
 			));
 		}
 
-		fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 			use sp_core::Encode;
@@ -797,6 +797,8 @@ mod tests {
 			ChainflipAccountStore, EpochInfo,
 		};
 		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
+		use crate::tests::network::setup_account;
+		use crate::tests::network::setup_peer_mapping;
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -891,13 +893,15 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
+			const ACTIVE_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
 					let (mut testnet, nodes) =
-						network::Network::create(5, &Validator::current_validators());
+						network::Network::create(ACTIVE_SET_SIZE as u8, &Validator::current_validators());
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -910,6 +914,14 @@ mod tests {
 					for keyless_node in &keyless_nodes {
 						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
 					}
+
+					// A late staker which we will use after the auction.  They are yet to stake
+					// and will do after the auction with the intention of being a backup validator
+					let late_staker = testnet.create_node();
+					testnet.set_active(&late_staker, true);
+					let seed = late_staker.to_string();
+					setup_account(&late_staker, &seed);
+					setup_peer_mapping(&late_staker, &seed);
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
@@ -997,6 +1009,16 @@ mod tests {
 							"should be validator"
 						);
 					}
+
+					// A late staker comes along, they should become a backup validator as they have
+					// everything in place
+					testnet.stake_manager_contract.stake(late_staker.clone(), stake_amount);
+					testnet.move_forward_blocks(1);
+					assert_eq!(
+						ChainflipAccountState::Backup,
+						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
+						"late staker should be a backup validator"
+					);
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
