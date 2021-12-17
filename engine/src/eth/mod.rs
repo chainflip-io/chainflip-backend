@@ -3,6 +3,8 @@ pub mod stake_manager;
 
 pub mod event_common;
 
+pub mod safe_stream;
+
 pub mod utils;
 
 use anyhow::{Context, Result};
@@ -300,6 +302,8 @@ pub trait EthObserver {
             "Subscribing to Ethereum events from contract at address: {:?}",
             hex::encode(deployed_address)
         );
+
+        // TODO: replace with safe stream :)
         // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
         let future_logs = web3
             .eth_subscribe()
@@ -436,107 +440,6 @@ async fn test_sub_chainlink() -> Result<()> {
     // blocks ahead. i.e. we have filled our last five blocks entry
 
     Ok(())
-}
-
-/// Contains a blocks worth of logs for a particular contract
-type LogBlock = Vec<Log>;
-
-pub struct SafeEthStream {
-    // The head of the eth subscription to the node
-    current_eth_block_head: U64,
-    // the eth log subscription stream
-    eth_stream: SubscriptionStream<WebSocket, Log>,
-
-    current_block_logs: LogBlock,
-    // the block in the last_five_blocks array we are currently pointing to
-    last_n_index: std::iter::Cycle<Range<u64>>,
-    last_n_blocks: Vec<LogBlock>,
-
-    blocks_head_is_ahead: u64,
-}
-
-impl SafeEthStream {
-    pub fn new(eth_stream: SubscriptionStream<WebSocket, Log>, block_safety: u64) -> Self {
-        Self {
-            eth_stream,
-            current_eth_block_head: U64::default(),
-            current_block_logs: Default::default(),
-            last_n_index: (0..block_safety).cycle(),
-            last_n_blocks: Default::default(),
-            blocks_head_is_ahead: block_safety,
-        }
-    }
-}
-
-impl Stream for SafeEthStream {
-    type Item = Log;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        // The number of ETH blocks we wait until we decide we are safe enough
-        // to avoid returning duplicate events due to reorgs
-        const BLOCKS_AWAITED: u64 = 5;
-
-        use futures_lite::stream::StreamExt;
-        while let Poll::Ready(Some(Ok(log))) = self.eth_stream.poll_next(cx) {
-            let log_block_number = log.block_number.unwrap();
-            if log_block_number < self.current_eth_block_head {
-                // we have reorgd.
-                // we now want to reset the blocks from there.
-                // e.g. if we had blocks [10, 11, 12, 13, 14] in our Vec,
-                // and we received a log with block number 12, we want to reset the Vec indexes
-                // storing blocks 12, 13, 14
-
-                let num_reorged = self
-                    .current_eth_block_head
-                    .saturating_sub(log.block_number.unwrap());
-
-                // because we've effectively reset the count, we now have fewer than BLOCKS_AWAITED actually
-                // awaited, because we have to go back to those blocks
-                self.blocks_head_is_ahead = BLOCKS_AWAITED.saturating_sub(num_reorged.as_u64());
-                // get to the block that we want to remove
-                // advance_by is an experimental api that makes this nicer
-                for _ in 0..self.blocks_head_is_ahead {
-                    self.last_n_index.next().unwrap();
-                }
-                // we want to reset and then add this event, to start again
-                self.current_block_logs = Vec::new();
-                self.current_block_logs.push(log.clone());
-
-                // last_five_blocks.insert(last_five_index.next(), last_fice)
-            } else if log.block_number.unwrap() > self.current_eth_block_head {
-                // we have progressed through the head of the stream and we have not reorged
-                // add events to our backlog
-                let index = self.last_n_index.next().unwrap();
-                let current_block_logs = self.current_block_logs.clone();
-                self.last_n_blocks
-                    .insert(index as usize, current_block_logs);
-                self.current_block_logs = Vec::new();
-
-                // we are catching up, zoom zoom
-                if self.blocks_head_is_ahead > 0 {
-                    self.blocks_head_is_ahead = self.blocks_head_is_ahead.saturating_sub(1);
-                }
-
-                // we want to add all the events in a single block
-            } else if log.block_number.unwrap() == self.current_eth_block_head {
-                // keep appending to this current blocks worth of blocks
-                self.current_block_logs.push(log.clone());
-            }
-
-            self.current_eth_block_head = log_block_number;
-        }
-
-        // if we are now 5 blocks ahead of the backlog we have stored, we can be pretty sure
-        // we won't reorg from here. Otherwise, continue along until we do
-        if self.blocks_head_is_ahead == 0 {
-            return Poll::Ready(self.last_n_blocks.clone().into_iter().flatten().next());
-        }
-
-        Poll::Pending
-    }
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
