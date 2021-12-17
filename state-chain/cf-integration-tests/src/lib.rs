@@ -1228,14 +1228,15 @@ mod tests {
 						"we should have new backup validators"
 					);
 
-					let backup_validator_balances: HashMap<NodeId, FlipBalance> = current_backup_validators
-						.iter()
-						.map(|validator_id| {
-							(validator_id.clone(), Flip::stakeable_balance(&validator_id))
-						})
-						.collect::<Vec<(NodeId, FlipBalance)>>()
-						.into_iter()
-						.collect();
+					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
+						current_backup_validators
+							.iter()
+							.map(|validator_id| {
+								(validator_id.clone(), Flip::stakeable_balance(&validator_id))
+							})
+							.collect::<Vec<(NodeId, FlipBalance)>>()
+							.into_iter()
+							.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup validators
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());

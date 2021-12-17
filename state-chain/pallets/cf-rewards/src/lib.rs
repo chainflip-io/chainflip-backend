@@ -13,7 +13,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{Rewarder, RewardRollover, RewardsDistribution};
+use cf_traits::{RewardRollover, Rewarder, RewardsDistribution};
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance},
