@@ -90,6 +90,8 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 	type ValidatorId = AccountId;
 	type Amount = T::Amount;
 
+	fn on_epoch_ending() {}
+
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],

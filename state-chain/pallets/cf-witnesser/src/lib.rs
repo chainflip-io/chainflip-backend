@@ -309,6 +309,8 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
+	fn on_epoch_ending() {}
+
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
