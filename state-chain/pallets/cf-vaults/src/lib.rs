@@ -230,7 +230,7 @@ pub struct Vault {
 pub mod pallet {
 	use super::*;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::{Saturating};
+	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -631,7 +631,8 @@ impl<T: Config> Pallet<T> {
 			VaultRotationStatus::<T>::new(ceremony_id, BTreeSet::from_iter(candidates.clone())),
 		);
 
-		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each block
+		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
+		// block
 		KeygenResolutionPending::<T>::append((
 			chain_id,
 			frame_system::Pallet::<T>::current_block_number(),
