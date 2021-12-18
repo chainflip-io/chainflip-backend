@@ -16,6 +16,7 @@ use frame_support::{
 	pallet_prelude::*,
 };
 pub use pallet::*;
+use sp_runtime::traits::BlockNumberProvider;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	convert::TryFrom,
@@ -229,7 +230,7 @@ pub struct Vault {
 pub mod pallet {
 	use super::*;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::{BlockNumberProvider, Saturating};
+	use sp_runtime::traits::{Saturating};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -281,7 +282,7 @@ pub mod pallet {
 							Self::on_keygen_success(keygen_ceremony_id, chain_id, new_public_key)
 								.unwrap_or_else(|e| {
 									log::error!(
-										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.", 
+										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.",
 										keygen_ceremony_id, e
 									);
 									weight += T::WeightInfo::on_keygen_failure();
@@ -433,6 +434,7 @@ pub mod pallet {
 			// There is a rotation happening.
 			let mut rotation =
 				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
+
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T>::AwaitingKeygen {
@@ -455,15 +457,6 @@ pub mod pallet {
 					keygen_status.add_failure_vote(&reporter, blamed)?;
 					Self::deposit_event(Event::<T>::KeygenFailureReported(reporter));
 				},
-			}
-
-			// If this is the first response, schedule resolution.
-			if keygen_status.response_count() == 1 {
-				// Schedule resolution.
-				KeygenResolutionPending::<T>::append((
-					chain_id,
-					frame_system::Pallet::<T>::current_block_number(),
-				))
 			}
 
 			PendingVaultRotations::<T>::insert(chain_id, rotation);
@@ -637,6 +630,13 @@ impl<T: Config> Pallet<T> {
 			chain_id,
 			VaultRotationStatus::<T>::new(ceremony_id, BTreeSet::from_iter(candidates.clone())),
 		);
+
+		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each block
+		KeygenResolutionPending::<T>::append((
+			chain_id,
+			frame_system::Pallet::<T>::current_block_number(),
+		));
+
 		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, chain_id, candidates));
 
 		Ok(())
