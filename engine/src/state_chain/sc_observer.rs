@@ -456,7 +456,7 @@ pub async fn start<BlockStream, RpcClient>(
                 }
 
                 slog::trace!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  account_data.state; 
-                "is_outgoing" => is_outgoing, "block number" => block_header.number, "last_active_epoch" => account_data.last_active_epoch);
+                "is_outgoing" => is_outgoing, "last_active_epoch" => account_data.last_active_epoch);
 
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
