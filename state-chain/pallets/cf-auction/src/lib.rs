@@ -519,6 +519,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		if let Ok(index) = remaining_bidders.binary_search_by(|bid| new_bid.0.cmp(&bid.0)) {
 			remaining_bidders[index] = new_bid;
+			Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 		}
 	}
 
@@ -591,7 +592,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 						Pallet::<T>::adjust_group(validator_id, true, remaining_bidders);
 					} else if amount > HighestPassiveNodeBid::<T>::get() {
 						let remaining_bidders = &mut RemainingBidders::<T>::get();
@@ -599,7 +599,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 					}
 				},
 				ChainflipAccountState::Backup =>
@@ -609,7 +608,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 						if amount < LowestBackupValidatorBid::<T>::get() {
 							Pallet::<T>::adjust_group(
 								validator_id,
