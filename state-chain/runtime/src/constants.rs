@@ -19,7 +19,7 @@ pub mod common {
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
 	// This should be the same as the `CLAIM_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
-	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+	pub const CLAIM_DELAY: u64 = 2 * SECS_IN_AN_HOUR;
 	/// This determines the average expected block time that we are targeting.
 	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked

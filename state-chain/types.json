@@ -188,7 +188,7 @@
       "TransactionFailed"
     ]
   },
-  "Uint": "U256",
+  "Uint": "[u8; 32]",
   "UnsignedTransaction": {
     "chain_id": "u64",
     "max_priority_fee_per_gas": "Option<U256>",
