@@ -11,7 +11,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::EthBroadcaster,
-    logging::COMPONENT_KEY,
+    logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
@@ -459,6 +459,9 @@ pub async fn start<BlockStream, RpcClient>(
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
                 }
+
+                slog::trace!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  account_data.state; 
+                "is_outgoing" => is_outgoing, "last_active_epoch" => account_data.last_active_epoch);
 
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
