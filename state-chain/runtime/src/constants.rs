@@ -1,5 +1,6 @@
 pub mod common {
 	use cf_traits::{BlockNumber, FlipBalance};
+	use pallet_cf_broadcast::AttemptCount;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
@@ -43,4 +44,7 @@ pub mod common {
 
 	/// The maximum number of blocks to wait after the first keygen response comes in.
 	pub const KEYGEN_RESPONSE_GRACE_PERIOD: u32 = 10;
+
+	/// The maximum number of broadcast attempts
+	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
 }
