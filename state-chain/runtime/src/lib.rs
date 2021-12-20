@@ -455,6 +455,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 parameter_types! {
 	pub const EthereumSigningTimeout: BlockNumber = 5;
 	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
+	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Runtime {
@@ -467,6 +468,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
+	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
 
