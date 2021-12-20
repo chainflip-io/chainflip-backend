@@ -45,6 +45,7 @@ pub struct SemVer {
 type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
+pub type Ipv6Addr = u128;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -109,9 +110,10 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
-		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey),
-		/// A validator has unregistered her current PeerId
+		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// ip_address\]
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
 
@@ -228,6 +230,8 @@ pub mod pallet {
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
+			port: u16,
+			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -235,18 +239,30 @@ pub mod pallet {
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
-			ensure!(
-				!AccountPeerMapping::<T>::contains_key(&account_id) &&
+
+			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+				if existing_peer_id != peer_id {
+					ensure!(
+						!MappedPeers::<T>::contains_key(&peer_id),
+						Error::<T>::AccountPeerMappingOverlap
+					);
+					MappedPeers::<T>::remove(&existing_peer_id);
+					MappedPeers::<T>::insert(&peer_id, ());
+				}
+			} else {
+				ensure!(
 					!MappedPeers::<T>::contains_key(&peer_id),
-				Error::<T>::AccountPeerMappingOverlap
-			);
+					Error::<T>::AccountPeerMappingOverlap
+				);
+				MappedPeers::<T>::insert(&peer_id, ());
+			}
+
 			AccountPeerMapping::<T>::insert(
-				account_id.clone(),
-				(account_id.clone(), peer_id.clone()),
+				&account_id,
+				(account_id.clone(), peer_id.clone(), port, ip_address.clone()),
 			);
 
-			MappedPeers::<T>::insert(peer_id.clone(), ());
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
@@ -316,8 +332,12 @@ pub mod pallet {
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
-	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey)>;
+	pub type AccountPeerMapping<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+	>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
@@ -571,7 +591,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

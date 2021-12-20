@@ -1,9 +1,11 @@
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
+    time::Duration,
 };
 
 use anyhow::Context;
+use futures::Stream;
 use jsonrpc_core_client::RpcError;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -111,4 +113,11 @@ pub fn read_and_decode_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
         .with_context(|| format!("Failed to read {} file at {}", context, file.display()))
         .and_then(t)
         .with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
+}
+
+/// Makes a stream that outputs () approximately every duration
+pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
+    Box::pin(futures::stream::unfold((), move |_| async move {
+        Some((tokio::time::sleep(duration.clone()).await, ()))
+    }))
 }
