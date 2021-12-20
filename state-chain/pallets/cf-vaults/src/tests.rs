@@ -128,7 +128,13 @@ fn keygen_report_success() {
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
-		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+
+		let keygen_resolution = KeygenResolutionPending::<MockRuntime>::get();
+		let (chain_id, since_block) = keygen_resolution[0];
+
+		// we're waiting on a resolution since we have started Keygen
+		assert_eq!(chain_id, cf_chains::ChainId::Ethereum);
+		assert_eq!(since_block, 1);
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
@@ -181,7 +187,7 @@ fn keygen_report_success() {
 			Error::<MockRuntime>::InvalidCeremonyId
 		);
 
-		// A resolution is now pending but no consensus is reached.
+		// A resolution is still pending but no consensus is reached.
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
@@ -216,7 +222,12 @@ fn keygen_report_failure() {
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
-		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		let keygen_resolution = KeygenResolutionPending::<MockRuntime>::get();
+		let (chain_id, since_block) = keygen_resolution[0];
+
+		// we're waiting on a resolution since we have started Keygen
+		assert_eq!(chain_id, cf_chains::ChainId::Ethereum);
+		assert_eq!(since_block, 1);
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
@@ -269,7 +280,7 @@ fn keygen_report_failure() {
 			Error::<MockRuntime>::InvalidCeremonyId
 		);
 
-		// A resolution is now pending but no consensus is reached.
+		// A resolution is still pending but no consensus is reached.
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
@@ -296,7 +307,12 @@ fn test_grace_period() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
-		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
+		let keygen_resolution = KeygenResolutionPending::<MockRuntime>::get();
+		let (chain_id, since_block) = keygen_resolution[0];
+
+		// we're waiting on a resolution since we have started Keygen
+		assert_eq!(chain_id, cf_chains::ChainId::Ethereum);
+		assert_eq!(since_block, 1);
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
@@ -305,13 +321,13 @@ fn test_grace_period() {
 			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
-		// > 10 blocks later we should resolve an error.
+		// > 25 blocks later we should resolve an error.
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
-		VaultsPallet::on_initialize(10);
+		VaultsPallet::on_initialize(25);
 		assert!(!KeygenResolutionPending::<MockRuntime>::get().is_empty());
-		VaultsPallet::on_initialize(11);
+		VaultsPallet::on_initialize(26);
 		assert!(KeygenResolutionPending::<MockRuntime>::get().is_empty());
 
 		// All non-responding candidates should have been reported.

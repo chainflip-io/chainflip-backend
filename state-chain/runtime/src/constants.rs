@@ -41,6 +41,6 @@ pub mod common {
 	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
 
-	/// The maximum number of blocks to wait after the first keygen response comes in.
-	pub const KEYGEN_RESPONSE_GRACE_PERIOD: u32 = 10;
+	/// The maximum number of blocks to wait for a keygen to complete.
+	pub const KEYGEN_RESPONSE_GRACE_PERIOD: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
 }
