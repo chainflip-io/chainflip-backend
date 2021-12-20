@@ -50,6 +50,7 @@ pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
+use pallet_cf_broadcast::AttemptCount;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
