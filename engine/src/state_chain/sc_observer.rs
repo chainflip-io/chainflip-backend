@@ -495,9 +495,13 @@ mod tests {
         let logger = logging::test_utils::new_test_logger();
 
         let (latest_block_hash, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
-                .await
-                .unwrap();
+            crate::state_chain::client::connect_to_state_chain(
+                &settings.state_chain,
+                false,
+                &logger,
+            )
+            .await
+            .unwrap();
 
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
