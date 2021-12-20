@@ -38,6 +38,12 @@ benchmarks! {
 	// 	let call = Call::<T>::keygen_failure(ceremony_id, chain_id, vec![]);
 	// 	let origin = T::EnsureWitnessed::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
+	// report_keygen_outcome {
+	// 	let caller: T::AccountId = whitelisted_caller();
+	// 	let ceremony_id = 1;
+	// 	let chain_id = ChainId::Ethereum;
+	// 	let reported_outcome =
+	// } : _(RawOrigin::Signed(caller))
 	vault_key_rotated {
 		let chain_id = ChainId::Ethereum;
 		let caller: T::AccountId = whitelisted_caller();
