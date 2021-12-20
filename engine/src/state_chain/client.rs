@@ -722,12 +722,12 @@ pub async fn connect_to_state_chain(
                             break nonce;
                         } else {
                             slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", our_account_id, latest_block_number);
-                            latest_block_number += 1;
                             let block_header =
                                 block_header_stream.next().await.ok_or_else(|| {
                                     anyhow::Error::msg("Chainflip block stream unexpectedly ended")
                                 })??; // TODO Factor out handling of assumed to be infinite streams
                             latest_block_hash = block_header.hash();
+                            latest_block_number += 1;
                             assert_eq!(latest_block_number, block_header.number);
                         }
                     }
