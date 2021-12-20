@@ -124,9 +124,10 @@
   "Nonce": "u64",
   "OfflineCondition": {
     "_enum": [
-      "BroadcastOutputFailed",
       "ParticipateSigningFailed",
-      "NotEnoughPerformanceCredits"
+      "ParticipateKeygenFailed",
+      "InvalidTransactionAuthored",
+      "TransactionFailedOnTransmission"
     ]
   },
   "OnlineCredits": "BlockNumber",
@@ -187,7 +188,7 @@
       "TransactionFailed"
     ]
   },
-  "Uint": "[u8; 32]",
+  "Uint": "U256",
   "UnsignedTransaction": {
     "chain_id": "u64",
     "max_priority_fee_per_gas": "Option<U256>",
