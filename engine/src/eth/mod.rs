@@ -27,13 +27,13 @@ use crate::{
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
-use futures::{TryFutureExt, TryStreamExt};
+use futures::{TryFutureExt};
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
     transports::WebSocket,
-    types::{BlockNumber, Bytes, FilterBuilder, Log, SyncState, TransactionParameters, H256},
+    types::{BlockNumber, Bytes, FilterBuilder, SyncState, TransactionParameters, H256},
     Web3,
 };
 
