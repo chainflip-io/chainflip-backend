@@ -21,8 +21,9 @@ use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
-    multisig_p2p::AccountId,
 };
+
+use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
 

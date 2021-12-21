@@ -1,8 +1,9 @@
 use std::convert::TryInto;
 
 use super::tests::KeygenContext;
+use crate::multisig::client::ensure_unsorted;
 use crate::multisig::KeygenOptions;
-use crate::{multisig::client::ensure_unsorted, multisig_p2p::AccountId};
+use state_chain_runtime::AccountId;
 
 // Generate the keys for genesis
 // Run test to ensure it doesn't panic
@@ -13,19 +14,19 @@ pub async fn genesis_keys() {
     let bashful =
         hex::decode("36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911").unwrap();
     let bashful: [u8; 32] = bashful.try_into().unwrap();
-    let bashful = AccountId(bashful);
+    let bashful = AccountId::new(bashful);
     println!("bashful: {:?}", bashful);
 
     let doc =
         hex::decode("8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04").unwrap();
     let doc: [u8; 32] = doc.try_into().unwrap();
-    let doc = AccountId(doc);
+    let doc = AccountId::new(doc);
     println!("doc: {:?}", doc);
 
     let dopey =
         hex::decode("ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e").unwrap();
     let dopey: [u8; 32] = dopey.try_into().unwrap();
-    let dopey = AccountId(dopey);
+    let dopey = AccountId::new(dopey);
     println!("dopey: {:?}", dopey);
 
     let account_ids = ensure_unsorted(vec![doc.clone(), dopey.clone(), bashful.clone()], 0);

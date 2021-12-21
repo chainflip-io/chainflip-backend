@@ -8,10 +8,8 @@ use std::{
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
 
-use crate::{
-    multisig::client::common::{ProcessMessageResult, StageResult},
-    multisig_p2p::AccountId,
-};
+use crate::multisig::client::common::{ProcessMessageResult, StageResult};
+use state_chain_runtime::AccountId;
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
 

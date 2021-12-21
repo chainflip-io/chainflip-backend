@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, MultisigOutcome};
-use crate::multisig_p2p::AccountId;
+use state_chain_runtime::AccountId;
 
 use client::{
     keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
@@ -379,7 +379,7 @@ pub fn generate_keygen_context(
     // we never reuse the same id for different ceremonies, but lets
     // put the signers in to make the context hard to predict as well
     for id in signers {
-        hasher.update(id.0);
+        hasher.update(id);
     }
 
     HashContext(*hasher.finalize().as_ref())
