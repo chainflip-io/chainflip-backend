@@ -288,6 +288,7 @@ pub trait EthObserver {
     async fn event_stream(
         &self,
         web3: &Web3<WebSocket>,
+        // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
@@ -300,61 +301,56 @@ pub trait EthObserver {
             hex::encode(deployed_address)
         );
 
-        // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
+        // Start future log stream before requesting current block number, so we can return the block it's safe to get
+        // the past blocks for
         let eth_head_stream = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
-        let future_heads = safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+        let mut safe_head_stream =
+            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+
+        // the first block that we know is safe, we should use to pass around as the current block
+        let best_safe_block_number = safe_head_stream
+            .next()
+            .await
+            .ok_or(anyhow::Error::msg("No block headers in safe stream"))?
+            .number
+            .ok_or(anyhow::Error::msg(
+                "Best safe block does not have a block number",
+            ))?;
         let future_logs =
-            filtered_log_stream_by_contract(future_heads, web3.clone(), deployed_address).await;
+            filtered_log_stream_by_contract(safe_head_stream, web3.clone(), deployed_address).await;
 
         let from_block = U64::from(from_block);
 
-        let current_block = web3.eth().block_number().await?;
-
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
-        let (past_logs, exclude_future_logs_before) = if from_block <= current_block {
-            (
-                web3.eth()
-                    .logs(
-                        FilterBuilder::default()
-                            .from_block(BlockNumber::Number(from_block))
-                            .to_block(BlockNumber::Number(current_block))
-                            .address(vec![deployed_address])
-                            .build(),
-                    )
-                    .await
-                    .context("Failed to fetch past ETH logs")?,
-                current_block + 1,
-            )
+        let past_logs = if from_block <= best_safe_block_number {
+            web3.eth()
+                .logs(
+                    FilterBuilder::default()
+                        // from_block and to_block are *inclusive*
+                        .from_block(BlockNumber::Number(from_block))
+                        .to_block(BlockNumber::Number(best_safe_block_number))
+                        .address(vec![deployed_address])
+                        .build(),
+                )
+                .await
+                .context("Failed to fetch past ETH logs")?
         } else {
-            (vec![], from_block)
+            vec![]
         };
-
-        let future_logs = future_logs.filter_map(move |unparsed_log| {
-            let block_number = unparsed_log.block_number.unwrap();
-            // Need to remove logs that have already been included in past_logs or are before from_block
-            if block_number < exclude_future_logs_before {
-                None
-            } else {
-                Some(future_logs)
-            }
-        });
 
         slog::info!(logger, "Future logs fetched");
         let logger = logger.clone();
+
         Ok(Box::new(
             tokio_stream::iter(past_logs)
-                .map(Ok)
                 .chain(future_logs)
                 .map(
-                    move |result_unparsed_log| -> Result<EventWithCommon<Self::EventParameters>, anyhow::Error> {
-                        let result_event = result_unparsed_log
-                            .and_then(|log| EventWithCommon::<Self::EventParameters>::decode(&decode_log, log));
-
+                    move |unparsed_log| -> Result<EventWithCommon<Self::EventParameters>, anyhow::Error> {
+                        let result_event = EventWithCommon::<Self::EventParameters>::decode(&decode_log, unparsed_log);
                         if let Ok(ok_result) = &result_event {
                             slog::debug!(logger, "Received ETH log {}", ok_result);
                         }
-
                         result_event
                     },
                 ),

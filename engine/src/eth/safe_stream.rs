@@ -151,17 +151,22 @@ mod tests {
         let head_stream = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
         let safe_eth_head_stream = safe_eth_log_header_stream(head_stream, 3);
 
-        let mut filtered_log_stream =
-            filtered_log_stream_by_contract(web3, safe_eth_head_stream, contract_address).await;
+        // 0xbfc1d5db948e992f161ae29db3bdbfb34024209831130dc353979e5dc1eb7518	Transfer	9854010	26 secs ago	0xa7a82dd06901f29ab14af63faf3358ad101724a8	 IN 	 0x01be23585060835e02b77ef475b0cc51aa1e0709	0 Ether	0.000086777512
+        // 0x46fa8757305f071f09a9dd4fbbf89b8bd8d0c9cae2afbf67a04aa3bfdfa082ca	Transfer	9854009
+        let logs = web3
+            .eth()
+            .logs(
+                FilterBuilder::default()
+                    .from_block(BlockNumber::Number(U64::from(9854009)))
+                    // is this inclusive
+                    .to_block(BlockNumber::Number(U64::from(9854010)))
+                    .address(vec![contract_address])
+                    .build(),
+            )
+            .await
+            .unwrap();
 
-        while let Some(item) = filtered_log_stream.next().await {
-            println!(
-                "Got a log for Block: {}. Tx hash: {:?}. topics: {:?}",
-                item.block_number.unwrap(),
-                item.transaction_hash,
-                item.topics
-            );
-        }
+        println!("There are: {} logs.", logs.len());
     }
 
     fn block_header(
