@@ -322,7 +322,9 @@ mod tests {
 			assert_ok!(state_chain_runtime::Validator::register_peer_id(
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				peer_keypair.public(),
-				peer_keypair.sign(&node_id.encode()[..])
+				0,
+				0,
+				peer_keypair.sign(&node_id.encode()[..]),
 			));
 		}
 
@@ -607,7 +609,10 @@ mod tests {
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_vaults::GenesisConfig { ethereum_vault_key },
+				&pallet_cf_vaults::GenesisConfig {
+					ethereum_vault_key,
+					ethereum_deployment_block: 0,
+				},
 				storage,
 			)
 			.unwrap();
