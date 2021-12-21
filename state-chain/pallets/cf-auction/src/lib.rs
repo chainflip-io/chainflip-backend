@@ -17,9 +17,9 @@ pub use weights::WeightInfo;
 extern crate assert_matches;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
-	ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping, IsOnline,
-	QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
+	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BackupValidators,
+	BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping,
+	IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -620,5 +620,17 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				_ => {},
 			}
 		}
+	}
+}
+
+impl<T: Config> BackupValidators for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn backup_validators() -> Vec<Self::ValidatorId> {
+		RemainingBidders::<T>::get()
+			.iter()
+			.take(BackupGroupSize::<T>::get() as usize)
+			.map(|(validator_id, _)| validator_id.clone())
+			.collect()
 	}
 }

@@ -1,12 +1,15 @@
 use std::{
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
+    net::Ipv6Addr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
 use cf_p2p::{PeerId, PeerIdTransferable};
 use futures::TryStreamExt;
+use itertools::Itertools;
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -22,7 +25,7 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{read_and_decode_file, rpc_error_into_anyhow_error},
+    common::{self, read_and_decode_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
@@ -45,7 +48,7 @@ impl std::fmt::Debug for AccountId {
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
-    Registered,
+    Registered(u16, Ipv6Addr),
     Unregistered,
 }
 
@@ -55,6 +58,50 @@ primarily to avoid the problem where multisig sends messages before the mapping
 has been updated, which is possible at the moment.
 TODO: Batch outgoing messages
 */
+
+async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+    cfe_peer_id: &PeerId,
+    cfe_peer_keypair: &libp2p::identity::ed25519::Keypair,
+    state_chain_client: &Arc<StateChainClient<RPCClient>>,
+    account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (peer_id, port, ip_address) = state_chain_client
+        .get_local_listen_addresses()
+        .await?
+        .into_iter()
+        .sorted()
+        .dedup()
+        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
+        .next()
+        .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
+
+    if *cfe_peer_id == peer_id {
+        if Some(&(peer_id, port, ip_address))
+            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
+        {
+            state_chain_client
+                .submit_signed_extrinsic(
+                    logger,
+                    pallet_cf_validator::Call::register_peer_id(
+                        sp_core::ed25519::Public(cfe_peer_keypair.public().encode()),
+                        port,
+                        ip_address.into(),
+                        sp_core::ed25519::Signature::try_from(
+                            &cfe_peer_keypair.sign(&state_chain_client.our_account_id.encode()[..])
+                                [..],
+                        )
+                        .unwrap(),
+                    ),
+                )
+                .await?;
+        }
+
+        Ok(())
+    } else {
+        Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file confugration option.", peer_id, cfe_peer_id)))
+    }
+}
 
 fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
     Ok(PeerId::from_public_key(
@@ -91,8 +138,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     .await
     .map_err(rpc_error_into_anyhow_error)?;
 
-    let account_peer_mapping = state_chain_client
-        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public)>(
+    let mut account_to_peer = state_chain_client
+        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
@@ -101,88 +148,81 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await?
         .into_iter()
-        .map(|(account_id, public_key)| {
+        .map(|(account_id, public_key, port, ip_address)| {
             Ok((
                 AccountId(*account_id.as_ref()),
-                public_key_to_peer_id(&public_key)?,
+                (
+                    public_key_to_peer_id(&public_key)?,
+                    port,
+                    ip_address.into(),
+                )
             ))
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<BTreeMap<_, _>>>()?;
 
-    let mut account_to_peer = account_peer_mapping
+    let mut peer_to_account = account_to_peer
         .iter()
-        .cloned()
-        .collect::<BTreeMap<_, _>>();
-    let mut peer_to_account = account_peer_mapping
-        .iter()
-        .cloned()
-        .map(|(x, y)| (y, x))
+        .map(|(account_id, (peer_id, _, _))| (peer_id.clone(), account_id.clone()))
         .collect::<BTreeMap<_, _>>();
 
     slog::info!(
         logger,
-        "Loaded peer account id mapping from chain: {:#?}",
-        peer_to_account
+        "Loaded account peer mapping from chain: {:#?}",
+        account_to_peer
     );
 
-    {
-        let keypair: libp2p::identity::ed25519::Keypair =
-            read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
-                libp2p::identity::ed25519::SecretKey::from_bytes(
-                    &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
-                )
-                .map_err(anyhow::Error::new)
-            })?
-            .into();
-        let cfe_peer_id = libp2p::identity::PublicKey::Ed25519(keypair.public()).into_peer_id();
+    let cfe_peer_keypair: libp2p::identity::ed25519::Keypair =
+        read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+            libp2p::identity::ed25519::SecretKey::from_bytes(
+                &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
+            )
+            .map_err(anyhow::Error::new)
+        })?
+        .into();
+    let cfe_peer_id =
+        libp2p::identity::PublicKey::Ed25519(cfe_peer_keypair.public()).into_peer_id();
+    update_registered_peer_id(
+        &cfe_peer_id,
+        &cfe_peer_keypair,
+        &state_chain_client,
+        &account_to_peer,
+        &logger,
+    )
+    .await?;
 
-        let sc_node_peer_id = state_chain_client.get_local_peer_id().await?;
-
-        if cfe_peer_id != sc_node_peer_id {
-            return Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file configuration option.", sc_node_peer_id, cfe_peer_id)));
-        }
-
-        slog::info!(logger, "Peer id is: {}", cfe_peer_id);
-
-        if let Some(on_chain_peer_id) =
-            account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
-        {
-            if on_chain_peer_id != &sc_node_peer_id {
-                return Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you registered on the Chainflip Blockchain ({}).", sc_node_peer_id, on_chain_peer_id)));
-            }
-        } else {
-            state_chain_client
-                .submit_signed_extrinsic(
-                    &logger,
-                    pallet_cf_validator::Call::register_peer_id(
-                        sp_core::ed25519::Public(keypair.public().encode()),
-                        sp_core::ed25519::Signature::try_from(
-                            &keypair.sign(&state_chain_client.our_account_id.encode()[..])[..],
-                        )
-                        .unwrap(),
-                    ),
-                )
-                .await?;
-        }
-    }
-
-    {
-        let peers: Vec<_> = peer_to_account
-            .keys()
-            .map(PeerIdTransferable::from)
-            .collect();
-        client
-            .set_peers(peers.clone())
-            .await
-            .map_err(rpc_error_into_anyhow_error)
-            .with_context(|| format!("Failed to add peers to reserved set: {:#?}", peers))?;
-        slog::info!(logger, "Added peers to reserved set: {:#?}", peers);
-    }
+    client
+        .set_peers(
+            account_to_peer
+                .values()
+                .filter_map(|(peer_id, port, ip_address)| {
+                    if cfe_peer_id != *peer_id {
+                        Some((PeerIdTransferable::from(peer_id), *port, *ip_address))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        )
+        .await
+        .map_err(rpc_error_into_anyhow_error)
+        .with_context(|| {
+            format!(
+                "Failed to add peers to reserved set: {:#?}",
+                account_to_peer
+            )
+        })?;
+    slog::info!(
+        logger,
+        "Added peers to reserved set: {:#?}",
+        account_to_peer
+    );
 
     let mut incoming_p2p_message_stream = client
         .subscribe_messages()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
+
+    let mut check_listener_address_stream = common::make_periodic_stream(Duration::from_secs(60));
 
     loop {
         tokio::select! {
@@ -206,7 +246,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
             Some((account_id, message)) = outgoing_p2p_message_receiver.recv() => {
                 match async {
                     account_to_peer.get(&account_id).ok_or_else(|| anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id)))
-                }.and_then(|peer_id| {
+                }.and_then(|(peer_id, _, _)| {
                     client.send_message(
                         vec![peer_id.into()],
                         bincode::serialize(&message).unwrap()
@@ -220,31 +260,36 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                 match public_key_to_peer_id(&peer_public_key) {
                     Ok(peer_id) => {
                         match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered => {
-                                if account_to_peer.contains_key(&account_id) || peer_to_account.contains_key(&peer_id) {
-                                    // This is currently possible, but can be avoided. TODO Resolve
+                            AccountPeerMappingChange::Registered(port, ip_address) => {
+                                if let Some((existing_peer_id, _, _)) = account_to_peer.get(&account_id) {
+                                    peer_to_account.remove(&existing_peer_id);
+                                }
+                                if peer_to_account.contains_key(&peer_id) {
                                     slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 } else {
-                                    account_to_peer.insert(account_id.clone(), peer_id.clone());
-                                    peer_to_account.insert(peer_id, account_id);
-                                    if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                        slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
-                                    } else {
-                                        slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                    peer_to_account.insert(peer_id.clone(), account_id.clone());
+                                    account_to_peer.insert(account_id, (peer_id.clone(), port, ip_address));
+                                    if cfe_peer_id != peer_id {
+                                        if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                            slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
+                                        } else {
+                                            slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                        }
                                     }
                                 }
                             }
                             AccountPeerMappingChange::Unregistered => {
-                                if Some(&peer_id) == account_to_peer.get(&account_id) {
+                                if Some(&account_id) == peer_to_account.get(&peer_id) {
                                     account_to_peer.remove(&account_id);
                                     peer_to_account.remove(&peer_id);
-                                    if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                        slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
-                                    } else {
-                                        slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                    if cfe_peer_id != peer_id {
+                                        if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                            slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
+                                        } else {
+                                            slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                        }
                                     }
                                 } else {
-                                    // This is currently possible, but can be avoided. TODO Resolve
                                     slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
                                 }
                             }
@@ -252,6 +297,9 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                     },
                     Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
                 }
+            },
+            Some(()) = check_listener_address_stream.next() => {
+                update_registered_peer_id(&cfe_peer_id, &cfe_peer_keypair, &state_chain_client, &account_to_peer, &logger).await?;
             }
         }
     }
