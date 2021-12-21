@@ -967,6 +967,7 @@ dependencies = [
  "cf-chains",
  "cf-p2p",
  "cf-traits",
+ "chrono",
  "config",
  "crossbeam-channel",
  "curv-kzen",
