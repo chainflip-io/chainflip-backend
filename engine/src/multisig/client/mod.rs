@@ -18,6 +18,7 @@ mod genesis;
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
+    common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
@@ -242,8 +243,8 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a keygen request, participants: {:?}",
-                    keygen_info.signers;
+                    "Received a keygen request, participants: {}",
+                    format_iterator(&keygen_info.signers);
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
@@ -255,8 +256,8 @@ where
 
                 slog::debug!(
                     self.logger,
-                    "Received a request to sign, message_hash: {}, signers: {:?}",
-                    sign_info.data, sign_info.signers;
+                    "Received a request to sign, message_hash: {}, signers: {}",
+                    sign_info.data, format_iterator(&sign_info.signers);
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
                 match self.key_store.get_key(key_id) {

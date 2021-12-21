@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+use crate::common::format_iterator;
 use crate::multisig::client::{self, MultisigOutcome};
 use state_chain_runtime::AccountId;
 
@@ -278,7 +279,7 @@ impl CeremonyManager {
                         #SIGNING_CEREMONY_FAILED,
                         "Signing ceremony failed: {}",
                         reason; "blamed parties" =>
-                        format!("{:?}",blamed_parties)
+                        format_iterator(&blamed_parties)
                     );
 
                     self.outcome_sender
@@ -320,7 +321,7 @@ impl CeremonyManager {
                         #KEYGEN_CEREMONY_FAILED,
                         "Keygen ceremony failed: {}",
                         reason; "blamed parties" =>
-                        format!("{:?}",blamed_parties)
+                        format_iterator(&blamed_parties)
                     );
 
                     self.outcome_sender

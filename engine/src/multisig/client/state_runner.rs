@@ -8,7 +8,10 @@ use std::{
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
 
-use crate::multisig::client::common::{ProcessMessageResult, StageResult};
+use crate::{
+    common::format_iterator,
+    multisig::client::common::{ProcessMessageResult, StageResult},
+};
 use state_chain_runtime::AccountId;
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
@@ -232,12 +235,12 @@ where
                         .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
-                        .collect();
+                        .collect::<Vec<_>>();
 
                     slog::warn!(
                         self.logger,
-                        "Ceremony expired before being authorized, reporting parties: {:?}",
-                        reported_ids
+                        "Ceremony expired before being authorized, reporting parties: {}",
+                        format_iterator(&reported_ids)
                     );
 
                     Some(reported_ids)
@@ -254,8 +257,8 @@ where
 
                     slog::warn!(
                         self.logger,
-                        "Ceremony expired, reporting parties: {:?}",
-                        reported_ids,
+                        "Ceremony expired, reporting parties: {}",
+                        format_iterator(&reported_ids),
                     );
 
                     Some(reported_ids)
