@@ -44,8 +44,10 @@ where
                 println!("Got block with number: {:?}", number);
 
                 if number > state.head_eth_stream {
+                    println!("We have a new block, yay.");
                     state.last_n_blocks.push_front(header);
                 } else {
+                    println!("reorginatoooooor");
                     let reorg_depth =
                         (state.head_eth_stream.saturating_sub(number)).saturating_add(U64::from(1));
 
@@ -53,6 +55,8 @@ where
                     (0..reorg_depth.as_u64())
                         .map(|_| state.last_n_blocks.pop_front())
                         .for_each(drop);
+
+                    println!("last blocks len: {:?}", state.last_n_blocks.len());
                     state.last_n_blocks.push_front(header);
                 }
 
@@ -66,12 +70,16 @@ where
                 break None;
             }
 
+            println!("====== DO WE YIELD? ======");
             println!(
                 "back block number: {:?}",
                 state.last_n_blocks.back().unwrap().number.unwrap()
             );
 
-            println!("head of stream: {:?}", state.head_eth_stream);
+            println!(
+                "head of stream used to calc safety: {:?}",
+                state.head_eth_stream
+            );
 
             if state
                 .last_n_blocks
@@ -82,7 +90,7 @@ where
                 .saturating_add(U64::from(safety_margin))
                 <= state.head_eth_stream
             {
-                println!("Returning block");
+                println!("Yielding block");
                 break Some((state.last_n_blocks.pop_back().unwrap(), state));
             } else {
                 // we don't want to return None to the caller here. Instead we want to keep progressing
@@ -244,15 +252,50 @@ mod tests {
     #[tokio::test]
     async fn returns_one_when_two_in_inner_but_one_safety_then_no_more() {
         let first_block = block_header(1, 0, Default::default());
-        // let second_block = block_header(2, 1, Default::default());
+        let second_block = block_header(2, 1, Default::default());
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
-            block_header(2, 1, Default::default()),
+            second_block.clone(),
+            block_header(3, 2, Default::default()),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
         assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert_eq!(stream.next().await, Some(second_block.unwrap()));
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn returns_duplicate_blocks_if_in_inner_when_no_safety() {
+        let first_block = block_header(1, 0, Default::default());
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            first_block.clone(),
+        ]);
+
+        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+
+        assert_eq!(stream.next().await, Some(first_block.clone().unwrap()));
+        assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn handles_duplicate_blocks_returned_from_api_when_safety() {
+        let first_block = block_header(1, 0, Default::default());
+        let second_block = block_header(2, 1, Default::default());
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            first_block.clone(),
+            second_block.clone(),
+            block_header(2, 2, Default::default()),
+        ]);
+
+        let mut stream = safe_eth_log_header_stream(header_stream, 1);
+
+        assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert_eq!(stream.next().await, Some(second_block.unwrap()));
         assert!(stream.next().await.is_none());
     }
 
