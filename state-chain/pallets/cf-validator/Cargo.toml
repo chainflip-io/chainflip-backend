@@ -81,6 +81,7 @@ tag = 'merge-config-option'
 [features]
 default = ['std']
 std = [
+    'cf-traits/std',
     'codec/std',
     'scale-info/std',
     'frame-support/std',
