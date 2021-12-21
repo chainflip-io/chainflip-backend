@@ -45,7 +45,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Auction CurrentPhase (r:0 w:1)
 	fn on_initialize_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_637_000_000 as Weight)
+		(2_700_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(154 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -61,7 +61,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner PendingRequests (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(173_000_000 as Weight)
+		(180_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(10 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Auction CurrentPhase (r:0 w:1)
 	fn on_initialize_none() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(115_000_000 as Weight)
+		(119_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -79,7 +79,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Vaults KeygenResolutionPending (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(95_000_000 as Weight)
+		(100_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -88,7 +88,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Vaults Vaults (r:1 w:2)
 	fn vault_key_rotated() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(63_000_000 as Weight)
+		(74_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -103,7 +103,7 @@ impl WeightInfo for () {
 	// Storage: Auction CurrentPhase (r:0 w:1)
 	fn on_initialize_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_637_000_000 as Weight)
+		(2_700_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(154 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -119,7 +119,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner PendingRequests (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(173_000_000 as Weight)
+		(180_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -129,7 +129,7 @@ impl WeightInfo for () {
 	// Storage: Auction CurrentPhase (r:0 w:1)
 	fn on_initialize_none() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(115_000_000 as Weight)
+		(119_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -137,7 +137,7 @@ impl WeightInfo for () {
 	// Storage: Vaults KeygenResolutionPending (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(95_000_000 as Weight)
+		(100_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -146,7 +146,7 @@ impl WeightInfo for () {
 	// Storage: Vaults Vaults (r:1 w:2)
 	fn vault_key_rotated() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(63_000_000 as Weight)
+		(74_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}

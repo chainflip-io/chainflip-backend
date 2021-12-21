@@ -56,6 +56,9 @@ benchmarks! {
 	} : {
 		Pallet::<T>::on_initialize((5 as u32).into());
 	}
+	verify {
+		assert!(!PendingVaultRotations::<T>::contains_key(CHAIN_ID));
+	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = (0 as u32).into();
 			KeygenResolutionPending::<T>::append((
@@ -78,6 +81,9 @@ benchmarks! {
 	} : {
 		Pallet::<T>::on_initialize((5 as u32).into());
 	}
+	verify {
+		assert!(PendingVaultRotations::<T>::contains_key(CHAIN_ID));
+	}
 	on_initialize_none {
 		let current_block: T::BlockNumber = (0 as u32).into();
 		KeygenResolutionPending::<T>::append((
@@ -95,6 +101,9 @@ benchmarks! {
 	} : {
 		Pallet::<T>::on_initialize((11 as u32).into());
 	}
+	verify {
+		assert_eq!(KeygenResolutionPending::<T>::get().len(), 0);
+	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
 		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T>(150, caller.clone().into());
@@ -106,6 +115,9 @@ benchmarks! {
 		);
 		let reported_outcome = KeygenOutcome::Success(Default::default());
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, CHAIN_ID, reported_outcome)
+	verify {
+		assert_eq!(KeygenResolutionPending::<T>::get().len(), 1);
+	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
 		PendingVaultRotations::<T>::insert(
@@ -115,6 +127,9 @@ benchmarks! {
 		let call = Call::<T>::vault_key_rotated(CHAIN_ID, NEW_PUBLIC_KEY.to_vec(), 5 as u64, TX_HASH.to_vec());
 		let origin = T::EnsureWitnessed::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert!(Vaults::<T>::contains_key(T::EpochInfo::epoch_index(), ChainId::Ethereum));
+	}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
