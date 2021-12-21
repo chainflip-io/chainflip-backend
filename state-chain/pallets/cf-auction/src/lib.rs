@@ -371,8 +371,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						.collect();
 
 					let backup_group_size =
-						min(validator_group_size as u32, validator_set_target_size) /
-							T::ActiveToBackupValidatorRatio::get();
+						validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
 
 					let remaining_bidders: Vec<_> =
 						bids.iter().skip(validator_group_size as usize).collect();
