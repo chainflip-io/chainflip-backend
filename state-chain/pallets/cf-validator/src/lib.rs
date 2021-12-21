@@ -394,6 +394,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn is_auction_phase() -> bool {
 		!T::Auctioneer::waiting_on_bids()
 	}
+
+	fn active_validator_count() -> u32 {
+		Validators::<T>::decode_len().unwrap_or_default() as u32
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.
