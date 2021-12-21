@@ -13,27 +13,21 @@ use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
-use std::ops::Range;
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
-    api::SubscriptionStream,
     ethabi::Address,
     types::{CallRequest, U64},
 };
 
 use crate::{
     common::{read_and_decode_file, Mutex},
-    eth,
     logging::COMPONENT_KEY,
-    settings::{self, Settings},
+    settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::{TryFutureExt, TryStreamExt};
-use std::{
-    collections::HashMap, convert::TryInto, fmt::Debug, str::FromStr, sync::Arc, task::Poll,
-    time::Duration,
-};
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},

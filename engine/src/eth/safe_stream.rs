@@ -1,9 +1,8 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use futures::{stream, Stream};
 use sp_core::H160;
 use web3::{
-    api::SubscriptionStream,
     transports::WebSocket,
     types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64},
     Web3,
@@ -12,8 +11,6 @@ use web3::{
 use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
-
-use crate::{eth, logging::COMPONENT_KEY, settings};
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
@@ -41,7 +38,7 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                println!("Got block with number: {:?}", number);
+                println!("Inner stream at block number: {:?}", number);
 
                 if number > state.head_eth_stream {
                     state.last_n_blocks.push_front(header);
@@ -54,7 +51,6 @@ where
                         .map(|_| state.last_n_blocks.pop_front())
                         .for_each(drop);
 
-                    println!("last blocks len: {:?}", state.last_n_blocks.len());
                     state.last_n_blocks.push_front(header);
                 }
 
@@ -67,13 +63,19 @@ where
             if state
                 .last_n_blocks
                 .back()
-                .unwrap()
+                .expect("always at least one item on the queue")
                 .number
-                .unwrap()
+                .expect("all blocks on the chain have numbers")
                 .saturating_add(U64::from(safety_margin))
                 <= state.head_eth_stream
             {
-                break Some((state.last_n_blocks.pop_back().unwrap(), state));
+                break Some((
+                    state
+                        .last_n_blocks
+                        .pop_back()
+                        .expect("already put an item above"),
+                    state,
+                ));
             } else {
                 // we don't want to return None to the caller here. Instead we want to keep progressing
                 // through the inner stream
@@ -85,23 +87,15 @@ where
     stream
 }
 
-async fn filtered_log_stream_by_contract(
-    // init_data: StreamAndBlocks,
+async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
     web3: Web3<WebSocket>,
+    safe_eth_head_stream: SafeBlockHeaderStream,
     contract_address: H160,
-    logger: &slog::Logger,
-) -> impl Stream<Item = Log> {
-    const BLOCKS_AWAITED: u64 = 3;
-
-    let eth_head_stream = web3
-        .eth_subscribe()
-        .subscribe_new_heads()
-        .await
-        .expect("should create head stream");
-
-    let stream = safe_eth_log_header_stream(eth_head_stream, 4);
-
-    let my_stream = stream
+) -> impl Stream<Item = Log>
+where
+    SafeBlockHeaderStream: Stream<Item = BlockHeader>,
+{
+    let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
             let web3 = web3.clone();
             async move {
@@ -131,7 +125,7 @@ async fn filtered_log_stream_by_contract(
         })
         .flatten();
 
-    my_stream
+    Box::pin(my_stream)
 }
 
 #[cfg(test)]
@@ -149,10 +143,29 @@ mod tests {
 
     #[tokio::test]
     async fn manual_test() {
-        // let header_stream =
-    }
+        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let logger = new_discard_logger();
+        let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
+            .await
+            .expect("Failed to create Web3 WebSocket");
 
-    const CONTRACT_ADDRESS: [u8; 20] = hex!("01BE23585060835E02B77ef475b0Cc51aA1e0709");
+        let contract_address = H160::from(hex!("01BE23585060835E02B77ef475b0Cc51aA1e0709"));
+
+        let head_stream = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
+        let safe_eth_head_stream = safe_eth_log_header_stream(head_stream, 3);
+
+        let mut filtered_log_stream =
+            filtered_log_stream_by_contract(web3, safe_eth_head_stream, contract_address).await;
+
+        while let Some(item) = filtered_log_stream.next().await {
+            println!(
+                "Got a log for Block: {}. Tx hash: {:?}. topics: {:?}",
+                item.block_number.unwrap(),
+                item.transaction_hash,
+                item.topics
+            );
+        }
+    }
 
     fn block_header(
         hash: u8,
