@@ -89,6 +89,7 @@ std = [
     'sp-core/std',
     'sp-runtime/std',
     'pallet-session/std',
+    'log/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
