@@ -44,10 +44,8 @@ where
                 println!("Got block with number: {:?}", number);
 
                 if number > state.head_eth_stream {
-                    println!("We have a new block, yay.");
                     state.last_n_blocks.push_front(header);
                 } else {
-                    println!("reorginatoooooor");
                     let reorg_depth =
                         (state.head_eth_stream.saturating_sub(number)).saturating_add(U64::from(1));
 
@@ -60,26 +58,11 @@ where
                     state.last_n_blocks.push_front(header);
                 }
 
-                println!(
-                    "Update head eth stream from {:?}, to number: {:?}",
-                    state.head_eth_stream, number
-                );
                 state.head_eth_stream = number;
             } else {
                 // when the inner stream is consumed, we want to end the wrapping stream
                 break None;
             }
-
-            println!("====== DO WE YIELD? ======");
-            println!(
-                "back block number: {:?}",
-                state.last_n_blocks.back().unwrap().number.unwrap()
-            );
-
-            println!(
-                "head of stream used to calc safety: {:?}",
-                state.head_eth_stream
-            );
 
             if state
                 .last_n_blocks
@@ -90,7 +73,6 @@ where
                 .saturating_add(U64::from(safety_margin))
                 <= state.head_eth_stream
             {
-                println!("Yielding block");
                 break Some((state.last_n_blocks.pop_back().unwrap(), state));
             } else {
                 // we don't want to return None to the caller here. Instead we want to keep progressing
@@ -101,64 +83,56 @@ where
         loop_state
     }));
     stream
-
-    //         let safe_block = state
-    //             .head_eth_stream
-    //             .saturating_sub(U64::from(safety_margin));
-    //         if let Some(_) = state.interesting_past_blocks.get(&safe_block) {
-    //             println!("Getting a safe block");
-    //             let logs = state
-    //                 .web3
-    //                 .eth()
-    //                 .logs(
-    //                     FilterBuilder::default()
-    //                         //todo: is there an "at block"
-    //                         .from_block(BlockNumber::Number(safe_block))
-    //                         .to_block(BlockNumber::Number(safe_block))
-    //                         .address(vec![contract_address])
-    //                         .build(),
-    //                 )
-    //                 .await
-    //                 // have the stream return results
-    //                 .unwrap();
-    //             let log_stream = stream::iter(logs);
-    //             Some((log_stream, state))
-    //         } else {
-    //             println!("No safe blocks to find");
-    //             Some((stream::iter(Vec::new()), state))
-    //         }
-    //     })
-    //     .flatten(),
-    // );
-    // stream
 }
 
-// // check if this block has anything of interest
-// let mut contract_bloom = Bloom::default();
-// contract_bloom.accrue(Input::Raw(&contract_address.0));
+async fn filtered_log_stream_by_contract(
+    // init_data: StreamAndBlocks,
+    web3: Web3<WebSocket>,
+    contract_address: H160,
+    logger: &slog::Logger,
+) -> impl Stream<Item = Log> {
+    const BLOCKS_AWAITED: u64 = 3;
 
-// if header.logs_bloom.contains_bloom(&contract_bloom) {
-//     println!("Yes, we have an interesting block at: {}", number);
-//     state.interesting_past_blocks.insert(number, ());
-// }
+    let eth_head_stream = web3
+        .eth_subscribe()
+        .subscribe_new_heads()
+        .await
+        .expect("should create head stream");
 
-// async fn create_safe_eth_log_stream(
-//     // init_data: StreamAndBlocks,
-//     web3: Web3<WebSocket>,
-//     contract_address: H160,
-//     logger: &slog::Logger,
-// ) -> impl Stream<Item = Log> {
-//     const BLOCKS_AWAITED: u64 = 3;
+    let stream = safe_eth_log_header_stream(eth_head_stream, 4);
 
-//     let eth_head_stream = web3
-//         .clone()
-//         .eth_subscribe()
-//         .subscribe_new_heads()
-//         .await
-//         .expect("should create head stream");
+    let my_stream = stream
+        .filter_map(move |header| {
+            let web3 = web3.clone();
+            async move {
+                let block_number = header.number.unwrap();
+                let mut contract_bloom = Bloom::default();
+                contract_bloom.accrue(Input::Raw(&contract_address.0));
 
-//     inner_safe_eth_log_stream(eth_head_stream, web3, contract_address, BLOCKS_AWAITED)
-// }
+                if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
+                    let logs = web3
+                        .eth()
+                        .logs(
+                            FilterBuilder::default()
+                                //todo: is there an "at block"
+                                .from_block(BlockNumber::Number(block_number))
+                                .to_block(BlockNumber::Number(block_number))
+                                .address(vec![contract_address])
+                                .build(),
+                        )
+                        .await
+                        // have the stream return results
+                        .unwrap();
+                    Some(stream::iter(logs))
+                } else {
+                    None
+                }
+            }
+        })
+        .flatten();
+
+    my_stream
+}
 
 #[cfg(test)]
 mod tests {
@@ -172,6 +146,11 @@ mod tests {
     use sp_core::H256;
 
     use super::*;
+
+    #[tokio::test]
+    async fn manual_test() {
+        // let header_stream =
+    }
 
     const CONTRACT_ADDRESS: [u8; 20] = hex!("01BE23585060835E02B77ef475b0Cc51aA1e0709");
 
@@ -267,22 +246,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_duplicate_blocks_if_in_inner_when_no_safety() {
+    async fn returns_reorgs_of_depth_1_blocks_if_in_inner_when_no_safety() {
+        // NB: Same block number, different blocks. Our node saw two blocks at the same height, so returns them both
         let first_block = block_header(1, 0, Default::default());
+        let first_block_prime = block_header(2, 0, Default::default());
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
-            first_block.clone(),
+            first_block_prime.clone(),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
         assert_eq!(stream.next().await, Some(first_block.clone().unwrap()));
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
         assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
-    async fn handles_duplicate_blocks_returned_from_api_when_safety() {
+    async fn handles_reogs_depth_1_blocks_when_safety() {
         let first_block = block_header(1, 0, Default::default());
         let second_block = block_header(2, 1, Default::default());
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
@@ -299,37 +280,23 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    // #[tokio::test]
-    // async fn returns_none_when_one_in_inner_before_safety_margin_reached() {
-    //     let settings = Settings::from_file("config/Local.toml").unwrap();
-    //     let logger = new_discard_logger();
+    #[tokio::test]
+    async fn safe_stream_when_reorg_of_depth_below_safety() {
+        let first_block = block_header(1, 10, Default::default());
+        let second_block = block_header(2, 11, Default::default());
+        let first_block_prime = block_header(11, 10, Default::default());
+        let second_block_prime = block_header(21, 11, Default::default());
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            second_block.clone(),
+            first_block_prime.clone(),
+            second_block_prime.clone(),
+            block_header(2, 12, Default::default()),
+        ]);
 
-    //     let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
-    //         .await
-    //         .expect("Failed to create Web3 WebSocket");
+        let mut stream = safe_eth_log_header_stream(header_stream, 2);
 
-    //     let contract_address = H160::from(hex!("01BE23585060835E02B77ef475b0Cc51aA1e0709"));
-
-    //     let first_block = block_header(1, 0, Default::default());
-    //     let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
-    //         first_block,
-    //         block_header(2, 0, Default::default()),
-    //     ]);
-
-    //     let mut stream = inner_safe_eth_log_stream(header_stream, web3, contract_address, 2);
-
-    //     // assert_eq!(stream.next().await, Some(Ok(first_block)));
-    // }
-
-    // #[tokio::test]
-    // async fn returns_none_when_stream_empty() {
-
-    // }
-
-    // #[tokio::test]
-    // async fn returns_next_value_when_sufficiently_safe() {
-
-    // }
-
-    //..
+        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert!(stream.next().await.is_none());
+    }
 }
