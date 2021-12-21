@@ -38,8 +38,6 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                println!("Inner stream at block number: {:?}", number);
-
                 if number > state.head_eth_stream {
                     state.last_n_blocks.push_front(header);
                 } else {
@@ -56,7 +54,7 @@ where
 
                 state.head_eth_stream = number;
             } else {
-                // when the inner stream is consumed, we want to end the wrapping stream
+                // when the inner stream is consumed, we want to end the wrapping/safe stream
                 break None;
             }
 
@@ -65,7 +63,7 @@ where
                 .back()
                 .expect("always at least one item on the queue")
                 .number
-                .expect("all blocks on the chain have numbers")
+                .expect("all blocks on the chain have block numbers")
                 .saturating_add(U64::from(safety_margin))
                 <= state.head_eth_stream
             {
@@ -87,9 +85,9 @@ where
     stream
 }
 
-async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
-    web3: Web3<WebSocket>,
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
     safe_eth_head_stream: SafeBlockHeaderStream,
+    web3: Web3<WebSocket>,
     contract_address: H160,
 ) -> impl Stream<Item = Log>
 where
@@ -115,7 +113,6 @@ where
                                 .build(),
                         )
                         .await
-                        // have the stream return results
                         .unwrap();
                     Some(stream::iter(logs))
                 } else {

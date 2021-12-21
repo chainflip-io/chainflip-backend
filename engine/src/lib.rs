@@ -1,6 +1,7 @@
 pub mod common;
 #[macro_use]
 pub mod errors;
+pub mod constants;
 pub mod health;
 pub mod multisig;
 pub mod p2p;

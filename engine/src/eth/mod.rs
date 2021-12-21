@@ -22,6 +22,7 @@ use web3::{
 
 use crate::{
     common::{read_and_decode_file, Mutex},
+    eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -39,6 +40,8 @@ use web3::{
 use tokio_stream::{Stream, StreamExt};
 
 use event_common::EventWithCommon;
+
+use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 use async_trait::async_trait;
 
@@ -297,19 +300,14 @@ pub trait EthObserver {
             hex::encode(deployed_address)
         );
 
-        // TODO: replace with safe stream :)
         // Start future log stream before requesting current block number, to ensure BlockNumber::Pending isn't after current_block
-        let future_logs = web3
-            .eth_subscribe()
-            .subscribe_logs(
-                FilterBuilder::default()
-                    .from_block(BlockNumber::Latest)
-                    .address(vec![deployed_address])
-                    .build(),
-            )
-            .await
-            .context("Error subscribing to ETH logs")?;
+        let eth_head_stream = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
+        let future_heads = safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+        let future_logs =
+            filtered_log_stream_by_contract(future_heads, web3.clone(), deployed_address).await;
+
         let from_block = U64::from(from_block);
+
         let current_block = web3.eth().block_number().await?;
 
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
@@ -332,22 +330,15 @@ pub trait EthObserver {
             (vec![], from_block)
         };
 
-        let future_logs =
-            future_logs
-                .map_err(anyhow::Error::new)
-                .filter_map(move |result_unparsed_log| {
-                    // Need to remove logs that have already been included in past_logs or are before from_block
-                    match result_unparsed_log {
-                        Ok(Log {
-                            block_number: None, ..
-                        }) => Some(Err(anyhow::Error::msg("Found log without block number"))),
-                        Ok(Log {
-                            block_number: Some(block_number),
-                            ..
-                        }) if block_number < exclude_future_logs_before => None,
-                        _ => Some(result_unparsed_log),
-                    }
-                });
+        let future_logs = future_logs.filter_map(move |unparsed_log| {
+            let block_number = unparsed_log.block_number.unwrap();
+            // Need to remove logs that have already been included in past_logs or are before from_block
+            if block_number < exclude_future_logs_before {
+                None
+            } else {
+                Some(future_logs)
+            }
+        });
 
         slog::info!(logger, "Future logs fetched");
         let logger = logger.clone();
