@@ -551,9 +551,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed.attempt_count,
 			));
 		} else {
-			Self::deposit_event(Event::<T, I>::BroadcastAborted(
-				failed.broadcast_id,
-			));
+			Self::deposit_event(Event::<T, I>::BroadcastAborted(failed.broadcast_id));
 		}
 	}
 
