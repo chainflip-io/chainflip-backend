@@ -246,7 +246,7 @@ pub mod pallet {
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
-		BroadcastAbortedAfterFailedAttempts(BroadcastId),
+		BroadcastAborted(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -551,7 +551,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed.attempt_count,
 			));
 		} else {
-			Self::deposit_event(Event::<T, I>::BroadcastAbortedAfterFailedAttempts(
+			Self::deposit_event(Event::<T, I>::BroadcastAborted(
 				failed.broadcast_id,
 			));
 		}

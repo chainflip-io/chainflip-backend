@@ -65,7 +65,7 @@ impl MockCfe {
 				},
 				BroadcastEvent::BroadcastAttemptExpired(broadcast_id, stage) =>
 					EXPIRED_ATTEMPTS.with(|cell| cell.borrow_mut().push((broadcast_id, stage))),
-				BroadcastEvent::BroadcastAbortedAfterFailedAttempts(_) => {
+				BroadcastEvent::BroadcastAborted(_) => {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
@@ -211,7 +211,7 @@ fn test_abort_after_max_attempt_reached() {
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
-			Event::MockBroadcast(crate::Event::BroadcastAbortedAfterFailedAttempts(1))
+			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
 		);
 	})
 }
