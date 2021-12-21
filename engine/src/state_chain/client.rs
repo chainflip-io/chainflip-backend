@@ -9,6 +9,8 @@ use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -23,6 +25,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
@@ -184,7 +187,7 @@ pub trait StateChainRpcApi {
 
     async fn rotate_keys(&self) -> Result<Bytes>;
 
-    async fn system_local_peer_id(&self) -> Result<PeerId>;
+    async fn local_listen_addresses(&self) -> Result<Vec<String>>;
 }
 
 #[async_trait]
@@ -240,13 +243,12 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("storage_pairs RPC API failed")
     }
 
-    async fn system_local_peer_id(&self) -> Result<PeerId> {
+    async fn local_listen_addresses(&self) -> Result<Vec<String>> {
         self.system_rpc_client
-            .system_local_peer_id()
+            .system_local_listen_addresses()
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("system_local_peer_id RPC API failed")
-            .and_then(|bs58| Ok(PeerId::from_str(&bs58)?))
+            .context("system_local_listen_addresses RPC API failed")
     }
 }
 
@@ -464,8 +466,50 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect()
     }
 
-    pub async fn get_local_peer_id(&self) -> Result<PeerId> {
-        self.state_chain_rpc_client.system_local_peer_id().await
+    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, u16, Ipv6Addr)>> {
+        self.state_chain_rpc_client
+            .local_listen_addresses()
+            .await?
+            .into_iter()
+            .map(|string_multiaddr| {
+                let multiaddr = Multiaddr::from_str(&string_multiaddr)?;
+                let protocols = multiaddr.into_iter().collect::<Vec<_>>();
+
+                // Note: Nodes started without validator argument will also listen with a WebSocket (Therefore their protocol list will also contain a WS element)
+
+                Ok((
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::P2p(multihash) => Some(multihash),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected P2p Protocol"))
+                        .and_then(|multihash| {
+                            PeerId::from_multihash(*multihash)
+                                .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))
+                        })
+                        .with_context(|| string_multiaddr.clone())?,
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::Tcp(port) => Some(*port),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected Tcp Protocol"))
+                        .with_context(|| string_multiaddr.clone())?,
+                    protocols
+                        .iter()
+                        .find_map(|protocol| match protocol {
+                            Protocol::Ip6(ip_address) => Some(*ip_address),
+                            Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
+                            _ => None,
+                        })
+                        .ok_or_else(|| anyhow::Error::msg("Expected Ip Protocol"))
+                        .with_context(|| string_multiaddr.clone())?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
@@ -592,6 +636,7 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
+    wait_for_staking: bool,
     logger: &slog::Logger,
 ) -> Result<(
     H256,
@@ -619,6 +664,12 @@ pub async fn connect_to_state_chain(
         },
     )?));
 
+    let our_account_id = signer.account_id().to_owned();
+
+    let account_storage_key = StorageKey(
+        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+    );
+
     let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
         state_chain_settings.ws_endpoint.as_str(),
     )?)
@@ -636,7 +687,7 @@ pub async fn connect_to_state_chain(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    let (latest_block_hash, latest_block_number) = {
+    let (latest_block_hash, latest_block_number, account_nonce) = {
         let (stream_block_hash, stream_block_number) =
             if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
                 Ok((stream_block_header.hash(), stream_block_header.number))
@@ -660,14 +711,80 @@ pub async fn connect_to_state_chain(
             .number;
 
         // if the finalised head number is > stream_block_number, loop the stream
-        if stream_block_number < finalised_head_number {
-            for _i in stream_block_number..finalised_head_number {
-                block_header_stream.next().await;
-            }
-            (finalised_head_hash, finalised_head_number)
-        } else {
-            (stream_block_hash, stream_block_number)
+        let (mut latest_block_hash, mut latest_block_number) =
+            if stream_block_number < finalised_head_number {
+                for _i in stream_block_number..finalised_head_number {
+                    block_header_stream.next().await.ok_or_else(|| {
+                        anyhow::Error::msg("Chainflip block stream unexpectedly ended")
+                    })??; // TODO Factor out handling of assumed to be infinite streams
+                }
+                (finalised_head_hash, finalised_head_number)
+            } else {
+                (stream_block_hash, stream_block_number)
+            };
+
+        async fn get_account_nonce(
+            state_rpc_client: &StateRpcClient,
+            account_storage_key: &StorageKey,
+            block_hash: state_chain_runtime::Hash,
+        ) -> Result<Option<u32>> {
+            Ok(
+                if let Some(encoded_account_info) = state_rpc_client
+                    .storage(account_storage_key.clone(), Some(block_hash))
+                    .await
+                    .map_err(rpc_error_into_anyhow_error)?
+                {
+                    let account_info: frame_system::AccountInfo<
+                        <RuntimeImplForSigningExtrinsics as System>::Index,
+                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
+                    > = Decode::decode(&mut &encoded_account_info.0[..])?;
+                    Some(account_info.nonce)
+                } else {
+                    None
+                },
+            )
         }
+
+        let account_nonce = match get_account_nonce(
+            &state_rpc_client,
+            &account_storage_key,
+            latest_block_hash,
+        )
+        .await?
+        {
+            Some(nonce) => nonce,
+            None => {
+                if wait_for_staking {
+                    loop {
+                        if let Some(nonce) = get_account_nonce(
+                            &state_rpc_client,
+                            &account_storage_key,
+                            latest_block_hash,
+                        )
+                        .await?
+                        {
+                            break nonce;
+                        } else {
+                            slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", our_account_id, latest_block_number);
+                            let block_header =
+                                block_header_stream.next().await.ok_or_else(|| {
+                                    anyhow::Error::msg("Chainflip block stream unexpectedly ended")
+                                })??; // TODO Factor out handling of assumed to be infinite streams
+                            latest_block_hash = block_header.hash();
+                            latest_block_number += 1;
+                            assert_eq!(latest_block_number, block_header.number);
+                        }
+                    }
+                } else {
+                    return Err(anyhow::Error::msg(format!(
+                        "Your Chainflip account {} is not staked",
+                        our_account_id
+                    )));
+                }
+            }
+        };
+
+        (latest_block_hash, latest_block_number, account_nonce)
     };
 
     slog::info!(
@@ -685,6 +802,7 @@ pub async fn connect_to_state_chain(
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?.clone();
+
     let state_chain_rpc_client = StateChainRpcClient {
         system_rpc_client,
         author_rpc_client,
@@ -692,37 +810,12 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
-    let our_account_id = signer.account_id().to_owned();
-
-    let account_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
-    );
-
     Ok((
         latest_block_hash,
         block_header_stream,
         Arc::new(StateChainClient {
             metadata,
-            nonce: AtomicU32::new({
-                let account_info: frame_system::AccountInfo<
-                        <RuntimeImplForSigningExtrinsics as System>::Index,
-                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
-                    > = Decode::decode(
-                        &mut &state_chain_rpc_client
-                            .state_rpc_client
-                            .storage(account_storage_key.clone(), Some(latest_block_hash))
-                            .await
-                            .map_err(rpc_error_into_anyhow_error)?
-                            .ok_or_else(|| {
-                                anyhow::format_err!(
-                                    "AccountId {:?} doesn't exist on the state chain. Please ensure you have staked and can see your stake on chain.",
-                                    our_account_id,
-                                )
-                            })?
-                            .0[..],
-                    )?;
-                account_info.nonce
-            }),
+            nonce: AtomicU32::new(account_nonce),
             runtime_version: state_chain_rpc_client
                 .state_rpc_client
                 .runtime_version(Some(latest_block_hash))
@@ -770,7 +863,7 @@ mod tests {
         let settings = Settings::from_file("config/Local.toml").unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
-            connect_to_state_chain(&settings.state_chain, &logger)
+            connect_to_state_chain(&settings.state_chain, false, &logger)
                 .await
                 .expect("Could not connect");
 

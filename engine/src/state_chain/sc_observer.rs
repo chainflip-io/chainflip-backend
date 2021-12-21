@@ -11,7 +11,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::EthBroadcaster,
-    logging::COMPONENT_KEY,
+    logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
@@ -146,13 +146,18 @@ pub async fn start<BlockStream, RpcClient>(
                                     pallet_cf_validator::Event::PeerIdRegistered(
                                         account_id,
                                         peer_id,
+                                        port,
+                                        ip_address,
                                     ),
                                 ) => {
                                     account_peer_mapping_change_sender
                                         .send((
                                             AccountId(*account_id.as_ref()),
                                             peer_id,
-                                            AccountPeerMappingChange::Registered,
+                                            AccountPeerMappingChange::Registered(
+                                                port,
+                                                ip_address.into(),
+                                            ),
                                         ))
                                         .unwrap();
                                 }
@@ -455,6 +460,9 @@ pub async fn start<BlockStream, RpcClient>(
                     is_outgoing = new_is_outgoing;
                 }
 
+                slog::trace!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  account_data.state; 
+                "is_outgoing" => is_outgoing, "last_active_epoch" => account_data.last_active_epoch);
+
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
                 // cause issues (if we tried to send on one of the interval boundaries)
@@ -495,9 +503,13 @@ mod tests {
         let logger = logging::test_utils::new_test_logger();
 
         let (latest_block_hash, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
-                .await
-                .unwrap();
+            crate::state_chain::client::connect_to_state_chain(
+                &settings.state_chain,
+                false,
+                &logger,
+            )
+            .await
+            .unwrap();
 
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();

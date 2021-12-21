@@ -39,7 +39,7 @@ async fn main() {
         .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
             .await
             .expect("Failed to connect to state chain");
 
