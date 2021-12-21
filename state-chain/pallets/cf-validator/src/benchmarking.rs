@@ -33,6 +33,9 @@ benchmarks! {
 		let validator_id: T::ValidatorId = caller.into();
 		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
 	}
+	// TODO: this benchmark is failing in in an test environment.
+	// Pretty sure the reason for this is that the account function
+	// is acting differently in the test environment.
 	register_peer_id {
 		// Due to the fact that we have no full_crypto features
 		// available in wasm we have to create a key pair as well as
