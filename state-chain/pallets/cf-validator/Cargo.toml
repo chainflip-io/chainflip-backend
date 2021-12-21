@@ -91,6 +91,7 @@ std = [
     'sp-runtime/std',
     'pallet-session/std',
     'pallet-cf-auction/std',
+    'log/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
