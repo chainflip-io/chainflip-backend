@@ -329,7 +329,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					let number_of_bidders = bids.len() as u32;
 					let mut target_validator_group_size =
 						min(max_number_of_validators, number_of_bidders) as usize;
-					let mut target_validating_group: Vec<_> =
+					let mut next_validator_group: Vec<_> =
 						bids.iter().take(target_validator_group_size as usize).collect();
 
 					if T::EmergencyRotation::emergency_rotation_in_progress() {
@@ -341,7 +341,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						if let Some(AuctionResult { minimum_active_bid, .. }) =
 							LastAuctionResult::<T>::get()
 						{
-							if let Some(new_target_validator_group_size) = target_validating_group
+							if let Some(new_target_validator_group_size) = next_validator_group
 								.iter()
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
@@ -358,15 +358,15 @@ impl<T: Config> Auctioneer for Pallet<T> {
 								target_validator_group_size = new_target_validator_group_size +
 									number_of_backup_validators_to_be_included as usize;
 
-								target_validating_group.truncate(target_validator_group_size);
+								next_validator_group.truncate(target_validator_group_size);
 							}
 						}
 					}
 
 					let minimum_active_bid =
-						target_validating_group.last().map(|(_, bid)| *bid).unwrap_or_default();
+						next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
 
-					let validating_set: Vec<_> = target_validating_group
+					let validating_set: Vec<_> = next_validator_group
 						.iter()
 						.map(|(validator_id, _)| (*validator_id).clone())
 						.collect();
