@@ -346,8 +346,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
 								let number_of_existing_backup_validators =
-									(target_validator_group_size - new_target_validator_group_size) as u32 *
-										(T::ActiveToBackupValidatorRatio::get() - 1) /
+									(target_validator_group_size - new_target_validator_group_size)
+										as u32 * (T::ActiveToBackupValidatorRatio::get() - 1) /
 										T::ActiveToBackupValidatorRatio::get();
 
 								let number_of_backup_validators_to_be_included =
@@ -356,8 +356,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 									) / 100;
 
 								target_validator_group_size = new_target_validator_group_size +
-									number_of_backup_validators_to_be_included
-										as usize;
+									number_of_backup_validators_to_be_included as usize;
 
 								target_validating_group.truncate(target_validator_group_size);
 							}
