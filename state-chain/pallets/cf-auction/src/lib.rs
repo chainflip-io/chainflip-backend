@@ -16,11 +16,7 @@ pub use weights::WeightInfo;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{
-	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BackupValidators,
-	BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping,
-	IsOnline, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
-};
+use cf_traits::{ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping, IsOnline, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator, AuctionIndex};
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -232,6 +228,10 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
+
+	fn auction_index() -> AuctionIndex {
+		CurrentAuctionIndex::<T>::get()
+	}
 
 	fn active_range() -> ActiveValidatorRange {
 		ActiveValidatorSizeRange::<T>::get()

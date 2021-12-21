@@ -161,8 +161,6 @@ mod tests {
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-			// Our old winners remain
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			run_to_block(15);
