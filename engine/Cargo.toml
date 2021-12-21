@@ -66,7 +66,7 @@ generic-array= "0.14"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
-cf-p2p = {path = "../state-chain/client/cf-p2p"}
+multisig_p2p_transport = {path = "../state-chain/multisig_p2p_transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}

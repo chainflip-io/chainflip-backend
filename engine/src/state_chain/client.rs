@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use cf_chains::ChainId;
-use cf_p2p::PeerId;
+use multisig_p2p_transport::PeerId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;

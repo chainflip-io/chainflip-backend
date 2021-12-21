@@ -16,7 +16,7 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
-    p2p::{self, AccountId, AccountPeerMappingChange},
+    multisig_p2p::{self, AccountId, AccountPeerMappingChange},
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
@@ -184,7 +184,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 ) => {
                                     let signers: Vec<_> = validator_candidates
                                         .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
+                                        .map(|v| multisig_p2p::AccountId(v.clone().into()))
                                         .collect();
 
                                     let gen_new_key_event = MultisigInstruction::Keygen(
@@ -259,7 +259,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 ) if validators.contains(&state_chain_client.our_account_id) => {
                                     let signers: Vec<_> = validators
                                         .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
+                                        .map(|v| multisig_p2p::AccountId(v.clone().into()))
                                         .collect();
 
                                     let sign_tx = MultisigInstruction::Sign(SigningInfo::new(

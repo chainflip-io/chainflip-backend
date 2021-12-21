@@ -3,7 +3,7 @@ pub mod common;
 pub mod errors;
 pub mod health;
 pub mod multisig;
-pub mod p2p;
+pub mod multisig_p2p;
 pub mod settings;
 pub mod state_chain;
 

@@ -1,5 +1,5 @@
 [package]
-name = 'cf-p2p'
+name = 'multisig_p2p_transport'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2018'

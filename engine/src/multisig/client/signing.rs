@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     multisig::{KeyId, MessageHash},
-    p2p::AccountId,
+    multisig_p2p::AccountId,
 };
 
 use self::frost::SigningData;
