@@ -325,12 +325,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					bids.sort_unstable_by_key(|k| k.1);
 					bids.reverse();
 
-					let validator_set_target_size = ActiveValidatorSizeRange::<T>::get().1;
+					let max_number_of_validators = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
-					let mut validator_group_size =
-						min(validator_set_target_size, number_of_bidders) as usize;
-					let mut validating_set: Vec<_> =
-						bids.iter().take(validator_group_size as usize).collect();
+					let mut target_validator_group_size =
+						min(max_number_of_validators, number_of_bidders) as usize;
+					let mut target_validating_group: Vec<_> =
+						bids.iter().take(target_validator_group_size as usize).collect();
 
 					if T::EmergencyRotation::emergency_rotation_in_progress() {
 						// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
@@ -341,40 +341,42 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						if let Some(AuctionResult { minimum_active_bid, .. }) =
 							LastAuctionResult::<T>::get()
 						{
-							if let Some(number_of_validators) = validating_set
+							if let Some(new_target_validator_group_size) = target_validating_group
 								.iter()
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
-								// Number of backup validators in existing set
-								let number_of_backup_validators =
-									(validator_group_size - number_of_validators) * 2 / 3;
+								let number_of_existing_backup_validators =
+									(target_validator_group_size - new_target_validator_group_size) as u32 *
+										(T::ActiveToBackupValidatorRatio::get() - 1) /
+										T::ActiveToBackupValidatorRatio::get();
 
-								let desired_number_of_backup_validators =
-									(number_of_backup_validators as u32).saturating_mul(
+								let number_of_backup_validators_to_be_included =
+									(number_of_existing_backup_validators as u32).saturating_mul(
 										T::PercentageOfBackupValidatorsInEmergency::get(),
 									) / 100;
 
-								validator_group_size = number_of_validators +
-									desired_number_of_backup_validators as usize;
+								target_validator_group_size = new_target_validator_group_size +
+									number_of_backup_validators_to_be_included
+										as usize;
 
-								validating_set.truncate(validator_group_size);
+								target_validating_group.truncate(target_validator_group_size);
 							}
 						}
 					}
 
 					let minimum_active_bid =
-						validating_set.last().map(|(_, bid)| *bid).unwrap_or_default();
+						target_validating_group.last().map(|(_, bid)| *bid).unwrap_or_default();
 
-					let validating_set: Vec<_> = validating_set
+					let validating_set: Vec<_> = target_validating_group
 						.iter()
 						.map(|(validator_id, _)| (*validator_id).clone())
 						.collect();
 
 					let backup_group_size =
-						validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
+						target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
 
 					let remaining_bidders: Vec<_> =
-						bids.iter().skip(validator_group_size as usize).collect();
+						bids.iter().skip(target_validator_group_size as usize).collect();
 
 					let phase = AuctionPhase::ValidatorsSelected(
 						validating_set.clone(),
