@@ -7,9 +7,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use futures::TryStreamExt;
 use itertools::Itertools;
+use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

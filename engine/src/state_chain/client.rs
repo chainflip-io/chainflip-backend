@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use cf_chains::ChainId;
-use multisig_p2p_transport::PeerId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -11,6 +10,7 @@ use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
+use multisig_p2p_transport::PeerId;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;

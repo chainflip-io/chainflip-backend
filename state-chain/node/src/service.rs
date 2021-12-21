@@ -211,14 +211,17 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (rpc_request_handler, p2p_message_handler_future) = multisig_p2p_transport::new_p2p_validator_network_node(
-		network.clone(),
-		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
-	);
+	let (rpc_request_handler, p2p_message_handler_future) =
+		multisig_p2p_transport::new_p2p_validator_network_node(
+			network.clone(),
+			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
+		);
 
 	let rpc_extensions_builder = {
 		let mut io = MetaIoHandler::default();
-		io.extend_with(multisig_p2p_transport::P2PValidatorNetworkNodeRpcApi::to_delegate(rpc_request_handler));
+		io.extend_with(multisig_p2p_transport::P2PValidatorNetworkNodeRpcApi::to_delegate(
+			rpc_request_handler,
+		));
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
