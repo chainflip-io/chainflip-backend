@@ -176,6 +176,13 @@ pub trait Auctioneer {
 	fn abort();
 }
 
+pub trait BackupValidators {
+	type ValidatorId;
+
+	/// The current set of backup validators.  The set may change at anytime.
+	fn backup_validators() -> Vec<Self::ValidatorId>;
+}
+
 /// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
@@ -211,10 +218,12 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
+	/// The current epoch is ending
+	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
-	/// a `_new_bond`
+	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
+	/// a `new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -310,6 +319,12 @@ pub trait RewardRollover {
 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
 	/// are available.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
+}
+
+pub trait Rewarder {
+	type AccountId;
+	// Apportion rewards due to all beneficiaries
+	fn reward_all() -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.
