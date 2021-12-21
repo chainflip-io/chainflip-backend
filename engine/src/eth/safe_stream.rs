@@ -128,24 +128,18 @@ where
 #[cfg(test)]
 mod tests {
 
-    use web3::types::H2048;
-
     use sp_core::H256;
 
     use super::*;
 
-    fn block_header(
-        hash: u8,
-        block_number: u64,
-        logs_bloom: H2048,
-    ) -> Result<BlockHeader, web3::Error> {
+    fn block_header(hash: u8, block_number: u64) -> Result<BlockHeader, web3::Error> {
         let block_header = BlockHeader {
             // fields that matter
             hash: Some(H256::from([hash; 32])),
             number: Some(U64::from(block_number)),
-            logs_bloom,
 
             // defaults
+            logs_bloom: Default::default(),
             parent_hash: H256::default(),
             uncles_hash: H256::default(),
             author: H160::default(),
@@ -185,11 +179,7 @@ mod tests {
     #[tokio::test]
     async fn returns_none_when_some_in_inner_when_safety() {
         let header_stream =
-            stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![block_header(
-                1,
-                0,
-                Default::default(),
-            )]);
+            stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![block_header(1, 0)]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 4);
 
@@ -198,7 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_one_when_one_in_inner_but_no_more_when_no_safety() {
-        let first_block = block_header(1, 0, Default::default());
+        let first_block = block_header(1, 0);
         let header_stream =
             stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![first_block.clone()]);
 
@@ -210,12 +200,12 @@ mod tests {
 
     #[tokio::test]
     async fn returns_one_when_two_in_inner_but_one_safety_then_no_more() {
-        let first_block = block_header(1, 0, Default::default());
-        let second_block = block_header(2, 1, Default::default());
+        let first_block = block_header(1, 0);
+        let second_block = block_header(2, 1);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
             second_block.clone(),
-            block_header(3, 2, Default::default()),
+            block_header(3, 2),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
@@ -228,8 +218,8 @@ mod tests {
     #[tokio::test]
     async fn returns_reorgs_of_depth_1_blocks_if_in_inner_when_no_safety() {
         // NB: Same block number, different blocks. Our node saw two blocks at the same height, so returns them both
-        let first_block = block_header(1, 0, Default::default());
-        let first_block_prime = block_header(2, 0, Default::default());
+        let first_block = block_header(1, 0);
+        let first_block_prime = block_header(2, 0);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
             first_block_prime.clone(),
@@ -244,13 +234,13 @@ mod tests {
 
     #[tokio::test]
     async fn handles_reogs_depth_1_blocks_when_safety() {
-        let first_block = block_header(1, 0, Default::default());
-        let second_block = block_header(2, 1, Default::default());
+        let first_block = block_header(1, 0);
+        let second_block = block_header(2, 1);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
             first_block.clone(),
             second_block.clone(),
-            block_header(2, 2, Default::default()),
+            block_header(2, 2),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
@@ -262,16 +252,16 @@ mod tests {
 
     #[tokio::test]
     async fn safe_stream_when_reorg_of_depth_below_safety() {
-        let first_block = block_header(1, 10, Default::default());
-        let second_block = block_header(2, 11, Default::default());
-        let first_block_prime = block_header(11, 10, Default::default());
-        let second_block_prime = block_header(21, 11, Default::default());
+        let first_block = block_header(1, 10);
+        let second_block = block_header(2, 11);
+        let first_block_prime = block_header(11, 10);
+        let second_block_prime = block_header(21, 11);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
             second_block.clone(),
             first_block_prime.clone(),
             second_block_prime.clone(),
-            block_header(2, 12, Default::default()),
+            block_header(2, 12),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 2);

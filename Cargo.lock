@@ -981,7 +981,6 @@ dependencies = [
  "futures-util",
  "generic-array 0.14.4",
  "hex",
- "hex-literal",
  "httparse",
  "itertools",
  "jsonrpc-core",
