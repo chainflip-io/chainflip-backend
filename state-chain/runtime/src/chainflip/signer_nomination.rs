@@ -139,8 +139,6 @@ mod tests {
 	#[test]
 	fn test_subset_selection_is_none() {
 		for seed in 0..100 {
-			// zero is invalid
-			assert_eq!(None, try_select_random_subset(seed, 0, (0..5).collect()));
 			// empty set is invalid
 			assert_eq!(None, try_select_random_subset(seed, 0, (0..0).collect()));
 			// threshold can't be larger than the set size
