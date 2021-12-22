@@ -44,16 +44,16 @@ where
 
                     // pop off the front of the queue
                     (0..reorg_depth.as_u64()).for_each(|_| {
-                        state.last_n_blocks.pop_front();
+                        state.last_n_blocks.pop_back();
                     });
                 }
 
-                state.last_n_blocks.push_front(header);
+                state.last_n_blocks.push_back(header);
                 state.head_eth_stream = number;
 
                 if state
                     .last_n_blocks
-                    .back()
+                    .front()
                     .expect("always at least one item on the queue")
                     .number
                     .expect("all blocks on the chain have block numbers")
@@ -63,7 +63,7 @@ where
                     break Some((
                         state
                             .last_n_blocks
-                            .pop_back()
+                            .pop_front()
                             .expect("already put an item above"),
                         state,
                     ));
