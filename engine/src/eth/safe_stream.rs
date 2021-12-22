@@ -32,7 +32,7 @@ where
         head_eth_stream: U64::from(0),
         last_n_blocks: Default::default(),
     };
-    let stream = Box::pin(stream::unfold(init_data, move |mut state| async move {
+    Box::pin(stream::unfold(init_data, move |mut state| async move {
         let loop_state = loop {
             if let Some(header) = state.stream.next().await {
                 let header = header.unwrap();
@@ -78,8 +78,7 @@ where
             }
         };
         loop_state
-    }));
-    stream
+    }))
 }
 
 pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
