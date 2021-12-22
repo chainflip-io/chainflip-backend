@@ -169,7 +169,7 @@ impl Settings {
         // Load settings from the default file or from the path specified from cmd line options
         let mut settings = match opts.clone().config_path {
             Some(path) => Self::from_default_file(&path, CommandLineOptions::default())?,
-            None => Self::from_default_file("config/Local.toml", CommandLineOptions::default())?,
+            None => Self::from_default_file("config/Default.toml", CommandLineOptions::default())?,
         };
 
         Self::settings_plus_command_line_options(&mut settings, opts)?;
