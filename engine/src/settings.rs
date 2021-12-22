@@ -167,12 +167,13 @@ impl Settings {
     /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
-        let path = match opts.clone().config_path {
-            Some(path) => path,
-            None => "config/Default.toml".to_string(),
-        };
-
-        let settings = Self::from_default_file(&path, opts)?;
+        let settings = Self::from_default_file(
+            &match &opts.config_path.clone() {
+                Some(path) => path,
+                None => "config/Default.toml",
+            },
+            opts,
+        )?;
 
         Ok(settings)
     }
