@@ -74,8 +74,6 @@ mod tests {
 
 	use super::*;
 
-	const SEED: u64 = 0;
-
 	/// Generates a set of validators with the SignerId = index + 1
 	fn validator_set(len: usize) -> Vec<u64> {
 		(0..len as u64).collect::<Vec<_>>()
@@ -119,7 +117,7 @@ mod tests {
 		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
 	}
 
-	fn test_subset_with<T: Clone + Ord>(seed: u64, threshold: usize, set: Vec<T>) {
+	fn assert_selected_subset_is_valid<T: Clone + Ord>(seed: u64, threshold: usize, set: Vec<T>) {
 		let source = BTreeSet::from_iter(set.clone());
 		let result = BTreeSet::from_iter(try_select_random_subset(seed, threshold, set).unwrap());
 		assert!(result.len() == threshold);
@@ -128,19 +126,38 @@ mod tests {
 
 	#[test]
 	fn test_random_subset_selection() {
-		test_subset_with(SEED, 2, (0..5).collect());
-		test_subset_with(SEED, 3, (0..5).collect());
-		test_subset_with(SEED, 4, (0..5).collect());
-		test_subset_with(SEED, 5, (0..5).collect());
+		for seed in 0..100 {
+			assert_selected_subset_is_valid(seed, 0, (0..5).collect());
+			assert_selected_subset_is_valid(seed, 1, (0..5).collect());
+			assert_selected_subset_is_valid(seed, 2, (0..5).collect());
+			assert_selected_subset_is_valid(seed, 3, (0..5).collect());
+			assert_selected_subset_is_valid(seed, 4, (0..5).collect());
+			assert_selected_subset_is_valid(seed, 5, (0..5).collect());
+		}
+	}
+
+	#[test]
+	fn test_subset_selection_is_none() {
+		for seed in 0..100 {
+			// zero is invalid
+			assert_eq!(None, try_select_random_subset(seed, 0, (0..5).collect()));
+			// empty set is invalid
+			assert_eq!(None, try_select_random_subset(seed, 0, (0..0).collect()));
+			// threshold can't be larger than the set size
+			assert_eq!(None, try_select_random_subset(seed, 6, (0..5).collect()));
+		}
 	}
 
 	#[test]
 	fn different_seed_different_set() {
-		let seed = 1;
-		let set = (0..5).collect::<Vec<_>>();
-		let b = BTreeSet::from_iter(try_select_random_subset(seed, 2, set.clone()).unwrap());
-		let a = BTreeSet::from_iter(try_select_random_subset(seed + 1, 2, set.clone()).unwrap());
-
-		assert_ne!(a, b);
+		let set = (0..150).collect::<Vec<_>>();
+		for seed in 0..100 {
+			// Note: strictly speaking these don't have to be different but the chances of a
+			// collision should be quite low.
+			assert_ne!(
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				BTreeSet::from_iter(try_select_random_subset(seed + 100, 2, set.clone()).unwrap()),
+			);
+		}
 	}
 }
