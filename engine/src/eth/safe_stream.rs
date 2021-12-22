@@ -43,9 +43,9 @@ where
                     let reorg_depth = (state.head_eth_stream - number) + U64::from(1);
 
                     // pop off the front of the queue
-                    (0..reorg_depth.as_u64())
-                        .map(|_| state.last_n_blocks.pop_front())
-                        .for_each(drop);
+                    (0..reorg_depth.as_u64()).for_each(|_| {
+                        state.last_n_blocks.pop_front();
+                    });
                 }
 
                 state.last_n_blocks.push_front(header);
