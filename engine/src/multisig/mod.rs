@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{logging::COMPONENT_KEY, p2p::AccountId};
+use crate::{common, logging::COMPONENT_KEY, multisig_p2p::AccountId};
 use futures::StreamExt;
 use slog::o;
 
@@ -87,9 +87,7 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
-            Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))
-        }));
+        let mut cleanup_stream = common::make_periodic_stream(Duration::from_secs(10));
 
         loop {
             tokio::select! {

@@ -3,7 +3,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, AccountId},
+    multisig_p2p::{self, AccountId},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -39,7 +39,7 @@ async fn main() {
         .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
             .await
             .expect("Failed to connect to state chain");
 
@@ -116,7 +116,7 @@ async fn main() {
             &root_logger,
         ),
         async {
-            p2p::start(
+            multisig_p2p::start(
                 &settings,
                 state_chain_client.clone(),
                 latest_block_hash,

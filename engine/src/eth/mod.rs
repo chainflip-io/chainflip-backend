@@ -21,7 +21,7 @@ use web3::{
 };
 
 use crate::{
-    common::{read_and_decode_file, Mutex},
+    common::{read_clean_and_decode_hex_str_file, Mutex},
     eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
@@ -80,7 +80,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
 {
-    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerObserver"));
+    let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
 
     type TaskEndBlock = Arc<Mutex<Option<u64>>>;
@@ -204,7 +204,7 @@ impl EthBroadcaster {
         web3: Web3<web3::transports::WebSocket>,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        let secret_key = read_and_decode_file(
+        let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
             |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),

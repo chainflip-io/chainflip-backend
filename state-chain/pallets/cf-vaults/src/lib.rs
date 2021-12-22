@@ -277,26 +277,25 @@ pub mod pallet {
 				{
 					match response_status.consensus_outcome() {
 						Some(KeygenOutcome::Success(new_public_key)) => {
-							weight += T::WeightInfo::on_keygen_success();
+							weight += T::WeightInfo::on_initialize_success();
 							Self::on_keygen_success(keygen_ceremony_id, chain_id, new_public_key)
 								.unwrap_or_else(|e| {
 									log::error!(
 										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.", 
 										keygen_ceremony_id, e
 									);
-									weight += T::WeightInfo::on_keygen_failure();
 									Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
 								});
 						},
 						Some(KeygenOutcome::Failure(offenders)) => {
-							weight += T::WeightInfo::on_keygen_failure();
+							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
 							if current_block.saturating_sub(since_block) >=
 								T::KeygenResponseGracePeriod::get()
 							{
-								weight += T::WeightInfo::on_keygen_failure();
+								weight += T::WeightInfo::on_initialize_none();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
 								Self::deposit_event(Event::<T>::KeygenGracePeriodElapsed(
 									keygen_ceremony_id,
@@ -560,12 +559,17 @@ pub mod pallet {
 		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise
 		/// we could use that instead of `Vec`...
 		pub ethereum_vault_key: Vec<u8>,
+
+		pub ethereum_deployment_block: u64,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { ethereum_vault_key: Default::default() }
+			Self {
+				ethereum_vault_key: Default::default(),
+				ethereum_deployment_block: Default::default(),
+			}
 		}
 	}
 
@@ -580,7 +584,10 @@ pub mod pallet {
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
-					active_window: BlockHeightWindow::default(),
+					active_window: BlockHeightWindow {
+						from: self.ethereum_deployment_block,
+						to: None,
+					},
 				},
 			);
 		}

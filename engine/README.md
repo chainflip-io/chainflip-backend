@@ -16,7 +16,6 @@ Broadly the Chainflip Engine's responsibilities include:
 
 - [State Chain](./src/state_chain/README.md)
 - [Multi-signature](./src/multisig/README.md)
-- [Peer-2-Peer](./src/p2p/README.md)
 - [Ethereum](./src/eth/README.md)
 - [Health](./src/health.rs)
 

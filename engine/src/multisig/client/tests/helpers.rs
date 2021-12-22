@@ -35,7 +35,7 @@ use crate::{
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
     },
-    p2p::AccountId,
+    multisig_p2p::AccountId,
 };
 
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
