@@ -38,9 +38,7 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                if number > state.head_eth_stream {
-                    state.last_n_blocks.push_front(header);
-                } else {
+                if number <= state.head_eth_stream {
                     let reorg_depth =
                         (state.head_eth_stream.saturating_sub(number)).saturating_add(U64::from(1));
 
@@ -48,10 +46,9 @@ where
                     (0..reorg_depth.as_u64())
                         .map(|_| state.last_n_blocks.pop_front())
                         .for_each(drop);
-
-                    state.last_n_blocks.push_front(header);
                 }
 
+                state.last_n_blocks.push_front(header);
                 state.head_eth_stream = number;
             } else {
                 // when the inner stream is consumed, we want to end the wrapping/safe stream
