@@ -443,6 +443,11 @@ impl pallet_cf_online::Config for Runtime {
 use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: BlockNumber = 150;
+	pub const CeremonyRetryDelay: BlockNumber = 150;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::RandomSignerNomination;
@@ -450,6 +455,8 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {

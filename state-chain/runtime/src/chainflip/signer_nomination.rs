@@ -1,39 +1,10 @@
-use crate::{Online, Runtime};
-use cf_traits::{Chainflip, IsOnline};
-use frame_support::{Hashable, storage::IterableStorageMap};
+use crate::{Online, Runtime, Validator};
+use cf_traits::{Chainflip, EpochInfo};
+use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use sp_std::vec::Vec;
-use codec::{Encode, Decode};
 
-// /// Returns a scaled index based on an input seed
-// fn get_random_index(seed: Vec<u8>, max: usize) -> usize {
-// 	let hash = twox_128(&seed);
-// 	let index = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]) % max as u32;
-// 	index as usize
-// }
-
-// /// Select the next signer
-// fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
-// 	validators: Vec<(SignerId, ())>,
-// 	seed: Vec<u8>,
-// ) -> Option<SignerId> {
-// 	// Get all online validators
-// 	let online_validators =
-// 		validators.iter().filter(|(id, _)| T::is_online(id)).collect::<Vec<_>>();
-// 	let number_of_online_validators = online_validators.len();
-// 	// Check if there is someone online
-// 	if number_of_online_validators == 0 {
-// 		return None
-// 	}
-// 	// Get a a pseudo random id by which we choose the next validator
-// 	let the_chosen_one = get_random_index(seed, number_of_online_validators);
-// 	online_validators.get(the_chosen_one).map(|f| f.0.clone())
-// }
-
-/// Select a random subset of size `n` from the set of `things`.
-///
-/// Returns `None` if `n` is larger than the number of things.
-fn select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Option<Vec<T>> {
+fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Option<Vec<T>> {
 	if n > things.len() {
 		return None
 	}
@@ -67,10 +38,18 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 /// Nominates pseudo-random signers based on the provided seed.
 pub struct RandomSignerNomination;
 
-fn get_online_validators(
-) -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	pallet_cf_validator::ValidatorLookup::<Runtime>::iter_keys()
-		.filter(|id| <Online as cf_traits::IsOnline>::is_online(&id))
+/// Returns a list of online validators.
+///
+/// TODO: When #1037 is merged, use the more efficient EpochInfo::current_validators()
+fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
+	pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
+		.filter_map(|(id, _)| {
+			if <Online as cf_traits::IsOnline>::is_online(&id) {
+				Some(id.clone())
+			} else {
+				None
+			}
+		})
 		.collect()
 }
 
@@ -83,26 +62,19 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
-		// TODO: get this from `EpochInfo` instead.
-		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
-		let mut online_validators = get_online_validators();
-		select_random_subset(
-			seed_from_hashable(seed),
-			threshold as usize,
-			online_validators,
-		)
+		let threshold = <Validator as EpochInfo>::consensus_threshold();
+		let online_validators = get_online_validators();
+		try_select_random_subset(seed_from_hashable(seed), threshold as usize, online_validators)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::collections::BTreeSet;
+	use std::{collections::BTreeSet, iter::FromIterator};
 
 	use super::*;
-	use cf_traits::IsOnline;
-	use frame_support::traits::InstanceFilter;
-	use sp_std::cell::RefCell;
-	// use std::ops::Range;
+
+	const SEED: u64 = 0;
 
 	/// Generates a set of validators with the SignerId = index + 1
 	fn validator_set(len: usize) -> Vec<u64> {
@@ -133,54 +105,50 @@ mod tests {
 	#[test]
 	fn test_select_signer() {
 		// Expect Some validator
-		assert!(
-			select_one(
-				seed_from_hashable(vec![2, 5, 7, 3]),
-				vec![(4, ()), (6, ()), (7, ()), (9, ())],
-			).is_some()
-		);
+		assert!(select_one(
+			seed_from_hashable(vec![2, 5, 7, 3]),
+			vec![(4, ()), (6, ()), (7, ()), (9, ())],
+		)
+		.is_some());
 		// Expect a validator in a set of 150 validators
-		assert!(
-			select_one(
-				seed_from_hashable(String::from("seed").into_bytes()),
-				validator_set(150),
-			).is_some()
-		);
+		assert!(select_one(
+			seed_from_hashable(String::from(String::from("seed")).into_bytes()),
+			validator_set(150),
+		)
+		.is_some());
 		// Expect an comparable big change in the value
 		// distribution for an small input seed change
-		assert!(
-			select_one(
-				seed_from_hashable(("seedy", "seed")),
-				validator_set(150),
-			).is_some()
-		);
+		assert!(select_one(
+			seed_from_hashable((String::from("seedy"), String::from("seed"))),
+			validator_set(150),
+		)
+		.is_some());
 		// Expect an reasonable SignerId for an bigger input seed
-		assert!(
-			select_one(
-				seed_from_hashable(("west1_north_south_east:_berlin_zonk", 1, 2, 3, 4u128))
-				validator_set(150),
-			).is_some()
-		);
+		assert!(select_one(
+			seed_from_hashable((
+				String::from("west1_north_south_east:_berlin_zonk"),
+				1,
+				2,
+				3,
+				4u128
+			)),
+			validator_set(150),
+		)
+		.is_some());
 		// Expect the select_signer function to return None
 		// if there is currently no online validator
-		assert!(
-			select_one(
-				seed_from_hashable("seed")
-				vec![],
-			).is_none()
-		);
+		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
 	}
 
-	fn test_subset_with<T>(seed: u64, threshold: u64, set: Vec<T>) {
+	fn test_subset_with<T: Clone + Ord>(seed: u64, threshold: usize, set: Vec<T>) {
 		let source = BTreeSet::from_iter(set.clone());
-		let result = BTreeSet::from_iter(select_random_subset(SEED, threshold, set));
+		let result = BTreeSet::from_iter(try_select_random_subset(seed, threshold, set).unwrap());
 		assert!(result.len() == threshold);
-		assert!(source.is_superset(result))
+		assert!(source.is_superset(&result))
 	}
 
 	#[test]
 	fn test_random_subset_selection() {
-		const SEED: u64 = 0;
 		test_subset_with(SEED, 2, (0..5).collect());
 		test_subset_with(SEED, 3, (0..5).collect());
 		test_subset_with(SEED, 4, (0..5).collect());

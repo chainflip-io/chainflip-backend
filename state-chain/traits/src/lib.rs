@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
-	Parameter, Hashable,
+	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};

@@ -1,7 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Auction, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation,
-	Rewards, Runtime, Validator, Vaults, Witnesser,
+	AccountId, Auction, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards,
+	Runtime, Validator, Vaults, Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
@@ -15,8 +15,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, IsOnline, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder,
-	SigningContext, StakeHandler, StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -29,7 +29,6 @@ use sp_runtime::{
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
-use sp_io::hashing::twox_128;
 use sp_runtime::helpers_128bit::multiply_by_rational;
 
 mod signer_nomination;
@@ -241,7 +240,6 @@ impl Heartbeat for ChainflipHeartbeat {
 		weight
 	}
 }
-
 
 // Supported Ethereum signing operations.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
