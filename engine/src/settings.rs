@@ -167,12 +167,12 @@ impl Settings {
     /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
-        let mut settings = match opts.clone().config_path {
-            Some(path) => Self::from_default_file(&path, CommandLineOptions::default())?,
-            None => Self::from_default_file("config/Default.toml", CommandLineOptions::default())?,
+        let path = match opts.clone().config_path {
+            Some(path) => path,
+            None => "config/Default.toml".to_string(),
         };
 
-        Self::settings_plus_command_line_options(&mut settings, opts)?;
+        let settings = Self::from_default_file(&path, opts)?;
 
         Ok(settings)
     }
@@ -190,11 +190,13 @@ impl Settings {
         Ok(())
     }
 
-    // Override the settings with the cmd line options if they exist
-    fn settings_plus_command_line_options(
-        settings: &mut Settings,
-        opts: CommandLineOptions,
-    ) -> Result<(), ConfigError> {
+    /// Load settings from a TOML file
+    /// If opts contains another file name, it'll use that as the default
+    pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
+        let mut s = Config::new();
+        s.merge(File::with_name(file))?;
+        let mut settings: Settings = s.try_into()?;
+
         if let Some(opt) = opts.node_key_file {
             settings.node_p2p.node_key_file = opt
         };
@@ -238,18 +240,6 @@ impl Settings {
 
         // Run the validation again
         settings.validate_settings()?;
-
-        Ok(())
-    }
-
-    /// Load settings from a TOML file
-    /// If opts contains another file name, it'll use that as the default
-    pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(File::with_name(file))?;
-        let mut settings: Settings = s.try_into()?;
-
-        Self::settings_plus_command_line_options(&mut settings, opts)?;
 
         Ok(settings)
     }
