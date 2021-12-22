@@ -50,31 +50,31 @@ where
 
                 state.last_n_blocks.push_front(header);
                 state.head_eth_stream = number;
+
+                if state
+                    .last_n_blocks
+                    .back()
+                    .expect("always at least one item on the queue")
+                    .number
+                    .expect("all blocks on the chain have block numbers")
+                    .saturating_add(U64::from(safety_margin))
+                    <= state.head_eth_stream
+                {
+                    break Some((
+                        state
+                            .last_n_blocks
+                            .pop_back()
+                            .expect("already put an item above"),
+                        state,
+                    ));
+                } else {
+                    // we don't want to return None to the caller here. Instead we want to keep progressing
+                    // through the inner stream
+                    continue;
+                }
             } else {
                 // when the inner stream is consumed, we want to end the wrapping/safe stream
                 break None;
-            }
-
-            if state
-                .last_n_blocks
-                .back()
-                .expect("always at least one item on the queue")
-                .number
-                .expect("all blocks on the chain have block numbers")
-                .saturating_add(U64::from(safety_margin))
-                <= state.head_eth_stream
-            {
-                break Some((
-                    state
-                        .last_n_blocks
-                        .pop_back()
-                        .expect("already put an item above"),
-                    state,
-                ));
-            } else {
-                // we don't want to return None to the caller here. Instead we want to keep progressing
-                // through the inner stream
-                continue;
             }
         };
         loop_state
