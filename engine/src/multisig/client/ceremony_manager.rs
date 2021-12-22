@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, MultisigOutcome};
-use crate::p2p::AccountId;
+use crate::multisig_p2p::AccountId;
 
 use client::{
     keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,

@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use crate::p2p::AccountId;
+use crate::multisig_p2p::AccountId;
 
 use serde::{Deserialize, Serialize};
 

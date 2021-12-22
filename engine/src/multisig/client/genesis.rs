@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use super::tests::KeygenContext;
 use crate::multisig::KeygenOptions;
-use crate::{multisig::client::ensure_unsorted, p2p::AccountId};
+use crate::{multisig::client::ensure_unsorted, multisig_p2p::AccountId};
 
 // Generate the keys for genesis
 // Run test to ensure it doesn't panic
