@@ -39,8 +39,8 @@ where
                 let number = header.number.unwrap();
 
                 if number <= state.head_eth_stream {
-                    let reorg_depth =
-                        (state.head_eth_stream.saturating_sub(number)).saturating_add(U64::from(1));
+                    // if we receive two of the same block number then we still need to drop the first
+                    let reorg_depth = (state.head_eth_stream - number) + U64::from(1);
 
                     // pop off the front of the queue
                     (0..reorg_depth.as_u64())
