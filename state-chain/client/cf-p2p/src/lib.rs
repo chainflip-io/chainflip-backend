@@ -872,6 +872,7 @@ mod tests {
 			.add_peer(peer_1_transferable.clone(), port_1, ip_address_1)
 			.await
 			.unwrap();
+		network_expectations.write().checkpoint();
 
 		// Tests
 
@@ -898,6 +899,7 @@ mod tests {
 				.await,
 			Ok(_)
 		));
+		network_expectations.write().checkpoint();
 
 		// Peer gets sent message
 
@@ -911,6 +913,7 @@ mod tests {
 			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
 			Ok(_)
 		));
+		network_expectations.write().checkpoint();
 
 		// Partially unreserved peers cause message to be not be sent
 
