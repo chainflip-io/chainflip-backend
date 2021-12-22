@@ -852,30 +852,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-p2p"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "bs58",
- "futures 0.3.17",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "jsonrpc-pubsub",
- "log 0.4.14",
- "mockall",
- "sc-network",
- "sc-rpc",
- "serde 1.0.130",
- "serde_json",
- "sp-core",
- "sp-runtime",
- "tokio 1.13.0",
- "tokio-stream",
-]
-
-[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
@@ -965,7 +941,6 @@ dependencies = [
  "bincode",
  "bs58",
  "cf-chains",
- "cf-p2p",
  "cf-traits",
  "config",
  "crossbeam-channel",
@@ -992,6 +967,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "mockall",
+ "multisig-p2p-transport",
  "num",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
@@ -1041,7 +1017,6 @@ dependencies = [
 name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
- "cf-p2p",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "futures 0.3.17",
@@ -1050,6 +1025,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "multisig-p2p-transport",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
@@ -4473,6 +4449,30 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "multisig-p2p-transport"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "bs58",
+ "futures 0.3.17",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "log 0.4.14",
+ "mockall",
+ "sc-network",
+ "sc-rpc",
+ "serde 1.0.130",
+ "serde_json",
+ "sp-core",
+ "sp-runtime",
+ "tokio 1.13.0",
+ "tokio-stream",
+]
 
 [[package]]
 name = "multistream-select"

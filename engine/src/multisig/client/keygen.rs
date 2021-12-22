@@ -17,7 +17,7 @@ pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
 
-use crate::p2p::AccountId;
+use crate::multisig_p2p::AccountId;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
 

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{common, logging::COMPONENT_KEY, p2p::AccountId};
+use crate::{common, logging::COMPONENT_KEY, multisig_p2p::AccountId};
 use futures::StreamExt;
 use slog::o;
 
