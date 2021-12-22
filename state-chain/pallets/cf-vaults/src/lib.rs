@@ -288,7 +288,7 @@ pub mod pallet {
 								});
 						},
 						Some(KeygenOutcome::Failure(offenders)) => {
-							weight += T::WeightInfo::on_initialize_failure();
+							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {

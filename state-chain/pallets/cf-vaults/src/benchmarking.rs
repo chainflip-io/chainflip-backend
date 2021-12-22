@@ -34,6 +34,7 @@ fn generate_validator_set<T: Config>(
 
 benchmarks! {
 	on_initialize_failure {
+		let b in 101 .. 150;
 		let current_block: T::BlockNumber = (0 as u32).into();
 			KeygenResolutionPending::<T>::append((
 				CHAIN_ID,
@@ -41,10 +42,10 @@ benchmarks! {
 		));
 		let caller: T::AccountId = whitelisted_caller();
 		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T>(150, caller.clone().into());
-		let blamed: BTreeSet<T::ValidatorId> = generate_validator_set::<T>(150, caller.clone().into());
+		let blamed: BTreeSet<T::ValidatorId> = generate_validator_set::<T>(b, caller.clone().into());
 		let mut keygen_response_status = KeygenResponseStatus::<T>::new(candidates);
 
-		for i in 0..120 {
+		for i in 0..b {
 			let validator_id = account("doogle", i, 0);
 			let _ = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
 		}
