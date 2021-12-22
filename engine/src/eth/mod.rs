@@ -313,9 +313,7 @@ pub trait EthObserver {
             .await
             .ok_or(anyhow::Error::msg("No block headers in safe stream"))?
             .number
-            .ok_or(anyhow::Error::msg(
-                "Best safe block does not have a block number",
-            ))?;
+            .expect("all blocks in safe stream have numbers");
         let future_logs =
             filtered_log_stream_by_contract(safe_head_stream, web3.clone(), deployed_address).await;
 
