@@ -42,7 +42,6 @@ where
                     // if we receive two of the same block number then we still need to drop the first
                     let reorg_depth = (state.head_eth_stream - number) + U64::from(1);
 
-                    // pop off the front of the queue
                     (0..reorg_depth.as_u64()).for_each(|_| {
                         state.last_n_blocks.pop_back();
                     });
@@ -51,26 +50,25 @@ where
                 state.last_n_blocks.push_back(header);
                 state.head_eth_stream = number;
 
-                if state
-                    .last_n_blocks
-                    .front()
-                    .expect("always at least one item on the queue")
-                    .number
-                    .expect("all blocks on the chain have block numbers")
-                    .saturating_add(U64::from(safety_margin))
-                    <= state.head_eth_stream
-                {
-                    break Some((
-                        state
-                            .last_n_blocks
-                            .pop_front()
-                            .expect("already put an item above"),
-                        state,
-                    ));
-                } else {
-                    // we don't want to return None to the caller here. Instead we want to keep progressing
-                    // through the inner stream
-                    continue;
+                if let Some(header) = state.last_n_blocks.front() {
+                    if header
+                        .number
+                        .expect("all blocks on the chain have block numbers")
+                        .saturating_add(U64::from(safety_margin))
+                        <= state.head_eth_stream
+                    {
+                        break Some((
+                            state
+                                .last_n_blocks
+                                .pop_front()
+                                .expect("already put an item above"),
+                            state,
+                        ));
+                    } else {
+                        // we don't want to return None to the caller here. Instead we want to keep progressing
+                        // through the inner stream
+                        continue;
+                    }
                 }
             } else {
                 // when the inner stream is consumed, we want to end the wrapping/safe stream
