@@ -24,12 +24,10 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        head_eth_stream: U64,
         last_n_blocks: VecDeque<BlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
-        head_eth_stream: U64::from(0),
         last_n_blocks: Default::default(),
     };
     Box::pin(stream::unfold(init_data, move |mut state| async move {
@@ -38,24 +36,27 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                if number <= state.head_eth_stream {
-                    // if we receive two of the same block number then we still need to drop the first
-                    let reorg_depth = (state.head_eth_stream - number) + U64::from(1);
+                if let Some(last_unsafe_block_header) = state.last_n_blocks.back() {
+                    let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
+                    assert!(number <= last_unsafe_block_number + 1);
+                    if number <= last_unsafe_block_number {
+                        // if we receive two of the same block number then we still need to drop the first
+                        let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
 
-                    (0..reorg_depth.as_u64()).for_each(|_| {
-                        state.last_n_blocks.pop_back();
-                    });
+                        (0..reorg_depth.as_u64()).for_each(|_| {
+                            state.last_n_blocks.pop_back();
+                        });
+                    }
                 }
 
                 state.last_n_blocks.push_back(header);
-                state.head_eth_stream = number;
 
                 if let Some(header) = state.last_n_blocks.front() {
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
                         .saturating_add(U64::from(safety_margin))
-                        <= state.head_eth_stream
+                        <= number
                     {
                         break Some((
                             state
