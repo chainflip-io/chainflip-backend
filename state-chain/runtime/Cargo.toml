@@ -217,6 +217,7 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'frame-system-rpc-runtime-api/std',
+  'nanorand/std',
   'pallet-aura/std',
   'pallet-grandpa/std',
   'pallet-randomness-collective-flip/std',
