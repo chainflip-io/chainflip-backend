@@ -9,7 +9,7 @@ use sp_std::vec::Vec;
 /// If `n` is greater than the length of the Vec, returns `None`, otherwise
 /// `Some` Vec of length `n`.
 fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Option<Vec<T>> {
-	if n > things.len() {
+	if things.is_empty() || n > things.len() {
 		return None
 	}
 	if n == things.len() {
@@ -117,7 +117,7 @@ mod tests {
 	fn test_subset_selection_is_none() {
 		for seed in 0..100 {
 			// empty set is invalid
-			assert_eq!(None, try_select_random_subset(seed, 0, (0..0).collect()));
+			assert_eq!(None, try_select_random_subset::<u64>(seed, 0, vec![]));
 			// threshold can't be larger than the set size
 			assert_eq!(None, try_select_random_subset(seed, 6, (0..5).collect()));
 		}
