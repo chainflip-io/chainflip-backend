@@ -845,7 +845,7 @@ mod tests {
 
     use crate::{
         logging::{self, test_utils::new_test_logger},
-        settings::Settings,
+        settings::{CommandLineOptions, Settings},
         testing::assert_ok,
     };
 
@@ -855,7 +855,9 @@ mod tests {
     #[tokio::main]
     #[test]
     async fn test_finalised_storage_subs() {
-        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let settings =
+            Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
+                .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
             connect_to_state_chain(&settings.state_chain, false, &logger)
