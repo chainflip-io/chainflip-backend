@@ -89,7 +89,7 @@ mod tests {
 		let a = select_one(seed_from_hashable(String::from("seed")), validator_set(150)).unwrap();
 		// Expect a different value for different seed (collision is unlikely).
 		let b = select_one(seed_from_hashable(String::from("seedy")), validator_set(150)).unwrap();
-		assert_ne(a, b);
+		assert_ne!(a, b);
 		// If an empty set is provided, the result is `None`
 		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
 	}
