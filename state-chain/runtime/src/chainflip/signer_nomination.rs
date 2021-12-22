@@ -81,27 +81,6 @@ mod tests {
 		(0..len as u64).collect::<Vec<_>>()
 	}
 
-	// thread_local! {
-	// 	// Switch to control the mock
-	// 	pub static ONLINE: RefCell<bool>  = RefCell::new(true);
-	// }
-
-	// struct MockIsOnline;
-	// impl IsOnline for MockIsOnline {
-	// 	type ValidatorId = u64;
-
-	// 	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
-	// 		ONLINE.with(|cell| cell.borrow().clone())
-	// 	}
-	// }
-
-	// #[test]
-	// fn test_get_random_index() {
-	// 	assert!(get_random_index(vec![1, 6, 7, 4, 6, 7, 8], 5) < 5);
-	// 	assert!(get_random_index(vec![0, 0, 0], 5) < 5);
-	// 	assert!(get_random_index(vec![180, 200, 240], 10) < 10);
-	// }
-
 	#[test]
 	fn test_select_signer() {
 		// Expect Some validator
@@ -153,5 +132,15 @@ mod tests {
 		test_subset_with(SEED, 3, (0..5).collect());
 		test_subset_with(SEED, 4, (0..5).collect());
 		test_subset_with(SEED, 5, (0..5).collect());
+	}
+
+	#[test]
+	fn different_seed_different_set() {
+		let seed = 1;
+		let set = (0..5).collect::<Vec<_>>();
+		let b = BTreeSet::from_iter(try_select_random_subset(seed, 2, set.clone()).unwrap());
+		let a = BTreeSet::from_iter(try_select_random_subset(seed + 1, 2, set.clone()).unwrap());
+
+		assert_ne!(a, b);
 	}
 }
