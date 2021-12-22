@@ -5,7 +5,7 @@ panic = 'unwind'
 members = [
   'state-chain/chains',
   'state-chain/node',
-  'state-chain/multisig_p2p_transport',
+  'state-chain/multisig-p2p-transport',
   'state-chain/pallets/cf-flip',
   'state-chain/pallets/cf-staking',
   'state-chain/pallets/cf-validator',

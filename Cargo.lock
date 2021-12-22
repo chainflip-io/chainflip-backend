@@ -967,7 +967,7 @@ dependencies = [
  "libp2p",
  "log 0.4.14",
  "mockall",
- "multisig_p2p_transport",
+ "multisig-p2p-transport",
  "num",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
@@ -1025,7 +1025,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
- "multisig_p2p_transport",
+ "multisig-p2p-transport",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
@@ -4451,7 +4451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
-name = "multisig_p2p_transport"
+name = "multisig-p2p-transport"
 version = "0.1.0"
 dependencies = [
  "anyhow",
