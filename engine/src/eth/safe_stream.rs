@@ -19,7 +19,7 @@ pub fn safe_eth_log_header_stream<BlockHeaderStream>(
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
-    pub struct StreamAndBlocks<BlockHeaderStream>
+    struct StreamAndBlocks<BlockHeaderStream>
     where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
@@ -235,18 +235,19 @@ mod tests {
     #[tokio::test]
     async fn handles_reogs_depth_1_blocks_when_safety() {
         let first_block = block_header(1, 0);
-        let second_block = block_header(2, 1);
+        let first_block_prime = block_header(11, 0);
+        let second_block_prime = block_header(2, 1);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
             first_block.clone(),
-            first_block.clone(),
-            second_block.clone(),
+            first_block_prime.clone(),
+            second_block_prime.clone(),
             block_header(2, 2),
         ]);
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
-        assert_eq!(stream.next().await, Some(second_block.unwrap()));
+        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert_eq!(stream.next().await, Some(second_block_prime.unwrap()));
         assert!(stream.next().await.is_none());
     }
 

@@ -3,7 +3,7 @@ pub mod stake_manager;
 
 pub mod event_common;
 
-pub mod safe_stream;
+mod safe_stream;
 
 pub mod utils;
 
@@ -27,7 +27,7 @@ use crate::{
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
-use futures::{TryFutureExt};
+use futures::TryFutureExt;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
