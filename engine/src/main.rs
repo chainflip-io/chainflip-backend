@@ -29,8 +29,17 @@ async fn main() {
         .run()
         .await;
 
+    // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
+    // we connect to the SC (which requires the user to be staked)
+    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
+        .await
+        .expect("Failed to create Web3 WebSocket");
+
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+        .expect("Failed to create ETH broadcaster");
+
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
             .await
             .expect("Failed to connect to state chain");
 
@@ -65,13 +74,6 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel();
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-
-    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
-        .await
-        .expect("Failed to create Web3 WebSocket");
-
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
-        .expect("Failed to create ETH broadcaster");
 
     // TODO: multi consumer, single producer?
     let (sm_window_sender, sm_window_receiver) =

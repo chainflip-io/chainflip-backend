@@ -864,6 +864,7 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-pubsub",
  "log 0.4.14",
+ "mockall",
  "sc-network",
  "sc-rpc",
  "serde 1.0.130",
@@ -871,7 +872,6 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "tokio 1.13.0",
- "tokio-compat-02",
  "tokio-stream",
 ]
 

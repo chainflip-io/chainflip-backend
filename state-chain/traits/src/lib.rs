@@ -176,6 +176,13 @@ pub trait Auctioneer {
 	fn abort();
 }
 
+pub trait BackupValidators {
+	type ValidatorId;
+
+	/// The current set of backup validators.  The set may change at anytime.
+	fn backup_validators() -> Vec<Self::ValidatorId>;
+}
+
 /// Feedback on a vault rotation
 pub trait VaultRotationHandler {
 	type ValidatorId;
@@ -211,10 +218,12 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
+	/// The current epoch is ending
+	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
-	/// a `_new_bond`
+	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
+	/// a `new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -310,6 +319,12 @@ pub trait RewardRollover {
 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
 	/// are available.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
+}
+
+pub trait Rewarder {
+	type AccountId;
+	// Apportion rewards due to all beneficiaries
+	fn reward_all() -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.
@@ -526,15 +541,17 @@ pub mod offline_conditions {
 	use super::*;
 	pub type ReputationPoints = i32;
 
-	/// Conditions that cause a validator to be knocked offline.
+	/// Conditions that cause a validator to be docked reputation points
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 	pub enum OfflineCondition {
-		/// A broadcast of an output has failed
-		BroadcastOutputFailed,
 		/// There was a failure in participation during a signing
 		ParticipateSigningFailed,
-		/// Not Enough Performance Credits
-		NotEnoughPerformanceCredits,
+		/// There was a failure in participation during a key generation ceremony
+		ParticipateKeygenFailed,
+		/// An invalid transaction was authored
+		InvalidTransactionAuthored,
+		/// A transaction failed on transmission
+		TransactionFailedOnTransmission,
 	}
 
 	/// Error on reporting an offline condition.
@@ -545,7 +562,7 @@ pub mod offline_conditions {
 	}
 
 	pub trait OfflinePenalty {
-		fn penalty(condition: &OfflineCondition) -> ReputationPoints;
+		fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool);
 	}
 
 	/// For reporting offline conditions.
@@ -598,4 +615,11 @@ pub trait WaivedFees {
 	type AccountId;
 	type Call;
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+}
+
+/// Qualify what is considered as a potential validator for the network
+pub trait QualifyValidator {
+	type ValidatorId;
+	/// Is the validator qualified to be a validator and meet our expectations of one
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }

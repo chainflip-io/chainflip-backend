@@ -45,6 +45,7 @@ pub struct SemVer {
 type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
+pub type Ipv6Addr = u128;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -56,6 +57,7 @@ pub struct PercentageRange {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -109,9 +111,10 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
-		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey),
-		/// A validator has unregistered her current PeerId
+		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// ip_address\]
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
 
@@ -224,10 +227,12 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
+			port: u16,
+			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -235,17 +240,30 @@ pub mod pallet {
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
-			ensure!(
-				!AccountPeerMapping::<T>::contains_key(&account_id) &&
+
+			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+				if existing_peer_id != peer_id {
+					ensure!(
+						!MappedPeers::<T>::contains_key(&peer_id),
+						Error::<T>::AccountPeerMappingOverlap
+					);
+					MappedPeers::<T>::remove(&existing_peer_id);
+					MappedPeers::<T>::insert(&peer_id, ());
+				}
+			} else {
+				ensure!(
 					!MappedPeers::<T>::contains_key(&peer_id),
-				Error::<T>::AccountPeerMappingOverlap
-			);
+					Error::<T>::AccountPeerMappingOverlap
+				);
+				MappedPeers::<T>::insert(&peer_id, ());
+			}
+
 			AccountPeerMapping::<T>::insert(
-				account_id.clone(),
-				(account_id.clone(), peer_id.clone()),
+				&account_id,
+				(account_id.clone(), peer_id.clone(), port, ip_address.clone()),
 			);
-			MappedPeers::<T>::insert(peer_id.clone(), ());
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
+
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
@@ -312,11 +330,20 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// The current bond
+	#[pallet::storage]
+	#[pallet::getter(fn bond)]
+	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
-	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey)>;
+	pub type AccountPeerMapping<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+	>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
@@ -345,12 +372,11 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			if let Some(auction_result) = T::Auctioneer::auction_result() {
-				T::EpochTransitionHandler::on_new_epoch(
-					&[],
-					&auction_result.winners,
-					auction_result.minimum_active_bid,
-				);
+			if let Some(AuctionResult { winners, minimum_active_bid }) =
+				T::Auctioneer::auction_result()
+			{
+				Bond::<T>::set(minimum_active_bid.clone());
+				T::EpochTransitionHandler::on_new_epoch(&[], &winners, minimum_active_bid);
 			}
 			CurrentEpoch::<T>::set(0);
 			Pallet::<T>::generate_lookup();
@@ -375,10 +401,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn bond() -> Self::Amount {
-		match T::Auctioneer::phase() {
-			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
-			_ => Zero::zero(),
-		}
+		Bond::<T>::get()
 	}
 
 	fn epoch_index() -> EpochIndex {
@@ -400,6 +423,8 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// of the auction, validate and select winners, as one.  If this fails we force a
 				// new rotation attempt.
 				if Self::should_rotate(now) {
+					// The current epoch is on the way out
+					T::EpochTransitionHandler::on_epoch_ending();
 					let processed =
 						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
 					if !processed {
@@ -570,7 +595,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

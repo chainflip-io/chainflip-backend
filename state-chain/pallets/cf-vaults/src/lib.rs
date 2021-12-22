@@ -560,12 +560,17 @@ pub mod pallet {
 		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise
 		/// we could use that instead of `Vec`...
 		pub ethereum_vault_key: Vec<u8>,
+
+		pub ethereum_deployment_block: u64,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { ethereum_vault_key: Default::default() }
+			Self {
+				ethereum_vault_key: Default::default(),
+				ethereum_deployment_block: Default::default(),
+			}
 		}
 	}
 
@@ -580,7 +585,10 @@ pub mod pallet {
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
-					active_window: BlockHeightWindow::default(),
+					active_window: BlockHeightWindow {
+						from: self.ethereum_deployment_block,
+						to: None,
+					},
 				},
 			);
 		}
@@ -662,10 +670,10 @@ impl<T: Config> Pallet<T> {
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
 		for offender in offenders {
-			T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, &offender)
+			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender)
 				.unwrap_or_else(|e| {
 					log::error!(
-						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
+						"Unable to report ParticipateKeygenFailed for signer {:?}: {:?}",
 						offender,
 						e
 					);
