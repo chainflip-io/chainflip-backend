@@ -319,8 +319,7 @@ pub trait EthObserver {
 
         let from_block = U64::from(from_block);
 
-        // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
-        // request past block via http and prepend them to the stream manually.
+        // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
         let past_logs = if from_block <= best_safe_block_number {
             web3.eth()
                 .logs(
