@@ -201,6 +201,9 @@ pub mod pallet {
 		RetryStale(CeremonyId),
 		/// \[ceremony_id, reporter_id\]
 		FailureReportProcessed(CeremonyId, T::ValidatorId),
+		/// Not enough signers were available to reach threshold. Ceremony will be retried.
+		/// \[ceremony_id\]
+		SignersUnavailable(CeremonyId),
 	}
 
 	#[pallet::error]
@@ -478,6 +481,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			);
 
+			// Emit the request to the CFE.
+			Self::deposit_event(Event::<T, I>::SignersUnavailable(id));
 			// Schedule the retry for the next block.
 			Self::schedule_retry(id, T::CeremonyRetryDelay::get());
 		}

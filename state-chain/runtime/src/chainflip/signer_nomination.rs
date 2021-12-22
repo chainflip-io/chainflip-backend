@@ -4,6 +4,10 @@ use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use sp_std::vec::Vec;
 
+/// Tries to select `n` items randomly from the provided Vec.
+///
+/// If `n` is greater than the length of the Vec, returns `None`, otherwise
+/// `Some` Vec of length `n`.
 fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Option<Vec<T>> {
 	if n > things.len() {
 		return None
@@ -80,40 +84,13 @@ mod tests {
 	}
 
 	#[test]
-	fn test_select_signer() {
-		// Expect Some validator
-		assert!(select_one(
-			seed_from_hashable(vec![2, 5, 7, 3]),
-			vec![(4, ()), (6, ()), (7, ()), (9, ())],
-		)
-		.is_some());
-		// Expect a validator in a set of 150 validators
-		assert!(select_one(
-			seed_from_hashable(String::from(String::from("seed")).into_bytes()),
-			validator_set(150),
-		)
-		.is_some());
-		// Expect an comparable big change in the value
-		// distribution for an small input seed change
-		assert!(select_one(
-			seed_from_hashable((String::from("seedy"), String::from("seed"))),
-			validator_set(150),
-		)
-		.is_some());
-		// Expect an reasonable SignerId for an bigger input seed
-		assert!(select_one(
-			seed_from_hashable((
-				String::from("west1_north_south_east:_berlin_zonk"),
-				1,
-				2,
-				3,
-				4u128
-			)),
-			validator_set(150),
-		)
-		.is_some());
-		// Expect the select_signer function to return None
-		// if there is currently no online validator
+	fn test_select_one() {
+		// Expect a validator in a set of 150 validators.
+		let a = select_one(seed_from_hashable(String::from("seed")), validator_set(150)).unwrap();
+		// Expect a different value for different seed (collision is unlikely).
+		let b = select_one(seed_from_hashable(String::from("seedy")), validator_set(150)).unwrap();
+		assert_ne(a, b);
+		// If an empty set is provided, the result is `None`
 		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
 	}
 
