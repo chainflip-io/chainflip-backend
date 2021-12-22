@@ -24,11 +24,11 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        last_n_blocks: VecDeque<BlockHeader>,
+        unsafe_blocks: VecDeque<BlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
-        last_n_blocks: Default::default(),
+        unsafe_blocks: Default::default(),
     };
     Box::pin(stream::unfold(init_data, move |mut state| async move {
         let loop_state = loop {
@@ -36,7 +36,7 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                if let Some(last_unsafe_block_header) = state.last_n_blocks.back() {
+                if let Some(last_unsafe_block_header) = state.unsafe_blocks.back() {
                     let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
                     assert!(number <= last_unsafe_block_number + 1);
                     if number <= last_unsafe_block_number {
@@ -44,14 +44,14 @@ where
                         let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
 
                         (0..reorg_depth.as_u64()).for_each(|_| {
-                            state.last_n_blocks.pop_back();
+                            state.unsafe_blocks.pop_back();
                         });
                     }
                 }
 
-                state.last_n_blocks.push_back(header);
+                state.unsafe_blocks.push_back(header);
 
-                if let Some(header) = state.last_n_blocks.front() {
+                if let Some(header) = state.unsafe_blocks.front() {
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
@@ -60,7 +60,7 @@ where
                     {
                         break Some((
                             state
-                                .last_n_blocks
+                                .unsafe_blocks
                                 .pop_front()
                                 .expect("already put an item above"),
                             state,
