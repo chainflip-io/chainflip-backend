@@ -102,7 +102,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 103,
+	spec_version: 106,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -444,13 +444,20 @@ impl pallet_cf_online::Config for Runtime {
 use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: BlockNumber = 15;
+	pub const CeremonyRetryDelay: BlockNumber = 1;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {
@@ -463,7 +470,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
@@ -490,7 +497,7 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
 		Historical: session_historical::{Pallet},
-		Witnesser: pallet_cf_witnesser::{Pallet, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
 		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},

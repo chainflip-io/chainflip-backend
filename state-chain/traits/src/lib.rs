@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
-	Parameter,
+	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -94,10 +94,10 @@ pub trait EpochInfo {
 
 	/// The consensus threshold for the current epoch.
 	///
-	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
-	/// `share_count` is taken from [Self::active_validator_count].
+	/// This is the number of parties required to conduct a *successful* threshold
+	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::threshold_from_share_count(Self::active_validator_count())
+		cf_utilities::success_threshold_from_share_count(Self::active_validator_count())
 	}
 }
 
@@ -458,11 +458,11 @@ pub trait SignerNomination {
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	/// Returns None if no signers are live.
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId>;
+	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.
