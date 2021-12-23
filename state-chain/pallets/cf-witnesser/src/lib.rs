@@ -324,6 +324,8 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		NumValidators::<T>::set(total);
 
 		// Assume all validators are live at the start of an Epoch.
-		ConsensusThreshold::<T>::mutate(|thresh| *thresh = success_threshold_from_share_count(total))
+		ConsensusThreshold::<T>::mutate(|thresh| {
+			*thresh = success_threshold_from_share_count(total)
+		})
 	}
 }
