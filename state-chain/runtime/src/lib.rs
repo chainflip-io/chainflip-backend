@@ -444,13 +444,20 @@ impl pallet_cf_online::Config for Runtime {
 use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: BlockNumber = 150;
+	pub const CeremonyRetryDelay: BlockNumber = 150;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {
@@ -463,7 +470,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

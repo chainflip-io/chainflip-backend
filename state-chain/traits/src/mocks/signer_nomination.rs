@@ -16,29 +16,21 @@ macro_rules! impl_mock_signer_nomination {
 		impl cf_traits::SignerNomination for MockSignerNomination {
 			type SignerId = $account_id;
 
-			fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
-				Some(CANDIDATES.with(|cell| {
-					let candidates = cell.borrow();
-					let random = seed.iter().fold(0, |acc, x| acc + x.clone() as u64);
-					candidates[random as usize % candidates.len()].clone()
-				}))
+			fn nomination_with_seed<H: frame_support::Hashable>(
+				_seed: H,
+			) -> Option<Self::SignerId> {
+				CANDIDATES.with(|cell| cell.borrow().iter().next().cloned())
 			}
 
-			fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
-				CANDIDATES.with(|cell| {
-					let mut candidates = cell.borrow().clone();
-					let threshold = if candidates.len() * 2 % 3 == 0 {
-						candidates.len() * 2 % 3
+			fn threshold_nomination_with_seed<H: frame_support::Hashable>(
+				_seed: H,
+			) -> Option<Vec<Self::SignerId>> {
+				Some(CANDIDATES.with(|cell| cell.borrow().clone())).and_then(|v| {
+					if v.is_empty() {
+						None
 					} else {
-						candidates.len() * 2 % 3 + 1
-					};
-					candidates
-						.iter()
-						.cycle()
-						.skip(seed as usize % candidates.len())
-						.take(threshold)
-						.cloned()
-						.collect()
+						Some(v)
+					}
 				})
 			}
 		}
