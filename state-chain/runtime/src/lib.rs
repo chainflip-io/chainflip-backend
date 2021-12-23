@@ -494,7 +494,7 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
 		Historical: session_historical::{Pallet},
-		Witnesser: pallet_cf_witnesser::{Pallet, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
 		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
