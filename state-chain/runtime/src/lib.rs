@@ -445,8 +445,8 @@ use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
 parameter_types! {
-	pub const ThresholdFailureTimeout: BlockNumber = 150;
-	pub const CeremonyRetryDelay: BlockNumber = 150;
+	pub const ThresholdFailureTimeout: BlockNumber = 15;
+	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
