@@ -25,10 +25,13 @@ benchmarks! {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let call = Call::<T>::staked(caller, balance, eth_addr, tx_hash);
+		let call = Call::<T>::staked(caller.clone(), balance, eth_addr, tx_hash);
 		let origin = T::EnsureWitnessed::successful_origin();
 
 	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert!(!AccountRetired::<T>::get(&caller));
+	}
 
 	claim {
 		let balance_to_claim: T::Balance = T::Balance::from(50 as u32);
@@ -44,6 +47,9 @@ benchmarks! {
 		stake_call.dispatch_bypass_filter(origin)?;
 
 	} :_(RawOrigin::Signed(caller.clone()), balance_to_claim, eth_addr)
+	verify {
+		assert!(PendingClaims::<T>::contains_key(&caller));
+	}
 
 	claim_all {
 		let eth_addr: EthereumAddress = [42u8; 20];
@@ -60,7 +66,10 @@ benchmarks! {
 		let stake_call = Call::<T>::staked(caller.clone(), balance_to_stake, eth_addr, tx_hash);
 		stake_call.dispatch_bypass_filter(origin)?;
 
-	}:_(RawOrigin::Signed(caller), eth_addr)
+	}:_(RawOrigin::Signed(caller.clone()), eth_addr)
+	verify {
+		assert!(PendingClaims::<T>::contains_key(&caller));
+	}
 
 	claimed {
 		let balance_to_claim: T::Balance = T::Balance::from(100 as u32);
@@ -82,6 +91,9 @@ benchmarks! {
 		let call = Call::<T>::claimed(caller.clone(), balance_to_claim, tx_hash);
 
 	}: { call.dispatch_bypass_filter(origin.clone())? }
+	verify {
+		assert!(!PendingClaims::<T>::contains_key(&caller));
+	}
 
 	post_claim_signature {
 		let sig: SchnorrVerificationComponents = SchnorrVerificationComponents {
@@ -103,28 +115,40 @@ benchmarks! {
 		let claimable = T::Flip::claimable_balance(&caller);
 		Pallet::<T>::do_claim(&caller, claimable, eth_addr)?;
 
-		let call = Call::<T>::post_claim_signature(caller, sig);
+		let call = Call::<T>::post_claim_signature(caller.clone(), sig);
 	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert!(PendingClaims::<T>::contains_key(&caller));
+	}
 
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
 		AccountRetired::<T>::insert(caller.clone(), false);
 
-	}:_(RawOrigin::Signed(caller))
+	}:_(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert!(AccountRetired::<T>::get(caller));
+	}
 
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
 		AccountRetired::<T>::insert(caller.clone(), true);
 
-	}:_(RawOrigin::Signed(caller))
+	}:_(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert!(!AccountRetired::<T>::get(caller));
+	}
 
 	on_initialize_best_case {
 	}: {
 		Pallet::<T>::on_initialize((2 as u32).into());
 	}
+	verify {
+		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
+	}
 
 	// TODO: we need to manipulate the time to expire the claims
-	// otherwise we didn't include the iteration in out benchmark
+	// otherwise we didn't include the iteration in our benchmark
 	on_initialize_worst_case {
 		let b in 0 .. 150 as u32;
 		let accounts = create_accounts::<T>(150);
