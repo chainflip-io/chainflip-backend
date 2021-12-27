@@ -26,7 +26,7 @@ path = '../runtime'
 
 [dependencies]
 # Chainflip-specific dependencies  
-cf-p2p = {path = '../client/cf-p2p'}
+multisig-p2p-transport = {path = '../multisig-p2p-transport'}
 futures = {version = '0.3.4'}
 hex = '0.4'
 hex-literal = '0.3.1'

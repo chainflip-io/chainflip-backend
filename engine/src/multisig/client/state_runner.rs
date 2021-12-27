@@ -10,7 +10,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use crate::{
     multisig::client::common::{ProcessMessageResult, StageResult},
-    p2p::AccountId,
+    multisig_p2p::AccountId,
 };
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};

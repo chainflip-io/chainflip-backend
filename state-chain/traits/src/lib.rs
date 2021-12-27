@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
-	Parameter,
+	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -475,11 +475,11 @@ pub trait SignerNomination {
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	/// Returns None if no signers are live.
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId>;
+	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -617,4 +617,11 @@ pub trait WaivedFees {
 	type AccountId;
 	type Call;
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+}
+
+/// Qualify what is considered as a potential validator for the network
+pub trait QualifyValidator {
+	type ValidatorId;
+	/// Is the validator qualified to be a validator and meet our expectations of one
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }

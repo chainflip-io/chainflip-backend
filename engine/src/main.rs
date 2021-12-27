@@ -3,7 +3,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, AccountId},
+    multisig_p2p::{self, AccountId},
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -116,7 +116,7 @@ async fn main() {
             &root_logger,
         ),
         async {
-            p2p::start(
+            multisig_p2p::start(
                 &settings,
                 state_chain_client.clone(),
                 latest_block_hash,
