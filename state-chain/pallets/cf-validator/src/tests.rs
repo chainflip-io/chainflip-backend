@@ -167,6 +167,9 @@ mod tests {
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 3);
 			// We have the new set of validators
 			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
+			// The pallet has the same set of validators as those in the session pallet(those that
+			// are securing the network)
+			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
 		});
 	}
 
