@@ -16,6 +16,7 @@ extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migration;
 
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
@@ -23,7 +24,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::{EstimateNextSessionRotation, OnKilledAccount, StorageVersion},
 };
 pub use pallet::*;
 use sp_core::ed25519;
@@ -31,6 +32,8 @@ use sp_runtime::traits::{
 	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
+
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -64,6 +67,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -133,7 +137,12 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// On a runtime upgrade we migrate to the next version
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate_to_v1::<T, Self>()
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
