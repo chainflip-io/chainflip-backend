@@ -13,7 +13,7 @@ use crate::Pallet as Rewards;
 
 benchmarks! {
 	redeem_rewards {
-		let caller = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller();
 		// Define use balances
 		let rewards_entitlement: T::Balance = T::Balance::from(10000 as u32);
 		let apportioned_rewards: T::Balance = T::Balance::from(2 as u32);
@@ -26,7 +26,11 @@ benchmarks! {
 		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, 4 as u32);
 		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, rewards_entitlement);
 		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, apportioned_rewards);
-	}: _(RawOrigin::Signed(caller))
+	}: _(RawOrigin::Signed(caller.clone().into()))
+	verify {
+		let actual_rewards = ApportionedRewards::<T>::get(&VALIDATOR_REWARDS, caller).unwrap();
+		assert_eq!(T::Balance::from(2500 as u32), actual_rewards);
+	}
 }
 
 impl_benchmark_test_suite!(

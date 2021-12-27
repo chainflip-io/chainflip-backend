@@ -17,18 +17,29 @@ benchmarks! {
 		let call = Box::new(frame_system::Call::remark(vec![]).into());
 		<Members<T>>::put(vec![caller.clone()]);
 	}: _(RawOrigin::Signed(caller.clone()), call)
+	verify {
+		assert_eq!(ProposalCount::<T>::get(), 1);
+	}
 	approve {
 		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(vec![caller.clone()]);
 		Governance::<T>::push_proposal(Box::new(call));
 	}: _(RawOrigin::Signed(caller.clone()), 1)
+	verify {
+		assert_eq!(ProposalCount::<T>::get(), 1);
+		// TODO: Figure out why this is not working
+		// assert!(Proposals::<T>::get(1).approved.contains(&caller));
+	}
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();
 		let members = vec![caller.clone()];
-		let call = Call::<T>::new_membership_set(members);
+		let call = Call::<T>::new_membership_set(members.clone());
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(Members::<T>::get(), members);
+	}
 	call_as_sudo {
 		let call: <T as Config>::Call = frame_system::Call::set_code_without_checks(vec![1, 2, 3, 4]).into();
 		let sudo_call = Call::<T>::call_as_sudo(Box::new(call));

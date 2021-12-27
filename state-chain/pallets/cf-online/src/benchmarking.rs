@@ -7,7 +7,7 @@ use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whiteli
 use frame_system::RawOrigin;
 
 #[allow(unused)]
-use crate::Pallet as Online;
+use crate::Pallet;
 
 const HEART_BLOCK_INTERVAL: u32 = 150;
 const MAX_VALIDATOR_AMOUNT: u32 = 150;
@@ -26,11 +26,11 @@ benchmarks! {
 		}
 		// TODO: set the generated validators as active validators
 	} : {
-		Online::<T>::on_initialize(HEART_BLOCK_INTERVAL.into());
+		Pallet::<T>::on_initialize(HEART_BLOCK_INTERVAL.into());
 	}
 	on_initialize_no_action {
 	} : {
-		Online::<T>::on_initialize((HEART_BLOCK_INTERVAL + 1).into());
+		Pallet::<T>::on_initialize((HEART_BLOCK_INTERVAL + 1).into());
 	}
 }
 
