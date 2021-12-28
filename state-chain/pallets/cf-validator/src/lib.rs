@@ -155,7 +155,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if StorageVersion::<T>::get() == 0 {
+			if releases::V0 == <Self as GetStorageVersion>::on_chain_storage_version() {
 				migrations::v1::pre_migrate::<T, Self>()
 			} else {
 				Ok(())
