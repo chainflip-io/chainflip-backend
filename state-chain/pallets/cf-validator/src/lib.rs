@@ -16,7 +16,7 @@ extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migration;
+mod migrations;
 
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
@@ -24,7 +24,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	traits::{EstimateNextSessionRotation, OnKilledAccount, StorageVersion},
+	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 pub use pallet::*;
 use sp_core::ed25519;
@@ -33,7 +33,13 @@ use sp_runtime::traits::{
 };
 use sp_std::prelude::*;
 
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds Bond and Validator storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -67,7 +73,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -138,9 +144,27 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// On a runtime upgrade we migrate to the next version
 		fn on_runtime_upgrade() -> Weight {
-			migration::migrate_to_v1::<T, Self>()
+			if releases::V0 == <Self as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Self>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if StorageVersion::<T>::get() == 0 {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::v1::post_migrate::<T, Self>()
 		}
 	}
 
@@ -623,4 +647,14 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
 	}
+}
+
+#[cfg(feature = "try-runtime")]
+fn pre_upgrade() -> Result<(), &'static str> {
+	Ok(())
+}
+
+#[cfg(feature = "try-runtime")]
+fn post_upgrade() -> Result<(), &'static str> {
+	Ok(())
 }
