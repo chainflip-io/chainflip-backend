@@ -3,7 +3,7 @@ use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
 	Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
+use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -15,8 +15,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -24,6 +24,7 @@ use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
+	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
