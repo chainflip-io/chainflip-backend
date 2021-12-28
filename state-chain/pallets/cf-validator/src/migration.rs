@@ -30,16 +30,6 @@ pub fn migrate_to_v1<T: Config, P: GetStorageVersion + PalletInfoAccess>(
 		let validators = <pallet_session::Pallet<T>>::validators();
 		// Set the validating set from the session pallet
 		Validators::<T>::put(validators.clone());
-		// There is a bug in version v1.0.0 where the validator lookup is out of sync
-		// with the current active validator set so we would want to align this with the
-		// current validating set.
-		// See https://github.com/chainflip-io/chainflip-backend/issues/1072.
-		ValidatorLookup::<T>::remove_all(None);
-		let number_of_validators = validators.len();
-		for validator in validators {
-			ValidatorLookup::<T>::insert(validator, ());
-		}
-
 		// Update the version number to 1
 		StorageVersion::new(1).put::<P>();
 		log::info!(
