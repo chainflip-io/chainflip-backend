@@ -5,12 +5,21 @@
 /// i.e. at least `t+1` parties are required.
 /// This follows the notation in the multisig library that
 /// we are using and in the corresponding literature.
+///
+/// For the *success* threshold, use [success_threshold_from_share_count].
 
 pub fn threshold_from_share_count(share_count: u32) -> u32 {
     if share_count == 0 {
         return 0;
     }
     ((share_count * 2) - 1) / 3
+}
+
+/// Returns the number of parties required for a threshold signature
+/// ceremony to *succeed*.
+
+pub fn success_threshold_from_share_count(share_count: u32) -> u32 {
+    threshold_from_share_count(share_count) + 1
 }
 
 #[test]

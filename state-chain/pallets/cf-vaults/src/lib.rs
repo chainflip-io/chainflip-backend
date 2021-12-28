@@ -16,6 +16,7 @@ use frame_support::{
 	pallet_prelude::*,
 };
 pub use pallet::*;
+use sp_runtime::traits::BlockNumberProvider;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	convert::TryFrom,
@@ -75,10 +76,10 @@ impl<T: Config> KeygenResponseStatus<T> {
 		}
 	}
 
-	/// The threshold is the smallest number of respondents able to reach consensus.
+	/// The success threshold is the smallest number of respondents able to reach consensus.
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
-	pub fn threshold(&self) -> u32 {
+	pub fn success_threshold(&self) -> u32 {
 		utilities::threshold_from_share_count(self.candidate_count).saturating_add(1)
 	}
 
@@ -124,7 +125,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 	/// otherwise returns `None`.
 	fn success_result(&self) -> Option<Vec<u8>> {
 		self.success_votes.iter().find_map(|(key, votes)| {
-			if *votes >= self.threshold() {
+			if *votes >= self.success_threshold() {
 				Some(key.clone())
 			} else {
 				None
@@ -144,26 +145,26 @@ impl<T: Config> KeygenResponseStatus<T> {
 	///
 	/// If no-one passes the threshold, returns `None`.
 	fn failure_result(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		let remaining_votes = self.remaining_candidate_count();
 		let mut possible = self
 			.blame_votes
 			.iter()
-			.filter(|(_, vote_count)| **vote_count + remaining_votes >= self.threshold())
+			.filter(|(_, vote_count)| {
+				**vote_count + self.remaining_candidate_count() >= self.success_threshold()
+			})
 			.peekable();
 
+		// If no nodes will ever conclusively be considered failed, we return None to signify that
+		// we can't make a decision.
 		if possible.peek().is_none() {
 			return None
 		}
 
-		let mut pending = possible
-			.clone()
-			.filter(|(_, vote_count)| **vote_count < self.threshold())
-			.peekable();
-
-		if pending.peek().is_none() {
-			Some(possible.map(|(id, _)| id).cloned().collect())
-		} else {
+		if possible.clone().any(|(_, vote_count)| *vote_count < self.success_threshold()) {
+			// We are still waiting for more reponses before drawing a conclusion.
 			None
+		} else {
+			// The results are conclusive, we don't need to wait for any further reports.
+			Some(possible.map(|(id, _)| id).cloned().collect())
 		}
 	}
 
@@ -171,7 +172,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 	///
 	/// If no outcome can be determined, returns `None`.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T>> {
-		if self.response_count() < self.threshold() {
+		if self.response_count() < self.success_threshold() {
 			return None
 		}
 
@@ -229,7 +230,7 @@ pub struct Vault {
 pub mod pallet {
 	use super::*;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::{BlockNumberProvider, Saturating};
+	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -272,7 +273,7 @@ pub mod pallet {
 			for (chain_id, since_block) in KeygenResolutionPending::<T>::get() {
 				if let Some(VaultRotationStatus::<T>::AwaitingKeygen {
 					keygen_ceremony_id,
-					response_status,
+					ref response_status,
 				}) = PendingVaultRotations::<T>::get(chain_id)
 				{
 					match response_status.consensus_outcome() {
@@ -281,7 +282,7 @@ pub mod pallet {
 							Self::on_keygen_success(keygen_ceremony_id, chain_id, new_public_key)
 								.unwrap_or_else(|e| {
 									log::error!(
-										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.", 
+										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.",
 										keygen_ceremony_id, e
 									);
 									Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
@@ -301,7 +302,12 @@ pub mod pallet {
 									keygen_ceremony_id,
 									chain_id,
 								));
-								Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
+
+								Self::on_keygen_failure(
+									keygen_ceremony_id,
+									chain_id,
+									response_status.remaining_candidates.clone(),
+								);
 							} else {
 								unresolved.push((chain_id, since_block));
 							}
@@ -427,6 +433,7 @@ pub mod pallet {
 			// There is a rotation happening.
 			let mut rotation =
 				PendingVaultRotations::<T>::get(chain_id).ok_or(Error::<T>::NoActiveRotation)?;
+
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T>::AwaitingKeygen {
@@ -449,15 +456,6 @@ pub mod pallet {
 					keygen_status.add_failure_vote(&reporter, blamed)?;
 					Self::deposit_event(Event::<T>::KeygenFailureReported(reporter));
 				},
-			}
-
-			// If this is the first response, schedule resolution.
-			if keygen_status.response_count() == 1 {
-				// Schedule resolution.
-				KeygenResolutionPending::<T>::append((
-					chain_id,
-					frame_system::Pallet::<T>::current_block_number(),
-				))
 			}
 
 			PendingVaultRotations::<T>::insert(chain_id, rotation);
@@ -631,6 +629,14 @@ impl<T: Config> Pallet<T> {
 			chain_id,
 			VaultRotationStatus::<T>::new(ceremony_id, BTreeSet::from_iter(candidates.clone())),
 		);
+
+		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
+		// block
+		KeygenResolutionPending::<T>::append((
+			chain_id,
+			frame_system::Pallet::<T>::current_block_number(),
+		));
+
 		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, chain_id, candidates));
 
 		Ok(())

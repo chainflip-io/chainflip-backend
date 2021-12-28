@@ -379,7 +379,6 @@ pub mod pallet {
 				T::EpochTransitionHandler::on_new_epoch(&[], &winners, minimum_active_bid);
 			}
 			CurrentEpoch::<T>::set(0);
-			Pallet::<T>::generate_lookup();
 		}
 	}
 }
@@ -467,10 +466,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Generate our validator lookup list
-	fn generate_lookup() {
+	pub fn generate_lookup(new_validators: &[T::ValidatorId]) {
 		// Update our internal list of validators
 		ValidatorLookup::<T>::remove_all(None);
-		for validator in <pallet_session::Pallet<T>>::validators() {
+		for validator in new_validators {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 	}
@@ -512,8 +511,6 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					);
 					// Emit an event
 					Self::deposit_event(Event::NewEpoch(new_epoch));
-					// Generate our lookup list of validators
-					Self::generate_lookup();
 					let old_validators = T::Auctioneer::auction_result()
 						.expect("from genesis we would expect a previous auction")
 						.winners;

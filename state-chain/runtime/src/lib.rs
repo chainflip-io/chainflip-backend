@@ -48,6 +48,7 @@ use crate::chainflip::{
 use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
+use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
 use pallet_cf_reputation::ReputationPenalty;
 
@@ -101,7 +102,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 106,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -444,8 +445,8 @@ use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
 parameter_types! {
-	pub const ThresholdFailureTimeout: BlockNumber = 150;
-	pub const CeremonyRetryDelay: BlockNumber = 150;
+	pub const ThresholdFailureTimeout: BlockNumber = 15;
+	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
@@ -462,6 +463,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 parameter_types! {
 	pub const EthereumSigningTimeout: BlockNumber = 5;
 	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
+	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Runtime {
@@ -474,6 +476,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = EthereumSigningTimeout;
 	type TransmissionTimeout = EthereumTransmissionTimeout;
+	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
 

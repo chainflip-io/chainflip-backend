@@ -1,7 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Auction, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards,
-	Runtime, Validator, Vaults, Witnesser,
+	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
+	Validator, Vaults, Witnesser,
 };
 use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
@@ -15,8 +15,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
-	StakeHandler, StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
+	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -28,8 +28,6 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
-
-use sp_runtime::helpers_128bit::multiply_by_rational;
 
 mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;
@@ -70,6 +68,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
 			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
 		});
+		Validator::generate_lookup(new_validators);
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
