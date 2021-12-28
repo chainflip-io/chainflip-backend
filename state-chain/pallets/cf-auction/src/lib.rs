@@ -16,7 +16,12 @@ pub use weights::WeightInfo;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator, AuctionIndex};
+use cf_traits::{
+	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionPhase, AuctionResult, Auctioneer,
+	BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
+	HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler,
+	VaultRotator,
+};
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -235,9 +240,9 @@ impl<T: Config> QualifyValidator for Pallet<T> {
 		// Rule #1 - They are registered
 		// Rule #2 - They have a registered peer id
 		// Rule #3 - Confirm that the validators are 'online'
-		T::Registrar::is_registered(&validator_id) &&
-			T::PeerMapping::has_peer_mapping(&validator_id) &&
-			T::Online::is_online(&validator_id)
+		T::Registrar::is_registered(validator_id) &&
+			T::PeerMapping::has_peer_mapping(validator_id) &&
+			T::Online::is_online(validator_id)
 	}
 }
 
@@ -529,10 +534,10 @@ impl<T: Config> Pallet<T> {
 		remaining_bids.reverse();
 
 		let lowest_backup_validator_bid =
-			Self::lowest_bid(&Self::current_backup_validators(&remaining_bids));
+			Self::lowest_bid(&Self::current_backup_validators(remaining_bids));
 
 		let highest_passive_node_bid =
-			Self::highest_bid(&Self::current_passive_nodes(&remaining_bids));
+			Self::highest_bid(&Self::current_passive_nodes(remaining_bids));
 
 		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);

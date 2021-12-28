@@ -260,7 +260,7 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(
 				&account_id,
-				(account_id.clone(), peer_id.clone(), port, ip_address.clone()),
+				(account_id.clone(), peer_id, port, ip_address),
 			);
 
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
@@ -285,7 +285,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id: T::ValidatorId = account_id.into();
+			let validator_id: T::ValidatorId = account_id;
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
@@ -375,7 +375,7 @@ pub mod pallet {
 			if let Some(AuctionResult { winners, minimum_active_bid }) =
 				T::Auctioneer::auction_result()
 			{
-				Bond::<T>::set(minimum_active_bid.clone());
+				Bond::<T>::set(minimum_active_bid);
 				T::EpochTransitionHandler::on_new_epoch(&[], &winners, minimum_active_bid);
 			}
 			CurrentEpoch::<T>::set(0);
