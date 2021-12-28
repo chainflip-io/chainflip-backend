@@ -1,6 +1,6 @@
 use super::*;
 use cf_traits::AuctionResult;
-use frame_support::traits::{Get, GetStorageVersion, PalletInfoAccess, StorageVersion};
+use frame_support::traits::{Get, GetStorageVersion, PalletInfoAccess};
 
 pub fn migrate_to_v1<T: Config, P: GetStorageVersion + PalletInfoAccess>(
 ) -> frame_support::weights::Weight {
@@ -11,7 +11,7 @@ pub fn migrate_to_v1<T: Config, P: GetStorageVersion + PalletInfoAccess>(
 		on_chain_storage_version,
 	);
 
-	if on_chain_storage_version < 1 {
+	if on_chain_storage_version < STORAGE_VERSION {
 		// Current version is is genesis, upgrade to version 1
 		// Changes are the addition of two storage items: `Validators` and `Bond`
 		// We are using `Auctioneer::auction_result()` as the last successful auction to
@@ -31,13 +31,13 @@ pub fn migrate_to_v1<T: Config, P: GetStorageVersion + PalletInfoAccess>(
 		// Set the validating set from the session pallet
 		Validators::<T>::put(validators.clone());
 		// Update the version number to 1
-		StorageVersion::new(1).put::<P>();
+		STORAGE_VERSION.put::<P>();
 		log::info!(
 			target: "runtime::cf_validator",
 			"Running migration storage v1 for cf_validator with storage version {:?} was complete",
 			on_chain_storage_version,
 		);
-		T::DbWeight::get().reads_writes(3, 2 + number_of_validators as Weight)
+		T::DbWeight::get().reads_writes(3, 2)
 	} else {
 		log::warn!(
 			target: "runtime::cf_validator",
