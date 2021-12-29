@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 pallet-cf-auction = { path = '../cf-auction', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
+log = { version = '0.4.14', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -91,6 +92,7 @@ std = [
     'sp-runtime/std',
     'pallet-session/std',
     'pallet-cf-auction/std',
+    'log/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
