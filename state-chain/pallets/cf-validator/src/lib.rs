@@ -133,7 +133,22 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			0
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			Ok(())
+		}
+
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
