@@ -5079,10 +5079,8 @@ dependencies = [
  "assert_matches",
  "cf-traits",
  "frame-benchmarking",
- "frame-executive",
  "frame-support",
  "frame-system",
- "frame-try-runtime",
  "pallet-cf-auction",
  "pallet-session",
  "parity-scale-codec",
@@ -5091,7 +5089,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "try-runtime-cli",
 ]
 
 [[package]]
@@ -8550,7 +8547,6 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
- "frame-try-runtime",
  "getrandom 0.2.3",
  "hex-literal",
  "log 0.4.14",
@@ -8591,7 +8587,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
- "try-runtime-cli",
 ]
 
 [[package]]

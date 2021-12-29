@@ -78,25 +78,9 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'merge-config-option'
 
-[dependencies.frame-executive]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.frame-try-runtime]
-optional = true
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.try-runtime-cli]
-optional = true
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
 [features]
 default = ['std']
 std = [
-    'frame-try-runtime/std',
     'cf-traits/std',
     'codec/std',
     'scale-info/std',
@@ -107,15 +91,10 @@ std = [
     'sp-runtime/std',
     'pallet-session/std',
     'pallet-cf-auction/std',
-    'frame-executive/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
-try-runtime = [
-    "frame-executive/try-runtime",
-    "frame-try-runtime",
-    "frame-system/try-runtime",
-]
+try-runtime = ['frame-support/try-runtime']
