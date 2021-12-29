@@ -147,7 +147,6 @@ pub mod pallet {
 		fn post_upgrade() -> Result<(), &'static str> {
 			Ok(())
 		}
-
 	}
 
 	#[pallet::call]
