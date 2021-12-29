@@ -113,7 +113,7 @@ pub enum AggKeyVerificationError {
 /// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParityBit {
 	Odd,
 	Even,
@@ -162,7 +162,7 @@ impl From<ParityBit> for Uint {
 
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AggKey {
 	/// X coordinate of the public key as a 32-byte array.
 	pub pub_key_x: [u8; 32],
