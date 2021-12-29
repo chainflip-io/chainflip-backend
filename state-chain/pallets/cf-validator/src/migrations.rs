@@ -14,7 +14,7 @@ pub(crate) mod v1 {
 			"if we don't have a previous auction then we shouldn't be upgrading"
 		);
 
-		log::debug!(
+		log::info!(
 			target: "runtime::cf_validator",
 			"migration: Validator storage version v1 PRE migration checks successful!"
 		);
@@ -37,9 +37,9 @@ pub(crate) mod v1 {
 			Validators::<T>::put(validators.clone());
 			T::DbWeight::get().reads_writes(2, 2)
 		} else {
-			log::warn!(
+			log::error!(
 				target: "runtime::cf_validator",
-				"migration: Failed to set bond as auction result not present"
+				"migration: Migration failed, there is no auction result."
 			);
 			T::DbWeight::get().reads(1)
 		}
@@ -56,7 +56,7 @@ pub(crate) mod v1 {
 
 		assert_eq!(<pallet_session::Pallet<T>>::validators(), Validators::<T>::get());
 
-		log::debug!(
+		log::info!(
 			target: "runtime::cf_validator",
 			"migration: Validator storage version v1 POST migration checks successful!"
 		);
