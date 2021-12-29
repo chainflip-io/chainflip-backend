@@ -145,8 +145,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Self as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Self>();
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
 				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			} else {
 				T::DbWeight::get().reads(1)
@@ -155,7 +155,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Self as GetStorageVersion>::on_chain_storage_version() {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
 				migrations::v1::pre_migrate::<T, Self>()
 			} else {
 				Ok(())
@@ -647,14 +647,4 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
 	}
-}
-
-#[cfg(feature = "try-runtime")]
-fn pre_upgrade() -> Result<(), &'static str> {
-	Ok(())
-}
-
-#[cfg(feature = "try-runtime")]
-fn post_upgrade() -> Result<(), &'static str> {
-	Ok(())
 }
