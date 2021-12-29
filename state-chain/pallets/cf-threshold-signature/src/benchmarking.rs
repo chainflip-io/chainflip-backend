@@ -41,6 +41,26 @@ benchmarks_instance_pallet! {
 		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
 	} : _(RawOrigin::Signed(signer), ceremony_id, offenders)
 	on_initialize {} : {}
+	determine_offenders {
+		let a in 1 .. 200;
+
+		// Worst case: 1/2 of participants failed.
+		let blame_counts = (0..a / 2)
+			.map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED))
+			.map(|id| (id, a))
+			.collect();
+
+		let completed_response_context = RequestContext::<T, I> {
+			attempt: 0,
+			retry_scheduled: true,
+			remaining_respondents: Default::default(),
+			blame_counts,
+			participant_count: a,
+			chain_signing_context: T::SigningContext::benchmark_default(),
+		};
+	} : {
+
+	}
 }
 
 // impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
