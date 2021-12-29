@@ -5,23 +5,32 @@ use super::*;
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite,
+	account, benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite,
 };
 use frame_system::RawOrigin;
-use pallet_cf_validator::ValidatorLookup;
+use pallet_cf_validator::{ValidatorLookup, Validators};
 use sp_std::convert::TryInto;
-
-#[allow(unused)]
-use crate::Pallet;
 
 const SEED: u32 = 0;
 
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 
 benchmarks_instance_pallet! {
-	where_clause { where T: pallet_cf_validator::Config }
+	where_clause {
+		where
+			T: frame_system::Config
+			+ pallet_cf_validator::Config
+			+ pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
+	}
 
 	signature_success {
+		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
+
+		Validators::<T>::put(all_accounts.clone().collect::<Vec<_>>());
+		for account in all_accounts.clone() {
+			ValidatorLookup::<T>::insert(account, ());
+		}
+
 		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
 		let signature = <SignatureFor<T, I> as BenchmarkDefault>::benchmark_default();
 	} : _(RawOrigin::None, ceremony_id, signature)
@@ -29,14 +38,15 @@ benchmarks_instance_pallet! {
 		let a in 1 .. 100;
 		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
 
+		Validators::<T>::put(all_accounts.clone().collect::<Vec<_>>());
 		for account in all_accounts.clone() {
 			ValidatorLookup::<T>::insert(account, ());
 		}
-		let all_validator_ids = all_accounts.map(|account_id| <T as Chainflip>::ValidatorId::from(account_id));
+		let all_validator_ids = all_accounts.clone().map(|account_id| <T as Chainflip>::ValidatorId::from(account_id));
 		let offenders = BTreeSet::from_iter(all_validator_ids.take(a as usize))
 			.try_into()
 			.expect("Benchmark threshold should not exceed BTreeSet bounds");
-		let signer = account("signers", a, SEED);
+		let signer = all_accounts.skip(a as usize).next().unwrap();
 
 		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
 	} : _(RawOrigin::Signed(signer), ceremony_id, offenders)
@@ -59,7 +69,7 @@ benchmarks_instance_pallet! {
 			chain_signing_context: T::SigningContext::benchmark_default(),
 		};
 	} : {
-
+		let _ = completed_response_context.offenders();
 	}
 }
 

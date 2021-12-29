@@ -5061,6 +5061,7 @@ dependencies = [
  "hex-literal",
  "log 0.4.14",
  "pallet-cf-validator",
+ "pallet-session",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
