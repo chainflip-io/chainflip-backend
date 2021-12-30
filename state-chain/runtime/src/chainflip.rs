@@ -15,8 +15,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
-	StakeHandler, StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, SigningContext, StakeHandler,
+	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -340,27 +340,6 @@ impl BroadcastConfig for EthereumBroadcastConfig {
 		eth::verify_transaction(unsigned_tx, signed_tx, address)
 			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
-	}
-}
-
-/// Simple Ethereum-specific key provider that reads from the vault.
-pub struct EthereumKeyProvider;
-
-impl KeyProvider<Ethereum> for EthereumKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id() -> Self::KeyId {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
-			.expect("Ethereum is always supported.")
-			.public_key
-	}
-
-	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
-			.expect("Ethereum is always supported.")
-			.public_key
-			.try_into()
-			.expect("TODO: make it so this call can't fail.")
 	}
 }
 

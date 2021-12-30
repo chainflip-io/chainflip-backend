@@ -488,8 +488,8 @@ fn testnet_genesis(
 		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
 		vaults: VaultsConfig {
-			ethereum_vault_key: eth_init_agg_key.to_vec(),
-			ethereum_deployment_block,
+			vault_key: eth_init_agg_key.to_vec(),
+			deployment_block: ethereum_deployment_block
 		},
 		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,

@@ -36,7 +36,8 @@ type BasisPoints = u32;
 pub mod pallet {
 
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use cf_chains::Ethereum;
+use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -85,10 +86,10 @@ pub mod pallet {
 
 		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
 		type SigningContext: From<UpdateFlipSupply>
-			+ SigningContext<Self, Chain = cf_chains::Ethereum>;
+			+ SigningContext<Self, Chain = Ethereum>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self, Ethereum, Context = Self::SigningContext>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;

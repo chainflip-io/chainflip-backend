@@ -6,6 +6,7 @@ pub mod constants;
 #[cfg(test)]
 mod tests;
 use core::time::Duration;
+use cf_chains::Ethereum;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
@@ -16,6 +17,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_vaults::Vault;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -163,8 +165,9 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
 }
 
-impl pallet_cf_vaults::Config for Runtime {
+impl pallet_cf_vaults::Config<Instance1> for Runtime {
 	type Event = Event;
+	type Chain = Ethereum;
 	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
@@ -452,7 +455,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type KeyProvider = chainflip::EthereumKeyProvider;
+	type KeyProvider = Vaults;
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -501,7 +504,7 @@ construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
+		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},

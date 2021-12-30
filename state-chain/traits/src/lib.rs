@@ -103,6 +103,14 @@ impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	}
 }
 
+pub struct CurrentEpochIndex<T>(PhantomData<T>);
+
+impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
+	fn get() -> u32 {
+		T::EpochInfo::epoch_index()
+	}
+}
+
 /// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -487,15 +495,16 @@ pub trait KeyProvider<C: ChainCrypto> {
 }
 
 /// Api trait for pallets that need to sign things.
-pub trait ThresholdSigner<T>
+pub trait ThresholdSigner<T, C>
 where
 	T: Chainflip,
+	C: Chain,
 {
-	type Context: SigningContext<T>;
+	type Context: SigningContext<T, Chain = C>;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(context: Self::Context) -> u64;
-
+	
 	/// Initiate a transaction signing request and return the request id.
 	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
 		Self::request_signature(transaction.into())

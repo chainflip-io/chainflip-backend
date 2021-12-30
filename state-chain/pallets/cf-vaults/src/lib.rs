@@ -2,14 +2,11 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{
-	eth::{set_agg_key_with_agg_key::SetAggKeyWithAggKey, AggKey},
-	ChainId, Ethereum, ChainCrypto, Chain
-};
+use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainCrypto, Ethereum};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, EpochIndex, EpochInfo, Nonce, NonceProvider, SigningContext, ThresholdSigner,
-	VaultRotationHandler, VaultRotator,
+	VaultRotationHandler, VaultRotator, KeyProvider, CurrentEpochIndex,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -50,10 +47,10 @@ impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 	}
 }
 
-pub type KeygenOutcomeFor<T: Config<I>, I: 'static> = KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
-pub type AggKeyFor<T: Config<I>, I: 'static> = <T::Chain as ChainCrypto>::AggKey;
-pub type TransactionHashFor<T: Config<I>, I: 'static> = <T::Chain as ChainCrypto>::TransactionHash;
-pub type ThresholdSignatureFor<T: Config<I>, I: 'static> = <T::Chain as ChainCrypto>::ThresholdSignature;
+pub type KeygenOutcomeFor<T, I> = KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
+pub type AggKeyFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
+pub type TransactionHashFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
+pub type ThresholdSignatureFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
 /// Tracks the current state of the keygen ceremony.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -244,7 +241,7 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		///
+		/// The chain that managed by this vault.
 		type Chain: Chain + ChainCrypto;
 
 		/// Rotation handler.
@@ -257,7 +254,7 @@ pub mod pallet {
 		type SigningContext: From<SetAggKeyWithAggKey> + SigningContext<Self, Chain = Self::Chain>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self, Self::Chain, Context = Self::SigningContext>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -274,40 +271,35 @@ pub mod pallet {
 			let mut weight = 0;
 
 			// Check if we need to finalize keygen
-			let mut unresolved = Vec::new();
-			for since_block in KeygenResolutionPending::<T, I>::get() {
-				if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id,
-					response_status,
-				}) = PendingVaultRotations::<T, I>::get()
-				{
-					match response_status.consensus_outcome() {
-						Some(KeygenOutcome::Success(new_public_key)) => {
-							weight += T::WeightInfo::on_initialize_success();
-							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
-						},
-						Some(KeygenOutcome::Failure(offenders)) => {
-							weight += T::WeightInfo::on_initialize_failure(offenders.len());
-							Self::on_keygen_failure(keygen_ceremony_id, offenders);
-						},
-						None => {
-							if current_block.saturating_sub(since_block) >=
-								T::KeygenResponseGracePeriod::get()
-							{
-								weight += T::WeightInfo::on_initialize_none();
-								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
-								Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
-									keygen_ceremony_id,
-								));
-								Self::on_keygen_failure(keygen_ceremony_id, vec![]);
-							} else {
-								unresolved.push(since_block);
-							}
-						},
-					}
+			
+			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id,
+				response_status,
+			}) = PendingVaultRotations::<T, I>::get()
+			{
+				match response_status.consensus_outcome() {
+					Some(KeygenOutcome::Success(new_public_key)) => {
+						weight += T::WeightInfo::on_initialize_success();
+						Self::on_keygen_success(keygen_ceremony_id, new_public_key);
+					},
+					Some(KeygenOutcome::Failure(offenders)) => {
+						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
+						Self::on_keygen_failure(keygen_ceremony_id, offenders);
+					},
+					None => {
+						if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
+							T::KeygenResponseGracePeriod::get()
+						{
+							weight += T::WeightInfo::on_initialize_none();
+							log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
+							Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
+								keygen_ceremony_id,
+							));
+							Self::on_keygen_failure(keygen_ceremony_id, vec![]);
+						}
+					},
 				}
 			}
-			KeygenResolutionPending::<T, I>::put(unresolved);
 
 			weight
 		}
@@ -318,7 +310,7 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_ceremony_id_counter)]
 	pub(super) type KeygenCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// A map of vaults by epoch and chain
+	/// A map of vaults by epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
 	pub(super) type Vaults<T: Config<I>, I: 'static = ()> =
@@ -330,16 +322,16 @@ pub mod pallet {
 	pub(super) type PendingVaultRotations<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultRotationStatus<T, I>>;
 
-	/// Threshold key nonces for each chain.
+	/// Threshold key nonces for this chain.
 	#[pallet::storage]
-	#[pallet::getter(fn chain_nonces)]
-	pub(super) type ChainNonces<T, I = ()> = StorageValue<_, Nonce, ValueQuery>;
+	#[pallet::getter(fn chain_nonce)]
+	pub(super) type ChainNonce<T, I = ()> = StorageValue<_, Nonce, ValueQuery>;
 
-	/// Threshold key nonces for each chain.
+	/// 
 	#[pallet::storage]
-	#[pallet::getter(fn responses_incoming)]
-	pub(super) type KeygenResolutionPending<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<BlockNumberFor<T>>, ValueQuery>;
+	#[pallet::getter(fn keygen_resolution_pending_since)]
+	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -414,7 +406,6 @@ pub mod pallet {
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			chain_id: ChainId,
 			reported_outcome: KeygenOutcomeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?.into();
@@ -451,7 +442,7 @@ pub mod pallet {
 			// If this is the first response, schedule resolution.
 			if keygen_status.response_count() == 1 {
 				// Schedule resolution.
-				KeygenResolutionPending::<T, I>::append(
+				KeygenResolutionPendingSince::<T, I>::put(
 					frame_system::Pallet::<T>::current_block_number(),
 				)
 			}
@@ -481,7 +472,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
-			chain_id: ChainId,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: u64,
 			tx_hash: TransactionHashFor<T, I>,
@@ -501,8 +491,7 @@ pub mod pallet {
 			// over the one we expected, but we should log the issue nonetheless.
 			if new_public_key != expected_new_key {
 				log::error!(
-					"Unexpected new agg key witnessed for {:?}. Expected {:?}, got {:?}.",
-					chain_id,
+					"Unexpected new agg key witnessed. Expected {:?}, got {:?}.",
 					expected_new_key,
 					new_public_key,
 				);
@@ -512,7 +501,7 @@ pub mod pallet {
 			}
 
 			// We update the current epoch with an active window for the outgoers
-			Vaults::<T, I>::try_mutate_exists(T::EpochInfo::epoch_index(), |maybe_vault| {
+			Vaults::<T, I>::try_mutate_exists(CurrentEpochIndex::<T>::get(), |maybe_vault| {
 				if let Some(vault) = maybe_vault.as_mut() {
 					vault.active_window.to = Some(block_number);
 					Ok(())
@@ -521,14 +510,12 @@ pub mod pallet {
 				}
 			})?;
 
-			PendingVaultRotations::<T, I>::put(
-				VaultRotationStatus::<T, I>::Complete { tx_hash },
-			);
+			PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
 			// For the new epoch we create a new vault with the new public key and its active
 			// window at for the block after that reported
 			Vaults::<T, I>::insert(
-				T::EpochInfo::epoch_index().saturating_add(1),
+				CurrentEpochIndex::<T>::get().saturating_add(1),
 				Vault {
 					public_key: new_public_key,
 					active_window: BlockHeightWindow {
@@ -546,22 +533,20 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		/// The Vault key should be a 33-byte compressed key in `[y; x]` order, where is `2` (even)
-		/// or `3` (odd).
+		/// The provided Vec must be convertible to the chain's AggKey.
 		///
-		/// Requires `Serialize` and `Deserialize` which isn't implemented for `[u8; 33]` otherwise
-		/// we could use that instead of `Vec`...
-		pub ethereum_vault_key: Vec<u8>,
-
-		pub ethereum_deployment_block: u64,
+		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
+		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
+		pub vault_key: Vec<u8>,
+		pub deployment_block: u64,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
-				ethereum_vault_key: Default::default(),
-				ethereum_deployment_block: Default::default(),
+				vault_key: Default::default(),
+				deployment_block: Default::default(),
 			}
 		}
 	}
@@ -569,19 +554,17 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {
-			let public_key = AggKeyFor::<T, I>::try_from(self.ethereum_vault_key)
-				// TODO: Can't use expect() here without some type shenanigans, but would give
+			let public_key = AggKeyFor::<T, I>::try_from(self.vault_key.clone())
+				// Note: Can't use expect() here without some type shenanigans, but would give
 				// clearer error messages.
-				.unwrap_or_else(|_| {
-					panic!("Can't build genesis without a valid ethereum vault key.")
-				});
+				.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."));
 
-			Vaults::<T>::insert(
-				T::EpochInfo::epoch_index(),
+			Vaults::<T, I>::insert(
+				CurrentEpochIndex::<T>::get(),
 				Vault {
 					public_key,
 					active_window: BlockHeightWindow {
-						from: self.ethereum_deployment_block,
+						from: self.deployment_block,
 						to: None,
 					},
 				},
@@ -592,7 +575,7 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> NonceProvider<Ethereum> for Pallet<T, I> {
 	fn next_nonce() -> Nonce {
-		ChainNonces::<T, I>::mutate(|nonce| {
+		ChainNonce::<T, I>::mutate(|nonce| {
 			let new_nonce = nonce.saturating_add(1);
 			*nonce = new_nonce;
 			new_nonce
@@ -606,43 +589,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		!PendingVaultRotations::<T, I>::exists()
 	}
 
-	fn start_vault_rotation_for_chain(
-		candidates: Vec<T::ValidatorId>,
-	) -> DispatchResult {
+	fn start_vault_rotation_for_chain(candidates: Vec<T::ValidatorId>) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
-		ensure!(
-			!PendingVaultRotations::<T, I>::exists(),
-			Error::<T, I>::DuplicateRotationRequest
-		);
+		ensure!(!PendingVaultRotations::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
 
 		let ceremony_id = KeygenCeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		PendingVaultRotations::<T, I>::put(
-			VaultRotationStatus::<T, I>::new(ceremony_id, BTreeSet::from_iter(candidates.clone())),
-		);
+		PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::new(
+			ceremony_id,
+			BTreeSet::from_iter(candidates.clone()),
+		));
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
 
 		Ok(())
 	}
 
-	fn on_keygen_success(
-		ceremony_id: CeremonyId,
-		new_public_key: AggKeyFor<T, I>,
-	) -> DispatchResult {
+	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
+		KeygenResolutionPendingSince::<T, I>::kill();
 
-		T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
-			<Self as NonceProvider<Ethereum>>::next_nonce(),
+		// T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
+		// 	<Self as NonceProvider<Ethereum>>::next_nonce(),
+		// 	new_public_key,
+		// ));
+		PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
-		));
-		PendingVaultRotations::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
-		);
-		Ok(().into())
+		});
 	}
 
 	fn on_keygen_failure(
@@ -660,9 +636,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					0
 				});
 		}
-
+		
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-		// TODO: Instead of deleting the storage entirely, we should probably reset to some initial state.
+		KeygenResolutionPendingSince::<T, I>::kill();
+		// TODO: Instead of deleting the storage entirely, we should probably reset to some initial
+		// state.
 		PendingVaultRotations::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
 		T::RotationHandler::vault_rotation_aborted();
@@ -691,6 +669,23 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 }
+
+impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
+	type KeyId = Vec<u8>;
+
+	fn current_key_id() -> Self::KeyId {
+		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
+			.expect("We can't exist without a vault")
+			.public_key
+			.into()
+	}
+
+	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
+		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
+			.expect("We can't exist without a vault")
+			.public_key
+	}
+} 
 
 /// Takes three arguments: a pattern, a variable expression and an error literal.
 ///

@@ -617,8 +617,8 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_vaults::GenesisConfig {
-					ethereum_vault_key,
-					ethereum_deployment_block: 0,
+					vault_key: ethereum_vault_key,
+					deployment_block: 0,
 				},
 				storage,
 			)
@@ -745,7 +745,7 @@ mod tests {
 
 				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
 
-				assert_eq!(Vaults::chain_nonces(ChainId::Ethereum), 0, "nonce not incremented");
+				assert_eq!(Vaults::chain_nonce(ChainId::Ethereum), 0, "nonce not incremented");
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),

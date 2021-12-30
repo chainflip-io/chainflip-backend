@@ -11,7 +11,7 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{ChainId, Ethereum};
+	use cf_chains::{Ethereum, ChainCrypto};
 	use cf_traits::Witnesser;
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
@@ -33,14 +33,14 @@ pub mod pallet {
 	pub trait Config:
 		frame_system::Config
 		+ StakingConfig
-		+ VaultsConfig
+		+ VaultsConfig<Instance1, Chain = Ethereum>
 		+ SigningConfig<Instance1, TargetChain = Ethereum>
 		+ BroadcastConfig<Instance1, TargetChain = Ethereum>
 	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
-			+ From<VaultsCall<Self>>
+			+ From<VaultsCall<Self, Instance1>>
 			+ From<SigningCall<Self, Instance1>>
 			+ From<BroadcastCall<Self, Instance1>>;
 
@@ -176,19 +176,21 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(VaultsCall::<T>::vault_key_rotated(*chain_id, new_public_key.clone(), *block_number, tx_hash.clone())
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_vault_key_rotated(
+		#[pallet::weight(
+			T::WeightInfoWitnesser::witness().saturating_add(
+				VaultsCall::<T, Instance1>::vault_key_rotated(new_public_key.clone(), *block_number, tx_hash.clone())
+					.get_dispatch_info()
+					.weight
+		))]
+		pub fn witness_eth_aggkey_rotation(
 			origin: OriginFor<T>,
-			chain_id: ChainId,
-			new_public_key: Vec<u8>,
+			new_public_key: <Ethereum as ChainCrypto>::AggKey,
 			block_number: u64,
-			tx_hash: Vec<u8>,
+			tx_hash: <Ethereum as ChainCrypto>::TransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call =
-				VaultsCall::vault_key_rotated(chain_id, new_public_key, block_number, tx_hash);
+				VaultsCall::<T, Instance1>::vault_key_rotated(new_public_key, block_number, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
 	}
