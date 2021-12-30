@@ -106,11 +106,19 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
 			initialise_validator((2, 10), epoch);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::Error);
+			MockAuctioneer::create_auction_scenario(
+				0,
+				&[1, 2],
+				AuctionScenario::NoValidatorsSelected,
+			);
 			run_to_block(epoch);
 			move_forward_blocks(1);
 			assert!(ValidatorPallet::force(), "a new rotation should be forced as it has failed");
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::Error);
+			MockAuctioneer::create_auction_scenario(
+				0,
+				&[1, 2],
+				AuctionScenario::NoValidatorsSelected,
+			);
 			move_forward_blocks(1);
 			assert!(ValidatorPallet::force(), "a new rotation should be forced as it has failed");
 			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);

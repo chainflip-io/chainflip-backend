@@ -117,7 +117,7 @@ thread_local! {
 
 pub enum AuctionScenario {
 	HappyPath,
-	Error,
+	NoValidatorsSelected,
 }
 
 impl MockAuctioneer {
@@ -134,10 +134,11 @@ impl MockAuctioneer {
 		);
 
 		MockAuctioneer::set_phase(AuctionPhase::default());
-
-		let behaviour =
-			MockAuctioneer::create_behaviour(MockBidderProvider::get_bidders(), bond, scenario);
-		MockAuctioneer::set_behaviour(behaviour);
+		MockAuctioneer::set_behaviour(MockAuctioneer::create_behaviour(
+			MockBidderProvider::get_bidders(),
+			bond,
+			scenario,
+		));
 	}
 
 	pub fn create_behaviour(
@@ -146,6 +147,7 @@ impl MockAuctioneer {
 		scenario: AuctionScenario,
 	) -> AuctionBehaviour {
 		match scenario {
+			// Run through a happy path of all bidders being selected and confirmed
 			AuctionScenario::HappyPath => {
 				vec![
 					AuctionPhase::BidsTaken(bidders.clone()),
@@ -159,7 +161,8 @@ impl MockAuctioneer {
 					),
 				]
 			},
-			AuctionScenario::Error => vec![AuctionPhase::BidsTaken(bidders.clone())],
+			// We stop after bids taken and subsequent calls will return an AuctionError
+			AuctionScenario::NoValidatorsSelected => vec![AuctionPhase::BidsTaken(bidders.clone())],
 		}
 	}
 
