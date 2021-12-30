@@ -1020,6 +1020,7 @@ version = "0.1.0"
 dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "frame-try-runtime",
  "futures 0.3.17",
  "hex",
  "hex-literal",
@@ -1054,6 +1055,7 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
+ "try-runtime-cli",
  "utilities",
 ]
 
@@ -2302,6 +2304,17 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-opt
 dependencies = [
  "parity-scale-codec",
  "sp-api",
+]
+
+[[package]]
+name = "frame-try-runtime"
+version = "0.10.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option#e56346561e9c0082f3613b5b6f525d6203add611"
+dependencies = [
+ "frame-support",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -6324,6 +6337,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "remote-externalities"
+version = "0.10.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option#e56346561e9c0082f3613b5b6f525d6203add611"
+dependencies = [
+ "env_logger 0.9.0",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-ws-client",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde 1.0.130",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-version",
+]
+
+[[package]]
 name = "remove_dir_all"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8517,6 +8548,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "getrandom 0.2.3",
  "hex-literal",
  "log 0.4.14",
@@ -9313,6 +9345,26 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "try-runtime-cli"
+version = "0.10.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option#e56346561e9c0082f3613b5b6f525d6203add611"
+dependencies = [
+ "log 0.4.14",
+ "parity-scale-codec",
+ "remote-externalities",
+ "sc-chain-spec",
+ "sc-cli",
+ "sc-executor",
+ "sc-service",
+ "serde 1.0.130",
+ "sp-core",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-state-machine",
+ "structopt",
+]
 
 [[package]]
 name = "twox-hash"
