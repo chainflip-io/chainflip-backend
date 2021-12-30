@@ -254,6 +254,7 @@ pub mod pallet {
 		/// - [PendingClaim](Error::PendingClaim)
 		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
+		/// - [ClaimFailedDuringExclusionPeriod](Error::ClaimFailedDuringExclusionPeriod)
 		///
 		/// ## Dependencies
 		///
