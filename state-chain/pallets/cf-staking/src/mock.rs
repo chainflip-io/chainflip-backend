@@ -119,6 +119,9 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+parameter_types! {
+	pub const ClaimExclusionPeriod: u64 = 1;
+}
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, Call);
 
@@ -189,6 +192,7 @@ impl pallet_cf_staking::Config for Test {
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type ClaimExclusionPeriod = ClaimExclusionPeriod;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
