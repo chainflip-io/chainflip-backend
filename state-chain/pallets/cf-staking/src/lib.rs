@@ -29,12 +29,11 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::prelude::*;
-
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, Saturating, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
+use sp_std::prelude::*;
 
 use frame_support::pallet_prelude::Weight;
 use sp_runtime::traits::BlockNumberProvider;
@@ -524,8 +523,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn is_exclusion_period() -> bool {
-		frame_system::Pallet::<T>::current_block_number() >
-			T::EpochInfo::next_expected_epoch() - T::ClaimExclusionPeriod::get()
+		let current_block = frame_system::Pallet::<T>::current_block_number();
+		let period_starts =
+			T::EpochInfo::next_expected_epoch().saturating_sub(T::ClaimExclusionPeriod::get());
+		current_block < period_starts
 	}
 
 	fn do_claim(
