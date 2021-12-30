@@ -46,6 +46,6 @@ impl VaultRotator for Mock {
 	}
 
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
-		TO_CONFIRM.with(|l| (*l.borrow()).clone())
+		TO_CONFIRM.with(|l| *l.borrow())
 	}
 }
