@@ -437,4 +437,31 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn should_predict_next_epoch() {
+		new_test_ext().execute_with(|| {
+			let epoch = 100;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			assert_eq!(
+				<ValidatorPallet as EpochInfo>::next_expected_epoch(),
+				epoch,
+				"Our first epoch would be at block {}",
+				epoch
+			);
+			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+			// We are on block 1, move forward 2 blocks
+			run_to_block(1 + 2);
+			clear_confirmation();
+			// We are on block 3 move forward 1 block
+			run_to_block(3 + 1);
+			// Our next epoch is expected epoch(100) + 4
+			assert_eq!(
+				<ValidatorPallet as EpochInfo>::next_expected_epoch(),
+				epoch + 4,
+				"Our next expected epoch would be at block {} + 4",
+				epoch
+			);
+		});
+	}
 }

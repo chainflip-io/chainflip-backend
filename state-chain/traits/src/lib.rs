@@ -66,6 +66,8 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
+	/// A block number
+	type BlockNumber;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
@@ -93,6 +95,9 @@ pub trait EpochInfo {
 	fn consensus_threshold() -> u32 {
 		cf_utilities::threshold_from_share_count(Self::active_validator_count())
 	}
+
+	/// The expected block number we expect to start the next epoch
+	fn next_expected_epoch() -> Self::BlockNumber;
 }
 
 pub struct CurrentThreshold<T>(PhantomData<T>);

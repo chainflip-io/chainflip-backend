@@ -432,6 +432,7 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type BlockNumber = T::BlockNumber;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()
@@ -455,6 +456,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn active_validator_count() -> u32 {
 		Validators::<T>::decode_len().unwrap_or_default() as u32
+	}
+
+	fn next_expected_epoch() -> Self::BlockNumber {
+		CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()
 	}
 }
 
