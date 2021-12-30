@@ -37,7 +37,7 @@ use sp_runtime::{
 };
 
 use frame_support::pallet_prelude::Weight;
-
+use sp_runtime::traits::BlockNumberProvider;
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
@@ -99,6 +99,10 @@ pub mod pallet {
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
+
+		/// Claim exclusion period before next epoch
+		#[pallet::constant]
+		type ClaimExclusionPeriod: Get<Self::BlockNumber>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -195,6 +199,9 @@ pub mod pallet {
 		/// A withdrawal address is provided, but the account has a different withdrawal address
 		/// already associated.
 		WithdrawalAddressRestricted,
+
+		/// Failed to claim as we are in the claim exclusion period before an epoch
+		ClaimFailedDuringExclusionPeriod,
 	}
 
 	#[pallet::call]
@@ -516,11 +523,17 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
 
+	fn is_exclusion_period() -> bool {
+		frame_system::Pallet::<T>::current_block_number() >
+			T::EpochInfo::next_expected_epoch() - T::ClaimExclusionPeriod::get()
+	}
+
 	fn do_claim(
 		account_id: &AccountId<T>,
 		amount: T::Balance,
 		address: EthereumAddress,
 	) -> Result<(), DispatchError> {
+		ensure!(Self::is_exclusion_period(), Error::<T>::ClaimFailedDuringExclusionPeriod);
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::NoClaimsDuringAuctionPhase);
 

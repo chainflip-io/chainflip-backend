@@ -350,6 +350,8 @@ impl pallet_cf_witnesser::Config for Runtime {
 parameter_types! {
 	/// 6 days.
 	pub const ClaimTTL: Duration = Duration::from_secs(3 * CLAIM_DELAY);
+	/// 1 day before the next expected epoch will we prevent claims
+	pub const ClaimExclusionPeriod: BlockNumber = 1 * DAYS;
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -365,6 +367,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
+	type ClaimExclusionPeriod = ClaimExclusionPeriod;
 }
 
 impl pallet_cf_governance::Config for Runtime {
