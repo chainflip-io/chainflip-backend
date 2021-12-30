@@ -113,13 +113,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
-}
-
-parameter_types! {
 	pub const ClaimExclusionPeriod: u64 = 1;
 }
 // Implement mock for RestrictionHandler
