@@ -6,6 +6,7 @@ mod tests {
 
 	const ALICE: u64 = 100;
 	const BOB: u64 = 101;
+	const GENESIS_EPOCH: u32 = 1;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
@@ -14,6 +15,21 @@ mod tests {
 	fn initialise_validator(range: ActiveValidatorRange, epoch: u64) {
 		assert_ok!(MockAuctioneer::set_active_range(range));
 		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should be in the genesis epoch({})",
+			GENESIS_EPOCH
+		);
+	}
+
+	fn assert_next_epoch() {
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH + 1,
+			"we should be in epoch {}",
+			GENESIS_EPOCH + 1
+		);
 	}
 
 	#[test]
@@ -104,7 +120,7 @@ mod tests {
 				[1, 2],
 				"a new set of validators should be now validating"
 			);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1, "we should be in epoch 1");
+			assert_next_epoch();
 		});
 	}
 
@@ -138,7 +154,7 @@ mod tests {
 				new_validators,
 				"a new set of validators should be now validating"
 			);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1, "we should be in epoch 1");
+			assert_next_epoch();
 		});
 	}
 
@@ -148,7 +164,7 @@ mod tests {
 			initialise_validator((2, 10), 1);
 			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);
 			move_forward_blocks(2);
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1, "we should be in epoch 1");
+			assert_next_epoch();
 			let outgoing_validators = outgoing_validators();
 			assert_eq!(
 				outgoing_validators, DUMMY_GENESIS_VALIDATORS,
@@ -178,12 +194,6 @@ mod tests {
 			);
 
 			assert_eq!(
-				<ValidatorPallet as EpochInfo>::epoch_index(),
-				0,
-				"we should be in the genesis epoch"
-			);
-
-			assert_eq!(
 				mock::current_validators(),
 				DUMMY_GENESIS_VALIDATORS,
 				"the current validators should be the genesis validators"
@@ -205,11 +215,7 @@ mod tests {
 			);
 			// Complete the auction process
 			move_forward_blocks(1);
-			assert_eq!(
-				<ValidatorPallet as EpochInfo>::epoch_index(),
-				1,
-				"we should be in the epoch 1"
-			);
+			assert_next_epoch();
 			assert_eq!(min_bid(), bond, "bond should be updated");
 		});
 	}
@@ -225,9 +231,10 @@ mod tests {
 			);
 			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
 			assert_eq!(
-				ValidatorPallet::current_epoch(),
-				0,
-				"the first epoch should be the zeroth epoch"
+				<ValidatorPallet as EpochInfo>::epoch_index(),
+				GENESIS_EPOCH,
+				"we should be in the genesis epoch({})",
+				GENESIS_EPOCH
 			);
 		});
 	}
