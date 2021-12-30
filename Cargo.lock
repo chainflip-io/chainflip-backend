@@ -8548,6 +8548,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "getrandom 0.2.3",
  "hex-literal",
  "log 0.4.14",
