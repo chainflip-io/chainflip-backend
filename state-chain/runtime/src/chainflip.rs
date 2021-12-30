@@ -69,7 +69,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
 			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
 		});
-		Validator::generate_lookup(new_validators);
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.

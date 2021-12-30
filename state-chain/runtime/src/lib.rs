@@ -430,7 +430,6 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OfflinePenalty;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
 }
@@ -541,6 +540,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
+	(),
 >;
 
 impl_runtime_apis! {
@@ -663,6 +663,14 @@ impl_runtime_apis! {
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	impl frame_try_runtime::TryRuntime<Block> for Runtime {
+		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
+			let weight = Executive::try_runtime_upgrade()?;
+			Ok((weight, BlockWeights::get().max_block))
 		}
 	}
 
