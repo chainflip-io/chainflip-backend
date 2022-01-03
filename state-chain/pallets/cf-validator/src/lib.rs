@@ -594,15 +594,18 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	}
 
 	fn estimate_current_session_progress(
-		_now: T::BlockNumber,
+		now: T::BlockNumber,
 	) -> (Option<sp_runtime::Permill>, Weight) {
-		// TODO
-		(None, 0)
+		let next = Self::next_expected_epoch();
+		let previous = CurrentEpochStartedAt::<T>::get();
+		(
+			Some(sp_runtime::Permill::from_rational(now - previous, next - previous)),
+			T::DbWeight::get().reads(3),
+		)
 	}
 
 	fn estimate_next_session_rotation(_now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-		// TODO
-		(None, 0)
+		(Some(Self::next_expected_epoch()), T::DbWeight::get().reads(2))
 	}
 }
 
