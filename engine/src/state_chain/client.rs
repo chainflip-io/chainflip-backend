@@ -339,6 +339,20 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             rpc_err
                         );
                     }
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
+                        code: ErrorCode::ServerError(1010),
+                        data: Some(Value::String(ref invalid_transaction)),
+                        ..
+                    }) if invalid_transaction
+                        == <&'static str>::from(InvalidTransaction::BadProof) =>
+                    {
+                        slog::error!(
+                            logger,
+                            "HEREEEEEEEE We have a bad signatureeeee. Error: {:?}",
+                            rpc_err
+                        );
+                    }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
                         slog::error!(
