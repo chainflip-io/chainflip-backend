@@ -314,7 +314,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         code: ErrorCode::ServerError(1014),
                         ..
                     }) => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                        slog::error!(
+                            logger,
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            nonce,
+                            rpc_err
+                        );
                     }
                     // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
                     // is in a block
@@ -323,7 +328,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         code: ErrorCode::ServerError(1010),
                         ..
                     }) => {
-                        slog::error!(logger, "Extrinsic submission failed with nonce: {}", nonce);
+                        slog::error!(
+                            logger,
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            nonce,
+                            rpc_err
+                        );
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
