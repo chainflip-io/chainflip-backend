@@ -362,15 +362,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type Amount = T::Amount;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::validators()
+		ValidatorLookup::<T>::iter_keys().collect()
 	}
 
 	fn is_validator(account: &Self::ValidatorId) -> bool {
 		ValidatorLookup::<T>::contains_key(account)
-	}
-
-	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::queued_keys().into_iter().map(|(k, _)| k).collect()
 	}
 
 	fn bond() -> Self::Amount {
