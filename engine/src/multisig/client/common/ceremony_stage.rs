@@ -6,7 +6,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     multisig::client::{utils::PartyIdxMapping, MultisigMessage},
-    p2p::AccountId,
+    multisig_p2p::AccountId,
 };
 
 /// Outcome of a given ceremony stage

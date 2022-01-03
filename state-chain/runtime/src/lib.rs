@@ -429,7 +429,6 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OfflinePenalty;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
 }
@@ -443,13 +442,20 @@ impl pallet_cf_online::Config for Runtime {
 use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: BlockNumber = 150;
+	pub const CeremonyRetryDelay: BlockNumber = 150;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type Event = Event;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::EthereumKeyProvider;
 	type OfflineReporter = Reputation;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {
@@ -461,7 +467,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
-	type SignerNomination = chainflip::BasicSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
@@ -487,7 +493,7 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
 		Historical: session_historical::{Pallet},
-		Witnesser: pallet_cf_witnesser::{Pallet, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
 		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
@@ -531,6 +537,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
+	(),
 >;
 
 impl_runtime_apis! {
@@ -653,6 +660,14 @@ impl_runtime_apis! {
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	impl frame_try_runtime::TryRuntime<Block> for Runtime {
+		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
+			let weight = Executive::try_runtime_upgrade()?;
+			Ok((weight, BlockWeights::get().max_block))
 		}
 	}
 

@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
-	Parameter,
+	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -73,12 +73,8 @@ pub trait EpochInfo {
 	/// Checks if the account is currently a validator.
 	fn is_validator(account: &Self::ValidatorId) -> bool;
 
-	/// If we are in auction phase then the proposed set to validate once the auction is
-	/// confirmed else an empty vector
-	fn next_validators() -> Vec<Self::ValidatorId>;
-
-	/// The amount to be used as bond, this is the minimum stake needed to get into the
-	/// candidate validator set
+	/// The amount to be used as bond, this is the minimum stake needed to be included in the
+	/// current candidate validator set
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -88,9 +84,7 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
-	fn active_validator_count() -> u32 {
-		Self::current_validators().len() as u32
-	}
+	fn active_validator_count() -> u32;
 
 	/// The consensus threshold for the current epoch.
 	///
@@ -157,6 +151,8 @@ pub trait Auctioneer {
 	type Amount;
 	type BidderProvider;
 
+	/// The last auction ran
+	fn auction_index() -> AuctionIndex;
 	/// Range describing auction set size
 	fn active_range() -> ActiveValidatorRange;
 	/// Set new auction range, returning on success the old value
@@ -473,11 +469,11 @@ pub trait SignerNomination {
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	/// Returns None if no signers are live.
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId>;
+	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.

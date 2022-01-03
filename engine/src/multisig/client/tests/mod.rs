@@ -12,7 +12,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use crate::{
     multisig::{KeygenInfo, MessageHash},
-    p2p::AccountId,
+    multisig_p2p::AccountId,
 };
 
 use std::convert::TryInto;

@@ -183,6 +183,11 @@ impl Chainflip for Test {
 cf_traits::impl_mock_signer_nomination!(u64);
 cf_traits::impl_mock_offline_conditions!(u64);
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
@@ -190,6 +195,8 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 	type OfflineReporter = MockOfflineReporter;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 pub struct MockBroadcastConfig;

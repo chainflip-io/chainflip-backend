@@ -4,7 +4,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    logging::KEYGEN_REQUEST_IGNORED, multisig::client::ThresholdParameters, p2p::AccountId,
+    logging::KEYGEN_REQUEST_IGNORED, multisig::client::ThresholdParameters, multisig_p2p::AccountId,
 };
 
 use super::{

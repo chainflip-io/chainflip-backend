@@ -7,14 +7,14 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use cf_p2p::{PeerId, PeerIdTransferable};
 use futures::TryStreamExt;
 use itertools::Itertools;
+use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-pub use cf_p2p::P2PRpcClient;
+pub use multisig_p2p_transport::P2PRpcClient;
 
 use codec::Encode;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{self, read_and_decode_file, rpc_error_into_anyhow_error},
+    common::{self, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
@@ -172,7 +172,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     );
 
     let cfe_peer_keypair: libp2p::identity::ed25519::Keypair =
-        read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+        read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
             libp2p::identity::ed25519::SecretKey::from_bytes(
                 &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
             )
