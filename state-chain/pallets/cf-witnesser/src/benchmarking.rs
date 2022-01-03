@@ -23,7 +23,11 @@ benchmarks! {
 		// Unfortunately, this is blocked by the fact that we can't pass
 		// a witness call here - for now.
 		ConsensusThreshold::<T>::set(2);
-	} : _(RawOrigin::Signed(caller.clone()), Box::new(call))
+	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()))
+	verify {
+		let call_hash = Hashable::blake2_256(&call);
+		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
+	}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
