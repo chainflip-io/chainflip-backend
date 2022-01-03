@@ -352,6 +352,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             "HEREEEEEEEE We have a bad signatureeeee. Error: {:?}",
                             rpc_err
                         );
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+                        return Err(rpc_error_into_anyhow_error(rpc_err));
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
@@ -1053,7 +1055,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tx_retried_and_nonce_not_incremented_when_invalid_tx_not_stale() {
+    async fn tx_retried_and_nonce_not_incremented_when_invalid_tx_bad_proof() {
         let logger = new_test_logger();
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
