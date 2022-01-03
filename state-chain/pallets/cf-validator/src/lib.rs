@@ -369,10 +369,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		ValidatorLookup::<T>::contains_key(account)
 	}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::queued_keys().into_iter().map(|(k, _)| k).collect()
-	}
-
 	fn bond() -> Self::Amount {
 		match T::Auctioneer::phase() {
 			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,

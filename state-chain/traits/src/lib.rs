@@ -73,10 +73,6 @@ pub trait EpochInfo {
 	/// Checks if the account is currently a validator.
 	fn is_validator(account: &Self::ValidatorId) -> bool;
 
-	/// If we are in auction phase then the proposed set to validate once the auction is
-	/// confirmed else an empty vector
-	fn next_validators() -> Vec<Self::ValidatorId>;
-
 	/// The amount to be used as bond, this is the minimum stake needed to get into the
 	/// candidate validator set
 	fn bond() -> Self::Amount;
