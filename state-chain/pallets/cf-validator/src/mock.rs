@@ -201,6 +201,8 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
 		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 
+		ValidatorPallet::generate_lookup(new_validators);
+
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
 				&validator,
@@ -245,7 +247,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
 		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners: vec![],
+			winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
 			minimum_active_bid: 0,
 		},
 	};
