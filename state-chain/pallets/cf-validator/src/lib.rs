@@ -362,7 +362,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type Amount = T::Amount;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::validators()
+		ValidatorLookup::<T>::iter_keys().collect()
 	}
 
 	fn is_validator(account: &Self::ValidatorId) -> bool {
