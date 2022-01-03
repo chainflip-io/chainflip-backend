@@ -3,10 +3,11 @@ use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
+use frame_support::pallet_prelude::InvalidTransaction;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::{AccountInfo, Phase};
 use futures::{Stream, StreamExt, TryStreamExt};
-use jsonrpc_core::{Error, ErrorCode};
+use jsonrpc_core::{Error, ErrorCode, Value};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
@@ -326,8 +327,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     RpcError::JsonRpcError(Error {
                         // this is the error returned when the "transaction is outdated" i.e. nonce is too low
                         code: ErrorCode::ServerError(1010),
+                        data: Some(Value::String(ref invalid_transaction)),
                         ..
-                    }) => {
+                    }) if invalid_transaction
+                        == <&'static str>::from(InvalidTransaction::Stale) =>
+                    {
                         slog::error!(
                             logger,
                             "Extrinsic submission failed with nonce: {}. Error: {:?}",
@@ -944,7 +948,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tx_retried_and_nonce_incremented_on_fail_due_to_nonce_each_time() {
+    async fn tx_retried_and_nonce_incremented_on_fail_due_to_nonce_in_tx_pool_each_time() {
         let logger = new_test_logger();
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -985,6 +989,99 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 10);
+    }
+
+    #[tokio::test]
+    async fn tx_retried_and_nonce_incremented_on_fail_due_to_nonce_consumed_in_prev_blocks_each_time(
+    ) {
+        let logger = new_test_logger();
+
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(MAX_RETRY_ATTEMPTS)
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1010),
+                        message: "Invalid Transaction".to_string(),
+                        data: Some(Value::String(
+                            <&'static str>::from(InvalidTransaction::Stale).into(),
+                        )),
+                    }))
+                },
+            );
+
+        let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
+            metadata: substrate_subxt::Metadata::default(),
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
+        };
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+
+        state_chain_client
+            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .await
+            .unwrap_err();
+
+        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 10);
+    }
+
+    #[tokio::test]
+    async fn tx_retried_and_nonce_not_incremented_when_invalid_tx_not_stale() {
+        let logger = new_test_logger();
+
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
+                    Err(RpcError::JsonRpcError(Error {
+                        code: ErrorCode::ServerError(1010),
+                        message: "Invalid Transaction".to_string(),
+                        data: Some(Value::String(
+                            <&'static str>::from(InvalidTransaction::BadProof).into(),
+                        )),
+                    }))
+                },
+            );
+
+        let state_chain_client = StateChainClient {
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
+            metadata: substrate_subxt::Metadata::default(),
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: mock_state_chain_rpc_client,
+            runtime_version: RuntimeVersion::default(),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
+        };
+
+        let force_rotation_call: state_chain_runtime::Call =
+            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
+                pallet_cf_validator::Call::force_rotation().into(),
+            ))
+            .into();
+
+        state_chain_client
+            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .await
+            .unwrap_err();
+
+        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 0);
     }
 
     #[tokio::test]
