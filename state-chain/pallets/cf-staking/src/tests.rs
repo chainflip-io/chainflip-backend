@@ -436,6 +436,25 @@ fn claim_expiry() {
 }
 
 #[test]
+fn no_claims_during_exclusion_period() {
+	new_test_ext().execute_with(|| {
+		let stake = 45u128;
+		MockEpochInfo::set_is_auction_phase(false);
+		// We are on block 1, exclusion period in mock is 1 and we set the next expected epoch to be
+		// 2
+		MockEpochInfo::set_next_epoch_expected(2);
+		// Staking whilst in the exlusion period is OK
+		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
+
+		// Now we should fail trying to claim as we are in the exclusion period
+		assert_noop!(
+			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
+			<Error<Test>>::ClaimFailedDuringExclusionPeriod
+		);
+	});
+}
+
+#[test]
 fn no_claims_during_auction() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
