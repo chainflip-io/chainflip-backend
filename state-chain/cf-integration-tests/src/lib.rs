@@ -1045,11 +1045,12 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		// Stakers cannot unstake during the conclusion of the auction
+		// Stakers cannot unstake whilst we are in the exclusion period which includes the auction
+		// period.
 		// We have a set of nodes that are staked and that are included in the auction
 		// Moving block by block of an auction we shouldn't be able to claim stake
-		fn cannot_claim_stake_during_auction() {
-			const EPOCH_BLOCKS: u32 = 100;
+		fn cannot_claim_stake_whilst_in_exclusion_period() {
+			const EPOCH_BLOCKS: u32 = 7 * DAYS;
 			const MAX_VALIDATORS: u32 = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
@@ -1076,7 +1077,7 @@ mod tests {
 						"We should be in the genesis epoch"
 					);
 
-					// We should be able to claim stake out of an auction
+					// We should be able to claim stake out of the exclusion period
 					for node in &nodes {
 						assert_ok!(Staking::claim(
 							Origin::signed(node.clone()),
@@ -1085,18 +1086,12 @@ mod tests {
 						));
 					}
 
-					// Move to new epoch
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-					// Start auction
-					testnet.move_forward_blocks(1);
+					// Move to some blocks before the epoch to be in the exclusion period.
+					// We jump rather than process each block, a little quicker
+					System::set_block_number(EPOCH_BLOCKS - 10);
 
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
-
-					// We will try to claim some stake
+					// We will try to claim some stake, this will fail as we are in the exclusion
+					// period
 					for node in &nodes {
 						assert_noop!(
 							Staking::claim(
@@ -1104,7 +1099,29 @@ mod tests {
 								stake_amount,
 								ETH_ZERO_ADDRESS
 							),
-							Error::<Runtime>::NoClaimsDuringAuctionPhase
+							Error::<Runtime>::ClaimFailedDuringExclusionPeriod
+						);
+					}
+
+					// Move to an epoch and trigger an auction, claims should still be blocked
+					testnet.move_forward_blocks(11);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
+
+					// We will try to claim some stake, this will fail as we are in the exclusion
+					// period
+					for node in &nodes {
+						assert_noop!(
+							Staking::claim(
+								Origin::signed(node.clone()),
+								stake_amount,
+								ETH_ZERO_ADDRESS
+							),
+							Error::<Runtime>::ClaimFailedDuringExclusionPeriod
 						);
 					}
 

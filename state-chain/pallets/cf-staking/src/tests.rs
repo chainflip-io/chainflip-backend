@@ -455,23 +455,6 @@ fn no_claims_during_exclusion_period() {
 }
 
 #[test]
-fn no_claims_during_auction() {
-	new_test_ext().execute_with(|| {
-		let stake = 45u128;
-		MockEpochInfo::set_is_auction_phase(true);
-
-		// Staking during an auction is OK.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
-
-		// Claiming during an auction isn't OK.
-		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
-			<Error<Test>>::NoClaimsDuringAuctionPhase
-		);
-	});
-}
-
-#[test]
 fn test_claim_all() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 100;

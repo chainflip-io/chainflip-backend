@@ -189,9 +189,6 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Cannot make a claim request while an auction is being resolved.
-		NoClaimsDuringAuctionPhase,
-
 		/// Failed to encode the signed claim payload.
 		ClaimEncodingFailed,
 
@@ -527,7 +524,7 @@ impl<T: Config> Pallet<T> {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let period_starts =
 			T::EpochInfo::next_expected_epoch().saturating_sub(T::ClaimExclusionPeriod::get());
-		current_block < period_starts
+		current_block >= period_starts
 	}
 
 	fn do_claim(
@@ -535,9 +532,8 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		address: EthereumAddress,
 	) -> Result<(), DispatchError> {
-		ensure!(Self::is_exclusion_period(), Error::<T>::ClaimFailedDuringExclusionPeriod);
-		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::NoClaimsDuringAuctionPhase);
+		// No new claim requests can be processed if we're currently in the claim exclusion period
+		ensure!(!Self::is_exclusion_period(), Error::<T>::ClaimFailedDuringExclusionPeriod);
 
 		// If a claim already exists, return an error. The validator must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.
