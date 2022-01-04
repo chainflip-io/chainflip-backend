@@ -443,7 +443,9 @@ mod tests {
 	fn should_predict_next_epoch() {
 		new_test_ext().execute_with(|| {
 			let epoch = 100;
-			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
+			initialise_validator((2, 10), epoch);
+			MockAuctioneer::create_auction_scenario(10, &[1, 2], AuctionScenario::HappyPath);
+
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::next_expected_epoch(),
 				epoch,
@@ -451,15 +453,13 @@ mod tests {
 				epoch
 			);
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			// We are on block 1, move forward 2 blocks
-			run_to_block(1 + 2);
-			// We are on block 3 move forward 1 block
-			run_to_block(3 + 1);
-			// Our next epoch is expected epoch(100) + 4
+			// An auction takes 2 blocks to complete, we are on block 1
+			move_forward_blocks(2);
+			// Our next epoch is expected epoch(100) + 2(auction) + 1(starting block)
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::next_expected_epoch(),
-				epoch + 4,
-				"Our next expected epoch would be at block {} + 4",
+				epoch + 3,
+				"Our next expected epoch would be at block {} + 3",
 				epoch
 			);
 		});
