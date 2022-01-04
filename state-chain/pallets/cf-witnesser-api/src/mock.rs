@@ -220,6 +220,7 @@ impl pallet_cf_broadcast::BroadcastConfig for MockBroadcastConfig {
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const MaximumAttempts: u32 = 3;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -231,6 +232,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
+	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = ();
 }
 
@@ -241,7 +243,7 @@ impl VaultRotationHandler for Test {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: u64 = 10;
+	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
 impl pallet_cf_vaults::Config for Test {

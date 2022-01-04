@@ -1,9 +1,9 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Auction, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards,
-	Runtime, Validator, Vaults, Witnesser,
+	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
+	Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
+use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -24,12 +24,11 @@ use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
+	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
-
-use sp_runtime::helpers_128bit::multiply_by_rational;
 
 mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;

@@ -88,10 +88,10 @@ pub trait EpochInfo {
 
 	/// The consensus threshold for the current epoch.
 	///
-	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
-	/// `share_count` is taken from [Self::active_validator_count].
+	/// This is the number of parties required to conduct a *successful* threshold
+	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::threshold_from_share_count(Self::active_validator_count())
+		cf_utilities::success_threshold_from_share_count(Self::active_validator_count())
 	}
 }
 
