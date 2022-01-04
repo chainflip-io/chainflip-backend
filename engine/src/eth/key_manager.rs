@@ -1,6 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
+use crate::common::Mutex;
 use crate::eth::SharedEvent;
 use crate::state_chain::client::StateChainClient;
 use crate::{
@@ -119,7 +120,7 @@ impl EthObserver for KeyManager {
     async fn handle_event<RPCClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<Mutex<StateChainClient<RPCClient>>>,
         logger: &slog::Logger,
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
@@ -128,6 +129,8 @@ impl EthObserver for KeyManager {
         match event.event_parameters {
             KeyManagerEvent::KeyChange { new_key, .. } => {
                 let _ = state_chain_client
+                    .lock()
+                    .await
                     .submit_signed_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_vault_key_rotated(

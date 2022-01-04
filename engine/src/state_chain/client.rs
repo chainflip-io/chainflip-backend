@@ -40,7 +40,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
+use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error, Mutex};
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -312,7 +312,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
-        &self,
+        &mut self,
         logger: &slog::Logger,
         extrinsic: Extrinsic,
     ) -> Result<H256>
@@ -405,8 +405,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .fetch_runtime_version(Default::default())
                             .await?;
 
-                        // self.metadata = metadata;
-                        // self.runtime_version = runtime_version;
+                        self.metadata = metadata;
+                        self.runtime_version = runtime_version;
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(rpc_error_into_anyhow_error(rpc_err));
@@ -727,7 +727,7 @@ pub async fn connect_to_state_chain(
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
-    Arc<StateChainClient<StateChainRpcClient>>,
+    Arc<Mutex<StateChainClient<StateChainRpcClient>>>,
 )> {
     use substrate_subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
@@ -900,7 +900,7 @@ pub async fn connect_to_state_chain(
     Ok((
         latest_block_hash,
         block_header_stream,
-        Arc::new(StateChainClient {
+        Arc::new(Mutex::new(StateChainClient {
             metadata,
             nonce: AtomicU32::new(account_nonce),
             runtime_version,
@@ -918,7 +918,7 @@ pub async fn connect_to_state_chain(
             account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
-        }),
+        })),
     ))
 }
 
@@ -928,6 +928,7 @@ mod tests {
     use std::convert::TryInto;
 
     use sp_core::H160;
+    use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;
     use substrate_subxt::PairSigner;
 
@@ -952,7 +953,10 @@ mod tests {
                 .await
                 .expect("Could not connect");
 
-        println!("My account id is: {}", state_chain_client.our_account_id);
+        println!(
+            "My account id is: {}",
+            state_chain_client.lock().await.our_account_id
+        );
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
@@ -962,7 +966,7 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client
+            let my_state_for_this_block = state_chain_client.lock().await
                 .get_environment_value::<H160>(block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >::hashed_key().into()))
@@ -994,7 +998,7 @@ mod tests {
                 move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
             );
 
-        let state_chain_client = StateChainClient {
+        let mut state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
@@ -1039,7 +1043,7 @@ mod tests {
                 },
             );
 
-        let state_chain_client = StateChainClient {
+        let mut state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
@@ -1086,7 +1090,7 @@ mod tests {
                 },
             );
 
-        let state_chain_client = StateChainClient {
+        let mut state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
@@ -1113,7 +1117,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tx_retried_and_nonce_not_incremented_when_invalid_tx_bad_proof() {
+    async fn tx_retried_and_nonce_not_incremented_but_version_updated_when_invalid_tx_bad_proof() {
         let logger = new_test_logger();
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -1132,7 +1136,27 @@ mod tests {
                 },
             );
 
-        let state_chain_client = StateChainClient {
+        mock_state_chain_rpc_client
+            .expect_fetch_metadata()
+            .times(1)
+            .returning(|_| Ok(substrate_subxt::Metadata::default()));
+
+        mock_state_chain_rpc_client
+            .expect_fetch_runtime_version()
+            .times(1)
+            .returning(move |_| {
+                Ok(RuntimeVersion {
+                    spec_name: create_runtime_str!("fake-chainflip-node"),
+                    impl_name: create_runtime_str!("fake-chainflip-node"),
+                    authoring_version: 1,
+                    spec_version: 104,
+                    impl_version: 1,
+                    apis: Default::default(),
+                    transaction_version: 1,
+                })
+            });
+
+        let mut state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),
@@ -1155,7 +1179,11 @@ mod tests {
             .await
             .unwrap_err();
 
+        // we should not have incremented the nonce, since submission failed
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 0);
+
+        // we should have updated the runtime version
+        assert_eq!(state_chain_client.runtime_version.spec_version, 104);
     }
 
     #[tokio::test]
@@ -1173,7 +1201,7 @@ mod tests {
                 },
             );
 
-        let state_chain_client = StateChainClient {
+        let mut state_chain_client = StateChainClient {
             metadata: substrate_subxt::Metadata::default(),
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
@@ -1236,7 +1264,7 @@ mod tests {
                 move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
             );
 
-        let state_chain_client = StateChainClient {
+        let mut state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             metadata: substrate_subxt::Metadata::default(),

@@ -74,7 +74,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
     contract_observer: ContractObserver,
     web3: &Web3<WebSocket>,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
-    state_chain_client: Arc<StateChainClient<RPCCLient>>,
+    state_chain_client: Arc<Mutex<StateChainClient<RPCCLient>>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
@@ -361,7 +361,7 @@ pub trait EthObserver {
     async fn handle_event<RPCClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<Mutex<StateChainClient<RPCClient>>>,
         logger: &slog::Logger,
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send;

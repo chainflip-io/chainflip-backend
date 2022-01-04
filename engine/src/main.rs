@@ -43,9 +43,11 @@ async fn main() {
             .await
             .expect("Failed to connect to state chain");
 
-    let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
+    let account_id = AccountId(*state_chain_client.lock().await.our_account_id.as_ref());
 
     state_chain_client
+        .lock()
+        .await
         .submit_signed_extrinsic(
             &root_logger,
             pallet_cf_validator::Call::cfe_version(SemVer {
@@ -81,7 +83,7 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    let stake_manager_address = state_chain_client
+    let stake_manager_address = state_chain_client.lock().await
         .get_environment_value(
             latest_block_hash,
             StorageKey(pallet_cf_environment::StakeManagerAddress::<
@@ -93,7 +95,7 @@ async fn main() {
     let stake_manager_contract =
         StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
 
-    let key_manager_address = state_chain_client
+    let key_manager_address = state_chain_client.lock().await
         .get_environment_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
             state_chain_runtime::Runtime,
         >::hashed_key().into()))

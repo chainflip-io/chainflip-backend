@@ -89,6 +89,8 @@ async fn request_claim(
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
     let tx_hash = state_chain_client
+        .lock()
+        .await
         .submit_signed_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
         .await
         .expect("Failed to submit redeem extrinsic");
@@ -99,6 +101,8 @@ async fn request_claim(
     );
 
     let tx_hash = state_chain_client
+        .lock()
+        .await
         .submit_signed_extrinsic(
             logger,
             pallet_cf_staking::Call::claim(atomic_amount, eth_address),
@@ -115,6 +119,8 @@ async fn request_claim(
     let block_stream = block_stream.as_mut();
 
     let events = state_chain_client
+        .lock()
+        .await
         .watch_submitted_extrinsic(tx_hash, block_stream)
         .await
         .expect("Failed to watch extrinsic");
@@ -129,6 +135,8 @@ async fn request_claim(
                 let header = result_header.expect("Failed to get a valid block header");
                 let block_hash = header.hash();
                 let events = state_chain_client
+                    .lock()
+                    .await
                     .get_events(block_hash)
                     .await
                     .unwrap_or_else(|e| {
@@ -139,13 +147,15 @@ async fn request_claim(
                         pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
                     ) = event
                     {
-                        if validator_id == state_chain_client.our_account_id {
+                        if validator_id == state_chain_client.lock().await.our_account_id {
                             if should_register_claim {
                                 println!(
                                     "Your claim certificate is: {:?}",
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
+                                    .lock()
+                                    .await
                                     .get_environment_value::<u64>(
                                         block_hash,
                                         StorageKey(
@@ -159,6 +169,8 @@ async fn request_claim(
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
+                                    .lock()
+                                    .await
                                     .get_environment_value(
                                         block_hash,
                                         StorageKey(
@@ -238,6 +250,8 @@ async fn register_claim(
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
     let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let seed = state_chain_client
+        .lock()
+        .await
         .rotate_session_keys()
         .await
         .expect("Could not rotate session keys.");
@@ -251,6 +265,8 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
     };
 
     let tx_hash = state_chain_client
+        .lock()
+        .await
         .submit_signed_extrinsic(
             logger,
             pallet_cf_validator::Call::set_keys(new_session_key, [0; 1].to_vec()),
@@ -265,6 +281,8 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
     let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let tx_hash = state_chain_client
+        .lock()
+        .await
         .submit_signed_extrinsic(logger, pallet_cf_staking::Call::retire_account())
         .await
         .expect("Could not retire account");
