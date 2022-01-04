@@ -25,7 +25,7 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{self, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error, Mutex},
+    common::{self, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
@@ -62,13 +62,11 @@ TODO: Batch outgoing messages
 async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     cfe_peer_id: &PeerId,
     cfe_peer_keypair: &libp2p::identity::ed25519::Keypair,
-    state_chain_client: &Arc<Mutex<StateChainClient<RPCClient>>>,
+    state_chain_client: &Arc<StateChainClient<RPCClient>>,
     account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
     let (peer_id, port, ip_address) = state_chain_client
-        .lock()
-        .await
         .get_local_listen_addresses()
         .await?
         .into_iter()
@@ -80,13 +78,9 @@ async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync 
 
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
-            != account_to_peer.get(&AccountId(
-                *state_chain_client.lock().await.our_account_id.as_ref(),
-            ))
+            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
         {
             state_chain_client
-                .lock()
-                .await
                 .submit_signed_extrinsic(
                     logger,
                     pallet_cf_validator::Call::register_peer_id(
@@ -94,8 +88,7 @@ async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync 
                         port,
                         ip_address.into(),
                         sp_core::ed25519::Signature::try_from(
-                            &cfe_peer_keypair
-                                .sign(&state_chain_client.lock().await.our_account_id.encode()[..])
+                            &cfe_peer_keypair.sign(&state_chain_client.our_account_id.encode()[..])
                                 [..],
                         )
                         .unwrap(),
@@ -120,7 +113,7 @@ fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<P
 
 pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     settings: &settings::Settings,
-    state_chain_client: Arc<Mutex<StateChainClient<RPCClient>>>,
+    state_chain_client: Arc<StateChainClient<RPCClient>>,
     latest_block_hash: H256,
     incoming_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     mut outgoing_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
@@ -146,7 +139,6 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer = state_chain_client
-        .lock().await
         .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(

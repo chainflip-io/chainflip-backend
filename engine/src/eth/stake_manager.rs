@@ -1,7 +1,7 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use crate::{common::Mutex, state_chain::client::StateChainClient};
+use crate::state_chain::client::StateChainClient;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::{
@@ -97,7 +97,7 @@ impl EthObserver for StakeManager {
     async fn handle_event<RPCClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<Mutex<StateChainClient<RPCClient>>>,
+        state_chain_client: Arc<StateChainClient<RPCClient>>,
         logger: &slog::Logger,
     ) where
         RPCClient: 'static + StateChainRpcApi + Sync + Send,
@@ -111,8 +111,6 @@ impl EthObserver for StakeManager {
                 return_addr,
             } => {
                 let _ = state_chain_client
-                    .lock()
-                    .await
                     .submit_signed_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_staked(
@@ -126,8 +124,6 @@ impl EthObserver for StakeManager {
             }
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let _ = state_chain_client
-                    .lock()
-                    .await
                     .submit_signed_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_claimed(

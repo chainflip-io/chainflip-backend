@@ -292,7 +292,7 @@ impl StateChainRpcApi for StateChainRpcClient {
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     // TODO: Update, might have changed in runtime upgrade??
-    metadata: substrate_subxt::Metadata,
+    metadata: Mutex<substrate_subxt::Metadata>,
 
     account_storage_key: StorageKey,
     events_storage_key: StorageKey,
@@ -301,7 +301,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     pub our_account_id: AccountId32,
 
     // TODO: Update on badproof
-    runtime_version: sp_version::RuntimeVersion,
+    runtime_version: Mutex<sp_version::RuntimeVersion>,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
@@ -312,7 +312,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
-        &mut self,
+        &self,
         logger: &slog::Logger,
         extrinsic: Extrinsic,
     ) -> Result<H256>
@@ -324,11 +324,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         for _ in 0..MAX_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
+            let runtime_version = { self.runtime_version.lock().await.clone() };
             match self
                 .state_chain_rpc_client
                 .submit_extrinsic_rpc(
                     substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
-                        &self.runtime_version,
+                        &runtime_version,
                         self.genesis_hash,
                         nonce,
                         encoded_extrinsic.clone(),
@@ -394,8 +395,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             rpc_err
                         );
 
-                        // update the metadata and runtime version
-                        // block hash????
                         let metadata = self
                             .state_chain_rpc_client
                             .fetch_metadata(Default::default())
@@ -405,8 +404,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .fetch_runtime_version(Default::default())
                             .await?;
 
-                        self.metadata = metadata;
-                        self.runtime_version = runtime_version;
+                        {
+                            *(self.runtime_version.lock().await) = runtime_version;
+                            *(self.metadata.lock().await) = metadata;
+                        }
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(rpc_error_into_anyhow_error(rpc_err));
@@ -690,12 +691,14 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
-    pub fn get_metadata(&self) -> &substrate_subxt::Metadata {
-        &self.metadata
+    pub async fn get_metadata(&self) -> substrate_subxt::Metadata {
+        (*self.metadata.lock().await).clone()
     }
 
-    pub fn get_heartbeat_block_interval(&self) -> u32 {
+    pub async fn get_heartbeat_block_interval(&self) -> u32 {
         self.metadata
+            .lock()
+            .await
             .module("Reputation")
             .expect("No module 'Reputation' in chain metadata")
             .constant("HeartbeatBlockInterval")
@@ -727,7 +730,7 @@ pub async fn connect_to_state_chain(
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
-    Arc<Mutex<StateChainClient<StateChainRpcClient>>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
 )> {
     use substrate_subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
@@ -891,17 +894,19 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
-    let runtime_version = state_chain_rpc_client
-        .state_rpc_client
-        .runtime_version(Some(latest_block_hash))
-        .await
-        .map_err(rpc_error_into_anyhow_error)?;
+    let runtime_version = Mutex::new(
+        state_chain_rpc_client
+            .state_rpc_client
+            .runtime_version(Some(latest_block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)?,
+    );
 
     Ok((
         latest_block_hash,
         block_header_stream,
-        Arc::new(Mutex::new(StateChainClient {
-            metadata,
+        Arc::new(StateChainClient {
+            metadata: Mutex::new(metadata),
             nonce: AtomicU32::new(account_nonce),
             runtime_version,
             genesis_hash: try_unwrap_value(
@@ -918,7 +923,7 @@ pub async fn connect_to_state_chain(
             account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
-        })),
+        }),
     ))
 }
 
@@ -953,10 +958,7 @@ mod tests {
                 .await
                 .expect("Could not connect");
 
-        println!(
-            "My account id is: {}",
-            state_chain_client.lock().await.our_account_id
-        );
+        println!("My account id is: {}", state_chain_client.our_account_id);
 
         while let Some(block) = block_stream.next().await {
             let block_header = block.unwrap();
@@ -966,7 +968,7 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client.lock().await
+            let my_state_for_this_block = state_chain_client
                 .get_environment_value::<H160>(block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >::hashed_key().into()))
@@ -998,14 +1000,14 @@ mod tests {
                 move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
             );
 
-        let mut state_chain_client = StateChainClient {
+        let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: substrate_subxt::Metadata::default(),
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1043,14 +1045,14 @@ mod tests {
                 },
             );
 
-        let mut state_chain_client = StateChainClient {
+        let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: substrate_subxt::Metadata::default(),
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1090,14 +1092,14 @@ mod tests {
                 },
             );
 
-        let mut state_chain_client = StateChainClient {
+        let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: substrate_subxt::Metadata::default(),
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1156,14 +1158,14 @@ mod tests {
                 })
             });
 
-        let mut state_chain_client = StateChainClient {
+        let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: substrate_subxt::Metadata::default(),
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1183,7 +1185,10 @@ mod tests {
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 0);
 
         // we should have updated the runtime version
-        assert_eq!(state_chain_client.runtime_version.spec_version, 104);
+        assert_eq!(
+            state_chain_client.runtime_version.lock().await.spec_version,
+            104
+        );
     }
 
     #[tokio::test]
@@ -1201,14 +1206,14 @@ mod tests {
                 },
             );
 
-        let mut state_chain_client = StateChainClient {
-            metadata: substrate_subxt::Metadata::default(),
+        let state_chain_client = StateChainClient {
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1264,14 +1269,14 @@ mod tests {
                 move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
             );
 
-        let mut state_chain_client = StateChainClient {
+        let state_chain_client = StateChainClient {
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: substrate_subxt::Metadata::default(),
+            metadata: Mutex::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RuntimeVersion::default(),
+            runtime_version: Mutex::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
         };
@@ -1289,5 +1294,23 @@ mod tests {
         );
 
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn my_test() {
+        struct TestStruct {
+            int_a: Mutex<u32>,
+            int_b: Mutex<u32>,
+        }
+
+        let my_struct = Arc::new(TestStruct {
+            int_a: Mutex::new(1),
+            int_b: Mutex::new(2),
+        });
+
+        (*my_struct.int_a.lock().await) = 11;
+        (*my_struct.int_b.lock().await) = 12;
+
+        println!("my_struct a: {:?}", (*my_struct.int_a.lock().await));
     }
 }
