@@ -453,7 +453,6 @@ mod tests {
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			// We are on block 1, move forward 2 blocks
 			run_to_block(1 + 2);
-			clear_confirmation();
 			// We are on block 3 move forward 1 block
 			run_to_block(3 + 1);
 			// Our next epoch is expected epoch(100) + 4
