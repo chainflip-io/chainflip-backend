@@ -187,6 +187,8 @@ pub trait StateChainRpcApi {
     async fn get_block(&self, block_hash: state_chain_runtime::Hash)
         -> Result<Option<SignedBlock>>;
 
+    async fn latest_block_hash(&self) -> Result<H256>;
+
     async fn rotate_keys(&self) -> Result<Bytes>;
 
     async fn local_listen_addresses(&self) -> Result<Vec<String>>;
@@ -225,6 +227,17 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("get_block RPC API failed")
     }
 
+    async fn latest_block_hash(&self) -> Result<H256> {
+        Ok(self
+            .chain_rpc_client
+            .header(None)
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .context("latest_block_hash RPC API failed")?
+            .ok_or(anyhow::Error::msg("Latest block hash could not be fetched"))?
+            .hash())
+    }
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -242,6 +255,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .rotate_keys()
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("rotate_keys RPC API failed")
     }
 
     async fn storage_pairs(
@@ -397,13 +411,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             rpc_err
                         );
 
+                        let latest_block_hash =
+                            self.state_chain_rpc_client.latest_block_hash().await?;
+
                         let metadata = self
                             .state_chain_rpc_client
-                            .fetch_metadata(Default::default())
+                            .fetch_metadata(latest_block_hash)
                             .await?;
                         let runtime_version = self
                             .state_chain_rpc_client
-                            .fetch_runtime_version(Default::default())
+                            .fetch_runtime_version(latest_block_hash)
                             .await?;
 
                         println!("We have fetched the new metadata and runtime version");
