@@ -3,7 +3,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    multisig_p2p::{self, AccountId},
+    multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -42,8 +42,6 @@ async fn main() {
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
             .await
             .expect("Failed to connect to state chain");
-
-    let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
     state_chain_client
         .submit_signed_extrinsic(
@@ -105,7 +103,7 @@ async fn main() {
     tokio::join!(
         // Start signing components
         multisig::start_client(
-            account_id.clone(),
+            state_chain_client.our_account_id.clone(),
             db,
             multisig_instruction_receiver,
             multisig_outcome_sender,

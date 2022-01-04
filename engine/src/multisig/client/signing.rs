@@ -12,10 +12,9 @@ use pallet_cf_vaults::CeremonyId;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    multisig::{KeyId, MessageHash},
-    multisig_p2p::AccountId,
-};
+use crate::multisig::{KeyId, MessageHash};
+
+use state_chain_runtime::AccountId;
 
 use self::frost::SigningData;
 

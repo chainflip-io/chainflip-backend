@@ -8,14 +8,17 @@ use pallet_cf_vaults::CeremonyId;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::multisig::{
-    client::{
-        keygen::{HashContext, KeygenOptions, SecretShare3},
-        signing,
-        utils::PartyIdxMapping,
-        CeremonyAbortReason, MultisigData, ThresholdParameters,
+use crate::{
+    common::format_iterator,
+    multisig::{
+        client::{
+            keygen::{HashContext, KeygenOptions, SecretShare3},
+            signing,
+            utils::PartyIdxMapping,
+            CeremonyAbortReason, MultisigData, ThresholdParameters,
+        },
+        KeyId, MultisigInstruction, SchnorrSignature,
     },
-    KeyId, MultisigInstruction, SchnorrSignature,
 };
 
 use crate::testing::assert_ok;
@@ -35,8 +38,9 @@ use crate::{
         crypto::Point,
         KeyDBMock, KeygenInfo, SigningInfo,
     },
-    multisig_p2p::AccountId,
 };
+
+use state_chain_runtime::AccountId;
 
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
@@ -1146,8 +1150,9 @@ impl KeygenContext {
             expected_reported_nodes.iter().sorted().cloned().collect();
         if reported_nodes_sorted != expected_nodes_sorted {
             return Err(anyhow::Error::msg(format!(
-                "Incorrect reported nodes: {:?}, expected: {:?}",
-                reported_nodes_sorted, expected_nodes_sorted
+                "Incorrect reported nodes: {}, expected: {}",
+                format_iterator(&reported_nodes_sorted),
+                format_iterator(&expected_nodes_sorted)
             )));
         }
 

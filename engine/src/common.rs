@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
     time::Duration,
@@ -6,6 +7,7 @@ use std::{
 
 use anyhow::Context;
 use futures::Stream;
+use itertools::Itertools;
 use jsonrpc_core_client::RpcError;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -123,4 +125,10 @@ pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
     Box::pin(futures::stream::unfold((), move |_| async move {
         Some((tokio::time::sleep(duration.clone()).await, ()))
     }))
+}
+
+pub fn format_iterator<'a, I: 'static + Display, It: 'a + IntoIterator<Item = &'a I>>(
+    it: It,
+) -> String {
+    format!("{}", it.into_iter().format(", "))
 }
