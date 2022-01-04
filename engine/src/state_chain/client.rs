@@ -23,6 +23,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
+use sp_version::RuntimeVersion;
 use state_chain_runtime::{Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
@@ -189,6 +190,17 @@ pub trait StateChainRpcApi {
     async fn rotate_keys(&self) -> Result<Bytes>;
 
     async fn local_listen_addresses(&self) -> Result<Vec<String>>;
+
+    /// Fetch the metadata from the chain
+    async fn fetch_metadata(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<substrate_subxt::Metadata>;
+
+    async fn fetch_runtime_version(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<RuntimeVersion>;
 }
 
 #[async_trait]
@@ -251,15 +263,44 @@ impl StateChainRpcApi for StateChainRpcClient {
             .map_err(rpc_error_into_anyhow_error)
             .context("system_local_listen_addresses RPC API failed")
     }
+
+    async fn fetch_metadata(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<substrate_subxt::Metadata> {
+        Ok(substrate_subxt::Metadata::try_from(
+            RuntimeMetadataPrefixed::decode(
+                &mut &self
+                    .state_rpc_client
+                    .metadata(Some(block_hash))
+                    .await
+                    .map_err(rpc_error_into_anyhow_error)?[..],
+            )?,
+        )?)
+    }
+
+    async fn fetch_runtime_version(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<RuntimeVersion> {
+        self.state_rpc_client
+            .runtime_version(Some(block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+    }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
+    // TODO: Update, might have changed in runtime upgrade??
     metadata: substrate_subxt::Metadata,
+
     account_storage_key: StorageKey,
     events_storage_key: StorageKey,
     nonce: AtomicU32,
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
+
+    // TODO: Update on badproof
     runtime_version: sp_version::RuntimeVersion,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
@@ -352,6 +393,21 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             "HEREEEEEEEE We have a bad signatureeeee. Error: {:?}",
                             rpc_err
                         );
+
+                        // update the metadata and runtime version
+                        // block hash????
+                        let metadata = self
+                            .state_chain_rpc_client
+                            .fetch_metadata(Default::default())
+                            .await?;
+                        let runtime_version = self
+                            .state_chain_rpc_client
+                            .fetch_runtime_version(Default::default())
+                            .await?;
+
+                        // self.metadata = metadata;
+                        // self.runtime_version = runtime_version;
+
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(rpc_error_into_anyhow_error(rpc_err));
                     }
@@ -835,17 +891,19 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
+    let runtime_version = state_chain_rpc_client
+        .state_rpc_client
+        .runtime_version(Some(latest_block_hash))
+        .await
+        .map_err(rpc_error_into_anyhow_error)?;
+
     Ok((
         latest_block_hash,
         block_header_stream,
         Arc::new(StateChainClient {
             metadata,
             nonce: AtomicU32::new(account_nonce),
-            runtime_version: state_chain_rpc_client
-                .state_rpc_client
-                .runtime_version(Some(latest_block_hash))
-                .await
-                .map_err(rpc_error_into_anyhow_error)?,
+            runtime_version,
             genesis_hash: try_unwrap_value(
                 state_chain_rpc_client
                     .chain_rpc_client
