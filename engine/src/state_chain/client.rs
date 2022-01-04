@@ -406,6 +406,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .fetch_runtime_version(Default::default())
                             .await?;
 
+                        println!("We have fetched the new metadata and runtime version");
+
                         {
                             let runtime_version_locked =
                                 { self.runtime_version.lock().await.clone() };
@@ -420,6 +422,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         // don't return, therefore go back to the top of the loop and retry sending the transaction
+                        println!("going back to the top of the loop");
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
