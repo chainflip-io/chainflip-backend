@@ -1176,6 +1176,11 @@ mod tests {
             );
 
         mock_state_chain_rpc_client
+            .expect_latest_block_hash()
+            .times(1)
+            .returning(|| Ok(H256::default()));
+
+        mock_state_chain_rpc_client
             .expect_fetch_metadata()
             .times(1)
             .returning(|_| Ok(substrate_subxt::Metadata::default()));
