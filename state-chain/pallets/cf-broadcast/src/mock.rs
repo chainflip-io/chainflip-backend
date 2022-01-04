@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
+use crate::{
+	self as pallet_cf_broadcast, AttemptCount, BroadcastConfig, Instance1, SignerNomination,
+};
 use cf_chains::Ethereum;
 use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
 use codec::{Decode, Encode};
@@ -121,10 +123,12 @@ impl BroadcastConfig for MockBroadcastConfig {
 
 pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
 pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
+pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 3;
 
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
+	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -137,6 +141,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
+	type MaximumAttempts = MaximumAttempts;
 }
 
 // Build genesis storage according to the mock runtime.

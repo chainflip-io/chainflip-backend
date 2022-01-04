@@ -276,7 +276,7 @@ mod tests {
 										ChainId::Ethereum,
 										KeygenOutcome::Success(public_key),
 									).expect(&format!(
-										"should be able to report keygen outcome from node: {:?}",
+										"should be able to report keygen outcome from node: {}",
 										self.node_id)
 									);
 								}

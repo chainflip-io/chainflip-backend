@@ -24,7 +24,7 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{Index, SignedBlock};
+use state_chain_runtime::{AccountId, Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
@@ -59,7 +59,7 @@ impl System for RuntimeImplForSigningExtrinsics {
     type BlockNumber = <state_chain_runtime::Runtime as frame_system::Config>::BlockNumber;
     type Hash = <state_chain_runtime::Runtime as frame_system::Config>::Hash;
     type Hashing = <state_chain_runtime::Runtime as frame_system::Config>::Hashing;
-    type AccountId = <state_chain_runtime::Runtime as frame_system::Config>::AccountId;
+    type AccountId = AccountId;
     type Address = state_chain_runtime::Address;
     type Header = <state_chain_runtime::Runtime as frame_system::Config>::Header;
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
