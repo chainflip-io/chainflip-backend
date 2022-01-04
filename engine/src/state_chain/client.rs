@@ -382,7 +382,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         );
                     }
                     RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
+                        // this is the error returned when the "transaction has bad signature" -> when the runtime is updated, since the
+                        // runtime version and/or metadata is now incorrect
                         code: ErrorCode::ServerError(1010),
                         data: Some(Value::String(ref invalid_transaction)),
                         ..
@@ -391,7 +392,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     {
                         slog::error!(
                             logger,
-                            "HEREEEEEEEE We have a bad signatureeeee. Error: {:?}",
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            nonce,
                             rpc_err
                         );
 
@@ -405,12 +407,19 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .await?;
 
                         {
+                            let runtime_version_locked =
+                                { self.runtime_version.lock().await.clone() };
+
+                            if runtime_version_locked == runtime_version {
+                                slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
+                            }
+
                             *(self.runtime_version.lock().await) = runtime_version;
                             *(self.metadata.lock().await) = metadata;
                         }
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(rpc_error_into_anyhow_error(rpc_err));
+                        // don't return, therefore go back to the top of the loop and retry sending the transaction
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
@@ -1138,6 +1147,14 @@ mod tests {
                 },
             );
 
+        // Second time called, should succeed
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            .returning(
+                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(H256::default()),
+            );
+
         mock_state_chain_rpc_client
             .expect_fetch_metadata()
             .times(1)
@@ -1176,13 +1193,14 @@ mod tests {
             ))
             .into();
 
-        state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
-            .await
-            .unwrap_err();
+        assert_ok!(
+            state_chain_client
+                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .await
+        );
 
-        // we should not have incremented the nonce, since submission failed
-        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 0);
+        // we should only have incremented the nonce once, on the success
+        assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 1);
 
         // we should have updated the runtime version
         assert_eq!(
