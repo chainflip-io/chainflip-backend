@@ -8,6 +8,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -18,10 +19,7 @@ extern crate assert_matches;
 mod benchmarking;
 mod migrations;
 
-use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping,
-};
+use cf_traits::{AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, HasPeerMapping, AuctionResult};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
@@ -144,6 +142,31 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// We expect this to return true when a rotation has been forced, it is now scheduled
+			// or we are currently in a rotation
+			if Self::should_rotate(block_number) {
+				match T::Auctioneer::process() {
+					Ok(phase) => {
+						// We are only interested in a confirmed set of validators
+						// We will be using the confirmed validators during the session rotation
+						if let AuctionPhase::ConfirmedValidators(..) = phase {
+							// Reset a forced rotation
+							if Force::<T>::get() {
+								Force::<T>::set(false);
+							}
+							// If we were in an emergency, mark as completed
+							Self::emergency_rotation_completed();
+							// We signal to rotate the set
+							ReadyToRotate::<T>::set(true);
+						}
+					},
+					Err(_) => {},
+				}
+			}
+			0
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
 				releases::V1.put::<Pallet<T>>();
@@ -367,6 +390,11 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// We have reached a set of confirmed validators, we can rotate in the new set
+	#[pallet::storage]
+	#[pallet::getter(fn ready_to_rotate)]
+	pub type ReadyToRotate<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	/// A list of the current validators
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
@@ -460,36 +488,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(now: T::BlockNumber) -> bool {
-		// If we are waiting on bids let's see if we want to start a new rotation
-		match T::Auctioneer::phase() {
-			AuctionPhase::WaitingForBids => {
-				// If the session should end, start an auction.  We evaluate the first two steps
-				// of the auction, validate and select winners, as one.  If this fails we force a
-				// new rotation attempt.
-				if Self::should_rotate(now) {
-					// The current epoch is on the way out
-					T::EpochTransitionHandler::on_epoch_ending();
-					let processed =
-						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
-					if !processed {
-						Force::<T>::set(true);
-					}
-					return processed
-				}
-
-				false
-			},
-			AuctionPhase::ValidatorsSelected(..) => {
-				// Confirmation of winners, we need to finally process them
-				// This checks whether this is confirmable via the `AuctionConfirmation` trait
-				T::Auctioneer::process().is_ok()
-			},
-			_ => {
-				// Do nothing more
-				false
-			},
-		}
+	fn should_end_session(_now: T::BlockNumber) -> bool {
+		ReadyToRotate::<T>::get()
 	}
 }
 
@@ -549,30 +549,30 @@ impl<T: Config> Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	/// Prepare candidates for a new session
+	/// If we have a set of confirmed validators we roll them in over two blocks
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		// We have notified the session pallet that we are to rotate, this would occur when we have
+		// a set of confirmed validators in the `on_initialize` hook.  We will first need to return
+		// the next set of validators, reset the flag to rotate, and then on the next block start
+		// the new epoch
 		match T::Auctioneer::phase() {
-			// Successfully completed the process, these are the next set of validators to be used
-			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
-			// A rotation has occurred, we emit an event of the new epoch and compile a list of
-			// validators for validator lookup
-			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
-				// If we have a set of winners
-				if !winners.is_empty() {
-					// Reset forced rotation flag
-					if Force::<T>::get() {
-						Force::<T>::set(false);
-					}
-					// If we were in an emergency, mark as completed
-					Self::emergency_rotation_completed();
-					// Start the new epoch
-					Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
-				}
-
+			// We would start here proposing the set of candidates
+			AuctionPhase::ConfirmedValidators(new_validators, _) => {
 				let _ = T::Auctioneer::process();
+				Some(new_validators)
+			},
+			// We finally start the new epoch and rotate into the next set of validators
+			AuctionPhase::WaitingForBids => {
+				// Reset the flag
+				ReadyToRotate::<T>::set(false);
+				// The last auction result with our confirmed validators and bond
+				let AuctionResult { winners, minimum_active_bid } =
+					T::Auctioneer::auction_result().expect("everything starts with an auction");
+				// Start the new epoch
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+				// Rotate to the new set in this session
 				None
 			},
-			// Return
 			_ => None,
 		}
 	}
