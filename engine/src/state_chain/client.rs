@@ -941,7 +941,7 @@ pub async fn connect_to_state_chain(
             our_account_id,
             account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
-            events_storage_key: system_pallet_metadata.clone().storage("Events")?.prefix(),
+            events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
         }),
     ))
 }
