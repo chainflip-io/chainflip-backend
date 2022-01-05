@@ -423,8 +423,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .fetch_runtime_version(latest_block_hash)
                             .await?;
 
-                        println!("We have fetched the new metadata and runtime version");
-
                         {
                             let runtime_version_locked =
                                 { self.runtime_version.lock().await.clone() };
@@ -439,7 +437,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         // don't return, therefore go back to the top of the loop and retry sending the transaction
-                        println!("going back to the top of the loop");
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
@@ -1337,23 +1334,5 @@ mod tests {
         );
 
         assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
-    }
-
-    #[tokio::test]
-    async fn my_test() {
-        struct TestStruct {
-            int_a: Mutex<u32>,
-            int_b: Mutex<u32>,
-        }
-
-        let my_struct = Arc::new(TestStruct {
-            int_a: Mutex::new(1),
-            int_b: Mutex::new(2),
-        });
-
-        (*my_struct.int_a.lock().await) = 11;
-        (*my_struct.int_b.lock().await) = 12;
-
-        println!("my_struct a: {:?}", (*my_struct.int_a.lock().await));
     }
 }

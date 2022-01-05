@@ -135,7 +135,6 @@ pub async fn start<BlockStream, RpcClient>(
                 // Process this block's events
                 match state_chain_client.get_events(block_hash).await {
                     Ok(events) => {
-                        println!("We got an ok from the get events call");
                         for (_phase, event, _topics) in events {
                             match event {
                                 state_chain_runtime::Event::Validator(
