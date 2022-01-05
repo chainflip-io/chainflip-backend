@@ -288,7 +288,7 @@ impl StateChainRpcApi for StateChainRpcClient {
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     account_storage_key: StorageKey,
     events_storage_key: StorageKey,
-    heartbeat_block_interval: u32,
+    pub heartbeat_block_interval: u32,
     nonce: AtomicU32,
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
@@ -691,10 +691,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .await?;
 
         Ok(epoch.last().expect("should have epoch").to_owned())
-    }
-
-    pub fn get_heartbeat_block_interval(&self) -> u32 {
-        self.heartbeat_block_interval
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
