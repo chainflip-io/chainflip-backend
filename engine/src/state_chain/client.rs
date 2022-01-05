@@ -288,7 +288,8 @@ impl StateChainRpcApi for StateChainRpcClient {
                     .state_rpc_client
                     .metadata(Some(block_hash))
                     .await
-                    .map_err(rpc_error_into_anyhow_error)?[..],
+                    .map_err(rpc_error_into_anyhow_error)
+                    .context("fetch_metadata RPC API failed")?[..],
             )?,
         )?)
     }
@@ -301,11 +302,11 @@ impl StateChainRpcApi for StateChainRpcClient {
             .runtime_version(Some(block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)
+            .context("fetch_runtime_version RPC API failed")
     }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    // TODO: Update, might have changed in runtime upgrade??
     metadata: Mutex<substrate_subxt::Metadata>,
 
     account_storage_key: StorageKey,
@@ -314,7 +315,6 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
 
-    // TODO: Update on badproof
     runtime_version: Mutex<sp_version::RuntimeVersion>,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
