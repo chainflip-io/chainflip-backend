@@ -904,15 +904,6 @@ pub async fn connect_to_state_chain(
         latest_block_hash
     );
 
-    let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
-            .metadata(Some(latest_block_hash))
-            .await
-            .map_err(rpc_error_into_anyhow_error)?[..],
-    )?)?;
-
-    let system_pallet_metadata = metadata.module("System")?.clone();
-
     let state_chain_rpc_client = StateChainRpcClient {
         system_rpc_client,
         author_rpc_client,
@@ -920,13 +911,11 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
-    let runtime_version = Mutex::new(
-        state_chain_rpc_client
-            .state_rpc_client
-            .runtime_version(Some(latest_block_hash))
-            .await
-            .map_err(rpc_error_into_anyhow_error)?,
-    );
+    let metadata = state_chain_rpc_client
+        .fetch_metadata(latest_block_hash)
+        .await?;
+
+    let system_pallet_metadata = metadata.module("System")?.clone();
 
     Ok((
         latest_block_hash,
@@ -934,7 +923,11 @@ pub async fn connect_to_state_chain(
         Arc::new(StateChainClient {
             metadata: Mutex::new(metadata),
             nonce: AtomicU32::new(account_nonce),
-            runtime_version,
+            runtime_version: Mutex::new(
+                state_chain_rpc_client
+                    .fetch_runtime_version(latest_block_hash)
+                    .await?,
+            ),
             genesis_hash: try_unwrap_value(
                 state_chain_rpc_client
                     .chain_rpc_client
