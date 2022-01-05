@@ -9,7 +9,7 @@ use chainflip_engine::{
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
-use sp_core::storage::StorageKey;
+use sp_core::{storage::StorageKey, U256};
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -79,6 +79,30 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    // ensure configured eth node is pointing to the correct chain id
+    let chain_id_from_sc = U256::from(state_chain_client
+        .get_environment_value::<u64>(
+            latest_block_hash,
+            StorageKey(
+                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
+                )
+                .into(),
+            ),
+        )
+        .await
+        .expect("Should get ChainId from SC"));
+
+    let chain_id_from_eth = web3.eth().chain_id().await.expect("Should fetch chain id");
+
+    if !chain_id_from_sc.eq(&chain_id_from_eth) {
+        slog::error!(
+            &root_logger,
+            "Ethereum node pointing to incorret chain. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
+            chain_id_from_sc
+        );
+        std::process::exit(0);
+    }
+
     let stake_manager_address = state_chain_client
         .get_environment_value(
             latest_block_hash,
@@ -97,6 +121,7 @@ async fn main() {
         >::hashed_key().into()))
         .await
         .expect("Should get KeyManager address from SC");
+
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
