@@ -265,7 +265,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Get an id that was not in the keygen and substitute it in the signer list
-    let unknown_signer_id = AccountId([0; 32]);
+    let unknown_signer_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_signer_id));
     let mut signer_ids = SIGNER_IDS.clone();
     signer_ids[1] = unknown_signer_id;
@@ -367,7 +367,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     let sign_states = ctx.sign().await;
 
     // Get an id that is not in the keygen ceremony
-    let unknown_id = AccountId([0; 32]);
+    let unknown_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_id));
 
     // Test for all keygen stages

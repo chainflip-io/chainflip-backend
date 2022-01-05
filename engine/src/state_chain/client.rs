@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use cf_chains::ChainId;
-use cf_p2p::PeerId;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -11,6 +10,7 @@ use jsonrpc_core::{Error, ErrorCode};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
+use multisig_p2p_transport::PeerId;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -22,7 +22,7 @@ use sp_core::{
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{Index, SignedBlock};
+use state_chain_runtime::{AccountId, Index, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
@@ -38,7 +38,7 @@ use substrate_subxt::{
     Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::common::{read_and_decode_file, rpc_error_into_anyhow_error};
+use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -57,7 +57,7 @@ impl System for RuntimeImplForSigningExtrinsics {
     type BlockNumber = <state_chain_runtime::Runtime as frame_system::Config>::BlockNumber;
     type Hash = <state_chain_runtime::Runtime as frame_system::Config>::Hash;
     type Hashing = <state_chain_runtime::Runtime as frame_system::Config>::Hashing;
-    type AccountId = <state_chain_runtime::Runtime as frame_system::Config>::AccountId;
+    type AccountId = AccountId;
     type Address = state_chain_runtime::Address;
     type Header = <state_chain_runtime::Runtime as frame_system::Config>::Header;
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
@@ -648,21 +648,16 @@ pub async fn connect_to_state_chain(
     let signer = substrate_subxt::PairSigner::<
         RuntimeImplForSigningExtrinsics,
         sp_core::sr25519::Pair,
-    >::new(sp_core::sr25519::Pair::from_seed(&read_and_decode_file(
-        &state_chain_settings.signing_key_file,
-        "State Chain Signing Key",
-        |str| {
-            <[u8; 32]>::try_from(
-                hex::decode(
-                    str.replace("\"", "")
-                        // allow inserting the private key with or without the 0x
-                        .replace("0x", ""),
-                )
-                .map_err(anyhow::Error::new)?,
-            )
-            .map_err(|_err| anyhow::Error::msg("Wrong length"))
-        },
-    )?));
+    >::new(sp_core::sr25519::Pair::from_seed(
+        &read_clean_and_decode_hex_str_file(
+            &state_chain_settings.signing_key_file,
+            "State Chain Signing Key",
+            |str| {
+                <[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
+                    .map_err(|_err| anyhow::Error::msg("Wrong length"))
+            },
+        )?,
+    ));
 
     let our_account_id = signer.account_id().to_owned();
 
@@ -850,7 +845,7 @@ mod tests {
 
     use crate::{
         logging::{self, test_utils::new_test_logger},
-        settings::Settings,
+        settings::{CommandLineOptions, Settings},
         testing::assert_ok,
     };
 
@@ -860,7 +855,9 @@ mod tests {
     #[tokio::main]
     #[test]
     async fn test_finalised_storage_subs() {
-        let settings = Settings::from_file("config/Local.toml").unwrap();
+        let settings =
+            Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
+                .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
             connect_to_state_chain(&settings.state_chain, false, &logger)

@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{common, logging::COMPONENT_KEY, p2p::AccountId};
+use crate::{common, logging::COMPONENT_KEY};
 use futures::StreamExt;
 use slog::o;
+use state_chain_runtime::AccountId;
 
 pub use client::{
     KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,

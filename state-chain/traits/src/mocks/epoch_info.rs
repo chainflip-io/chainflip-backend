@@ -82,10 +82,6 @@ macro_rules! impl_mock_epoch_info {
 				BOND.with(|cell| *cell.borrow())
 			}
 
-			fn next_validators() -> Vec<Self::ValidatorId> {
-				NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
-			}
-
 			fn epoch_index() -> $epoch_index {
 				EPOCH.with(|cell| *cell.borrow())
 			}
