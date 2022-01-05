@@ -152,7 +152,7 @@ pub mod utils {
         slog_json::Json::new(std::io::stdout())
             .add_key_value(slog::o!(
             "ts" => slog::PushFnValue(move |_ : &Record, ser| {
-                ser.emit(chrono::Local::now().to_rfc3339())
+                ser.emit(chrono::Utc::now().to_rfc3339())
             }),
             "level" => slog::FnValue(move |rec : &Record| {
                 rec.level().as_str().to_lowercase()
