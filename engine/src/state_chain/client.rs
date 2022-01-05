@@ -194,12 +194,6 @@ pub trait StateChainRpcApi {
 
     async fn local_listen_addresses(&self) -> Result<Vec<String>>;
 
-    /// Fetch the metadata from the chain
-    async fn fetch_metadata(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<substrate_subxt::Metadata>;
-
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -277,22 +271,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("system_local_listen_addresses RPC API failed")
-    }
-
-    async fn fetch_metadata(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<substrate_subxt::Metadata> {
-        Ok(substrate_subxt::Metadata::try_from(
-            RuntimeMetadataPrefixed::decode(
-                &mut &self
-                    .state_rpc_client
-                    .metadata(Some(block_hash))
-                    .await
-                    .map_err(rpc_error_into_anyhow_error)
-                    .context("fetch_metadata RPC API failed")?[..],
-            )?,
-        )?)
     }
 
     async fn fetch_runtime_version(
@@ -426,6 +404,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             if runtime_version_locked == runtime_version {
                                 slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
                                 // break, as the error is now very unlikely to be solved by fetching again
+                                self.nonce.fetch_sub(1, Ordering::Relaxed);
                                 break;
                             }
 
@@ -887,18 +866,21 @@ pub async fn connect_to_state_chain(
         latest_block_hash
     );
 
+    let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
+        &mut &state_rpc_client
+            .metadata(Some(latest_block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)?[..],
+    )?)?;
+
+    let system_pallet_metadata = metadata.module("System")?;
+
     let state_chain_rpc_client = StateChainRpcClient {
         system_rpc_client,
         author_rpc_client,
         state_rpc_client,
         chain_rpc_client,
     };
-
-    let metadata = state_chain_rpc_client
-        .fetch_metadata(latest_block_hash)
-        .await?;
-
-    let system_pallet_metadata = metadata.module("System")?;
 
     Ok((
         latest_block_hash,
@@ -1160,11 +1142,6 @@ mod tests {
             .expect_latest_block_hash()
             .times(1)
             .returning(|| Ok(H256::default()));
-
-        mock_state_chain_rpc_client
-            .expect_fetch_metadata()
-            .times(1)
-            .returning(|_| Ok(substrate_subxt::Metadata::default()));
 
         mock_state_chain_rpc_client
             .expect_fetch_runtime_version()
