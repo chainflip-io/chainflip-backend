@@ -308,10 +308,9 @@ impl StateChainRpcApi for StateChainRpcClient {
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    metadata: RwLock<substrate_subxt::Metadata>,
-
     account_storage_key: StorageKey,
     events_storage_key: StorageKey,
+    heartbeat_block_interval: u32,
     nonce: AtomicU32,
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
@@ -415,10 +414,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         let latest_block_hash =
                             self.state_chain_rpc_client.latest_block_hash().await?;
 
-                        let metadata = self
-                            .state_chain_rpc_client
-                            .fetch_metadata(latest_block_hash)
-                            .await?;
                         let runtime_version = self
                             .state_chain_rpc_client
                             .fetch_runtime_version(latest_block_hash)
@@ -435,7 +430,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             }
 
                             *(self.runtime_version.write().await) = runtime_version;
-                            *(self.metadata.write().await) = metadata;
                         }
 
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
@@ -720,22 +714,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(epoch.last().expect("should have epoch").to_owned())
     }
 
-    pub async fn get_metadata(&self) -> substrate_subxt::Metadata {
-        (*self.metadata.read().await).clone()
-    }
-
-    pub async fn get_heartbeat_block_interval(&self) -> u32 {
-        self.metadata
-            .read()
-            .await
-            .module("Reputation")
-            .expect("No module 'Reputation' in chain metadata")
-            .constant("HeartbeatBlockInterval")
-            .expect(
-                "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
-            )
-            .value::<u32>()
-            .expect("Could not decode HeartbeatBlockInterval to u32")
+    pub fn get_heartbeat_block_interval(&self) -> u32 {
+        self.heartbeat_block_interval
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
@@ -944,7 +924,15 @@ pub async fn connect_to_state_chain(
             account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
-            metadata: RwLock::new(metadata),
+            heartbeat_block_interval: metadata
+                .module("Reputation")
+                .expect("No module 'Reputation' in chain metadata")
+                .constant("HeartbeatBlockInterval")
+                .expect(
+                    "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
+                )
+                .value::<u32>()
+                .expect("Could not decode HeartbeatBlockInterval to u32"),
         }),
     ))
 }
@@ -1023,9 +1011,9 @@ mod tests {
             );
 
         let state_chain_client = StateChainClient {
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -1068,9 +1056,9 @@ mod tests {
             );
 
         let state_chain_client = StateChainClient {
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -1115,9 +1103,9 @@ mod tests {
             );
 
         let state_chain_client = StateChainClient {
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -1194,9 +1182,9 @@ mod tests {
             });
 
         let state_chain_client = StateChainClient {
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,
@@ -1243,7 +1231,7 @@ mod tests {
             );
 
         let state_chain_client = StateChainClient {
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
@@ -1306,9 +1294,9 @@ mod tests {
             );
 
         let state_chain_client = StateChainClient {
+            heartbeat_block_interval: 20,
             account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
-            metadata: RwLock::new(substrate_subxt::Metadata::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
             state_chain_rpc_client: mock_state_chain_rpc_client,

@@ -43,7 +43,7 @@ pub async fn start<BlockStream, RpcClient>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval().await;
+    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
 
     slog::info!(
         logger,
