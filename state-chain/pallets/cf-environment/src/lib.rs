@@ -11,12 +11,7 @@ pub mod pallet {
 	type EthereumAddress = [u8; 20];
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			// Change the values of the config items here
-			0
-		}
-	}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {

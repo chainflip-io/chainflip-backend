@@ -18,6 +18,10 @@ mod tests {
 				);
 			}
 
+			let expected_backup_group_size = winners.len() as u32 / BACKUP_VALIDATOR_RATIO;
+
+			assert_eq!(AuctionPallet::backup_group_size(), expected_backup_group_size);
+
 			assert_eq!(
 				AuctionPallet::auction_result(),
 				Some(AuctionResult { winners, minimum_active_bid })

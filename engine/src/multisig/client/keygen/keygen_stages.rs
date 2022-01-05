@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
 use crate::multisig::client;
+use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use client::{
     common::{
@@ -370,8 +370,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                 if has_duplicates {
                     slog::warn!(
                         self.common.logger,
-                        "Complaint had duplicates: {:?}",
-                        blamed_idxs
+                        "Complaint had duplicates: {}",
+                        format_iterator(blamed_idxs)
                     );
                 }
 
@@ -381,8 +381,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                     } else {
                         slog::warn!(
                             self.common.logger,
-                            "Invalid index in complaint: {:?}",
-                            idx_blamed
+                            "Invalid index in complaint: {}",
+                            format_iterator(blamed_idxs)
                         );
                         false
                     }

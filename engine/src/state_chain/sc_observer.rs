@@ -5,7 +5,7 @@ use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
-use sp_runtime::AccountId32;
+use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -16,7 +16,7 @@ use crate::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
-    p2p::{self, AccountId, AccountPeerMappingChange},
+    multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
@@ -152,7 +152,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 ) => {
                                     account_peer_mapping_change_sender
                                         .send((
-                                            AccountId(*account_id.as_ref()),
+                                            account_id,
                                             peer_id,
                                             AccountPeerMappingChange::Registered(
                                                 port,
@@ -169,7 +169,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 ) => {
                                     account_peer_mapping_change_sender
                                         .send((
-                                            AccountId(*account_id.as_ref()),
+                                            account_id,
                                             peer_id,
                                             AccountPeerMappingChange::Unregistered,
                                         ))
@@ -182,13 +182,8 @@ pub async fn start<BlockStream, RpcClient>(
                                         validator_candidates,
                                     ),
                                 ) => {
-                                    let signers: Vec<_> = validator_candidates
-                                        .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
-                                        .collect();
-
                                     let gen_new_key_event = MultisigInstruction::Keygen(
-                                        KeygenInfo::new(ceremony_id, signers),
+                                        KeygenInfo::new(ceremony_id, validator_candidates),
                                     );
 
                                     multisig_instruction_sender
@@ -222,11 +217,6 @@ pub async fn start<BlockStream, RpcClient>(
                                                     "Keygen failed with error: {:?}",
                                                     err
                                                 );
-                                                let bad_account_ids: Vec<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
-
                                                 let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
@@ -257,16 +247,11 @@ pub async fn start<BlockStream, RpcClient>(
                                         payload,
                                     ),
                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                    let signers: Vec<_> = validators
-                                        .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
-                                        .collect();
-
                                     let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
                                         ceremony_id,
                                         KeyId(key_id),
                                         MessageHash(payload.to_fixed_bytes()),
-                                        signers,
+                                        validators,
                                     ));
 
                                     // The below will be replaced with one shot channels
@@ -296,16 +281,12 @@ pub async fn start<BlockStream, RpcClient>(
                                                     .await;
                                             }
                                             Err((_, bad_account_ids)) => {
-                                                let bad_account_ids: BTreeSet<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
                                                 let _ = state_chain_client
                                                     .submit_signed_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
                                                             ceremony_id,
-                                                            bad_account_ids
+                                                            bad_account_ids.into_iter().collect()
                                                         )
                                                     )
                                                     .await;

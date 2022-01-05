@@ -7,17 +7,17 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use cf_p2p::{PeerId, PeerIdTransferable};
 use futures::TryStreamExt;
 use itertools::Itertools;
+use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-pub use cf_p2p::P2PRpcClient;
+pub use multisig_p2p_transport::P2PRpcClient;
+use state_chain_runtime::AccountId;
 
 use codec::Encode;
-use serde::{Deserialize, Serialize};
 
 use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
@@ -25,26 +25,12 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{self, read_and_decode_file, rpc_error_into_anyhow_error},
+    common::{self, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error},
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
-
-// TODO REMOVE
-#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct AccountId(pub [u8; 32]);
-impl std::fmt::Display for AccountId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
-    }
-}
-impl std::fmt::Debug for AccountId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
@@ -78,7 +64,7 @@ async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync 
 
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
-            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
+            != account_to_peer.get(&state_chain_client.our_account_id)
         {
             state_chain_client
                 .submit_signed_extrinsic(
@@ -139,7 +125,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer = state_chain_client
-        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
+        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
@@ -150,7 +136,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         .into_iter()
         .map(|(account_id, public_key, port, ip_address)| {
             Ok((
-                AccountId(*account_id.as_ref()),
+                account_id,
                 (
                     public_key_to_peer_id(&public_key)?,
                     port,
@@ -172,7 +158,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     );
 
     let cfe_peer_keypair: libp2p::identity::ed25519::Keypair =
-        read_and_decode_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
+        read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
             libp2p::identity::ed25519::SecretKey::from_bytes(
                 &mut Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
             )

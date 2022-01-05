@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
-	Parameter,
+	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -73,12 +73,8 @@ pub trait EpochInfo {
 	/// Checks if the account is currently a validator.
 	fn is_validator(account: &Self::ValidatorId) -> bool;
 
-	/// If we are in auction phase then the proposed set to validate once the auction is
-	/// confirmed else an empty vector
-	fn next_validators() -> Vec<Self::ValidatorId>;
-
-	/// The amount to be used as bond, this is the minimum stake needed to get into the
-	/// candidate validator set
+	/// The amount to be used as bond, this is the minimum stake needed to be included in the
+	/// current candidate validator set
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -88,16 +84,14 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
-	fn active_validator_count() -> u32 {
-		Self::current_validators().len() as u32
-	}
+	fn active_validator_count() -> u32;
 
 	/// The consensus threshold for the current epoch.
 	///
-	/// By default this is based on [cf_utilities::threshold_from_share_count] where the
-	/// `share_count` is taken from [Self::active_validator_count].
+	/// This is the number of parties required to conduct a *successful* threshold
+	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::threshold_from_share_count(Self::active_validator_count())
+		cf_utilities::success_threshold_from_share_count(Self::active_validator_count())
 	}
 }
 
@@ -157,6 +151,8 @@ pub trait Auctioneer {
 	type Amount;
 	type BidderProvider;
 
+	/// The last auction ran
+	fn auction_index() -> AuctionIndex;
 	/// Range describing auction set size
 	fn active_range() -> ActiveValidatorRange;
 	/// Set new auction range, returning on success the old value
@@ -174,6 +170,13 @@ pub trait Auctioneer {
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
 	/// Abort the process and back the preliminary phase
 	fn abort();
+}
+
+pub trait BackupValidators {
+	type ValidatorId;
+
+	/// The current set of backup validators.  The set may change at anytime.
+	fn backup_validators() -> Vec<Self::ValidatorId>;
 }
 
 /// Feedback on a vault rotation
@@ -211,10 +214,12 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
+	/// The current epoch is ending
+	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
-	/// The `_old_validators` have moved on to leave the `_new_validators` securing the network with
-	/// a `_new_bond`
+	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
+	/// a `new_bond`
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -310,6 +315,12 @@ pub trait RewardRollover {
 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
 	/// are available.
 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
+}
+
+pub trait Rewarder {
+	type AccountId;
+	// Apportion rewards due to all beneficiaries
+	fn reward_all() -> Result<(), DispatchError>;
 }
 
 /// Allow triggering of emissions.
@@ -458,11 +469,11 @@ pub trait SignerNomination {
 
 	/// Returns a random live signer. The seed value is used as a source of randomness.
 	/// Returns None if no signers are live.
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId>;
+	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -600,4 +611,11 @@ pub trait WaivedFees {
 	type AccountId;
 	type Call;
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+}
+
+/// Qualify what is considered as a potential validator for the network
+pub trait QualifyValidator {
+	type ValidatorId;
+	/// Is the validator qualified to be a validator and meet our expectations of one
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
