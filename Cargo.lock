@@ -942,6 +942,7 @@ dependencies = [
  "bs58",
  "cf-chains",
  "cf-traits",
+ "chrono",
  "config",
  "crossbeam-channel",
  "curv-kzen",
