@@ -91,7 +91,7 @@ async fn main() {
             ),
         )
         .await
-        .expect("Should get ChainId from SC"));
+        .expect("Should get EthereumChainId from SC"));
 
         let chain_id_from_eth = web3.eth().chain_id().await.expect("Should fetch chain id");
 
