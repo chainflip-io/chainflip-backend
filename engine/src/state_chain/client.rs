@@ -430,6 +430,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
                             if runtime_version_locked == runtime_version {
                                 slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
+                                // break, as the error is now very unlikely to be solved by fetching again
+                                break;
                             }
 
                             *(self.runtime_version.write().await) = runtime_version;
