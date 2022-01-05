@@ -98,7 +98,8 @@ async fn main() {
         if chain_id_from_sc != chain_id_from_eth {
             slog::error!(
             &root_logger,
-            "Ethereum node pointing to incorret chain. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
+            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
+            chain_id_from_eth,
             chain_id_from_sc
         );
             return;
