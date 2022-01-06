@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use pallet_cf_vaults::CeremonyId;
 
-use crate::multisig::MultisigDB;
+use crate::multisig::KeyDB;
 
 // Id's that are more then this amount behind the latest id are removed
 const USED_CEREMONY_IDS_AGE_LIMIT: u64 = 1_000;
@@ -13,7 +13,7 @@ const USED_CEREMONY_IDS_AGE_LIMIT: u64 = 1_000;
 #[derive(Clone)]
 pub struct CeremonyIdTracker<S>
 where
-    S: MultisigDB,
+    S: KeyDB,
 {
     used_signing_ids: UsedCeremonyIds,
     used_keygen_ids: UsedCeremonyIds,
@@ -23,7 +23,7 @@ where
 
 impl<S> CeremonyIdTracker<S>
 where
-    S: MultisigDB,
+    S: KeyDB,
 {
     // Create a new `CeremonyIdTracker` and load the persistent data from the db
     pub fn new(logger: slog::Logger, db: Arc<Mutex<S>>) -> Self {
@@ -98,11 +98,11 @@ impl UsedCeremonyIds {
 // Test consuming an id marks it as used
 #[test]
 fn test_ceremony_id_consumption() {
-    use crate::multisig::db::MultisigDBMock;
+    use crate::multisig::db::KeyDBMock;
 
     let mut tracker = CeremonyIdTracker::new(
         crate::logging::test_utils::new_test_logger(),
-        Arc::new(Mutex::new(MultisigDBMock::new())),
+        Arc::new(Mutex::new(KeyDBMock::new())),
     );
 
     let signing_test_id = 1;

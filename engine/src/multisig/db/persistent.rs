@@ -3,7 +3,7 @@ use std::{
     path::Path,
 };
 
-use super::MultisigDB;
+use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use pallet_cf_vaults::CeremonyId;
 use slog::o;
@@ -20,27 +20,27 @@ pub const DB_KEY_SIGNING_TRACKING_DATA: &[u8] = b"signing_tracking_data";
 pub const DB_KEY_KEYGEN_TRACKING_DATA: &[u8] = b"keygen_tracking_data";
 
 /// Database for keys that uses rocksdb
-pub struct PersistentMultisigDB {
+pub struct PersistentKeyDB {
     /// Rocksdb database instance
     db: Database,
     logger: slog::Logger,
 }
 
-impl PersistentMultisigDB {
+impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::default();
         // TODO: Update to kvdb 14 and then can pass in &Path
         let db = Database::open(&config, path.to_str().expect("Invalid path"))
             .expect("could not open database");
 
-        PersistentMultisigDB {
+        PersistentKeyDB {
             db,
-            logger: logger.new(o!(COMPONENT_KEY => "PersistentMultisigDB")),
+            logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
         }
     }
 }
 
-impl MultisigDB for PersistentMultisigDB {
+impl KeyDB for PersistentKeyDB {
     fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo) {
         let mut tx = self.db.transaction();
 
@@ -125,8 +125,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        logging::test_utils::new_test_logger, multisig::db::PersistentMultisigDB,
-        testing::assert_ok,
+        logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
     };
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
@@ -151,7 +150,7 @@ mod tests {
         let db_path = Path::new("db1");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let p_db = PersistentMultisigDB::new(&db_path, &logger);
+            let p_db = PersistentKeyDB::new(&db_path, &logger);
             let db = p_db.db;
 
             // Add the keyshare to the database
@@ -160,7 +159,7 @@ mod tests {
             db.write(tx).unwrap();
         }
 
-        let p_db = PersistentMultisigDB::new(&db_path, &logger);
+        let p_db = PersistentKeyDB::new(&db_path, &logger);
         let keys = p_db.load_keys();
         let key = keys.get(&key_id).expect("Should have an entry for key");
         assert_eq!(key.params.threshold, 1);
@@ -175,7 +174,7 @@ mod tests {
         let db_path = Path::new("db2");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let mut p_db = PersistentMultisigDB::new(&db_path, &logger);
+            let mut p_db = PersistentKeyDB::new(&db_path, &logger);
 
             let keys_before = p_db.load_keys();
             // there should be no key [0; 33] yet

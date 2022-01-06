@@ -18,7 +18,7 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, MultisigDB, SigningOutcome};
+use crate::multisig::{KeyDB, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
@@ -31,7 +31,7 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 #[derive(Clone)]
 pub struct CeremonyManager<S>
 where
-    S: MultisigDB,
+    S: KeyDB,
 {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
@@ -44,7 +44,7 @@ where
 
 impl<S> CeremonyManager<S>
 where
-    S: MultisigDB,
+    S: KeyDB,
 {
     pub fn new(
         my_account_id: AccountId,
@@ -421,7 +421,7 @@ where
 #[cfg(test)]
 impl<S> CeremonyManager<S>
 where
-    S: MultisigDB,
+    S: KeyDB,
 {
     pub fn expire_all(&mut self) {
         for (_, state) in &mut self.signing_states {
