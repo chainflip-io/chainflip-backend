@@ -170,6 +170,7 @@ impl CeremonyManager {
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
+            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -237,6 +238,7 @@ impl CeremonyManager {
             .is_signing_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
