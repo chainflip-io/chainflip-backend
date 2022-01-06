@@ -451,7 +451,8 @@ pub async fn start<BlockStream, RpcClient>(
                     || matches!(account_data.state, ChainflipAccountState::Validator)
                     || is_outgoing)
                     && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
+                        // submit two heartbeats for every interval
+                        % (heartbeat_block_interval / 2)
                         == 0)
                 {
                     slog::info!(
