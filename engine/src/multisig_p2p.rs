@@ -153,7 +153,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
     slog::info!(
         logger,
-        "Loaded account peer mapping from chain: {:#?}",
+        "Loaded account peer mapping from chain: {:?}",
         account_to_peer
     );
 
@@ -191,17 +191,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await
         .map_err(rpc_error_into_anyhow_error)
-        .with_context(|| {
-            format!(
-                "Failed to add peers to reserved set: {:#?}",
-                account_to_peer
-            )
-        })?;
-    slog::info!(
-        logger,
-        "Added peers to reserved set: {:#?}",
-        account_to_peer
-    );
+        .with_context(|| format!("Failed to add peers to reserved set: {:?}", account_to_peer))?;
+    slog::info!(logger, "Added peers to reserved set: {:?}", account_to_peer);
 
     let mut incoming_p2p_message_stream = client
         .subscribe_messages()
