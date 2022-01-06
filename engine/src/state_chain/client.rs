@@ -42,6 +42,7 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
+use crate::constants::MAX_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -151,9 +152,6 @@ pub type EventInfo = (
 );
 
 ////////////////////
-
-/// Number of times to retry if the nonce is wrong
-const MAX_RETRY_ATTEMPTS: usize = 10;
 
 pub struct StateChainRpcClient {
     author_rpc_client: AuthorRpcClient,
