@@ -9,11 +9,8 @@
 /// For the *success* threshold, use [success_threshold_from_share_count].
 
 pub fn threshold_from_share_count(share_count: u32) -> u32 {
-    if share_count == 0 {
-        0
-    } else {
-        (share_count.checked_mul(2).unwrap() - 1) / 3
-    }
+    assert_ne!(0, share_count);
+    (share_count.checked_mul(2).unwrap() - 1) / 3
 }
 
 /// Returns the number of parties required for a threshold signature
