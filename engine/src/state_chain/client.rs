@@ -389,6 +389,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             rpc_err
                         );
 
+                        // we want to reset the nonce, either for the next extrinsic, or for when
+                        // we retry this one, with the updated runtime_version
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+
                         let latest_block_hash =
                             self.state_chain_rpc_client.latest_block_hash().await?;
 
@@ -404,15 +408,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             if runtime_version_locked == runtime_version {
                                 slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
                                 // break, as the error is now very unlikely to be solved by fetching again
-                                self.nonce.fetch_sub(1, Ordering::Relaxed);
                                 break;
                             }
 
                             *(self.runtime_version.write().await) = runtime_version;
                         }
-
-                        self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        // don't return, therefore go back to the top of the loop and retry sending the transaction
+                        // don't `return`, therefore go back to the top of the loop and retry sending the transaction
                     }
                     err => {
                         let err = rpc_error_into_anyhow_error(err);
