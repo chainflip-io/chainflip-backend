@@ -13,7 +13,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{RewardRollover, RewardsDistribution};
+use cf_traits::{RewardRollover, Rewarder, RewardsDistribution};
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance},
@@ -94,6 +94,24 @@ pub mod pallet {
 			Self::try_apportion_full_entitlement(&account_id)?;
 			Ok(().into())
 		}
+	}
+}
+
+impl<T: Config> Rewarder for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn reward_all() -> Result<(), DispatchError> {
+		// Sanity check in case we screwed up with the accounting.
+		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
+
+		// Credit each validator with their due rewards.
+		for (account_id, already_received) in
+			ApportionedRewards::<T>::iter_prefix(VALIDATOR_REWARDS)
+		{
+			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
+		}
+
+		Ok(())
 	}
 }
 

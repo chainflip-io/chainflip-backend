@@ -95,6 +95,11 @@ impl cf_traits::KeyProvider<AlwaysVerifiesCoin> for MockKeyProvider {
 	}
 }
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = AlwaysVerifiesCoin;
@@ -102,6 +107,8 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {

@@ -133,7 +133,7 @@ impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: u64 = 10;
+	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {
@@ -156,6 +156,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
+			ethereum_deployment_block: 0,
 		},
 	};
 

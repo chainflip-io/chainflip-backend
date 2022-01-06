@@ -10,10 +10,9 @@ use lazy_static::lazy_static;
 use log::*;
 use pallet_cf_vaults::CeremonyId;
 
-use crate::{
-    multisig::{KeygenInfo, MessageHash},
-    p2p::AccountId,
-};
+use crate::multisig::{KeygenInfo, MessageHash};
+
+use state_chain_runtime::AccountId;
 
 use std::convert::TryInto;
 
@@ -25,13 +24,13 @@ pub const SIGNING_STAGES: usize = 4;
 lazy_static! {
 
     static ref ACCOUNT_IDS: Vec<AccountId> =
-        [1, 2, 3, 4].iter().map(|i| AccountId([*i; 32])).collect();
+        [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
     static ref SIGNER_IDXS: Vec<usize> = vec![0, 1, 2];
     static ref SIGNER_IDS: Vec<AccountId> = SIGNER_IDXS
         .iter()
         .map(|idx| ACCOUNT_IDS[*idx].clone())
         .collect();
-    static ref UNEXPECTED_VALIDATOR_ID: AccountId = AccountId(
+    static ref UNEXPECTED_VALIDATOR_ID: AccountId = AccountId::new(
         "unexpected|unexpected|unexpected"
             .as_bytes()
             .try_into()

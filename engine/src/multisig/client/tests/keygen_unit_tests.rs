@@ -238,7 +238,7 @@ async fn should_ignore_keygen_request_if_not_participating() {
     let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 0);
 
     // Get an id that is not `c1`s id
-    let unknown_id = AccountId([0; 32]);
+    let unknown_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_id));
     let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[0] = unknown_id;
@@ -261,7 +261,7 @@ async fn should_ignore_duplicate_keygen_request() {
     let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), 2);
 
     // Create a list of accounts that is different from the default Keygen
-    let unknown_id = AccountId([0; 32]);
+    let unknown_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_id));
     let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[1] = unknown_id;
@@ -288,7 +288,7 @@ async fn should_ignore_unexpected_message_for_stage() {
     let keygen_states = ctx.generate().await;
 
     // Get an id that is not in the keygen ceremony
-    let unknown_id = AccountId([0; 32]);
+    let unknown_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_id));
 
     // Test for all keygen stages

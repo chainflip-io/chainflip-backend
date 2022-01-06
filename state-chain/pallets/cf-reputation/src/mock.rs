@@ -116,7 +116,6 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type Penalty = MockOfflinePenalty;
 	type WeightInfo = ();
-	type EpochInfo = MockEpochInfo;
 	type Banned = MockBanned;
 }
 

@@ -1,9 +1,9 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Online, Reputation, Rewards,
-	Runtime, Validator, Vaults, Witnesser,
+	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
+	Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
+use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -13,9 +13,9 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
+	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, IsOnline, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
 	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
@@ -24,12 +24,14 @@ use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
+	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
-use sp_io::hashing::twox_128;
+mod signer_nomination;
+pub use signer_nomination::RandomSignerNomination;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -47,6 +49,13 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
+	fn on_epoch_ending() {
+		// Apportion rewards for the current validators
+		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
+			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
+		});
+	}
+
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -58,7 +67,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover: {:?}!", err);
+			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
 		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
@@ -82,6 +91,8 @@ pub struct AccountStateManager<T>(PhantomData<T>);
 impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 	type ValidatorId = AccountId;
 	type Amount = T::Amount;
+
+	fn on_epoch_ending() {}
 
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
@@ -125,7 +136,7 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
 }
 
 struct BackupValidatorEmissions;
@@ -139,7 +150,10 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight {
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
+		if backup_validators.len() == 0 {
+			return 0
+		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
@@ -157,16 +171,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(&Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
 			.iter()
 			.map(|backup_validator| {
 				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(*backup_validator);
+					Self::StakeTransfer::stakeable_balance(backup_validator);
 				let reward_scaling_factor =
 					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
 				total_rewards += reward;
-				(*backup_validator, reward)
+				(backup_validator.clone(), reward)
 			})
 			.collect();
 
@@ -175,7 +189,11 @@ impl RewardDistribution for BackupValidatorEmissions {
 			rewards = rewards
 				.into_iter()
 				.map(|(validator_id, reward)| {
-					(validator_id, (reward * emissions_cap) / total_rewards)
+					(
+						validator_id,
+						multiply_by_rational(reward, emissions_cap, total_rewards)
+							.unwrap_or_default(),
+					)
 				})
 				.collect();
 		}
@@ -207,16 +225,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		// We pay rewards to online backup validators on each heartbeat interval
-		let backup_validators: Vec<&Self::ValidatorId> = network_state
-			.online
-			.iter()
-			.filter(|account_id| {
-				ChainflipAccountStore::<Runtime>::get(*account_id).state ==
-					ChainflipAccountState::Backup
-			})
-			.collect();
-
+		let backup_validators = <Auction as BackupValidators>::backup_validators();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are within the emergency rotation range
@@ -228,62 +237,6 @@ impl Heartbeat for ChainflipHeartbeat {
 		}
 
 		weight
-	}
-}
-
-/// Returns a scaled index based on an input seed
-pub fn get_random_index(seed: Vec<u8>, max: usize) -> usize {
-	let hash = twox_128(&seed);
-	let index = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]) % max as u32;
-	index as usize
-}
-
-/// Select the next signer
-pub fn select_signer<SignerId: Clone, T: IsOnline<ValidatorId = SignerId>>(
-	validators: Vec<(SignerId, ())>,
-	seed: Vec<u8>,
-) -> Option<SignerId> {
-	// Get all online validators
-	let online_validators =
-		validators.iter().filter(|(id, _)| T::is_online(id)).collect::<Vec<_>>();
-	let number_of_online_validators = online_validators.len();
-	// Check if there is someone online
-	if number_of_online_validators == 0 {
-		return None
-	}
-	// Get a a pseudo random id by which we choose the next validator
-	let the_chosen_one = get_random_index(seed, number_of_online_validators);
-	online_validators.get(the_chosen_one).map(|f| f.0.clone())
-}
-/// A very basic but working implementation of signer nomination.
-///
-/// For a single signer, takes the first online validator in the validator lookup map.
-///
-/// For multiple signers, takes the first N online validators where N is signing consensus
-/// threshold.
-pub struct BasicSignerNomination;
-
-impl cf_traits::SignerNomination for BasicSignerNomination {
-	type SignerId = AccountId;
-
-	fn nomination_with_seed(seed: Vec<u8>) -> Option<Self::SignerId> {
-		let validators =
-			pallet_cf_validator::ValidatorLookup::<Runtime>::iter().collect::<Vec<_>>();
-		select_signer::<Self::SignerId, Online>(validators, seed)
-	}
-
-	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
-		let threshold = pallet_cf_witnesser::ConsensusThreshold::<Runtime>::get();
-		pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-			.filter_map(|(id, _)| {
-				if <Online as cf_traits::IsOnline>::is_online(&id) {
-					Some(id)
-				} else {
-					None
-				}
-			})
-			.take(threshold as usize)
-			.collect()
 	}
 }
 

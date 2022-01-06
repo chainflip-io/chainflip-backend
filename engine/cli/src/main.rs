@@ -74,7 +74,7 @@ async fn request_claim(
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. You will send two transactions, a redeem and claim.",
         amount,
         atomic_amount,
         hex::encode(eth_address)
@@ -84,14 +84,19 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
     // Currently you have to redeem rewards before you can claim them - this may eventually be
     // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
-    let _tx_hash_redeem = state_chain_client
+    let tx_hash = state_chain_client
         .submit_signed_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
         .await
         .expect("Failed to submit redeem extrinsic");
+
+    println!(
+        "Your redeem has transaction hash: `{:#x}`. Next we will execute the the claim...",
+        tx_hash
+    );
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
@@ -182,7 +187,8 @@ async fn request_claim(
                                 );
                                 break 'outer;
                             } else {
-                                println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim. <LINK>");
+                                println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim.");
+                                break 'outer;
                             }
                         }
                     }
@@ -230,7 +236,7 @@ async fn register_claim(
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let seed = state_chain_client
         .rotate_session_keys()
         .await
@@ -257,7 +263,7 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 }
 
 async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(logger, pallet_cf_staking::Call::retire_account())
         .await

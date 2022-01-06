@@ -1,11 +1,10 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use pallet_cf_vaults::CeremonyId;
+use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{
-    logging::KEYGEN_REQUEST_IGNORED, multisig::client::ThresholdParameters, p2p::AccountId,
-};
+use crate::{logging::KEYGEN_REQUEST_IGNORED, multisig::client::ThresholdParameters};
 
 use super::{
     common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResult},

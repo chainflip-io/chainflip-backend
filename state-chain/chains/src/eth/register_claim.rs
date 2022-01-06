@@ -86,9 +86,13 @@ impl RegisterClaim {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						// msgHash
 						ParamType::Uint(256),
+						// sig
 						ParamType::Uint(256),
+						// nonce
 						ParamType::Uint(256),
+						// ktimesGAddr
 						ParamType::Address,
 					]),
 				),

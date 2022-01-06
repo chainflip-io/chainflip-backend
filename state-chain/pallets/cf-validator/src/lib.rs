@@ -16,6 +16,7 @@ extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 use cf_traits::{
 	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
@@ -32,6 +33,14 @@ use sp_runtime::traits::{
 };
 use sp_std::prelude::*;
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds Bond and Validator storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
@@ -45,6 +54,7 @@ pub struct SemVer {
 type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
+pub type Ipv6Addr = u128;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -56,12 +66,14 @@ pub struct PercentageRange {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -109,9 +121,10 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(T::ValidatorId, Version, Version),
-		/// A validator has register her current PeerId
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey),
-		/// A validator has unregistered her current PeerId
+		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// ip_address\]
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 	}
 
@@ -130,7 +143,34 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -228,6 +268,8 @@ pub mod pallet {
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
+			port: u16,
+			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -235,18 +277,30 @@ pub mod pallet {
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
-			ensure!(
-				!AccountPeerMapping::<T>::contains_key(&account_id) &&
+
+			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+				if existing_peer_id != peer_id {
+					ensure!(
+						!MappedPeers::<T>::contains_key(&peer_id),
+						Error::<T>::AccountPeerMappingOverlap
+					);
+					MappedPeers::<T>::remove(&existing_peer_id);
+					MappedPeers::<T>::insert(&peer_id, ());
+				}
+			} else {
+				ensure!(
 					!MappedPeers::<T>::contains_key(&peer_id),
-				Error::<T>::AccountPeerMappingOverlap
-			);
+					Error::<T>::AccountPeerMappingOverlap
+				);
+				MappedPeers::<T>::insert(&peer_id, ());
+			}
+
 			AccountPeerMapping::<T>::insert(
-				account_id.clone(),
-				(account_id.clone(), peer_id.clone()),
+				&account_id,
+				(account_id.clone(), peer_id, port, ip_address),
 			);
 
-			MappedPeers::<T>::insert(peer_id.clone(), ());
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id));
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
@@ -268,7 +322,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id: T::ValidatorId = account_id.into();
+			let validator_id: T::ValidatorId = account_id;
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
@@ -308,16 +362,30 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// Validator lookup
+	/// Active validator lookup
 	#[pallet::storage]
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// A list of the current validators
+	#[pallet::storage]
+	#[pallet::getter(fn validators)]
+	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
+	/// The current bond
+	#[pallet::storage]
+	#[pallet::getter(fn bond)]
+	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
 	/// Account to Peer Mapping
 	#[pallet::storage]
 	#[pallet::getter(fn validator_peer_id)]
-	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Ed25519PublicKey)>;
+	pub type AccountPeerMapping<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+	>;
 
 	/// Peers that are associated with account ids
 	#[pallet::storage]
@@ -346,15 +414,17 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			if let Some(auction_result) = T::Auctioneer::auction_result() {
-				T::EpochTransitionHandler::on_new_epoch(
-					&[],
-					&auction_result.winners,
-					auction_result.minimum_active_bid,
+
+			if let Some(AuctionResult { minimum_active_bid, winners }) =
+				T::Auctioneer::auction_result()
+			{
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			} else {
+				log::warn!(
+					"Unavailable genesis auction so we have no current validating set! \
+							Forcing a rotation will resolve this if we have stakers available"
 				);
 			}
-			CurrentEpoch::<T>::set(0);
-			Pallet::<T>::generate_lookup();
 		}
 	}
 }
@@ -364,22 +434,15 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type Amount = T::Amount;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::validators()
+		Validators::<T>::get()
 	}
 
 	fn is_validator(account: &Self::ValidatorId) -> bool {
 		ValidatorLookup::<T>::contains_key(account)
 	}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::queued_keys().into_iter().map(|(k, _)| k).collect()
-	}
-
 	fn bond() -> Self::Amount {
-		match T::Auctioneer::phase() {
-			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
-			_ => Zero::zero(),
-		}
+		Bond::<T>::get()
 	}
 
 	fn epoch_index() -> EpochIndex {
@@ -388,6 +451,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn is_auction_phase() -> bool {
 		!T::Auctioneer::waiting_on_bids()
+	}
+
+	fn active_validator_count() -> u32 {
+		Validators::<T>::decode_len().unwrap_or_default() as u32
 	}
 }
 
@@ -401,6 +468,8 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// of the auction, validate and select winners, as one.  If this fails we force a
 				// new rotation attempt.
 				if Self::should_rotate(now) {
+					// The current epoch is on the way out
+					T::EpochTransitionHandler::on_epoch_ending();
 					let processed =
 						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
 					if !processed {
@@ -425,6 +494,34 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Starting a new epoch we update the storage, emit the event and call
+	/// `EpochTransitionHandler::on_new_epoch`
+	fn start_new_epoch(new_validators: &[T::ValidatorId], new_bond: T::Amount) {
+		let old_validators = Validators::<T>::get();
+		// Update state of current validators
+		Validators::<T>::set(new_validators.to_vec());
+		ValidatorLookup::<T>::remove_all(None);
+		for validator in new_validators {
+			ValidatorLookup::<T>::insert(validator, ());
+		}
+		// The new bond set
+		Bond::<T>::set(new_bond);
+		// Set the block this epoch starts at
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+
+		// Calculate the new epoch index
+		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
+			*epoch = epoch.saturating_add(One::one());
+			*epoch
+		});
+
+		// Emit that a new epoch will be starting
+		Self::deposit_event(Event::NewEpoch(new_epoch));
+
+		// Handler for a new epoch
+		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+	}
+
 	/// Check whether we should based on either a force rotation or we have reach the epoch
 	/// block number
 	fn should_rotate(now: T::BlockNumber) -> bool {
@@ -440,15 +537,6 @@ impl<T: Config> Pallet<T> {
 		let diff = now.saturating_sub(current_epoch_started_at);
 
 		diff >= blocks_per_epoch
-	}
-
-	/// Generate our validator lookup list
-	fn generate_lookup() {
-		// Update our internal list of validators
-		ValidatorLookup::<T>::remove_all(None);
-		for validator in <pallet_session::Pallet<T>>::validators() {
-			ValidatorLookup::<T>::insert(validator, ());
-		}
 	}
 
 	fn force_validator_rotation() -> Weight {
@@ -477,29 +565,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					}
 					// If we were in an emergency, mark as completed
 					Self::emergency_rotation_completed();
-					// Calculate our new epoch index
-					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
-						*epoch = epoch.saturating_add(One::one());
-						*epoch
-					});
-					// Set the block this epoch starts at
-					CurrentEpochStartedAt::<T>::set(
-						frame_system::Pallet::<T>::current_block_number(),
-					);
-					// Emit an event
-					Self::deposit_event(Event::NewEpoch(new_epoch));
-					// Generate our lookup list of validators
-					Self::generate_lookup();
-					let old_validators = T::Auctioneer::auction_result()
-						.expect("from genesis we would expect a previous auction")
-						.winners;
-
-					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(
-						&old_validators,
-						&winners,
-						minimum_active_bid,
-					);
+					// Start the new epoch
+					Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
 				}
 
 				let _ = T::Auctioneer::process();
@@ -571,7 +638,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

@@ -1,9 +1,13 @@
 use std::{
+    fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
+    time::Duration,
 };
 
 use anyhow::Context;
+use futures::Stream;
+use itertools::Itertools;
 use jsonrpc_core_client::RpcError;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -101,7 +105,7 @@ pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
     anyhow::Error::msg(format!("{:?}", error))
 }
 
-pub fn read_and_decode_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
+pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
     file: &Path,
     context: &str,
     t: T,
@@ -109,6 +113,22 @@ pub fn read_and_decode_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
     std::fs::read_to_string(&file)
         .map_err(anyhow::Error::new)
         .with_context(|| format!("Failed to read {} file at {}", context, file.display()))
-        .and_then(t)
+        .and_then(|str| {
+            let str = str.replace("0x", "").replace("\"", "");
+            t(str.trim().to_string())
+        })
         .with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
+}
+
+/// Makes a stream that outputs () approximately every duration
+pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
+    Box::pin(futures::stream::unfold((), move |_| async move {
+        Some((tokio::time::sleep(duration.clone()).await, ()))
+    }))
+}
+
+pub fn format_iterator<'a, I: 'static + Display, It: 'a + IntoIterator<Item = &'a I>>(
+    it: It,
+) -> String {
+    format!("{}", it.into_iter().format(", "))
 }

@@ -18,8 +18,8 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
-use frame_support::traits::EnsureOrigin;
-use frame_system::pallet_prelude::OriginFor;
+use frame_support::traits::{EnsureOrigin, Get};
+use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{BlockNumberProvider, Saturating},
@@ -153,6 +153,15 @@ pub mod pallet {
 
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+
+		/// Timeout after which we consider a threshold signature ceremony to have failed.
+		#[pallet::constant]
+		type ThresholdFailureTimeout: Get<Self::BlockNumber>;
+
+		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
+		/// number of blocks to wait before retrying with a new set.
+		#[pallet::constant]
+		type CeremonyRetryDelay: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -192,6 +201,9 @@ pub mod pallet {
 		RetryStale(CeremonyId),
 		/// \[ceremony_id, reporter_id\]
 		FailureReportProcessed(CeremonyId, T::ValidatorId),
+		/// Not enough signers were available to reach threshold. Ceremony will be retried.
+		/// \[ceremony_id\]
+		SignersUnavailable(CeremonyId),
 	}
 
 	#[pallet::error]
@@ -353,8 +365,6 @@ pub mod pallet {
 				cf_traits::CurrentThreshold<T>,
 			>,
 		) -> DispatchResultWithPostInfo {
-			const FAILURE_TIMEOUT_BLOCKS: u32 = 10;
-
 			let reporter_id = ensure_signed(origin)?.into();
 
 			let _ = PendingRequests::<T, I>::try_mutate(id, |maybe_context| {
@@ -373,22 +383,12 @@ pub mod pallet {
 						if !context.retry_scheduled &&
 							context.countdown_initiation_threshold_reached()
 						{
-							// Schedule for retry.
 							context.retry_scheduled = true;
-							RetryQueues::<T, I>::append(
-								frame_system::Pallet::<T>::current_block_number().saturating_add(
-									BlockNumberFor::<T>::from(FAILURE_TIMEOUT_BLOCKS),
-								),
-								id,
-							);
+							Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
 						}
 						if context.remaining_respondents.is_empty() {
-							// All respondents have reported, schedule retry for next block.
-							RetryQueues::<T, I>::append(
-								frame_system::Pallet::<T>::current_block_number()
-									.saturating_add(BlockNumberFor::<T>::from(1u32)),
-								id,
-							);
+							// No more respondents waiting: we can retry on the next block.
+							Self::schedule_retry(id, 1u32.into());
 						}
 
 						Ok(())
@@ -449,27 +449,53 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let payload = context.get_payload();
 
 		// Select nominees for threshold signature.
-		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
+		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed((id, attempt)) {
+			// Store the context.
+			PendingRequests::<T, I>::insert(
+				id,
+				RequestContext {
+					attempt,
+					retry_scheduled: false,
+					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
+					blame_counts: Default::default(),
+					participant_count: nominees.len() as u32,
+					chain_signing_context: context,
+				},
+			);
 
-		// Store the context.
-		PendingRequests::<T, I>::insert(
-			id,
-			RequestContext {
-				attempt,
-				retry_scheduled: false,
-				remaining_respondents: BTreeSet::from_iter(nominees.clone()),
-				blame_counts: Default::default(),
-				participant_count: nominees.len() as u32,
-				chain_signing_context: context,
-			},
-		);
+			// Emit the request to the CFE.
+			Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
+				id, key_id, nominees, payload,
+			));
+		} else {
+			// Store the context, schedule a retry for the next block.
+			PendingRequests::<T, I>::insert(
+				id,
+				RequestContext {
+					attempt,
+					retry_scheduled: true,
+					remaining_respondents: Default::default(),
+					blame_counts: Default::default(),
+					participant_count: 0,
+					chain_signing_context: context,
+				},
+			);
 
-		// Emit the request to the CFE.
-		Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-			id, key_id, nominees, payload,
-		));
+			// Emit the request to the CFE.
+			Self::deposit_event(Event::<T, I>::SignersUnavailable(id));
+			// Schedule the retry for the next block.
+			Self::schedule_retry(id, T::CeremonyRetryDelay::get());
+		}
 
 		id
+	}
+
+	fn schedule_retry(id: CeremonyId, retry_delay: BlockNumberFor<T>) {
+		RetryQueues::<T, I>::append(
+			frame_system::Pallet::<T>::current_block_number()
+				.saturating_add(BlockNumberFor::<T>::from(retry_delay)),
+			id,
+		);
 	}
 }
 
