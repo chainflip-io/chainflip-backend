@@ -78,17 +78,20 @@ impl UsedCeremonyIds {
 fn test_ceremony_id_consumption() {
     let mut tracker = CeremonyIdTracker::new(crate::logging::test_utils::new_test_logger());
 
+    // Using a different id for signing & keygen, to confirm no cross contamination
     let signing_test_id = 1;
+    let keygen_test_id = 2;
+    assert_ne!(signing_test_id, keygen_test_id);
+
     assert!(!tracker.is_signing_ceremony_id_used(&signing_test_id));
     tracker.consume_signing_id(&signing_test_id);
     assert!(tracker.is_signing_ceremony_id_used(&signing_test_id));
+    assert!(!tracker.is_keygen_ceremony_id_used(&signing_test_id));
 
-    // Using a different id for keygen, to confirm no cross contamination with signing
-    let keygen_test_id = 2;
-    assert_ne!(signing_test_id, keygen_test_id);
     assert!(!tracker.is_keygen_ceremony_id_used(&keygen_test_id));
     tracker.consume_keygen_id(&keygen_test_id);
     assert!(tracker.is_keygen_ceremony_id_used(&keygen_test_id));
+    assert!(!tracker.is_signing_ceremony_id_used(&keygen_test_id));
 }
 
 // Test that the age limit is enforced

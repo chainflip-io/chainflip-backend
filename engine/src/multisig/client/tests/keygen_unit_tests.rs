@@ -26,7 +26,7 @@ async fn happy_path_results_in_valid_key() {
     assert!(keygen_states.blame_responses6.is_none());
 
     // Able to generate a valid signature
-    assert!(ctx.sign().await.sign_finished.outcome.result.is_ok());
+    assert_ok!(ctx.sign().await.sign_finished.outcome.result);
 }
 
 /// If keygen state expires before a formal request to keygen
