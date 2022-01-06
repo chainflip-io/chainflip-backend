@@ -216,23 +216,43 @@ where
 
         // cleanup stale signing_info in pending_requests_to_sign
         let logger = &self.logger;
+
+        let mut expired_ceremony_ids = vec![];
+
         self.pending_requests_to_sign
             .retain(|key_id, pending_signing_infos| {
                 pending_signing_infos.retain(|pending| {
                     if pending.should_expire_at < Instant::now() {
+                        let ceremony_id = pending.signing_info.ceremony_id;
+
                         slog::warn!(
                             logger,
                             #REQUEST_TO_SIGN_EXPIRED,
                             "Request to sign expired waiting for key id: {:?}",
                             key_id;
-                            CEREMONY_ID_KEY => pending.signing_info.ceremony_id,
+                            CEREMONY_ID_KEY => ceremony_id,
                         );
+
+                        expired_ceremony_ids.push(ceremony_id);
                         return false;
                     }
                     true
                 });
                 !pending_signing_infos.is_empty()
             });
+
+        for id in expired_ceremony_ids {
+            if let Err(err) = self
+                .multisig_outcome_sender
+                .send(MultisigOutcome::Keygen(KeygenOutcome::timeout(id, vec![])))
+            {
+                slog::error!(
+                    self.logger,
+                    "Could not send KeygenOutcome::timeout: {}",
+                    err
+                );
+            }
+        }
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
@@ -330,7 +350,7 @@ where
             // TODO: alert
             slog::error!(
                 self.logger,
-                "Could not sent KeygenOutcome::Success: {}",
+                "Could not send KeygenOutcome::Success: {}",
                 err
             );
         }
