@@ -43,12 +43,10 @@ pub async fn start<BlockStream, RpcClient>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
-
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
-        heartbeat_block_interval,
+        state_chain_client.heartbeat_block_interval,
     );
 
     state_chain_client
@@ -450,8 +448,8 @@ pub async fn start<BlockStream, RpcClient>(
                 if (matches!(account_data.state, ChainflipAccountState::Backup)
                     || matches!(account_data.state, ChainflipAccountState::Validator)
                     || is_outgoing)
-                    && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
+                    && ((block_header.number + (state_chain_client.heartbeat_block_interval / 2))
+                        % state_chain_client.heartbeat_block_interval
                         == 0)
                 {
                     slog::info!(

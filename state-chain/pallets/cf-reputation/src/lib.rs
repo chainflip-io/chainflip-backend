@@ -234,7 +234,6 @@ pub mod pallet {
 				Reputations::<T>::mutate(
 					validator_id,
 					|Reputation { online_credits, reputation_points }| {
-						// Accrue some online credits of `HeartbeatInterval` size
 						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points
