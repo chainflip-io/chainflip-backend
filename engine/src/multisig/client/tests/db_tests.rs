@@ -24,7 +24,7 @@ async fn check_signing_db() {
 
     // 2. Extract the clients' database
     let client1 = ctx.get_client(&account_id);
-    let db = client1.get_db().lock().unwrap().clone();
+    let db = client1.get_db().clone();
 
     // 3. Create a new multisig client using the extracted database
     let id = client1.get_my_account_id();

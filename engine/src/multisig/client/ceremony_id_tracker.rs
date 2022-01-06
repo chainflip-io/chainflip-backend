@@ -1,43 +1,29 @@
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
 
 use pallet_cf_vaults::CeremonyId;
 
-use crate::multisig::KeyDB;
-
-// Id's that are more then this amount behind the latest id are removed
+// Ids that are more then this amount behind the latest id are removed
 const USED_CEREMONY_IDS_AGE_LIMIT: u64 = 1_000;
 
 /// Used to track every ceremony id that has been used in the past,
 /// so we can make sure they are not reused.
 #[derive(Clone)]
-pub struct CeremonyIdTracker<S>
-where
-    S: KeyDB,
-{
+pub struct CeremonyIdTracker {
     used_signing_ids: UsedCeremonyIds,
     used_keygen_ids: UsedCeremonyIds,
-    db: Arc<Mutex<S>>,
     logger: slog::Logger,
 }
 
-impl<S> CeremonyIdTracker<S>
-where
-    S: KeyDB,
-{
-    // Create a new `CeremonyIdTracker` and load the persistent data from the db
-    pub fn new(logger: slog::Logger, db: Arc<Mutex<S>>) -> Self {
-        let used_signing_ids = UsedCeremonyIds {
-            ids: db.lock().unwrap().load_tracking_for_signing(),
-        };
-        let used_keygen_ids = UsedCeremonyIds {
-            ids: db.lock().unwrap().load_tracking_for_keygen(),
-        };
-
+impl CeremonyIdTracker {
+    // Create a new `CeremonyIdTracker` with empty `UsedCeremonyIds`
+    pub fn new(logger: slog::Logger) -> Self {
         CeremonyIdTracker {
-            used_signing_ids,
-            used_keygen_ids,
-            db,
+            used_signing_ids: UsedCeremonyIds {
+                ids: HashSet::new(),
+            },
+            used_keygen_ids: UsedCeremonyIds {
+                ids: HashSet::new(),
+            },
             logger,
         }
     }
@@ -45,19 +31,11 @@ where
     /// Mark this ceremony id as used
     pub fn consume_signing_id(&mut self, ceremony_id: &CeremonyId) {
         self.used_signing_ids.add(ceremony_id);
-        self.db
-            .lock()
-            .unwrap()
-            .update_tracking_for_signing(&self.used_signing_ids.ids);
     }
 
     /// Mark this ceremony id as used
     pub fn consume_keygen_id(&mut self, ceremony_id: &CeremonyId) {
         self.used_keygen_ids.add(ceremony_id);
-        self.db
-            .lock()
-            .unwrap()
-            .update_tracking_for_keygen(&self.used_keygen_ids.ids);
     }
 
     /// Check if the ceremony id has already been used
@@ -74,7 +52,7 @@ where
 /// Wrapper around the used ceremony id data
 #[derive(Clone)]
 struct UsedCeremonyIds {
-    // All used id's
+    // All used ids
     ids: HashSet<CeremonyId>,
 }
 
@@ -98,12 +76,7 @@ impl UsedCeremonyIds {
 // Test consuming an id marks it as used
 #[test]
 fn test_ceremony_id_consumption() {
-    use crate::multisig::db::KeyDBMock;
-
-    let mut tracker = CeremonyIdTracker::new(
-        crate::logging::test_utils::new_test_logger(),
-        Arc::new(Mutex::new(KeyDBMock::new())),
-    );
+    let mut tracker = CeremonyIdTracker::new(crate::logging::test_utils::new_test_logger());
 
     let signing_test_id = 1;
     assert!(!tracker.is_signing_ceremony_id_used(&signing_test_id));

@@ -43,20 +43,4 @@ impl KeyDB for KeyDBMock {
             })
             .collect()
     }
-
-    /// Save a new unused ceremony id to the underlying storage
-    fn update_tracking_for_signing(&mut self, data: &HashSet<CeremonyId>) {
-        self.signing_tracking_data = data.clone();
-    }
-    fn update_tracking_for_keygen(&mut self, data: &HashSet<CeremonyId>) {
-        self.keygen_tracking_data = data.clone();
-    }
-
-    /// Load all the unused ceremony ids from the underlying storage
-    fn load_tracking_for_signing(&self) -> HashSet<CeremonyId> {
-        self.signing_tracking_data.clone()
-    }
-    fn load_tracking_for_keygen(&self) -> HashSet<CeremonyId> {
-        self.keygen_tracking_data.clone()
-    }
 }

@@ -1,5 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::multisig::client::{self, MultisigOutcome};
 use crate::p2p::AccountId;
@@ -18,7 +18,7 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeyDB, KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashContext, KeygenData, KeygenOptions};
@@ -29,29 +29,22 @@ type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
 #[derive(Clone)]
-pub struct CeremonyManager<S>
-where
-    S: KeyDB,
-{
+pub struct CeremonyManager {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     logger: slog::Logger,
-    ceremony_id_tracker: CeremonyIdTracker<S>,
+    ceremony_id_tracker: CeremonyIdTracker,
 }
 
-impl<S> CeremonyManager<S>
-where
-    S: KeyDB,
-{
+impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
         outcome_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
         logger: &slog::Logger,
-        ceremony_id_db: Arc<Mutex<S>>,
     ) -> Self {
         CeremonyManager {
             my_account_id,
@@ -60,7 +53,7 @@ where
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
             logger: logger.clone(),
-            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone(), ceremony_id_db),
+            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone()),
         }
     }
 
@@ -419,10 +412,7 @@ where
 }
 
 #[cfg(test)]
-impl<S> CeremonyManager<S>
-where
-    S: KeyDB,
-{
+impl CeremonyManager {
     pub fn expire_all(&mut self) {
         for (_, state) in &mut self.signing_states {
             state.set_expiry_time(std::time::Instant::now());

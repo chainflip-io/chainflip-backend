@@ -1,11 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-};
+use std::{collections::HashMap, path::Path};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use pallet_cf_vaults::CeremonyId;
 use slog::o;
 
 use crate::{
@@ -14,10 +10,6 @@ use crate::{
 };
 
 pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
-//pub const DB_COL_CEREMONY_TRACKING: u32 = 1;
-
-pub const DB_KEY_SIGNING_TRACKING_DATA: &[u8] = b"signing_tracking_data";
-pub const DB_KEY_KEYGEN_TRACKING_DATA: &[u8] = b"keygen_tracking_data";
 
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
@@ -90,33 +82,6 @@ impl KeyDB for PersistentKeyDB {
             })
             .collect()
     }
-
-    fn update_tracking_for_signing(&mut self, data: &HashSet<CeremonyId>) {
-        save_ceremony_tracking(&mut self.db, data, DB_KEY_SIGNING_TRACKING_DATA);
-    }
-
-    fn load_tracking_for_signing(&self) -> HashSet<CeremonyId> {
-        load_ceremony_tracking(&self.db, DB_KEY_SIGNING_TRACKING_DATA)
-            .expect("should load signing tacking data")
-    }
-
-    fn update_tracking_for_keygen(&mut self, data: &HashSet<CeremonyId>) {
-        save_ceremony_tracking(&mut self.db, data, DB_KEY_KEYGEN_TRACKING_DATA);
-    }
-
-    fn load_tracking_for_keygen(&self) -> HashSet<CeremonyId> {
-        load_ceremony_tracking(&self.db, DB_KEY_KEYGEN_TRACKING_DATA)
-            .expect("should load keygen tacking data")
-    }
-}
-
-fn save_ceremony_tracking(_db: &mut Database, _data: &HashSet<CeremonyId>, _key: &[u8]) {
-    // Disabled writing ceremony tracking data to disk until we have a better db solution.
-}
-
-fn load_ceremony_tracking(_db: &Database, _key: &[u8]) -> anyhow::Result<HashSet<CeremonyId>> {
-    // Disabled writing ceremony tracking data to disk until we have a better db solution.
-    Ok(HashSet::new())
 }
 
 #[cfg(test)]
