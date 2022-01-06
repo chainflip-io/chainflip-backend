@@ -384,7 +384,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     {
                         slog::error!(
                             logger,
-                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
                             nonce,
                             rpc_err
                         );
