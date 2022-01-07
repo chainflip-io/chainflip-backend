@@ -892,12 +892,14 @@ impl KeygenContext {
                 let pubkeys: Vec<_> = results.iter().map(|res| res.clone().unwrap()).collect();
 
                 // ensure all participants have the same public key
-                assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
-                assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
+                let first_pubkey = pubkeys[0].clone();
+                for pubkey in pubkeys {
+                    assert_eq!(first_pubkey.serialize(), pubkey.serialize());
+                }
 
                 let mut sec_keys = HashMap::new();
 
-                let key_id = KeyId(pubkeys[0].serialize().into());
+                let key_id = KeyId(first_pubkey.serialize().into());
                 self.key_id = Some(key_id.clone());
 
                 for (id, c) in clients.iter() {
@@ -907,7 +909,7 @@ impl KeygenContext {
 
                 Ok(KeyReadyData {
                     clients: clients.clone(),
-                    pubkey: pubkeys[0],
+                    pubkey: first_pubkey,
                     sec_keys,
                 })
             } else {

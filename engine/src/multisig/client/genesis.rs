@@ -13,17 +13,27 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::Write;
 
+    use crate::multisig::client::ensure_unsorted;
     use crate::multisig::KeygenOptions;
-    use crate::{multisig::client::ensure_unsorted, p2p::AccountId};
+    use state_chain_runtime::AccountId;
 
     const ENV_VAR_OUTPUT_FILE: &str = "KEYSHARES_JSON_OUTPUT";
     const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
-    const NODE_NAMES: &[&str] = &["bashful", "doc", "dopey"];
-    const DEFAULT_NODE_IDS: &[&str] = &[
-        "36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911",
-        "8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04",
-        "ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e",
+    // If no `ENV_VAR_INPUT_FILE` is defined, then these default names and ids are used to run the genesis unit test
+    const DEFAULT_NODES: &[&[&str]] = &[
+        &[
+            "bashful",
+            "36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911",
+        ],
+        &[
+            "doc",
+            "8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04",
+        ],
+        &[
+            "dopey",
+            "ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e",
+        ],
     ];
 
     fn account_id_from_string(account_id_hex: &str) -> Result<AccountId, anyhow::Error> {
@@ -35,7 +45,59 @@ mod tests {
             anyhow::Error::msg(format!("Invalid account id {:?}: {:?}", &account_id_hex, e))
         })?;
 
-        Ok(AccountId(data))
+        Ok(AccountId::new(data))
+    }
+
+    fn load_node_ids_from_csv(file: &str) -> HashMap<String, AccountId> {
+        // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
+        if let Ok(mut rdr) = csv::Reader::from_path(&file) {
+            let node_name_to_id_map: HashMap<String, AccountId> = rdr
+                .records()
+                .filter_map(|result| match result {
+                    Ok(record) => {
+                        // Load the items from the row
+                        let mut items: Vec<String> = vec![];
+                        for item in record.iter() {
+                            items.push(item.to_string());
+                        }
+
+                        // Get the node name and id and put them in the hashmap
+                        if items.len() == 2 {
+                            let item_node_name = items[0].to_lowercase();
+                            if DEFAULT_NODES
+                                .iter()
+                                .find(|node| node[0] == item_node_name)
+                                .is_none()
+                            {
+                                println!(
+                                    "Warning: using a new/unknown node name: {}",
+                                    &item_node_name
+                                );
+                            }
+                            // Even if its an unknown node name, we still use it
+                            Some((
+                                item_node_name.clone(),
+                                account_id_from_string(&record[1]).expect(&format!(
+                                    "Error loading node id for {} from {}",
+                                    &item_node_name, &file
+                                )),
+                            ))
+                        } else {
+                            println!("Error reading csv: bad format");
+                            None
+                        }
+                    }
+                    Err(e) => {
+                        println!("Error reading csv record: {}", e);
+                        None
+                    }
+                })
+                .collect();
+
+            return node_name_to_id_map;
+        } else {
+            panic!("No genesis csv file found at {}", &file);
+        }
     }
 
     // Generate the keys for genesis
@@ -46,60 +108,41 @@ mod tests {
 
         // Load the node id from a csv file if the env var exists
         if let Ok(input_file_path) = env::var(ENV_VAR_INPUT_FILE) {
-            if let Ok(mut rdr) = csv::Reader::from_path(&input_file_path) {
-                for result in rdr.records() {
-                    // Get the data from the csv
-                    let mut records: Vec<Vec<String>> = vec![];
-                    match result {
-                        Ok(record) => {
-                            println!("record found: {:?}", record);
-                            let mut items: Vec<String> = vec![];
-                            for item in record.iter() {
-                                println!("item: {}", item);
-                                items.push(item.to_string());
-                            }
-                            records.push(items);
-                        }
-                        Err(e) => {
-                            println!("Error reading csv record: {}", e);
-                        }
-                    }
-                    // Parse the node id's and fill in the map
-                    for record in records {
-                        if record.len() != 2 {
-                            println!("Error reading csv: bad format");
-                        } else {
-                            for node_name in NODE_NAMES {
-                                if &record[0].to_lowercase() == *node_name {
-                                    println!(
-                                        "Got id from csv for {} - {:?}",
-                                        *node_name,
-                                        account_id_from_string(&record[1])
-                                    );
-                                    node_name_to_id_map.insert(
-                                        node_name.to_string(),
-                                        account_id_from_string(&record[1]).expect(&format!(
-                                            "Error loading node ids from {}",
-                                            &input_file_path
-                                        )),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                println!("No genesis csv found at {}", &input_file_path);
+            node_name_to_id_map = load_node_ids_from_csv(&input_file_path);
+            println!(
+                "Loaded {} node ids from {}, {:?}",
+                node_name_to_id_map.len(),
+                &input_file_path,
+                node_name_to_id_map
+            );
+
+            // Check for duplicate ids
+            for (_, node_id) in node_name_to_id_map.clone() {
+                let duplicates: HashMap<&String, &AccountId> = node_name_to_id_map
+                    .iter()
+                    .filter(|(_, id)| *id == &node_id)
+                    .collect();
+                assert!(
+                    duplicates.len() == 1,
+                    "Found a duplicate node id in the csv file {:?}",
+                    duplicates
+                );
             }
+
+            assert!(
+                node_name_to_id_map.len() > 1,
+                "Not enough nodes in csv file {} to run genesis",
+                &input_file_path
+            );
         } else {
             println!(
                 "No genesis node id csv file defined with {}, using default values",
                 ENV_VAR_INPUT_FILE
             );
-            for i in 0..NODE_NAMES.len() {
+            for i in 0..DEFAULT_NODES.len() {
                 node_name_to_id_map.insert(
-                    NODE_NAMES[i].to_string(),
-                    account_id_from_string(DEFAULT_NODE_IDS[i]).unwrap(),
+                    DEFAULT_NODES[i][0].to_string(),
+                    account_id_from_string(DEFAULT_NODES[i][1]).unwrap(),
                 );
             }
         }
@@ -149,16 +192,14 @@ mod tests {
             "Signing ceremony failed"
         );
 
-        println!(
-            "Pubkey is (66 chars, 33 bytes): {:?}",
-            hex::encode(
-                valid_keygen_states
-                    .key_ready_data()
-                    .expect("successful_keygen")
-                    .pubkey
-                    .serialize()
-            )
+        let pub_key = hex::encode(
+            valid_keygen_states
+                .key_ready_data()
+                .expect("successful_keygen")
+                .pubkey
+                .serialize(),
         );
+        println!("Pubkey is (66 chars, 33 bytes): {:?}", pub_key);
 
         let secret_keys = &valid_keygen_states
             .key_ready_data()
@@ -167,13 +208,14 @@ mod tests {
 
         // Print the output :)
         let mut output: HashMap<String, String> = HashMap::new();
-        for i in 0..NODE_NAMES.len() {
-            let secret = secret_keys[&node_name_to_id_map[NODE_NAMES[i]]].clone();
+        output.insert("AGG_KEY".to_string(), pub_key);
+        for (node_name, account_id) in node_name_to_id_map {
+            let secret = secret_keys[&account_id].clone();
             let secret = bincode::serialize(&secret)
-                .expect(&format!("Could not serialize secret for {}", NODE_NAMES[i]));
+                .expect(&format!("Could not serialize secret for {}", node_name));
             let secret = hex::encode(secret);
-            output.insert(NODE_NAMES[i].to_string(), secret.clone());
-            println!("{}'s secret: {:?}", NODE_NAMES[i], secret);
+            output.insert(node_name.to_string(), secret.clone());
+            println!("{}'s secret: {:?}", node_name, secret);
         }
 
         // Output the secret shares to a file if the env var exists
