@@ -478,7 +478,7 @@ mod tests {
     use crate::{
         eth::{self, MockEthInterface, Web3Wrapper},
         logging::{self, test_utils::new_test_logger},
-        settings::test_utils::new_test_settings,
+        settings::{self, test_utils::new_test_settings},
         state_chain::client::MockStateChainRpcApi,
     };
 
@@ -486,13 +486,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_sc_observer() {
-        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        let mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         let logger = new_test_logger();
 
-        // all extrinisc submissions succeed
-        mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
-            .returning(|_| Ok(H256::default()));
+        // TODO: Define behaviour of the StateChainRPC
 
         let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
@@ -534,7 +531,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
     async fn run_the_sc_observer() {
-        let settings = new_test_settings().unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::new_test_logger();
 
         let (latest_block_hash, block_stream, state_chain_client) =
