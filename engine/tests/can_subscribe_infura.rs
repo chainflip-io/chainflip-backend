@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver},
+    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver, Web3Wrapper},
     logging::utils,
     settings::Settings,
 };
@@ -16,9 +16,11 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let web3 = new_synced_web3_client(&settings.eth, &root_logger)
-        .await
-        .unwrap();
+    let web3 = Web3Wrapper::new(
+        new_synced_web3_client(&settings.eth, &root_logger)
+            .await
+            .unwrap(),
+    );
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let key_manager = KeyManager::new(H160::default()).unwrap();
@@ -26,7 +28,7 @@ pub async fn test_all_key_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     key_manager
-        .event_stream(&web3, 0, &root_logger)
+        .event_stream(web3, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(10)))

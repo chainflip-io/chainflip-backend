@@ -474,7 +474,10 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{eth, logging, settings};
+    use crate::{
+        eth::{self, Web3Wrapper},
+        logging, settings,
+    };
 
     use super::*;
 
@@ -500,9 +503,11 @@ mod tests {
         let (_multisig_outcome_sender, multisig_outcome_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-        let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
-            .await
-            .unwrap();
+        let web3 = Web3Wrapper::new(
+            eth::new_synced_web3_client(&settings.eth, &logger)
+                .await
+                .unwrap(),
+        );
         let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &logger).unwrap();
 
         let (sm_window_sender, _sm_window_receiver) =
