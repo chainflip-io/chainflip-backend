@@ -12,6 +12,8 @@ use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
 
+use super::EthInterface;
+
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
@@ -80,13 +82,14 @@ where
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, Web3Type>(
     safe_eth_head_stream: SafeBlockHeaderStream,
-    web3: Web3<WebSocket>,
+    web3: Web3Type,
     contract_address: H160,
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = BlockHeader>,
+    Web3Type: EthInterface + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
@@ -98,8 +101,7 @@ where
 
                 if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
                     let logs = web3
-                        .eth()
-                        .logs(
+                        .get_logs(
                             FilterBuilder::default()
                                 //todo: is there an "at block"
                                 .from_block(BlockNumber::Number(block_number))

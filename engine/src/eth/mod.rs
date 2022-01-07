@@ -16,8 +16,9 @@ use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
+    api::SubscriptionStream,
     ethabi::Address,
-    types::{CallRequest, U64},
+    types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
 use crate::{
@@ -70,15 +71,16 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RPCCLient>(
+pub async fn start_contract_observer<ContractObserver, RPCCLient, Web3Type>(
     contract_observer: ContractObserver,
-    web3: &Web3<WebSocket>,
+    web3: Web3Type,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
+    Web3Type: 'static + EthInterface + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -119,7 +121,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient>(
                         received_window.from
                     );
                     let mut event_stream = contract_observer
-                        .event_stream(&web3, received_window.from, &logger)
+                        .event_stream(web3, received_window.from, &logger)
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -189,19 +191,109 @@ pub async fn new_synced_web3_client(
     .await
 }
 
+// all these can be done by web3 or our mock interface
+#[async_trait]
+pub trait EthInterface {
+    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+
+    async fn sign_transaction<K: Key + Send>(
+        &self,
+        tx: TransactionParameters,
+        key: K,
+    ) -> Result<SignedTransaction>;
+
+    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
+
+    async fn subscribe_new_heads(
+        &self,
+    ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
+
+    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
+
+    async fn chain_id(&self) -> Result<U256>;
+}
+
+/// Wraps the web3 library, so can use a trait to make testing easier
+#[derive(Clone)]
+pub struct Web3Wrapper {
+    web3: Web3<web3::transports::WebSocket>,
+}
+
+impl Web3Wrapper {
+    pub fn new(web3: Web3<web3::transports::WebSocket>) -> Self {
+        Self { web3 }
+    }
+}
+
+//let tx_hash = self
+// .web3
+// .eth()
+// .send_raw_transaction(raw_signed_tx.into())
+// .await
+// .context("Failed to send raw signed ETH transaction")?;
+
+#[async_trait]
+impl EthInterface for Web3Wrapper {
+    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
+        self.web3
+            .eth()
+            .estimate_gas(req, block)
+            .await
+            .context("Failed to estimate gas")
+    }
+
+    async fn sign_transaction<K: Key + Send>(
+        &self,
+        tx: TransactionParameters,
+        key: K,
+    ) -> Result<SignedTransaction> {
+        self.web3
+            .accounts()
+            .sign_transaction(tx, key)
+            .await
+            .context("Failed to sign transaction")
+    }
+
+    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
+        self.web3
+            .eth()
+            .send_raw_transaction(rlp)
+            .await
+            .context("Failed to send raw transaction")
+    }
+
+    async fn subscribe_new_heads(
+        &self,
+    ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
+        Ok(self.web3.eth_subscribe().subscribe_new_heads().await?)
+    }
+
+    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
+        self.web3
+            .eth()
+            .logs(filter)
+            .await
+            .context("Failed to fetch ETH logs")
+    }
+
+    async fn chain_id(&self) -> Result<U256> {
+        Ok(self.web3.eth().chain_id().await?)
+    }
+}
+
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
 #[derive(Clone, Debug)]
-pub struct EthBroadcaster {
-    web3: Web3<web3::transports::WebSocket>,
+pub struct EthBroadcaster<Web3Type: EthInterface> {
+    web3: Web3Type,
     secret_key: SecretKey,
     pub address: Address,
     logger: slog::Logger,
 }
 
-impl EthBroadcaster {
+impl<Web3Type: EthInterface> EthBroadcaster<Web3Type> {
     pub fn new(
         eth_settings: &settings::Eth,
-        web3: Web3<web3::transports::WebSocket>,
+        web3: Web3Type,
         logger: &slog::Logger,
     ) -> Result<Self> {
         let secret_key = read_clean_and_decode_hex_str_file(
@@ -240,7 +332,6 @@ impl EthBroadcaster {
         } else {
             let call_request: CallRequest = tx_params.clone().into();
             self.web3
-                .eth()
                 .estimate_gas(call_request, None)
                 .await
                 .context("Failed to estimate gas")?
@@ -262,7 +353,6 @@ impl EthBroadcaster {
 
         Ok(self
             .web3
-            .accounts()
             .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
             .await
             .context("Failed to sign ETH transaction")?
@@ -271,23 +361,16 @@ impl EthBroadcaster {
 
     /// Broadcast a transaction to the network
     pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
-        let tx_hash = self
-            .web3
-            .eth()
-            .send_raw_transaction(raw_signed_tx.into())
-            .await
-            .context("Failed to send raw signed ETH transaction")?;
-
-        Ok(tx_hash)
+        self.web3.send_raw_transaction(raw_signed_tx.into()).await
     }
 }
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    async fn event_stream(
+    async fn event_stream<Web3Type: 'static + EthInterface + Send + Sync + Clone>(
         &self,
-        web3: &Web3<WebSocket>,
+        web3: Web3Type,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
@@ -303,7 +386,9 @@ pub trait EthObserver {
 
         // Start future log stream before requesting current block number, so we can return the block it's safe to get
         // the past blocks for
-        let eth_head_stream = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
+
+        let eth_head_stream = web3.subscribe_new_heads().await?;
+
         let mut safe_head_stream =
             safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
@@ -321,17 +406,16 @@ pub trait EthObserver {
 
         // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
         let past_logs = if from_block <= best_safe_block_number {
-            web3.eth()
-                .logs(
-                    FilterBuilder::default()
-                        // from_block and to_block are *inclusive*
-                        .from_block(BlockNumber::Number(from_block))
-                        .to_block(BlockNumber::Number(best_safe_block_number))
-                        .address(vec![deployed_address])
-                        .build(),
-                )
-                .await
-                .context("Failed to fetch past ETH logs")?
+            web3.get_logs(
+                FilterBuilder::default()
+                    // from_block and to_block are *inclusive*
+                    .from_block(BlockNumber::Number(from_block))
+                    .to_block(BlockNumber::Number(best_safe_block_number))
+                    .address(vec![deployed_address])
+                    .build(),
+            )
+            .await
+            .context("Failed to fetch past ETH logs")?
         } else {
             vec![]
         };

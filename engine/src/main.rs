@@ -1,5 +1,8 @@
 use chainflip_engine::{
-    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
+    eth::{
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthInterface,
+        Web3Wrapper,
+    },
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
@@ -31,9 +34,11 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
-        .await
-        .expect("Failed to create Web3 WebSocket");
+    let web3 = Web3Wrapper::new(
+        eth::new_synced_web3_client(&settings.eth, &root_logger)
+            .await
+            .expect("Failed to create Web3 WebSocket"),
+    );
 
     let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
         .expect("Failed to create ETH broadcaster");
@@ -93,7 +98,7 @@ async fn main() {
         .await
         .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = web3.eth().chain_id().await.expect("Should fetch chain id");
+        let chain_id_from_eth = web3.chain_id().await.expect("Should fetch chain id");
 
         if chain_id_from_sc != chain_id_from_eth {
             slog::error!(
@@ -171,14 +176,14 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            &web3,
+            web3.clone(),
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            &web3,
+            web3.clone(),
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,
