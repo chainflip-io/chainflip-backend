@@ -3,16 +3,16 @@
 pub mod frost;
 pub mod frost_stages;
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Instant};
 
 use pallet_cf_vaults::CeremonyId;
 
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::{KeyId, MessageHash};
+use crate::{
+    constants::PENDING_SIGN_DURATION,
+    multisig::{KeyId, MessageHash},
+};
 
 use state_chain_runtime::AccountId;
 
@@ -46,8 +46,6 @@ impl SigningInfo {
         }
     }
 }
-
-const PENDING_SIGN_DURATION: Duration = Duration::from_secs(500); // TODO Look at this value
 
 /// A wrapper around SigningInfo that contains the timeout info for cleanup
 #[derive(Clone, Debug)]
