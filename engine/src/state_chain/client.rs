@@ -173,11 +173,11 @@ pub trait StateChainRpcApi {
         extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
     ) -> Result<sp_core::H256, RpcError>;
 
-    async fn storage_events_at(
+    async fn get_from_storage_with_key<StorageType: 'static + Decode + Debug>(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
+    ) -> Result<Vec<StorageType>>;
 
     async fn storage_pairs(
         &self,
@@ -233,16 +233,32 @@ impl StateChainRpcApi for StateChainRpcClient {
             .hash())
     }
 
-    async fn storage_events_at(
+    async fn get_from_storage_with_key<StorageType: 'static + Decode + Debug>(
         &self,
-        block_hash: Option<state_chain_runtime::Hash>,
+        block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
-        self.state_rpc_client
-            .query_storage_at(vec![storage_key], block_hash)
+    ) -> Result<Vec<StorageType>> {
+        let storage_updates: Vec<_> = self
+            .state_rpc_client
+            .query_storage_at(vec![storage_key], Some(block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("storage_events_at RPC API failed")
+            .context("storage_events_at RPC API failed")?
+            .into_iter()
+            .map(|storage_change_set| {
+                let StorageChangeSet { block: _, changes } = storage_change_set;
+                changes
+                    .into_iter()
+                    .filter_map(|(_storage_key, option_data)| {
+                        option_data.map(|data| {
+                            StorageType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
+                        })
+                    })
+            })
+            .flatten()
+            .collect::<Result<_>>()?;
+
+        Ok(storage_updates)
     }
 
     async fn rotate_keys(&self) -> Result<Bytes> {
@@ -533,32 +549,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    async fn get_from_storage_with_key<StorageType: Decode + Debug>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<Vec<StorageType>> {
-        let storage_updates: Vec<_> = self
-            .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), storage_key)
-            .await?
-            .into_iter()
-            .map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            StorageType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
-                    })
-            })
-            .flatten()
-            .collect::<Result<_>>()?;
-
-        Ok(storage_updates)
-    }
-
     pub async fn get_storage_pairs<StorageType: Decode + Debug>(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -628,6 +618,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         chain_id: ChainId,
     ) -> Result<Vault> {
         let vaults = self
+            .state_chain_rpc_client
             .get_from_storage_with_key::<Vault>(
                 block_hash,
                 StorageKey(
@@ -642,12 +633,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
-    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
+    pub async fn get_environment_value<ValueType: 'static + Debug + Decode + Clone>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<ValueType> {
         let value_changes = self
+            .state_chain_rpc_client
             .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
             .await?;
 
@@ -663,6 +655,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<EventInfo>> {
         let events = self
+            .state_chain_rpc_client
             .get_from_storage_with_key::<Vec<EventInfo>>(
                 block_hash,
                 self.events_storage_key.clone(),
@@ -681,6 +674,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
         let account_info = self
+            .state_chain_rpc_client
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
                 self.account_storage_key.clone(),
@@ -700,6 +694,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
         let epoch = self
+            .state_chain_rpc_client
             .get_from_storage_with_key::<EpochIndex>(
                 block_hash,
                 StorageKey(
