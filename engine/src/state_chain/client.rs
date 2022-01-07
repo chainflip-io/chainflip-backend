@@ -301,6 +301,24 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     state_chain_rpc_client: RpcClient,
 }
 
+#[cfg(test)]
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
+        use substrate_subxt::PairSigner;
+        Self {
+            heartbeat_block_interval: 20,
+            account_storage_key: StorageKey(Vec::default()),
+            events_storage_key: StorageKey(Vec::default()),
+            nonce: AtomicU32::new(0),
+            our_account_id: AccountId32::new([0; 32]),
+            state_chain_rpc_client: rpc_client,
+            runtime_version: RwLock::new(RuntimeVersion::default()),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
+        }
+    }
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(

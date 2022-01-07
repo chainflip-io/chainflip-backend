@@ -45,6 +45,9 @@ use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 use async_trait::async_trait;
 
+#[cfg(test)]
+use mockall::automock;
+
 #[derive(Error, Debug)]
 pub enum EventParseError {
     #[error("Unexpected event signature in log subscription: {0:?}")]
@@ -190,15 +193,15 @@ pub async fn new_synced_web3_client(
     .await
 }
 
-// all these can be done by web3 or our mock interface
+#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait EthInterface {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
 
-    async fn sign_transaction<K: Key + Send>(
+    async fn sign_transaction(
         &self,
         tx: TransactionParameters,
-        key: K,
+        key: &SecretKey,
     ) -> Result<SignedTransaction>;
 
     async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
@@ -224,13 +227,6 @@ impl Web3Wrapper {
     }
 }
 
-//let tx_hash = self
-// .web3
-// .eth()
-// .send_raw_transaction(raw_signed_tx.into())
-// .await
-// .context("Failed to send raw signed ETH transaction")?;
-
 #[async_trait]
 impl EthInterface for Web3Wrapper {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
@@ -241,14 +237,14 @@ impl EthInterface for Web3Wrapper {
             .context("Failed to estimate gas")
     }
 
-    async fn sign_transaction<K: Key + Send>(
+    async fn sign_transaction(
         &self,
         tx: TransactionParameters,
-        key: K,
+        key: &SecretKey,
     ) -> Result<SignedTransaction> {
         self.web3
             .accounts()
-            .sign_transaction(tx, key)
+            .sign_transaction(tx, SecretKeyRef::from(key))
             .await
             .context("Failed to sign transaction")
     }
@@ -309,6 +305,20 @@ impl<Web3Type: EthInterface> EthBroadcaster<Web3Type> {
         })
     }
 
+    #[cfg(test)]
+    pub fn new_test(web3: Web3Type, logger: &slog::Logger) -> Self {
+        // just a fake key
+        let secret_key =
+            SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
+                .unwrap();
+        Self {
+            web3,
+            secret_key,
+            address: SecretKeyRef::new(&secret_key).address(),
+            logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
+        }
+    }
+
     /// Encode and sign a transaction.
     pub async fn encode_and_sign_tx(
         &self,
@@ -352,7 +362,7 @@ impl<Web3Type: EthInterface> EthBroadcaster<Web3Type> {
 
         Ok(self
             .web3
-            .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
+            .sign_transaction(tx_params, &self.secret_key)
             .await
             .context("Failed to sign ETH transaction")?
             .raw_transaction)
@@ -503,4 +513,18 @@ fn decode_shared_event_closure(
             }
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::logging::test_utils::new_test_logger;
+
+    use super::*;
+
+    #[test]
+    fn cfg_test_create_eth_broadcaster_works() {
+        let web3_mock = MockEthInterface::new();
+        let logger = new_test_logger();
+        EthBroadcaster::new_test(web3_mock, &logger);
+    }
 }

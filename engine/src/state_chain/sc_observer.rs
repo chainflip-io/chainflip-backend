@@ -474,12 +474,59 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
 
 #[cfg(test)]
 mod tests {
+
     use crate::{
-        eth::{self, Web3Wrapper},
-        logging, settings,
+        eth::{self, MockEthInterface, Web3Wrapper},
+        logging::{self, test_utils::new_test_logger},
+        settings::{self, test_utils::new_test_settings},
+        state_chain::client::MockStateChainRpcApi,
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_sc_observer() {
+        let mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        let logger = new_test_logger();
+
+        // TODO: Define behaviour of the StateChainRPC
+
+        let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+        ));
+
+        let sc_block_stream = tokio_stream::iter(vec![]);
+
+        let web3_mock = MockEthInterface::new();
+
+        let eth_broadcaster = EthBroadcaster::new_test(web3_mock, &logger);
+
+        let (multisig_instruction_sender, _multisig_instruction_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+        let (_multisig_outcome_sender, multisig_outcome_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+        let (sm_window_sender, _sm_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+        let (km_window_sender, _km_window_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
+        start(
+            state_chain_client,
+            sc_block_stream,
+            eth_broadcaster,
+            multisig_instruction_sender,
+            account_peer_mapping_change_sender,
+            multisig_outcome_receiver,
+            sm_window_sender,
+            km_window_sender,
+            H256::default(),
+            &logger,
+        )
+        .await;
+    }
 
     #[tokio::test]
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
