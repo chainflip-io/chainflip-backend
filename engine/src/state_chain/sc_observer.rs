@@ -10,7 +10,7 @@ use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    eth::EthBroadcaster,
+    eth::{EthBroadcaster, EthInterface},
     logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
@@ -20,10 +20,10 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-pub async fn start<BlockStream, RpcClient>(
+pub async fn start<BlockStream, RpcClient, Web3Type>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster,
+    eth_broadcaster: EthBroadcaster<Web3Type>,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
@@ -40,13 +40,16 @@ pub async fn start<BlockStream, RpcClient>(
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
+    Web3Type: EthInterface,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
+
+    let blocks_per_heartbeat = state_chain_client.heartbeat_block_interval / 2;
 
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
-        state_chain_client.heartbeat_block_interval,
+        blocks_per_heartbeat
     );
 
     state_chain_client
@@ -449,7 +452,7 @@ pub async fn start<BlockStream, RpcClient>(
                     || matches!(account_data.state, ChainflipAccountState::Validator)
                     || is_outgoing)
                     && ((block_header.number + (state_chain_client.heartbeat_block_interval / 2))
-                        % state_chain_client.heartbeat_block_interval
+                        % blocks_per_heartbeat
                         == 0)
                 {
                     slog::info!(

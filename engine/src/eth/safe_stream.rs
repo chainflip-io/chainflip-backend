@@ -2,11 +2,7 @@ use std::collections::VecDeque;
 
 use futures::{stream, Stream};
 use sp_core::H160;
-use web3::{
-    transports::WebSocket,
-    types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64},
-    Web3,
-};
+use web3::types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64};
 
 use ethbloom::{Bloom, Input};
 
