@@ -483,6 +483,12 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
 #[cfg(test)]
 mod tests {
 
+    use frame_system::AccountInfo;
+    use mockall::predicate::eq;
+    use pallet_cf_vaults::Vault;
+    use sp_core::storage::StorageKey;
+    use sp_runtime::AccountId32;
+
     use crate::{
         eth::{self, MockEthInterface, Web3Wrapper},
         logging::{self, test_utils::new_test_logger},
@@ -490,13 +496,13 @@ mod tests {
         state_chain::client::MockStateChainRpcApi,
     };
 
+    use crate::state_chain::client::test_utils::storage_change_set_from;
+
     use super::*;
 
     #[tokio::test]
-    async fn test_sc_observer() {
+    async fn no_blocks_in_stream_sends_initial_extrinsics() {
         let logger = new_test_logger();
-
-        let sc_block_stream = tokio_stream::iter(vec![]);
 
         let web3_mock = MockEthInterface::new();
 
@@ -514,11 +520,81 @@ mod tests {
         let (km_window_sender, _km_window_receiver) =
             tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-        // Mock the state chain client's actions
-        let mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        // Submits only one extrinsic when no events, the heartbeat
+        let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+        mock_state_chain_rpc_client
+            .expect_submit_extrinsic_rpc()
+            .times(1)
+            .returning(move |_| Ok(H256::default()));
+
+        let latest_block_hash = H256::default();
+
+        // get account info
+        let our_account_id = AccountId32::new([0u8; 32]);
+
+        let account_info_storage_key = StorageKey(frame_system::Account::<
+            state_chain_runtime::Runtime,
+        >::hashed_key_for(&our_account_id));
+
+        mock_state_chain_rpc_client
+            .expect_storage_events_at()
+            .with(eq(Some(latest_block_hash)), eq(account_info_storage_key))
+            .times(1)
+            .returning(move |_, _| {
+                Ok(vec![storage_change_set_from(
+                    AccountInfo {
+                        nonce: 0,
+                        consumers: 0,
+                        providers: 0,
+                        sufficients: 0,
+                        data: ChainflipAccountData {
+                            state: ChainflipAccountState::Validator,
+                            last_active_epoch: Some(0),
+                        },
+                    },
+                    latest_block_hash,
+                )])
+            });
+
+        // get the epoch
+        let epoch_key = StorageKey(
+            pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
+        );
+        mock_state_chain_rpc_client
+            .expect_storage_events_at()
+            .with(eq(Some(latest_block_hash)), eq(epoch_key))
+            .times(1)
+            .returning(move |_, _| Ok(vec![storage_change_set_from(1, latest_block_hash)]));
+
+        // get the current vault
+        let vault_key = StorageKey(
+            pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+                &0,
+                &ChainId::Ethereum,
+            ),
+        );
+
+        mock_state_chain_rpc_client
+            .expect_storage_events_at()
+            .with(eq(Some(latest_block_hash)), eq(vault_key))
+            .times(1)
+            .returning(move |_, _| {
+                Ok(vec![storage_change_set_from(
+                    Vault {
+                        public_key: vec![0; 33],
+                        active_window: BlockHeightWindow { from: 0, to: None },
+                    },
+                    latest_block_hash,
+                )])
+            });
+
         let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
+            our_account_id,
         ));
+
+        // No blocks in the stream
+        let sc_block_stream = tokio_stream::iter(vec![]);
 
         start(
             state_chain_client,
@@ -529,7 +605,7 @@ mod tests {
             multisig_outcome_receiver,
             sm_window_sender,
             km_window_sender,
-            H256::default(),
+            latest_block_hash,
             &logger,
         )
         .await;
