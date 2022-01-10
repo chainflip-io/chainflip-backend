@@ -102,11 +102,11 @@ impl CeremonyManager {
         });
 
         for id in signing_ceremony_ids_to_consume {
-            self.ceremony_id_tracker.consume_signing_id(&id);
+            self.remove_signing_ceremony(&id);
         }
 
         for id in keygen_ceremony_ids_to_consume {
-            self.ceremony_id_tracker.consume_keygen_id(&id);
+            self.remove_keygen_ceremony(&id);
         }
 
         for event in events_to_send {
@@ -396,18 +396,18 @@ impl CeremonyManager {
         })
     }
 
-    // Removed a finished keygen ceremony and mark its id as used
+    // Removed a keygen ceremony and mark its id as used
     fn remove_keygen_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.keygen_states.remove(ceremony_id);
         self.ceremony_id_tracker.consume_keygen_id(ceremony_id);
 
         slog::debug!(
-            self.logger, "Removed a finished keygen ceremony";
+            self.logger, "Removed a keygen ceremony";
             CEREMONY_ID_KEY => ceremony_id
         );
     }
 
-    // Removed a finished signing ceremony and mark its id as used
+    // Removed a signing ceremony and mark its id as used
     fn remove_signing_ceremony(&mut self, ceremony_id: &CeremonyId) {
         self.signing_states.remove(ceremony_id);
         self.ceremony_id_tracker.consume_signing_id(ceremony_id);
