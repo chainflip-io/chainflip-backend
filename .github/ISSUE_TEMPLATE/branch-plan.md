@@ -48,10 +48,6 @@ A more thorough technical description of the code to be introduced. Including bu
 
 ---
 
-### Shortcut Story Link
-
-[SC-XXXX].
-
 ### Alternatives Considered
 
 A clear and concise description of any alternative solutions you've considered.
