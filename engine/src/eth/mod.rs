@@ -74,7 +74,7 @@ impl SignatureAndEvent {
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
     contract_observer: ContractObserver,
-    eth_rpc: EthRpc,
+    eth_rpc: &EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,

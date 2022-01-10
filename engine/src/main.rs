@@ -177,14 +177,14 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            eth_rpc_client.clone(),
+            &eth_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            eth_rpc_client.clone(),
+            &eth_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,
