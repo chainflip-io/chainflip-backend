@@ -44,7 +44,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let blocks_per_heartbeat = state_chain_client.heartbeat_block_interval / 2;
+    let blocks_per_heartbeat = std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
 
     slog::info!(
         logger,
