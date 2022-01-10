@@ -13,6 +13,7 @@ mod tests {
 
     use crate::multisig::client::ensure_unsorted;
     use crate::multisig::KeygenOptions;
+    use crate::testing::assert_ok;
     use state_chain_runtime::AccountId;
 
     const ENV_VAR_OUTPUT_FILE: &str = "KEYSHARES_JSON_OUTPUT";
@@ -89,6 +90,7 @@ mod tests {
             "Not enough nodes to run genesis"
         );
 
+        // Run keygen
         println!("Generating keys");
 
         let account_ids = ensure_unsorted(node_name_to_id_map.values().cloned().collect(), 0);
@@ -115,29 +117,33 @@ mod tests {
         let active_ids: Vec<_> = {
             use rand::prelude::*;
 
-            let mut rng = StdRng::seed_from_u64(0);
-            let active_count = utilities::threshold_from_share_count(account_ids.len() as u32) + 1;
-
             ensure_unsorted(
                 account_ids
-                    .choose_multiple(&mut rng, active_count as usize)
+                    .choose_multiple(
+                        &mut StdRng::seed_from_u64(0),
+                        utilities::success_threshold_from_share_count(account_ids.len() as u32)
+                            as usize,
+                    )
                     .cloned()
                     .collect(),
                 0,
             )
         };
 
-        let signing_result = keygen_context.sign_with_ids(&active_ids).await;
-
-        assert!(
-            signing_result.sign_finished.outcome.result.is_ok(),
-            "Signing ceremony failed"
+        assert_ok!(
+            keygen_context
+                .sign_with_ids(&active_ids)
+                .await
+                .sign_finished
+                .outcome
+                .result
         );
 
+        // Print the output
         let pub_key = hex::encode(
             valid_keygen_states
                 .key_ready_data()
-                .expect("successful_keygen")
+                .expect("successful keygen")
                 .pubkey
                 .serialize(),
         );
@@ -148,19 +154,20 @@ mod tests {
             .expect("successful keygen")
             .sec_keys;
 
-        // Print the output :)
-        let mut output: HashMap<String, String> = HashMap::new();
-        output.insert("AGG_KEY".to_string(), pub_key);
-        for (node_name, account_id) in node_name_to_id_map {
-            let secret = secret_keys[&account_id].clone();
-            let secret = bincode::serialize(&secret)
-                .expect(&format!("Could not serialize secret for {}", node_name));
-            let secret = hex::encode(secret);
-            output.insert(node_name.to_string(), secret.clone());
-            println!("{}'s secret: {:?}", node_name, secret);
-        }
+        let mut output: HashMap<String, String> = node_name_to_id_map
+            .iter()
+            .map(|(node_name, account_id)| {
+                let secret = hex::encode(
+                    bincode::serialize(&secret_keys[&account_id].clone())
+                        .expect(&format!("Could not serialize secret for {}", node_name)),
+                );
+                println!("{}'s secret: {:?}", &node_name, &secret);
+                (node_name.to_string(), secret.clone())
+            })
+            .collect();
 
-        // Output the secret shares to a file if the env var exists
+        // Output the secret shares and the Pubkey to a file if the env var exists
+        output.insert("AGG_KEY".to_string(), pub_key);
         if let Ok(output_file_path) = env::var(ENV_VAR_OUTPUT_FILE) {
             println!("Outputting key shares to {}", output_file_path);
             let mut file = File::create(&output_file_path)
