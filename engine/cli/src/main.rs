@@ -212,13 +212,13 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let web3_wrapper = EthRpcClient::new(
+    let eth_rpc_client = EthRpcClient::new(
         eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .expect("Failed to create Web3 WebSocket"),
     );
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3_wrapper, logger)?;
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client, logger)?;
 
     eth_broadcaster
         .send(

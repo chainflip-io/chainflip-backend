@@ -34,13 +34,13 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let web3 = EthRpcClient::new(
+    let eth_rpc_client = EthRpcClient::new(
         eth::new_synced_web3_client(&settings.eth, &root_logger)
             .await
             .expect("Failed to create Web3 WebSocket"),
     );
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
         .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
@@ -98,7 +98,10 @@ async fn main() {
         .await
         .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = web3.chain_id().await.expect("Should fetch chain id");
+        let chain_id_from_eth = eth_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
 
         if chain_id_from_sc != chain_id_from_eth {
             slog::error!(
@@ -176,14 +179,14 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            web3.clone(),
+            eth_rpc_client.clone(),
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            web3.clone(),
+            eth_rpc_client.clone(),
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,

@@ -75,7 +75,7 @@ impl SignatureAndEvent {
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
     contract_observer: ContractObserver,
-    web3: EthRpc,
+    eth_rpc: EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
@@ -111,7 +111,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
 
             // clone for capture by tokio task
             let task_end_at_block_c = task_end_at_block.clone();
-            let web3 = web3.clone();
+            let eth_rpc = eth_rpc.clone();
             let logger = logger.clone();
             let contract_observer = contract_observer.clone();
             let state_chain_client = state_chain_client.clone();
@@ -123,7 +123,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
                         received_window.from
                     );
                     let mut event_stream = contract_observer
-                        .event_stream(web3, received_window.from, &logger)
+                        .event_stream(eth_rpc, received_window.from, &logger)
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -279,14 +279,18 @@ impl EthRpcApi for EthRpcClient {
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
 #[derive(Clone, Debug)]
 pub struct EthBroadcaster<EthRpc: EthRpcApi> {
-    web3: EthRpc,
+    eth_rpc: EthRpc,
     secret_key: SecretKey,
     pub address: Address,
     logger: slog::Logger,
 }
 
 impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
-    pub fn new(eth_settings: &settings::Eth, web3: EthRpc, logger: &slog::Logger) -> Result<Self> {
+    pub fn new(
+        eth_settings: &settings::Eth,
+        eth_rpc: EthRpc,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
         let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
@@ -294,7 +298,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
         )
         .unwrap();
         Ok(Self {
-            web3,
+            eth_rpc: eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
@@ -302,13 +306,13 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
     }
 
     #[cfg(test)]
-    pub fn new_test(web3: EthRpc, logger: &slog::Logger) -> Self {
+    pub fn new_test(eth_rpc: EthRpc, logger: &slog::Logger) -> Self {
         // just a fake key
         let secret_key =
             SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
                 .unwrap();
         Self {
-            web3,
+            eth_rpc: eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
@@ -336,7 +340,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             gas_limit
         } else {
             let call_request: CallRequest = tx_params.clone().into();
-            self.web3
+            self.eth_rpc
                 .estimate_gas(call_request, None)
                 .await
                 .context("Failed to estimate gas")?
@@ -357,7 +361,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
         );
 
         Ok(self
-            .web3
+            .eth_rpc
             .sign_transaction(tx_params, &self.secret_key)
             .await
             .context("Failed to sign ETH transaction")?
@@ -366,7 +370,9 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 
     /// Broadcast a transaction to the network
     pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
-        self.web3.send_raw_transaction(raw_signed_tx.into()).await
+        self.eth_rpc
+            .send_raw_transaction(raw_signed_tx.into())
+            .await
     }
 }
 #[async_trait]
@@ -375,7 +381,7 @@ pub trait EthObserver {
 
     async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
-        web3: EthRpc,
+        eth_rpc: EthRpc,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
@@ -392,7 +398,7 @@ pub trait EthObserver {
         // Start future log stream before requesting current block number, so we can return the block it's safe to get
         // the past blocks for
 
-        let eth_head_stream = web3.subscribe_new_heads().await?;
+        let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
 
         let mut safe_head_stream =
             safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
@@ -405,22 +411,24 @@ pub trait EthObserver {
             .number
             .expect("all blocks in safe stream have numbers");
         let future_logs =
-            filtered_log_stream_by_contract(safe_head_stream, web3.clone(), deployed_address).await;
+            filtered_log_stream_by_contract(safe_head_stream, eth_rpc.clone(), deployed_address)
+                .await;
 
         let from_block = U64::from(from_block);
 
         // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
         let past_logs = if from_block <= best_safe_block_number {
-            web3.get_logs(
-                FilterBuilder::default()
-                    // from_block and to_block are *inclusive*
-                    .from_block(BlockNumber::Number(from_block))
-                    .to_block(BlockNumber::Number(best_safe_block_number))
-                    .address(vec![deployed_address])
-                    .build(),
-            )
-            .await
-            .context("Failed to fetch past ETH logs")?
+            eth_rpc
+                .get_logs(
+                    FilterBuilder::default()
+                        // from_block and to_block are *inclusive*
+                        .from_block(BlockNumber::Number(from_block))
+                        .to_block(BlockNumber::Number(best_safe_block_number))
+                        .address(vec![deployed_address])
+                        .build(),
+                )
+                .await
+                .context("Failed to fetch past ETH logs")?
         } else {
             vec![]
         };
@@ -519,8 +527,8 @@ mod tests {
 
     #[test]
     fn cfg_test_create_eth_broadcaster_works() {
-        let web3_mock = MockEthRpcApi::new();
+        let eth_rpc_api_mock = MockEthRpcApi::new();
         let logger = new_test_logger();
-        EthBroadcaster::new_test(web3_mock, &logger);
+        EthBroadcaster::new_test(eth_rpc_api_mock, &logger);
     }
 }

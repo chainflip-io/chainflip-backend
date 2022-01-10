@@ -504,9 +504,9 @@ mod tests {
     async fn no_blocks_in_stream_sends_initial_extrinsics() {
         let logger = new_test_logger();
 
-        let web3_mock = MockEthRpcApi::new();
+        let eth_rpc_mock = MockEthRpcApi::new();
 
-        let eth_broadcaster = EthBroadcaster::new_test(web3_mock, &logger);
+        let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
@@ -633,12 +633,13 @@ mod tests {
         let (_multisig_outcome_sender, multisig_outcome_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-        let web3 = EthRpcClient::new(
+        let eth_rpc_client = EthRpcClient::new(
             eth::new_synced_web3_client(&settings.eth, &logger)
                 .await
                 .unwrap(),
         );
-        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &logger).unwrap();
+        let eth_broadcaster =
+            EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &logger).unwrap();
 
         let (sm_window_sender, _sm_window_receiver) =
             tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();

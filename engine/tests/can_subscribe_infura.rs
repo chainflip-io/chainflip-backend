@@ -16,7 +16,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let web3 = EthRpcClient::new(
+    let eth_rpc_client = EthRpcClient::new(
         new_synced_web3_client(&settings.eth, &root_logger)
             .await
             .unwrap(),
@@ -28,7 +28,7 @@ pub async fn test_all_key_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     key_manager
-        .event_stream(web3, 0, &root_logger)
+        .event_stream(eth_rpc_client, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(10)))
