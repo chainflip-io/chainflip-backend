@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
         self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
-        Web3Wrapper,
+        EthRpcClient,
     },
     health::HealthMonitor,
     logging,
@@ -34,7 +34,7 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let web3 = Web3Wrapper::new(
+    let web3 = EthRpcClient::new(
         eth::new_synced_web3_client(&settings.eth, &root_logger)
             .await
             .expect("Failed to create Web3 WebSocket"),

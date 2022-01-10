@@ -217,18 +217,18 @@ pub trait EthRpcApi {
 
 /// Wraps the web3 library, so can use a trait to make testing easier
 #[derive(Clone)]
-pub struct Web3Wrapper {
+pub struct EthRpcClient {
     web3: Web3<web3::transports::WebSocket>,
 }
 
-impl Web3Wrapper {
+impl EthRpcClient {
     pub fn new(web3: Web3<web3::transports::WebSocket>) -> Self {
         Self { web3 }
     }
 }
 
 #[async_trait]
-impl EthRpcApi for Web3Wrapper {
+impl EthRpcApi for EthRpcClient {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
         self.web3
             .eth()

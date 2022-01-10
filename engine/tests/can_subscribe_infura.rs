@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver, Web3Wrapper},
+    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver, EthRpcClient},
     logging::utils,
     settings::Settings,
 };
@@ -16,7 +16,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let web3 = Web3Wrapper::new(
+    let web3 = EthRpcClient::new(
         new_synced_web3_client(&settings.eth, &root_logger)
             .await
             .unwrap(),

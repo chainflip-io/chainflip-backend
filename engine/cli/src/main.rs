@@ -1,6 +1,6 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{self, EthBroadcaster, Web3Wrapper},
+    eth::{self, EthBroadcaster, EthRpcClient},
     state_chain::client::connect_to_state_chain,
 };
 use futures::StreamExt;
@@ -212,7 +212,7 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let web3_wrapper = Web3Wrapper::new(
+    let web3_wrapper = EthRpcClient::new(
         eth::new_synced_web3_client(&settings.eth, &logger)
             .await
             .expect("Failed to create Web3 WebSocket"),
