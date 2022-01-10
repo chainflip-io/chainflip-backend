@@ -633,7 +633,7 @@ mod tests {
         let (_multisig_outcome_sender, multisig_outcome_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-        let eth_rpc_client = EthRpcClient::new(&settings.eth, &logger).await;
+        let eth_rpc_client = EthRpcClient::new(&settings.eth, &logger).await.unwrap();
         let eth_broadcaster =
             EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &logger).unwrap();
 

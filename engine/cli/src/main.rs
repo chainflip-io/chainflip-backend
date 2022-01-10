@@ -212,7 +212,9 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, logger).await;
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, logger)
+        .await
+        .expect("Unable to create EthRpcClient");
 
     let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client, logger)?;
 

@@ -154,45 +154,6 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
     }
 }
 
-pub async fn new_synced_web3_client(
-    eth_settings: &settings::Eth,
-    logger: &slog::Logger,
-) -> Result<Web3<web3::transports::WebSocket>> {
-    let node_endpoint = &eth_settings.node_endpoint;
-    slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
-    tokio::time::timeout(Duration::from_secs(5), async {
-        Ok(web3::Web3::new(
-            web3::transports::WebSocket::new(node_endpoint)
-                .await
-                .context(here!())?,
-        ))
-    })
-    // Flatten the Result<Result<>> returned by timeout()
-    .map_err(anyhow::Error::new)
-    .and_then(|x| async { x })
-    // Make sure the eth node is fully synced
-    .and_then(|web3| async {
-        while let SyncState::Syncing(info) = web3
-            .eth()
-            .syncing()
-            .await
-            .context("Failure while syncing web3 client")?
-        {
-            let duration_secs = 4;
-            slog::info!(
-                logger,
-                "Waiting for eth node to sync. Sync state is: {:?}. Checking again in {} seconds...",
-                info,
-                duration_secs
-            );
-            tokio::time::sleep(Duration::from_secs(duration_secs)).await;
-        }
-        slog::info!(logger, "ETH node is synced.");
-        Ok(web3)
-    })
-    .await
-}
-
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait EthRpcApi {
@@ -222,11 +183,41 @@ pub struct EthRpcClient {
 }
 
 impl EthRpcClient {
-    pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Self {
-        let web3 = new_synced_web3_client(eth_settings, &logger)
-            .await
-            .expect("Failed to create Web3 WebSocket");
-        Self { web3 }
+    pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        let node_endpoint = &eth_settings.node_endpoint;
+        slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+        let web3 = tokio::time::timeout(Duration::from_secs(5), async {
+            Ok(web3::Web3::new(
+                web3::transports::WebSocket::new(node_endpoint)
+                    .await
+                    .context(here!())?,
+            ))
+        })
+        // Flatten the Result<Result<>> returned by timeout()
+        .map_err(anyhow::Error::new)
+        .and_then(|x| async { x })
+        // Make sure the eth node is fully synced
+        .and_then(|web3| async {
+            while let SyncState::Syncing(info) = web3
+                .eth()
+                .syncing()
+                .await
+                .context("Failure while syncing web3 client")?
+            {
+                let duration_secs = 4;
+                slog::info!(
+                    logger,
+                    "Waiting for eth node to sync. Sync state is: {:?}. Checking again in {} seconds...",
+                    info,
+                    duration_secs
+                );
+                tokio::time::sleep(Duration::from_secs(duration_secs)).await;
+            }
+            slog::info!(logger, "ETH node is synced.");
+            Ok(web3)
+        }).await?;
+
+        Ok(Self { web3 })
     }
 }
 

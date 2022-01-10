@@ -27,7 +27,9 @@ pub async fn test_all_stake_manager_events() {
     let settings =
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger).await;
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+        .await
+        .expect("Couldn't create EthRpcClient");
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let stake_manager = StakeManager::new(H160::default()).unwrap();

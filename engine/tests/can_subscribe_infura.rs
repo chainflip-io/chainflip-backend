@@ -16,7 +16,9 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger).await;
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+        .await
+        .expect("Couldn't create EthRpcClient");
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let key_manager = KeyManager::new(H160::default()).unwrap();
