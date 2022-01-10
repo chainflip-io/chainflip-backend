@@ -34,11 +34,7 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let eth_rpc_client = EthRpcClient::new(
-        eth::new_synced_web3_client(&settings.eth, &root_logger)
-            .await
-            .expect("Failed to create Web3 WebSocket"),
-    );
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger).await;
 
     let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
         .expect("Failed to create ETH broadcaster");

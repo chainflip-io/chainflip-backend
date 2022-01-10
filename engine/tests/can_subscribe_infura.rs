@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, new_synced_web3_client, EthObserver, EthRpcClient},
+    eth::{key_manager::KeyManager, EthObserver, EthRpcClient},
     logging::utils,
     settings::Settings,
 };
@@ -16,11 +16,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let eth_rpc_client = EthRpcClient::new(
-        new_synced_web3_client(&settings.eth, &root_logger)
-            .await
-            .unwrap(),
-    );
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger).await;
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let key_manager = KeyManager::new(H160::default()).unwrap();

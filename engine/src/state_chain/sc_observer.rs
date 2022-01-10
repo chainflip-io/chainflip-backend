@@ -490,7 +490,7 @@ mod tests {
     use sp_runtime::AccountId32;
 
     use crate::{
-        eth::{self, EthRpcClient, MockEthRpcApi},
+        eth::{EthRpcClient, MockEthRpcApi},
         logging::{self, test_utils::new_test_logger},
         settings::test_utils::new_test_settings,
         state_chain::client::MockStateChainRpcApi,
@@ -633,11 +633,7 @@ mod tests {
         let (_multisig_outcome_sender, multisig_outcome_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-        let eth_rpc_client = EthRpcClient::new(
-            eth::new_synced_web3_client(&settings.eth, &logger)
-                .await
-                .unwrap(),
-        );
+        let eth_rpc_client = EthRpcClient::new(&settings.eth, &logger).await;
         let eth_broadcaster =
             EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &logger).unwrap();
 

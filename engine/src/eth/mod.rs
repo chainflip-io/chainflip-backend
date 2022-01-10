@@ -222,7 +222,10 @@ pub struct EthRpcClient {
 }
 
 impl EthRpcClient {
-    pub fn new(web3: Web3<web3::transports::WebSocket>) -> Self {
+    pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Self {
+        let web3 = new_synced_web3_client(eth_settings, &logger)
+            .await
+            .expect("Failed to create Web3 WebSocket");
         Self { web3 }
     }
 }
