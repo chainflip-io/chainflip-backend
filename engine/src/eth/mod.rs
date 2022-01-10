@@ -73,16 +73,16 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RPCCLient, Web3Type>(
+pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
     contract_observer: ContractObserver,
-    web3: Web3Type,
+    web3: EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RPCCLient>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
-    Web3Type: 'static + EthRpcApi + Sync + Send + Clone,
+    EthRpc: 'static + EthRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -278,19 +278,15 @@ impl EthRpcApi for EthRpcClient {
 
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
 #[derive(Clone, Debug)]
-pub struct EthBroadcaster<Web3Type: EthRpcApi> {
-    web3: Web3Type,
+pub struct EthBroadcaster<EthRpc: EthRpcApi> {
+    web3: EthRpc,
     secret_key: SecretKey,
     pub address: Address,
     logger: slog::Logger,
 }
 
-impl<Web3Type: EthRpcApi> EthBroadcaster<Web3Type> {
-    pub fn new(
-        eth_settings: &settings::Eth,
-        web3: Web3Type,
-        logger: &slog::Logger,
-    ) -> Result<Self> {
+impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
+    pub fn new(eth_settings: &settings::Eth, web3: EthRpc, logger: &slog::Logger) -> Result<Self> {
         let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
@@ -306,7 +302,7 @@ impl<Web3Type: EthRpcApi> EthBroadcaster<Web3Type> {
     }
 
     #[cfg(test)]
-    pub fn new_test(web3: Web3Type, logger: &slog::Logger) -> Self {
+    pub fn new_test(web3: EthRpc, logger: &slog::Logger) -> Self {
         // just a fake key
         let secret_key =
             SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
@@ -377,9 +373,9 @@ impl<Web3Type: EthRpcApi> EthBroadcaster<Web3Type> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    async fn event_stream<Web3Type: 'static + EthRpcApi + Send + Sync + Clone>(
+    async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
-        web3: Web3Type,
+        web3: EthRpc,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,

@@ -20,10 +20,10 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-pub async fn start<BlockStream, RpcClient, Web3Type>(
+pub async fn start<BlockStream, RpcClient, EthRpc>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster<Web3Type>,
+    eth_broadcaster: EthBroadcaster<EthRpc>,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
@@ -40,7 +40,7 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
-    Web3Type: EthRpcApi,
+    EthRpc: EthRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 

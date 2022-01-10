@@ -78,14 +78,14 @@ where
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, Web3Type>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
     safe_eth_head_stream: SafeBlockHeaderStream,
-    web3: Web3Type,
+    web3: EthRpc,
     contract_address: H160,
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = BlockHeader>,
-    Web3Type: EthRpcApi + Clone,
+    EthRpc: EthRpcApi + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
