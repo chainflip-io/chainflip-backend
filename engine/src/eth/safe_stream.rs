@@ -8,7 +8,7 @@ use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
 
-use super::EthInterface;
+use super::EthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
@@ -85,7 +85,7 @@ pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, Web3Type>(
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = BlockHeader>,
-    Web3Type: EthInterface + Clone,
+    Web3Type: EthRpcApi + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {

@@ -1,6 +1,6 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthInterface,
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
         Web3Wrapper,
     },
     health::HealthMonitor,

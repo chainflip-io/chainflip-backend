@@ -10,7 +10,7 @@ use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    eth::{EthBroadcaster, EthInterface},
+    eth::{EthBroadcaster, EthRpcApi},
     logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
@@ -40,7 +40,7 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
-    Web3Type: EthInterface,
+    Web3Type: EthRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
@@ -490,7 +490,7 @@ mod tests {
     use sp_runtime::AccountId32;
 
     use crate::{
-        eth::{self, MockEthInterface, Web3Wrapper},
+        eth::{self, MockEthRpcApi, Web3Wrapper},
         logging::{self, test_utils::new_test_logger},
         settings::test_utils::new_test_settings,
         state_chain::client::MockStateChainRpcApi,
@@ -504,7 +504,7 @@ mod tests {
     async fn no_blocks_in_stream_sends_initial_extrinsics() {
         let logger = new_test_logger();
 
-        let web3_mock = MockEthInterface::new();
+        let web3_mock = MockEthRpcApi::new();
 
         let eth_broadcaster = EthBroadcaster::new_test(web3_mock, &logger);
 

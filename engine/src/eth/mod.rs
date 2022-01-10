@@ -82,7 +82,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient, Web3Type>(
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
     RPCCLient: 'static + StateChainRpcApi + Sync + Send,
-    Web3Type: 'static + EthInterface + Sync + Send + Clone,
+    Web3Type: 'static + EthRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -195,7 +195,7 @@ pub async fn new_synced_web3_client(
 
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait EthInterface {
+pub trait EthRpcApi {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
 
     async fn sign_transaction(
@@ -228,7 +228,7 @@ impl Web3Wrapper {
 }
 
 #[async_trait]
-impl EthInterface for Web3Wrapper {
+impl EthRpcApi for Web3Wrapper {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
         self.web3
             .eth()
@@ -278,14 +278,14 @@ impl EthInterface for Web3Wrapper {
 
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
 #[derive(Clone, Debug)]
-pub struct EthBroadcaster<Web3Type: EthInterface> {
+pub struct EthBroadcaster<Web3Type: EthRpcApi> {
     web3: Web3Type,
     secret_key: SecretKey,
     pub address: Address,
     logger: slog::Logger,
 }
 
-impl<Web3Type: EthInterface> EthBroadcaster<Web3Type> {
+impl<Web3Type: EthRpcApi> EthBroadcaster<Web3Type> {
     pub fn new(
         eth_settings: &settings::Eth,
         web3: Web3Type,
@@ -377,7 +377,7 @@ impl<Web3Type: EthInterface> EthBroadcaster<Web3Type> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    async fn event_stream<Web3Type: 'static + EthInterface + Send + Sync + Clone>(
+    async fn event_stream<Web3Type: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
         web3: Web3Type,
         // usually the start of the validator's active window
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn cfg_test_create_eth_broadcaster_works() {
-        let web3_mock = MockEthInterface::new();
+        let web3_mock = MockEthRpcApi::new();
         let logger = new_test_logger();
         EthBroadcaster::new_test(web3_mock, &logger);
     }
