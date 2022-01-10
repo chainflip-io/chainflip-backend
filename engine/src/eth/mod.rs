@@ -122,7 +122,7 @@ pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
                         received_window.from
                     );
                     let mut event_stream = contract_observer
-                        .event_stream(eth_rpc, received_window.from, &logger)
+                        .event_stream(&eth_rpc, received_window.from, &logger)
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -373,7 +373,7 @@ pub trait EthObserver {
 
     async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
-        eth_rpc: EthRpc,
+        eth_rpc: &EthRpc,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
