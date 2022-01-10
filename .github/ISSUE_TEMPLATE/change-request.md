@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-### Describe the changes you'd like
+### Description
 
 A clear and concise description of what you want to happen. E.g. The enum `Status` on the State Chain does not match up with the CFE. We require the State Chain enum to be modified to `{item1, item2}`.
 
@@ -15,7 +15,7 @@ A clear and concise description of what you want to happen. E.g. The enum `Statu
 
 If so, link it here [SC-XXXX].
 
-### Describe alternatives you've considered
+### Alternatives Considered
 
 A clear and concise description of any alternative solutions or features you've considered.
 
@@ -23,6 +23,6 @@ A clear and concise description of any alternative solutions or features you've 
 
 Add any other context or screenshots about the request here.
 
-### Tag specific people for comment
+### Relevant people
 
 Tag folks here
