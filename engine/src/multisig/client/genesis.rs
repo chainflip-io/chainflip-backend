@@ -4,14 +4,12 @@ use super::tests::KeygenContext;
 mod tests {
     use super::*;
 
-    use anyhow::Result;
     use csv;
     use serde_json;
     use std::collections::HashMap;
-    use std::convert::TryInto;
-    use std::env;
     use std::fs::File;
     use std::io::prelude::Write;
+    use std::{env, io};
 
     use crate::multisig::client::ensure_unsorted;
     use crate::multisig::KeygenOptions;
@@ -21,111 +19,75 @@ mod tests {
     const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
     // If no `ENV_VAR_INPUT_FILE` is defined, then these default names and ids are used to run the genesis unit test
-    const DEFAULT_NODES: &[(&str, &str)] = &[
-        (
-            "bashful",
-            "36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911",
-        ),
-        (
-            "doc",
-            "8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04",
-        ),
-        (
-            "dopey",
-            "ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e",
-        ),
-    ];
-
-    // Don't think we need this - there should be a better way, using deserialise, or Into, code that I believe already exists
-    fn account_id_from_string(account_id_hex: &str) -> Result<AccountId, anyhow::Error> {
-        let data = hex::decode(&account_id_hex.trim()).map_err(|e| {
-            anyhow::Error::msg(format!("Invalid account id {:?}: {:?}", &account_id_hex, e))
-        })?;
-
-        let data: [u8; 32] = data.try_into().map_err(|e| {
-            anyhow::Error::msg(format!("Invalid account id {:?}: {:?}", &account_id_hex, e))
-        })?;
-
-        Ok(AccountId::new(data))
-    }
+    const DEFAULT_CSV_CONTENT: &str = "node_name, node_id
+    DOC,5F9ofCBWLMFXotypXtbUnbLXkM1Z9As47GRhDDFJDsxKgpBu
+    BASHFUL,5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN
+    DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
     type Record = (String, AccountId);
 
-    fn load_node_ids_from_csv(file: &str) -> HashMap<String, AccountId> {
+    fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<String, AccountId>
+    where
+        R: io::Read,
+    {
         // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
-        if let Ok(mut rdr) = csv::Reader::from_path(&file) {
-            rdr
+        reader
                 .records()
                 .filter_map(|result| match result {
                     Ok(result) => Some(result),
                     Err(e) => {
-                        println!("Error reading csv record: {}", e);
-                        None
+                        panic!("Error reading csv record: {}", e);
                     }
                 })
                 .filter_map(|record| {
                     match record.deserialize::<Record>(None) {
                         Ok(record) => Some(record),
                         Err(e) => {
-                            println!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). {}", e);
-                            None
+                            panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas{}", e);
                         }
                     }
                 })
                 .collect::<HashMap<String, AccountId>>()
-        } else {
-            panic!("No genesis csv file found at {}", &file);
-        }
     }
 
     // Generate the keys for genesis
     // Run test to ensure it doesn't panic
     #[tokio::test]
     pub async fn genesis_keys() {
-        let mut node_name_to_id_map: HashMap<String, AccountId> = HashMap::new();
-
         // Load the node id from a csv file if the env var exists
-        if let Ok(input_file_path) = env::var(ENV_VAR_INPUT_FILE) {
-            node_name_to_id_map = load_node_ids_from_csv(&input_file_path);
-            println!(
-                "Loaded {} node ids from {}, {:?}",
-                node_name_to_id_map.len(),
-                &input_file_path,
-                node_name_to_id_map
-            );
-
-            // REVIEW: Why not do this for the defaults too? Could just generalise the way the outputs are generated, i.e. node_name_to_id_map
-            // then there'd be the same amount of code, but we'd also be checking the defaults
-            // Check for duplicate ids
-            for (_, node_id) in node_name_to_id_map.clone() {
-                let duplicates: HashMap<&String, &AccountId> = node_name_to_id_map
-                    .iter()
-                    .filter(|(_, id)| *id == &node_id)
-                    .collect();
-                assert!(
-                    duplicates.len() == 1,
-                    "Found a duplicate node id in the csv file {:?}",
-                    duplicates
-                );
+        let node_name_to_id_map = match env::var(ENV_VAR_INPUT_FILE) {
+            Ok(input_file_path) => {
+                println!("Loading node ids from {}", input_file_path);
+                load_node_ids_from_csv(
+                    csv::Reader::from_path(&input_file_path).expect("Should read from csv file"),
+                )
             }
+            Err(_) => {
+                println!(
+                    "No genesis node id csv file defined with {}, using default values",
+                    ENV_VAR_INPUT_FILE
+                );
+                load_node_ids_from_csv(csv::Reader::from_reader(DEFAULT_CSV_CONTENT.as_bytes()))
+            }
+        };
 
+        // Check for duplicate ids
+        for (_, node_id) in node_name_to_id_map.clone() {
+            let duplicates: HashMap<&String, &AccountId> = node_name_to_id_map
+                .iter()
+                .filter(|(_, id)| *id == &node_id)
+                .collect();
             assert!(
-                node_name_to_id_map.len() > 1,
-                "Not enough nodes in csv file {} to run genesis",
-                &input_file_path
+                duplicates.len() == 1,
+                "Found a duplicate node id {:?}",
+                duplicates
             );
-        } else {
-            println!(
-                "No genesis node id csv file defined with {}, using default values",
-                ENV_VAR_INPUT_FILE
-            );
-            for (name, account_id) in DEFAULT_NODES {
-                node_name_to_id_map.insert(
-                    name.to_string(),
-                    account_id_from_string(account_id).unwrap(),
-                );
-            }
         }
+
+        assert!(
+            node_name_to_id_map.len() > 1,
+            "Not enough nodes to run genesis"
+        );
 
         println!("Generating keys");
 
