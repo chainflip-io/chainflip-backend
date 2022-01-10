@@ -1,4 +1,9 @@
-use crate::multisig::client::{self, tests::helpers::check_blamed_paries};
+use crate::multisig::client::{
+    self,
+    tests::helpers::{
+        check_blamed_paries, gen_invalid_signing_comm1, next_with_timeout, sig_data_to_p2p,
+    },
+};
 
 use client::tests::*;
 
@@ -89,7 +94,7 @@ async fn should_handle_invalid_local_sig() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -110,7 +115,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -132,7 +137,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 
     let sign_states = ctx.sign().await;
 
-    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+    let (_, blamed_parties) = sign_states.sign_finished.outcome.result.unwrap_err();
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![bad_id]);
@@ -241,7 +246,7 @@ async fn should_delay_rts_until_key_is_ready() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let message = helpers::keygen_data_to_p2p(ver5, KEYGEN_CEREMONY_ID);
+            let message = helpers::keygen_data_to_p2p(ver5);
             c1.process_p2p_message(sender_id.clone(), message);
         }
     }
@@ -346,7 +351,7 @@ async fn pending_rts_should_expire() {
     for sender_id in ctx.get_account_ids() {
         if sender_id != &id0 {
             let ver5 = keygen_states.ver_comp_stage5.as_ref().unwrap().ver5[&sender_id].clone();
-            let message = helpers::keygen_data_to_p2p(ver5.clone(), KEYGEN_CEREMONY_ID);
+            let message = helpers::keygen_data_to_p2p(ver5.clone());
             c1.process_p2p_message(sender_id.clone(), message);
         }
     }
@@ -460,10 +465,92 @@ async fn should_ignore_rts_with_duplicate_signer() {
 }
 
 #[tokio::test]
+async fn should_ignore_rts_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    // Get a client and finish a signing ceremony
+    let mut c1 = sign_states.get_client_at_stage(&ctx.get_account_id(0), 4);
+    c1.receive_signing_stage_data(4, &sign_states, &ctx.get_account_id(1));
+    c1.receive_signing_stage_data(4, &sign_states, &ctx.get_account_id(2));
+
+    // Send an rts with the same ceremony id (the default signing ceremony id for tests)
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+
+    // The rts should have been ignored
+    assert_ok!(c1.ensure_at_signing_stage(0));
+    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
+
+#[tokio::test]
+async fn should_ignore_stage_data_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = sign_states.sign_finished.clients[&ctx.get_account_id(0)].clone();
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
+
+    // Receive comm1 from a used ceremony id (the default signing ceremony id)
+    let message = sig_data_to_p2p(sign_states.sign_phase1.comm1s[&ctx.get_account_id(1)].clone());
+    assert_eq!(message.ceremony_id, SIGN_CEREMONY_ID);
+    c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
+
+    // The message should have been ignored and no ceremony was started
+    // In this case, the ceremony would be unauthorised, so we must check how many signing states exist
+    // to see if a unauthorised state was created.
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
+}
+
+#[tokio::test]
+async fn should_not_consume_ceremony_id_if_unauthorised() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    // Get a client that has not used the default signing ceremony id yet
+    let id0 = ctx.get_account_id(0);
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&id0]
+        .clone();
+    assert_ok!(c1.ensure_at_signing_stage(0));
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
+
+    // Receive comm1 with the default signing ceremony id
+    let message = sig_data_to_p2p(gen_invalid_signing_comm1());
+    assert_eq!(message.ceremony_id, SIGN_CEREMONY_ID);
+    c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
+
+    // Check that the unauthorised ceremony was created
+    assert_eq!(c1.ceremony_manager.get_signing_states_len(), 1);
+
+    // Timeout the unauthorised ceremony
+    c1.expire_all();
+    c1.cleanup();
+
+    // Clear out the timeout outcome
+    next_with_timeout(ctx.outcome_receivers.get_mut(&id0).unwrap()).await;
+
+    // Sign as normal using the default ceremony id
+    let sign_states = ctx.sign().await;
+
+    // Should not have been rejected because of a used ceremony id
+    assert!(sign_states.sign_finished.outcome.result.is_ok());
+}
+
+#[tokio::test]
 async fn should_sign_with_all_parties() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
 
     // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
-    assert_ok!(ctx.sign_with_ids(&ACCOUNT_IDS).await.outcome.result);
+    assert_ok!(
+        ctx.sign_with_ids(&ACCOUNT_IDS)
+            .await
+            .sign_finished
+            .outcome
+            .result
+    );
 }

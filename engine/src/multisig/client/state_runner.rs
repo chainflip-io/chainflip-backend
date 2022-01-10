@@ -1,22 +1,16 @@
-use std::{
-    collections::BTreeMap,
-    fmt::Display,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::BTreeMap, fmt::Display, sync::Arc, time::Instant};
 
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
 
 use crate::{
     common::format_iterator,
+    constants::MAX_STAGE_DURATION,
     multisig::client::common::{ProcessMessageResult, StageResult},
 };
 use state_chain_runtime::AccountId;
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
-
-const MAX_STAGE_DURATION: Duration = Duration::from_secs(300); // TODO Look at this value
 
 #[derive(Clone)]
 pub struct StateAuthorised<CeremonyData, CeremonyResult>
@@ -267,6 +261,11 @@ where
         } else {
             None
         }
+    }
+
+    /// returns true if the ceremony is authorized (has received a ceremony request)
+    pub fn is_authorized(&self) -> bool {
+        self.inner.is_some()
     }
 
     #[cfg(test)]

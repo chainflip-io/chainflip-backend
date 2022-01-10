@@ -101,7 +101,7 @@ mod tests {
                 if count >= 20 {
                     panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
                 }
-                let valid_keygen_states = keygen_context.generate().await;
+                let valid_keygen_states = keygen_context.generate_with_ceremony_id(count).await;
 
                 if valid_keygen_states.key_ready_data().is_some() {
                     break valid_keygen_states;
@@ -130,7 +130,7 @@ mod tests {
         let signing_result = keygen_context.sign_with_ids(&active_ids).await;
 
         assert!(
-            signing_result.outcome.result.is_ok(),
+            signing_result.sign_finished.outcome.result.is_ok(),
             "Signing ceremony failed"
         );
 

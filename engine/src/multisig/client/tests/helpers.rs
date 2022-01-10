@@ -4,8 +4,8 @@ use anyhow::Result;
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream::Peekable, StreamExt};
 use itertools::Itertools;
-use pallet_cf_vaults::CeremonyId;
 
+use pallet_cf_vaults::CeremonyId;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
@@ -120,7 +120,7 @@ macro_rules! recv_all_data_signing {
 }
 
 macro_rules! distribute_data_keygen_custom {
-    ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr) => {{
+    ($clients:expr, $account_ids: expr, $messages: expr, $custom_messages: expr, $ceremony_id: expr) => {{
         for sender_id in &$account_ids {
             for receiver_id in &$account_ids {
                 if receiver_id != sender_id {
@@ -130,7 +130,7 @@ macro_rules! distribute_data_keygen_custom {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_message);
 
-                    let message = keygen_data_to_p2p(message, KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p_with_ceremony_id(message, $ceremony_id);
 
                     $clients
                         .get_mut(receiver_id)
@@ -143,9 +143,10 @@ macro_rules! distribute_data_keygen_custom {
 }
 
 macro_rules! distribute_data_keygen {
-    ($clients:expr, $account_ids: expr, $messages: expr) => {{
+    ($clients:expr, $account_ids: expr, $messages: expr, $ceremony_id: expr) => {{
         for sender_id in &$account_ids {
-            let message = keygen_data_to_p2p($messages[sender_id].clone(), KEYGEN_CEREMONY_ID);
+            let message =
+                keygen_data_to_p2p_with_ceremony_id($messages[sender_id].clone(), $ceremony_id);
 
             for receiver_id in &$account_ids {
                 if receiver_id != sender_id {
@@ -345,12 +346,19 @@ pub struct SigningPhase4Data {
     pub ver4s: HashMap<AccountId, frost::VerifyLocalSig4>,
 }
 
+/// The outcome of the ceremony and the Clients at the state
+/// when the outcome was generated,
+pub struct SigningFinishedData {
+    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub outcome: SigningOutcome,
+}
+
 pub struct ValidSigningStates {
     pub sign_phase1: SigningPhase1Data,
     pub sign_phase2: SigningPhase2Data,
     pub sign_phase3: Option<SigningPhase3Data>,
     pub sign_phase4: Option<SigningPhase4Data>,
-    pub outcome: SigningOutcome,
+    pub sign_finished: SigningFinishedData,
 }
 
 impl ValidSigningStates {
@@ -366,10 +374,11 @@ impl ValidSigningStates {
     }
 }
 
-pub fn get_stage_for_keygen_ceremony(client: &MultisigClientNoDB) -> Option<String> {
-    client
-        .ceremony_manager
-        .get_keygen_stage_for(KEYGEN_CEREMONY_ID)
+pub fn get_stage_for_keygen_ceremony(
+    client: &MultisigClientNoDB,
+    ceremony_id: &CeremonyId,
+) -> Option<String> {
+    client.ceremony_manager.get_keygen_stage_for(ceremony_id)
 }
 
 #[derive(Default)]
@@ -406,7 +415,7 @@ pub struct KeygenContext {
     /// This clients will match the ones in `key_ready`,
     /// but stored separately so we could substitute
     /// them in more advanced tests
-    clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: HashMap<AccountId, MultisigClientNoDB>,
     /// Maps AccountId to the corresponding signer index
     /// (and vice versa)
     idx_mapping: PartyIdxMapping,
@@ -424,7 +433,7 @@ fn gen_invalid_local_sig() -> LocalSig3 {
     }
 }
 
-fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
         &HashContext([0; 32]),
         0,
@@ -434,6 +443,14 @@ fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
         },
     );
     fake_comm1
+}
+
+pub fn gen_invalid_signing_comm1() -> SigningCommitment {
+    SigningCommitment {
+        index: 0,
+        d: Point::random(),
+        e: Point::random(),
+    }
 }
 
 impl KeygenContext {
@@ -596,15 +613,10 @@ impl KeygenContext {
         // It doesn't matter what kind of commitment we create here,
         // the main idea is that the commitment doesn't match what we
         // send to all other parties
-        let fake_comm1 = SigningCommitment {
-            index: 0,
-            d: Point::random(),
-            e: Point::random(),
-        };
-
-        self.custom_data
-            .comm1_signing
-            .insert((sender_id.clone(), receiver_id.clone()), fake_comm1);
+        self.custom_data.comm1_signing.insert(
+            (sender_id.clone(), receiver_id.clone()),
+            gen_invalid_signing_comm1(),
+        );
     }
 
     /// Make the specified node send a new random commitment to the receiver
@@ -654,6 +666,14 @@ impl KeygenContext {
     // resulting in `KeygenContext` which can be used
     // to sign messages
     pub async fn generate(&mut self) -> ValidKeygenStates {
+        self.generate_with_ceremony_id(KEYGEN_CEREMONY_ID).await
+    }
+
+    // Generate keygen states using the specified ceremony id
+    pub async fn generate_with_ceremony_id(
+        &mut self,
+        ceremony_id: CeremonyId,
+    ) -> ValidKeygenStates {
         let instant = std::time::Instant::now();
 
         let clients = &mut self.clients;
@@ -668,7 +688,7 @@ impl KeygenContext {
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
-            ceremony_id: KEYGEN_CEREMONY_ID,
+            ceremony_id,
             signers: account_ids.clone(),
         };
 
@@ -689,14 +709,15 @@ impl KeygenContext {
             clients,
             self.account_ids,
             &comm1s,
-            &mut self.custom_data.comm1_keygen
+            &mut self.custom_data.comm1_keygen,
+            ceremony_id.clone()
         );
 
         println!("Distributed all comm1");
 
         clients
             .values()
-            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(2)));
+            .for_each(|c| assert_ok!(c.ensure_ceremony_at_keygen_stage(2, &ceremony_id)));
 
         let ver2s = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
 
@@ -707,13 +728,13 @@ impl KeygenContext {
 
         // *** Distribute VerifyComm2s, so we can advance and generate Secret3 ***
 
-        distribute_data_keygen!(clients, self.account_ids, ver2s);
+        distribute_data_keygen!(clients, self.account_ids, ver2s, ceremony_id.clone());
 
         if !clients
             .values()
             .next()
             .unwrap()
-            .ensure_at_keygen_stage(3)
+            .ensure_ceremony_at_keygen_stage(3, &ceremony_id)
             .is_ok()
         {
             // The ceremony failed early, gather the result and reported_nodes, then return
@@ -755,7 +776,7 @@ impl KeygenContext {
 
         clients
             .values()
-            .for_each(|c| assert_ok!(c.ensure_at_keygen_stage(3)));
+            .for_each(|c| assert_ok!(c.ensure_ceremony_at_keygen_stage(3, &ceremony_id)));
 
         // *** Collect all Secret3
 
@@ -791,7 +812,7 @@ impl KeygenContext {
                         .remove(&(sender_id.clone(), receiver_id.clone()))
                         .unwrap_or(valid_sec3.clone());
 
-                    let message = keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID);
+                    let message = keygen_data_to_p2p_with_ceremony_id(sec3.clone(), ceremony_id);
 
                     clients
                         .get_mut(receiver_id)
@@ -816,7 +837,8 @@ impl KeygenContext {
             clients,
             self.account_ids,
             complaints,
-            self.custom_data.complaints
+            self.custom_data.complaints,
+            ceremony_id.clone()
         );
 
         println!("Distributed all complaints");
@@ -830,13 +852,18 @@ impl KeygenContext {
 
         println!("Collected all verify complaints");
 
-        distribute_data_keygen!(clients, self.account_ids, ver_complaints);
+        distribute_data_keygen!(
+            clients,
+            self.account_ids,
+            ver_complaints,
+            ceremony_id.clone()
+        );
 
         println!("Distributed all verify complaints");
 
         // Now we are either done or have to enter the blaming stage
         let nodes_entered_blaming = clients.values().all(|c| {
-            get_stage_for_keygen_ceremony(&c).as_deref()
+            get_stage_for_keygen_ceremony(&c, &ceremony_id).as_deref()
                 == Some("BroadcastStage<BlameResponsesStage6>")
         });
 
@@ -857,7 +884,8 @@ impl KeygenContext {
                 clients,
                 self.account_ids,
                 responses6,
-                &mut self.custom_data.secret_shares_blaming
+                &mut self.custom_data.secret_shares_blaming,
+                ceremony_id.clone()
             );
 
             println!("Distributed all blame responses");
@@ -870,7 +898,7 @@ impl KeygenContext {
 
             println!("Collected all blame responses verification");
 
-            distribute_data_keygen!(clients, self.account_ids, ver7);
+            distribute_data_keygen!(clients, self.account_ids, ver7, ceremony_id.clone());
 
             println!("Distributed all blame responses verification");
         }
@@ -1059,7 +1087,10 @@ impl KeygenContext {
                 sign_phase2,
                 sign_phase3: None,
                 sign_phase4: None,
-                outcome: outcome,
+                sign_finished: SigningFinishedData {
+                    outcome,
+                    clients: clients.clone(),
+                },
             };
         }
 
@@ -1114,7 +1145,10 @@ impl KeygenContext {
                 sign_phase2,
                 sign_phase3: Some(sign_phase3),
                 sign_phase4: Some(sign_phase4),
-                outcome: outcome,
+                sign_finished: SigningFinishedData {
+                    outcome,
+                    clients: clients.clone(),
+                },
             }
         } else {
             panic!("No Signing Outcome")
@@ -1218,7 +1252,12 @@ async fn check_and_get_signing_outcome(
     }
 
     if !outcomes.is_empty() {
-        assert_eq!(outcomes.len(), rxs.len(), "Not all signers got an outcome");
+        assert_eq!(
+            outcomes.len(),
+            rxs.len(),
+            "Not all signers got an outcome: {:?}",
+            outcomes[0].result
+        );
 
         for outcome in outcomes.iter() {
             assert_eq!(outcome, &outcomes[0], "Outcome different between signers");
@@ -1299,7 +1338,16 @@ pub fn sig_data_to_p2p(data: impl Into<SigningData>) -> MultisigMessage {
     }
 }
 
-pub fn keygen_data_to_p2p(data: impl Into<KeygenData>, ceremony_id: CeremonyId) -> MultisigMessage {
+// Create a p2p MultisigMessage using the default ceremony id
+pub fn keygen_data_to_p2p(data: impl Into<KeygenData>) -> MultisigMessage {
+    keygen_data_to_p2p_with_ceremony_id(data, KEYGEN_CEREMONY_ID)
+}
+
+// Create a p2p MultisigMessage using the specified ceremony id
+pub fn keygen_data_to_p2p_with_ceremony_id(
+    data: impl Into<KeygenData>,
+    ceremony_id: CeremonyId,
+) -> MultisigMessage {
     MultisigMessage {
         ceremony_id,
         data: MultisigData::Keygen(data.into()),
@@ -1340,11 +1388,20 @@ impl MultisigClientNoDB {
         }
     }
 
-    /// Check is the client is at the specified keygen BroadcastStage (0-5).
+    /// Check is the default ceremony is at the specified keygen BroadcastStage (0-5).
     /// 0 = No Stage
     /// 1 = AwaitCommitments1 ... and so on
     pub fn ensure_at_keygen_stage(&self, stage_number: usize) -> Result<()> {
-        let stage = get_stage_for_keygen_ceremony(self);
+        self.ensure_ceremony_at_keygen_stage(stage_number, &KEYGEN_CEREMONY_ID)
+    }
+
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-5).
+    pub fn ensure_ceremony_at_keygen_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: &CeremonyId,
+    ) -> Result<()> {
+        let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
         let is_at_stage = match stage_number {
             0 => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
@@ -1385,19 +1442,13 @@ impl MultisigClientNoDB {
         sender_id: &AccountId,
     ) -> MultisigMessage {
         match stage {
-            1 => keygen_data_to_p2p(
-                keygen_states.comm_stage1.comm1s[sender_id].clone(),
-                KEYGEN_CEREMONY_ID,
-            ),
-            2 => keygen_data_to_p2p(
-                keygen_states.ver_com_stage2.ver2s[sender_id].clone(),
-                KEYGEN_CEREMONY_ID,
-            ),
+            1 => keygen_data_to_p2p(keygen_states.comm_stage1.comm1s[sender_id].clone()),
+            2 => keygen_data_to_p2p(keygen_states.ver_com_stage2.ver2s[sender_id].clone()),
             3 => {
                 let sec3 = keygen_states.sec_stage3.as_ref().expect("No stage 3").sec3[sender_id]
                     .get(&self.get_my_account_id())
                     .unwrap();
-                keygen_data_to_p2p(sec3.clone(), KEYGEN_CEREMONY_ID)
+                keygen_data_to_p2p(sec3.clone())
             }
             4 => keygen_data_to_p2p(
                 keygen_states
@@ -1406,7 +1457,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 4")
                     .comp4s[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             5 => keygen_data_to_p2p(
                 keygen_states
@@ -1415,7 +1465,6 @@ impl MultisigClientNoDB {
                     .expect("No stage 5")
                     .ver5[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             6 => keygen_data_to_p2p(
                 keygen_states
@@ -1424,7 +1473,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 6")
                     .resp6[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             7 => keygen_data_to_p2p(
                 keygen_states
@@ -1433,7 +1481,6 @@ impl MultisigClientNoDB {
                     .expect("No blaming stage 7")
                     .ver7[sender_id]
                     .clone(),
-                KEYGEN_CEREMONY_ID,
             ),
             _ => panic!("Invalid stage to receive message, stage: {}", stage),
         }

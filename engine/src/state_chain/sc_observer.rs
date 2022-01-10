@@ -43,12 +43,12 @@ pub async fn start<BlockStream, RpcClient>(
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
+    let blocks_per_heartbeat = state_chain_client.heartbeat_block_interval / 2;
 
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
-        heartbeat_block_interval,
+        blocks_per_heartbeat
     );
 
     state_chain_client
@@ -196,12 +196,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Keygen(KeygenOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(pubkey) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected keygen ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(pubkey) => {
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -210,14 +213,14 @@ pub async fn start<BlockStream, RpcClient>(
                                                         ),
                                                     ))
                                                     .await;
-                                            }
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Keygen failed with error: {:?}",
-                                                    err
-                                                );
-                                                let _ = state_chain_client
+                                                }
+                                                Err((err, bad_account_ids)) => {
+                                                    slog::error!(
+                                                        logger,
+                                                        "Keygen failed with error: {:?}",
+                                                        err
+                                                    );
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -226,8 +229,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                         ),
                                                     ))
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
@@ -265,12 +269,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Signing(SigningOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(sig) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Signing(SigningOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected signing ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(sig) => {
+                                                    let _ = state_chain_client
                                                     .submit_unsigned_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::signature_success(
@@ -279,9 +286,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                         )
                                                     )
                                                     .await;
-                                            }
-                                            Err((_, bad_account_ids)) => {
-                                                let _ = state_chain_client
+                                                }
+                                                Err((_, bad_account_ids)) => {
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
@@ -290,8 +297,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                         )
                                                     )
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
@@ -450,8 +458,8 @@ pub async fn start<BlockStream, RpcClient>(
                 if (matches!(account_data.state, ChainflipAccountState::Backup)
                     || matches!(account_data.state, ChainflipAccountState::Validator)
                     || is_outgoing)
-                    && ((block_header.number + (heartbeat_block_interval / 2))
-                        % heartbeat_block_interval
+                    && ((block_header.number + (state_chain_client.heartbeat_block_interval / 2))
+                        % blocks_per_heartbeat
                         == 0)
                 {
                     slog::info!(

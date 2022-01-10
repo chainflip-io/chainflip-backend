@@ -1,4 +1,7 @@
-use crate::multisig::client::CeremonyAbortReason;
+use crate::multisig::client::{
+    tests::helpers::{gen_invalid_keygen_comm1, keygen_data_to_p2p, next_with_timeout},
+    CeremonyAbortReason,
+};
 use crate::multisig::MultisigInstruction;
 
 use super::helpers::{self, check_blamed_paries};
@@ -23,7 +26,7 @@ async fn happy_path_results_in_valid_key() {
     assert!(keygen_states.blame_responses6.is_none());
 
     // Able to generate a valid signature
-    assert_ok!(ctx.sign().await.outcome.result);
+    assert_ok!(ctx.sign().await.sign_finished.outcome.result);
 }
 
 /// If keygen state expires before a formal request to keygen
@@ -171,7 +174,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     assert!(keygen_states.blame_responses6.is_some());
 
     // Check that we are still able to sign
-    assert!(ctx.sign().await.outcome.result.is_ok());
+    assert!(ctx.sign().await.sign_finished.outcome.result.is_ok());
 }
 
 /// If one or more parties send an invalid secret share both the first
@@ -444,4 +447,76 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     // Check that the keygen request was ignored
     assert_ok!(c1.ensure_at_keygen_stage(0));
     assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
+}
+
+#[tokio::test]
+async fn should_ignore_keygen_request_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&ctx.get_account_id(0)]
+        .clone();
+
+    // Send another keygen request with the same ceremony_id
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
+
+    // Check that the keygen request was ignored
+    assert_ok!(c1.ensure_at_keygen_stage(0));
+    assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
+}
+
+#[tokio::test]
+async fn should_ignore_stage_data_with_used_ceremony_id() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    // Get a client that has already completed keygen
+    let mut c1 = keygen_states
+        .key_ready_data()
+        .expect("successful keygen")
+        .clients[&ctx.get_account_id(0)]
+        .clone();
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
+
+    // Receive a comm1 with a used ceremony id (same default keygen ceremony id)
+    c1.receive_keygen_stage_data(1, &keygen_states, &ctx.get_account_id(1));
+
+    // The message should have been ignored and no ceremony was started
+    // In this case, the ceremony would be unauthorised, so we must check how many keygen states exist
+    // to see if a unauthorised state was created.
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
+}
+
+#[tokio::test]
+async fn should_not_consume_ceremony_id_if_unauthorised() {
+    let mut ctx = helpers::KeygenContext::new();
+
+    // Get a client that has not used the default keygen ceremony id yet
+    let id0 = ctx.get_account_id(0);
+    let mut c1 = ctx.clients[&id0].clone();
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
+
+    // Receive comm1 with the default keygen ceremony id
+    let message = keygen_data_to_p2p(gen_invalid_keygen_comm1());
+    assert_eq!(message.ceremony_id, KEYGEN_CEREMONY_ID);
+    c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
+
+    // Check that the unauthorised ceremony was created
+    assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 1);
+
+    // Timeout the unauthorised ceremony
+    c1.expire_all();
+    c1.cleanup();
+
+    // Clear out the timeout outcome
+    next_with_timeout(ctx.outcome_receivers.get_mut(&id0).unwrap()).await;
+
+    // keygen as normal using the default ceremony id
+    let keygen_states = ctx.generate().await;
+
+    // Should not of been rejected because of a used ceremony id
+    assert!(keygen_states.key_ready.is_ok());
 }
