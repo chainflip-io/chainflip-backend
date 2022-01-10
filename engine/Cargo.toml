@@ -137,3 +137,4 @@ mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
+tempdir = "0.3.7"
