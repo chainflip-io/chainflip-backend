@@ -288,10 +288,9 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             &eth_settings.private_key_file,
             "Ethereum Private Key",
             |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
-        )
-        .unwrap();
+        )?;
         Ok(Self {
-            eth_rpc: eth_rpc,
+            eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
