@@ -72,15 +72,15 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RPCCLient, EthRpc>(
+pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
     contract_observer: ContractObserver,
     eth_rpc: &EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
-    state_chain_client: Arc<StateChainClient<RPCCLient>>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
-    RPCCLient: 'static + StateChainRpcApi + Sync + Send,
+    RpcClient: 'static + StateChainRpcApi + Sync + Send,
     EthRpc: 'static + EthRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
@@ -447,13 +447,13 @@ pub trait EthObserver {
         &self,
     ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>>;
 
-    async fn handle_event<RPCClient>(
+    async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
     ) where
-        RPCClient: 'static + StateChainRpcApi + Sync + Send;
+        RpcClient: 'static + StateChainRpcApi + Sync + Send;
 
     fn get_deployed_address(&self) -> H160;
 }
