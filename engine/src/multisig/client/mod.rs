@@ -1,5 +1,6 @@
 #[macro_use]
 mod utils;
+mod ceremony_id_tracker;
 mod common;
 mod key_store;
 pub mod keygen;

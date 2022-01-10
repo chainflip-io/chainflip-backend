@@ -263,6 +263,11 @@ where
         }
     }
 
+    /// returns true if the ceremony is authorized (has received a ceremony request)
+    pub fn is_authorized(&self) -> bool {
+        self.inner.is_some()
+    }
+
     #[cfg(test)]
     pub fn get_stage(&self) -> Option<String> {
         self.inner

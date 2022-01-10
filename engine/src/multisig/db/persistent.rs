@@ -9,6 +9,8 @@ use crate::{
     multisig::{client::KeygenResultInfo, KeyId},
 };
 
+pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
+
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
     /// Rocksdb database instance
@@ -38,7 +40,11 @@ impl KeyDB for PersistentKeyDB {
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        tx.put_vec(0, &key_id.0, keygen_result_info_encoded);
+        tx.put_vec(
+            DB_COL_KEYGEN_RESULT_INFO,
+            &key_id.0,
+            keygen_result_info_encoded,
+        );
 
         // commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -51,7 +57,7 @@ impl KeyDB for PersistentKeyDB {
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
-            .iter(0)
+            .iter(DB_COL_KEYGEN_RESULT_INFO)
             .filter_map(|(key_id, key_info)| {
                 let key_id: KeyId = KeyId(key_id.into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
@@ -107,8 +113,8 @@ mod tests {
         ];
         let key_id = KeyId(key.into());
         let db_path = Path::new("db1");
+        let _ = std::fs::remove_dir_all(db_path);
         {
-            // Insert the key into the database
             let p_db = PersistentKeyDB::new(&db_path, &logger);
             let db = p_db.db;
 
@@ -131,6 +137,7 @@ mod tests {
         let logger = new_test_logger();
         let key_id = KeyId(vec![0; 33]);
         let db_path = Path::new("db2");
+        let _ = std::fs::remove_dir_all(db_path);
         {
             let mut p_db = PersistentKeyDB::new(&db_path, &logger);
 
