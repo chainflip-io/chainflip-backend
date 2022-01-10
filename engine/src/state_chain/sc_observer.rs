@@ -197,12 +197,15 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Keygen(KeygenOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(pubkey) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected keygen ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(pubkey) => {
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -211,14 +214,14 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                                         ),
                                                     ))
                                                     .await;
-                                            }
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Keygen failed with error: {:?}",
-                                                    err
-                                                );
-                                                let _ = state_chain_client
+                                                }
+                                                Err((err, bad_account_ids)) => {
+                                                    slog::error!(
+                                                        logger,
+                                                        "Keygen failed with error: {:?}",
+                                                        err
+                                                    );
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -227,8 +230,9 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                                         ),
                                                     ))
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
@@ -266,12 +270,15 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Signing(SigningOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(sig) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Signing(SigningOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected signing ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(sig) => {
+                                                    let _ = state_chain_client
                                                     .submit_unsigned_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::signature_success(
@@ -280,9 +287,9 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                                         )
                                                     )
                                                     .await;
-                                            }
-                                            Err((_, bad_account_ids)) => {
-                                                let _ = state_chain_client
+                                                }
+                                                Err((_, bad_account_ids)) => {
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
@@ -291,8 +298,9 @@ pub async fn start<BlockStream, RpcClient, Web3Type>(
                                                         )
                                                     )
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
