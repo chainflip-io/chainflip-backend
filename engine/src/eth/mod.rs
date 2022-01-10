@@ -23,13 +23,14 @@ use web3::{
 
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
+    constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
     eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -40,8 +41,6 @@ use web3::{
 use tokio_stream::{Stream, StreamExt};
 
 use event_common::EventWithCommon;
-
-use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 use async_trait::async_trait;
 
@@ -186,7 +185,7 @@ impl EthRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
         slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
-        let web3 = tokio::time::timeout(Duration::from_secs(5), async {
+        let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(node_endpoint)
                     .await
@@ -202,20 +201,20 @@ impl EthRpcClient {
                 .eth()
                 .syncing()
                 .await
-                .context("Failure while syncing web3 client")?
+                .context("Failure while syncing EthRpcClient client")?
             {
-                let duration_secs = 4;
                 slog::info!(
                     logger,
-                    "Waiting for eth node to sync. Sync state is: {:?}. Checking again in {} seconds...",
+                    "Waiting for ETH node to sync. Sync state is: {:?}. Checking again in {:?} ...",
                     info,
-                    duration_secs
+                    SYNC_POLL_INTERVAL
                 );
-                tokio::time::sleep(Duration::from_secs(duration_secs)).await;
+                tokio::time::sleep(SYNC_POLL_INTERVAL).await;
             }
             slog::info!(logger, "ETH node is synced.");
             Ok(web3)
-        }).await?;
+        })
+        .await?;
 
         Ok(Self { web3 })
     }
