@@ -287,7 +287,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
         let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
-            |key| SecretKey::from_str(&key[..]).map_err(anyhow::Error::new),
+            |key| SecretKey::from_str(key).map_err(anyhow::Error::new),
         )?;
         Ok(Self {
             eth_rpc,
