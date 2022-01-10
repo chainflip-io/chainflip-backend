@@ -32,6 +32,7 @@ async fn happy_path_results_in_valid_key() {
 /// If keygen state expires before a formal request to keygen
 /// (from our SC), we should report initiators of that ceremony
 #[tokio::test]
+#[ignore = "functionality disabled as SC does not expect this response"]
 async fn should_report_on_timeout_before_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;

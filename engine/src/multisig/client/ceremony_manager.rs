@@ -70,11 +70,16 @@ impl CeremonyManager {
         self.signing_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
                 slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
-                let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
-                events_to_send.push(MultisigOutcome::Signing(outcome));
 
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized(){
+
+                    // NOTE: we only respond if we have received a ceremony request from
+                    // SC (i.e. the ceremony is "authorised")
+                    // TODO: report nodes via a different extrinsic instead
+                    let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
+                    events_to_send.push(MultisigOutcome::Signing(outcome));
+
                     signing_ceremony_ids_to_consume.push(*ceremony_id);
                 }
 
@@ -87,11 +92,16 @@ impl CeremonyManager {
         self.keygen_states.retain(|ceremony_id, state| {
             if let Some(bad_nodes) = state.try_expiring() {
                 slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
-                let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
-                events_to_send.push(MultisigOutcome::Keygen(outcome));
 
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized(){
+
+                    // NOTE: we only respond if we have received a ceremony request from
+                    // SC (i.e. the ceremony is "authorised")
+                    // TODO: report nodes via a different extrinsic instead
+                    let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
+                    events_to_send.push(MultisigOutcome::Keygen(outcome));
+
                     keygen_ceremony_ids_to_consume.push(*ceremony_id);
                 }
 
