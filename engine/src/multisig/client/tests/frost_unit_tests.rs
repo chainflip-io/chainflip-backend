@@ -145,6 +145,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 }
 
 #[tokio::test]
+#[ignore = "functionality disabled as SC does not expect this response"]
 async fn should_report_on_timeout_before_request_to_sign() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
