@@ -2,15 +2,13 @@ use std::collections::VecDeque;
 
 use futures::{stream, Stream};
 use sp_core::H160;
-use web3::{
-    transports::WebSocket,
-    types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64},
-    Web3,
-};
+use web3::types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64};
 
 use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
+
+use super::EthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
@@ -80,26 +78,26 @@ where
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
     safe_eth_head_stream: SafeBlockHeaderStream,
-    web3: Web3<WebSocket>,
+    eth_rpc: EthRpc,
     contract_address: H160,
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = BlockHeader>,
+    EthRpc: EthRpcApi + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
-            let web3 = web3.clone();
+            let eth_rpc = eth_rpc.clone();
             async move {
                 let block_number = header.number.unwrap();
                 let mut contract_bloom = Bloom::default();
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
 
                 if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
-                    let logs = web3
-                        .eth()
-                        .logs(
+                    let logs = eth_rpc
+                        .get_logs(
                             FilterBuilder::default()
                                 //todo: is there an "at block"
                                 .from_block(BlockNumber::Number(block_number))

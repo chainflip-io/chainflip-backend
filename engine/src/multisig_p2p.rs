@@ -45,10 +45,10 @@ has been updated, which is possible at the moment.
 TODO: Batch outgoing messages
 */
 
-async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     cfe_peer_id: &PeerId,
     cfe_peer_keypair: &libp2p::identity::ed25519::Keypair,
-    state_chain_client: &Arc<StateChainClient<RPCClient>>,
+    state_chain_client: &Arc<StateChainClient<RpcClient>>,
     account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
@@ -97,9 +97,9 @@ fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<P
     ))
 }
 
-pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient<RPCClient>>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
     latest_block_hash: H256,
     incoming_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
     mut outgoing_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
