@@ -105,7 +105,7 @@ pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
     anyhow::Error::msg(format!("{:?}", error))
 }
 
-pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(String) -> Result<V, anyhow::Error>>(
+pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(
     file: &Path,
     context: &str,
     t: T,
@@ -113,9 +113,14 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(String) -> Result<V, anyh
     std::fs::read_to_string(&file)
         .map_err(anyhow::Error::new)
         .with_context(|| format!("Failed to read {} file at {}", context, file.display()))
-        .and_then(|str| {
-            let str = str.replace("0x", "").replace("\"", "");
-            t(str.trim().to_string())
+        .and_then(|string| {
+            let mut str = string.as_str();
+            str = str.trim();
+            str = str.trim_matches(['"', '\''].as_ref());
+            if let Some(stripped_str) = str.strip_prefix("0x") {
+                str = stripped_str;
+            }
+            t(str)
         })
         .with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
 }
