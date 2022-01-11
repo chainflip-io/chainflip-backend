@@ -4,7 +4,6 @@ mod ceremony_id_tracker;
 mod common;
 mod key_store;
 pub mod keygen;
-mod keygen_state_runner;
 pub mod signing;
 mod state_runner;
 

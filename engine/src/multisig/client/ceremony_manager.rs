@@ -6,8 +6,8 @@ use crate::multisig::client::{self, MultisigOutcome};
 use state_chain_runtime::AccountId;
 
 use client::{
-    keygen_state_runner::KeygenStateRunner, signing::frost::SigningData, state_runner::StateRunner,
-    utils::PartyIdxMapping, CeremonyAbortReason, MultisigOutcomeSender, SchnorrSignature,
+    signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping,
+    CeremonyAbortReason, MultisigOutcomeSender, SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
@@ -22,10 +22,11 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
-use super::keygen::{HashContext, KeygenData, KeygenOptions};
+use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
 use super::MultisigMessage;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
+type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
@@ -210,6 +211,8 @@ impl CeremonyManager {
 
     /// Process a keygen request
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
+        // TODO: Consider similiarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
+
         let KeygenInfo {
             ceremony_id,
             signers,
@@ -243,19 +246,31 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger));
 
-        let context = generate_keygen_context(ceremony_id, signers);
+        let initial_stage = {
+            let context = generate_keygen_context(ceremony_id, signers);
 
-        state.on_keygen_request(
+            let common = CeremonyCommon {
+                ceremony_id,
+                outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
+                validator_mapping: validator_map.clone(),
+                own_idx: our_idx,
+                all_idxs: signer_idxs,
+                logger: logger.clone(),
+            };
+
+            let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
+
+            Box::new(BroadcastStage::new(processor, common))
+        };
+
+        if let Err(reason) = state.on_ceremony_request(
             ceremony_id,
-            self.outcome_sender.clone(),
-            self.outgoing_p2p_message_sender.clone(),
+            initial_stage,
             validator_map,
-            our_idx,
-            signer_idxs,
-            keygen_options,
-            context,
-            &logger,
-        );
+            self.outcome_sender.clone(),
+        ) {
+            slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+        }
     }
 
     /// Process a request to sign
