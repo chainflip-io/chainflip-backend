@@ -285,7 +285,6 @@ impl StateChainRpcApi for StateChainRpcClient {
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    account_storage_key: StorageKey,
     events_storage_key: StorageKey,
     pub heartbeat_block_interval: u32,
     nonce: AtomicU32,
@@ -311,11 +310,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         Self {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(
-                frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-                    &our_account_id,
-                ),
-            ),
             events_storage_key,
             nonce: AtomicU32::new(0),
             our_account_id,
@@ -691,7 +685,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let account_info = self
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
-                self.account_storage_key.clone(),
+                StorageKey(
+                    frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
+                        &self.our_account_id,
+                    ),
+                ),
             )
             .await?;
 
@@ -926,8 +924,6 @@ pub async fn connect_to_state_chain(
             signer: signer.clone(),
             state_chain_rpc_client,
             our_account_id,
-            // TODO: Could remove this now that we use the type itself
-            account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
             heartbeat_block_interval: metadata
@@ -1058,7 +1054,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -1101,7 +1096,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -1146,7 +1140,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -1218,7 +1211,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -1263,7 +1255,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
@@ -1322,7 +1313,6 @@ mod tests {
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
             events_storage_key: StorageKey(Vec::default()),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new([0; 32]),
