@@ -110,7 +110,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     }
 
     // Initialise the account state
-    let (mut account_data, mut is_outgoing ) =
+    let (mut account_data, mut is_outgoing) =
         get_current_account_state(state_chain_client.clone(), initial_block_hash).await;
 
     if account_data.state == ChainflipAccountState::Validator || is_outgoing {
