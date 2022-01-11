@@ -31,6 +31,22 @@ fn test_header(number: u32) -> Header {
     }
 }
 
+fn account_info_from_data(
+    state: ChainflipAccountState,
+    last_active_epoch: Option<u32>,
+) -> AccountInfo<u32, ChainflipAccountData> {
+    AccountInfo {
+        nonce: 0,
+        consumers: 0,
+        providers: 0,
+        sufficients: 0,
+        data: ChainflipAccountData {
+            state,
+            last_active_epoch,
+        },
+    }
+}
+
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup() {
     // Submits only one extrinsic when no events, the heartbeat
@@ -56,16 +72,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
                 initial_block_hash,
             )])
         });
@@ -186,17 +193,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        // NB: We are Passive and last active is one less than current epoch (3)
-                        state: ChainflipAccountState::Passive,
-                        last_active_epoch: Some(2),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Passive, Some(2)),
                 initial_block_hash,
             )])
         });
@@ -329,17 +326,7 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        // NB: We are Passive and last active is *two* less than current epoch (3)
-                        state: ChainflipAccountState::Backup,
-                        last_active_epoch: Some(1),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Backup, Some(1)),
                 initial_block_hash,
             )])
         });
@@ -447,17 +434,7 @@ async fn backup_checks_account_data_every_block() {
         .times(3)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        // NB: We are Passive and last active is *two* less than current epoch (3)
-                        state: ChainflipAccountState::Backup,
-                        last_active_epoch: Some(1),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Backup, Some(1)),
                 initial_block_hash,
             )])
         });
@@ -571,16 +548,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
                 initial_block_hash,
             )])
         });
@@ -596,16 +564,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(4),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(4)),
                 new_epoch_block_header_hash,
             )])
         });
@@ -798,16 +757,7 @@ async fn backup_to_validator_on_new_epoch() {
         .times(2)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Backup,
-                        last_active_epoch: None,
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Backup, None),
                 initial_block_hash,
             )])
         });
@@ -823,16 +773,7 @@ async fn backup_to_validator_on_new_epoch() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(4),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(4)),
                 new_epoch_block_header_hash,
             )])
         });
@@ -986,16 +927,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
                 initial_block_hash,
             )])
         });
@@ -1011,16 +943,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Passive,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Passive, Some(3)),
                 new_epoch_block_header_hash,
             )])
         });
@@ -1032,16 +955,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(2)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Passive,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Passive, Some(3)),
                 H256::default(),
             )])
         });
@@ -1265,16 +1179,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                AccountInfo {
-                    nonce: 0,
-                    consumers: 0,
-                    providers: 0,
-                    sufficients: 0,
-                    data: ChainflipAccountData {
-                        state: ChainflipAccountState::Validator,
-                        last_active_epoch: Some(3),
-                    },
-                },
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
                 initial_block_hash,
             )])
         });
