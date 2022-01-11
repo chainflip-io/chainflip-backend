@@ -378,7 +378,7 @@ impl pallet_cf_governance::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MintInterval: u32 = 10 * MINUTES;
+	pub const MintInterval: u32 = 100_000;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
