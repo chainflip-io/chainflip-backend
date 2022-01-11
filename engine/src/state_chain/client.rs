@@ -301,7 +301,11 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    pub fn create_test_sc_client(rpc_client: RpcClient, our_account_id: AccountId32) -> Self {
+    pub fn create_test_sc_client(
+        rpc_client: RpcClient,
+        our_account_id: AccountId32,
+        events_storage_key: StorageKey,
+    ) -> Self {
         use substrate_subxt::PairSigner;
 
         Self {
@@ -311,7 +315,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     &our_account_id,
                 ),
             ),
-            events_storage_key: StorageKey(Vec::default()),
+            events_storage_key,
             nonce: AtomicU32::new(0),
             our_account_id,
             state_chain_rpc_client: rpc_client,
@@ -921,6 +925,7 @@ pub async fn connect_to_state_chain(
             signer: signer.clone(),
             state_chain_rpc_client,
             our_account_id,
+            // TODO: Could remove this now that we use the type itself
             account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),

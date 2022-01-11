@@ -61,11 +61,13 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
     ) -> (ChainflipAccountData, bool) {
+        println!("Getting account data");
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
             .await
             .expect("Could not get account data");
 
+        println!("Getting epoch");
         let current_epoch = state_chain_client
             .epoch_at_block(block_hash)
             .await
@@ -87,6 +89,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
+        println!("Getting vault");
         let eth_vault = state_chain_client
             .get_vault(
                 block_hash,
@@ -134,6 +137,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                 let mut received_new_epoch = false;
 
                 // Process this block's events
+                println!("Getting events");
                 match state_chain_client.get_events(block_hash).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
