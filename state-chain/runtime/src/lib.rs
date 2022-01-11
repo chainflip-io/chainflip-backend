@@ -458,6 +458,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 parameter_types! {
