@@ -432,7 +432,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Updates the claim exclusion period and gated with Governance
+		/// Updates the claim exclusion period and gated with Governance.  We protect against
+		/// exclusion periods being greater than the number of blocks we expect an epoch to run.
 		///
 		/// ## Events
 		///
@@ -448,7 +449,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				blocks > T::EpochInfo::blocks_per_epoch(),
+				T::EpochInfo::blocks_per_epoch() >= blocks,
 				Error::<T>::InvalidClaimExclusionPeriod
 			);
 			ClaimExclusionPeriod::<T>::set(blocks);

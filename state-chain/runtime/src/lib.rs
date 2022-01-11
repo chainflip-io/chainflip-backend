@@ -368,7 +368,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
-
 impl pallet_cf_governance::Config for Runtime {
 	type Origin = Origin;
 	type Call = Call;

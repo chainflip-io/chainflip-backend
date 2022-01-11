@@ -455,6 +455,19 @@ fn no_claims_during_exclusion_period() {
 }
 
 #[test]
+fn update_exclusion_period() {
+	new_test_ext().execute_with(|| {
+		let blocks = 10;
+		MockEpochInfo::set_epoch_in_blocks(blocks);
+		assert_ok!(Staking::update_claim_exclusion_period(Origin::root(), blocks - 1));
+		assert_noop!(
+			Staking::update_claim_exclusion_period(Origin::root(), blocks + 1),
+			Error::<Test>::InvalidClaimExclusionPeriod
+		);
+	});
+}
+
+#[test]
 fn test_claim_all() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 100;
