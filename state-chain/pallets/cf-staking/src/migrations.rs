@@ -7,7 +7,6 @@ pub(crate) mod v1 {
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
-		assert!(false);
 		assert!(P::on_chain_storage_version() == releases::V0, "Storage version too high.");
 		assert!(T::EpochInfo::blocks_per_epoch() > Zero::zero(), "we should have blocks per epoch");
 
