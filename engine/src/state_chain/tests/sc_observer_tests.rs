@@ -33,24 +33,6 @@ fn test_header(number: u32) -> Header {
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     mock_state_chain_rpc_client
@@ -133,6 +115,23 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, mut sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, mut km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
     start(
         state_chain_client,
         sc_block_stream,
@@ -163,23 +162,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     // Current epoch is set to 3. Our last_active_epoch is set to 2.
     // So we should be deemed outgoing, and submit the block height windows as expected to the nodes
     // even though we are passive
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -266,6 +248,24 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, mut sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, mut km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
     start(
         state_chain_client,
         sc_block_stream,
@@ -305,23 +305,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
     // Current epoch is set to 3. Our last_active_epoch is set to 1.
     // So we should be backup, but not outgoing. Hence, we should not send any messages
     // down the witness channels
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -382,6 +365,24 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
+
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, mut sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, mut km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     start(
         state_chain_client,
@@ -691,7 +692,6 @@ async fn validator_to_validator_on_new_epoch_event() {
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
                 vec![(
-                    // TODO: Check that this phase is correct for a new epoch event
                     Phase::ApplyExtrinsic(0),
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
@@ -904,7 +904,6 @@ async fn backup_to_validator_on_new_epoch() {
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
                 vec![(
-                    // TODO: Check that this phase is correct for a new epoch event
                     Phase::ApplyExtrinsic(0),
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
@@ -949,12 +948,6 @@ async fn backup_to_validator_on_new_epoch() {
 
 #[tokio::test]
 async fn validator_to_outgoing_passive_on_new_epoch_event() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
     // === FAKE BLOCKHEADERS ===
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);
@@ -967,18 +960,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         Ok(test_header(22)),
         Ok(test_header(23)),
     ]);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -1146,7 +1127,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
                 vec![(
-                    // TODO: Check that this phase is correct for a new epoch event
                     Phase::ApplyExtrinsic(0),
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
@@ -1168,6 +1148,24 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         our_account_id,
         events_key,
     ));
+
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, mut sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, mut km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     start(
         state_chain_client,
@@ -1215,8 +1213,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
 #[tokio::test]
 async fn only_encodes_and_signs_when_active_and_specified() {
-    let logger = new_test_logger();
-
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
@@ -1245,20 +1241,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                 transaction_hash: H256::default(),
             })
         });
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits the extrinsic for the heartbeat
     // and for submitting `transaction_ready_for_broadcast()`
@@ -1344,7 +1326,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                 vec![
                     (
                         // sign this one
-                        // TODO: Check that this phase is correct for a new epoch event
                         Phase::ApplyExtrinsic(0),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
@@ -1357,7 +1338,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                     ),
                     (
                         // do NOT sign this one
-                        // TODO: Check that this phase is correct for a new epoch event
                         Phase::ApplyExtrinsic(1),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
@@ -1378,6 +1358,22 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         our_account_id,
         events_key,
     ));
+
+    let logger = new_test_logger();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, mut sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, mut km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     start(
         state_chain_client,
