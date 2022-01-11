@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts, Pallet, PendingClaims,
-	WithdrawalAddresses,
+	mock::*, pallet, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts, Pallet,
+	PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
@@ -162,13 +162,33 @@ fn cannot_double_claim() {
 		);
 
 		// Redeem the first claim.
+		assert_eq!(
+			ClaimExpiries::<Test>::get()[0].1,
+			ALICE,
+			"Alice's claim should have an expiry set"
+		);
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a1, TX_HASH));
+		assert_eq!(
+			ClaimExpiries::<Test>::get().len(),
+			0,
+			"As Alice's claim is claimed it should have no expiry"
+		);
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2, ETH_DUMMY_ADDR));
 
 		// Redeem the rest.
+		assert_eq!(
+			ClaimExpiries::<Test>::get()[0].1,
+			ALICE,
+			"Alice's claim should have an expiry set"
+		);
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a2, TX_HASH));
+		assert_eq!(
+			ClaimExpiries::<Test>::get().len(),
+			0,
+			"As Alice's claim is claimed it should have no expiry"
+		);
 
 		// Remaining stake should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
