@@ -61,7 +61,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
     ) -> (ChainflipAccountData, bool) {
-        println!("Getting account data");
+        println!("Getting account data for block hash: {:?}", block_hash);
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
             .await

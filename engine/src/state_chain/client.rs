@@ -148,7 +148,7 @@ type SystemRpcClient =
 pub type EventInfo = (
     Phase,
     state_chain_runtime::Event,
-    // TODO: Find out / leave comment why this is a vec of hashes what does it represent?
+    // These are the event topics
     Vec<state_chain_runtime::Hash>,
 );
 
