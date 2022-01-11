@@ -4,7 +4,10 @@ use std::{
     fmt::Display,
 };
 
-use crate::multisig::client::{MultisigData, MultisigMessage};
+use crate::{
+    multisig::client::{MultisigData, MultisigMessage},
+    multisig_p2p::OutgoingMultisigStageMessages,
+};
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
@@ -88,56 +91,59 @@ where
     type Result = Result;
 
     fn init(&mut self) {
-        // TODO Clean and remove dup code (Alastair Holmes 18.11.2021)
-        match self.processor.init() {
-            DataToSend::Broadcast(data) => {
-                for destination_idx in &self.common.all_idxs {
-                    if *destination_idx == self.common.own_idx {
-                        // Save our own share
-                        self.messages.insert(self.common.own_idx, data.clone());
-                    } else {
-                        let data: D = data.clone().into();
-                        self.common
-                            .outgoing_p2p_message_sender
-                            .send((
-                                self.common
-                                    .validator_mapping
-                                    .get_id(*destination_idx)
-                                    .expect("Unknown account index")
-                                    .clone(),
-                                MultisigMessage {
-                                    ceremony_id: self.common.ceremony_id,
-                                    data: data.into(),
-                                },
-                            ))
-                            .expect("Could not send p2p message.");
-                    }
-                }
+        let common = &self.common;
+
+        let idx_to_id = |idx: &usize| {
+            common
+                .validator_mapping
+                .get_id(*idx)
+                .expect("Unknown account index")
+                .clone()
+        };
+
+        let (own_message, outgoing_messages) = match self.processor.init() {
+            DataToSend::Broadcast(stage_data) => {
+                let ceremony_data: D = stage_data.clone().into();
+                (
+                    stage_data.clone(),
+                    OutgoingMultisigStageMessages::Broadcast(
+                        common.all_idxs.iter().map(idx_to_id).collect(),
+                        MultisigMessage {
+                            ceremony_id: common.ceremony_id,
+                            data: ceremony_data.into(),
+                        },
+                    ),
+                )
             }
-            DataToSend::Private(messages) => {
-                for (destination_idx, data) in messages {
-                    if destination_idx == self.common.own_idx {
-                        self.messages.insert(self.common.own_idx, data);
-                    } else {
-                        let data: D = data.clone().into();
-                        self.common
-                            .outgoing_p2p_message_sender
-                            .send((
-                                self.common
-                                    .validator_mapping
-                                    .get_id(destination_idx)
-                                    .expect("Unknown account index")
-                                    .clone(),
+            DataToSend::Private(mut messages) => (
+                messages
+                    .remove(&common.own_idx)
+                    .expect("Must include message to self"),
+                OutgoingMultisigStageMessages::Private(
+                    messages
+                        .into_iter()
+                        .map(|(idx, stage_data)| {
+                            let ceremony_data: D = stage_data.into();
+                            (
+                                idx_to_id(&idx),
                                 MultisigMessage {
-                                    ceremony_id: self.common.ceremony_id,
-                                    data: data.into(),
+                                    ceremony_id: common.ceremony_id,
+                                    data: ceremony_data.into(),
                                 },
-                            ))
-                            .expect("Could not send p2p message.");
-                    }
-                }
-            }
-        }
+                            )
+                        })
+                        .collect(),
+                ),
+            ),
+        };
+
+        // Save our own share
+        self.messages.insert(common.own_idx, own_message);
+
+        self.common
+            .outgoing_p2p_message_sender
+            .send(outgoing_messages)
+            .expect("Could not send p2p message.");
     }
 
     fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {
