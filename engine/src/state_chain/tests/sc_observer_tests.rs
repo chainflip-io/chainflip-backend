@@ -63,13 +63,14 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     // get account info
     let our_account_id = AccountId32::new([0u8; 32]);
 
-    let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
-    );
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(account_info_storage_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(frame_system::Account::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(&our_account_id))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -88,26 +89,30 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         });
 
     // get the epoch
-    let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
-    );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
 
     // get the current vault
-    let vault_key = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
-            &3,
-            &ChainId::Ethereum,
-        ),
-    );
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(vault_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(pallet_cf_vaults::Vaults::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(
+                &3, &ChainId::Ethereum
+            ))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -188,13 +193,14 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     // get account info
     let our_account_id = AccountId32::new([0u8; 32]);
 
-    let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
-    );
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(account_info_storage_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(frame_system::Account::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(&our_account_id))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -214,26 +220,29 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         });
 
     // get the current epoch, which is 3
-    let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
-    );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
 
     // get the current vault
-    let vault_key = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
-            &2,
-            &ChainId::Ethereum,
-        ),
-    );
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(vault_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(pallet_cf_vaults::Vaults::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(
+                &2, &ChainId::Ethereum
+            ))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -326,13 +335,14 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
     // get account info
     let our_account_id = AccountId32::new([0u8; 32]);
 
-    let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
-    );
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(account_info_storage_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(frame_system::Account::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(&our_account_id))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -352,12 +362,15 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         });
 
     // get the current epoch, which is 3
-    let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
-    );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
 
@@ -421,13 +434,14 @@ async fn backup_checks_account_data_every_block() {
     // get account info
     let our_account_id = AccountId32::new([0u8; 32]);
 
-    let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
-    );
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(account_info_storage_key))
+        .with(
+            predicate::always(),
+            eq(StorageKey(frame_system::Account::<
+                state_chain_runtime::Runtime,
+            >::hashed_key_for(&our_account_id))),
+        )
         // NB: This is called three times. Once at the start, and then once for every block (x2 in this test)
         .times(3)
         .returning(move |_, _| {
@@ -448,12 +462,15 @@ async fn backup_checks_account_data_every_block() {
         });
 
     // get the current epoch, which is 3
-    let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
-    );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(epoch_key))
+        .with(
+            predicate::always(),
+            eq(StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            )),
+        )
         .times(3)
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, H256::default())]));
 
