@@ -11,6 +11,7 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+mod migrations;
 #[cfg(test)]
 mod tests;
 
@@ -35,9 +36,17 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-use frame_support::pallet_prelude::Weight;
+use frame_support::pallet_prelude::{GetStorageVersion, Weight};
 use sp_runtime::traits::BlockNumberProvider;
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds ClaimExclusionPeriod storage item
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -137,6 +146,33 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			Self::expire_pending_claims()
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
 		}
 	}
 
