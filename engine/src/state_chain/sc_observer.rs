@@ -35,7 +35,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
     km_window_sender: UnboundedSender<BlockHeightWindow>,
-    latest_block_hash: H256,
+    initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
@@ -89,7 +89,10 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
-        println!("Getting vault");
+        println!(
+            "Getting vault, accountdata: {:?}, block_hash: {:?}",
+            account_data, block_hash
+        );
         let eth_vault = state_chain_client
             .get_vault(
                 block_hash,
@@ -108,12 +111,12 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 
     // Initialise the account state
     let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
+        get_current_account_state(state_chain_client.clone(), initial_block_hash).await;
 
     if account_data.state == ChainflipAccountState::Validator || is_outgoing {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
-            latest_block_hash,
+            initial_block_hash,
             account_data,
             &sm_window_sender,
             &km_window_sender,
@@ -125,20 +128,20 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
-            Ok(block_header) => {
-                let block_hash = block_header.hash();
+            Ok(current_block_header) => {
+                let current_block_hash = current_block_header.hash();
                 slog::debug!(
                     logger,
                     "Processing SC block {} with block hash: {:#x}",
-                    block_header.number,
-                    block_hash
+                    current_block_header.number,
+                    current_block_hash
                 );
 
                 let mut received_new_epoch = false;
 
                 // Process this block's events
                 println!("Getting events");
-                match state_chain_client.get_events(block_hash).await {
+                match state_chain_client.get_events(current_block_hash).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
@@ -401,7 +404,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                     slog::trace!(
                                         logger,
                                         "Ignoring event at block {}: {:?}",
-                                        block_header.number,
+                                        current_block_header.number,
                                         ignored_event
                                     );
                                 }
@@ -412,7 +415,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                         slog::error!(
                             logger,
                             "Failed to decode events at block {}. {}",
-                            block_header.number,
+                            current_block_header.number,
                             error,
                         );
                     }
@@ -426,7 +429,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                 // need to send anything to them
                 if received_new_epoch {
                     let (new_account_data, new_is_outgoing) =
-                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                        get_current_account_state(state_chain_client.clone(), current_block_hash)
+                            .await;
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
 
@@ -434,7 +438,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                     {
                         send_windows_to_witness_processes(
                             state_chain_client.clone(),
-                            latest_block_hash,
+                            current_block_hash,
                             account_data,
                             &sm_window_sender,
                             &km_window_sender,
@@ -449,7 +453,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                     // If we are Backup or Passive, we must update our state on every block, since it's possible
                     // we move between Backup and Passive on every block
                     let (new_account_data, new_is_outgoing) =
-                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                        get_current_account_state(state_chain_client.clone(), current_block_hash)
+                            .await;
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
                 }
@@ -463,14 +468,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                 if (matches!(account_data.state, ChainflipAccountState::Backup)
                     || matches!(account_data.state, ChainflipAccountState::Validator)
                     || is_outgoing)
-                    && ((block_header.number + (state_chain_client.heartbeat_block_interval / 2))
+                    && ((current_block_header.number
+                        + (state_chain_client.heartbeat_block_interval / 2))
                         % blocks_per_heartbeat
                         == 0)
                 {
                     slog::info!(
                         logger,
                         "Sending heartbeat at block: {}",
-                        block_header.number
+                        current_block_header.number
                     );
                     let _ = state_chain_client
                         .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
