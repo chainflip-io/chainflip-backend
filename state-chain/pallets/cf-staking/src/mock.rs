@@ -114,7 +114,6 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 	pub const BlocksPerDay: u64 = 14400;
-	pub const ClaimExclusionPeriod: u64 = 1;
 }
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, Call);
@@ -186,7 +185,7 @@ impl pallet_cf_staking::Config for Test {
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type ClaimExclusionPeriod = ClaimExclusionPeriod;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
@@ -197,7 +196,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
-		staking: StakingConfig { genesis_stakers: vec![] },
+		staking: StakingConfig { genesis_stakers: vec![], claim_exclusion_period: 1 },
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

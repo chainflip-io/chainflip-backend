@@ -16,6 +16,7 @@ macro_rules! impl_mock_epoch_info {
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
 			pub static NEXT_EPOCH: RefCell<u64> = RefCell::new(u64::MAX);
+			pub static EPOCH_IN_BLOCKS: RefCell<u64> = RefCell::new(u64::MAX);
 		}
 
 		impl MockEpochInfo {
@@ -69,6 +70,10 @@ macro_rules! impl_mock_epoch_info {
 			pub fn set_next_epoch_expected(block_number: u64) {
 				NEXT_EPOCH.with(|cell| *cell.borrow_mut() = block_number);
 			}
+
+			pub fn set_epoch_in_blocks(blocks: u64) {
+				EPOCH_IN_BLOCKS.with(|cell| *cell.borrow_mut() = blocks);
+			}
 		}
 
 		impl EpochInfo for MockEpochInfo {
@@ -102,6 +107,10 @@ macro_rules! impl_mock_epoch_info {
 
 			fn next_expected_epoch() -> Self::BlockNumber {
 				NEXT_EPOCH.with(|cell| *cell.borrow())
+			}
+
+			fn blocks_per_epoch() -> Self::BlockNumber {
+				EPOCH_IN_BLOCKS.with(|cell| *cell.borrow())
 			}
 		}
 	};

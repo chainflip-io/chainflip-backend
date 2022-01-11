@@ -454,13 +454,14 @@ fn testnet_genesis(
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
 ) -> GenesisConfig {
+	let blocks_per_epoch = 8 * HOURS;
 	GenesisConfig {
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		validator: ValidatorConfig { blocks_per_epoch: 8 * HOURS },
+		validator: ValidatorConfig { blocks_per_epoch },
 		session: SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -469,6 +470,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 		staking: StakingConfig {
+			claim_exclusion_period: blocks_per_epoch / 2,
 			genesis_stakers: genesis_stakers
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))

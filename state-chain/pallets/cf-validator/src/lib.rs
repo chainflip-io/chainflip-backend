@@ -461,6 +461,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn next_expected_epoch() -> Self::BlockNumber {
 		CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()
 	}
+
+	fn blocks_per_epoch() -> Self::BlockNumber {
+		BlocksPerEpoch::<T>::get()
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.

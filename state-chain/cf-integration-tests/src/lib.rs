@@ -553,9 +553,12 @@ mod tests {
 				.assimilate_storage(storage)
 				.unwrap();
 
-			pallet_cf_staking::GenesisConfig::<Runtime> { genesis_stakers: self.accounts.clone() }
-				.assimilate_storage(storage)
-				.unwrap();
+			pallet_cf_staking::GenesisConfig::<Runtime> {
+				genesis_stakers: self.accounts.clone(),
+				claim_exclusion_period: self.blocks_per_epoch / 2,
+			}
+			.assimilate_storage(storage)
+			.unwrap();
 
 			pallet_session::GenesisConfig::<Runtime> {
 				keys: self

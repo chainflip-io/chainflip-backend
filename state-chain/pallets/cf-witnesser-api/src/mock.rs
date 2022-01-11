@@ -50,10 +50,6 @@ parameter_types! {
 	pub const ClaimTTL: Duration = Duration::from_millis(1000);
 }
 
-parameter_types! {
-	pub const ClaimExclusionPeriod: u64 = 1;
-}
-
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -169,8 +165,8 @@ impl pallet_cf_staking::Config for Test {
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
-	type ClaimExclusionPeriod = ClaimExclusionPeriod;
 }
 
 type Amount = u128;

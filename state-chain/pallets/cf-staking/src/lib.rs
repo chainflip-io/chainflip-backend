@@ -95,13 +95,12 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
 		type ClaimTTL: Get<Duration>;
-
-		/// Claim exclusion period before next epoch
-		#[pallet::constant]
-		type ClaimExclusionPeriod: Get<Self::BlockNumber>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -130,6 +129,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
+
+	#[pallet::storage]
+	pub(super) type ClaimExclusionPeriod<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -163,6 +165,9 @@ pub mod pallet {
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
+
+		/// The claim exclusion period has been updated. \[new_period\]
+		ClaimExclusionPeriodUpdated(T::BlockNumber),
 	}
 
 	#[pallet::error]
@@ -198,6 +203,9 @@ pub mod pallet {
 
 		/// Failed to claim as we are in the claim exclusion period before an epoch
 		ClaimFailedDuringExclusionPeriod,
+
+		/// Invalid claim exclusion period
+		InvalidClaimExclusionPeriod,
 	}
 
 	#[pallet::call]
@@ -423,23 +431,49 @@ pub mod pallet {
 			Self::activate(&who)?;
 			Ok(().into())
 		}
+
+		/// Updates the claim exclusion period and gated with Governance
+		///
+		/// ## Events
+		///
+		/// - [ClaimExclusionPeriodUpdated](Event::ClaimExclusionPeriodUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidClaimExclusionPeriod](Error::InvalidClaimExclusionPeriod)
+		#[pallet::weight(10_000_000)]
+		pub fn update_claim_exclusion_period(
+			origin: OriginFor<T>,
+			blocks: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				blocks > T::EpochInfo::blocks_per_epoch(),
+				Error::<T>::InvalidClaimExclusionPeriod
+			);
+			ClaimExclusionPeriod::<T>::set(blocks);
+			Self::deposit_event(Event::ClaimExclusionPeriodUpdated(blocks));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
+		pub claim_exclusion_period: T::BlockNumber,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![] }
+			Self { genesis_stakers: vec![], claim_exclusion_period: Zero::zero() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			ClaimExclusionPeriod::<T>::set(self.claim_exclusion_period);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 			}
@@ -523,7 +557,7 @@ impl<T: Config> Pallet<T> {
 	fn is_exclusion_period() -> bool {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let period_starts =
-			T::EpochInfo::next_expected_epoch().saturating_sub(T::ClaimExclusionPeriod::get());
+			T::EpochInfo::next_expected_epoch().saturating_sub(ClaimExclusionPeriod::<T>::get());
 		current_block >= period_starts
 	}
 

@@ -102,6 +102,9 @@ pub trait EpochInfo {
 
 	/// The expected block number we expect to start the next epoch
 	fn next_expected_epoch() -> Self::BlockNumber;
+
+	/// The number of blocks we expect an epoch to last
+	fn blocks_per_epoch() -> Self::BlockNumber;
 }
 
 pub struct CurrentThreshold<T>(PhantomData<T>);
