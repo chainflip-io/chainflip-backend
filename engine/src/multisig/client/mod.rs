@@ -373,8 +373,6 @@ where
                         .process_keygen_data(sender_id, ceremony_id, data)
                 {
                     self.on_key_generated(ceremony_id, key);
-                    // NOTE: we could already delete the state here, but it is
-                    // not necessary as it will be deleted by "cleanup"
                 }
             }
             MultisigMessage {
@@ -409,8 +407,7 @@ where
         self.my_account_id.clone()
     }
 
-    /// Change the time we wait until deleting all unresolved states
-    pub fn expire_all(&mut self) {
+    pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
 
         self.pending_requests_to_sign.retain(|_, pending_infos| {
@@ -419,5 +416,32 @@ where
             }
             true
         });
+
+        self.cleanup();
+    }
+
+    /// Conditionally force timeout for a stage depending on what
+    /// current stage is
+    pub fn ensure_stage_finalized_signing(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
+        // TODO: use enums for stage names/idx
+
+        dbg!(self.ceremony_manager.get_signing_stage_for(ceremony_id));
+
+        if &self.ceremony_manager.get_signing_stage_for(ceremony_id)
+            == &Some(stage_name.to_string())
+        {
+            self.force_stage_timeout();
+        }
+    }
+
+    /// Conditionally force timeout for a stage depending on what
+    /// current stage is
+    pub fn ensure_stage_finalized_keygen(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
+        dbg!(self.ceremony_manager.get_keygen_stage_for(ceremony_id));
+
+        if &self.ceremony_manager.get_keygen_stage_for(ceremony_id) == &Some(stage_name.to_string())
+        {
+            self.force_stage_timeout();
+        }
     }
 }

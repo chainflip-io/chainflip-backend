@@ -40,7 +40,12 @@ impl KeygenStateRunner {
         all_idxs: BTreeSet<usize>,
         keygen_options: KeygenOptions,
         context: HashContext,
+        logger: &slog::Logger,
     ) {
+        // We update the logger since it might contain additional context (in case
+        // the ceremony was initially created before keygen request by a p2p message)
+        self.logger = logger.clone();
+
         self.idx_mapping = Some(idx_mapping.clone());
 
         let common = CeremonyCommon {
@@ -64,8 +69,31 @@ impl KeygenStateRunner {
         }
     }
 
-    pub fn try_expiring(&mut self) -> Option<Vec<AccountId>> {
-        self.inner.try_expiring()
+    /// Combine keygen result with the validator mapping for the current ceremony
+    fn assemble_keygen_result_info(&self, result: KeygenResult) -> KeygenResultInfo {
+        // NOTE: this line makes it impossible (currently) to create keys
+        // for non-standard t/n ratios
+        let params = ThresholdParameters::from_share_count(result.party_public_keys.len());
+
+        let idx_mapping = self
+            .idx_mapping
+            .as_ref()
+            .expect("idx mapping should be present")
+            .clone();
+
+        KeygenResultInfo {
+            key: Arc::new(result),
+            validator_map: idx_mapping,
+            params,
+        }
+    }
+
+    pub fn try_expiring(
+        &mut self,
+    ) -> Option<Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>> {
+        self.inner
+            .try_expiring()
+            .map(|res| res.map(|keygen_result| self.assemble_keygen_result_info(keygen_result)))
     }
 
     pub fn process_message(
@@ -73,24 +101,9 @@ impl KeygenStateRunner {
         sender_id: AccountId,
         data: KeygenData,
     ) -> Option<Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>> {
-        self.inner.process_message(sender_id, data).map(|res| {
-            res.map(|keygen_result| {
-                let params =
-                    ThresholdParameters::from_share_count(keygen_result.party_public_keys.len());
-
-                let idx_mapping = self
-                    .idx_mapping
-                    .as_ref()
-                    .expect("idx mapping should be present")
-                    .clone();
-
-                KeygenResultInfo {
-                    key: Arc::new(keygen_result),
-                    validator_map: idx_mapping,
-                    params,
-                }
-            })
-        })
+        self.inner
+            .process_message(sender_id, data)
+            .map(|res| res.map(|keygen_result| self.assemble_keygen_result_info(keygen_result)))
     }
 
     /// returns true if the ceremony is authorized (has received a ceremony request)

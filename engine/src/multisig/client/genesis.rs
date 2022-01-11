@@ -65,23 +65,20 @@ pub async fn genesis_keys() {
         )
     };
 
-    let signing_result = keygen_context.sign_with_ids(&active_ids).await;
+    let signing_result = keygen_context.sign_custom(&active_ids, None).await;
 
     assert!(
         signing_result.sign_finished.outcome.result.is_ok(),
         "Signing ceremony failed"
     );
 
-    println!(
-        "Pubkey is (66 chars, 33 bytes): {:?}",
-        hex::encode(
-            valid_keygen_states
-                .key_ready_data()
-                .expect("successful_keygen")
-                .pubkey
-                .serialize()
-        )
-    );
+    let agg_key = valid_keygen_states
+        .key_ready_data()
+        .expect("successful_keygen")
+        .pubkey
+        .serialize();
+
+    println!("Pubkey is (66 chars, 33 bytes): {:?}", hex::encode(agg_key));
 
     let secret_keys = &valid_keygen_states
         .key_ready_data()

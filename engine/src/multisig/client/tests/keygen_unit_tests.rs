@@ -11,8 +11,7 @@ use crate::testing::assert_ok;
 use super::*;
 
 use crate::logging::{
-    KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_EXPIRED,
-    KEYGEN_REQUEST_IGNORED,
+    KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
 };
 
 /// If all nodes are honest and behave as expected we should
@@ -44,8 +43,7 @@ async fn should_report_on_timeout_before_keygen_request() {
     c1.receive_keygen_stage_data(1, &keygen_states, &bad_party_id);
 
     // Force all ceremonies to time out
-    c1.expire_all();
-    c1.cleanup();
+    c1.force_stage_timeout();
 
     check_blamed_paries(
         ctx.outcome_receivers
@@ -54,45 +52,6 @@ async fn should_report_on_timeout_before_keygen_request() {
         &[bad_party_id],
     )
     .await;
-    assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
-}
-
-/// If a ceremony expires in the middle of any stage,
-/// we should report the slow parties
-#[tokio::test]
-async fn should_report_on_timeout_stage() {
-    let mut ctx = helpers::KeygenContext::new();
-
-    // Use invalid secret share so the ceremony will go all the way to the blaming stages
-    // (It doesn't matter who sends this invalid share)
-    ctx.use_invalid_secret_share(&ctx.get_account_id(2), &ctx.get_account_id(0));
-    let keygen_states = ctx.generate().await;
-
-    let bad_party_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
-    let good_party_id = ctx.get_account_id(3);
-
-    // Test the timeout for all stages
-    for stage in 1..=KEYGEN_STAGES {
-        // Get a client at the correct stage
-        let mut c1 = keygen_states.get_client_at_stage(&ctx.get_account_id(0), stage);
-
-        // Receive data from one client but not the others
-        c1.receive_keygen_stage_data(stage, &keygen_states, &good_party_id);
-
-        // Trigger timeout
-        c1.expire_all();
-        c1.cleanup();
-
-        // Check that the late 2 clients are correctly reported
-        check_blamed_paries(
-            ctx.outcome_receivers
-                .get_mut(&ctx.get_account_id(0))
-                .unwrap(),
-            &bad_party_ids,
-        )
-        .await;
-        assert!(ctx.tag_cache.contains_tag(KEYGEN_REQUEST_EXPIRED));
-    }
 }
 
 #[tokio::test]
@@ -509,8 +468,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 1);
 
     // Timeout the unauthorised ceremony
-    c1.expire_all();
-    c1.cleanup();
+    c1.force_stage_timeout();
 
     // Clear out the timeout outcome
     next_with_timeout(ctx.outcome_receivers.get_mut(&id0).unwrap()).await;
@@ -520,4 +478,33 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     // Should not of been rejected because of a used ceremony id
     assert!(keygen_states.key_ready.is_ok());
+}
+
+mod timeout {
+
+    use super::*;
+
+    // What should be tested w.r.t timeouts:
+
+    // 1. [todo] If timeout during a broadcast verification stage, and we have enough data, we can recover
+    // TODO: more test cases
+
+    mod during_broadcast_verification_stage {
+
+        use super::*;
+
+        async fn recover_if_agree_on_values(stage_idx: usize) {
+            let mut ctx = helpers::KeygenContext::new();
+            let bad_party_id = ctx.get_account_id(1);
+
+            ctx.force_party_timeout_keygen(&bad_party_id, None, stage_idx);
+
+            let _ = ctx.generate().await;
+        }
+
+        #[tokio::test]
+        async fn recover_if_agree_on_values_stage2() {
+            recover_if_agree_on_values(2).await;
+        }
+    }
 }
