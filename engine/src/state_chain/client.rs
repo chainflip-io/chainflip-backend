@@ -991,7 +991,6 @@ mod tests {
 
     use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;
-    use substrate_subxt::PairSigner;
 
     use crate::{
         logging::{self, test_utils::new_test_logger},
@@ -1052,16 +1051,11 @@ mod tests {
             .times(1)
             .returning(move |_| Ok(tx_hash.clone()));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1094,16 +1088,11 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1138,16 +1127,11 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1209,16 +1193,11 @@ mod tests {
                 })
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1253,16 +1232,11 @@ mod tests {
             .times(1)
             .returning(move |_| Err(RpcError::Timeout));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1311,16 +1285,11 @@ mod tests {
             .times(1)
             .returning(move |_| Ok(tx_hash.clone()));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client = StateChainClient::create_test_sc_client(
+            mock_state_chain_rpc_client,
+            AccountId32::new([0; 32]),
+            StorageKey(Vec::default()),
+        );
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
