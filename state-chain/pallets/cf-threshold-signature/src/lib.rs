@@ -134,6 +134,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChain: Chain + ChainCrypto;
 
@@ -424,6 +427,15 @@ pub mod pallet {
 				offenders.try_into().map_err(|_| Error::<T, I>::ExcessOffenders)?,
 			)
 			.dispatch_bypass_filter(origin)
+		}
+
+		#[pallet::weight(10_000)]
+		// NB.  Remove this!
+		pub fn clear_requests(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			PendingRequests::<T, I>::remove_all(None);
+			RetryQueues::<T, I>::remove_all(None);
+			Ok(().into())
 		}
 	}
 }

@@ -102,7 +102,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 107,
+	spec_version: 108,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -378,7 +378,7 @@ impl pallet_cf_governance::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MintInterval: u32 = 10 * MINUTES;
+	pub const MintInterval: u32 = 100_000;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
@@ -458,6 +458,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 parameter_types! {

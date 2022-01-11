@@ -220,6 +220,7 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type TargetChain = Doge;
 	type SigningContext = DogeThresholdSignerContext;
 	type SignerNomination = MockNominator;
