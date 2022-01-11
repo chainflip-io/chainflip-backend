@@ -15,14 +15,10 @@ use crate::{
     multisig::{MultisigInstruction, MultisigOutcome},
     settings::test_utils::new_test_settings,
     state_chain::{
-        client::{
-            test_utils::storage_change_set_from, EventInfo, MockStateChainRpcApi, StateChainClient,
-        },
+        client::{test_utils::storage_change_set_from, MockStateChainRpcApi, StateChainClient},
         sc_observer::start,
     },
 };
-
-use anyhow::Result;
 
 fn test_header(number: u32) -> Header {
     Header {
@@ -632,16 +628,16 @@ async fn validator_checks_account_data_on_new_epoch_event() {
             )])
         });
 
-    let vault_key_two = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
-            &4,
-            &ChainId::Ethereum,
-        ),
-    );
+    let vault_key_after_new_epoch = StorageKey(pallet_cf_vaults::Vaults::<
+        state_chain_runtime::Runtime,
+    >::hashed_key_for(&4, &ChainId::Ethereum));
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header.hash())), eq(vault_key_two))
+        .with(
+            eq(Some(new_epoch_block_header.hash())),
+            eq(vault_key_after_new_epoch),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
