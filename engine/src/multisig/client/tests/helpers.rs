@@ -920,7 +920,10 @@ impl KeygenContext {
                 let pubkeys: Vec<_> = results.iter().map(|res| res.clone().unwrap()).collect();
 
                 // ensure all participants have the same public key
-                let first_pubkey = pubkeys[0].clone();
+                let first_pubkey = pubkeys
+                    .first()
+                    .expect("Node 0 should have a public key")
+                    .clone();
                 for pubkey in pubkeys {
                     assert_eq!(first_pubkey.serialize(), pubkey.serialize());
                 }

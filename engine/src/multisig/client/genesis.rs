@@ -21,9 +21,9 @@ mod tests {
 
     // If no `ENV_VAR_INPUT_FILE` is defined, then these default names and ids are used to run the genesis unit test
     const DEFAULT_CSV_CONTENT: &str = "node_name, node_id
-    DOC,5F9ofCBWLMFXotypXtbUnbLXkM1Z9As47GRhDDFJDsxKgpBu
-    BASHFUL,5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN
-    DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
+DOC,5F9ofCBWLMFXotypXtbUnbLXkM1Z9As47GRhDDFJDsxKgpBu
+BASHFUL,5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN
+DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
     type Record = (String, AccountId);
 
@@ -32,7 +32,7 @@ mod tests {
         R: io::Read,
     {
         // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
-        reader
+        let nodes = reader
                 .records()
                 .filter_map(|result| match result {
                     Ok(result) => Some(result),
@@ -44,11 +44,23 @@ mod tests {
                     match record.deserialize::<Record>(None) {
                         Ok(record) => Some(record),
                         Err(e) => {
-                            panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas{}", e);
+                            panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas. Error: {}", e);
                         }
                     }
                 })
-                .collect::<HashMap<String, AccountId>>()
+                .collect::<Vec<(String, AccountId)>>();
+
+        // Check for duplicate names when filling the HashMap
+        let mut mode_id_map = HashMap::new();
+        nodes.iter().for_each(|(name, id)| {
+            assert!(
+                mode_id_map.insert(name.clone(), id.clone()).is_none(),
+                "Duplicate node name {} in csv",
+                &name
+            );
+        });
+
+        mode_id_map
     }
 
     // Generate the keys for genesis
