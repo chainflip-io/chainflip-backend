@@ -299,6 +299,29 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     state_chain_rpc_client: RpcClient,
 }
 
+#[cfg(test)]
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    pub fn create_test_sc_client(rpc_client: RpcClient, our_account_id: AccountId32) -> Self {
+        use substrate_subxt::PairSigner;
+
+        Self {
+            heartbeat_block_interval: 20,
+            account_storage_key: StorageKey(
+                frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
+                    &our_account_id,
+                ),
+            ),
+            events_storage_key: StorageKey(Vec::default()),
+            nonce: AtomicU32::new(0),
+            our_account_id,
+            state_chain_rpc_client: rpc_client,
+            runtime_version: RwLock::new(RuntimeVersion::default()),
+            genesis_hash: Default::default(),
+            signer: PairSigner::new(Pair::generate().0),
+        }
+    }
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
@@ -915,11 +938,55 @@ pub async fn connect_to_state_chain(
 }
 
 #[cfg(test)]
+pub mod test_utils {
+    use cf_traits::ChainflipAccountState;
+
+    use super::*;
+
+    /// Used to make mocking of items returned from the state chain easier,
+    /// as the trait wraps a call that returns encoded items from the chain
+    pub fn storage_change_set_from<StorageType: Encode>(
+        change: StorageType,
+        block: state_chain_runtime::Hash,
+    ) -> StorageChangeSet<state_chain_runtime::Hash> {
+        let storage_data: StorageData = StorageData(change.encode());
+        let changes: Vec<(StorageKey, Option<StorageData>)> =
+            vec![(StorageKey(vec![0u8; 32]), Some(storage_data))];
+        StorageChangeSet { block, changes }
+    }
+
+    #[test]
+    fn storage_change_set_encoding_works() {
+        let account_info = AccountInfo {
+            nonce: 12u32,
+            consumers: 1,
+            providers: 2,
+            sufficients: 0,
+            data: ChainflipAccountData {
+                state: ChainflipAccountState::Validator,
+                last_active_epoch: Some(1),
+            },
+        };
+
+        let storage_change_set = storage_change_set_from(account_info, H256::default());
+
+        let changes = storage_change_set.changes[0].clone();
+        let storage_data = changes.1.unwrap().0;
+
+        // this was retrieved from the chain itself
+        let storage_data_expected: Vec<u8> = vec![
+            12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0,
+        ];
+
+        assert_eq!(storage_data, storage_data_expected);
+    }
+}
+
+#[cfg(test)]
 mod tests {
 
     use std::convert::TryInto;
 
-    use sp_core::H160;
     use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;
     use substrate_subxt::PairSigner;
@@ -956,9 +1023,7 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_environment_value::<H160>(block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
-                    state_chain_runtime::Runtime,
-                >::hashed_key().into()))
+                .get_account_data(block_hash)
                 .await
                 .unwrap();
 
@@ -983,9 +1048,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
-            );
+            .returning(move |_| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
@@ -1022,15 +1085,13 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(MAX_RETRY_ATTEMPTS)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
-                    Err(RpcError::JsonRpcError(Error {
-                        code: ErrorCode::ServerError(1014),
-                        message: "Priority too low".to_string(),
-                        data: None,
-                    }))
-                },
-            );
+            .returning(move |_| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1014),
+                    message: "Priority too low".to_string(),
+                    data: None,
+                }))
+            });
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
@@ -1067,17 +1128,15 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(MAX_RETRY_ATTEMPTS)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
-                    Err(RpcError::JsonRpcError(Error {
-                        code: ErrorCode::ServerError(1010),
-                        message: "Invalid Transaction".to_string(),
-                        data: Some(Value::String(
-                            <&'static str>::from(InvalidTransaction::Stale).into(),
-                        )),
-                    }))
-                },
-            );
+            .returning(move |_| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1010),
+                    message: "Invalid Transaction".to_string(),
+                    data: Some(Value::String(
+                        <&'static str>::from(InvalidTransaction::Stale).into(),
+                    )),
+                }))
+            });
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
@@ -1129,9 +1188,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(H256::default()),
-            );
+            .returning(move |_| Ok(H256::default()));
 
         mock_state_chain_rpc_client
             .expect_latest_block_hash()
@@ -1196,11 +1253,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
-                    Err(RpcError::Timeout)
-                },
-            );
+            .returning(move |_| Err(RpcError::Timeout));
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,
@@ -1248,22 +1301,18 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
-                    Err(RpcError::JsonRpcError(Error {
-                        code: ErrorCode::ServerError(1014),
-                        message: "Priority too low".to_string(),
-                        data: None,
-                    }))
-                },
-            );
+            .returning(move |_| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1014),
+                    message: "Priority too low".to_string(),
+                    data: None,
+                }))
+            });
 
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| Ok(tx_hash.clone()),
-            );
+            .returning(move |_| Ok(tx_hash.clone()));
 
         let state_chain_client = StateChainClient {
             heartbeat_block_interval: 20,

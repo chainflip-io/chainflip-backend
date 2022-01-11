@@ -94,13 +94,13 @@ pub enum StakeManagerEvent {
 impl EthObserver for StakeManager {
     type EventParameters = StakeManagerEvent;
 
-    async fn handle_event<RPCClient>(
+    async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
     ) where
-        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+        RpcClient: 'static + StateChainRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
