@@ -713,7 +713,15 @@ async fn validator_checks_account_data_on_new_epoch_event() {
         BlockHeightWindow { from: 30, to: None }
     );
 
-    // TODO: Check we send the correct messages here
+    // after a new epoch, we should have sent new messages down the channels
+    assert_eq!(
+        km_window_receiver.recv().await.unwrap(),
+        BlockHeightWindow { from: 40, to: None }
+    );
+    assert_eq!(
+        sm_window_receiver.recv().await.unwrap(),
+        BlockHeightWindow { from: 40, to: None }
+    );
 }
 
 #[tokio::test]
