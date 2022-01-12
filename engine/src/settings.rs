@@ -249,8 +249,9 @@ impl Settings {
 /// Parse the URL and check that it is a valid websocket url
 pub fn parse_websocket_url(url: &str) -> Result<Url> {
     let issue_list_url = Url::parse(url)?;
-    if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
-        return Err(anyhow::Error::msg("Wrong scheme"));
+    let scheme = issue_list_url.scheme();
+    if scheme != "ws" && scheme != "wss" {
+        return Err(anyhow::Error::msg(format!("Invalid scheme: `{}`", scheme)));
     }
     if issue_list_url.host() == None
         || issue_list_url.username() != ""
@@ -259,7 +260,7 @@ pub fn parse_websocket_url(url: &str) -> Result<Url> {
         || issue_list_url.fragment() != None
         || issue_list_url.cannot_be_a_base()
     {
-        return Err(anyhow::Error::msg("Invalid URL data"));
+        return Err(anyhow::Error::msg("Invalid URL data."));
     }
 
     Ok(issue_list_url)

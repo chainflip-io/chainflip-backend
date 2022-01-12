@@ -18,8 +18,13 @@ use structopt::StructOpt;
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
-    let settings =
-        Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
+    let settings = match Settings::new(CommandLineOptions::from_args()) {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!("Error reading settings: {}", error);
+            return;
+        }
+    };
 
     let root_logger = logging::utils::new_json_logger_with_tag_filter(
         settings.log.whitelist.clone(),
