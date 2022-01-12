@@ -727,14 +727,14 @@ async fn backup_to_validator_on_new_epoch() {
         });
 
     // We'll get the vault from the new epoch 4 when we become active
-    let vault_key_after_new_epoch =
-        StorageKey(Vaults::<Runtime>::hashed_key_for(&4, &ChainId::Ethereum));
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.hash())),
-            eq(vault_key_after_new_epoch),
+            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
+                &4,
+                &ChainId::Ethereum,
+            ))),
         )
         .times(1)
         .returning(move |_, _| {
