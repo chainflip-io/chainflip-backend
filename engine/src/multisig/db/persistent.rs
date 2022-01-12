@@ -9,6 +9,8 @@ use crate::{
     multisig::{client::KeygenResultInfo, KeyId},
 };
 
+use anyhow::{Context, Result};
+
 /// Column for any metadata keys
 pub const METADATA_COL: u32 = 1;
 
@@ -22,16 +24,15 @@ pub struct PersistentKeyDB {
 }
 
 impl PersistentKeyDB {
-    pub fn new(path: &Path, logger: &slog::Logger) -> Self {
-        let config = DatabaseConfig::default();
-        // TODO: Update to kvdb 14 and then can pass in &Path
-        let db = Database::open(&config, path.to_str().expect("Invalid path"))
-            .expect("could not open database");
+    pub fn new(path: &Path, logger: &slog::Logger) -> Result<Self> {
+        let db = Database::open(&DatabaseConfig::default(), path)
+            .map_err(anyhow::Error::msg)
+            .context(format!("Failed to open database at: {}", path.display()))?;
 
-        PersistentKeyDB {
+        Ok(PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
-        }
+        })
     }
 }
 
@@ -114,7 +115,7 @@ mod tests {
         let db_path = Path::new("db1");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let p_db = PersistentKeyDB::new(&db_path, &logger);
+            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let db = p_db.db;
 
             // Add the keyshare to the database
@@ -123,7 +124,7 @@ mod tests {
             db.write(tx).unwrap();
         }
 
-        let p_db = PersistentKeyDB::new(&db_path, &logger);
+        let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
         let keys = p_db.load_keys();
         let key = keys.get(&key_id).expect("Should have an entry for key");
         assert_eq!(key.params.threshold, 1);
@@ -138,7 +139,7 @@ mod tests {
         let db_path = Path::new("db2");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let mut p_db = PersistentKeyDB::new(&db_path, &logger);
+            let mut p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
 
             let keys_before = p_db.load_keys();
             // there should be no key [0; 33] yet
