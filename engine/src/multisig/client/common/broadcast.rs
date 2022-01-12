@@ -194,6 +194,8 @@ where
 
         let mut received_messages = std::mem::take(&mut self.messages);
 
+        // Turns values T into Option<T>, inserting `None` where
+        // data hasn't been received for `idx`
         let messages: HashMap<_, _> = self
             .common
             .all_idxs
