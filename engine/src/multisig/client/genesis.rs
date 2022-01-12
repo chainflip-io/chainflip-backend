@@ -6,7 +6,7 @@ mod tests {
 
     use csv;
     use serde_json;
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
     use std::fs::File;
     use std::io::prelude::Write;
     use std::{env, io};
@@ -32,7 +32,9 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
         R: io::Read,
     {
         // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
-        let nodes = reader
+        let mut node_names: BTreeSet<String> = BTreeSet::new();
+        let mut node_ids: BTreeSet<AccountId> = BTreeSet::new();
+        reader
                 .records()
                 .filter_map(|result| match result {
                     Ok(result) => Some(result),
@@ -42,25 +44,27 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
                 })
                 .filter_map(|record| {
                     match record.deserialize::<Record>(None) {
-                        Ok(record) => Some(record),
+                        Ok((name, id)) => {
+                            // Check for duplicate names and ids
+                            assert!(
+                                node_names.insert(name.clone()),
+                                "Duplicate node name {} in csv",
+                                &name
+                            );
+                            assert!(
+                                node_ids.insert(id.clone()),
+                                "Duplicate node id {} reused by {}",
+                                &id,
+                                &name
+                            );
+                            Some((name, id))
+                        },
                         Err(e) => {
                             panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas. Error: {}", e);
                         }
                     }
                 })
-                .collect::<Vec<(String, AccountId)>>();
-
-        // Check for duplicate names when filling the HashMap
-        let mut mode_id_map = HashMap::new();
-        nodes.iter().for_each(|(name, id)| {
-            assert!(
-                mode_id_map.insert(name.clone(), id.clone()).is_none(),
-                "Duplicate node name {} in csv",
-                &name
-            );
-        });
-
-        mode_id_map
+                .collect::<HashMap<String, AccountId>>()
     }
 
     // Generate the keys for genesis
@@ -83,19 +87,6 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
                 load_node_ids_from_csv(csv::Reader::from_reader(DEFAULT_CSV_CONTENT.as_bytes()))
             }
         };
-
-        // Check for duplicate ids
-        for (_, node_id) in node_name_to_id_map.clone() {
-            let duplicates: HashMap<&String, &AccountId> = node_name_to_id_map
-                .iter()
-                .filter(|(_, id)| *id == &node_id)
-                .collect();
-            assert!(
-                duplicates.len() == 1,
-                "Found a duplicate node id {:?}",
-                duplicates
-            );
-        }
 
         assert!(
             node_name_to_id_map.len() > 1,
