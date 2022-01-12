@@ -301,7 +301,9 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
 // use this events key, to save creating chain metadata in the tests
 #[cfg(test)]
-pub const MOCK_EVENTS_KEY: StorageKey = StorageKey(vec![2; 32]);
+pub fn mock_events_key() -> StorageKey {
+    StorageKey(vec![2; 32])
+}
 
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
@@ -310,7 +312,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         Self {
             heartbeat_block_interval: 20,
-            events_storage_key: MOCK_EVENTS_KEY,
+            events_storage_key: mock_events_key(),
             nonce: AtomicU32::new(0),
             our_account_id,
             state_chain_rpc_client: rpc_client,
@@ -1054,7 +1056,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -1091,7 +1092,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -1130,7 +1130,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -1196,7 +1195,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -1235,7 +1233,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
@@ -1288,7 +1285,6 @@ mod tests {
         let state_chain_client = StateChainClient::create_test_sc_client(
             mock_state_chain_rpc_client,
             AccountId32::new([0; 32]),
-            StorageKey(Vec::default()),
         );
 
         let force_rotation_call: state_chain_runtime::Call =
