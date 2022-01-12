@@ -230,7 +230,13 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 }
             }
             Some(messages) = outgoing_p2p_message_receiver.recv() => {
-                async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(client: &P2PRpcClient, account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>, account_ids: AccountIds, message: MultisigMessage, logger: &slog::Logger) {
+                async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
+                    client: &P2PRpcClient,
+                    account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+                    account_ids: AccountIds,
+                    message: MultisigMessage,
+                    logger: &slog::Logger
+                ) {
                     match async {
                         account_ids.clone().into_iter().map(|account_id| match account_to_peer.get(&account_id) {
                             Some((peer_id, _, _)) => Ok(peer_id.into()),
