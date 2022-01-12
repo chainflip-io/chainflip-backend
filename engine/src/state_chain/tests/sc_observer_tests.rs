@@ -18,8 +18,8 @@ use crate::{
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
-            mock_events_key, test_utils::storage_change_set_from, MockStateChainRpcApi,
-            StateChainClient,
+            mock_account_storage_key, mock_events_key, test_utils::storage_change_set_from,
+            MockStateChainRpcApi, StateChainClient, OUR_ACCOUNT_ID_BYTES,
         },
         sc_observer::start,
     },
@@ -62,17 +62,9 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
 
     let initial_block_hash = H256::default();
 
-    // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(initial_block_hash)),
-            eq(StorageKey(
-                frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
-            )),
-        )
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -115,7 +107,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     // No blocks in the stream
@@ -179,16 +170,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(initial_block_hash)),
-            eq(StorageKey(
-                frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
-            )),
-        )
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -233,7 +218,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     // No blocks in the stream
@@ -307,16 +291,9 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(initial_block_hash)),
-            eq(StorageKey(
-                frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
-            )),
-        )
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -337,7 +314,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     // No blocks in the stream
@@ -410,16 +386,10 @@ async fn backup_checks_account_data_every_block() {
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            predicate::always(),
-            eq(StorageKey(
-                frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
-            )),
-        )
+        .with(predicate::always(), eq(mock_account_storage_key()))
         // NB: This is called three times. Once at the start, and then once for every block (x2 in this test)
         .times(3)
         .returning(move |_, _| {
@@ -450,7 +420,6 @@ async fn backup_checks_account_data_every_block() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     // two empty blocks in the stream (empty because all queries for the events of a block will
@@ -516,19 +485,9 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     let initial_block_hash = H256::default();
 
-    // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
-    let account_info_storage_key = StorageKey(frame_system::Account::<Runtime>::hashed_key_for(
-        &our_account_id,
-    ));
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(initial_block_hash)),
-            eq(account_info_storage_key.clone()),
-        )
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -543,7 +502,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.hash())),
-            eq(account_info_storage_key),
+            eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
@@ -635,7 +594,6 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     start(
@@ -717,16 +675,11 @@ async fn backup_to_validator_on_new_epoch() {
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
-    let account_info_storage_key = StorageKey(frame_system::Account::<Runtime>::hashed_key_for(
-        &our_account_id,
-    ));
 
     // We start as a backup node and fetch on start up, and then the empty block
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(account_info_storage_key.clone()))
+        .with(predicate::always(), eq(mock_account_storage_key()))
         .times(2)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -741,7 +694,7 @@ async fn backup_to_validator_on_new_epoch() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.hash())),
-            eq(account_info_storage_key),
+            eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
@@ -823,7 +776,6 @@ async fn backup_to_validator_on_new_epoch() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     start(
@@ -879,18 +831,9 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
-    let account_info_storage_key = StorageKey(frame_system::Account::<Runtime>::hashed_key_for(
-        &our_account_id,
-    ));
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(initial_block_hash)),
-            eq(account_info_storage_key.clone()),
-        )
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -905,7 +848,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.hash())),
-            eq(account_info_storage_key.clone()),
+            eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
@@ -918,7 +861,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     // after we become passive, we have two blocks of checking our status
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(account_info_storage_key))
+        .with(predicate::always(), eq(mock_account_storage_key()))
         .times(2)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -1017,7 +960,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     let logger = new_test_logger();
@@ -1124,15 +1066,9 @@ async fn only_encodes_and_signs_when_active_and_specified() {
     let initial_block_hash = H256::default();
 
     // get account info
-    let our_account_id = AccountId32::new([0u8; 32]);
-
-    let account_info_storage_key = StorageKey(frame_system::Account::<Runtime>::hashed_key_for(
-        &our_account_id,
-    ));
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(account_info_storage_key))
+        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -1187,7 +1123,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
                                 0,
-                                AccountId32::new([0; 32]),
+                                AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
                         ),
@@ -1212,7 +1148,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
-        our_account_id,
     ));
 
     let logger = new_test_logger();

@@ -306,15 +306,27 @@ pub fn mock_events_key() -> StorageKey {
 }
 
 #[cfg(test)]
+pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
+
+#[cfg(test)]
+pub fn mock_account_storage_key() -> StorageKey {
+    StorageKey(
+        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&AccountId32::new(
+            OUR_ACCOUNT_ID_BYTES,
+        )),
+    )
+}
+
+#[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    pub fn create_test_sc_client(rpc_client: RpcClient, our_account_id: AccountId32) -> Self {
+    pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
         use substrate_subxt::PairSigner;
 
         Self {
             heartbeat_block_interval: 20,
             events_storage_key: mock_events_key(),
             nonce: AtomicU32::new(0),
-            our_account_id,
+            our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
             state_chain_rpc_client: rpc_client,
             runtime_version: RwLock::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
@@ -1053,10 +1065,8 @@ mod tests {
             .times(1)
             .returning(move |_| Ok(tx_hash.clone()));
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1089,10 +1099,8 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1127,10 +1135,8 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1192,10 +1198,8 @@ mod tests {
                 })
             });
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1230,10 +1234,8 @@ mod tests {
             .times(1)
             .returning(move |_| Err(RpcError::Timeout));
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1282,10 +1284,8 @@ mod tests {
             .times(1)
             .returning(move |_| Ok(tx_hash.clone()));
 
-        let state_chain_client = StateChainClient::create_test_sc_client(
-            mock_state_chain_rpc_client,
-            AccountId32::new([0; 32]),
-        );
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
