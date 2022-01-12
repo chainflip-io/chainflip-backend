@@ -128,7 +128,7 @@
       "ParticipateSigningFailed",
       "ParticipateKeygenFailed",
       "InvalidTransactionAuthored",
-      "TransactionFailedOnTransmission",
+      "TransactionFailedOnTransmission"
     ]
   },
   "OnlineCredits": "BlockNumber",
