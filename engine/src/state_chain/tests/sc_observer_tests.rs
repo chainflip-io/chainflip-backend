@@ -17,7 +17,7 @@ use crate::{
     multisig::{MultisigInstruction, MultisigOutcome},
     settings::test_utils::new_test_settings,
     state_chain::{
-        client::{test_utils::storage_change_set_from, MockStateChainRpcApi, StateChainClient},
+        client::{test_utils::storage_change_set_from, MockStateChainRpcApi, StateChainClient, MOCK_EVENTS_KEY},
         sc_observer::start,
     },
 };
@@ -117,7 +117,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        StorageKey(vec![0, 32]),
     ));
 
     // No blocks in the stream
@@ -240,7 +239,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        StorageKey(vec![0, 32]),
     ));
 
     // No blocks in the stream
@@ -348,7 +346,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        StorageKey(vec![0; 32]),
     ));
 
     // No blocks in the stream
@@ -454,20 +451,17 @@ async fn backup_checks_account_data_every_block() {
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, H256::default())]));
 
     // Get events from the block
-    // use this fake events key, to save creating chain metadata in the tests
-    let events_key = StorageKey(vec![2; 32]);
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(events_key.clone()))
+        .with(predicate::always(), eq(MOCK_EVENTS_KEY))
         .times(2)
         .returning(|_, _| Ok(vec![]));
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        events_key,
     ));
 
     // two empty blocks in the stream (empty because all queries for the events of a block will
@@ -632,13 +626,11 @@ async fn validator_to_validator_on_new_epoch_event() {
         });
 
     // Get events from the block
-    // use this fake events key, to save creating chain metadata in the tests
-    let events_key = StorageKey(vec![2; 32]);
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(empty_block_header.hash())), eq(events_key.clone()))
+        .with(eq(Some(empty_block_header.hash())), eq(MOCK_EVENTS_KEY))
         .times(1)
         .returning(|_, _| Ok(vec![]));
 
@@ -646,7 +638,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.clone().hash())),
-            eq(events_key.clone()),
+            eq(MOCK_EVENTS_KEY),
         )
         .times(1)
         .returning(move |_, _| {
@@ -663,7 +655,6 @@ async fn validator_to_validator_on_new_epoch_event() {
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        events_key,
     ));
 
     start(
@@ -826,13 +817,11 @@ async fn backup_to_validator_on_new_epoch() {
         });
 
     // Get events from the block
-    // use this fake events key, to save creating chain metadata in the tests
-    let events_key = StorageKey(vec![2; 32]);
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(empty_block_header.hash())), eq(events_key.clone()))
+        .with(eq(Some(empty_block_header.hash())), eq(MOCK_EVENTS_KEY))
         .times(1)
         .returning(|_, _| Ok(vec![]));
 
@@ -840,7 +829,7 @@ async fn backup_to_validator_on_new_epoch() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.clone().hash())),
-            eq(events_key.clone()),
+            eq(MOCK_EVENTS_KEY),
         )
         .times(1)
         .returning(move |_, _| {
@@ -857,7 +846,6 @@ async fn backup_to_validator_on_new_epoch() {
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        events_key,
     ));
 
     start(
@@ -1029,14 +1017,12 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         });
 
     // Get events from the block
-    // use this fake events key, to save creating chain metadata in the tests
-    let events_key = StorageKey(vec![2; 32]);
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.clone().hash())),
-            eq(events_key.clone()),
+            eq(MOCK_EVENTS_KEY),
         )
         .times(1)
         .returning(move |_, _| {
@@ -1054,14 +1040,13 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     // on every block
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(predicate::always(), eq(events_key.clone()))
+        .with(predicate::always(), eq(MOCK_EVENTS_KEY))
         .times(3)
         .returning(|_, _| Ok(vec![]));
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        events_key,
     ));
 
     let logger = new_test_logger();
@@ -1218,13 +1203,11 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         });
 
     // get the events for the new block - will contain 2 events, one for us to sign and one for us not to sign
-    let events_key = StorageKey(vec![2; 32]);
-
     mock_state_chain_rpc_client
         .expect_storage_events_at()
         .with(
             eq(Some(block_header.clone().hash())),
-            eq(events_key.clone()),
+            eq(MOCK_EVENTS_KEY),
         )
         .times(1)
         .returning(move |_, _| {
@@ -1262,7 +1245,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
         our_account_id,
-        events_key,
     ));
 
     let logger = new_test_logger();

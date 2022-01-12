@@ -299,18 +299,18 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     state_chain_rpc_client: RpcClient,
 }
 
+// use this events key, to save creating chain metadata in the tests
+#[cfg(test)]
+pub const MOCK_EVENTS_KEY: StorageKey = StorageKey(vec![2; 32]);
+
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    pub fn create_test_sc_client(
-        rpc_client: RpcClient,
-        our_account_id: AccountId32,
-        events_storage_key: StorageKey,
-    ) -> Self {
+    pub fn create_test_sc_client(rpc_client: RpcClient, our_account_id: AccountId32) -> Self {
         use substrate_subxt::PairSigner;
 
         Self {
             heartbeat_block_interval: 20,
-            events_storage_key,
+            events_storage_key: MOCK_EVENTS_KEY,
             nonce: AtomicU32::new(0),
             our_account_id,
             state_chain_rpc_client: rpc_client,
