@@ -1142,19 +1142,26 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         });
 
     // get the epoch
-    let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
+        )
         .times(1)
         .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
 
     // get the current vault
-    let vault_key = StorageKey(Vaults::<Runtime>::hashed_key_for(&3, &ChainId::Ethereum));
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(vault_key))
+        .with(
+            eq(Some(initial_block_hash)),
+            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
+                &3,
+                &ChainId::Ethereum,
+            ))),
+        )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
