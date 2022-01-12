@@ -145,69 +145,6 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 }
 
 #[tokio::test]
-#[ignore = "functionality disabled as SC does not expect this response"]
-async fn should_report_on_timeout_before_request_to_sign() {
-    let mut ctx = helpers::KeygenContext::new();
-    let keygen_states = ctx.generate().await;
-    let sign_states = ctx.sign().await;
-
-    let id0 = ctx.get_account_id(0);
-
-    let mut c1 = keygen_states
-        .key_ready_data()
-        .expect("successful keygen")
-        .clients[&id0]
-        .clone();
-
-    assert_ok!(c1.ensure_at_signing_stage(0));
-
-    let bad_array_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
-
-    for id in &bad_array_ids {
-        c1.receive_signing_stage_data(1, &sign_states, id);
-    }
-
-    assert_ok!(c1.ensure_at_signing_stage(0));
-
-    c1.expire_all();
-    c1.cleanup();
-
-    check_blamed_paries(ctx.outcome_receivers.get_mut(&id0).unwrap(), &bad_array_ids).await;
-    assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
-}
-
-/// If a ceremony expires in the middle of any stage,
-/// we should report the slow parties
-#[tokio::test]
-async fn should_report_on_timeout_stage() {
-    let mut ctx = helpers::KeygenContext::new();
-    let _ = ctx.generate().await;
-    let sign_states = ctx.sign().await;
-
-    let bad_party_ids = [ctx.get_account_id(1)];
-    let good_party_id = ctx.get_account_id(2);
-
-    // Test the timeout for all stages
-    for stage in 1..=SIGNING_STAGES {
-        let id0 = ctx.get_account_id(0);
-
-        // Get a client at the correct stage
-        let mut c1 = sign_states.get_client_at_stage(&id0, stage);
-
-        // Receive data from one client but not the others
-        c1.receive_signing_stage_data(stage, &sign_states, &good_party_id);
-
-        // Trigger timeout
-        c1.expire_all();
-        c1.cleanup();
-
-        // Check that the late 2 clients are correctly reported
-        check_blamed_paries(ctx.outcome_receivers.get_mut(&id0).unwrap(), &bad_party_ids).await;
-        assert!(ctx.tag_cache.contains_tag(REQUEST_TO_SIGN_EXPIRED));
-    }
-}
-
-#[tokio::test]
 async fn should_ignore_duplicate_rts() {
     let mut ctx = helpers::KeygenContext::new();
     let _ = ctx.generate().await;
@@ -345,8 +282,7 @@ async fn pending_rts_should_expire() {
     c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
 
     // Timeout all the requests
-    c1.expire_all();
-    c1.cleanup();
+    c1.force_stage_timeout();
 
     // Complete the keygen by sending the ver5 from each other client to client 0
     for sender_id in ctx.get_account_ids() {
@@ -528,8 +464,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 1);
 
     // Timeout the unauthorised ceremony
-    c1.expire_all();
-    c1.cleanup();
+    c1.force_stage_timeout();
 
     // Clear out the timeout outcome
     next_with_timeout(ctx.outcome_receivers.get_mut(&id0).unwrap()).await;
@@ -548,10 +483,197 @@ async fn should_sign_with_all_parties() {
 
     // Run the signing ceremony using all of the accounts that were in keygen (ACCOUNT_IDS)
     assert_ok!(
-        ctx.sign_with_ids(&ACCOUNT_IDS)
+        ctx.sign_custom(&*SIGNER_IDS, None)
             .await
             .sign_finished
             .outcome
             .result
     );
+}
+
+mod timeout {
+
+    // What should be tested w.r.t timeouts:
+
+    // 0. [ignored] If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
+    //           (i.e. whoever send stage data for the ceremony)
+
+    // 1a. [done] If timeout during a broadcast verification stage, and we have enough data, we can recover
+    // 1b. [done] If timeout during a broadcast verification stage, and we don't have enough data to
+    //            recover some of the parties messages, we report those parties (note that we can't report
+    //            the parties that were responsible for the timeout in the first place as we would need
+    //            another round of "voting" which can also timeout, and then we are back where we started)
+
+    // 2a.        If timeout during a regular stage, but the majority of nodes can agree on all values,
+    //            we proceed with the ceremony and use the data received by the majority
+    // 2b. [done] If timeout during a regular stage, and the majority of nodes didn't receive the data
+    //            from some nodes (i.e. they vote on value `None`), those nodes are reported
+    // 2c.        Same as [2b], but the nodes are reported if the majority can't agree on any one value
+    //            (even if all values are `Some(...)` such as when a node does an inconsistent broadcast)
+
+    // 3.         If timeout before the key is ready, the ceremony should be ignored, but need to ensure that
+    //    we return a response
+
+    use super::*;
+
+    // This covers [0]
+    #[tokio::test]
+    #[ignore = "functionality disabled as SC does not expect this response"]
+    async fn should_report_on_timeout_before_request_to_sign() {
+        let mut ctx = helpers::KeygenContext::new();
+        let keygen_states = ctx.generate().await;
+        let sign_states = ctx.sign().await;
+
+        let id0 = ctx.get_account_id(0);
+
+        let mut c1 = keygen_states
+            .key_ready_data()
+            .expect("successful keygen")
+            .clients[&id0]
+            .clone();
+
+        assert_ok!(c1.ensure_at_signing_stage(0));
+
+        let bad_array_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
+
+        for id in &bad_array_ids {
+            c1.receive_signing_stage_data(1, &sign_states, id);
+        }
+
+        assert_ok!(c1.ensure_at_signing_stage(0));
+
+        c1.force_stage_timeout();
+
+        check_blamed_paries(ctx.outcome_receivers.get_mut(&id0).unwrap(), &bad_array_ids).await;
+    }
+
+    mod during_regular_stage {
+
+        // This covers 2a
+        async fn recover_if_party_appears_offline_to_minority(stage_idx: usize) {
+            // If a party times out during a regular stage,
+            // and the majority of nodes agree on this in the following
+            // (broadcast verification) stage, the party gets reported
+            let mut ctx = helpers::KeygenContext::new();
+            let _ = ctx.generate().await;
+
+            let bad_party_id = ctx.get_account_id(1);
+
+            let other_party_id = ctx.get_account_id(2);
+
+            ctx.force_party_timeout_signing(&bad_party_id, Some(&other_party_id), stage_idx);
+
+            let result = ctx.sign().await.sign_finished.outcome.result;
+
+            assert_ok!(result);
+        }
+
+        use super::*;
+        // This covers 2b
+        async fn offline_party_should_be_reported(stage_idx: usize) {
+            // If a party times out during a regular stage,
+            // and the majority of nodes agree on this in the following
+            // (broadcast verification) stage, the party gets reported
+            let mut ctx = helpers::KeygenContext::new();
+            let _ = ctx.generate().await;
+
+            let bad_party_id = ctx.get_account_id(1);
+
+            ctx.force_party_timeout_signing(&bad_party_id, None, stage_idx);
+
+            let result = ctx.sign().await.sign_finished.outcome.result;
+
+            let error = result.as_ref().unwrap_err();
+
+            assert_eq!(error.1, &[bad_party_id]);
+        }
+
+        #[tokio::test]
+        async fn recover_if_party_appears_offline_to_minority_stage1() {
+            recover_if_party_appears_offline_to_minority(1).await;
+        }
+
+        #[tokio::test]
+        async fn recover_if_party_appears_offline_to_minority_stage3() {
+            recover_if_party_appears_offline_to_minority(3).await;
+        }
+
+        #[tokio::test]
+        async fn offline_party_should_be_reported_stage1() {
+            offline_party_should_be_reported(1).await;
+        }
+
+        #[tokio::test]
+        async fn offline_party_should_be_reported_stage3() {
+            offline_party_should_be_reported(3).await;
+        }
+    }
+
+    mod during_broadcast_verification_stage {
+
+        use super::*;
+
+        // This covers 1a
+        async fn recover_if_agree_on_values(stage_idx: usize) {
+            let mut ctx = helpers::KeygenContext::new();
+            let _ = ctx.generate().await;
+
+            let bad_party_id = ctx.get_account_id(1);
+
+            ctx.force_party_timeout_signing(&bad_party_id, None, stage_idx);
+
+            let result = ctx.sign().await.sign_finished.outcome.result;
+
+            assert_ok!(result);
+        }
+
+        #[tokio::test]
+        async fn recover_if_agree_on_values_stage2() {
+            recover_if_agree_on_values(2).await;
+        }
+
+        #[tokio::test]
+        async fn recover_if_agree_on_values_stage4() {
+            recover_if_agree_on_values(4).await;
+        }
+
+        // This covers 1b
+        async fn report_if_cannot_agree_on_values(stage_idx: usize) {
+            assert!(
+                stage_idx > 1,
+                "expected a broadcast verification stage index"
+            );
+
+            let mut ctx = helpers::KeygenContext::new();
+            let _ = ctx.generate().await;
+
+            // This party will time out during the preceding regular stage,
+            // it should be reported
+            let bad_party_1 = ctx.get_account_id(1);
+            ctx.force_party_timeout_signing(&bad_party_1, None, stage_idx - 1);
+
+            // This party will time out during a broadcast
+            // verification stage, it won't get reported
+            // (ideally it would, but we can't due to the
+            // limitations of the protocol)
+            let bad_party_2 = ctx.get_account_id(2);
+            ctx.force_party_timeout_signing(&bad_party_2, None, stage_idx);
+
+            let result = ctx.sign().await.sign_finished.outcome.result;
+
+            let error = result.as_ref().unwrap_err();
+
+            assert_eq!(error.1, &[bad_party_1]);
+        }
+
+        #[tokio::test]
+        async fn report_if_cannot_agree_on_values_stage_2() {
+            report_if_cannot_agree_on_values(2).await;
+        }
+
+        #[tokio::test]
+        async fn report_if_cannot_agree_on_values_stage_4() {
+            report_if_cannot_agree_on_values(4).await;
+        }
+    }
 }

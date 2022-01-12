@@ -34,8 +34,9 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     fn should_delay(&self, m: &D) -> bool;
 
     /// Determines how the data for this stage (of type `Self::Message`)
-    /// should be processed once it is received from all other parties
-    fn process(self, messages: HashMap<usize, Self::Message>) -> StageResult<D, Result>;
+    /// should be processed once it either received it from all other parties
+    /// or the stage timed out (None is used for missing messages)
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> StageResult<D, Result>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
@@ -186,8 +187,23 @@ where
         self.processor.should_delay(m)
     }
 
-    fn finalize(self: Box<Self>) -> StageResult<D, Result> {
-        self.processor.process(self.messages)
+    fn finalize(mut self: Box<Self>) -> StageResult<D, Result> {
+        // Because we might want to finalize the stage before
+        // all data has been received (e.g. due to a timeout),
+        // we insert None for any missing data
+
+        let mut received_messages = std::mem::take(&mut self.messages);
+
+        // Turns values T into Option<T>, inserting `None` where
+        // data hasn't been received for `idx`
+        let messages: HashMap<_, _> = self
+            .common
+            .all_idxs
+            .iter()
+            .map(|idx| (*idx, received_messages.remove(idx)))
+            .collect();
+
+        self.processor.process(messages)
     }
 
     fn awaited_parties(&self) -> Vec<usize> {

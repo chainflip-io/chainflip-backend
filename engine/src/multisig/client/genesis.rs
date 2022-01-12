@@ -135,7 +135,7 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
         assert_ok!(
             keygen_context
-                .sign_with_ids(&active_ids)
+                .sign_custom(&active_ids, None)
                 .await
                 .sign_finished
                 .outcome

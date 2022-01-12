@@ -13,8 +13,8 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::logging::{
-    CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_EXPIRED, KEYGEN_REQUEST_IGNORED,
-    REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+    CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
+    SIGNING_CEREMONY_FAILED,
 };
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
@@ -62,66 +62,46 @@ impl CeremonyManager {
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
     pub fn cleanup(&mut self) {
-        let mut events_to_send = vec![];
-        let mut signing_ceremony_ids_to_consume = vec![];
-        let mut keygen_ceremony_ids_to_consume = vec![];
+        // Copy the keys so we can iterate over them while at the same time
+        // removing the elements as we go
+        let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
 
-        let logger = &self.logger;
-        self.signing_states.retain(|ceremony_id, state| {
-            if let Some(bad_nodes) = state.try_expiring() {
-                slog::warn!(logger, #REQUEST_TO_SIGN_EXPIRED, "Signing state expired and will be abandoned");
-
+        for ceremony_id in &signing_ids {
+            let state = self
+                .signing_states
+                .get_mut(ceremony_id)
+                .expect("state must exist");
+            if let Some(result) = state.try_expiring() {
+                // NOTE: we only respond (and consume the ceremony id)
+                //  if we have received a ceremony request from
+                // SC (i.e. the ceremony is "authorised")
+                // TODO: report nodes via a different extrinsic instead
                 // Only consume the ceremony id if it has been authorized
-                if state.is_authorized(){
-
-                    // NOTE: we only respond if we have received a ceremony request from
-                    // SC (i.e. the ceremony is "authorised")
-                    // TODO: report nodes via a different extrinsic instead
-                    let outcome = SigningOutcome::timeout(*ceremony_id, bad_nodes);
-                    events_to_send.push(MultisigOutcome::Signing(outcome));
-
-                    signing_ceremony_ids_to_consume.push(*ceremony_id);
+                if state.is_authorized() {
+                    self.process_signing_ceremony_outcome(*ceremony_id, result);
+                } else {
+                    self.signing_states.remove(&ceremony_id);
                 }
-
-                false
-            } else {
-                true
             }
-        });
-
-        self.keygen_states.retain(|ceremony_id, state| {
-            if let Some(bad_nodes) = state.try_expiring() {
-                slog::warn!(logger, #KEYGEN_REQUEST_EXPIRED, "Keygen state expired and will be abandoned");
-
-                // Only consume the ceremony id if it has been authorized
-                if state.is_authorized(){
-
-                    // NOTE: we only respond if we have received a ceremony request from
-                    // SC (i.e. the ceremony is "authorised")
-                    // TODO: report nodes via a different extrinsic instead
-                    let outcome = KeygenOutcome::timeout(*ceremony_id, bad_nodes);
-                    events_to_send.push(MultisigOutcome::Keygen(outcome));
-
-                    keygen_ceremony_ids_to_consume.push(*ceremony_id);
-                }
-
-                false
-            } else {
-                true
-            }
-        });
-
-        for id in signing_ceremony_ids_to_consume {
-            self.remove_signing_ceremony(&id);
         }
 
-        for id in keygen_ceremony_ids_to_consume {
-            self.remove_keygen_ceremony(&id);
-        }
+        let keygen_ids: Vec<_> = self.keygen_states.keys().copied().collect();
 
-        for event in events_to_send {
-            if let Err(err) = self.outcome_sender.send(event) {
-                slog::error!(self.logger, "Unable to send event: {}", err);
+        for ceremony_id in &keygen_ids {
+            let state = self
+                .keygen_states
+                .get_mut(ceremony_id)
+                .expect("state must exist");
+            if let Some(result) = state.try_expiring() {
+                // NOTE: we only respond (and consume the ceremony id)
+                // if we have received a ceremony request from
+                // SC (i.e. the ceremony is "authorised")
+                // TODO: report nodes via a different extrinsic instead
+                if state.is_authorized() {
+                    self.process_keygen_ceremony_outcome(*ceremony_id, result);
+                } else {
+                    self.keygen_states.remove(&ceremony_id);
+                }
             }
         }
     }
@@ -154,6 +134,80 @@ impl CeremonyManager {
         Ok((our_idx, signer_idxs))
     }
 
+    fn process_signing_ceremony_outcome(
+        &mut self,
+        ceremony_id: CeremonyId,
+        result: Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>,
+    ) {
+        self.signing_states.remove(&ceremony_id);
+        self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
+        slog::debug!(
+            self.logger, "Removed a finished signing ceremony";
+            CEREMONY_ID_KEY => ceremony_id
+        );
+
+        match result {
+            Ok(schnorr_sig) => {
+                self.outcome_sender
+                    .send(MultisigOutcome::Signing(SigningOutcome {
+                        id: ceremony_id,
+                        result: Ok(schnorr_sig),
+                    }))
+                    .unwrap();
+            }
+            Err((blamed_parties, reason)) => {
+                slog::warn!(
+                    self.logger,
+                    #SIGNING_CEREMONY_FAILED,
+                    "Signing ceremony failed: {}",
+                    reason; "blamed parties" =>
+                    format_iterator(&blamed_parties)
+                );
+
+                self.outcome_sender
+                    .send(MultisigOutcome::Signing(SigningOutcome {
+                        id: ceremony_id,
+                        result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                    }))
+                    .unwrap();
+            }
+        }
+    }
+
+    fn process_keygen_ceremony_outcome(
+        &mut self,
+        ceremony_id: CeremonyId,
+        result: Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>,
+    ) -> Option<KeygenResultInfo> {
+        self.keygen_states.remove(&ceremony_id);
+        self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
+        slog::debug!(
+            self.logger, "Removed a finished keygen ceremony";
+            CEREMONY_ID_KEY => ceremony_id
+        );
+
+        match result {
+            Ok(keygen_result_info) => Some(keygen_result_info),
+            Err((blamed_parties, reason)) => {
+                slog::warn!(
+                    self.logger,
+                    #KEYGEN_CEREMONY_FAILED,
+                    "Keygen ceremony failed: {}",
+                    reason; "blamed parties" =>
+                    format_iterator(&blamed_parties)
+                );
+
+                self.outcome_sender
+                    .send(MultisigOutcome::Keygen(KeygenOutcome {
+                        id: ceremony_id,
+                        result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
+                    }))
+                    .unwrap();
+                None
+            }
+        }
+    }
+
     /// Process a keygen request
     pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
         let KeygenInfo {
@@ -184,12 +238,10 @@ impl CeremonyManager {
             return;
         }
 
-        let logger = &self.logger;
-
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger));
 
         let context = generate_keygen_context(ceremony_id, signers);
 
@@ -202,6 +254,7 @@ impl CeremonyManager {
             signer_idxs,
             keygen_options,
             context,
+            &logger,
         );
     }
 
@@ -324,34 +377,7 @@ impl CeremonyManager {
             .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
-            self.remove_signing_ceremony(&ceremony_id);
-
-            match result {
-                Ok(schnorr_sig) => {
-                    self.outcome_sender
-                        .send(MultisigOutcome::Signing(SigningOutcome {
-                            id: ceremony_id,
-                            result: Ok(schnorr_sig),
-                        }))
-                        .unwrap();
-                }
-                Err((blamed_parties, reason)) => {
-                    slog::warn!(
-                        self.logger,
-                        #SIGNING_CEREMONY_FAILED,
-                        "Signing ceremony failed: {}",
-                        reason; "blamed parties" =>
-                        format_iterator(&blamed_parties)
-                    );
-
-                    self.outcome_sender
-                        .send(MultisigOutcome::Signing(SigningOutcome {
-                            id: ceremony_id,
-                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                        }))
-                        .unwrap();
-                }
-            }
+            self.process_signing_ceremony_outcome(ceremony_id, result);
         }
     }
 
@@ -380,47 +406,9 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
 
-        state.process_message(sender_id, data).and_then(|res| {
-            self.remove_keygen_ceremony(&ceremony_id);
-
-            match res {
-                Ok(keygen_result_info) => Some(keygen_result_info),
-                Err((blamed_parties, reason)) => {
-                    slog::warn!(
-                        self.logger,
-                        #KEYGEN_CEREMONY_FAILED,
-                        "Keygen ceremony failed: {}",
-                        reason; "blamed parties" =>
-                        format_iterator(&blamed_parties)
-                    );
-
-                    self.outcome_sender
-                        .send(MultisigOutcome::Keygen(KeygenOutcome {
-                            id: ceremony_id,
-                            result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                        }))
-                        .unwrap();
-                    None
-                }
-            }
-        })
-    }
-
-    // Removed a keygen ceremony and mark its id as used
-    fn remove_keygen_ceremony(&mut self, ceremony_id: &CeremonyId) {
-        self.keygen_states.remove(ceremony_id);
-        self.ceremony_id_tracker.consume_keygen_id(ceremony_id);
-
-        slog::debug!(
-            self.logger, "Removed a keygen ceremony";
-            CEREMONY_ID_KEY => ceremony_id
-        );
-    }
-
-    // Removed a signing ceremony and mark its id as used
-    fn remove_signing_ceremony(&mut self, ceremony_id: &CeremonyId) {
-        self.signing_states.remove(ceremony_id);
-        self.ceremony_id_tracker.consume_signing_id(ceremony_id);
+        state
+            .process_message(sender_id, data)
+            .and_then(|res| self.process_keygen_ceremony_outcome(ceremony_id, res))
     }
 }
 
@@ -446,9 +434,9 @@ impl CeremonyManager {
         self.signing_states.len()
     }
 
-    pub fn get_keygen_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
+    pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
         self.keygen_states
-            .get(ceremony_id)
+            .get(&ceremony_id)
             .and_then(|s| s.get_stage())
     }
 

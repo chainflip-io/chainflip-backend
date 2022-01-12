@@ -59,7 +59,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 
     should_delay!(SigningData::BroadcastVerificationStage2);
 
-    fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         // No verification is necessary here, just generating new stage
 
         let processor = VerifyCommitmentsBroadcast2 {
@@ -85,7 +85,7 @@ struct VerifyCommitmentsBroadcast2 {
     // Our nonce pair generated in the previous stage
     nonces: Box<SecretNoncePair>,
     // Public nonce commitments collected in the previous stage
-    commitments: HashMap<usize, Comm1>,
+    commitments: HashMap<usize, Option<Comm1>>,
 }
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
@@ -104,8 +104,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     should_delay!(SigningData::LocalSigStage3);
 
     /// Verify that all values have been broadcast correctly during stage 1
-    fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
-        let verified_commitments = match verify_broadcasts(&messages) {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
+        let verified_commitments = match verify_broadcasts(messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(
@@ -176,7 +176,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 
     /// Nothing to process here yet, simply creating the new stage once all of the
     /// data has been collected
-    fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let processor = VerifyLocalSigsBroadcastStage4 {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
@@ -198,7 +198,7 @@ struct VerifyLocalSigsBroadcastStage4 {
     /// Nonce commitments from all parties (verified to be correctly broadcast)
     commitments: HashMap<usize, Comm1>,
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
-    local_sigs: HashMap<usize, LocalSig3>,
+    local_sigs: HashMap<usize, Option<LocalSig3>>,
 }
 
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4);
@@ -220,8 +220,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 
     /// Verify that signature shares have been broadcast correctly, and if so,
     /// combine them into the (final) aggregate signature
-    fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
-        let local_sigs = match verify_broadcasts(&messages) {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
+        let local_sigs = match verify_broadcasts(messages) {
             Ok(sigs) => sigs,
             Err(blamed_parties) => {
                 return StageResult::Error(
