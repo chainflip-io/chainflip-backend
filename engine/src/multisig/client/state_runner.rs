@@ -199,6 +199,7 @@ where
                 m,
                 id,
             );
+            // TODO: The bug I talked about is here. This is problematic as what if this process_message call results in the completion of ceremony. It will not ever call on_key_generated().
             self.process_message(id, m);
         }
     }
