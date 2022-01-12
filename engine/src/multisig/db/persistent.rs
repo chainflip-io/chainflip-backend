@@ -9,7 +9,10 @@ use crate::{
     multisig::{client::KeygenResultInfo, KeyId},
 };
 
-pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
+/// Column for any metadata keys
+pub const METADATA_COL: u32 = 1;
+
+pub const KEYGEN_DATA_COL: u32 = 0;
 
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
@@ -40,11 +43,7 @@ impl KeyDB for PersistentKeyDB {
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        tx.put_vec(
-            DB_COL_KEYGEN_RESULT_INFO,
-            &key_id.0,
-            keygen_result_info_encoded,
-        );
+        tx.put_vec(KEYGEN_DATA_COL, &key_id.0, keygen_result_info_encoded);
 
         // commit the tx to the database
         self.db.write(tx).unwrap_or_else(|e| {
@@ -57,7 +56,7 @@ impl KeyDB for PersistentKeyDB {
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
-            .iter(DB_COL_KEYGEN_RESULT_INFO)
+            .iter(KEYGEN_DATA_COL)
             .filter_map(|(key_id, key_info)| {
                 let key_id: KeyId = KeyId(key_id.into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
