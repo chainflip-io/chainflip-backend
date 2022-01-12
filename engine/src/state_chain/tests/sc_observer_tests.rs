@@ -4,10 +4,11 @@ use cf_chains::{eth::UnsignedTransaction, ChainId};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
+use pallet_cf_validator::CurrentEpoch::<;
 use pallet_cf_vaults::{BlockHeightWindow, Vault};
 use sp_core::{storage::StorageKey, H256, U256};
 use sp_runtime::{AccountId32, Digest};
-use state_chain_runtime::Header;
+use state_chain_runtime::{Header, Runtime};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -66,7 +67,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(frame_system::Account::<
-                state_chain_runtime::Runtime,
+                Runtime,
             >::hashed_key_for(&our_account_id))),
         )
         .times(1)
@@ -83,7 +84,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                CurrentEpoch::<Runtime>::hashed_key()
                     .into(),
             )),
         )
@@ -96,8 +97,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .expect_storage_events_at()
         .with(
             eq(Some(initial_block_hash)),
-            eq(StorageKey(pallet_cf_vaults::Vaults::<
-                state_chain_runtime::Runtime,
+            eq(StorageKey(Vaults::<
+                Runtime,
             >::hashed_key_for(
                 &3, &ChainId::Ethereum
             ))),
@@ -187,7 +188,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(frame_system::Account::<
-                state_chain_runtime::Runtime,
+                Runtime,
             >::hashed_key_for(&our_account_id))),
         )
         .times(1)
@@ -204,7 +205,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                CurrentEpoch::<Runtime>::hashed_key()
                     .into(),
             )),
         )
@@ -216,8 +217,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .expect_storage_events_at()
         .with(
             eq(Some(initial_block_hash)),
-            eq(StorageKey(pallet_cf_vaults::Vaults::<
-                state_chain_runtime::Runtime,
+            eq(StorageKey(Vaults::<
+                Runtime,
             >::hashed_key_for(
                 &2, &ChainId::Ethereum
             ))),
@@ -320,7 +321,7 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(frame_system::Account::<
-                state_chain_runtime::Runtime,
+                Runtime,
             >::hashed_key_for(&our_account_id))),
         )
         .times(1)
@@ -337,7 +338,7 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         .with(
             eq(Some(initial_block_hash)),
             eq(StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                CurrentEpoch::<Runtime>::hashed_key()
                     .into(),
             )),
         )
@@ -427,7 +428,7 @@ async fn backup_checks_account_data_every_block() {
         .with(
             predicate::always(),
             eq(StorageKey(frame_system::Account::<
-                state_chain_runtime::Runtime,
+                Runtime,
             >::hashed_key_for(&our_account_id))),
         )
         // NB: This is called three times. Once at the start, and then once for every block (x2 in this test)
@@ -445,7 +446,7 @@ async fn backup_checks_account_data_every_block() {
         .with(
             predicate::always(),
             eq(StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                CurrentEpoch::<Runtime>::hashed_key()
                     .into(),
             )),
         )
@@ -536,7 +537,7 @@ async fn validator_to_validator_on_new_epoch_event() {
     let our_account_id = AccountId32::new([0u8; 32]);
 
     let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+        frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
     );
 
     mock_state_chain_rpc_client
@@ -571,7 +572,7 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
+        CurrentEpoch::<Runtime>::hashed_key().into(),
     );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
@@ -588,7 +589,7 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     // get the current vault
     let vault_key = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+        Vaults::<Runtime>::hashed_key_for(
             &3,
             &ChainId::Ethereum,
         ),
@@ -609,8 +610,8 @@ async fn validator_to_validator_on_new_epoch_event() {
             )])
         });
 
-    let vault_key_after_new_epoch = StorageKey(pallet_cf_vaults::Vaults::<
-        state_chain_runtime::Runtime,
+    let vault_key_after_new_epoch = StorageKey(Vaults::<
+        Runtime,
     >::hashed_key_for(&4, &ChainId::Ethereum));
 
     mock_state_chain_rpc_client
@@ -747,7 +748,7 @@ async fn backup_to_validator_on_new_epoch() {
     let our_account_id = AccountId32::new([0u8; 32]);
 
     let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+        frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
     );
 
     // We start as a backup node and fetch on start up, and then the empty block
@@ -780,7 +781,7 @@ async fn backup_to_validator_on_new_epoch() {
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
+        CurrentEpoch::<Runtime>::hashed_key().into(),
     );
     // we get the epoch when we start up, and on the first block that we receive, since we start as backup
     mock_state_chain_rpc_client
@@ -803,8 +804,8 @@ async fn backup_to_validator_on_new_epoch() {
         });
 
     // We'll get the vault from the new epoch 4 when we become active
-    let vault_key_after_new_epoch = StorageKey(pallet_cf_vaults::Vaults::<
-        state_chain_runtime::Runtime,
+    let vault_key_after_new_epoch = StorageKey(Vaults::<
+        Runtime,
     >::hashed_key_for(&4, &ChainId::Ethereum));
 
     mock_state_chain_rpc_client
@@ -915,7 +916,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     let our_account_id = AccountId32::new([0u8; 32]);
 
     let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+        frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
     );
 
     mock_state_chain_rpc_client
@@ -962,7 +963,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
+        CurrentEpoch::<Runtime>::hashed_key().into(),
     );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
@@ -988,7 +989,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     // get the current vault
     let vault_key = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+        Vaults::<Runtime>::hashed_key_for(
             &3,
             &ChainId::Ethereum,
         ),
@@ -1170,7 +1171,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
     let our_account_id = AccountId32::new([0u8; 32]);
 
     let account_info_storage_key = StorageKey(
-        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+        frame_system::Account::<Runtime>::hashed_key_for(&our_account_id),
     );
 
     mock_state_chain_rpc_client
@@ -1186,7 +1187,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     // get the epoch
     let epoch_key = StorageKey(
-        pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key().into(),
+        CurrentEpoch::<Runtime>::hashed_key().into(),
     );
     mock_state_chain_rpc_client
         .expect_storage_events_at()
@@ -1196,7 +1197,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     // get the current vault
     let vault_key = StorageKey(
-        pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+        Vaults::<Runtime>::hashed_key_for(
             &3,
             &ChainId::Ethereum,
         ),
