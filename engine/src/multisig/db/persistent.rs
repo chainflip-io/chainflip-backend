@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, convert::TryInto, path::Path};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -11,8 +11,16 @@ use crate::{
 
 use anyhow::{Context, Result};
 
+/// This is the version of the data on this current branch
+/// This version *must* be bumped, and appropriate migrations
+/// written on any changes to the persistent application data format
+
+const DATA_VERSION: u32 = 0;
+
 /// Column for any metadata keys
 pub const METADATA_COL: u32 = 1;
+
+pub const DATA_VERSION_KEY: &[u8; 12] = b"data_version";
 
 pub const KEYGEN_DATA_COL: u32 = 0;
 
@@ -22,17 +30,71 @@ pub struct PersistentKeyDB {
     db: Database,
     logger: slog::Logger,
 }
-
 impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Result<Self> {
-        let db = Database::open(&DatabaseConfig::default(), path)
-            .map_err(anyhow::Error::msg)
-            .context(format!("Failed to open database at: {}", path.display()))?;
+        let logger = logger.new(o!(COMPONENT_KEY => "PersistentKeyDB"));
+        let db = if path.exists() {
+            // check the version against the existing database, assuming 0 if no version exists
+            let mut config = DatabaseConfig::default();
+            // we have already check that the database exists
+            config.create_if_missing = false;
+            let db = Database::open(&config, path)
+                .map_err(anyhow::Error::msg)
+                .context(format!("Failed to open database at: {}", path.display()))?;
 
-        Ok(PersistentKeyDB {
-            db,
-            logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
-        })
+            // get version number
+            let data_version = match db
+                .get(METADATA_COL, DATA_VERSION_KEY)
+                .map_err(anyhow::Error::msg)
+                .context("Failed quering for data_version")?
+            {
+                Some(version) => {
+                    let version: [u8; 4] = version.try_into().expect("Version should be a u32");
+                    let version = u32::from_be_bytes(version);
+                    slog::info!(logger, "Found data_version of {}", version);
+                    version
+                }
+                // If we can't find a data_version, we assume it's the first one
+                None => {
+                    slog::info!(logger, "Did not find data_version in existing database. Assuming data_version of 0");
+                    0
+                }
+            };
+
+            if data_version != DATA_VERSION {
+                slog::error!(logger, "Please perform the required data migrations. Your database has data version: {} but this CFE version uses data version: {}", data_version, DATA_VERSION);
+                return Err(anyhow::Error::msg(
+                    "Invalid data version on database. Migrations required",
+                ));
+            }
+            db
+        } else {
+            // create a new database, setting the version number to the latest version
+            let db = Database::open(&DatabaseConfig::default(), path)
+                .map_err(anyhow::Error::msg)
+                .context(format!("Failed to create database at: {}", path.display()))?;
+
+            // Put the latest version in there
+            let mut tx = db.transaction();
+            tx.put(METADATA_COL, DATA_VERSION_KEY, &DATA_VERSION.to_be_bytes());
+
+            match db.write(tx) {
+                Ok(()) => (),
+                Err(error) => {
+                    slog::error!(
+                        logger,
+                        "Failed to add data_version to database on initialisation with error: {:?}. Deleting bad database file...",
+                        error
+                    );
+                    std::fs::remove_dir_all(path)
+                        .expect("Should delete bad database initialisation");
+                    return Err(anyhow::Error::msg("Failed to initialise database"));
+                }
+            };
+            db
+        };
+
+        Ok(PersistentKeyDB { db, logger })
     }
 }
 
@@ -95,6 +157,32 @@ mod tests {
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
     const KEYGEN_RESULT_INFO_HEX: &'static str = "21000000000000000356815a968986af7dd8f84c365429435fba940a8b854129e78739d6d5a5ba74222000000000000000a0687cf58d7838802724b5a0ce902b421605488990c2a1156833743c68cc792303000000000000002100000000000000027cf4fe1aabd5862729d8f96ab07cf175f058fc7b4f79f3fd4fc4f9fba399dbb42100000000000000030bf033482c62d78902ff482b625dd99f025fcd429689123495bd5c5c6224cfda210000000000000002ee6ff7fd3bad3942708e965e728d8923784d36eb57f09d23aa75d8743a27c59b030000000000000030000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a0300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e010000000000000030000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427502000000000000000300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e30000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427530000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a03000000000000000100000000000000";
+
+    #[test]
+    fn new_db_creates_new_db_with_latest_version_when_db_does_not_exist() {
+        todo!();
+    }
+
+    #[test]
+    fn new_db_returns_db_when_db_data_version_is_latest() {
+        todo!();
+    }
+
+    #[test]
+    fn new_db_errors_about_migrations_when_data_version_mismatch() {
+        todo!()
+    }
+
+    #[test]
+    fn can_new_database() {
+        let logger = new_test_logger();
+        let db_path = Path::new("db_new");
+
+        let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+
+        // clean up
+        std::fs::remove_dir_all(db_path).unwrap();
+    }
 
     #[test]
     fn can_load_keys() {
