@@ -102,7 +102,7 @@ mod tests {
 
 // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
 pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
-    anyhow::Error::msg(format!("{:?}", error))
+    anyhow::Error::msg(format!("{}", error))
 }
 
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(

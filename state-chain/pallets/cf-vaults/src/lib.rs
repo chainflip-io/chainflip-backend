@@ -80,7 +80,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
 	pub fn success_threshold(&self) -> u32 {
-		utilities::threshold_from_share_count(self.candidate_count).saturating_add(1)
+		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// Accumulate a success vote into the keygen status.

@@ -1,104 +1,186 @@
-use std::convert::TryInto;
-
 use super::tests::KeygenContext;
-use crate::multisig::client::ensure_unsorted;
-use crate::multisig::KeygenOptions;
-use state_chain_runtime::AccountId;
 
-// Generate the keys for genesis
-// Run test to ensure it doesn't panic
-#[tokio::test]
-pub async fn genesis_keys() {
-    println!("Generating keys");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let bashful =
-        hex::decode("36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911").unwrap();
-    let bashful: [u8; 32] = bashful.try_into().unwrap();
-    let bashful = AccountId::new(bashful);
-    println!("bashful: {}", bashful);
+    use csv;
+    use serde_json;
+    use std::collections::{BTreeSet, HashMap};
+    use std::fs::File;
+    use std::io::prelude::Write;
+    use std::{env, io};
 
-    let doc =
-        hex::decode("8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04").unwrap();
-    let doc: [u8; 32] = doc.try_into().unwrap();
-    let doc = AccountId::new(doc);
-    println!("doc: {}", doc);
+    use crate::multisig::client::ensure_unsorted;
+    use crate::multisig::KeygenOptions;
+    use crate::testing::assert_ok;
+    use state_chain_runtime::AccountId;
 
-    let dopey =
-        hex::decode("ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e").unwrap();
-    let dopey: [u8; 32] = dopey.try_into().unwrap();
-    let dopey = AccountId::new(dopey);
-    println!("dopey: {}", dopey);
+    const ENV_VAR_OUTPUT_FILE: &str = "KEYSHARES_JSON_OUTPUT";
+    const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
-    let account_ids = ensure_unsorted(vec![doc.clone(), dopey.clone(), bashful.clone()], 0);
-    let mut keygen_context =
-        KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
+    // If no `ENV_VAR_INPUT_FILE` is defined, then these default names and ids are used to run the genesis unit test
+    const DEFAULT_CSV_CONTENT: &str = "node_name, node_id
+DOC,5F9ofCBWLMFXotypXtbUnbLXkM1Z9As47GRhDDFJDsxKgpBu
+BASHFUL,5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN
+DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
-    let valid_keygen_states = {
-        let mut count = 0;
-        let value = loop {
-            if count >= 20 {
-                panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
+    type Record = (String, AccountId);
+
+    fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<String, AccountId>
+    where
+        R: io::Read,
+    {
+        // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
+        let mut node_names: BTreeSet<String> = BTreeSet::new();
+        let mut node_ids: BTreeSet<AccountId> = BTreeSet::new();
+        reader
+                .records()
+                .filter_map(|result| match result {
+                    Ok(result) => Some(result),
+                    Err(e) => {
+                        panic!("Error reading csv record: {}", e);
+                    }
+                })
+                .filter_map(|record| {
+                    match record.deserialize::<Record>(None) {
+                        Ok((name, id)) => {
+                            // Check for duplicate names and ids
+                            assert!(
+                                node_names.insert(name.clone()),
+                                "Duplicate node name {} in csv",
+                                &name
+                            );
+                            assert!(
+                                node_ids.insert(id.clone()),
+                                "Duplicate node id {} reused by {}",
+                                &id,
+                                &name
+                            );
+                            Some((name, id))
+                        },
+                        Err(e) => {
+                            panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas. Error: {}", e);
+                        }
+                    }
+                })
+                .collect::<HashMap<String, AccountId>>()
+    }
+
+    // Generate the keys for genesis
+    // Run test to ensure it doesn't panic
+    #[tokio::test]
+    pub async fn genesis_keys() {
+        // Load the node id from a csv file if the env var exists
+        let node_name_to_id_map = match env::var(ENV_VAR_INPUT_FILE) {
+            Ok(input_file_path) => {
+                println!("Loading node ids from {}", input_file_path);
+                load_node_ids_from_csv(
+                    csv::Reader::from_path(&input_file_path).expect("Should read from csv file"),
+                )
             }
-            let valid_keygen_states = keygen_context.generate_with_ceremony_id(count).await;
-
-            if valid_keygen_states.key_ready_data().is_some() {
-                break valid_keygen_states;
+            Err(_) => {
+                println!(
+                    "No genesis node id csv file defined with {}, using default values",
+                    ENV_VAR_INPUT_FILE
+                );
+                load_node_ids_from_csv(csv::Reader::from_reader(DEFAULT_CSV_CONTENT.as_bytes()))
             }
-            count += 1;
         };
-        value
-    };
 
-    // Check that we can use the above keys
-    let active_ids: Vec<_> = {
-        use rand::prelude::*;
+        assert!(
+            node_name_to_id_map.len() > 1,
+            "Not enough nodes to run genesis"
+        );
 
-        let mut rng = StdRng::seed_from_u64(0);
-        let active_count = utilities::threshold_from_share_count(account_ids.len() as u32) + 1;
+        // Run keygen
+        println!("Generating keys");
 
-        ensure_unsorted(
-            account_ids
-                .choose_multiple(&mut rng, active_count as usize)
-                .cloned()
-                .collect(),
-            0,
-        )
-    };
+        let account_ids = ensure_unsorted(node_name_to_id_map.values().cloned().collect(), 0);
+        let mut keygen_context =
+            KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
 
-    let signing_result = keygen_context.sign_custom(&active_ids, None).await;
+        let valid_keygen_states = {
+            let mut count = 0;
+            let value = loop {
+                if count >= 20 {
+                    panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
+                }
+                let valid_keygen_states = keygen_context.generate_with_ceremony_id(count).await;
 
-    assert!(
-        signing_result.sign_finished.outcome.result.is_ok(),
-        "Signing ceremony failed"
-    );
+                if valid_keygen_states.key_ready_data().is_some() {
+                    break valid_keygen_states;
+                }
+                count += 1;
+            };
+            value
+        };
 
-    let agg_key = valid_keygen_states
-        .key_ready_data()
-        .expect("successful_keygen")
-        .pubkey
-        .serialize();
+        // Check that we can use the above keys
+        let active_ids: Vec<_> = {
+            use rand::prelude::*;
 
-    println!("Pubkey is (66 chars, 33 bytes): {:?}", hex::encode(agg_key));
+            ensure_unsorted(
+                account_ids
+                    .choose_multiple(
+                        &mut StdRng::seed_from_u64(0),
+                        utilities::success_threshold_from_share_count(account_ids.len() as u32)
+                            as usize,
+                    )
+                    .cloned()
+                    .collect(),
+                0,
+            )
+        };
 
-    let secret_keys = &valid_keygen_states
-        .key_ready_data()
-        .expect("successful keygen")
-        .sec_keys;
+        assert_ok!(
+            keygen_context
+                .sign_custom(&active_ids, None)
+                .await
+                .sign_finished
+                .outcome
+                .result
+        );
 
-    // pretty print the output :)
-    let bashful_secret = secret_keys[&bashful].clone();
-    let bashful_secret =
-        bincode::serialize(&bashful_secret).expect("Could not serialize bashful_secret");
-    let bashful_secret = hex::encode(bashful_secret);
-    println!("Bashfuls secret: {:?}", bashful_secret);
+        // Print the output
+        let pub_key = hex::encode(
+            valid_keygen_states
+                .key_ready_data()
+                .expect("successful keygen")
+                .pubkey
+                .serialize(),
+        );
+        println!("Pubkey is (66 chars, 33 bytes): {:?}", pub_key);
 
-    let doc_secret = secret_keys[&doc].clone();
-    let doc_secret = bincode::serialize(&doc_secret).expect("Could not serialize doc_secret");
-    let doc_secret = hex::encode(doc_secret);
-    println!("Doc secret_idx {:?}", doc_secret);
+        let secret_keys = &valid_keygen_states
+            .key_ready_data()
+            .expect("successful keygen")
+            .sec_keys;
 
-    let dopey_secret = secret_keys[&dopey].clone();
-    let dopey_secret = bincode::serialize(&dopey_secret).expect("Could not serialize dopey_secret");
-    let dopey_secret = hex::encode(dopey_secret);
-    println!("Dopey secret idx {:?}", dopey_secret);
+        let mut output: HashMap<String, String> = node_name_to_id_map
+            .iter()
+            .map(|(node_name, account_id)| {
+                let secret = hex::encode(
+                    bincode::serialize(&secret_keys[&account_id].clone())
+                        .expect(&format!("Could not serialize secret for {}", node_name)),
+                );
+                println!("{}'s secret: {:?}", &node_name, &secret);
+                (node_name.to_string(), secret.clone())
+            })
+            .collect();
+
+        // Output the secret shares and the Pubkey to a file if the env var exists
+        output.insert("AGG_KEY".to_string(), pub_key);
+        if let Ok(output_file_path) = env::var(ENV_VAR_OUTPUT_FILE) {
+            println!("Outputting key shares to {}", output_file_path);
+            let mut file = File::create(&output_file_path)
+                .expect(&format!("Cant create file {}", output_file_path));
+
+            let json_output = serde_json::to_string(&output).expect("Should make output into json");
+            file.write_all(json_output.as_bytes())
+                .expect(&format!("Failed to write to file {}", output_file_path));
+        } else {
+            println!("No output file defined with {}", ENV_VAR_OUTPUT_FILE);
+        }
+    }
 }
