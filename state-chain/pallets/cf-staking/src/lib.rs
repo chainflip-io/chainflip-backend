@@ -116,6 +116,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Store the list of staked accounts and whether or not they are retired
