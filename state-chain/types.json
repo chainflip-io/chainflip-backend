@@ -112,7 +112,10 @@
     "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
   "KeyId": "Vec<u8>",
-  "Keys": "u32",
+  "Keys": {
+    "aura": "[u8; 32]",
+    "grandpa": "[u8; 32]"
+  },
   "Liveness": {
     "last_heartbeat": "BlockNumber",
     "banned_until": "BlockNumber"
