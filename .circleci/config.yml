@@ -497,6 +497,9 @@ jobs:
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - attach_workspace:
           at: ./
+      - add_ssh_keys:
+          fingerprints:
+            - 54:21:2e:87:a3:09:b8:9d:30:b9:26:4b:11:45:74:f9
       - run:
           name: Create Testnet
           command: |
