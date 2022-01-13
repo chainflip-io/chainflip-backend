@@ -8,31 +8,41 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use frame_support::pallet_prelude::*;
+use frame_system::pallet_prelude::*;
+
+pub mod cfe {
+	use super::*;
+	/// On chain CFE settings
+	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	pub struct CFESettings {
+		/// Number of blocks we wait until we deem it safe (from reorgs)
+		pub eth_block_safety_margin: u32,
+		/// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key
+		/// that is supposed to sign this message to be generated. (Since we can receive requests
+		/// to sign for the next key, if other nodes are ahead of us)
+		pub pending_sign_duration: u32,
+		/// Maximum duration a ceremony stage can last
+		pub max_stage_duration: u32,
+		/// Number of times to retry after incrementing the nonce on a nonce error
+		pub max_retry_attempts: u32,
+	}
+
+	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub enum CFESettingKeys {
+		EthBlockSafetyMargin,
+		PendingSignDuration,
+		MaxStageDuration,
+		MaxRetryAttempts,
+	}
+}
+
 pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use sp_std::time::Duration;
-
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	type EthereumAddress = [u8; 20];
-
-	/// On chain CFE settings
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct CFESettingsStruct {
-		/// Number of blocks we wait until we deem it safe (from reorgs)
-		pub eth_block_safety_margin: u64,
-		/// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key
-		/// that is supposed to sign this message to be generated. (Since we can receive requests
-		/// to sign for the next key, if other nodes are ahead of us)
-		pub pending_sign_duration: Duration,
-		/// Maximum duration a ceremony stage can last
-		pub max_stage_duration: Duration,
-		/// Number of times to retry after incrementing the nonce on a nonce error
-		pub max_retry_attempts: u32,
-	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -68,11 +78,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
 	/// The address of the ETH chain id
-	pub type CFESettings<T> = StorageValue<_, CFESettingsStruct, ValueQuery>;
+	pub type CFESettings<T> = StorageValue<_, cfe::CFESettings, ValueQuery>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		UpdatedCFESettings(CFESettingsStruct),
+		UpdatedCFESettings(cfe::CFESettings),
 	}
 
 	#[pallet::error]
@@ -80,72 +91,34 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Sets the value for the CFE config: eth_block_safety_margin
+		/// Sets the value for a CFE settings item by a given key:
+		///
+		/// - EthBlockSafetyMargin
+		/// - PendingSignDuration
+		/// - MaxStageDuration
+		/// - MaxRetryAttempts
 		///
 		/// ## Events
 		///
 		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_eth_block_safety_margin())]
-		pub fn update_eth_block_safety_margin(
+		#[pallet::weight(T::WeightInfo::update_cfe_value())]
+		pub fn update_cfe_value(
 			origin: OriginFor<T>,
-			value: u64,
-		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
-			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
-			settings.eth_block_safety_margin = value;
-			CFESettings::<T>::put(settings);
-			Ok(().into())
-		}
-		/// Sets the value for the CFE config: pending_sign_duration
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_pending_sign_duration())]
-		pub fn update_pending_sign_duration(
-			origin: OriginFor<T>,
-			value: Duration,
-		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
-			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
-			settings.pending_sign_duration = value;
-			CFESettings::<T>::put(settings);
-			Ok(().into())
-		}
-		/// Sets the value for the CFE config: max_stage_duration
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
-		pub fn update_max_stage_duration(
-			origin: OriginFor<T>,
-			value: Duration,
-		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
-			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
-			settings.max_stage_duration = value;
-			CFESettings::<T>::put(settings);
-			Ok(().into())
-		}
-		/// Sets the value for the CFE config: max_retry_attempts
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_max_retry_attempts())]
-		pub fn update_max_retry_attempts(
-			origin: OriginFor<T>,
+			key: cfe::CFESettingKeys,
 			value: u32,
 		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 			let mut settings = CFESettings::<T>::get();
-			settings.max_retry_attempts = value;
-			CFESettings::<T>::put(settings);
+			match key {
+				cfe::CFESettingKeys::EthBlockSafetyMargin =>
+					settings.eth_block_safety_margin = value,
+				cfe::CFESettingKeys::MaxRetryAttempts => settings.max_retry_attempts = value,
+				cfe::CFESettingKeys::MaxStageDuration => settings.max_stage_duration = value,
+				cfe::CFESettingKeys::PendingSignDuration => settings.pending_sign_duration = value,
+			}
+			settings.max_stage_duration = value;
+			CFESettings::<T>::put(settings.clone());
+			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
 		}
 	}
@@ -155,9 +128,9 @@ pub mod pallet {
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
-		pub eth_block_safety_margin: u64,
-		pub pending_sign_duration: u64,
-		pub max_stage_duration: u64,
+		pub eth_block_safety_margin: u32,
+		pub pending_sign_duration: u32,
+		pub max_stage_duration: u32,
 		pub max_retry_attempts: u32,
 	}
 
@@ -183,10 +156,10 @@ pub mod pallet {
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
-			CFESettings::<T>::set(CFESettingsStruct {
+			CFESettings::<T>::set(cfe::CFESettings {
 				eth_block_safety_margin: self.eth_block_safety_margin,
-				pending_sign_duration: Duration::from_secs(self.pending_sign_duration),
-				max_stage_duration: Duration::from_secs(self.max_stage_duration),
+				pending_sign_duration: self.pending_sign_duration,
+				max_stage_duration: self.max_stage_duration,
 				max_retry_attempts: self.max_retry_attempts,
 			});
 		}

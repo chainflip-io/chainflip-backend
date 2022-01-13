@@ -26,10 +26,10 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
-const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
+const ETH_BLOCK_SAFETY_MARGIN: u32 = 4;
 const MAX_RETRY_ATTEMPTS: u32 = 500;
-const MAX_STAGE_DURATION: u64 = 300;
-const PENDING_SIGN_DURATION: u64 = 10;
+const MAX_STAGE_DURATION: u32 = 300;
+const PENDING_SIGN_DURATION: u32 = 10;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -60,9 +60,9 @@ pub struct StateChainEnvironment {
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
-	eth_block_safety_margin: u64,
-	pending_sign_duration: u64,
-	max_stage_duration: u64,
+	eth_block_safety_margin: u32,
+	pending_sign_duration: u32,
+	max_stage_duration: u32,
 	max_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -97,7 +97,7 @@ pub fn get_environment() -> StateChainEnvironment {
 
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
 		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN))
-		.parse::<u64>()
+		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u64");
 
 	let max_retry_attempts = env::var("MAX_RETRY_ATTEMPTS")
@@ -107,12 +107,12 @@ pub fn get_environment() -> StateChainEnvironment {
 
 	let max_stage_duration = env::var("MAX_STAGE_DURATION")
 		.unwrap_or(format!("{}", MAX_STAGE_DURATION))
-		.parse::<u64>()
+		.parse::<u32>()
 		.expect("MAX_STAGE_DURATION env var could not be parsed to u64");
 
 	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
 		.unwrap_or(format!("{}", PENDING_SIGN_DURATION))
-		.parse::<u64>()
+		.parse::<u32>()
 		.expect("PENDING_SIGN_DURATION env var could not be parsed to u64");
 
 	StateChainEnvironment {
