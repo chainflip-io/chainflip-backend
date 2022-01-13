@@ -208,7 +208,6 @@ workflows:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
-          <<: *only_main_branches
 
 ######################## /Workflows ########################
 
