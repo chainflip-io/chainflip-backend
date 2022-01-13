@@ -15,6 +15,7 @@ use futures::{
 use itertools::Itertools;
 
 use pallet_cf_vaults::CeremonyId;
+use secp256k1::PublicKey;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
@@ -804,15 +805,8 @@ impl KeygenContext {
                 results.push(result);
             }
 
-            let reported_nodes: Vec<_> = results
-                .iter()
-                .map(|res| res.as_ref().unwrap_err())
-                .collect();
-
-            assert!(
-                check_reported_nodes_consistency(&reported_nodes),
-                "Not all nodes reported the same parties"
-            );
+            let reported_nodes = reported_nodes_if_consistent(&results)
+                .expect("Reported nodes should be consistent");
 
             if self.auto_clear_tag_cache {
                 self.tag_cache.clear();
@@ -1021,15 +1015,8 @@ impl KeygenContext {
                     "Ceremony didn't result in an error for all parties"
                 );
 
-                let reported_nodes: Vec<_> = results
-                    .iter()
-                    .map(|res| res.as_ref().unwrap_err())
-                    .collect();
-
-                assert!(
-                    check_reported_nodes_consistency(&reported_nodes),
-                    "Not all nodes reported the same parties"
-                );
+                let reported_nodes = reported_nodes_if_consistent(&results)
+                    .expect("Reported nodes should be consistent");
 
                 Err(reported_nodes[0].clone())
             };
@@ -1341,20 +1328,25 @@ impl KeygenContext {
     }
 }
 
-// Returns true if all of the nodes reported the same parties.
-fn check_reported_nodes_consistency(
-    reported_nodes: &Vec<&(CeremonyAbortReason, Vec<AccountId>)>,
-) -> bool {
+// Returns Ok(reported_nodes) if everyone reported the same nodes, otherwise throws an error
+fn reported_nodes_if_consistent(
+    results: &Vec<Result<PublicKey, (CeremonyAbortReason, Vec<AccountId>)>>,
+) -> Result<Vec<&(CeremonyAbortReason, Vec<sp_runtime::AccountId32>)>> {
+    let reported_nodes: Vec<_> = results
+        .iter()
+        .map(|res| res.as_ref().unwrap_err())
+        .collect();
+
     for (_, reported_parties) in reported_nodes.iter() {
         let sorted_reported_parties: Vec<AccountId> =
             reported_parties.iter().sorted().cloned().collect();
         let other_sorted_reported_parties: Vec<AccountId> =
             reported_nodes[0].1.iter().sorted().cloned().collect();
         if sorted_reported_parties != other_sorted_reported_parties {
-            return false;
+            return Err(anyhow::Error::msg("Inconsistent reported nodes"));
         }
     }
-    true
+    Ok(reported_nodes)
 }
 
 // Checks that all signers got the same outcome and returns it
