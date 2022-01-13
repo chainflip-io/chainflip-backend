@@ -197,7 +197,6 @@ workflows:
   #          <<: *only_main_branches
 
   chainflip-testnet:
-    when: <<pipeline.parameters.build_testnet>>
     jobs:
       - clone-platform-repo:
           context:
@@ -205,8 +204,6 @@ workflows:
       - create-testnet:
           requires:
             - clone-platform-repo
-            - docker-build-chainflip-engine
-            - docker-build-chainflip-node
           context:
             - ghcr-credentials
             - do-credentials
