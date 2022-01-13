@@ -490,6 +490,8 @@ jobs:
         default: cluster-staging
     resource_class: small
     executor: chainflip-master
+    environment:
+      BACKEND_DIR: ../../
     steps:
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
