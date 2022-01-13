@@ -56,7 +56,7 @@ pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGN_CEREMONY_ID};
 
-pub const STAGE_FINISHED: usize = 0;
+pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 macro_rules! recv_broadcast {
     ($rxs:expr, $ceremony_variant: path, $variant: path) => {{
@@ -378,6 +378,7 @@ struct CustomDataToSend {
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
+    /// Account ids participating in the keygen
     account_ids: Vec<AccountId>,
     /// Some tests require data sent between some parties
     /// to deviate from the protocol (e.g. for testing
@@ -1520,7 +1521,7 @@ impl MultisigClientNoDB {
     pub fn ensure_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
         let is_at_stage = match stage_number {
-            STAGE_FINISHED => stage == None,
+            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
@@ -1552,7 +1553,7 @@ impl MultisigClientNoDB {
     ) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
         let is_at_stage = match stage_number {
-            STAGE_FINISHED => stage == None,
+            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
