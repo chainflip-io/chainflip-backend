@@ -5,9 +5,13 @@
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use sp_std::time::Duration;
 
 	use frame_support::pallet_prelude::*;
@@ -40,6 +44,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 	}
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -74,7 +80,12 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		/// Sets the value for the CFE config: eth_block_safety_margin
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_eth_block_safety_margin())]
 		pub fn update_eth_block_safety_margin(
 			origin: OriginFor<T>,
 			value: u64,
@@ -86,7 +97,12 @@ pub mod pallet {
 			CFESettings::<T>::put(settings);
 			Ok(().into())
 		}
-		#[pallet::weight(10_000)]
+		/// Sets the value for the CFE config: pending_sign_duration
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_pending_sign_duration())]
 		pub fn update_pending_sign_duration(
 			origin: OriginFor<T>,
 			value: Duration,
@@ -98,7 +114,12 @@ pub mod pallet {
 			CFESettings::<T>::put(settings);
 			Ok(().into())
 		}
-		#[pallet::weight(10_000)]
+		/// Sets the value for the CFE config: max_stage_duration
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
 		pub fn update_max_stage_duration(
 			origin: OriginFor<T>,
 			value: Duration,
@@ -110,7 +131,12 @@ pub mod pallet {
 			CFESettings::<T>::put(settings);
 			Ok(().into())
 		}
-		#[pallet::weight(10_000)]
+		/// Sets the value for the CFE config: max_retry_attempts
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_max_retry_attempts())]
 		pub fn update_max_retry_attempts(
 			origin: OriginFor<T>,
 			value: u32,

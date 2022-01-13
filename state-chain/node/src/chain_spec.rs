@@ -26,10 +26,10 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
-const ETH_BLOCK_SAFETY_MARGIN: u64 = 0;
-const MAX_RETRY_ATTEMPTS: u32 = 0;
-const MAX_STAGE_DURATION: u64 = 0;
-const PENDING_SIGN_DURATION: u64 = 0;
+const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
+const MAX_RETRY_ATTEMPTS: u32 = 500;
+const MAX_STAGE_DURATION: u64 = 300;
+const PENDING_SIGN_DURATION: u64 = 10;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
