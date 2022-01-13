@@ -499,5 +499,5 @@ jobs:
           name: Create Testnet
           command: |
             cd platform/cluster
-            ./build.sh -b="$CIRCLE_BRANCH" -t="$CIRCLE_SHA1" --build --reset
+            ./build.sh --namespace="$CIRCLE_BRANCH" --commit-tag="$CIRCLE_SHA1" --build --reset
 ######################## /Jobs ########################
