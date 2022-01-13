@@ -4,7 +4,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
+use frame_support::traits::{OnInitialize, OnRuntimeUpgrade};
 use frame_system::RawOrigin;
 
 const MINT_INTERVAL: u32 = 100;
@@ -29,6 +29,18 @@ benchmarks! {
 	rewards_minted {
 	}: {
 		Emissions::<T>::on_initialize((MINT_INTERVAL).into());
+	}
+	update_mint_interval {
+	}: _(RawOrigin::Root, (50 as u32).into())
+	verify {
+		 let mint_interval = Pallet::<T>::mint_interval().unwrap();
+		 assert_eq!(mint_interval, (50 as u32).into());
+	}
+	on_runtime_upgrade {
+	} : {
+		Emissions::<T>::on_runtime_upgrade();
+	} verify {
+		assert!(MintInterval::<T>::get().is_some());
 	}
 }
 

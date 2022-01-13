@@ -19,7 +19,6 @@ mod tests;
 
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
-use core::convert::TryInto;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -143,6 +142,8 @@ pub mod pallet {
 		ValidatorInflationEmissionsUpdated(BasisPoints),
 		/// Backup Validator inflation emission has been updated \[new\]
 		BackupValidatorInflationEmissionsUpdated(BasisPoints),
+		/// MintInterval has been updated.
+		MintIntervalUpdated(BlockNumberFor<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -161,7 +162,7 @@ pub mod pallet {
 			if let None = MintInterval::<T>::get() {
 				MintInterval::<T>::put(T::MintInterval::get());
 			}
-			0
+			T::WeightInfo::on_runtime_upgrade()
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
@@ -169,7 +170,7 @@ pub mod pallet {
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
 				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
-				T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
+				T::WeightInfo::rewards_minted()
 			} else {
 				T::WeightInfo::no_rewards_minted()
 			}
@@ -221,10 +222,23 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Updates the mint interval
-		#[pallet::weight(10_000)]
-		pub fn update_mint_interval(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		/// Updates the mint interval.
+		///
+		/// ## Events
+		///
+		/// - [MintIntervalUpdated](Event:: MintIntervalUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::update_mint_interval())]
+		pub fn update_mint_interval(
+			origin: OriginFor<T>,
+			value: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
+			MintInterval::<T>::put(value);
+			Self::deposit_event(Event::<T>::MintIntervalUpdated(value));
 			Ok(().into())
 		}
 	}
