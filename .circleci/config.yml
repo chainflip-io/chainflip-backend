@@ -103,133 +103,108 @@ commands:
 
 ######################## Workflows ########################
 workflows:
-  create-rust-base:
-    when: <<pipeline.parameters.rust-base>>
-    jobs:
-      - docker-build:
-          name: build-rust-base
-          extra_build_args: "--build-arg NIGHTLY=nightly-2021-07-05"
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
-          dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-          context:
-            - ghcr-credentials
-      - docker-build:
-          name: build-rust-poetry
-          image: chainflip-io/chainflip-backend/rust-poetry
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-          tag: latest
-          dockerfile: Dockerfile.rust-poetry
-          context:
-            - ghcr-credentials
-
-  # We run docs separately to the main flow, so it doesn't slow the process down.
-  chainflip-backend-docs:
-    when:
-      not: <<pipeline.parameters.build_testnet>>
-    jobs:
-      - cargo-doc-validator-package:
-          context:
-            - ghcr-credentials
-            - github-credentials
-
-  chainflip-backend-checks:
-    when:
-      not: <<pipeline.parameters.build_testnet>>
-    jobs:
-      - cargo-clippy-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
-            - github-credentials
-          <<: *ignore_main_branches
-
-      # The follow jobs always run, regardless of PR or merge.
-      - cargo-check-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
-            - github-credentials
-      - cargo-fmt-validator-package:
-          context:
-            - ghcr-credentials
-            - github-credentials
-      - cargo-build-and-test-validator-package:
-          requires:
-            - cargo-fmt-validator-package
-          context:
-            - ghcr-credentials
-            - github-credentials
-            - discord-webhooks
-      - test-single-node:
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-            - do-credentials
-            - infura-endpoints
-            - aws-credentials
-
-      # The follow jobs run on all successful merges to protected branches.
-      # Protected branches include main, develop, release/*, epic/*
-      - docker-build:
-          name: docker-build-chainflip-engine
-          image: chainflip-io/chainflip-backend/chainflip-engine
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - test-single-node
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - docker-build:
-          name: docker-build-chainflip-node
-          image: chainflip-io/chainflip-backend/chainflip-node
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
-          extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - test-single-node
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
+  #  create-rust-base:
+  #    when: <<pipeline.parameters.rust-base>>
+  #    jobs:
+  #      - docker-build:
+  #          name: build-rust-base
+  #          extra_build_args: "--build-arg NIGHTLY=nightly-2021-07-05"
+  #          image: chainflip-io/chainflip-backend/rust-base
+  #          tag: latest
+  #          dockerfile: Dockerfile.rust-base
+  #          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+  #          context:
+  #            - ghcr-credentials
+  #      - docker-build:
+  #          name: build-rust-poetry
+  #          image: chainflip-io/chainflip-backend/rust-poetry
+  #          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+  #          tag: latest
+  #          dockerfile: Dockerfile.rust-poetry
+  #          context:
+  #            - ghcr-credentials
+  #
+  #  # We run docs separately to the main flow, so it doesn't slow the process down.
+  #  chainflip-backend-docs:
+  #    when:
+  #      not: <<pipeline.parameters.build_testnet>>
+  #    jobs:
+  #      - cargo-doc-validator-package:
+  #          context:
+  #            - ghcr-credentials
+  #            - github-credentials
+  #
+  #  chainflip-backend-checks:
+  #    when:
+  #      not: <<pipeline.parameters.build_testnet>>
+  #    jobs:
+  #      - cargo-clippy-validator-package:
+  #          requires:
+  #            - cargo-fmt-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #            - github-credentials
+  #          <<: *ignore_main_branches
+  #
+  #      # The follow jobs always run, regardless of PR or merge.
+  #      - cargo-check-validator-package:
+  #          requires:
+  #            - cargo-fmt-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #            - github-credentials
+  #      - cargo-fmt-validator-package:
+  #          context:
+  #            - ghcr-credentials
+  #            - github-credentials
+  #      - cargo-build-and-test-validator-package:
+  #          requires:
+  #            - cargo-fmt-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #            - github-credentials
+  #            - discord-webhooks
+  #      - test-single-node:
+  #          requires:
+  #            - cargo-build-and-test-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #            - do-credentials
+  #            - infura-endpoints
+  #            - aws-credentials
+  #
+  #      # The follow jobs run on all successful merges to protected branches.
+  #      # Protected branches include main, develop, release/*, epic/*
+  #      - docker-build:
+  #          name: docker-build-chainflip-engine
+  #          image: chainflip-io/chainflip-backend/chainflip-engine
+  #          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+  #          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
+  #          requires:
+  #            - test-single-node
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *only_main_branches
+  #      - docker-build:
+  #          name: docker-build-chainflip-node
+  #          image: chainflip-io/chainflip-backend/chainflip-node
+  #          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
+  #          extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
+  #          requires:
+  #            - test-single-node
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *only_main_branches
 
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
     jobs:
-      - cargo-build-and-test-validator-package:
-          context:
-            - ghcr-credentials
-            - discord-webhooks
-          <<: *only_main_branches
-      - docker-build:
-          name: docker-build-chainflip-engine
-          image: chainflip-io/chainflip-backend/chainflip-engine
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-          extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - docker-build:
-          name: docker-build-chainflip-node
-          image: chainflip-io/chainflip-backend/chainflip-node
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
-          extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
-          requires:
-            - cargo-build-and-test-validator-package
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - clone-cluster-repo:
+      - clone-platform-repo:
           context:
             - github-credentials
       - create-testnet:
           requires:
-            - clone-cluster-repo
+            - clone-platform-repo
             - docker-build-chainflip-engine
             - docker-build-chainflip-node
           context:
@@ -374,7 +349,7 @@ jobs:
       - run: sccache --show-stats
       - run:
           environment:
-              RUSTFLAGS: -D warnings
+            RUSTFLAGS: -D warnings
           command: |
             cargo check --all-targets --all-features --locked --release
             sccache --show-stats
@@ -424,19 +399,19 @@ jobs:
           paths:
             - eth-contracts/*
 
-  clone-cluster-repo:
+  clone-platform-repo:
     resource_class: small
     docker:
       - image: "cimg/base:stable"
     steps:
       - gh/setup
       - gh/clone:
-          repo: https://github.com/chainflip-io/chainflip-cluster.git
-          dir: cluster
+          repo: https://github.com/chainflip-io/chainflip-platform-monorepo.git
+          dir: platform
       - persist_to_workspace:
           root: ./
           paths:
-            - cluster
+            - platform
 
   run-integration-tests:
     resource_class: xlarge
@@ -525,8 +500,8 @@ jobs:
       - attach_workspace:
           at: ./
       - run:
-          name: Install cluster
+          name: Create Testnet
           command: |
-            cd cluster
-            ./build.sh -b="$CIRCLE_BRANCH" -t="$CIRCLE_SHA1" --reset
+            cd platform/cluster
+            ./build.sh -b="$CIRCLE_BRANCH" -t="$CIRCLE_SHA1" --build --reset
 ######################## /Jobs ########################
