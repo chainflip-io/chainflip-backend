@@ -56,6 +56,8 @@ pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGN_CEREMONY_ID};
 
+pub const STAGE_FINISHED: usize = 0;
+
 macro_rules! recv_broadcast {
     ($rxs:expr, $ceremony_variant: path, $variant: path) => {{
         futures::stream::iter($rxs.iter_mut())
@@ -478,7 +480,7 @@ impl KeygenContext {
             p2p_receivers.insert(
                 id.clone(),
                 Box::pin(UnboundedReceiverStream::new(p2p_rx).peekable()),
-            ); // See KeygenContext TODO
+            );
             outcome_receivers.insert(
                 id.clone(),
                 Box::pin(UnboundedReceiverStream::new(rx).peekable()),
@@ -1518,7 +1520,7 @@ impl MultisigClientNoDB {
     pub fn ensure_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
         let is_at_stage = match stage_number {
-            0 => stage == None,
+            STAGE_FINISHED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
@@ -1550,7 +1552,7 @@ impl MultisigClientNoDB {
     ) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
         let is_at_stage = match stage_number {
-            0 => stage == None,
+            STAGE_FINISHED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
