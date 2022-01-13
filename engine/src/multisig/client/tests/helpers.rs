@@ -8,7 +8,10 @@ use std::{
 
 use anyhow::Result;
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
-use futures::{stream::Peekable, StreamExt};
+use futures::{
+    stream::{self, Peekable},
+    StreamExt,
+};
 use itertools::Itertools;
 
 use pallet_cf_vaults::CeremonyId;
@@ -25,6 +28,7 @@ use crate::{
         },
         KeyId, MultisigInstruction, SchnorrSignature,
     },
+    multisig_p2p::OutgoingMultisigStageMessages,
 };
 
 use crate::testing::assert_ok;
@@ -52,77 +56,44 @@ pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGN_CEREMONY_ID};
 
-macro_rules! recv_data_keygen {
-    ($rx:expr, $variant: path) => {{
-        let (_, m) = expect_next_with_timeout($rx).await;
-
-        match m {
-            MultisigMessage {
-                data: MultisigData::Keygen($variant(inner)),
-                ..
-            } => inner,
-            _ => {
-                panic!("Received message is not {}", stringify!($variant));
-            }
-        }
+macro_rules! recv_broadcast {
+    ($rxs:expr, $ceremony_variant: path, $variant: path) => {{
+        futures::stream::iter($rxs.iter_mut())
+            .then(|(id, rx)| async move {
+                (
+                    id.clone(),
+                    match expect_next_with_timeout(rx).await {
+                        OutgoingMultisigStageMessages::Broadcast(
+                            _,
+                            MultisigMessage {
+                                data: $ceremony_variant($variant(inner)),
+                                ..
+                            },
+                        ) => {
+                            assert_channel_empty(rx).await;
+                            inner
+                        }
+                        _ => {
+                            panic!("Received message is not {}", stringify!($variant));
+                        }
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>()
+            .await
     }};
 }
 
-macro_rules! recv_all_data_keygen {
-    ($rxs:expr, $variant: path) => {{
-        let mut messages = HashMap::new();
-
-        let count = $rxs.len();
-
-        for (id, rx) in $rxs.iter_mut() {
-            let data = recv_data_keygen!(rx, $variant);
-            messages.insert(id.clone(), data);
-
-            // ignore (count(other nodes) - 1) messages
-            for _ in 0..count - 2 {
-                let _ = recv_data_keygen!(rx, $variant);
-            }
-        }
-
-        messages
-    }};
+macro_rules! recv_keygen_broadcast {
+    ($rxs:expr, $variant: path) => {
+        recv_broadcast!($rxs, MultisigData::Keygen, $variant)
+    };
 }
 
-macro_rules! recv_data_signing {
-    ($rx:expr, $variant: path) => {{
-        let (_, m) = expect_next_with_timeout($rx).await;
-
-        match m {
-            MultisigMessage {
-                data: MultisigData::Signing($variant(inner)),
-                ..
-            } => inner,
-            _ => {
-                panic!("Received message is not {}", stringify!($variant));
-            }
-        }
-    }};
-}
-
-macro_rules! recv_all_data_signing {
-    ($rxs:expr, $variant: path) => {{
-        let mut messages = HashMap::new();
-
-        let signer_count = $rxs.len();
-
-        for (id, rx) in $rxs.iter_mut() {
-            let data = recv_data_signing!(rx, $variant);
-            messages.insert(id.clone(), data);
-
-            // ignore (count(other nodes) - 1) messages
-            for _ in 0..signer_count - 2 {
-                let _ = recv_data_signing!(rx, $variant);
-            }
-            assert_channel_empty(rx).await;
-        }
-
-        messages
-    }};
+macro_rules! recv_siging_broadcast {
+    ($rxs:expr, $variant: path) => {
+        recv_broadcast!($rxs, MultisigData::Signing, $variant)
+    };
 }
 
 macro_rules! distribute_data_keygen_custom {
@@ -188,7 +159,7 @@ pub(super) type MultisigOutcomeReceiver =
     Pin<Box<Peekable<UnboundedReceiverStream<MultisigOutcome>>>>;
 
 pub(super) type P2PMessageReceiver =
-    Pin<Box<Peekable<UnboundedReceiverStream<(AccountId, MultisigMessage)>>>>;
+    Pin<Box<Peekable<UnboundedReceiverStream<OutgoingMultisigStageMessages>>>>;
 
 pub struct Stage0Data {
     pub clients: HashMap<AccountId, MultisigClientNoDB>,
@@ -758,7 +729,7 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info.clone()));
         }
 
-        let comm1s = recv_all_data_keygen!(p2p_rxs, KeygenData::Comm1);
+        let comm1s = recv_keygen_broadcast!(p2p_rxs, KeygenData::Comm1);
 
         println!("Received all comm1");
 
@@ -787,7 +758,7 @@ impl KeygenContext {
             .values()
             .for_each(|c| assert_ok!(c.ensure_ceremony_at_keygen_stage(2, &ceremony_id)));
 
-        let ver2s = recv_all_data_keygen!(p2p_rxs, KeygenData::Verify2);
+        let ver2s = recv_keygen_broadcast!(p2p_rxs, KeygenData::Verify2);
 
         let ver_com_stage2 = CommVerStage2Data {
             clients: clients.clone(),
@@ -863,18 +834,7 @@ impl KeygenContext {
 
         // *** Collect all Secret3
 
-        let mut sec3s: HashMap<AccountId, _> = HashMap::new();
-
-        for (sender_id, rx) in p2p_rxs.iter_mut() {
-            let mut sec3_map = HashMap::new();
-            for i in 0..self.account_ids.len() - 1 {
-                println!("recv secret3 keygen, i: {}", i);
-                let (dest, sec3) = recv_secret3_keygen(rx).await;
-                sec3_map.insert(dest, sec3);
-            }
-
-            sec3s.insert(sender_id.clone(), sec3_map);
-        }
+        let sec3s = recv_keygen_secret3(p2p_rxs).await;
 
         println!("Received all sec3");
 
@@ -917,7 +877,7 @@ impl KeygenContext {
 
         println!("Distributed all sec3");
 
-        let complaints = recv_all_data_keygen!(p2p_rxs, KeygenData::Complaints4);
+        let complaints = recv_keygen_broadcast!(p2p_rxs, KeygenData::Complaints4);
 
         let comp_stage4 = Some(CompStage4Data {
             clients: clients.clone(),
@@ -938,7 +898,7 @@ impl KeygenContext {
 
         println!("Distributed all complaints");
 
-        let ver_complaints = recv_all_data_keygen!(p2p_rxs, KeygenData::VerifyComplaints5);
+        let ver_complaints = recv_keygen_broadcast!(p2p_rxs, KeygenData::VerifyComplaints5);
 
         let ver_comp_stage5 = Some(VerCompStage5Data {
             clients: clients.clone(),
@@ -970,7 +930,7 @@ impl KeygenContext {
         if nodes_entered_blaming {
             println!("All clients entered blaming phase!");
 
-            let responses6 = recv_all_data_keygen!(p2p_rxs, KeygenData::BlameResponse6);
+            let responses6 = recv_keygen_broadcast!(p2p_rxs, KeygenData::BlameResponse6);
             blame_responses6 = Some(BlameResponses6Data {
                 clients: clients.clone(),
                 resp6: responses6.clone(),
@@ -990,7 +950,7 @@ impl KeygenContext {
 
             println!("Distributed all blame responses");
 
-            let ver7 = recv_all_data_keygen!(p2p_rxs, KeygenData::VerifyBlameResponses7);
+            let ver7 = recv_keygen_broadcast!(p2p_rxs, KeygenData::VerifyBlameResponses7);
             ver_blame_responses7 = Some(VerBlameResponses7Data {
                 clients: clients.clone(),
                 ver7: ver7.clone(),
@@ -1169,7 +1129,7 @@ impl KeygenContext {
             assert_ok!(c.ensure_at_signing_stage(1));
         }
 
-        let comm1s = recv_all_data_signing!(p2p_rxs, SigningData::CommStage1);
+        let comm1s = recv_siging_broadcast!(p2p_rxs, SigningData::CommStage1);
 
         let sign_phase1 = SigningPhase1Data {
             clients: clients.clone(),
@@ -1196,7 +1156,7 @@ impl KeygenContext {
             .for_each(|c| assert_ok!(c.ensure_at_signing_stage(2)));
 
         // *** Collect Ver2 messages ***
-        let ver2s = recv_all_data_signing!(p2p_rxs, SigningData::BroadcastVerificationStage2);
+        let ver2s = recv_siging_broadcast!(p2p_rxs, SigningData::BroadcastVerificationStage2);
 
         let sign_phase2 = SigningPhase2Data {
             clients: clients.clone(),
@@ -1247,7 +1207,7 @@ impl KeygenContext {
 
         // *** Collect local sigs ***
 
-        let local_sigs = recv_all_data_signing!(p2p_rxs, SigningData::LocalSigStage3);
+        let local_sigs = recv_siging_broadcast!(p2p_rxs, SigningData::LocalSigStage3);
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -1270,7 +1230,7 @@ impl KeygenContext {
         });
 
         // *** Collect Ver4 messages ***
-        let ver4s = recv_all_data_signing!(p2p_rxs, SigningData::VerifyLocalSigsStage4);
+        let ver4s = recv_siging_broadcast!(p2p_rxs, SigningData::VerifyLocalSigsStage4);
 
         let sign_phase4 = SigningPhase4Data {
             clients: clients.clone(),
@@ -1484,19 +1444,38 @@ pub async fn expect_next_with_timeout<I>(
     }
 }
 
-async fn recv_secret3_keygen(rx: &mut P2PMessageReceiver) -> (AccountId, keygen::SecretShare3) {
-    if let (
-        dest,
-        MultisigMessage {
-            data: MultisigData::Keygen(KeygenData::SecretShares3(sec3)),
-            ..
-        },
-    ) = expect_next_with_timeout(rx).await
-    {
-        return (dest, sec3);
-    } else {
-        panic!("Received message is not Secret3 (keygen)");
-    }
+async fn recv_keygen_secret3(
+    p2p_rxs: &mut HashMap<AccountId, P2PMessageReceiver>,
+) -> HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>> {
+    stream::iter(p2p_rxs.iter_mut())
+        .then(|(id, rx)| async move {
+            if let OutgoingMultisigStageMessages::Private(messages) =
+                expect_next_with_timeout(rx).await
+            {
+                (
+                    id.clone(),
+                    messages
+                        .into_iter()
+                        .map(move |(dest, message)| {
+                            (
+                                dest,
+                                match message {
+                                    MultisigMessage {
+                                        data: MultisigData::Keygen(KeygenData::SecretShares3(sec3)),
+                                        ..
+                                    } => sec3,
+                                    _ => panic!("Received message is not Secret3 (keygen)"),
+                                },
+                            )
+                        })
+                        .collect(),
+                )
+            } else {
+                panic!("Expected p2p private messages");
+            }
+        })
+        .collect::<HashMap<_, _>>()
+        .await
 }
 
 pub fn sig_data_to_p2p(data: impl Into<SigningData>) -> MultisigMessage {

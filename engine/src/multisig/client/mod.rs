@@ -22,6 +22,7 @@ use crate::{
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
     multisig::{KeyDB, KeyId, MultisigInstruction},
+    multisig_p2p::OutgoingMultisigStageMessages,
 };
 
 use state_chain_runtime::AccountId;
@@ -173,7 +174,7 @@ where
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
     multisig_outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
+    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -188,7 +189,7 @@ where
         my_account_id: AccountId,
         db: S,
         multisig_outcome_sender: MultisigOutcomeSender,
-        outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
+        outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
