@@ -128,6 +128,11 @@ pub mod pallet {
 	pub(super) type BackupValidatorEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn mint_interval)]
+	/// How frequently to mint
+	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -151,6 +156,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			// Set the default value defined in the runtime when no value is provided.
+			if let None = MintInterval::<T>::get() {
+				MintInterval::<T>::put(T::MintInterval::get());
+			}
+			0
+		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
 
@@ -208,6 +220,13 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
+
+		/// Updates the mint interval
+		#[pallet::weight(10_000)]
+		pub fn update_mint_interval(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -236,11 +255,13 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Determines if we should mint at block number `block_number`.
 	fn should_mint_at(block_number: T::BlockNumber) -> bool {
-		let mint_interval = T::MintInterval::get();
-		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
-
-		should_mint
+		if let Some(mint_interval) = MintInterval::<T>::get() {
+			let blocks_elapsed = block_number - LastMintBlock::<T>::get();
+			let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
+			should_mint
+		} else {
+			false
+		}
 	}
 
 	/// Checks if we should mint.

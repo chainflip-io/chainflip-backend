@@ -28,6 +28,7 @@ pub mod cfe {
 		pub max_retry_attempts: u32,
 	}
 
+	/// Enum of available cfe setting keys
 	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub enum CFESettingKeys {
 		EthBlockSafetyMargin,
