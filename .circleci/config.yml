@@ -81,8 +81,7 @@ commands:
             -u tomjohnburton:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
             --data-raw "{
-            \"body\": \"<< parameters.content >>\"
-            }"
+            \"body\": \"<< parameters.content >>\"\"}}"
           fi
 
   send_notification:
