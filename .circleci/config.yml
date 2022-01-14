@@ -539,8 +539,7 @@ jobs:
           fingerprints:
             - 54:21:2e:87:a3:09:b8:9d:30:b9:26:4b:11:45:74:f9
       - comment:
-          content: >
-            _This is an automated message_\n\n🚀 Building Testnet
+          content: "_This is an automated message_\n\n🚀 Building Testnet"
       - run:
           name: Create Testnet
           command: |
