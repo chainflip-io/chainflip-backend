@@ -78,7 +78,7 @@ commands:
             pr_comment_url=$(echo $pr_response | jq -r ".[]._links.comments.href")
 
             curl --location --request POST "$pr_comment_url" \
-            -u $CIRCLE_USERNAME:$GHI_TOKEN \
+            -u tomjohnburton:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
             --data-raw "{
             \"body\": \"$(echo << parameters.content >>)\"
