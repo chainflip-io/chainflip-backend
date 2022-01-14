@@ -80,8 +80,7 @@ commands:
             curl --location --request POST "$pr_comment_url" \
             -u tomjohnburton:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
-            --data-raw "{
-            \"body\": \"<< parameters.content >>\"\"}}"
+            --data-raw "{\"body\": \"<< parameters.content >>\"}"
           fi
 
   send_notification:
@@ -541,14 +540,14 @@ jobs:
             - 54:21:2e:87:a3:09:b8:9d:30:b9:26:4b:11:45:74:f9
       - comment:
           content: >
-            _This is an automated message_\n\n🚀 Building Testnet
-      #      - run:
-      #          name: Create Testnet
-      #          command: |
-      #            apt-get -y install rsync
-      #            cd platform/cluster
-      #            ./build.sh --namespace="$CIRCLE_BRANCH" --commit-tag="$CIRCLE_SHA1" --testnet-id="$CIRCLE_BUILD --build --reset
+            _This is an automated message_\n\n🚀 Building Testnet\"}
+      - run:
+          name: Create Testnet
+          command: |
+            apt-get -y install rsync
+            cd platform/cluster
+            ./build.sh --namespace="$CIRCLE_BRANCH" --commit-tag="$CIRCLE_SHA1" --build --reset
       - comment:
           content: >
-            _This is an automated message_\n\n👍🏻 Testnet built successfully in the namespace \`$(echo $CIRCLE_BRANCH|tr \/ -)\`\n🟠 [Block explorer](https://polkadot.js.org/apps/?rpc=wss%3A%2F%2F$(echo $CIRCLE_BRANCH|tr \/ -)-node.chainflip.xyz#/explorer)\n🪵 [Logs](https://grafana.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Loki%20(euc1-monitoring)%22,%7B%22exemplar%22:true,%22expr%22:%22%7Bnamespace%3D%5C%22$(echo $CIRCLE_BRANCH|tr \/ -)%5C%22%7D%22%7D%5D)
+            _This is an automated message_\n\n👍🏻 Testnet built successfully in the namespace \`$(echo $CIRCLE_BRANCH|tr \/ -)\`\n🟠 [Block explorer](https://polkadot.js.org/apps/?rpc=wss%3A%2F%2F$(echo $CIRCLE_BRANCH|tr \/ -)-node.chainflip.xyz#/explorer)\n🪵 [Logs](https://grafana.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Loki%20(euc1-monitoring)%22,%7B%22exemplar%22:true,%22expr%22:%22%7Bnamespace%3D%5C%22$(echo $CIRCLE_BRANCH|tr \/ -)%5C%22%7D%22%7D%5D)\"}
 ######################## /Jobs ########################
