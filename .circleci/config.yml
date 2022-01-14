@@ -491,9 +491,10 @@ jobs:
     resource_class: small
     executor: chainflip-master
     environment:
-      BACKEND_DIR: ../../
+      BACKEND_DIR: ../../chainflip-backend
     steps:
-      - checkout
+      - checkout:
+          path: chainflip-backend
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - attach_workspace:
