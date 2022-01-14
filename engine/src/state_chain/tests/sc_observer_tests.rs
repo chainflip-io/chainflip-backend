@@ -21,7 +21,7 @@ use crate::{
             mock_account_storage_key, mock_events_key, test_utils::storage_change_set_from,
             MockStateChainRpcApi, StateChainClient, OUR_ACCOUNT_ID_BYTES,
         },
-        sc_observer::start,
+        sc_observer,
     },
 };
 
@@ -50,6 +50,18 @@ fn account_info_from_data(
         },
     }
 }
+
+/// ETH Window for epoch three initially. No end known
+const WINDOW_EPOCH_THREE_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 30, to: None };
+
+/// ETH Window for epoch three after epoch starts, so we know the end
+const WINDOW_EPOCH_THREE_END: BlockHeightWindow = BlockHeightWindow {
+    from: 30,
+    to: Some(39),
+};
+
+/// ETH Window for epoch three initially. No end known
+const WINDOW_EPOCH_FOUR_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 40, to: None };
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup() {
@@ -99,7 +111,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![0; 33],
-                    active_window: BlockHeightWindow { from: 30, to: None },
+                    active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
             )])
@@ -129,7 +141,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
     let (km_window_sender, mut km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -146,11 +158,11 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     // ensure we kicked off the witness processes
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
 }
 
@@ -241,7 +253,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     let (km_window_sender, mut km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -337,7 +349,7 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
     let (km_window_sender, mut km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -426,7 +438,7 @@ async fn backup_checks_account_data_every_block() {
     // return no events, see above)
     let sc_block_stream = tokio_stream::iter(vec![Ok(test_header(20)), Ok(test_header(21))]);
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -539,7 +551,7 @@ async fn validator_to_validator_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![0; 33],
-                    active_window: BlockHeightWindow { from: 30, to: None },
+                    active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
             )])
@@ -596,7 +608,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         mock_state_chain_rpc_client,
     ));
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -613,11 +625,11 @@ async fn validator_to_validator_on_new_epoch_event() {
     // ensure we did kick off the witness processes at the start
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
 
     // after a new epoch, we should have sent new messages down the channels
@@ -741,7 +753,7 @@ async fn backup_to_validator_on_new_epoch() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![1; 33],
-                    active_window: BlockHeightWindow { from: 40, to: None },
+                    active_window: WINDOW_EPOCH_FOUR_INITIAL,
                 },
                 new_epoch_block_header_hash,
             )])
@@ -778,7 +790,7 @@ async fn backup_to_validator_on_new_epoch() {
         mock_state_chain_rpc_client,
     ));
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -795,11 +807,11 @@ async fn backup_to_validator_on_new_epoch() {
     // after a new epoch, we should have sent new messages down the channels
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 40, to: None }
+        WINDOW_EPOCH_FOUR_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 40, to: None }
+        WINDOW_EPOCH_FOUR_INITIAL
     );
 
     assert!(km_window_receiver.recv().await.is_none());
@@ -906,7 +918,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![0; 33],
-                    active_window: BlockHeightWindow { from: 30, to: None },
+                    active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
             )])
@@ -921,10 +933,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![1; 33],
-                    active_window: BlockHeightWindow {
-                        from: 30,
-                        to: Some(39),
-                    },
+                    active_window: WINDOW_EPOCH_THREE_END,
                 },
                 new_epoch_block_header_hash,
             )])
@@ -980,7 +989,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     let (km_window_sender, mut km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -997,27 +1006,21 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     // ensure we did kick off the witness processes at the start
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
 
     // after a new epoch, we should have sent new messages to stop witnessing once we reach the final block height
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow {
-            from: 30,
-            to: Some(39)
-        }
+        WINDOW_EPOCH_THREE_END
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow {
-            from: 30,
-            to: Some(39)
-        }
+        WINDOW_EPOCH_THREE_END
     );
 
     assert!(km_window_receiver.recv().await.is_none());
@@ -1103,7 +1106,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![0; 33],
-                    active_window: BlockHeightWindow { from: 30, to: None },
+                    active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
             )])
@@ -1166,7 +1169,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
     let (km_window_sender, mut km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    start(
+    sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -1183,11 +1186,11 @@ async fn only_encodes_and_signs_when_active_and_specified() {
     // ensure we kicked off the witness processes
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 30, to: None }
+        WINDOW_EPOCH_THREE_INITIAL
     );
 
     assert!(km_window_receiver.recv().await.is_none());
@@ -1221,7 +1224,7 @@ async fn run_the_sc_observer() {
     let (km_window_sender, _km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    start(
+    sc_observer::start(
         state_chain_client,
         block_stream,
         eth_broadcaster,
