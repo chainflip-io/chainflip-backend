@@ -51,6 +51,12 @@ fn account_info_from_data(
     }
 }
 
+/// ETH Window for epoch three after epoch starts, so we know the end
+const WINDOW_EPOCH_TWO_END: BlockHeightWindow = BlockHeightWindow {
+    from: 20,
+    to: Some(29),
+};
+
 /// ETH Window for epoch three initially. No end known
 const WINDOW_EPOCH_THREE_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 30, to: None };
 
@@ -219,10 +225,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![0; 33],
-                    active_window: BlockHeightWindow {
-                        from: 20,
-                        to: Some(29),
-                    },
+                    active_window: WINDOW_EPOCH_TWO_END,
                 },
                 initial_block_hash,
             )])
@@ -270,17 +273,11 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     // ensure we kicked off the witness processes
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow {
-            from: 20,
-            to: Some(29)
-        }
+        WINDOW_EPOCH_TWO_END
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow {
-            from: 20,
-            to: Some(29)
-        }
+        WINDOW_EPOCH_TWO_END
     );
 
     assert!(km_window_receiver.recv().await.is_none());
@@ -571,7 +568,7 @@ async fn validator_to_validator_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 Vault {
                     public_key: vec![1; 33],
-                    active_window: BlockHeightWindow { from: 40, to: None },
+                    active_window: WINDOW_EPOCH_FOUR_INITIAL,
                 },
                 new_epoch_block_header_hash,
             )])
@@ -635,11 +632,11 @@ async fn validator_to_validator_on_new_epoch_event() {
     // after a new epoch, we should have sent new messages down the channels
     assert_eq!(
         km_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 40, to: None }
+        WINDOW_EPOCH_FOUR_INITIAL
     );
     assert_eq!(
         sm_window_receiver.recv().await.unwrap(),
-        BlockHeightWindow { from: 40, to: None }
+        WINDOW_EPOCH_FOUR_INITIAL
     );
 
     assert!(km_window_receiver.recv().await.is_none());
