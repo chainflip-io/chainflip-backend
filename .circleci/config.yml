@@ -80,7 +80,7 @@ commands:
             curl --location --request POST "$pr_comment_url" \
             -u tomjohnburton:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
-            --data-raw "{\"body\": \"<< parameters.content >>\"}"
+            --data-raw "{\"body\": \"<< parameters.content >> \"}"
           fi
 
   send_notification:
@@ -540,7 +540,7 @@ jobs:
             - 54:21:2e:87:a3:09:b8:9d:30:b9:26:4b:11:45:74:f9
       - comment:
           content: >
-            _This is an automated message_\n\n🚀 Building Testnet\"}
+            _This is an automated message_\n\n🚀 Building Testnet
       - run:
           name: Create Testnet
           command: |
