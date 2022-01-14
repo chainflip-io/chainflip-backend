@@ -493,6 +493,7 @@ jobs:
     environment:
       BACKEND_DIR: ../../
     steps:
+      - checkout
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - attach_workspace:
@@ -503,6 +504,7 @@ jobs:
       - run:
           name: Create Testnet
           command: |
+            apt-get install rsync
             cd platform/cluster
             ./build.sh --namespace="$CIRCLE_BRANCH" --commit-tag="$CIRCLE_SHA1" --build --reset
 ######################## /Jobs ########################
