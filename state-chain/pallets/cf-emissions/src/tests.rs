@@ -1,6 +1,5 @@
 mod tests {
 	use crate::{mock::*, BlockEmissions, Pallet};
-	use frame_support::assert_ok;
 	use pallet_cf_flip::Pallet as Flip;
 
 	type Emissions = Pallet<Test>;
@@ -20,8 +19,6 @@ mod tests {
 	#[test]
 	fn test_should_mint_at() {
 		new_test_ext(vec![], None).execute_with(|| {
-			// Set the mint interval
-			assert_ok!(Emissions::update_mint_interval(Origin::root(), 5));
 			// It has been `MINT_INTERVAL` blocks since the last mint.
 			assert_eq!(Emissions::should_mint_at(MINT_INTERVAL), true);
 			// It hasn't yet been `MINT_INTERVAL` blocks since the last mint.

@@ -205,6 +205,7 @@ pub mod pallet {
 				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
+			ReputationPointPenalty::<T>::put(T::ReputationPointPenalty::get());
 		}
 	}
 

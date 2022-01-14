@@ -262,6 +262,7 @@ pub mod pallet {
 		fn build(&self) {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
+			MintInterval::<T>::put(T::MintInterval::get());
 		}
 	}
 }
