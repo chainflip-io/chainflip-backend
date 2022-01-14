@@ -80,9 +80,7 @@ commands:
             curl --location --request POST "$pr_comment_url" \
             -u tomjohnburton:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
-            --data-raw "{
-            \"body\": \"$(echo << parameters.content >>)\"
-            }"
+            --data-raw "{\"body\": \"<< parameters.content >>\"}"
           fi
 
   send_notification:
