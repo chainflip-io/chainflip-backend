@@ -35,11 +35,13 @@ pub struct AwaitCommitments1 {
 }
 
 impl AwaitCommitments1 {
-    pub fn new(common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+    pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+        let nonces = SecretNoncePair::sample_random(&mut common.rng);
+
         AwaitCommitments1 {
             common,
             signing_common,
-            nonces: SecretNoncePair::sample_random(),
+            nonces,
         }
     }
 }

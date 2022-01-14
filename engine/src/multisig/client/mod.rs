@@ -21,7 +21,7 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{KeyDB, KeyId, MultisigInstruction},
+    multisig::{crypto::Rng, KeyDB, KeyId, MultisigInstruction},
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -258,6 +258,8 @@ where
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
+        use rand_legacy::FromEntropy;
+
         match instruction {
             MultisigInstruction::Keygen(keygen_info) => {
                 // For now disable generating a new key when we already have one
@@ -268,9 +270,10 @@ where
                     format_iterator(&keygen_info.signers);
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
+                let rng = Rng::from_entropy();
 
                 self.ceremony_manager
-                    .on_keygen_request(keygen_info, self.keygen_options);
+                    .on_keygen_request(rng, keygen_info, self.keygen_options);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
@@ -283,7 +286,10 @@ where
                 );
                 match self.key_store.get_key(key_id) {
                     Some(keygen_result_info) => {
+                        let rng = Rng::from_entropy();
+
                         self.ceremony_manager.on_request_to_sign(
+                            rng,
                             sign_info.data,
                             keygen_result_info.clone(),
                             sign_info.signers,
@@ -324,7 +330,12 @@ where
                     CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
+                use rand_legacy::FromEntropy;
+
+                let rng = Rng::from_entropy();
+
                 self.ceremony_manager.on_request_to_sign(
+                    rng,
                     signing_info.data,
                     key_info.clone(),
                     signing_info.signers,

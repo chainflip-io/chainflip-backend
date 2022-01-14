@@ -12,7 +12,7 @@ mod tests {
     use std::{env, io};
 
     use crate::multisig::client::ensure_unsorted;
-    use crate::multisig::KeygenOptions;
+    use crate::multisig::crypto::Rng;
     use crate::testing::assert_ok;
     use state_chain_runtime::AccountId;
 
@@ -97,8 +97,16 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
         println!("Generating keys");
 
         let account_ids = ensure_unsorted(node_name_to_id_map.values().cloned().collect(), 0);
-        let mut keygen_context =
-            KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
+
+        use rand_legacy::FromEntropy;
+
+        let mut keygen_context = KeygenContext::builder()
+            .with_account_ids(account_ids.clone())
+            // only generate contract compatible keys
+            .allowing_high_pubkey(false)
+            // Don't use deterministic crypto for genesis keys
+            .with_rng(Rng::from_entropy())
+            .build();
 
         let valid_keygen_states = {
             let mut count = 0;

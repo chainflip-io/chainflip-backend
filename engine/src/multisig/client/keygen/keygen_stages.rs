@@ -44,14 +44,14 @@ pub struct AwaitCommitments1 {
 
 impl AwaitCommitments1 {
     pub fn new(
-        common: CeremonyCommon,
+        mut common: CeremonyCommon,
         keygen_options: KeygenOptions,
         context: HashContext,
     ) -> Self {
         let params = ThresholdParameters::from_share_count(common.all_idxs.len());
 
         let (shares, own_commitment) =
-            generate_shares_and_commitment(&context, common.own_idx, params);
+            generate_shares_and_commitment(&mut common.rng, &context, common.own_idx, params);
 
         AwaitCommitments1 {
             common,

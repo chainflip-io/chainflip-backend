@@ -26,6 +26,7 @@ use crate::{
             utils::PartyIdxMapping,
             CeremonyAbortReason, MultisigData, ThresholdParameters,
         },
+        crypto::Rng,
         KeyId, MultisigInstruction, SchnorrSignature,
     },
     multisig_p2p::OutgoingMultisigStageMessages,
@@ -346,11 +347,6 @@ struct CustomDataToSendKeygen {
     ver7: HashMap<(AccountId, AccountId), keygen::VerifyBlameResponses7>,
 }
 
-// derive_impls_for_signing_data!(Comm1, SigningData::CommStage1);
-// derive_impls_for_signing_data!(VerifyComm2, SigningData::BroadcastVerificationStage2);
-// derive_impls_for_signing_data!(LocalSig3, SigningData::LocalSigStage3);
-// derive_impls_for_signing_data!(VerifyLocalSig4, SigningData::VerifyLocalSigsStage4);
-
 #[derive(Default)]
 struct CustomDataToSendSigning {
     /// Maps a (sender, receiver) pair to the data that will be
@@ -402,17 +398,19 @@ pub struct KeygenContext {
     // Cache of all tags that used in log calls
     pub tag_cache: TagCache,
     pub auto_clear_tag_cache: bool,
+    pub rng: Rng,
 }
 
-fn gen_invalid_local_sig() -> LocalSig3 {
+fn gen_invalid_local_sig(mut rng: &mut Rng) -> LocalSig3 {
     use crate::multisig::crypto::Scalar;
     frost::LocalSig3 {
-        response: Scalar::random(),
+        response: Scalar::random(&mut rng),
     }
 }
 
-pub fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
+        &mut rng,
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
@@ -423,11 +421,64 @@ pub fn gen_invalid_keygen_comm1() -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1() -> SigningCommitment {
+pub fn gen_invalid_signing_comm1(mut rng: &mut Rng) -> SigningCommitment {
     SigningCommitment {
         index: 0,
-        d: Point::random(),
-        e: Point::random(),
+        d: Point::random(&mut rng),
+        e: Point::random(&mut rng),
+    }
+}
+
+pub struct KeygenContextBuilder {
+    account_ids: Option<Vec<AccountId>>,
+    allowing_high_pubkey: bool,
+    rng: Option<Rng>,
+}
+
+impl KeygenContextBuilder {
+    pub fn with_account_ids(self, account_ids: Vec<AccountId>) -> Self {
+        Self {
+            account_ids: Some(account_ids),
+            ..self
+        }
+    }
+
+    pub fn allowing_high_pubkey(self, allow: bool) -> Self {
+        Self {
+            allowing_high_pubkey: allow,
+            ..self
+        }
+    }
+
+    pub fn with_rng(self, rng: Rng) -> Self {
+        Self {
+            rng: Some(rng),
+            ..self
+        }
+    }
+
+    pub fn build(self) -> KeygenContext {
+        // By default, hardcoded account ids are used for
+        // convenience
+        let account_ids = self
+            .account_ids
+            .unwrap_or_else(|| super::ACCOUNT_IDS.clone());
+
+        let keygen_options = if self.allowing_high_pubkey {
+            KeygenOptions::allowing_high_pubkey()
+        } else {
+            KeygenOptions::default()
+        };
+
+        // By default, a hardcoded seed is used to make
+        // all tests deterministic (not only in the outcome,
+        // but in what intermediate values they produce)
+        let rng = {
+            use rand_legacy::SeedableRng;
+            self.rng.unwrap_or_else(|| Rng::from_seed([0; 32]))
+        };
+
+        KeygenContext::inner_new(account_ids, keygen_options, rng)
     }
 }
 
@@ -435,24 +486,18 @@ impl KeygenContext {
     /// Generate context without starting the keygen ceremony.
     /// `allowing_high_pubkey` is enabled so tests will not fail.
     pub fn new() -> Self {
-        let account_ids = super::ACCOUNT_IDS.clone();
-        KeygenContext::inner_new(account_ids, KeygenOptions::allowing_high_pubkey())
+        Self::builder().build()
     }
 
-    pub fn new_with_account_ids(
-        account_ids: Vec<AccountId>,
-        keygen_options: KeygenOptions,
-    ) -> Self {
-        KeygenContext::inner_new(account_ids, keygen_options)
+    pub fn builder() -> KeygenContextBuilder {
+        KeygenContextBuilder {
+            account_ids: None,
+            allowing_high_pubkey: true,
+            rng: None,
+        }
     }
 
-    /// Generate context with the KeygenOptions as default, (No `allowing_high_pubkey`)
-    pub fn new_disallow_high_pubkey() -> Self {
-        let account_ids = super::ACCOUNT_IDS.clone();
-        KeygenContext::inner_new(account_ids, KeygenOptions::default())
-    }
-
-    fn inner_new(account_ids: Vec<AccountId>, keygen_options: KeygenOptions) -> Self {
+    fn inner_new(account_ids: Vec<AccountId>, keygen_options: KeygenOptions, rng: Rng) -> Self {
         let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
         let mut p2p_receivers = HashMap::new();
         let mut clients = HashMap::new();
@@ -497,6 +542,7 @@ impl KeygenContext {
             idx_mapping,
             tag_cache,
             auto_clear_tag_cache: true,
+            rng,
         }
     }
 
@@ -520,7 +566,7 @@ impl KeygenContext {
     }
 
     pub fn use_invalid_local_sig(&mut self, sender_id: &AccountId) {
-        let fake_sig3 = gen_invalid_local_sig();
+        let fake_sig3 = gen_invalid_local_sig(&mut self.rng);
 
         for receiver_id in &self.account_ids {
             if sender_id != receiver_id {
@@ -535,7 +581,7 @@ impl KeygenContext {
     pub fn use_invalid_secret_share(&mut self, sender_id: &AccountId, receiver_id: &AccountId) {
         assert_ne!(sender_id, receiver_id);
 
-        let invalid_share = SecretShare3::create_random();
+        let invalid_share = SecretShare3::create_random(&mut self.rng);
 
         self.custom_data
             .keygen
@@ -563,7 +609,7 @@ impl KeygenContext {
         // as the invalid share sent earlier (prior to blaming)
 
         let invalid_response = {
-            let invalid_share = SecretShare3::create_random();
+            let invalid_share = SecretShare3::create_random(&mut self.rng);
             let mut response = keygen::BlameResponse6(HashMap::default());
 
             let receiver_idx = self
@@ -598,7 +644,7 @@ impl KeygenContext {
         // send to all other parties
         self.custom_data.signing.comm1.insert(
             (sender_id.clone(), receiver_id.clone()),
-            gen_invalid_signing_comm1(),
+            gen_invalid_signing_comm1(&mut self.rng),
         );
     }
 
@@ -611,13 +657,13 @@ impl KeygenContext {
         assert_ne!(sender_id, receiver_id);
         self.custom_data.keygen.comm1.insert(
             (sender_id.clone(), receiver_id.clone()),
-            gen_invalid_keygen_comm1(),
+            gen_invalid_keygen_comm1(&mut self.rng),
         );
     }
 
     /// Make the specified node send an invalid commitment to all of the other account_ids
     pub fn use_invalid_keygen_comm1(&mut self, sender_id: AccountId) {
-        let fake_comm1 = gen_invalid_keygen_comm1();
+        let fake_comm1 = gen_invalid_keygen_comm1(&mut self.rng);
 
         for receiver_id in &self.account_ids {
             if &sender_id != receiver_id {
@@ -639,7 +685,7 @@ impl KeygenContext {
         // It doesn't matter what kind of local sig we create here,
         // the main idea is that it doesn't match what we
         // send to all other parties
-        let fake_sig3 = gen_invalid_local_sig();
+        let fake_sig3 = gen_invalid_local_sig(&mut self.rng);
 
         self.custom_data
             .signing

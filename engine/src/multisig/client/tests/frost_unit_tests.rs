@@ -456,7 +456,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_signing_states_len(), 0);
 
     // Receive comm1 with the default signing ceremony id
-    let message = sig_data_to_p2p(gen_invalid_signing_comm1());
+    let message = sig_data_to_p2p(gen_invalid_signing_comm1(&mut ctx.rng));
     assert_eq!(message.ceremony_id, SIGN_CEREMONY_ID);
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 

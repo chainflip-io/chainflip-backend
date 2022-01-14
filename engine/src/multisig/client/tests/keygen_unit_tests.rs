@@ -360,8 +360,10 @@ async fn should_handle_invalid_commitments() {
 async fn should_handle_not_compatible_keygen() {
     let mut counter = 0;
     loop {
-        // Disallow the high pubkey and run the keygen as normal
-        let mut ctx = helpers::KeygenContext::new_disallow_high_pubkey();
+        // Disallow the high pubkey and run the keygen as in production
+        let mut ctx = helpers::KeygenContext::builder()
+            .allowing_high_pubkey(false)
+            .build();
         ctx.auto_clear_tag_cache = false;
         let keygen_states = ctx.generate().await;
 
@@ -460,7 +462,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     assert_eq!(c1.ceremony_manager.get_keygen_states_len(), 0);
 
     // Receive comm1 with the default keygen ceremony id
-    let message = keygen_data_to_p2p(gen_invalid_keygen_comm1());
+    let message = keygen_data_to_p2p(gen_invalid_keygen_comm1(&mut ctx.rng));
     assert_eq!(message.ceremony_id, KEYGEN_CEREMONY_ID);
     c1.process_p2p_message(ACCOUNT_IDS[1].clone(), message);
 
