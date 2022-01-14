@@ -50,7 +50,7 @@ orbs:
   gh: circleci/github-cli@1.0.4
   doctl: digitalocean/cli@0.1.1
   helm: circleci/helm@1.2.0
-  comment: benjlevesque/pr-comment@0.1.9
+  comment: inari-build/pr-comment@0.0.12
 parameters:
   rust-base:
     type: boolean
@@ -517,7 +517,9 @@ jobs:
       - add_ssh_keys:
           fingerprints:
             - 54:21:2e:87:a3:09:b8:9d:30:b9:26:4b:11:45:74:f9
-      - comment:
+      - comment/post-comment:
+          gh-user: $CIRCLE_USERNAME
+          gh-token: $GHI_TOKEN
           comment: 🚀 Building Testnet
       - run:
           name: Create Testnet
@@ -525,7 +527,9 @@ jobs:
             apt-get -y install rsync
             cd platform/cluster
             ./build.sh --namespace="$CIRCLE_BRANCH" --commit-tag="$CIRCLE_SHA1" --build --reset
-      - comment:
+      - comment/post-comment:
+          gh-user: $CIRCLE_USERNAME
+          gh-token: $GHI_TOKEN
           comment: |
             👍🏻 Testnet built sucessfully
             🪵 Logs available [here](https://grafana.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Loki%22,%7B%22exemplar%22:true,%22expr%22:%22%7Bnamespace%3D%5C%22$($CIRCLE_BRANCH| tr \/ -)%5C%22%7D%22%7D%5D)
