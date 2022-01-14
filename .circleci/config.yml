@@ -263,7 +263,7 @@ jobs:
           image: <<parameters.image>>
           tag: <<parameters.tag>>
 
-  cargo-fmt-validator-package:
+  cargo-fmt:
     executor: rust-base
     steps:
       - checkout
@@ -275,7 +275,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-build-and-test-validator-package-integration:
+  cargo-build-and-test-integration:
     <<: *cargo-base-job
     executor: rust-poetry
     steps:
@@ -312,7 +312,7 @@ jobs:
       - send_notification:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
 
-  cargo-build-and-test-validator-package:
+  cargo-build-and-test:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -337,7 +337,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-check-validator-package:
+  cargo-check:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -349,7 +349,7 @@ jobs:
           command: |
             cargo check --all-targets --all-features --locked --release
             sccache --show-stats
-  cargo-test-validator-package:
+  cargo-test:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -358,7 +358,7 @@ jobs:
       - run: |
           cargo test --lib --locked --release
           sccache --show-stats
-  cargo-clippy-validator-package:
+  cargo-clippy:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -368,7 +368,7 @@ jobs:
           cargo clippy
           sccache --show-stats
 
-  cargo-doc-validator-package:
+  cargo-doc:
     <<: *cargo-base-job
     shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
@@ -380,6 +380,19 @@ jobs:
           sccache --show-stats
       - store_artifacts:
           path: target/doc/
+
+  cargo-audit:
+    <<: *cargo-base-job
+    shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
+    steps:
+      - checkout
+      - merge_target
+      - run: sccache --show-stats
+      - run: |
+          cargo install --force cargo-audit
+          cargo generate-lockfile
+      - run: >
+          cargo audit
 
   git-clone-contracts-repo:
     resource_class: small
