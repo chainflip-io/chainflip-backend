@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(array_map)] // stable as of rust 1.55
+
 
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
