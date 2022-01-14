@@ -80,7 +80,15 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			// Set the default value defined in the runtime when no value is provided.
+			if let None = ReputationPointPenalty::<T>::get() {
+				ReputationPointPenalty::<T>::put(T::ReputationPointPenalty::get());
+			}
+			T::WeightInfo::on_runtime_upgrade()
+		}
+	}
 
 	/// The ratio at which one accrues Reputation points in exchange for online credits
 	#[pallet::storage]
@@ -95,6 +103,12 @@ pub mod pallet {
 	pub type Reputations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn reputation_points_penalty)]
+	/// The number of reputation points we lose for every x blocks offline
+	pub(super) type ReputationPointPenalty<T: Config> =
+		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -102,6 +116,8 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation points has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
+		/// The value for ReputationPointPenalty has been updated
+		ReputationPointPenaltyUpdated(ReputationPenalty<BlockNumberFor<T>>),
 	}
 
 	#[pallet::error]
@@ -147,6 +163,22 @@ pub mod pallet {
 			AccrualRatio::<T>::set((points, online_credits));
 			Self::deposit_event(Event::AccrualRateUpdated(points, online_credits));
 
+			Ok(().into())
+		}
+		/// Updates the value for the ReputationPointPenalty storage item
+		///
+		/// ## Events
+		///
+		/// - [ReputationPointPenaltyUpdated](Event::ReputationPointPenaltyUpdated)
+		#[pallet::weight(T::WeightInfo::update_reputation_point_penalty())]
+		pub fn update_reputation_point_penalty(
+			origin: OriginFor<T>,
+			value: ReputationPenalty<BlockNumberFor<T>>,
+		) -> DispatchResultWithPostInfo {
+			// Ensure we are root when setting this
+			let _ = ensure_root(origin)?;
+			ReputationPointPenalty::<T>::put(value.clone());
+			Self::deposit_event(Event::ReputationPointPenaltyUpdated(value));
 			Ok(().into())
 		}
 	}
@@ -264,8 +296,10 @@ pub mod pallet {
 					|Reputation { online_credits, reputation_points }| {
 						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 							// Update reputation points
+							// TODO: refactor to make it not panic!
 							let ReputationPenalty { points, blocks } =
-								T::ReputationPointPenalty::get();
+								ReputationPointPenalty::<T>::get()
+									.expect("ReputationPointPenalty should never be none!");
 							let interval: u32 =
 								T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
 							let blocks: u32 = blocks.try_into().unwrap_or(0);

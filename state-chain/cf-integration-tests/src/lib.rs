@@ -1182,10 +1182,11 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use frame_support::traits::OnRuntimeUpgrade;
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Validator,
+			Reputation, Validator,
 		};
 		use std::collections::HashMap;
 
@@ -1329,6 +1330,9 @@ mod tests {
 						Validator::epoch_index(),
 						"We should still be in the first epoch"
 					);
+
+					// Perform a runtime upgrade to ensure a value is set for ReputationPointPenalty
+					Reputation::on_runtime_upgrade();
 
 					// Start an auction and wait for rotation
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);

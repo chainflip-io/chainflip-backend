@@ -132,6 +132,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
+		ReputationPallet::on_runtime_upgrade();
 		System::set_block_number(1);
 	});
 
