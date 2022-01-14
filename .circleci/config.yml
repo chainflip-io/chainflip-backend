@@ -68,6 +68,7 @@ commands:
         type: string
     steps:
       - run: |
+          set -x
           pr_response=$(curl --location --request GET "https://api.github.com/repos/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME/pulls?head=$CIRCLE_PROJECT_USERNAME:$CIRCLE_BRANCH&state=open" \
           -u $CIRCLE_USERNAME:$GHI_TOKEN)
 
