@@ -117,7 +117,6 @@ pub mod pallet {
 				cfe::CFESettingKeys::MaxStageDuration => settings.max_stage_duration = value,
 				cfe::CFESettingKeys::PendingSignDuration => settings.pending_sign_duration = value,
 			}
-			settings.max_stage_duration = value;
 			CFESettings::<T>::put(settings.clone());
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
