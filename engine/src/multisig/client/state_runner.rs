@@ -65,7 +65,10 @@ where
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
     ) -> Result<()> {
-        assert_eq!(self.ceremony_id, ceremony_id);
+        assert_eq!(
+            self.ceremony_id, ceremony_id,
+            "ceremony id set previously is incorrect"
+        );
 
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
