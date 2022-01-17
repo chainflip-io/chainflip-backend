@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::GetStorageVersion;
 
 pub(crate) mod v1 {
 	use super::*;

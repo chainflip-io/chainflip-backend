@@ -42,7 +42,7 @@ benchmarks! {
 	} : {
 		Emissions::<T>::on_runtime_upgrade();
 	} verify {
-		assert_eq!(MintInterval::<T>::get(), T::MintInterval::get());
+		assert_eq!(MintInterval::<T>::get(), 100u32.into());
 	}
 	// Benchmark for a runtime upgrade in which we do nothing
 	on_runtime_upgrade {

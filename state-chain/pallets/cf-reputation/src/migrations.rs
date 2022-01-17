@@ -16,6 +16,14 @@ pub(crate) mod v1 {
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn post_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
 		assert_eq!(P::on_chain_storage_version(), releases::V1);
+		assert_eq!(
+			ReputationPointPenalty::<T>::get(),
+			ReputationPenalty { points: 1, blocks: (10 as u32).into() }
+		);
+		log::info!(
+			target: "runtime::cf_reputation",
+			"migration: Reputation storage version v1 POST migration checks successful!"
+		);
 		Ok(())
 	}
 }
