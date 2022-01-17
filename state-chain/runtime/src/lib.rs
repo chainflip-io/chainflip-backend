@@ -379,10 +379,6 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
-parameter_types! {
-	pub const MintInterval: u32 = 10 * MINUTES;
-}
-
 impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type FlipBalance = FlipBalance;
@@ -390,7 +386,6 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
-	type MintInterval = MintInterval;
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;

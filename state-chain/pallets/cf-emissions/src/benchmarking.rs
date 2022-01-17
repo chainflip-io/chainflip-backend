@@ -33,14 +33,22 @@ benchmarks! {
 	update_mint_interval {
 	}: _(RawOrigin::Root, (50 as u32).into())
 	verify {
-		 let mint_interval = Pallet::<T>::mint_interval().unwrap();
+		 let mint_interval = Pallet::<T>::mint_interval();
 		 assert_eq!(mint_interval, (50 as u32).into());
 	}
-	on_runtime_upgrade {
+	// Benchmark for the runtime migration v1
+	on_runtime_upgrade_v1 {
+		releases::V0.put::<Pallet<T>>();
 	} : {
 		Emissions::<T>::on_runtime_upgrade();
 	} verify {
-		assert!(MintInterval::<T>::get().is_some());
+		assert_eq!(MintInterval::<T>::get(), T::MintInterval::get());
+	}
+	// Benchmark for a runtime upgrade in which we do nothing
+	on_runtime_upgrade {
+		releases::V1.put::<Pallet<T>>();
+	} : {
+		Emissions::<T>::on_runtime_upgrade();
 	}
 }
 

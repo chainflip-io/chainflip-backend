@@ -10,12 +10,21 @@ pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
+
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds MintInterval storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
 
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
@@ -71,10 +80,6 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
-		/// How frequently to mint.
-		#[pallet::constant]
-		type MintInterval: Get<Self::BlockNumber>;
-
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
@@ -95,6 +100,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -130,7 +136,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn mint_interval)]
 	/// Mint interval in blocks
-	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
@@ -158,11 +164,29 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			// Set the default value defined in the runtime when no value is provided.
-			if let None = MintInterval::<T>::get() {
-				MintInterval::<T>::put(T::MintInterval::get());
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>();
+				return T::WeightInfo::on_runtime_upgrade_v1()
 			}
 			T::WeightInfo::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
@@ -262,7 +286,7 @@ pub mod pallet {
 		fn build(&self) {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
-			MintInterval::<T>::put(T::MintInterval::get());
+			MintInterval::<T>::put(T::BlockNumber::from(100 as u32));
 		}
 	}
 }
@@ -270,13 +294,10 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Determines if we should mint at block number `block_number`.
 	fn should_mint_at(block_number: T::BlockNumber) -> bool {
-		if let Some(mint_interval) = MintInterval::<T>::get() {
-			let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-			let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
-			should_mint
-		} else {
-			false
-		}
+		let mint_interval = MintInterval::<T>::get();
+		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
+		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
+		should_mint
 	}
 
 	/// Checks if we should mint.
