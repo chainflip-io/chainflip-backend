@@ -129,7 +129,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn mint_interval)]
-	/// How frequently to mint
+	/// Mint interval in blocks
 	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 
 	#[pallet::event]
@@ -142,7 +142,7 @@ pub mod pallet {
 		ValidatorInflationEmissionsUpdated(BasisPoints),
 		/// Backup Validator inflation emission has been updated \[new\]
 		BackupValidatorInflationEmissionsUpdated(BasisPoints),
-		/// MintInterval has been updated.
+		/// MintInterval has been updated [block_number]
 		MintIntervalUpdated(BlockNumberFor<T>),
 	}
 
