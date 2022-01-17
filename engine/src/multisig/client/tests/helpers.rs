@@ -743,7 +743,7 @@ impl KeygenContext {
             self.account_ids,
             &comm1s,
             &mut self.custom_data.keygen.comm1,
-            &mut self.should_timeout_keygen,
+            &self.should_timeout_keygen,
             ceremony_id,
             1
         );
@@ -943,7 +943,7 @@ impl KeygenContext {
                 self.account_ids,
                 responses6,
                 &mut self.custom_data.keygen.secret_shares_blaming,
-                &mut self.should_timeout_keygen,
+                self.should_timeout_keygen,
                 ceremony_id,
                 6
             );

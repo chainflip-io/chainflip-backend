@@ -6,6 +6,7 @@ use pallet_cf_vaults::CeremonyId;
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
+    logging::CEREMONY_ID_KEY,
     multisig::client::common::{ProcessMessageResult, StageResult},
 };
 use state_chain_runtime::AccountId;
@@ -17,7 +18,6 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult>
 where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
-    pub ceremony_id: CeremonyId,
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
     pub result_sender: MultisigOutcomeSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
@@ -29,6 +29,7 @@ where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
     logger: slog::Logger,
+    ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
@@ -45,12 +46,13 @@ where
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(logger: &slog::Logger) -> Self {
+    pub fn new_unauthorised(logger: &slog::Logger, ceremony_id: CeremonyId) -> Self {
         StateRunner {
             inner: None,
+            ceremony_id,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
-            logger: logger.clone(),
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
 
@@ -63,6 +65,11 @@ where
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
     ) -> Result<()> {
+        assert_eq!(
+            self.ceremony_id, ceremony_id,
+            "ceremony id set previously is incorrect"
+        );
+
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
         }
@@ -70,7 +77,6 @@ where
         stage.init();
 
         self.inner = Some(StateAuthorised {
-            ceremony_id,
             stage: Some(stage),
             idx_mapping,
             result_sender,
