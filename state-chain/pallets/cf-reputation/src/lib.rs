@@ -7,6 +7,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds MintInterval storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -16,6 +24,7 @@ use sp_runtime::traits::Zero;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -26,6 +35,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	/// The credits one earns being online, equivalent to a blocktime online
@@ -55,10 +65,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// The number of reputation points we lose for every x blocks offline
-		#[pallet::constant]
-		type ReputationPointPenalty: Get<ReputationPenalty<Self::BlockNumber>>;
-
 		/// The floor and ceiling values for a reputation score
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
@@ -82,11 +88,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			// Set the default value defined in the runtime when no value is provided.
-			if let None = ReputationPointPenalty::<T>::get() {
-				ReputationPointPenalty::<T>::put(T::ReputationPointPenalty::get());
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>();
 			}
-			T::WeightInfo::on_runtime_upgrade()
+			0
 		}
 	}
 
@@ -107,7 +113,7 @@ pub mod pallet {
 	#[pallet::getter(fn reputation_points_penalty)]
 	/// The number of reputation points we lose for every x blocks offline
 	pub(super) type ReputationPointPenalty<T: Config> =
-		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, OptionQuery>;
+		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -205,7 +211,7 @@ pub mod pallet {
 				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
-			ReputationPointPenalty::<T>::put(T::ReputationPointPenalty::get());
+			ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
 		}
 	}
 
@@ -299,8 +305,7 @@ pub mod pallet {
 							// Update reputation points
 							// TODO: refactor to make it not panic!
 							let ReputationPenalty { points, blocks } =
-								ReputationPointPenalty::<T>::get()
-									.expect("ReputationPointPenalty should never be none!");
+								ReputationPointPenalty::<T>::get();
 							let interval: u32 =
 								T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
 							let blocks: u32 = blocks.try_into().unwrap_or(0);

@@ -10,17 +10,12 @@ pub(crate) mod v1 {
 	}
 
 	pub fn migrate<T: Config>() {
-		MintInterval::<T>::put(T::BlockNumber::from(100 as u32));
+		ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
 	}
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn post_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
 		assert_eq!(P::on_chain_storage_version(), releases::V1);
-		assert_eq!(T::BlockNumber::from(100 as u32), MintInterval::<T>::get());
-		log::info!(
-			target: "runtime::cf_emissions",
-			"migration: Emissions storage version v1 POST migration checks successful!"
-		);
 		Ok(())
 	}
 }

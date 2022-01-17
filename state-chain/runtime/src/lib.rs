@@ -50,7 +50,6 @@ pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
-use pallet_cf_reputation::ReputationPenalty;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -416,14 +415,12 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = 150;
-	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OfflinePenalty;
