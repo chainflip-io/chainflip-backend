@@ -11,9 +11,9 @@ use crate::Pallet as Reputation;
 
 benchmarks! {
 	update_accrual_ratio {
-	} : _(RawOrigin::Root, 2, (151 as u32).into())
+	} : _(RawOrigin::Root, 2, 151u32.into())
 	verify {
-		assert_eq!(Pallet::<T>::accrual_ratio(), (2, (151 as u32).into()).into())
+		assert_eq!(Pallet::<T>::accrual_ratio(), (2, 151u32.into()).into())
 	}
 }
 

@@ -9,7 +9,7 @@ use crate::Pallet;
 
 benchmarks! {
 	set_slashing_rate {
-		let balance: T::Balance = T::Balance::from(100 as u32);
+		let balance: T::Balance = T::Balance::from(100u32);
 		let call = Call::<T>::set_slashing_rate(balance);
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }

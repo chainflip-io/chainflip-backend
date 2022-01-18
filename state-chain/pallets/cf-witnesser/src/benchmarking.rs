@@ -16,7 +16,7 @@ benchmarks! {
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
 		let epoch = T::EpochInfo::epoch_index();
-		ValidatorIndex::<T>::insert(&epoch, caller.clone(), 0 as u16);
+		ValidatorIndex::<T>::insert(&epoch, caller.clone(), 0u16);
 		NumValidators::<T>::set(1);
 		// TODO: currently we don't measure the actual execution path
 		// we need to set the threshold to 1 to do this.

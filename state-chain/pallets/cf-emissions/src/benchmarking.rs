@@ -15,7 +15,7 @@ use crate::Pallet as Emissions;
 benchmarks! {
 	// Benchmark for the backup validator extrinsic
 	update_backup_validator_emission_inflation {
-	}: _(RawOrigin::Root, (100 as u32).into())
+	}: _(RawOrigin::Root, 100u32.into())
 	verify {
 		assert_eq!(ValidatorEmissionInflation::<T>::get(), 1000);
 	}
@@ -25,12 +25,11 @@ benchmarks! {
 		assert_eq!(BackupValidatorEmissionInflation::<T>::get(), 100);
 	}
 	no_rewards_minted {
-
 	} : {
-		Emissions::<T>::on_initialize((5 as u32).into());
+		Emissions::<T>::on_initialize(5u32.into());
 	}
 	verify {
-		assert_eq!(LastMintBlock::<T>::get(), (5 as u32).into());
+		assert_eq!(LastMintBlock::<T>::get(), 5u32.into());
 	}
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {

@@ -47,20 +47,20 @@ benchmarks! {
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
 	on_initialize {
 		// TODO: mock the time to end in the expire proposals case which is more expensive
-		let b in 1 .. 100 as u32;
+		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
 			Governance::<T>::push_proposal(call);
 		}
 	}: {
-		Governance::<T>::on_initialize((2 as u32).into());
+		Governance::<T>::on_initialize(2u32.into());
 	}
 	on_initialize_best_case {
 	}: {
-		Governance::<T>::on_initialize((2 as u32).into());
+		Governance::<T>::on_initialize(2u32.into());
 	}
 	expire_proposals {
-		let b in 1 .. 100 as u32;
+		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
 			Governance::<T>::push_proposal(call);

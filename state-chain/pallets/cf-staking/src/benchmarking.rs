@@ -20,7 +20,7 @@ use crate::Pallet;
 benchmarks! {
 
 	staked {
-		let balance: T::Balance = T::Balance::from(100 as u32);
+		let balance: T::Balance = T::Balance::from(100u32);
 		let eth_addr: EthereumAddress = [42u8; 20];
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
@@ -34,8 +34,8 @@ benchmarks! {
 	}
 
 	claim {
-		let balance_to_claim: T::Balance = T::Balance::from(50 as u32);
-		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
+		let balance_to_claim: T::Balance = T::Balance::from(50u32);
+		let balance_to_stake: T::Balance = T::Balance::from(100u32);
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let eth_addr: EthereumAddress = [42u8; 20];
 
@@ -55,8 +55,8 @@ benchmarks! {
 		let eth_addr: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let balance_to_claim: T::Balance = T::Balance::from(50 as u32);
-		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
+		let balance_to_claim: T::Balance = T::Balance::from(50u32);
+		let balance_to_stake: T::Balance = T::Balance::from(100u32);
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -72,8 +72,8 @@ benchmarks! {
 	}
 
 	claimed {
-		let balance_to_claim: T::Balance = T::Balance::from(100 as u32);
-		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
+		let balance_to_claim: T::Balance = T::Balance::from(100u32);
+		let balance_to_stake: T::Balance = T::Balance::from(100u32);
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let eth_addr: EthereumAddress = [42u8; 20];
 
@@ -102,7 +102,7 @@ benchmarks! {
 		};
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let eth_addr: EthereumAddress = [42u8; 20];
-		let balance_to_stake: T::Balance = T::Balance::from(100 as u32);
+		let balance_to_stake: T::Balance = T::Balance::from(100u32);
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -141,7 +141,7 @@ benchmarks! {
 
 	on_initialize_best_case {
 	}: {
-		Pallet::<T>::on_initialize((2 as u32).into());
+		Pallet::<T>::on_initialize((2u32).into());
 	}
 	verify {
 		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);

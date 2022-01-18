@@ -20,7 +20,7 @@ benchmarks! {
 	} : _(RawOrigin::Signed(caller))
 	verify {
 		let node = Nodes::<T>::get(&validator_id);
-		let current_block: T::BlockNumber = (1 as u32).into();
+		let current_block: T::BlockNumber = 1u32.into();
 		assert_eq!(node.last_heartbeat, current_block);
 	}
 	submit_network_state {
