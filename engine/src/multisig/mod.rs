@@ -90,13 +90,16 @@ where
         // Stream outputs () approximately every ten seconds
         let mut cleanup_stream = common::make_periodic_stream(Duration::from_secs(10));
 
+        use rand_legacy::FromEntropy;
+        let mut rng = crypto::Rng::from_entropy();
+
         loop {
             tokio::select! {
                 Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
                     client.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg);
+                    client.process_multisig_instruction(msg, &mut rng);
                 }
                 Some(()) = cleanup_stream.next() => {
                     client.cleanup();

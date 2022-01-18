@@ -75,7 +75,7 @@ async fn should_delay_comm1_before_rts() {
     c1.receive_signing_stage_data(1, &sign_states, &ctx.get_account_id(2));
 
     // Now get the request to sign
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // It should advance to stage 2 right away if the comm1's were delayed correctly
     assert_ok!(c1.ensure_at_signing_stage(2));
@@ -157,7 +157,7 @@ async fn should_ignore_duplicate_rts() {
     assert_ok!(c1.ensure_at_signing_stage(2));
 
     // Send another request to sign with the same ceremony_id and key_id
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert_ok!(c1.ensure_at_signing_stage(2));
@@ -175,7 +175,7 @@ async fn should_delay_rts_until_key_is_ready() {
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // send the request to sign
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // The request should have been delayed, so the stage is unaffected
     assert_ok!(c1.ensure_at_signing_stage(0));
@@ -214,7 +214,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     signer_ids[1] = unknown_signer_id;
 
     // Send the rts with the modified signer_ids
-    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids, &mut ctx.rng);
 
     // The rts should not have started a ceremony
     assert_ok!(c1.ensure_at_signing_stage(0));
@@ -239,7 +239,7 @@ async fn should_ignore_rts_if_not_participating() {
     assert!(!SIGNER_IDS.contains(&c1.get_my_account_id()));
 
     // Send the request to sign
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // The rts should not have started a ceremony
     assert_ok!(c1.ensure_at_signing_stage(0));
@@ -262,7 +262,7 @@ async fn should_ignore_rts_with_incorrect_amount_of_signers() {
     // Send the request to sign with not enough signers
     let mut signer_ids = SIGNER_IDS.clone();
     let _ = signer_ids.pop();
-    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids, &mut ctx.rng);
 
     // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(c1.ensure_at_signing_stage(0));
@@ -279,7 +279,7 @@ async fn pending_rts_should_expire() {
     assert_ok!(c1.ensure_at_signing_stage(0));
 
     // Send the rts with the key id currently unknown to the client
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // Timeout all the requests
     c1.force_stage_timeout();
@@ -394,7 +394,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     // Send the request to sign with a duplicate ID in the signers
     let mut signer_ids = SIGNER_IDS.clone();
     signer_ids[1] = signer_ids[2].clone();
-    c1.send_request_to_sign_default(ctx.key_id(), signer_ids);
+    c1.send_request_to_sign_default(ctx.key_id(), signer_ids, &mut ctx.rng);
 
     // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(c1.ensure_at_signing_stage(0));
@@ -413,7 +413,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     c1.receive_signing_stage_data(4, &sign_states, &ctx.get_account_id(2));
 
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
-    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone());
+    c1.send_request_to_sign_default(ctx.key_id(), SIGNER_IDS.clone(), &mut ctx.rng);
 
     // The rts should have been ignored
     assert_ok!(c1.ensure_at_signing_stage(0));

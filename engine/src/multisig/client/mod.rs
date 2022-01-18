@@ -257,12 +257,16 @@ where
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
-        use rand_legacy::FromEntropy;
-
+    pub fn process_multisig_instruction(
+        &mut self,
+        instruction: MultisigInstruction,
+        rng: &mut Rng,
+    ) {
         match instruction {
             MultisigInstruction::Keygen(keygen_info) => {
                 // For now disable generating a new key when we already have one
+
+                use rand_legacy::{Rng as _, SeedableRng};
 
                 slog::debug!(
                     self.logger,
@@ -270,7 +274,7 @@ where
                     format_iterator(&keygen_info.signers);
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
-                let rng = Rng::from_entropy();
+                let rng = Rng::from_seed(rng.gen());
 
                 self.ceremony_manager
                     .on_keygen_request(rng, keygen_info, self.keygen_options);
@@ -286,7 +290,8 @@ where
                 );
                 match self.key_store.get_key(key_id) {
                     Some(keygen_result_info) => {
-                        let rng = Rng::from_entropy();
+                        use rand_legacy::{Rng as _, SeedableRng};
+                        let rng = Rng::from_seed(rng.gen());
 
                         self.ceremony_manager.on_request_to_sign(
                             rng,

@@ -24,8 +24,26 @@ async fn happy_path_results_in_valid_key() {
     // No blaming stage
     assert!(keygen_states.blame_responses6.is_none());
 
+    let pubkey = keygen_states.key_ready.unwrap().pubkey;
+
+    // Should always generate the same key (given the same rng seed)
+    assert_eq!(
+        hex::encode(pubkey.serialize()),
+        "02da23ee9b5837d1a834e658a43bb0047794a57b1df3a777abee4939becab9d903"
+    );
+
     // Able to generate a valid signature
-    assert_ok!(ctx.sign().await.sign_finished.outcome.result);
+    let signature = assert_ok!(ctx.sign().await.sign_finished.outcome.result);
+
+    // Should always generate the same signature (given the same rng seed)
+    assert_eq!(
+        hex::encode(signature.s),
+        "5437008e73079744cbac3bb231ccabd87b654a63ea38f219056ce115a78cb4ee"
+    );
+    assert_eq!(
+        hex::encode(signature.r.serialize()),
+        "0394f12c8706482c54363295ef88fe5910bfc73a0423b0deb048f4181d6defdf53"
+    );
 }
 
 /// If keygen state expires before a formal request to keygen
@@ -66,7 +84,10 @@ async fn should_delay_comm1_before_keygen_request() {
 
     assert_ok!(c1.ensure_at_keygen_stage(0));
 
-    c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
+    c1.process_multisig_instruction(
+        MultisigInstruction::Keygen(KEYGEN_INFO.clone()),
+        &mut ctx.rng,
+    );
 
     assert_ok!(c1.ensure_at_keygen_stage(1));
 
@@ -205,7 +226,7 @@ async fn should_ignore_keygen_request_if_not_participating() {
 
     // Send the keygen request
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info), &mut ctx.rng);
 
     // The request should have been ignored and the not started a ceremony
     assert_ok!(c1.ensure_at_keygen_stage(0));
@@ -228,7 +249,7 @@ async fn should_ignore_duplicate_keygen_request() {
 
     // Send another keygen request with the same ceremony_id but different signers
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info), &mut ctx.rng);
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert_ok!(c1.ensure_at_keygen_stage(2));
@@ -404,7 +425,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
 
     // Send the keygen request with the modified signers list
     let keygen_info = KeygenInfo::new(KEYGEN_INFO.ceremony_id, keygen_ids);
-    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info));
+    c1.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info), &mut ctx.rng);
 
     // Check that the keygen request was ignored
     assert_ok!(c1.ensure_at_keygen_stage(0));
@@ -423,7 +444,10 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
         .clone();
 
     // Send another keygen request with the same ceremony_id
-    c1.process_multisig_instruction(MultisigInstruction::Keygen(KEYGEN_INFO.clone()));
+    c1.process_multisig_instruction(
+        MultisigInstruction::Keygen(KEYGEN_INFO.clone()),
+        &mut ctx.rng,
+    );
 
     // Check that the keygen request was ignored
     assert_ok!(c1.ensure_at_keygen_stage(0));

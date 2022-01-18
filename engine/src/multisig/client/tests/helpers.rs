@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::TryInto,
     fmt::Debug,
     pin::Pin,
@@ -277,32 +277,32 @@ impl ValidKeygenStates {
 
 /// Clients received a request to sign and generated (but haven't broadcast) Comm1
 pub struct SigningPhase1Data {
-    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: BTreeMap<AccountId, MultisigClientNoDB>,
     pub comm1s: HashMap<AccountId, frost::Comm1>,
 }
 
 /// Clients generated (but haven't broadcast) VerifyComm2
 pub struct SigningPhase2Data {
-    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: BTreeMap<AccountId, MultisigClientNoDB>,
     pub ver2s: HashMap<AccountId, frost::VerifyComm2>,
 }
 
 /// Clients generated (but haven't broadcast) LocalSig3
 pub struct SigningPhase3Data {
-    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: BTreeMap<AccountId, MultisigClientNoDB>,
     pub local_sigs: HashMap<AccountId, frost::LocalSig3>,
 }
 
 /// Clients generated (but haven't broadcast) VerifyLocalSig4
 pub struct SigningPhase4Data {
-    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: BTreeMap<AccountId, MultisigClientNoDB>,
     pub ver4s: HashMap<AccountId, frost::VerifyLocalSig4>,
 }
 
 /// The outcome of the ceremony and the Clients at the state
 /// when the outcome was generated,
 pub struct SigningFinishedData {
-    pub clients: HashMap<AccountId, MultisigClientNoDB>,
+    pub clients: BTreeMap<AccountId, MultisigClientNoDB>,
     pub outcome: SigningOutcome,
 }
 
@@ -772,7 +772,10 @@ impl KeygenContext {
         };
 
         for (_id, c) in clients.iter_mut() {
-            c.process_multisig_instruction(MultisigInstruction::Keygen(keygen_info.clone()));
+            c.process_multisig_instruction(
+                MultisigInstruction::Keygen(keygen_info.clone()),
+                &mut self.rng,
+            );
         }
 
         let comm1s = recv_keygen_broadcast!(p2p_rxs, KeygenData::Comm1);
@@ -1138,7 +1141,10 @@ impl KeygenContext {
         );
 
         // Only select clients will participate
-        let mut clients: HashMap<_, _> = self
+        // NOTE: it is important that we use BTreeMap
+        // as we want consistent order of clients for
+        // tests to be reproducible
+        let mut clients: BTreeMap<_, _> = self
             .clients
             .clone()
             .into_iter()
@@ -1167,7 +1173,10 @@ impl KeygenContext {
 
         // NOTE: only parties 0, 1 and 2 will participate in signing (SIGNER_IDXS)
         for c in clients.values_mut() {
-            c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
+            c.process_multisig_instruction(
+                MultisigInstruction::Sign(sign_info.clone()),
+                &mut self.rng,
+            );
 
             // TODO: If the key does not exist, we won't progress to the next stage, so
             // we should only test this if we know that the key is present
@@ -1553,9 +1562,14 @@ pub fn get_stage_for_signing_ceremony(c: &MultisigClientNoDB) -> Option<String> 
 
 impl MultisigClientNoDB {
     /// runs the MultisigInstruction::Sign with the default id, message hash
-    pub fn send_request_to_sign_default(&mut self, key_id: KeyId, signers: Vec<AccountId>) {
+    pub fn send_request_to_sign_default(
+        &mut self,
+        key_id: KeyId,
+        signers: Vec<AccountId>,
+        mut rng: &mut Rng,
+    ) {
         let sign_info = SigningInfo::new(SIGN_CEREMONY_ID, key_id, MESSAGE_HASH.clone(), signers);
-        self.process_multisig_instruction(MultisigInstruction::Sign(sign_info));
+        self.process_multisig_instruction(MultisigInstruction::Sign(sign_info), &mut rng);
     }
 
     /// Check is the client is at the specified signing BroadcastStage (0-4).
