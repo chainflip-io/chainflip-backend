@@ -17,11 +17,11 @@ pub use keygen_frost::HashContext;
 
 pub use keygen_stages::AwaitCommitments1;
 
-use crate::multisig_p2p::AccountId;
+use state_chain_runtime::AccountId;
 
-dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResult>);
+dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResultInfo>);
 
-use super::common::{CeremonyStage, KeygenResult};
+use super::common::{CeremonyStage, KeygenResultInfo};
 
 /// Information necessary for the multisig client to start a new keygen ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]

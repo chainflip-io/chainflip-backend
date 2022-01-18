@@ -31,6 +31,8 @@ hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
+chrono = "0.4.19"
+
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
 jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
@@ -135,3 +137,5 @@ mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
+csv = "1.1.6"
+tempdir = "0.3.7"

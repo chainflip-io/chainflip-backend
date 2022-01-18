@@ -133,7 +133,7 @@ impl ThresholdSigner<MockRuntime, Ethereum> for MockThresholdSigner {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: u64 = 10;
+	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {

@@ -170,8 +170,8 @@ pub mod pallet {
 
 	/// A counter to generate fresh ceremony ids.
 	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
+	#[pallet::getter(fn signing_ceremony_id_counter)]
+	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Stores the context required for processing live requests.
 	#[pallet::storage]
@@ -437,7 +437,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores its context, and returns its id.
 	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
-		let id = CeremonyIdCounter::<T, I>::mutate(|id| {
+		let id = SigningCeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});

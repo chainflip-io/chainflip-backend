@@ -238,9 +238,9 @@ impl AggKey {
 
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&nonce));
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(nonce));
 		let e = {
-			let challenge = self.message_challenge(&msg_hash, &k_times_g_addr);
+			let challenge = self.message_challenge(msg_hash, &k_times_g_addr);
 			let mut s = Scalar::default();
 			let mut bytes = [0u8; 32];
 			bytes.copy_from_slice(&challenge);

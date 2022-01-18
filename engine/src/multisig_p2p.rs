@@ -15,9 +15,9 @@ use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub use multisig_p2p_transport::P2PRpcClient;
+use state_chain_runtime::AccountId;
 
 use codec::Encode;
-use serde::{Deserialize, Serialize};
 
 use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
@@ -25,31 +25,26 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{self, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error},
+    common::{
+        self, format_iterator, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error,
+    },
     logging::COMPONENT_KEY,
     multisig::MultisigMessage,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-// TODO REMOVE
-#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct AccountId(pub [u8; 32]);
-impl std::fmt::Display for AccountId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
-    }
-}
-impl std::fmt::Debug for AccountId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
     Registered(u16, Ipv6Addr),
     Unregistered,
+}
+
+// TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
+#[derive(Debug)]
+pub enum OutgoingMultisigStageMessages {
+    Broadcast(Vec<AccountId>, MultisigMessage),
+    Private(Vec<(AccountId, MultisigMessage)>),
 }
 
 /*
@@ -59,10 +54,10 @@ has been updated, which is possible at the moment.
 TODO: Batch outgoing messages
 */
 
-async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     cfe_peer_id: &PeerId,
     cfe_peer_keypair: &libp2p::identity::ed25519::Keypair,
-    state_chain_client: &Arc<StateChainClient<RPCClient>>,
+    state_chain_client: &Arc<StateChainClient<RpcClient>>,
     account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
@@ -78,7 +73,7 @@ async fn update_registered_peer_id<RPCClient: 'static + StateChainRpcApi + Sync 
 
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
-            != account_to_peer.get(&AccountId(*state_chain_client.our_account_id.as_ref()))
+            != account_to_peer.get(&state_chain_client.our_account_id)
         {
             state_chain_client
                 .submit_signed_extrinsic(
@@ -111,12 +106,12 @@ fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<P
     ))
 }
 
-pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
+pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     settings: &settings::Settings,
-    state_chain_client: Arc<StateChainClient<RPCClient>>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
     latest_block_hash: H256,
     incoming_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
-    mut outgoing_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
+    mut outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     mut account_mapping_change_receiver: UnboundedReceiver<(
         AccountId,
         sp_core::ed25519::Public,
@@ -139,7 +134,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer = state_chain_client
-        .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
+        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
@@ -150,7 +145,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         .into_iter()
         .map(|(account_id, public_key, port, ip_address)| {
             Ok((
-                AccountId(*account_id.as_ref()),
+                account_id,
                 (
                     public_key_to_peer_id(&public_key)?,
                     port,
@@ -167,7 +162,7 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
 
     slog::info!(
         logger,
-        "Loaded account peer mapping from chain: {:#?}",
+        "Loaded account peer mapping from chain: {:?}",
         account_to_peer
     );
 
@@ -205,17 +200,8 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await
         .map_err(rpc_error_into_anyhow_error)
-        .with_context(|| {
-            format!(
-                "Failed to add peers to reserved set: {:#?}",
-                account_to_peer
-            )
-        })?;
-    slog::info!(
-        logger,
-        "Added peers to reserved set: {:#?}",
-        account_to_peer
-    );
+        .with_context(|| format!("Failed to add peers to reserved set: {:?}", account_to_peer))?;
+    slog::info!(logger, "Added peers to reserved set: {:?}", account_to_peer);
 
     let mut incoming_p2p_message_stream = client
         .subscribe_messages()
@@ -243,17 +229,39 @@ pub async fn start<RPCClient: 'static + StateChainRpcApi + Sync + Send>(
                     Err(error) => slog::error!(logger, "Failed to receive P2P message: {}", error)
                 }
             }
-            Some((account_id, message)) = outgoing_p2p_message_receiver.recv() => {
-                match async {
-                    account_to_peer.get(&account_id).ok_or_else(|| anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id)))
-                }.and_then(|(peer_id, _, _)| {
-                    client.send_message(
-                        vec![peer_id.into()],
-                        bincode::serialize(&message).unwrap()
-                    ).map_err(rpc_error_into_anyhow_error)
-                }).await {
-                    Ok(_) => slog::info!(logger, "Sent P2P message to: {}", account_id),
-                    Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", account_id, error)
+            Some(messages) = outgoing_p2p_message_receiver.recv() => {
+                async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
+                    client: &P2PRpcClient,
+                    account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+                    account_ids: AccountIds,
+                    message: MultisigMessage,
+                    logger: &slog::Logger
+                ) {
+                    match async {
+                        account_ids.clone().into_iter().map(|account_id| match account_to_peer.get(&account_id) {
+                            Some((peer_id, _, _)) => Ok(peer_id.into()),
+                            None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
+                        }).collect::<Result<Vec<_>, _>>()
+                    }.and_then(|peer_ids| {
+                        client.send_message(
+                            peer_ids,
+                            bincode::serialize(&message).unwrap()
+                        ).map_err(rpc_error_into_anyhow_error)
+                    }).await {
+                        Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
+                        Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error)
+                    }
+                }
+
+                match messages {
+                    OutgoingMultisigStageMessages::Broadcast(account_ids, message) => {
+                        send_messages(&client, &account_to_peer, account_ids.iter(), message, &logger).await;
+                    },
+                    OutgoingMultisigStageMessages::Private(messages) => {
+                        for (account_id, message) in messages {
+                            send_messages(&client, &account_to_peer, std::iter::once(&account_id), message, &logger).await;
+                        }
+                    }
                 }
             }
             Some((account_id, peer_public_key, account_peer_mapping_change)) = account_mapping_change_receiver.recv() => {

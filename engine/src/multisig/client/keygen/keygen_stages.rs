@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::logging::KEYGEN_REJECTED_INCOMPATIBLE;
-use crate::multisig::client;
+use crate::multisig::client::{self, KeygenResultInfo};
+use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use client::{
     common::{
@@ -64,7 +65,7 @@ impl AwaitCommitments1 {
 
 derive_display_as_type_name!(AwaitCommitments1);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1 {
     type Message = Comm1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -77,8 +78,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
 
     fn process(
         self,
-        messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+        messages: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         // We have received commitments from everyone, for now just need to
         // go through another round to verify consistent broadcasts
 
@@ -100,7 +101,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for AwaitCommitments1 {
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: CeremonyCommon,
-    commitments: HashMap<usize, Comm1>,
+    commitments: HashMap<usize, Option<Comm1>>,
     shares_to_send: OutgoingShares,
     keygen_options: KeygenOptions,
     context: HashContext,
@@ -119,7 +120,7 @@ fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
     x < half_order
 }
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroadcast2 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -134,9 +135,9 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyCommitmentsBroa
 
     fn process(
         self,
-        messages: std::collections::HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
-        let commitments = match verify_broadcasts(&messages) {
+        messages: std::collections::HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
+        let commitments = match verify_broadcasts(messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(
@@ -210,7 +211,7 @@ struct SecretSharesStage3 {
 
 derive_display_as_type_name!(SecretSharesStage3);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage3 {
     type Message = SecretShare3;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -226,24 +227,39 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
 
     fn process(
         self,
-        incoming_shares: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+        incoming_shares: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         // As the messages for this stage are sent in secret, it is possible
-        // for a malicious party to send us invalid data without us being able to prove
-        // that. Because of that, we can't simply terminate our protocol here.
+        // for a malicious party to send us invalid data (or not send anything
+        // at all) without us being able to prove that. Because of that, we
+        // can't simply terminate our protocol here.
 
-        let bad_parties: Vec<_> = incoming_shares
-            .iter()
-            .filter_map(|(sender_idx, share)| {
-                if verify_share(share, &self.commitments[sender_idx], self.common.own_idx) {
-                    None
+        let mut bad_parties = vec![];
+        let verified_shares: HashMap<usize, Self::Message> = incoming_shares
+            .into_iter()
+            .filter_map(|(sender_idx, share_opt)| {
+                if let Some(share) = share_opt {
+                    if verify_share(&share, &self.commitments[&sender_idx], self.common.own_idx) {
+                        Some((sender_idx, share))
+                    } else {
+                        slog::warn!(
+                            self.common.logger,
+                            "Received invalid secret share from party: {}",
+                            sender_idx
+                        );
+
+                        bad_parties.push(sender_idx);
+                        None
+                    }
                 } else {
                     slog::warn!(
                         self.common.logger,
-                        "Received invalid secret share from party: {}",
+                        "Received no secret share from party: {}",
                         sender_idx
                     );
-                    Some(*sender_idx)
+
+                    bad_parties.push(sender_idx);
+                    None
                 }
             })
             .collect();
@@ -251,7 +267,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for SecretSharesStage3 {
         let processor = ComplaintsStage4 {
             common: self.common.clone(),
             commitments: self.commitments,
-            shares: IncomingShares(incoming_shares),
+            shares: IncomingShares(verified_shares),
             outgoing_shares: self.shares,
             complaints: bad_parties,
         };
@@ -277,7 +293,7 @@ struct ComplaintsStage4 {
 
 derive_display_as_type_name!(ComplaintsStage4);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 {
     type Message = Complaints4;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -290,8 +306,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
 
     fn process(
         self,
-        messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+        messages: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
@@ -309,7 +325,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for ComplaintsStage4 {
 #[derive(Clone)]
 struct VerifyComplaintsBroadcastStage5 {
     common: CeremonyCommon,
-    received_complaints: HashMap<usize, Complaints4>,
+    received_complaints: HashMap<usize, Option<Complaints4>>,
     commitments: HashMap<usize, DKGCommitment>,
     shares: IncomingShares,
     outgoing_shares: OutgoingShares,
@@ -317,7 +333,7 @@ struct VerifyComplaintsBroadcastStage5 {
 
 derive_display_as_type_name!(VerifyComplaintsBroadcastStage5);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroadcastStage5 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsBroadcastStage5 {
     type Message = VerifyComplaints5;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -332,9 +348,9 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
 
     fn process(
         self,
-        messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
-        let verified_complaints = match verify_broadcasts(&messages) {
+        messages: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
+        let verified_complaints = match verify_broadcasts(messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(
@@ -346,10 +362,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
 
         if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
             // if all complaints are empty, we can finalize the ceremony
-            let keygen_result =
-                compute_keygen_result(self.common.all_idxs.len(), self.shares, &self.commitments);
+            let keygen_result_info =
+                compute_keygen_result_info(self.common, self.shares, &self.commitments);
 
-            return StageResult::Done(keygen_result);
+            return StageResult::Done(keygen_result_info);
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -370,8 +386,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                 if has_duplicates {
                     slog::warn!(
                         self.common.logger,
-                        "Complaint had duplicates: {:?}",
-                        blamed_idxs
+                        "Complaint had duplicates: {}",
+                        format_iterator(blamed_idxs)
                     );
                 }
 
@@ -381,8 +397,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
                     } else {
                         slog::warn!(
                             self.common.logger,
-                            "Invalid index in complaint: {:?}",
-                            idx_blamed
+                            "Invalid index in complaint: {}",
+                            format_iterator(blamed_idxs)
                         );
                         false
                     }
@@ -414,11 +430,13 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyComplaintsBroad
     }
 }
 
-fn compute_keygen_result(
-    share_count: usize,
+fn compute_keygen_result_info(
+    common: CeremonyCommon,
     secret_shares: IncomingShares,
     commitments: &HashMap<usize, DKGCommitment>,
-) -> KeygenResult {
+) -> KeygenResultInfo {
+    let share_count = common.all_idxs.len();
+
     let key_share = secret_shares
         .0
         .values()
@@ -435,12 +453,16 @@ fn compute_keygen_result(
 
     let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
 
-    KeygenResult {
-        key_share: KeyShare {
-            y: agg_pubkey,
-            x_i: key_share,
-        },
-        party_public_keys,
+    KeygenResultInfo {
+        params: ThresholdParameters::from_share_count(party_public_keys.len()),
+        key: Arc::new(KeygenResult {
+            key_share: KeyShare {
+                y: agg_pubkey,
+                x_i: key_share,
+            },
+            party_public_keys,
+        }),
+        validator_map: common.validator_mapping.clone(),
     }
 }
 
@@ -455,7 +477,7 @@ struct BlameResponsesStage6 {
 
 derive_display_as_type_name!(BlameResponsesStage6);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for BlameResponsesStage6 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesStage6 {
     type Message = BlameResponse6;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -502,10 +524,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for BlameResponsesStage6 
 
     fn process(
         self,
-        blame_responses: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
-        // verify broadcasts of blame responses
-
+        blame_responses: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
             blame_responses,
@@ -523,14 +543,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for BlameResponsesStage6 
 struct VerifyBlameResponsesBroadcastStage7 {
     common: CeremonyCommon,
     // Blame responses received from other parties in the previous communication round
-    blame_responses: HashMap<usize, BlameResponse6>,
+    blame_responses: HashMap<usize, Option<BlameResponse6>>,
     shares: IncomingShares,
     commitments: HashMap<usize, DKGCommitment>,
 }
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesBroadcastStage7 {
+impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -545,14 +565,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
 
     fn process(
         mut self,
-        messages: HashMap<usize, Self::Message>,
-    ) -> StageResult<KeygenData, KeygenResult> {
+        messages: HashMap<usize, Option<Self::Message>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
         slog::debug!(
             self.common.logger,
             "Processing verifications for blame responses"
         );
 
-        let verified_responses = match verify_broadcasts(&messages) {
+        let verified_responses = match verify_broadcasts(messages) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(
@@ -571,9 +591,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
                 if verify_share(&share, commitment, dest_idx) {
                     // if the share is meant for us, save it
                     if dest_idx == self.common.own_idx {
-                        // Sanity check: we shouldn't have complained about this share
-                        // if it was valid to begin with:
-                        debug_assert!(share.value != self.shares.0[&sender_idx].value);
                         self.shares.0.insert(sender_idx, share);
                     }
                 } else {
@@ -590,10 +607,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResult> for VerifyBlameResponsesB
         }
 
         if bad_parties.is_empty() {
-            let keygen_result =
-                compute_keygen_result(self.common.all_idxs.len(), self.shares, &self.commitments);
+            let keygen_result_info =
+                compute_keygen_result_info(self.common, self.shares, &self.commitments);
 
-            StageResult::Done(keygen_result)
+            StageResult::Done(keygen_result_info)
         } else {
             StageResult::Error(
                 bad_parties,

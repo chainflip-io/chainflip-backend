@@ -164,7 +164,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
 				migrations::v1::post_migrate::<T, Self>()
 			} else {
 				Ok(())
@@ -297,7 +297,7 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(
 				&account_id,
-				(account_id.clone(), peer_id.clone(), port, ip_address.clone()),
+				(account_id.clone(), peer_id, port, ip_address),
 			);
 
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
@@ -322,7 +322,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id: T::ValidatorId = account_id.into();
+			let validator_id: T::ValidatorId = account_id;
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(

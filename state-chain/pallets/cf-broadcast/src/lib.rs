@@ -176,6 +176,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransmissionTimeout: Get<BlockNumberFor<Self>>;
 
+		/// Maximum number of attempts
+		#[pallet::constant]
+		type MaximumAttempts: Get<AttemptCount>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -241,6 +245,8 @@ pub mod pallet {
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
+		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
+		BroadcastAborted(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -536,12 +542,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
+	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
 	fn schedule_retry(failed: FailedBroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append(&failed);
-		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-			failed.broadcast_id,
-			failed.attempt_count,
-		));
+		if failed.attempt_count < T::MaximumAttempts::get() {
+			BroadcastRetryQueue::<T, I>::append(&failed);
+			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
+				failed.broadcast_id,
+				failed.attempt_count,
+			));
+		} else {
+			Self::deposit_event(Event::<T, I>::BroadcastAborted(failed.broadcast_id));
+		}
 	}
 
 	/// Retry a failed attempt by starting anew with incremented attempt_count.
