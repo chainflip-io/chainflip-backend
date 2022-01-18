@@ -27,16 +27,14 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{EnsureOrigin, Get, HandleLifetime, IsType, UnixTime},
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::{OriginFor, Weight};
 pub use pallet::*;
 use sp_std::prelude::*;
 
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedSub, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
-
-use frame_support::pallet_prelude::Weight;
 
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
@@ -65,6 +63,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
+
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		type Balance: Parameter
 			+ Member
@@ -128,6 +129,9 @@ pub mod pallet {
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
@@ -160,6 +164,9 @@ pub mod pallet {
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
+
+		/// The minimum stake required has been updated. \[new_amount\]
+		MinimumStakeUpdated(T::Balance),
 	}
 
 	#[pallet::error]
@@ -195,6 +202,12 @@ pub mod pallet {
 		/// A withdrawal address is provided, but the account has a different withdrawal address
 		/// already associated.
 		WithdrawalAddressRestricted,
+
+		/// An invalid claim has been made
+		InvalidClaim,
+
+		/// Below the minimum stake
+		BelowMinimumStake,
 	}
 
 	#[pallet::call]
@@ -419,23 +432,46 @@ pub mod pallet {
 			Self::activate(&who)?;
 			Ok(().into())
 		}
+
+		/// Updates the minimum stake required for an account, the extrinsic is gated with
+		/// governance
+		///
+		/// ## Events
+		///
+		/// - [MinimumStakeUpdated](Event::MinimumStakeUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(10_000)]
+		pub fn update_minimum_stake(
+			origin: OriginFor<T>,
+			minimum_stake: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			MinimumStake::<T>::put(minimum_stake);
+			Self::deposit_event(Event::MinimumStakeUpdated(minimum_stake));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
+		pub minimum_stake: T::Balance,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![] }
+			Self { genesis_stakers: vec![], minimum_stake: Zero::zero() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			MinimumStake::<T>::set(self.minimum_stake);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 			}
@@ -521,6 +557,9 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		address: EthereumAddress,
 	) -> Result<(), DispatchError> {
+		// Ensure we are claiming something
+		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
+
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::NoClaimsDuringAuctionPhase);
 
@@ -535,6 +574,18 @@ impl<T: Config> Pallet<T> {
 				return Err(Error::<T>::WithdrawalAddressRestricted.into())
 			}
 		}
+
+		// Calculate the maximum that would remain after this claim and ensure it won't be less than
+		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
+		// this will need to be handled in a refactor of that trait(?)
+		let remaining = T::Flip::stakeable_balance(&account_id)
+			.checked_sub(&amount)
+			.ok_or(Error::<T>::InvalidClaim)?;
+
+		ensure!(
+			remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
+			DispatchError::from(Error::<T>::BelowMinimumStake)
+		);
 
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by
 		// the amount claimed.

@@ -116,7 +116,7 @@ fn claiming_unclaimable_is_err() {
 		// Claim FLIP before it is staked.
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::InvalidClaim
 		);
 
 		// Make sure account balance hasn't been touched.
@@ -125,10 +125,17 @@ fn claiming_unclaimable_is_err() {
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
+		// Try to, and fail, claim an amount that would leave the balance below the minimum stake
+		let excessive_claim = STAKE - MIN_STAKE + 1;
+		assert_noop!(
+			Staking::claim(Origin::signed(ALICE), excessive_claim, ETH_DUMMY_ADDR),
+			Error::<Test>::BelowMinimumStake
+		);
+
 		// Claim FLIP from another account.
 		assert_noop!(
 			Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::InvalidClaim
 		);
 
 		// Make sure storage hasn't been touched.
