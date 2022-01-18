@@ -277,7 +277,7 @@ pub mod pallet {
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&T::KeyProvider::current_key(),
 					&context.chain_signing_context.get_payload(),
-					&signature,
+					signature,
 				) {
 					ValidTransaction::with_tag_prefix("ThresholdSignature")
 						// We only expect one success per ceremony.
@@ -492,8 +492,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn schedule_retry(id: CeremonyId, retry_delay: BlockNumberFor<T>) {
 		RetryQueues::<T, I>::append(
-			frame_system::Pallet::<T>::current_block_number()
-				.saturating_add(BlockNumberFor::<T>::from(retry_delay)),
+			frame_system::Pallet::<T>::current_block_number().saturating_add(retry_delay),
 			id,
 		);
 	}

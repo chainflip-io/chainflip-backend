@@ -472,7 +472,7 @@ impl<T: Config> Pallet<T> {
 			withdrawal_address,
 			amount,
 		));
-		Err(Error::<T>::WithdrawalAddressRestricted)?
+		Err(Error::<T>::WithdrawalAddressRestricted)
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
@@ -514,7 +514,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		let new_total = T::Flip::credit_stake(&account_id, amount);
+		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
 		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
@@ -577,13 +577,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if *retired {
-						Err(Error::AlreadyRetired)?;
+						return Err(Error::AlreadyRetired)
 					}
 					*retired = true;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				},
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -597,13 +597,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if !*retired {
-						Err(Error::AlreadyActive)?;
+						return Err(Error::AlreadyActive)
 					}
 					*retired = false;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				},
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -655,11 +655,11 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
 
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, claim_amount);
+				T::Flip::revert_claim(account_id, claim_amount);
 			}
 		}
 
-		return T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
+		T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
 	}
 }
 
