@@ -497,12 +497,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 }
 
 /// Api trait for pallets that need to sign things.
-pub trait ThresholdSigner<T, C>
+pub trait ThresholdSigner<T>
 where
 	T: Chainflip,
-	C: Chain,
 {
-	type Context: SigningContext<T, Chain = C>;
+	type Context: SigningContext<T>;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(context: Self::Context) -> u64;

@@ -165,7 +165,7 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
 }
 
-impl pallet_cf_vaults::Config<Instance1> for Runtime {
+impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Chain = Ethereum;
 	type RotationHandler = ChainflipVaultRotationHandler;
@@ -450,7 +450,7 @@ parameter_types! {
 	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
-impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
+impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
@@ -467,7 +467,7 @@ parameter_types! {
 	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
-impl pallet_cf_broadcast::Config<Instance1> for Runtime {
+impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
@@ -490,6 +490,7 @@ pub mod chain_instances {
 
 	pub type EthereumInstance = Instance1;
 }
+use chain_instances::*;
 
 construct_runtime!(
 	pub enum Runtime where

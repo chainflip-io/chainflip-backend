@@ -487,6 +487,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 #[cfg(test)]
 mod tests {
 
+    use cf_chains::eth::AggKey;
     use frame_system::AccountInfo;
     use mockall::predicate::eq;
     use pallet_cf_vaults::Vault;
@@ -572,9 +573,8 @@ mod tests {
 
         // get the current vault
         let vault_key = StorageKey(
-            pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+            pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime, _>::hashed_key_for(
                 &0,
-                &ChainId::Ethereum,
             ),
         );
 
@@ -583,9 +583,9 @@ mod tests {
             .with(eq(Some(latest_block_hash)), eq(vault_key))
             .times(1)
             .returning(move |_, _| {
-                Ok(vec![storage_change_set_from(
+                Ok(vec![storage_change_set_from::<Vault<Ethereum>>(
                     Vault {
-                        public_key: vec![0; 33],
+                        public_key: AggKey::from_pubkey_compressed([0; 33]),
                         active_window: BlockHeightWindow { from: 0, to: None },
                     },
                     latest_block_hash,

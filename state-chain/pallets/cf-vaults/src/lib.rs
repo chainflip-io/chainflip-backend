@@ -1,4 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(assert_matches)]
+#![feature(array_map)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -255,7 +257,7 @@ pub mod pallet {
 		type SigningContext: From<SetAggKeyWithAggKey> + SigningContext<Self, Chain = Self::Chain>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Self::Chain, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -269,10 +271,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			let mut weight = 0;
+			let mut weight = T::DbWeight::get().reads(1);
+
+			if !KeygenResolutionPendingSince::<T, I>::exists() {
+				return weight
+			}
 
 			// Check if we need to finalize keygen
-
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				response_status,
@@ -331,7 +336,7 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonce)]
 	pub(super) type ChainNonce<T, I = ()> = StorageValue<_, Nonce, ValueQuery>;
 
-	///
+	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =

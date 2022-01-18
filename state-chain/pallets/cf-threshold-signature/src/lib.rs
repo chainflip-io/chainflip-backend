@@ -519,7 +519,7 @@ where
 	}
 }
 
-impl<T, I: 'static> cf_traits::ThresholdSigner<T, T::TargetChain> for Pallet<T, I>
+impl<T, I: 'static> cf_traits::ThresholdSigner<T> for Pallet<T, I>
 where
 	T: Config<I>,
 {

@@ -30,7 +30,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
+		VaultsPallet: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -124,7 +124,7 @@ impl SigningContext<MockRuntime> for MockEthSigningContext {
 
 pub struct MockThresholdSigner;
 
-impl ThresholdSigner<MockRuntime, Ethereum> for MockThresholdSigner {
+impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
 	type Context = MockEthSigningContext;
 
 	fn request_signature(_context: Self::Context) -> u64 {
@@ -136,7 +136,7 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
-impl pallet_cf_vaults::Config for MockRuntime {
+impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 	type Event = Event;
 	type Chain = Ethereum;
 	type RotationHandler = MockRotationHandler;

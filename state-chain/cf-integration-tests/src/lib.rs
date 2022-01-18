@@ -15,7 +15,6 @@ mod tests {
 		Timestamp, Validator,
 	};
 
-	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
@@ -130,14 +129,14 @@ mod tests {
 			}
 
 			// The public key proposed
-			pub fn proposed_public_key(&mut self) -> Vec<u8> {
+			pub fn proposed_public_key(&mut self) -> AggKey {
 				let (_, public) =
 					Self::generate_keypair(self.proposed_seed.expect("No key has been proposed"));
-				public.serialize_compressed().to_vec()
+				AggKey::from_pubkey_compressed(public.serialize_compressed())
 			}
 
 			// Propose a new public key
-			pub fn propose_new_public_key(&mut self) -> Vec<u8> {
+			pub fn propose_new_public_key(&mut self) -> AggKey {
 				self.proposed_seed = Some(self.key_seed + 1);
 				self.proposed_public_key()
 			}
@@ -236,16 +235,15 @@ mod tests {
 										// If we rotating let's witness the keys being rotated on the contract
 										EngineState::Rotation => {
 											let ethereum_block_number: u64 = 100;
-											let tx_hash = vec![1u8; 32];
+											let tx_hash = [1u8; 32];
 
 											let public_key = (&*self.signer).borrow_mut().proposed_public_key();
 
-											state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
+											state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
 												Origin::signed(self.node_id.clone()),
-												ChainId::Ethereum,
 												public_key,
 												ethereum_block_number,
-												tx_hash,
+												tx_hash.into(),
 											).expect("should be able to vault key rotation for node");
 										},
 										_ => {}
@@ -254,7 +252,7 @@ mod tests {
 							Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
 								self.engine_state = EngineState::Rotation;
 							},
-							Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+							Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted) => {
 								self.engine_state = EngineState::None;
 							},
 						);
@@ -265,7 +263,7 @@ mod tests {
 						events,
 						Event::EthereumVault(
 							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _, validators)) => {
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
 								if validators.contains(&self.node_id) {
 									// Propose a new key
 									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
@@ -273,7 +271,6 @@ mod tests {
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
-										ChainId::Ethereum,
 										KeygenOutcome::Success(public_key),
 									).expect(&format!(
 										"should be able to report keygen outcome from node: {}",
@@ -615,8 +612,8 @@ mod tests {
 			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
-			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_vaults::GenesisConfig {
+			GenesisBuild::<Runtime, _>::assimilate_storage(
+				&state_chain_runtime::EthereumVaultConfig {
 					vault_key: ethereum_vault_key,
 					deployment_block: 0,
 				},
@@ -750,7 +747,7 @@ mod tests {
 				);
 
 				assert_eq!(
-					EthereumVault::chain_nonce(ChainId::Ethereum),
+					EthereumVault::chain_nonce(),
 					0,
 					"nonce not incremented"
 				);

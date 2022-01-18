@@ -88,7 +88,7 @@ pub mod pallet {
 		type SigningContext: From<UpdateFlipSupply> + SigningContext<Self, Chain = Ethereum>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Ethereum, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
