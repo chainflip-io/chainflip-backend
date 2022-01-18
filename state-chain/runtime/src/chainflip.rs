@@ -1,7 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
-	Validator, Vaults, Witnesser,
+	Validator, Witnesser,
 };
 use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
@@ -9,7 +9,7 @@ use cf_chains::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
 		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
 	},
-	Chain, ChainCrypto, Ethereum,
+	ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
@@ -28,7 +28,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, marker::PhantomData, prelude::*};
 
 mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;
