@@ -5,9 +5,9 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
-	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, VaultsConfig, WASM_BINARY,
+	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -487,9 +487,9 @@ fn testnet_genesis(
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
 		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
-		vaults: VaultsConfig {
+		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),
-			deployment_block: ethereum_deployment_block
+			deployment_block: ethereum_deployment_block,
 		},
 		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,

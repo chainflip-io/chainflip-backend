@@ -10,9 +10,9 @@ mod tests {
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, Flip, Governance,
-		Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System, Timestamp,
-		Validator, Vaults,
+		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
+		Flip, Governance, Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System,
+		Timestamp, Validator,
 	};
 
 	use cf_chains::ChainId;
@@ -251,10 +251,10 @@ mod tests {
 										_ => {}
 									}
 							},
-							Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
+							Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
 								self.engine_state = EngineState::Rotation;
 							},
-							Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+							Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
 								self.engine_state = EngineState::None;
 							},
 						);
@@ -263,14 +263,14 @@ mod tests {
 					// Being staked we would be required to respond to keygen requests
 					on_events!(
 						events,
-						Event::Vaults(
+						Event::EthereumVault(
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _, validators)) => {
 								if validators.contains(&self.node_id) {
 									// Propose a new key
 									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
 
-									state_chain_runtime::Vaults::report_keygen_outcome(
+									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
 										ChainId::Ethereum,
@@ -442,7 +442,7 @@ mod tests {
 					Emissions::on_initialize(System::block_number());
 					Governance::on_initialize(System::block_number());
 					Reputation::on_initialize(System::block_number());
-					Vaults::on_initialize(System::block_number());
+					EthereumVault::on_initialize(System::block_number());
 					Validator::on_initialize(System::block_number());
 
 					// Notify contract events
@@ -743,9 +743,17 @@ mod tests {
 					"no rewards"
 				);
 
-				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
+				assert_eq!(
+					EthereumVault::keygen_ceremony_id_counter(),
+					0,
+					"no key generation requests"
+				);
 
-				assert_eq!(Vaults::chain_nonce(ChainId::Ethereum), 0, "nonce not incremented");
+				assert_eq!(
+					EthereumVault::chain_nonce(ChainId::Ethereum),
+					0,
+					"nonce not incremented"
+				);
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),

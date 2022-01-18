@@ -506,7 +506,7 @@ where
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(context: Self::Context) -> u64;
-	
+
 	/// Initiate a transaction signing request and return the request id.
 	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
 		Self::request_signature(transaction.into())

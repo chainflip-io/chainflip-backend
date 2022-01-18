@@ -5,7 +5,9 @@ use std::convert::TryInto;
 
 use super::*;
 
-use frame_benchmarking::{account, impl_benchmark_test_suite, whitelisted_caller, benchmarks_instance_pallet};
+use frame_benchmarking::{
+	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
+};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 

@@ -5,8 +5,8 @@ mod chainflip;
 pub mod constants;
 #[cfg(test)]
 mod tests;
-use core::time::Duration;
 use cf_chains::Ethereum;
+use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
@@ -128,7 +128,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinValidators = MinValidators;
-	type Handler = Vaults;
+	type Handler = EthereumVault;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type Online = Online;
 	type PeerMapping = pallet_cf_validator::Pallet<Self>;
@@ -360,7 +360,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type StakerId = AccountId;
 	type Flip = Flip;
-	type NonceProvider = Vaults;
+	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
@@ -391,7 +391,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type MintInterval = MintInterval;
-	type NonceProvider = Vaults;
+	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -455,7 +455,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type KeyProvider = Vaults;
+	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -479,6 +479,16 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type TransmissionTimeout = EthereumTransmissionTimeout;
 	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+}
+
+/// Instance aliases for per-chain instantiable pallets in the chainflip runtime.
+///
+/// Note these are a convenience to ensure we use the correct instances in definitions that use the
+/// generated pallet components. They don't work inside the `construct_runtime!` macro itself.
+pub mod chain_instances {
+	use frame_support::instances::*;
+
+	pub type EthereumInstance = Instance1;
 }
 
 construct_runtime!(
@@ -506,7 +516,7 @@ construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
+		EthereumVault: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},

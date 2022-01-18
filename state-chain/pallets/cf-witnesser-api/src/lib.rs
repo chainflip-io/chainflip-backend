@@ -11,7 +11,7 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{Ethereum, ChainCrypto};
+	use cf_chains::{ChainCrypto, Ethereum};
 	use cf_traits::Witnesser;
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
@@ -189,8 +189,11 @@ pub mod pallet {
 			tx_hash: <Ethereum as ChainCrypto>::TransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call =
-				VaultsCall::<T, Instance1>::vault_key_rotated(new_public_key, block_number, tx_hash);
+			let call = VaultsCall::<T, Instance1>::vault_key_rotated(
+				new_public_key,
+				block_number,
+				tx_hash,
+			);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

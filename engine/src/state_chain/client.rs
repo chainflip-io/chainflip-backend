@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use cf_chains::ChainId;
+use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -624,19 +624,21 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
-    pub async fn get_vault(
+    pub async fn get_vault<C, I: 'static>(
         &self,
         block_hash: state_chain_runtime::Hash,
         epoch_index: EpochIndex,
-        chain_id: ChainId,
-    ) -> Result<Vault> {
+    ) -> Result<Vault<C>>
+    where
+        C: Chain + ChainCrypto + Debug + Clone + 'static,
+        state_chain_runtime::Runtime: pallet_cf_vaults::Config<I, Chain = C>,
+    {
         let vaults = self
-            .get_from_storage_with_key::<Vault>(
+            .get_from_storage_with_key::<Vault<C>>(
                 block_hash,
                 StorageKey(
-                    pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
+                    pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime, I>::hashed_key_for(
                         &epoch_index,
-                        &chain_id,
                     ),
                 ),
             )

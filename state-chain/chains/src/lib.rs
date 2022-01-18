@@ -3,7 +3,10 @@
 
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
-use sp_std::{convert::{TryFrom, Into}, prelude::*};
+use sp_std::{
+	convert::{Into, TryFrom},
+	prelude::*,
+};
 
 pub mod eth;
 

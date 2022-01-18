@@ -88,7 +88,11 @@ pub mod pallet {
 		type SigningContext: From<RegisterClaim> + SigningContext<Self>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, cf_chains::Ethereum, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<
+			Self,
+			cf_chains::Ethereum,
+			Context = Self::SigningContext,
+		>;
 
 		/// Ensure that only threshold signature consensus can post a signature.
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;

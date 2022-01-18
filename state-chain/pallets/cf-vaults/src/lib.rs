@@ -5,8 +5,8 @@
 use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainCrypto, Ethereum};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, EpochIndex, Nonce, NonceProvider, SigningContext, ThresholdSigner,
-	VaultRotationHandler, VaultRotator, KeyProvider, CurrentEpochIndex,
+	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider, SigningContext,
+	ThresholdSigner, VaultRotationHandler, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -272,7 +272,7 @@ pub mod pallet {
 			let mut weight = 0;
 
 			// Check if we need to finalize keygen
-			
+
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				response_status,
@@ -296,7 +296,10 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
 								keygen_ceremony_id,
 							));
-							Self::on_keygen_failure(keygen_ceremony_id, response_status.remaining_candidates.clone());
+							Self::on_keygen_failure(
+								keygen_ceremony_id,
+								response_status.remaining_candidates.clone(),
+							);
 						}
 					},
 				}
@@ -328,7 +331,7 @@ pub mod pallet {
 	#[pallet::getter(fn chain_nonce)]
 	pub(super) type ChainNonce<T, I = ()> = StorageValue<_, Nonce, ValueQuery>;
 
-	/// 
+	///
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
@@ -416,7 +419,7 @@ pub mod pallet {
 			// There is a rotation happening.
 			let mut rotation =
 				PendingVaultRotations::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
-				
+
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -538,10 +541,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				vault_key: Default::default(),
-				deployment_block: Default::default(),
-			}
+			Self { vault_key: Default::default(), deployment_block: Default::default() }
 		}
 	}
 
@@ -557,10 +557,7 @@ pub mod pallet {
 				CurrentEpochIndex::<T>::get(),
 				Vault {
 					public_key,
-					active_window: BlockHeightWindow {
-						from: self.deployment_block,
-						to: None,
-					},
+					active_window: BlockHeightWindow { from: self.deployment_block, to: None },
 				},
 			);
 		}
@@ -600,9 +597,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
 		// block
-		KeygenResolutionPendingSince::<T, I>::put(
-			frame_system::Pallet::<T>::current_block_number(),
-		);
+		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
 
@@ -637,7 +632,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					0
 				});
 		}
-		
+
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 		KeygenResolutionPendingSince::<T, I>::kill();
 		// TODO: Instead of deleting the storage entirely, we should probably reset to some initial
@@ -686,7 +681,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 			.expect("We can't exist without a vault")
 			.public_key
 	}
-} 
+}
 
 /// Takes three arguments: a pattern, a variable expression and an error literal.
 ///

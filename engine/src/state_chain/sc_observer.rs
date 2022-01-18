@@ -1,11 +1,11 @@
-use cf_chains::ChainId;
+use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{chain_instances::EthereumInstance, AccountId};
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -88,12 +88,11 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
         let eth_vault = state_chain_client
-            .get_vault(
+            .get_vault::<Ethereum, EthereumInstance>(
                 block_hash,
                 account_data
                     .last_active_epoch
                     .expect("we are active or outgoing"),
-                ChainId::Ethereum,
             )
             .await?;
         sm_window_sender
@@ -176,10 +175,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                         ))
                                         .unwrap();
                                 }
-                                state_chain_runtime::Event::Vaults(
+                                state_chain_runtime::Event::EthereumVault(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
-                                        chain_id,
                                         validator_candidates,
                                     ),
                                 ) => {
@@ -208,9 +206,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
-                                                        chain_id,
                                                         pallet_cf_vaults::KeygenOutcome::Success(
-                                                            pubkey.serialize().to_vec(),
+                                                            cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
                                                         ),
                                                     ))
                                                     .await;
@@ -225,7 +222,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
-                                                        chain_id,
                                                         pallet_cf_vaults::KeygenOutcome::Failure(
                                                             BTreeSet::from_iter(bad_account_ids),
                                                         ),
