@@ -573,9 +573,7 @@ mod tests {
 
         // get the current vault
         let vault_key = StorageKey(
-            pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime, _>::hashed_key_for(
-                &0,
-            ),
+            pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime, _>::hashed_key_for(&0),
         );
 
         mock_state_chain_rpc_client

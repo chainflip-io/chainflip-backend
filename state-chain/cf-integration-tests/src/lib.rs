@@ -746,11 +746,7 @@ mod tests {
 					"no key generation requests"
 				);
 
-				assert_eq!(
-					EthereumVault::chain_nonce(),
-					0,
-					"nonce not incremented"
-				);
+				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),

@@ -178,9 +178,9 @@ fn keygen_report_success() {
 		);
 
 		// A resolution is still pending but no consensus is reached.
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -190,9 +190,9 @@ fn keygen_report_success() {
 		));
 
 		// This time we should have enough votes for consensus.
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_matches!(
 			PendingVaultRotations::<MockRuntime, _>::get().unwrap(),
@@ -259,9 +259,9 @@ fn keygen_report_failure() {
 		);
 
 		// A resolution is still pending but no consensus is reached.
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -271,9 +271,9 @@ fn keygen_report_failure() {
 		));
 
 		// This time we should have enough votes for consensus.
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
 	})
@@ -294,13 +294,13 @@ fn test_grace_period() {
 		));
 
 		// > 25 blocks later we should resolve an error.
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(1);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(25);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(26);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(1);
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(25);
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(26);
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// All non-responding candidates should have been reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![BOB, CHARLIE]);

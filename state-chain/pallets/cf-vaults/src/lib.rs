@@ -245,7 +245,9 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The chain that managed by this vault.
-		type Chain: Chain + ChainCrypto;
+		/// TODO: Remove the constraint on AggKey, currently required for compatibility with the
+		/// `ThresholdSigner`.
+		type Chain: Chain + ChainCrypto<AggKey = cf_chains::eth::AggKey>;
 
 		/// Rotation handler.
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
@@ -581,8 +583,11 @@ impl<T: Config<I>, I: 'static> NonceProvider<Ethereum> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn no_active_chain_vault_rotations() -> bool {
-		// Returns true if the iterator is empty or if all rotations are complete.
-		!PendingVaultRotations::<T, I>::exists()
+		if let Some(status) = PendingVaultRotations::<T, I>::get() {
+			matches!(status, VaultRotationStatus::<T, I>::Complete { .. })
+		} else {
+			true
+		}
 	}
 
 	fn start_vault_rotation_for_chain(candidates: Vec<T::ValidatorId>) -> DispatchResult {
@@ -613,10 +618,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 		KeygenResolutionPendingSince::<T, I>::kill();
 
-		// T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
-		// 	<Self as NonceProvider<Ethereum>>::next_nonce(),
-		// 	new_public_key,
-		// ));
+		T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
+			<Self as NonceProvider<Ethereum>>::next_nonce(),
+			new_public_key,
+		));
 		PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
