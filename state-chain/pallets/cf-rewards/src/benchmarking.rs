@@ -28,7 +28,7 @@ benchmarks! {
 		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, apportioned_rewards);
 	}: _(RawOrigin::Signed(caller.clone().into()))
 	verify {
-		let actual_rewards = ApportionedRewards::<T>::get(&VALIDATOR_REWARDS, caller).expect("ApportionedRewards are none!");
+		let actual_rewards = ApportionedRewards::<T>::get(&VALIDATOR_REWARDS, caller).expect("ApportionedRewards is none during benchmark verification!");
 		assert_eq!(T::Balance::from(2500u32), actual_rewards);
 	}
 }
