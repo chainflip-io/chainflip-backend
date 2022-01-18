@@ -82,6 +82,8 @@ impl CeremonyManager {
                 if state.is_authorized() {
                     self.process_signing_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
+
                     self.signing_states.remove(&ceremony_id);
                 }
             }
@@ -102,6 +104,7 @@ impl CeremonyManager {
                 if state.is_authorized() {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(&ceremony_id);
                 }
             }
@@ -163,7 +166,8 @@ impl CeremonyManager {
                     #SIGNING_CEREMONY_FAILED,
                     "Signing ceremony failed: {}",
                     reason; "blamed parties" =>
-                    format_iterator(&blamed_parties)
+                    format_iterator(&blamed_parties),
+                    CEREMONY_ID_KEY => ceremony_id,
                 );
 
                 self.outcome_sender
@@ -196,7 +200,8 @@ impl CeremonyManager {
                     #KEYGEN_CEREMONY_FAILED,
                     "Keygen ceremony failed: {}",
                     reason; "blamed parties" =>
-                    format_iterator(&blamed_parties)
+                    format_iterator(&blamed_parties),
+                    CEREMONY_ID_KEY => ceremony_id,
                 );
 
                 self.outcome_sender
@@ -250,7 +255,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger, ceremony_id));
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, signers);
@@ -334,7 +339,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -398,7 +403,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -428,7 +433,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger, ceremony_id));
 
         state
             .process_message(sender_id, data)
