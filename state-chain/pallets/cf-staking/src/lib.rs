@@ -27,7 +27,7 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{EnsureOrigin, Get, HandleLifetime, IsType, UnixTime},
 };
-use frame_system::pallet_prelude::{OriginFor, Weight};
+use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
@@ -36,6 +36,7 @@ use sp_runtime::{
 	DispatchError,
 };
 
+use frame_support::pallet_prelude::Weight;
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
