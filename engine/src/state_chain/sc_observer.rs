@@ -438,7 +438,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                     {
                         send_windows_to_witness_processes(
                             state_chain_client.clone(),
-                            latest_block_hash,
+                            block_hash,
                             account_data,
                             &sm_window_sender,
                             &km_window_sender,
