@@ -425,13 +425,13 @@ jobs:
           apt-get install -y gettext
           wget https://github.com/cli/cli/releases/download/v2.4.0/gh_2.4.0_linux_amd64.tar.gz
           tar -xvf gh_2.4.0_linux_amd64.tar.gz
-          audit=$(cargo-audit audit --json)
+          audit=$(cargo audit --json)
           advisory=$(echo $audit | jq '.vulnerabilities.list[].advisory | {id,package,title,description,date,url}')
           warnings=$(echo $audit | jq '.warnings | keys[] as $k| .[$k] | .[] | {kind,package}')
           date=$(date)
           cat .circleci/templates/audit-log.md | envsubst > /tmp/audit-log.md
           ./gh_2.4.0_linux_amd64/bin/gh issue edit 1175 --body-file /tmp/audit-log.md
-          
+
 
 
   git-clone-contracts-repo:
