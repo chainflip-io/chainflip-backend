@@ -11,5 +11,5 @@ $advisory
 ### Warnings
 
 ```json
-$warning
+$warnings
 ```
