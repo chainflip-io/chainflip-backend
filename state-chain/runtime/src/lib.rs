@@ -700,7 +700,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_emissions, Emissions);
 			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
 			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
-			list_benchmark!(list, extra, pallet_cf_vaults, Vaults);
+			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
@@ -739,7 +739,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_staking, Staking);
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
-			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
+			add_benchmark!(params, batches, pallet_cf_vaults, EthereumVault);
 			add_benchmark!(params, batches, pallet_cf_online, Online);
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);

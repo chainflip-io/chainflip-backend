@@ -30,7 +30,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
+		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -136,7 +136,7 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
-impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
+impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Chain = Ethereum;
 	type RotationHandler = MockRotationHandler;
@@ -146,6 +146,7 @@ impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
+
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;

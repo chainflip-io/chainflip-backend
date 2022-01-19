@@ -1,18 +1,15 @@
 //! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
 
-use std::convert::TryInto;
-
 use super::*;
 
+use cf_chains::eth::AggKey;
+use cf_traits::EpochInfo;
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
-
-#[allow(unused)]
-use crate::Pallet;
 
 // Note: Currently we only have one chain (ETH) - as soon we've
 // another chain we've to take this in account in our weight calculation benchmark.
@@ -68,7 +65,7 @@ benchmarks_instance_pallet! {
 
 		for i in 0..120 {
 			let validator_id = account("doogle", i, 0);
-			let _ = keygen_response_status.add_success_vote(&validator_id, NEW_PUBLIC_KEY.to_vec().into());
+			let _ = keygen_response_status.add_success_vote(&validator_id, AggKey::from_pubkey_compressed(NEW_PUBLIC_KEY));
 		}
 
 		PendingVaultRotations::<T, I>::put(
@@ -102,19 +99,20 @@ benchmarks_instance_pallet! {
 		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotations::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen { keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
 		);
-		let reported_outcome = KeygenOutcome::<T, I>::Success(Default::default());
+		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(AggKey::from_pubkey_compressed([0xbb; 33]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
 	verify {
 		assert!(KeygenResolutionPendingSince::<T, I>::exists());
 	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
+		let new_public_key = AggKey::from_pubkey_compressed([0xbb; 33]);
 		PendingVaultRotations::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingRotation {  new_public_key: NEW_PUBLIC_KEY.to_vec().into() },
+			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(NEW_PUBLIC_KEY.to_vec().into(), 5 as u64, Decode::decode(&TX_HASH[..]).unwrap());
+		let call = Call::<T, I>::vault_key_rotated(new_public_key, 5 as u64, Decode::decode(&mut &TX_HASH[..]).unwrap());
 		let origin = T::EnsureWitnessed::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
