@@ -422,6 +422,9 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
+          cargo install --force cargo-audit
+          cargo generate-lockfile
+      - run: |
           apt-get install -y gettext
           wget https://github.com/cli/cli/releases/download/v2.4.0/gh_2.4.0_linux_amd64.tar.gz
           tar -xvf gh_2.4.0_linux_amd64.tar.gz
