@@ -42,12 +42,13 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use crate::chainflip::{
+use cf_traits::ChainflipAccountData;
+pub use cf_traits::{BlockNumber, FlipBalance};
+pub use chainflip::chain_instances::*;
+use chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler, OfflinePenalty,
 };
-use cf_traits::ChainflipAccountData;
-pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
@@ -480,17 +481,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
-
-/// Instance aliases for per-chain instantiable pallets in the chainflip runtime.
-///
-/// Note these are a convenience to ensure we use the correct instances in definitions that use the
-/// generated pallet components. They don't work inside the `construct_runtime!` macro itself.
-pub mod chain_instances {
-	use frame_support::instances::*;
-
-	pub type EthereumInstance = Instance1;
-}
-use chain_instances::*;
 
 construct_runtime!(
 	pub enum Runtime where

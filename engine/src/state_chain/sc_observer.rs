@@ -5,7 +5,7 @@ use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
-use state_chain_runtime::{chain_instances::EthereumInstance, AccountId};
+use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -88,7 +88,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
         let eth_vault = state_chain_client
-            .get_vault::<Ethereum, EthereumInstance>(
+            .get_vault::<Ethereum>(
                 block_hash,
                 account_data
                     .last_active_epoch

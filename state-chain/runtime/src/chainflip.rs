@@ -1,4 +1,8 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+pub mod chain_instances;
+mod signer_nomination;
+pub use signer_nomination::RandomSignerNomination;
+
 use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
 	Validator, Witnesser,
@@ -29,9 +33,6 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, marker::PhantomData, prelude::*};
-
-mod signer_nomination;
-pub use signer_nomination::RandomSignerNomination;
 
 impl Chainflip for Runtime {
 	type Call = Call;

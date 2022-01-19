@@ -24,7 +24,7 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Index, SignedBlock};
+use state_chain_runtime::{AccountId, Index, PalletInstanceAlias, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
@@ -624,23 +624,23 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
-    pub async fn get_vault<C, I: 'static>(
+    pub async fn get_vault<C>(
         &self,
         block_hash: state_chain_runtime::Hash,
         epoch_index: EpochIndex,
     ) -> Result<Vault<C>>
     where
-        C: Chain + ChainCrypto + Debug + Clone + 'static,
-        state_chain_runtime::Runtime: pallet_cf_vaults::Config<I, Chain = C>,
+        C: Chain + ChainCrypto + Debug + Clone + 'static + PalletInstanceAlias,
+        state_chain_runtime::Runtime:
+            pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {
         let vaults = self
             .get_from_storage_with_key::<Vault<C>>(
                 block_hash,
-                StorageKey(
-                    pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime, I>::hashed_key_for(
-                        &epoch_index,
-                    ),
-                ),
+                StorageKey(pallet_cf_vaults::Vaults::<
+                    state_chain_runtime::Runtime,
+                    <C as PalletInstanceAlias>::Instance,
+                >::hashed_key_for(&epoch_index)),
             )
             .await?;
 
