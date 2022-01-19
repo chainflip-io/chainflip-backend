@@ -50,14 +50,16 @@ impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 	}
 }
 
-pub type KeygenOutcomeFor<T, I> = KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
-pub type AggKeyFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
-pub type TransactionHashFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
-pub type ThresholdSignatureFor<T, I> = <<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
+pub type KeygenOutcomeFor<T, I = ()> =
+	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
+pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
+pub type TransactionHashFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
+pub type ThresholdSignatureFor<T, I = ()> =
+	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
 /// Tracks the current state of the keygen ceremony.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenResponseStatus<T: Config<I>, I: 'static> {
+pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: u32,
 	/// The candidates that have yet to reply.
@@ -197,7 +199,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum VaultRotationStatus<T: Config<I>, I: 'static> {
+pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
