@@ -17,7 +17,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 	BuildStorage, Perbill,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::VecDeque};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -106,13 +106,19 @@ impl pallet_session::Config for Test {
 }
 
 pub struct MockAuctioneer;
-type AuctionBehaviour = Vec<AuctionPhase<ValidatorId, Amount>>;
 
 thread_local! {
 	pub static AUCTION_INDEX: RefCell<AuctionIndex> = RefCell::new(0);
 	pub static AUCTION_PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> = RefCell::new(AuctionPhase::default());
-	pub static AUCTION_BEHAVIOUR: RefCell<AuctionBehaviour> = RefCell::new(vec![]);
+	pub static AUCTION_BEHAVIOUR: RefCell<Result<AuctionBehaviour, AuctionError>> = RefCell::new(Ok(AuctionBehaviour::default()));
 	pub static AUCTION_RESULT: RefCell<AuctionResult<ValidatorId, Amount>> = RefCell::new(AuctionResult {minimum_active_bid: 0, winners: vec![] });
+}
+
+#[derive(Default, Clone)]
+pub struct AuctionBehaviour {
+	pub phases: VecDeque<AuctionPhase<ValidatorId, Amount>>,
+	pub winners: Vec<ValidatorId>,
+	pub minimum_active_bid: Amount,
 }
 
 pub enum AuctionScenario {
@@ -134,35 +140,38 @@ impl MockAuctioneer {
 		);
 
 		MockAuctioneer::set_phase(AuctionPhase::default());
-		MockAuctioneer::set_behaviour(MockAuctioneer::create_behaviour(
+		MockAuctioneer::set_behaviour(Ok(MockAuctioneer::create_behaviour(
 			MockBidderProvider::get_bidders(),
 			bond,
 			scenario,
-		));
+		)));
 	}
 
 	pub fn create_behaviour(
-		bidders: Vec<Bid<ValidatorId, Amount>>,
+		bids: Vec<Bid<ValidatorId, Amount>>,
 		bond: Amount,
 		scenario: AuctionScenario,
 	) -> AuctionBehaviour {
 		match scenario {
 			// Run through a happy path of all bidders being selected and confirmed
 			AuctionScenario::HappyPath => {
-				vec![
-					AuctionPhase::BidsTaken(bidders.clone()),
-					AuctionPhase::ValidatorsSelected(
-						bidders.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
-						bond,
-					),
-					AuctionPhase::ConfirmedValidators(
-						bidders.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
-						bond,
-					),
-				]
+				let bidders: Vec<_> =
+					bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
+				AuctionBehaviour {
+					phases: VecDeque::from(vec![
+						AuctionPhase::BidsTaken(bids.clone()),
+						AuctionPhase::ValidatorsSelected(bidders.clone(), bond),
+						AuctionPhase::ConfirmedValidators(bidders.clone(), bond),
+					]),
+					winners: bidders.clone(),
+					minimum_active_bid: bond,
+				}
 			},
-			// We stop after bids taken and subsequent calls will return an AuctionError
-			AuctionScenario::NoValidatorsSelected => vec![AuctionPhase::BidsTaken(bidders.clone())],
+			// We stop after bids taken and subsequent calls will return an AuctionError - TODO fix
+			AuctionScenario::NoValidatorsSelected => AuctionBehaviour {
+				phases: VecDeque::from(vec![AuctionPhase::BidsTaken(bids.clone())]),
+				..Default::default()
+			},
 		}
 	}
 
@@ -174,10 +183,9 @@ impl MockAuctioneer {
 		AUCTION_PHASE.with(|cell| *cell.borrow_mut() = phase);
 	}
 
-	pub fn set_behaviour(behaviour: AuctionBehaviour) {
+	pub fn set_behaviour(behaviour: Result<AuctionBehaviour, AuctionError>) {
 		AUCTION_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
-			(*cell.borrow_mut()).reverse();
 		});
 	}
 
@@ -220,9 +228,20 @@ impl Auctioneer for MockAuctioneer {
 
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
 		AUCTION_BEHAVIOUR.with(|cell| {
-			let next_phase = (*cell.borrow_mut()).pop().ok_or(AuctionError::Abort)?;
-			MockAuctioneer::set_phase(next_phase.clone());
-			Ok(next_phase)
+			let maybe_behaviour = &mut *cell.borrow_mut();
+			match maybe_behaviour {
+				Ok(behaviour) => {
+					let next_phase = behaviour.phases.pop_front().unwrap_or_default();
+					if next_phase == AuctionPhase::WaitingForBids {
+						MockAuctioneer::set_auction_result(AuctionResult {
+							winners: behaviour.winners.clone(),
+							minimum_active_bid: behaviour.minimum_active_bid,
+						})
+					}
+					Ok(next_phase)
+				},
+				Err(e) => Err(*e),
+			}
 		})
 	}
 
@@ -382,6 +401,7 @@ pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
 		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
+		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
 		Session::on_initialize(System::block_number());
 	}
 }
