@@ -10,12 +10,33 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use crate::Pallet;
 
 benchmarks! {
-	update_cfe_value {
-		let call = Call::<T>::update_cfe_value(cfe::CFESettingKeys::EthBlockSafetyMargin, 4);
+	update_eth_block_safety_margin {
+		let call = Call::<T>::update_eth_block_safety_margin(1);
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Pallet::<T>::cfe_settings().eth_block_safety_margin, 4);
+		assert_eq!(Pallet::<T>::cfe_settings().eth_block_safety_margin, 1);
+	}
+	update_max_retry_attempts {
+		let call = Call::<T>::update_max_retry_attempts(2);
+		let origin = T::EnsureGovernance::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(Pallet::<T>::cfe_settings().max_retry_attempts, 2);
+	}
+	update_max_stage_duration {
+		let call = Call::<T>::update_max_stage_duration(3);
+		let origin = T::EnsureGovernance::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(Pallet::<T>::cfe_settings().max_stage_duration, 3);
+	}
+	update_pending_sign_duration {
+		let call = Call::<T>::update_pending_sign_duration(4);
+		let origin = T::EnsureGovernance::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(Pallet::<T>::cfe_settings().pending_sign_duration, 4);
 	}
 }
 

@@ -26,6 +26,7 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
+// CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN: u32 = 4;
 const MAX_RETRY_ATTEMPTS: u32 = 500;
 const MAX_STAGE_DURATION: u32 = 300;
@@ -60,6 +61,7 @@ pub struct StateChainEnvironment {
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
+	// CFE config values starts here
 	eth_block_safety_margin: u32,
 	pending_sign_duration: u32,
 	max_stage_duration: u32,
@@ -98,22 +100,22 @@ pub fn get_environment() -> StateChainEnvironment {
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
 		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN))
 		.parse::<u32>()
-		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u64");
+		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
 	let max_retry_attempts = env::var("MAX_RETRY_ATTEMPTS")
 		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS))
 		.parse::<u32>()
-		.expect("MAX_RETRY_ATTEMPTS env var could not be parsed to u64");
+		.expect("MAX_RETRY_ATTEMPTS env var could not be parsed to u32");
 
 	let max_stage_duration = env::var("MAX_STAGE_DURATION")
 		.unwrap_or(format!("{}", MAX_STAGE_DURATION))
 		.parse::<u32>()
-		.expect("MAX_STAGE_DURATION env var could not be parsed to u64");
+		.expect("MAX_STAGE_DURATION env var could not be parsed to u32");
 
 	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
 		.unwrap_or(format!("{}", PENDING_SIGN_DURATION))
 		.parse::<u32>()
-		.expect("PENDING_SIGN_DURATION env var could not be parsed to u64");
+		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
 
 	StateChainEnvironment {
 		stake_manager_address,

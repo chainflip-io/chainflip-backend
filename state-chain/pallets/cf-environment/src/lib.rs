@@ -27,15 +27,6 @@ pub mod cfe {
 		/// Number of times to retry after incrementing the nonce on a nonce error
 		pub max_retry_attempts: u32,
 	}
-
-	/// Enum of available cfe setting keys
-	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-	pub enum CFESettingKeys {
-		EthBlockSafetyMargin,
-		PendingSignDuration,
-		MaxStageDuration,
-		MaxRetryAttempts,
-	}
 }
 
 pub use pallet::*;
@@ -78,7 +69,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
-	/// The address of the ETH chain id
+	/// The settings used by the CFE
 	pub type CFESettings<T> = StorageValue<_, cfe::CFESettings, ValueQuery>;
 
 	#[pallet::event]
@@ -92,31 +83,70 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Sets the value for a CFE settings item by a given key:
-		///
-		/// - EthBlockSafetyMargin
-		/// - PendingSignDuration
-		/// - MaxStageDuration
-		/// - MaxRetryAttempts
+		/// Sets the value for the CFE setting EthBlockSafetyMargin
 		///
 		/// ## Events
 		///
 		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_cfe_value())]
-		pub fn update_cfe_value(
+		#[pallet::weight(T::WeightInfo::update_eth_block_safety_margin())]
+		pub fn update_eth_block_safety_margin(
 			origin: OriginFor<T>,
-			key: cfe::CFESettingKeys,
-			value: u32,
+			eth_block_safety_margin: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			let mut settings = CFESettings::<T>::get();
-			match key {
-				cfe::CFESettingKeys::EthBlockSafetyMargin =>
-					settings.eth_block_safety_margin = value,
-				cfe::CFESettingKeys::MaxRetryAttempts => settings.max_retry_attempts = value,
-				cfe::CFESettingKeys::MaxStageDuration => settings.max_stage_duration = value,
-				cfe::CFESettingKeys::PendingSignDuration => settings.pending_sign_duration = value,
-			}
+			settings.eth_block_safety_margin = eth_block_safety_margin;
+			CFESettings::<T>::put(settings.clone());
+			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Ok(().into())
+		}
+		/// Sets the value for the CFE setting PendingSignDuration
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_max_retry_attempts())]
+		pub fn update_max_retry_attempts(
+			origin: OriginFor<T>,
+			max_retry_attempts: u32,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let mut settings = CFESettings::<T>::get();
+			settings.max_retry_attempts = max_retry_attempts;
+			CFESettings::<T>::put(settings.clone());
+			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Ok(().into())
+		}
+		/// Sets the value for the CFE setting MaxStageDuration
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
+		pub fn update_max_stage_duration(
+			origin: OriginFor<T>,
+			max_stage_duration: u32,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let mut settings = CFESettings::<T>::get();
+			settings.max_stage_duration = max_stage_duration;
+			CFESettings::<T>::put(settings.clone());
+			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Ok(().into())
+		}
+		/// Sets the value for the CFE setting MaxRetryAttempts
+		///
+		/// ## Events
+		///
+		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
+		#[pallet::weight(T::WeightInfo::update_pending_sign_duration())]
+		pub fn update_pending_sign_duration(
+			origin: OriginFor<T>,
+			pending_sign_duration: u32,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let mut settings = CFESettings::<T>::get();
+			settings.pending_sign_duration = pending_sign_duration;
 			CFESettings::<T>::put(settings.clone());
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
