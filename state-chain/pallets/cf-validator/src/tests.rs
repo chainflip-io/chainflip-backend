@@ -156,7 +156,8 @@ mod tests {
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 			// Run the process - two blocks
-			move_forward_blocks(2);
+			// TODO fix that it is 5 blocks
+			move_forward_blocks(5);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
@@ -171,7 +172,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			initialise_validator((2, 10), 1);
 			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);
-			move_forward_blocks(2);
+			// TODO fix blocks for auction
+			move_forward_blocks(5);
 			assert_next_epoch();
 			let outgoing_validators = outgoing_validators();
 			assert_eq!(
@@ -215,7 +217,11 @@ mod tests {
 			);
 			// FIXME https://github.com/chainflip-io/chainflip-backend/issues/935
 			// We already have a set of validators before the confirming vaults are rotated
-			move_forward_blocks(1);
+			move_forward_blocks(1); // AuctionPhase::ValidatorsSelected
+			move_forward_blocks(1); // AuctionPhase::ConfirmedValidators
+			move_forward_blocks(1); // Rotate step 1
+			move_forward_blocks(1); // Rotate step 2
+
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
