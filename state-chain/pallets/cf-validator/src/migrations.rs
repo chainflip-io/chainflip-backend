@@ -34,7 +34,7 @@ pub(crate) mod v1 {
 			Bond::<T>::put(minimum_active_bid);
 			let validators = <pallet_session::Pallet<T>>::validators();
 			// Set the validating set from the session pallet
-			Validators::<T>::put(validators.clone());
+			Validators::<T>::put(validators);
 			T::DbWeight::get().reads_writes(2, 2)
 		} else {
 			log::error!(
