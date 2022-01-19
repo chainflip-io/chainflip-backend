@@ -147,7 +147,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
-
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
