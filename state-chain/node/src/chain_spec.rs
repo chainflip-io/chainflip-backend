@@ -473,6 +473,7 @@ fn testnet_genesis(
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
+			minimum_stake: MIN_STAKE,
 		},
 		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),

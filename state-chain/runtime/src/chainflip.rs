@@ -103,7 +103,7 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 		// Update the last active epoch for the new validating set
 		let epoch_index = Validator::epoch_index();
 		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(&validator, epoch_index);
+			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
 		}
 	}
 }
@@ -152,7 +152,7 @@ impl RewardDistribution for BackupValidatorEmissions {
 
 	// This is called on each heartbeat interval
 	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
-		if backup_validators.len() == 0 {
+		if backup_validators.is_empty() {
 			return 0
 		}
 		// The current minimum active bid
@@ -351,14 +351,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 	type Call = Call;
 
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
-		let is_gov_call = match call {
-			Call::Governance(_) => true,
-			_ => false,
-		};
-		if is_gov_call {
+		if matches!(call, Call::Governance(_)) {
 			return super::Governance::members().contains(caller)
 		}
-		return false
+		false
 	}
 }
 

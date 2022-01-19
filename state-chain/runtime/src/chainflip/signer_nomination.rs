@@ -47,13 +47,15 @@ pub struct RandomSignerNomination;
 /// TODO: When #1037 is merged, use the more efficient EpochInfo::current_validators()
 fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
 	pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-		.filter_map(|(id, _)| {
-			if <Online as cf_traits::IsOnline>::is_online(&id) {
-				Some(id.clone())
-			} else {
-				None
-			}
-		})
+		.filter_map(
+			|(id, _)| {
+				if <Online as cf_traits::IsOnline>::is_online(&id) {
+					Some(id)
+				} else {
+					None
+				}
+			},
+		)
 		.collect()
 }
 

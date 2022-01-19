@@ -159,9 +159,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 		// If no nodes will ever conclusively be considered failed, we return None to signify that
 		// we can't make a decision.
-		if possible.peek().is_none() {
-			return None
-		}
+		possible.peek()?;
 
 		if possible.clone().any(|(_, vote_count)| *vote_count < self.success_threshold()) {
 			// We are still waiting for more reponses before drawing a conclusion.

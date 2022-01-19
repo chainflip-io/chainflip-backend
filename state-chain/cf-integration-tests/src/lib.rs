@@ -550,9 +550,12 @@ mod tests {
 				.assimilate_storage(storage)
 				.unwrap();
 
-			pallet_cf_staking::GenesisConfig::<Runtime> { genesis_stakers: self.accounts.clone() }
-				.assimilate_storage(storage)
-				.unwrap();
+			pallet_cf_staking::GenesisConfig::<Runtime> {
+				genesis_stakers: self.accounts.clone(),
+				minimum_stake: MIN_STAKE,
+			}
+			.assimilate_storage(storage)
+			.unwrap();
 
 			pallet_session::GenesisConfig::<Runtime> {
 				keys: self

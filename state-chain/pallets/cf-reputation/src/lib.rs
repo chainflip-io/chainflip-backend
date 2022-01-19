@@ -192,12 +192,12 @@ pub mod pallet {
 			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
 
 			if to_ban {
-				T::Banned::ban(&validator_id);
+				T::Banned::ban(validator_id);
 			}
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
-				condition.clone(),
+				condition,
 				penalty,
 			));
 
