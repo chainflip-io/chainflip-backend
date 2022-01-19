@@ -147,7 +147,7 @@ workflows:
           context:
             - ghcr-credentials
             - github-credentials
-  #          <<: *only_main_branches
+          <<: *only_main_branches
 
   chainflip-backend-checks:
     when:
