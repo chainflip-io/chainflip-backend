@@ -6,6 +6,7 @@ use pallet_cf_vaults::CeremonyId;
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
+    logging::CEREMONY_ID_KEY,
     multisig::client::common::{ProcessMessageResult, StageResult},
 };
 use state_chain_runtime::AccountId;
@@ -17,7 +18,6 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult>
 where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
-    pub ceremony_id: CeremonyId,
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
     pub result_sender: MultisigOutcomeSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
@@ -29,6 +29,7 @@ where
     Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
     logger: slog::Logger,
+    ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
@@ -45,12 +46,13 @@ where
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(logger: &slog::Logger) -> Self {
+    pub fn new_unauthorised(logger: &slog::Logger, ceremony_id: CeremonyId) -> Self {
         StateRunner {
             inner: None,
+            ceremony_id,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
-            logger: logger.clone(),
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
 
@@ -63,6 +65,11 @@ where
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
     ) -> Result<()> {
+        assert_eq!(
+            self.ceremony_id, ceremony_id,
+            "ceremony id set previously is incorrect"
+        );
+
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
         }
@@ -70,7 +77,6 @@ where
         stage.init();
 
         self.inner = Some(StateAuthorised {
-            ceremony_id,
             stage: Some(stage),
             idx_mapping,
             result_sender,
@@ -85,6 +91,56 @@ where
         self.process_delayed();
 
         Ok(())
+    }
+
+    fn finalize_current_stage(
+        &mut self,
+    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+        // Ideally, we would pass the authorised state as a parameter
+        // as it is always present (i.e. not `None`) when this function
+        // is called, but the borrow checker won't let allow this.
+
+        let authorised_state = self
+            .inner
+            .as_mut()
+            .expect("Ceremony must be authorised to finalize any of its stages");
+
+        let stage = authorised_state
+            .stage
+            .take()
+            .expect("Stage must be present to be finalized");
+
+        match stage.finalize() {
+            StageResult::NextStage(mut next_stage) => {
+                slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
+
+                next_stage.init();
+
+                authorised_state.stage = Some(next_stage);
+
+                // Instead of resetting the expiration time, we simply extend
+                // it (any remaining time carries over to the next stage).
+                // Doing it otherwise would allow other parties to influence
+                // the time at which the stages in individual nodes time out
+                // (by sending their data at specific times) thus making some
+                // attacks possible.
+                self.should_expire_at += MAX_STAGE_DURATION;
+
+                self.process_delayed();
+                return None;
+            }
+            StageResult::Error(bad_validators, reason) => {
+                return Some(Err((
+                    authorised_state.idx_mapping.get_ids(bad_validators),
+                    reason,
+                )));
+            }
+            StageResult::Done(result) => {
+                slog::debug!(self.logger, "Ceremony reached the final stage!");
+
+                return Some(Ok(result));
+            }
+        }
     }
 
     /// Process message from a peer, returning ceremony outcome if
@@ -130,37 +186,7 @@ where
                 }
 
                 if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
-                    let stage = authorised_state.stage.take().unwrap();
-
-                    match stage.finalize() {
-                        StageResult::NextStage(mut next_stage) => {
-                            slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
-
-                            next_stage.init();
-
-                            authorised_state.stage = Some(next_stage);
-
-                            // Instead of resetting the expiration time, we simply extend
-                            // it (any remaining time carries over to the next stage).
-                            // Doing it otherwise would allow other parties to influence
-                            // when stages in individual nodes time out (by sending their
-                            // data at specific times) thus making some attacks possible.
-                            self.should_expire_at += MAX_STAGE_DURATION;
-
-                            self.process_delayed();
-                        }
-                        StageResult::Error(bad_validators, reason) => {
-                            return Some(Err((
-                                authorised_state.idx_mapping.get_ids(bad_validators),
-                                reason,
-                            )));
-                        }
-                        StageResult::Done(result) => {
-                            slog::debug!(self.logger, "Ceremony reached the final stage!");
-
-                            return Some(Ok(result));
-                        }
-                    }
+                    return self.finalize_current_stage();
                 }
             }
         }
@@ -179,6 +205,7 @@ where
                 m,
                 id,
             );
+            // TODO: The bug I talked about is here. This is problematic as what if this process_message call results in the completion of ceremony. It will not ever call on_key_generated().
             self.process_message(id, m);
         }
     }
@@ -218,14 +245,16 @@ where
         );
     }
 
-    /// Check if the state expired, and if so, return the parties that
-    /// haven't submitted data for the current stage
-    pub fn try_expiring(&self) -> Option<Vec<AccountId>> {
+    /// Check if the stage has timed out, and if so, proceed according to the
+    /// protocol rules for the stage
+    pub fn try_expiring(
+        &mut self,
+    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
-                    // report the parties that tried to initiate the ceremony
-                    let reported_ids = self
+                    // Report the parties that tried to initiate the ceremony.
+                    let reported_ids: Vec<_> = self
                         .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
@@ -237,25 +266,25 @@ where
                         format_iterator(&reported_ids)
                     );
 
-                    Some(reported_ids)
+                    Some(Err((
+                        reported_ids,
+                        anyhow::Error::msg("ceremony expired before being authorized"),
+                    )))
                 }
-                Some(authorised_state) => {
-                    // report slow parties
-                    let reported_idxs = authorised_state
-                        .stage
-                        .as_ref()
-                        .expect("stage in authorised state is always present")
-                        .awaited_parties();
-
-                    let reported_ids = authorised_state.idx_mapping.get_ids(reported_idxs);
+                Some(_authorised_state) => {
+                    // We can't simply abort here as we don't know whether other
+                    // participants are going to do the same (e.g. if a malicious
+                    // node targeted us by communicating with everyone but us, it
+                    // would look to the rest of the network like we are the culprit).
+                    // Instead, we delegate the responsibility to the concrete stage
+                    // implementation to try to recover or agree on who to report.
 
                     slog::warn!(
                         self.logger,
-                        "Ceremony expired, reporting parties: {}",
-                        format_iterator(&reported_ids),
+                        "Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
                     );
 
-                    Some(reported_ids)
+                    self.finalize_current_stage()
                 }
             }
         } else {

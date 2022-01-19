@@ -296,8 +296,7 @@ impl<T: Config> Pallet<T> {
 	fn should_mint_at(block_number: T::BlockNumber) -> bool {
 		let mint_interval = MintInterval::<T>::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
-		should_mint
+		Self::should_mint(blocks_elapsed, mint_interval)
 	}
 
 	/// Checks if we should mint.
@@ -318,7 +317,7 @@ impl<T: Config> Pallet<T> {
 			block_as_u32,
 		);
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_transaction_signature(transaction.clone());
+		T::ThresholdSigner::request_transaction_signature(transaction);
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to

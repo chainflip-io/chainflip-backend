@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{common, logging::COMPONENT_KEY};
+use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use futures::StreamExt;
 use slog::o;
 use state_chain_runtime::AccountId;
@@ -65,7 +65,7 @@ pub fn start_client<S>(
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
-    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
+    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
