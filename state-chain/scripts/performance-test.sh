@@ -1,0 +1,2 @@
+./target/release/chainflip-node benchmark --extrinsic '*' --pallet pallet_cf_auction --output state-chain/benchmarking/auction.rs --execution=wasm --steps=1 --repeat=1 --template=state-chain/chainflip-weight-template.hbs
+./target/release/chainflip-node benchmark --extrinsic '*' --pallet pallet_cf_emissions --output state-chain/benchmarking/emissions.rs --execution=wasm --steps=1 --repeat=1 --template=state-chain/chainflip-weight-template.hbs

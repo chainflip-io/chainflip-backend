@@ -352,11 +352,12 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo build --locked --release
+          cargo build --locked --release --features runtime-benchmarks
           sccache --show-stats
       - run: |
-          cargo test --lib --locked --release
+          cargo test --lib --locked --release 
           sccache --show-stats
+      - run: source state-chain/scripts/performance-test.sh
       - persist_to_workspace:
           root: ./
           paths:
