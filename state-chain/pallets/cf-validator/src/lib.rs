@@ -156,8 +156,6 @@ pub mod pallet {
 							if Force::<T>::get() {
 								Force::<T>::set(false);
 							}
-							// If we were in an emergency, mark as completed
-							Self::emergency_rotation_completed();
 							ReadyToRotate::<T>::put(true);
 						}
 					},
@@ -508,6 +506,8 @@ impl<T: Config> Pallet<T> {
 		Bond::<T>::set(new_bond);
 		// Set the block this epoch starts at
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+		// If we were in an emergency, mark as completed
+		Self::emergency_rotation_completed();
 
 		// Calculate the new epoch index
 		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
@@ -566,9 +566,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 				ReadyToRotate::<T>::put(false);
 				Some(winners)
 			} else {
-				// Start the new epoch
 				ReadyToRotate::<T>::set(None);
-				// TODO is this best in other handler method?
+				// Start the new epoch
 				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
 				None
 			}
