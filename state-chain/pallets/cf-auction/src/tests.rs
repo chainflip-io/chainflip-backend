@@ -67,10 +67,6 @@ mod tests {
 			clear_confirmation();
 			// and finally we complete the process, a list of confirmed validators
 			let (new_winners, new_minimum_active_bid) = expected_validating_set();
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(validators, minimum_active_bid))
-				if (validators.clone(), minimum_active_bid) == (new_winners.clone(), new_minimum_active_bid)
-			);
-
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 
 			assert_eq!(
@@ -482,7 +478,6 @@ mod tests {
 			// Run through an auction
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(..)));
 			clear_confirmation();
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(..)));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 
 			// Confirm we just have the good bidders in our new auction result

@@ -161,7 +161,6 @@ impl MockAuctioneer {
 				AuctionBehaviour {
 					phases: VecDeque::from(vec![
 						AuctionPhase::ValidatorsSelected(bidders.clone(), bond),
-						AuctionPhase::ConfirmedValidators(bidders.clone(), bond),
 					]),
 					winners: bidders.clone(),
 					minimum_active_bid: bond,

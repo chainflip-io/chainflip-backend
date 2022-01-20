@@ -434,25 +434,19 @@ impl<T: Config> Auctioneer for Pallet<T> {
 							ChainflipAccountState::Passive,
 						);
 
-						let phase = AuctionPhase::ConfirmedValidators(winners, minimum_active_bid);
-						// Set phase
-						CurrentPhase::<T>::put(phase.clone());
+
+						// Store the result
+						LastAuctionResult::<T>::put(AuctionResult { winners, minimum_active_bid });
+						CurrentPhase::<T>::put(AuctionPhase::default());
 
 						Self::deposit_event(Event::AuctionConfirmed(
 							CurrentAuctionIndex::<T>::get(),
 						));
 
-						Ok(phase)
+						Ok(AuctionPhase::default())
 					},
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
-			},
-			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
-				// Store the result
-				LastAuctionResult::<T>::put(AuctionResult { winners, minimum_active_bid });
-				Self::deposit_event(Event::AwaitingBidders);
-				CurrentPhase::<T>::put(AuctionPhase::default());
-				Ok(AuctionPhase::default())
 			},
 		}
 		.map_err(|e| {
