@@ -149,6 +149,7 @@ pub mod pallet {
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
 			if ReadyToRotate::<T>::get().is_none() && Self::should_rotate(block_number) {
+				T::EpochTransitionHandler::on_epoch_ending();
 				match T::Auctioneer::process() {
 					Ok(phase) => {
 						// Auction completed when we return to the state of `WaitingForBids`
