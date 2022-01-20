@@ -152,16 +152,15 @@ impl MockAuctioneer {
 		bond: Amount,
 		scenario: AuctionScenario,
 	) -> AuctionBehaviour {
+		let bidders: Vec<_> =
+			bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
+
 		match scenario {
 			// Run through a happy path of all bidders being selected and confirmed
 			AuctionScenario::HappyPath => {
-				let bidders: Vec<_> =
-					bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
 				AuctionBehaviour {
 					phases: VecDeque::from(vec![
-						AuctionPhase::BidsTaken(bids.clone()),
 						AuctionPhase::ValidatorsSelected(bidders.clone(), bond),
-						AuctionPhase::ConfirmedValidators(bidders.clone(), bond),
 					]),
 					winners: bidders.clone(),
 					minimum_active_bid: bond,
@@ -169,7 +168,7 @@ impl MockAuctioneer {
 			},
 			// We stop after bids taken and subsequent calls will return an AuctionError - TODO fix
 			AuctionScenario::NoValidatorsSelected => AuctionBehaviour {
-				phases: VecDeque::from(vec![AuctionPhase::BidsTaken(bids.clone())]),
+				phases: VecDeque::from(vec![AuctionPhase::ValidatorsSelected(bidders.clone(), bond)]),
 				..Default::default()
 			},
 		}
