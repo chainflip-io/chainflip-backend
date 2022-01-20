@@ -1,6 +1,6 @@
 mod tests {
 	use crate::{mock::*, Error, *};
-	use cf_traits::{ActiveValidatorRange, IsOutgoing};
+	use cf_traits::{ActiveValidatorRange, AuctionError, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
@@ -106,28 +106,16 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
 			initialise_validator((2, 10), epoch);
-			MockAuctioneer::create_auction_scenario(
-				0,
-				&[1, 2],
-				AuctionScenario::NoValidatorsSelected,
-			);
+			MockAuctioneer::set_behaviour(Err(AuctionError::MinValidatorSize));
 			run_to_block(epoch);
-			move_forward_blocks(1);
-			assert!(ValidatorPallet::force(), "a new rotation should be forced as it has failed");
-			MockAuctioneer::create_auction_scenario(
-				0,
-				&[1, 2],
-				AuctionScenario::NoValidatorsSelected,
-			);
-			move_forward_blocks(1);
-			assert!(ValidatorPallet::force(), "a new rotation should be forced as it has failed");
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);
-			move_forward_blocks(2);
+			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
 			assert_eq!(
-				<ValidatorPallet as EpochInfo>::current_validators(),
-				[1, 2],
-				"a new set of validators should be now validating"
+				<ValidatorPallet as EpochInfo>::epoch_index(),
+				GENESIS_EPOCH,
+				"we should still be in the first epoch"
 			);
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
+			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
 			assert_next_epoch();
 		});
 	}
@@ -137,7 +125,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
 			initialise_validator((2, 10), epoch);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
 			run_to_block(epoch);
 			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			assert_noop!(
@@ -152,12 +140,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			initialise_validator((2, 10), 100);
 			let new_validators = vec![3, 4];
-			MockAuctioneer::create_auction_scenario(0, &new_validators, AuctionScenario::HappyPath);
+			MockAuctioneer::create_auction_scenario(0, &new_validators, SHORT_AND_HAPPY);
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			// Run the process - two blocks
-			// TODO fix that it is 5 blocks
-			move_forward_blocks(5);
+			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
@@ -171,9 +157,8 @@ mod tests {
 	fn should_have_outgoers_after_rotation() {
 		new_test_ext().execute_with(|| {
 			initialise_validator((2, 10), 1);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], AuctionScenario::HappyPath);
-			// TODO fix blocks for auction
-			move_forward_blocks(5);
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
+			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
 			assert_next_epoch();
 			let outgoing_validators = outgoing_validators();
 			assert_eq!(
@@ -197,11 +182,7 @@ mod tests {
 			let bond = 10;
 			let new_validators = vec![1, 2];
 
-			MockAuctioneer::create_auction_scenario(
-				bond,
-				&new_validators,
-				AuctionScenario::HappyPath,
-			);
+			MockAuctioneer::create_auction_scenario(bond, &new_validators, SHORT_AND_HAPPY);
 
 			assert_eq!(
 				mock::current_validators(),
@@ -215,12 +196,7 @@ mod tests {
 				&DUMMY_GENESIS_VALIDATORS[..],
 				"we should still be validating with the genesis validators"
 			);
-			// FIXME https://github.com/chainflip-io/chainflip-backend/issues/935
-			// We already have a set of validators before the confirming vaults are rotated
-			move_forward_blocks(1); // AuctionPhase::ValidatorsSelected
-			move_forward_blocks(1); // AuctionPhase::ConfirmedValidators
-			move_forward_blocks(1); // Rotate step 1
-			move_forward_blocks(1); // Rotate step 2
+			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
 
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),

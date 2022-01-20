@@ -17,7 +17,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 	BuildStorage, Perbill,
 };
-use std::{cell::RefCell, collections::VecDeque};
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -116,15 +116,21 @@ thread_local! {
 
 #[derive(Default, Clone)]
 pub struct AuctionBehaviour {
-	pub phases: VecDeque<AuctionPhase<ValidatorId, Amount>>,
+	pub length_in_blocks: u64,
 	pub winners: Vec<ValidatorId>,
 	pub minimum_active_bid: Amount,
 }
 
 pub enum AuctionScenario {
-	HappyPath,
+	// Validators are selected and confirmed immediately
+	HappyPath(u64),
 	NoValidatorsSelected,
 }
+
+// The blocks we expect to wait for the vaults to confirmed rotating
+pub const CONFIRMATION_BLOCKS: u64 = 1;
+pub const SHORT_AND_HAPPY: AuctionScenario = AuctionScenario::HappyPath(CONFIRMATION_BLOCKS);
+pub const SHORT_AND_HAPPY_ROTATION: u64 = CONFIRMATION_BLOCKS + 2;
 
 impl MockAuctioneer {
 	pub fn create_auction_scenario(
@@ -149,26 +155,21 @@ impl MockAuctioneer {
 
 	pub fn create_behaviour(
 		bids: Vec<Bid<ValidatorId, Amount>>,
-		bond: Amount,
+		minimum_active_bid: Amount,
 		scenario: AuctionScenario,
 	) -> AuctionBehaviour {
-		let bidders: Vec<_> =
-			bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
+		let winners: Vec<_> = bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
 
 		match scenario {
-			// Run through a happy path of all bidders being selected and confirmed
-			AuctionScenario::HappyPath => {
-				AuctionBehaviour {
-					phases: VecDeque::from(vec![
-						AuctionPhase::ValidatorsSelected(bidders.clone(), bond),
-					]),
-					winners: bidders.clone(),
-					minimum_active_bid: bond,
+			// Run through a happy path for length of blocks of all bidders being selected and confirmed
+			AuctionScenario::HappyPath(length_in_blocks) => AuctionBehaviour {
+					length_in_blocks,
+					winners: winners.clone(),
+					minimum_active_bid,
 				}
-			},
+			,
 			// We stop after bids taken and subsequent calls will return an AuctionError - TODO fix
 			AuctionScenario::NoValidatorsSelected => AuctionBehaviour {
-				phases: VecDeque::from(vec![AuctionPhase::ValidatorsSelected(bidders.clone(), bond)]),
 				..Default::default()
 			},
 		}
@@ -229,15 +230,24 @@ impl Auctioneer for MockAuctioneer {
 		AUCTION_BEHAVIOUR.with(|cell| {
 			let maybe_behaviour = &mut *cell.borrow_mut();
 			match maybe_behaviour {
-				Ok(behaviour) => {
-					let next_phase = behaviour.phases.pop_front().unwrap_or_default();
-					if next_phase == AuctionPhase::WaitingForBids {
+				Ok(behaviour) => match behaviour.length_in_blocks.checked_sub(1) {
+					None => {
 						MockAuctioneer::set_auction_result(AuctionResult {
 							winners: behaviour.winners.clone(),
 							minimum_active_bid: behaviour.minimum_active_bid,
-						})
-					}
-					Ok(next_phase)
+						});
+						MockAuctioneer::set_phase(AuctionPhase::default());
+						Ok(AuctionPhase::default())
+					},
+					Some(length) => {
+						behaviour.length_in_blocks = length;
+						let phase = AuctionPhase::ValidatorsSelected(
+							behaviour.winners.clone(),
+							behaviour.minimum_active_bid,
+						);
+						MockAuctioneer::set_phase(phase.clone());
+						Ok(phase)
+					},
 				},
 				Err(e) => Err(*e),
 			}
