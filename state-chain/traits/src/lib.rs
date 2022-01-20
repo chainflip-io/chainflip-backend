@@ -109,8 +109,6 @@ impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 pub enum AuctionPhase<ValidatorId, Amount> {
 	/// Waiting for bids
 	WaitingForBids,
-	/// Bids are now taken and validated
-	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	/// We have ran the auction and have a set of validators with minimum active bid.
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
 	/// The confirmed set of validators
@@ -202,7 +200,6 @@ pub trait VaultRotator {
 /// An error has occurred during an auction
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
-	Empty,
 	MinValidatorSize,
 	InvalidRange,
 	Abort,
