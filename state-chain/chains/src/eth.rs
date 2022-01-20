@@ -25,6 +25,12 @@ use sp_std::{
 	str, vec,
 };
 
+// Reference constants for the chain spec
+pub const CHAIN_ID_MAINNET: u64 = 1;
+pub const CHAIN_ID_ROPSTEN: u64 = 3;
+pub const CHAIN_ID_RINKEBY: u64 = 4;
+pub const CHAIN_ID_KOVAN: u64 = 42;
+
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;

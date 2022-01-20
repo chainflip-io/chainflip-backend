@@ -1024,6 +1024,7 @@ dependencies = [
 name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-try-runtime",
