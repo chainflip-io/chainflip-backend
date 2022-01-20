@@ -61,7 +61,7 @@ pub fn run_auction() {
 	AuctionPallet::process()
 		.and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process().and(AuctionPallet::process())
+			AuctionPallet::process()
 		})
 		.unwrap();
 
