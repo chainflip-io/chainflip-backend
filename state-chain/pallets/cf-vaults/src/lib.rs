@@ -25,6 +25,7 @@ use sp_std::{
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -228,6 +229,15 @@ pub struct Vault<T: ChainCrypto> {
 	pub active_window: BlockHeightWindow,
 }
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - Makes the pallet instantiable.
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -236,6 +246,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -313,6 +324,20 @@ pub mod pallet {
 			}
 
 			weight
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migrations::migrate_storage::<T, I>()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::pre_migration_checks::<T, I>()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::post_migration_checks::<T, I>()
 		}
 	}
 
