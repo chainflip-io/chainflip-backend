@@ -3,6 +3,7 @@ use crate::{
 	Error, VoteMask, Votes,
 };
 use frame_support::{assert_noop, assert_ok};
+use sp_core::hexdisplay::HexDisplay;
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	let events = frame_system::Pallet::<T>::events()
@@ -55,12 +56,19 @@ fn call_on_threshold() {
 		assert_eq!(votes.count_ones(), 3);
 
 		assert_event_sequence::<Test>(vec![
-			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
-			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
-			crate::Event::ThresholdReached(call_hash, 2).into(),
+			crate::Event::WitnessReceived(HexDisplay::from(&call_hash).to_string(), ALISSA, 1)
+				.into(),
+			crate::Event::WitnessReceived(HexDisplay::from(&call_hash).to_string(), BOBSON, 2)
+				.into(),
+			crate::Event::ThresholdReached(HexDisplay::from(&call_hash).to_string(), 2).into(),
 			dummy::Event::<Test>::ValueIncremented(answer).into(),
-			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
-			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
+			crate::Event::WitnessExecuted(
+				HexDisplay::from(&call_hash).to_string(),
+				dispatch_result,
+			)
+			.into(),
+			crate::Event::WitnessReceived(HexDisplay::from(&call_hash).to_string(), CHARLEMAGNE, 3)
+				.into(),
 		]);
 	});
 }

@@ -30,6 +30,7 @@ use frame_support::{
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use utilities::success_threshold_from_share_count;
+use sp_core::hexdisplay::HexDisplay;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -69,6 +70,9 @@ pub mod pallet {
 
 	/// A hash to index the call by.
 	pub(super) type CallHash = [u8; 32];
+
+	/// We want to emit the hash as a String for the purposes of events.
+	pub(super) type CallHashString = String;
 
 	/// Convenience alias for a collection of bits representing the votes of each validator.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
@@ -114,13 +118,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
+		WitnessReceived(CallHashString, T::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
-		ThresholdReached(CallHash, VoteCount),
+		ThresholdReached(CallHashString, VoteCount),
 
 		/// A witness call has been executed [call_sig, result].
-		WitnessExecuted(CallHash, DispatchResult),
+		WitnessExecuted(CallHashString, DispatchResult),
 	}
 
 	#[pallet::error]
@@ -243,7 +247,7 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		Self::deposit_event(Event::<T>::WitnessReceived(
-			call_hash,
+			HexDisplay::from(&call_hash).to_string(),
 			who.into(),
 			num_votes as VoteCount,
 		));
@@ -251,10 +255,10 @@ impl<T: Config> Pallet<T> {
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		let threshold = ConsensusThreshold::<T>::get() as usize;
 		if num_votes == threshold {
-			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
+			Self::deposit_event(Event::<T>::ThresholdReached(HexDisplay::from(&call_hash).to_string(), num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
-				call_hash,
+				HexDisplay::from(&call_hash).to_string(),
 				result.map(|_| ()).map_err(|e| e.error),
 			));
 			result
