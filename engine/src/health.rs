@@ -112,7 +112,8 @@ mod tests {
     async fn health_check_test() {
         let health_check = settings::test_utils::new_test_settings()
             .unwrap()
-            .health_check;
+            .health_check
+            .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
