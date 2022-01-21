@@ -10,6 +10,7 @@ pub(crate) mod v1 {
 	}
 
 	pub fn migrate<T: Config>() {
+		// Migration from the runtime parameter value of version V0
 		ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
 	}
 
