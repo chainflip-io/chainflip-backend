@@ -133,7 +133,9 @@ mod tests {
 			// collision should be quite low.
 			assert_ne!(
 				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed + 100, 100, set.clone()).unwrap()),
+				BTreeSet::from_iter(
+					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
+				),
 			);
 		}
 	}
