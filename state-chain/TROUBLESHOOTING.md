@@ -9,9 +9,22 @@ If you come across anything that is inaccurate or incomplete, please edit the do
 As of yet there is no real structure - this isn't intended to be a document to read from start to finish, it's not a tutorial. But your entries should be searchable, so write your entries with SEO in mind. 
 
 
-## Runtime upgrades
+## Runtime upgrades / Try-runtime
 
-...
+### General tips
+
+- There are some useful storage conversion utilities in `frame_support::storage::migration`.
+- Don't forget the add the `#[pallet::storage_version(..)]` decorator.
+
+### Storage migration / OnRuntimeUpgrade hook doesn't execute
+
+Make sure you build with `--features try-runtime`.
+Make sure you have incremented the spec version and/or the transaction version in `runtime/lib.rs`.
+Make sure you are testing against a network that is at a lower version number!
+
+### Pre and Post upgrade hooks don't execute
+
+Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise the feature will not be activated for the pallet when the runtime is compiled. 
 
 ## Benchmarks
 
