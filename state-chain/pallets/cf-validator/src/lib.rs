@@ -164,7 +164,12 @@ pub mod pallet {
 			if ReadyToRotate::<T>::get() == RotationStatus::Idle &&
 				Self::should_rotate(block_number)
 			{
-				T::EpochTransitionHandler::on_epoch_ending();
+				// At the start of each auction we notify that we are approaching the end of the
+				// current epoch.  TODO Could this be best in another trait such as `Auctioneer`?
+				if T::Auctioneer::phase() == AuctionPhase::WaitingForBids {
+					T::EpochTransitionHandler::on_epoch_ending();
+				}
+
 				if let Ok(phase) = T::Auctioneer::process() {
 					// Auction completed when we return to the state of `WaitingForBids`
 					if let AuctionPhase::WaitingForBids = phase {
