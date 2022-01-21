@@ -263,4 +263,5 @@ try-runtime = [
   "frame-try-runtime",
   "frame-system/try-runtime",
   "pallet-cf-validator/try-runtime",
+  "pallet-cf-vaults/try-runtime",
 ]
