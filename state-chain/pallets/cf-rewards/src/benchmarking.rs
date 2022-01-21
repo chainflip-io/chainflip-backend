@@ -12,9 +12,9 @@ benchmarks! {
 	redeem_rewards {
 		let caller: T::AccountId = whitelisted_caller();
 		// Define use balances
-		let rewards_entitlement: T::Balance = T::Balance::from(10000u32);
+		let rewards_entitlement: T::Balance = T::Balance::from(10_000u32);
 		let apportioned_rewards: T::Balance = T::Balance::from(2u32);
-		let reserved_balance: T::Balance = T::Balance::from(200000u32);
+		let reserved_balance: T::Balance = T::Balance::from(200_000u32);
 		// Mint to reserve
 		let mint = FlipIssuance::<T>::mint(reserved_balance);
 		let deposit = Flip::deposit_reserves(VALIDATOR_REWARDS, reserved_balance);
