@@ -116,62 +116,48 @@ thread_local! {
 
 #[derive(Default, Clone)]
 pub struct AuctionBehaviour {
-	pub length_in_blocks: u64,
+	pub confirmation_in_blocks: u64,
 	pub winners: Vec<ValidatorId>,
 	pub minimum_active_bid: Amount,
 }
 
-pub enum AuctionScenario {
-	// Validators are selected and confirmed immediately
-	HappyPath(u64),
-	NoValidatorsSelected,
-}
-
-// The blocks we expect to wait for the vaults to confirmed rotating
-pub const CONFIRMATION_BLOCKS: u64 = 1;
-pub const SHORT_AND_HAPPY: AuctionScenario = AuctionScenario::HappyPath(CONFIRMATION_BLOCKS);
-pub const SHORT_AND_HAPPY_ROTATION: u64 = CONFIRMATION_BLOCKS + 2;
+// Timing constants for test
+pub const SESSION_ROTATION_BLOCKS: u64 = 2;
+pub const SHORT_CONFIRMATION_BLOCKS: u64 = 1;
+pub const LONG_CONFIRMATION_BLOCKS: u64 = 10;
+pub const SHORT_ROTATION: u64 = SHORT_CONFIRMATION_BLOCKS + SESSION_ROTATION_BLOCKS;
+pub const LONG_ROTATION: u64 = LONG_CONFIRMATION_BLOCKS + SESSION_ROTATION_BLOCKS;
 
 impl MockAuctioneer {
 	pub fn create_auction_scenario(
-		bond: Amount,
+		minimum_active_bid: Amount,
 		candidates: &[ValidatorId],
-		scenario: AuctionScenario,
+		confirmation_in_blocks: u64,
 	) {
 		MockBidderProvider::set_bidders(
 			candidates
 				.iter()
-				.map(|validator_id| (*validator_id, bond + *validator_id))
+				.map(|validator_id| (*validator_id, minimum_active_bid + *validator_id))
 				.collect(),
 		);
 
 		MockAuctioneer::set_phase(AuctionPhase::default());
 		MockAuctioneer::set_behaviour(Ok(MockAuctioneer::create_behaviour(
 			MockBidderProvider::get_bidders(),
-			bond,
-			scenario,
+			minimum_active_bid,
+			confirmation_in_blocks,
 		)));
 	}
 
 	pub fn create_behaviour(
 		bids: Vec<Bid<ValidatorId, Amount>>,
 		minimum_active_bid: Amount,
-		scenario: AuctionScenario,
+		confirmation_in_blocks: u64,
 	) -> AuctionBehaviour {
-		let winners: Vec<_> = bids.iter().map(|(validator_id, _)| validator_id.clone()).collect();
-
-		match scenario {
-			// Run through a happy path for length of blocks of all bidders being selected and confirmed
-			AuctionScenario::HappyPath(length_in_blocks) => AuctionBehaviour {
-					length_in_blocks,
-					winners: winners.clone(),
-					minimum_active_bid,
-				}
-			,
-			// We stop after bids taken and subsequent calls will return an AuctionError - TODO fix
-			AuctionScenario::NoValidatorsSelected => AuctionBehaviour {
-				..Default::default()
-			},
+		AuctionBehaviour {
+			confirmation_in_blocks,
+			winners: bids.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
+			minimum_active_bid,
 		}
 	}
 
@@ -226,11 +212,12 @@ impl Auctioneer for MockAuctioneer {
 		Self::phase() == AuctionPhase::WaitingForBids
 	}
 
+	// A mock of the auction process, continue for `confirmation_in_blocks` or return an error
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
 		AUCTION_BEHAVIOUR.with(|cell| {
 			let maybe_behaviour = &mut *cell.borrow_mut();
 			match maybe_behaviour {
-				Ok(behaviour) => match behaviour.length_in_blocks.checked_sub(1) {
+				Ok(behaviour) => match behaviour.confirmation_in_blocks.checked_sub(1) {
 					None => {
 						MockAuctioneer::set_auction_result(AuctionResult {
 							winners: behaviour.winners.clone(),
@@ -240,7 +227,7 @@ impl Auctioneer for MockAuctioneer {
 						Ok(AuctionPhase::default())
 					},
 					Some(length) => {
-						behaviour.length_in_blocks = length;
+						behaviour.confirmation_in_blocks = length;
 						let phase = AuctionPhase::ValidatorsSelected(
 							behaviour.winners.clone(),
 							behaviour.minimum_active_bid,

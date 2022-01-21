@@ -108,14 +108,15 @@ mod tests {
 			initialise_validator((2, 10), epoch);
 			MockAuctioneer::set_behaviour(Err(AuctionError::MinValidatorSize));
 			run_to_block(epoch);
-			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
+			move_forward_blocks(SHORT_ROTATION);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::epoch_index(),
 				GENESIS_EPOCH,
 				"we should still be in the first epoch"
 			);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
-			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
+			// The auction runs more than expected and we move to next epoch
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], LONG_CONFIRMATION_BLOCKS);
+			move_forward_blocks(LONG_ROTATION);
 			assert_next_epoch();
 		});
 	}
@@ -125,7 +126,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
 			initialise_validator((2, 10), epoch);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_CONFIRMATION_BLOCKS);
 			run_to_block(epoch);
 			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
 			assert_noop!(
@@ -140,10 +141,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			initialise_validator((2, 10), 100);
 			let new_validators = vec![3, 4];
-			MockAuctioneer::create_auction_scenario(0, &new_validators, SHORT_AND_HAPPY);
+			MockAuctioneer::create_auction_scenario(0, &new_validators, SHORT_CONFIRMATION_BLOCKS);
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
+			move_forward_blocks(SHORT_ROTATION);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
@@ -157,8 +158,8 @@ mod tests {
 	fn should_have_outgoers_after_rotation() {
 		new_test_ext().execute_with(|| {
 			initialise_validator((2, 10), 1);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_AND_HAPPY);
-			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
+			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_CONFIRMATION_BLOCKS);
+			move_forward_blocks(SHORT_ROTATION);
 			assert_next_epoch();
 			let outgoing_validators = outgoing_validators();
 			assert_eq!(
@@ -182,7 +183,11 @@ mod tests {
 			let bond = 10;
 			let new_validators = vec![1, 2];
 
-			MockAuctioneer::create_auction_scenario(bond, &new_validators, SHORT_AND_HAPPY);
+			MockAuctioneer::create_auction_scenario(
+				bond,
+				&new_validators,
+				SHORT_CONFIRMATION_BLOCKS,
+			);
 
 			assert_eq!(
 				mock::current_validators(),
@@ -196,7 +201,7 @@ mod tests {
 				&DUMMY_GENESIS_VALIDATORS[..],
 				"we should still be validating with the genesis validators"
 			);
-			move_forward_blocks(SHORT_AND_HAPPY_ROTATION);
+			move_forward_blocks(SHORT_ROTATION);
 
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
