@@ -94,10 +94,10 @@ pub mod pallet {
 			eth_block_safety_margin: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CfeSettings::<T>::get();
-			settings.eth_block_safety_margin = eth_block_safety_margin;
-			CfeSettings::<T>::put(settings);
-			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+				settings.eth_block_safety_margin = eth_block_safety_margin;
+				*settings
+			});
 			Ok(().into())
 		}
 		/// Sets the value for the CFE setting PendingSignDuration
@@ -111,10 +111,10 @@ pub mod pallet {
 			max_retry_attempts: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CfeSettings::<T>::get();
-			settings.max_retry_attempts = max_retry_attempts;
-			CfeSettings::<T>::put(settings);
-			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+				settings.max_retry_attempts = max_retry_attempts;
+				*settings
+			});
 			Ok(().into())
 		}
 		/// Sets the value for the CFE setting MaxStageDuration
@@ -128,10 +128,10 @@ pub mod pallet {
 			max_stage_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CfeSettings::<T>::get();
-			settings.max_stage_duration = max_stage_duration;
-			CfeSettings::<T>::put(settings);
-			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+				settings.max_stage_duration = max_stage_duration;
+				*settings
+			});
 			Ok(().into())
 		}
 		/// Sets the value for the CFE setting MaxRetryAttempts
@@ -145,10 +145,10 @@ pub mod pallet {
 			pending_sign_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CfeSettings::<T>::get();
-			settings.pending_sign_duration = pending_sign_duration;
-			CfeSettings::<T>::put(settings);
-			Self::deposit_event(Event::UpdatedCFESettings(settings));
+			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+				settings.pending_sign_duration = pending_sign_duration;
+				*settings
+			});
 			Ok(().into())
 		}
 	}
@@ -193,5 +193,14 @@ pub mod pallet {
 				max_retry_attempts: self.max_retry_attempts,
 			});
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Updates the cfe settings and emits an event with the updated values
+	fn do_cfe_config_update(update_settings: &dyn Fn(&mut cfe::CfeSettings) -> cfe::CfeSettings) {
+		CfeSettings::<T>::mutate(|settings| {
+			Self::deposit_event(Event::UpdatedCFESettings(update_settings(settings)));
+		});
 	}
 }
