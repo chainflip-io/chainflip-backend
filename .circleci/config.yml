@@ -179,6 +179,12 @@ workflows:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
+      - performance-test:
+          requires:
+            - cargo-build-and-test
+          context:
+            - ghcr-credentials
+            - github-credentials
       - test-single-node:
           requires:
             - cargo-build-and-test
@@ -368,7 +374,6 @@ jobs:
       - run: |
           cargo test --lib --locked --release 
           sccache --show-stats
-      - run: source state-chain/scripts/performance-test.sh
       - persist_to_workspace:
           root: ./
           paths:
@@ -377,6 +382,11 @@ jobs:
             - target/release/chainflip-cli
       - send_notification:
           only_for_branches: "develop"
+
+  performance-test:
+    <<: *cargo-base-job
+    steps:
+      - run: source state-chain/scripts/performance-test.sh
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
