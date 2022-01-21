@@ -14,9 +14,9 @@ use frame_system::pallet_prelude::*;
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct CFESettings {
-		/// Number of blocks we wait until we deem it safe (from reorgs)
+	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq, Copy)]
+	pub struct CfeSettings {
+		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
 		/// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key
 		/// that is supposed to sign this message to be generated. (Since we can receive requests
@@ -70,12 +70,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
 	/// The settings used by the CFE
-	pub type CFESettings<T> = StorageValue<_, cfe::CFESettings, ValueQuery>;
+	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		UpdatedCFESettings(cfe::CFESettings),
+		UpdatedCFESettings(cfe::CfeSettings),
 	}
 
 	#[pallet::error]
@@ -94,9 +94,9 @@ pub mod pallet {
 			eth_block_safety_margin: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
+			let mut settings = CfeSettings::<T>::get();
 			settings.eth_block_safety_margin = eth_block_safety_margin;
-			CFESettings::<T>::put(settings.clone());
+			CfeSettings::<T>::put(settings);
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
 		}
@@ -111,9 +111,9 @@ pub mod pallet {
 			max_retry_attempts: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
+			let mut settings = CfeSettings::<T>::get();
 			settings.max_retry_attempts = max_retry_attempts;
-			CFESettings::<T>::put(settings.clone());
+			CfeSettings::<T>::put(settings);
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
 		}
@@ -128,9 +128,9 @@ pub mod pallet {
 			max_stage_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
+			let mut settings = CfeSettings::<T>::get();
 			settings.max_stage_duration = max_stage_duration;
-			CFESettings::<T>::put(settings.clone());
+			CfeSettings::<T>::put(settings);
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
 		}
@@ -145,9 +145,9 @@ pub mod pallet {
 			pending_sign_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let mut settings = CFESettings::<T>::get();
+			let mut settings = CfeSettings::<T>::get();
 			settings.pending_sign_duration = pending_sign_duration;
-			CFESettings::<T>::put(settings.clone());
+			CfeSettings::<T>::put(settings);
 			Self::deposit_event(Event::UpdatedCFESettings(settings));
 			Ok(().into())
 		}
@@ -186,7 +186,7 @@ pub mod pallet {
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
-			CFESettings::<T>::set(cfe::CFESettings {
+			CfeSettings::<T>::set(cfe::CfeSettings {
 				eth_block_safety_margin: self.eth_block_safety_margin,
 				pending_sign_duration: self.pending_sign_duration,
 				max_stage_duration: self.max_stage_duration,

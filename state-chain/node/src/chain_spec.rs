@@ -27,10 +27,10 @@ const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
 // CFE config default values
-const ETH_BLOCK_SAFETY_MARGIN: u32 = 4;
-const MAX_RETRY_ATTEMPTS: u32 = 500;
-const MAX_STAGE_DURATION: u32 = 300;
-const PENDING_SIGN_DURATION: u32 = 10;
+const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
+const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
+const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
+const PENDING_SIGN_DURATION_DEFAULT: u32 = 10;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -98,22 +98,22 @@ pub fn get_environment() -> StateChainEnvironment {
 		.expect("GENESIS_STAKE env var could not be parsed to u128");
 
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
-		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN))
+		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN_DEFAULT))
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
 	let max_retry_attempts = env::var("MAX_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS))
+		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS_DEFAULT))
 		.parse::<u32>()
 		.expect("MAX_RETRY_ATTEMPTS env var could not be parsed to u32");
 
 	let max_stage_duration = env::var("MAX_STAGE_DURATION")
-		.unwrap_or(format!("{}", MAX_STAGE_DURATION))
+		.unwrap_or(format!("{}", MAX_STAGE_DURATION_DEFAULT))
 		.parse::<u32>()
 		.expect("MAX_STAGE_DURATION env var could not be parsed to u32");
 
 	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
-		.unwrap_or(format!("{}", PENDING_SIGN_DURATION))
+		.unwrap_or(format!("{}", PENDING_SIGN_DURATION_DEFAULT))
 		.parse::<u32>()
 		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
 
