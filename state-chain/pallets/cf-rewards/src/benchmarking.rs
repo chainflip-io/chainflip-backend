@@ -8,9 +8,6 @@ use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_call
 use frame_system::RawOrigin;
 use pallet_cf_flip::FlipIssuance;
 
-#[allow(unused)]
-use crate::Pallet as Rewards;
-
 benchmarks! {
 	redeem_rewards {
 		let caller: T::AccountId = whitelisted_caller();

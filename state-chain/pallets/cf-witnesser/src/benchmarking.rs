@@ -7,9 +7,6 @@ use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_call
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
-#[allow(unused)]
-use crate::Pallet as Auction;
-
 benchmarks! {
 	witness {
 		let caller: T::AccountId = whitelisted_caller();

@@ -9,9 +9,6 @@ use frame_system::RawOrigin;
 
 const MINT_INTERVAL: u32 = 100;
 
-#[allow(unused)]
-use crate::Pallet as Emissions;
-
 benchmarks! {
 	// Benchmark for the backup validator extrinsic
 	update_backup_validator_emission_inflation {
@@ -26,7 +23,7 @@ benchmarks! {
 	}
 	no_rewards_minted {
 	} : {
-		Emissions::<T>::on_initialize(5u32.into());
+		Pallet::<T>::on_initialize(5u32.into());
 	}
 	verify {
 		assert_eq!(LastMintBlock::<T>::get(), 5u32.into());
@@ -34,7 +31,7 @@ benchmarks! {
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
 	}: {
-		Emissions::<T>::on_initialize((MINT_INTERVAL).into());
+		Pallet::<T>::on_initialize((MINT_INTERVAL).into());
 	}
 	verify {
 		assert_eq!(LastMintBlock::<T>::get(), MINT_INTERVAL.into());

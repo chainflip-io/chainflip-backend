@@ -7,9 +7,6 @@ use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whiteli
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
-#[allow(unused)]
-use crate::Pallet;
-
 // Note: Currently we only have one chain (ETH) - as soon we've
 // another chain we've to take this in account in our weight calculation benchmark.
 

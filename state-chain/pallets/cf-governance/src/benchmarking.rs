@@ -8,9 +8,6 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
-#[allow(unused)]
-use crate::Pallet as Governance;
-
 benchmarks! {
 	propose_governance_extrinsic {
 		let caller: T::AccountId = whitelisted_caller();
@@ -24,7 +21,7 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(vec![caller.clone()]);
-		Governance::<T>::push_proposal(Box::new(call));
+		Pallet::<T>::push_proposal(Box::new(call));
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 	verify {
 		assert_eq!(ProposalCount::<T>::get(), 1);
@@ -50,23 +47,23 @@ benchmarks! {
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
-			Governance::<T>::push_proposal(call);
+			Pallet::<T>::push_proposal(call);
 		}
 	}: {
-		Governance::<T>::on_initialize(2u32.into());
+		Pallet::<T>::on_initialize(2u32.into());
 	}
 	on_initialize_best_case {
 	}: {
-		Governance::<T>::on_initialize(2u32.into());
+		Pallet::<T>::on_initialize(2u32.into());
 	}
 	expire_proposals {
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark(vec![]).into());
-			Governance::<T>::push_proposal(call);
+			Pallet::<T>::push_proposal(call);
 		}
 	} : {
-		Governance::<T>::expire_proposals(<ActiveProposals<T>>::get());
+		Pallet::<T>::expire_proposals(<ActiveProposals<T>>::get());
 	}
 }
 

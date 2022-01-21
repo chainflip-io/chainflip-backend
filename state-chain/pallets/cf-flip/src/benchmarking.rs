@@ -4,9 +4,6 @@ use super::*;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 
-#[allow(unused)]
-use crate::Pallet;
-
 benchmarks! {
 	set_slashing_rate {
 		let balance: T::Balance = T::Balance::from(100u32);

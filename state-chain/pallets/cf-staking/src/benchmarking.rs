@@ -14,9 +14,6 @@ fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 	(0..=count).map(|i| account("doogle", i, 0)).collect()
 }
 
-#[allow(unused)]
-use crate::Pallet;
-
 benchmarks! {
 
 	staked {

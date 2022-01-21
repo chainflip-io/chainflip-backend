@@ -6,9 +6,6 @@ use super::*;
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
 
-#[allow(unused)]
-use crate::Pallet as Validator;
-
 benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
