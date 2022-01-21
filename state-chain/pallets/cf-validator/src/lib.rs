@@ -64,6 +64,19 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum RotationStatus {
+	Idle,
+	AwaitingCompletion,
+	Ready,
+}
+
+impl Default for RotationStatus {
+	fn default() -> Self {
+		RotationStatus::Idle
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -148,7 +161,9 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
-			if ReadyToRotate::<T>::get().is_none() && Self::should_rotate(block_number) {
+			if ReadyToRotate::<T>::get() == RotationStatus::Idle &&
+				Self::should_rotate(block_number)
+			{
 				T::EpochTransitionHandler::on_epoch_ending();
 				if let Ok(phase) = T::Auctioneer::process() {
 					// Auction completed when we return to the state of `WaitingForBids`
@@ -156,7 +171,7 @@ pub mod pallet {
 						if Force::<T>::get() {
 							Force::<T>::set(false);
 						}
-						ReadyToRotate::<T>::put(true);
+						ReadyToRotate::<T>::put(RotationStatus::AwaitingCompletion);
 					}
 				}
 			}
@@ -389,7 +404,7 @@ pub mod pallet {
 	/// We have reached a set of confirmed validators, we can rotate in the new set
 	#[pallet::storage]
 	#[pallet::getter(fn ready_to_rotate)]
-	pub type ReadyToRotate<T: Config> = StorageValue<_, bool>;
+	pub type ReadyToRotate<T: Config> = StorageValue<_, RotationStatus, ValueQuery>;
 
 	/// A list of the current validators
 	#[pallet::storage]
@@ -485,7 +500,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
-		ReadyToRotate::<T>::get().is_some()
+		ReadyToRotate::<T>::get() != RotationStatus::Idle
 	}
 }
 
@@ -559,18 +574,22 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 		let AuctionResult { winners, minimum_active_bid } =
 			T::Auctioneer::auction_result().expect("everything starts with an auction");
 
-		if let Some(rotate) = ReadyToRotate::<T>::get() {
-			if rotate {
-				ReadyToRotate::<T>::put(false);
+		match ReadyToRotate::<T>::get() {
+			RotationStatus::Idle => {
+				log::warn!(target: "cf-validator", "we shouldn't reach here and we will see the same \
+													validators in the next epoch");
+				None
+			},
+			RotationStatus::AwaitingCompletion => {
+				ReadyToRotate::<T>::put(RotationStatus::Ready);
 				Some(winners)
-			} else {
-				ReadyToRotate::<T>::set(None);
+			},
+			RotationStatus::Ready => {
+				ReadyToRotate::<T>::set(RotationStatus::Idle);
 				// Start the new epoch
 				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
 				None
-			}
-		} else {
-			unreachable!("`should_end_session()` should cover this")
+			},
 		}
 	}
 
