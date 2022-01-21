@@ -386,7 +386,8 @@ jobs:
   performance-test:
     <<: *cargo-base-job
     steps:
-      - run: source state-chain/scripts/performance-test.sh
+      - checkout
+      - run: source ./state-chain/scripts/performance-test.sh
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
