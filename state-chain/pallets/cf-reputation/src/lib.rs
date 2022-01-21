@@ -127,7 +127,7 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn reputation_points_penalty)]
+	#[pallet::getter(fn reputation_point_penalty)]
 	/// The number of reputation points we lose for every x blocks offline
 	pub(super) type ReputationPointPenalty<T: Config> =
 		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
