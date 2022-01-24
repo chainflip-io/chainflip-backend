@@ -15,6 +15,7 @@ use futures::{
 use itertools::Itertools;
 
 use pallet_cf_vaults::CeremonyId;
+use secp256k1::PublicKey;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
@@ -55,6 +56,8 @@ use state_chain_runtime::AccountId;
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{ACCOUNT_IDS, KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGN_CEREMONY_ID};
+
+pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 macro_rules! recv_broadcast {
     ($rxs:expr, $ceremony_variant: path, $variant: path) => {{
@@ -376,6 +379,7 @@ struct CustomDataToSend {
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
+    /// Account ids participating in the keygen
     account_ids: Vec<AccountId>,
     /// Some tests require data sent between some parties
     /// to deviate from the protocol (e.g. for testing
@@ -478,7 +482,7 @@ impl KeygenContext {
             p2p_receivers.insert(
                 id.clone(),
                 Box::pin(UnboundedReceiverStream::new(p2p_rx).peekable()),
-            ); // See KeygenContext TODO
+            );
             outcome_receivers.insert(
                 id.clone(),
                 Box::pin(UnboundedReceiverStream::new(rx).peekable()),
@@ -743,7 +747,7 @@ impl KeygenContext {
             self.account_ids,
             &comm1s,
             &mut self.custom_data.keygen.comm1,
-            &mut self.should_timeout_keygen,
+            &self.should_timeout_keygen,
             ceremony_id,
             1
         );
@@ -801,15 +805,8 @@ impl KeygenContext {
                 results.push(result);
             }
 
-            let reported_nodes: Vec<_> = results
-                .iter()
-                .map(|res| res.as_ref().unwrap_err())
-                .collect();
-
-            assert!(
-                check_reported_nodes_consistency(&reported_nodes),
-                "Not all nodes reported the same parties"
-            );
+            let reported_nodes = reported_nodes_if_consistent(&results)
+                .expect("Reported nodes should be consistent");
 
             if self.auto_clear_tag_cache {
                 self.tag_cache.clear();
@@ -943,7 +940,7 @@ impl KeygenContext {
                 self.account_ids,
                 responses6,
                 &mut self.custom_data.keygen.secret_shares_blaming,
-                &mut self.should_timeout_keygen,
+                self.should_timeout_keygen,
                 ceremony_id,
                 6
             );
@@ -1018,15 +1015,8 @@ impl KeygenContext {
                     "Ceremony didn't result in an error for all parties"
                 );
 
-                let reported_nodes: Vec<_> = results
-                    .iter()
-                    .map(|res| res.as_ref().unwrap_err())
-                    .collect();
-
-                assert!(
-                    check_reported_nodes_consistency(&reported_nodes),
-                    "Not all nodes reported the same parties"
-                );
+                let reported_nodes = reported_nodes_if_consistent(&results)
+                    .expect("Reported nodes should be consistent");
 
                 Err(reported_nodes[0].clone())
             };
@@ -1338,20 +1328,25 @@ impl KeygenContext {
     }
 }
 
-// Returns true if all of the nodes reported the same parties.
-fn check_reported_nodes_consistency(
-    reported_nodes: &Vec<&(CeremonyAbortReason, Vec<AccountId>)>,
-) -> bool {
+// Returns Ok(reported_nodes) if everyone reported the same nodes, otherwise throws an error
+fn reported_nodes_if_consistent(
+    results: &Vec<Result<PublicKey, (CeremonyAbortReason, Vec<AccountId>)>>,
+) -> Result<Vec<&(CeremonyAbortReason, Vec<sp_runtime::AccountId32>)>> {
+    let reported_nodes: Vec<_> = results
+        .iter()
+        .map(|res| res.as_ref().unwrap_err())
+        .collect();
+
     for (_, reported_parties) in reported_nodes.iter() {
         let sorted_reported_parties: Vec<AccountId> =
             reported_parties.iter().sorted().cloned().collect();
         let other_sorted_reported_parties: Vec<AccountId> =
             reported_nodes[0].1.iter().sorted().cloned().collect();
         if sorted_reported_parties != other_sorted_reported_parties {
-            return false;
+            return Err(anyhow::Error::msg("Inconsistent reported nodes"));
         }
     }
-    true
+    Ok(reported_nodes)
 }
 
 // Checks that all signers got the same outcome and returns it
@@ -1518,7 +1513,7 @@ impl MultisigClientNoDB {
     pub fn ensure_at_signing_stage(&self, stage_number: usize) -> Result<()> {
         let stage = get_stage_for_signing_ceremony(self);
         let is_at_stage = match stage_number {
-            0 => stage == None,
+            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
@@ -1550,7 +1545,7 @@ impl MultisigClientNoDB {
     ) -> Result<()> {
         let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
         let is_at_stage = match stage_number {
-            0 => stage == None,
+            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
             3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),

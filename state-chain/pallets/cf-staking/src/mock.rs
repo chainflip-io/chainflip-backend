@@ -189,17 +189,18 @@ impl pallet_cf_staking::Config for Test {
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
-
+pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
-		staking: StakingConfig { genesis_stakers: vec![] },
+		staking: StakingConfig { genesis_stakers: vec![], minimum_stake: MIN_STAKE },
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

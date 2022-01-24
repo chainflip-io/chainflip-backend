@@ -47,13 +47,15 @@ pub struct RandomSignerNomination;
 /// TODO: When #1037 is merged, use the more efficient EpochInfo::current_validators()
 fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
 	pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-		.filter_map(|(id, _)| {
-			if <Online as cf_traits::IsOnline>::is_online(&id) {
-				Some(id.clone())
-			} else {
-				None
-			}
-		})
+		.filter_map(
+			|(id, _)| {
+				if <Online as cf_traits::IsOnline>::is_online(&id) {
+					Some(id)
+				} else {
+					None
+				}
+			},
+		)
 		.collect()
 }
 
@@ -131,7 +133,20 @@ mod tests {
 			// collision should be quite low.
 			assert_ne!(
 				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed + 100, 2, set.clone()).unwrap()),
+				BTreeSet::from_iter(
+					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
+				),
+			);
+		}
+	}
+
+	#[test]
+	fn same_seed_same_set() {
+		let set = (0..150).collect::<Vec<_>>();
+		for seed in 0..100 {
+			assert_eq!(
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
 			);
 		}
 	}

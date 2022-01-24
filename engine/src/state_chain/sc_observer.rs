@@ -11,7 +11,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::{EthBroadcaster, EthRpcApi},
-    logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
+    logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
@@ -218,8 +218,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                 Err((err, bad_account_ids)) => {
                                                     slog::error!(
                                                         logger,
-                                                        "Keygen failed with error: {:?}",
-                                                        err
+                                                        "Keygen ceremony failed with error: {:?}",
+                                                        err;
+                                                        CEREMONY_ID_KEY => ceremony_id,
                                                     );
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
@@ -288,7 +289,14 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     )
                                                     .await;
                                                 }
-                                                Err((_, bad_account_ids)) => {
+                                                Err((err, bad_account_ids)) => {
+                                                    slog::error!(
+                                                        logger,
+                                                        "Signing ceremony failed with error: {:?}",
+                                                        err;
+                                                        CEREMONY_ID_KEY => ceremony_id,
+                                                    );
+
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(
                                                         &logger,

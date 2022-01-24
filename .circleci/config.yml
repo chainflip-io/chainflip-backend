@@ -62,6 +62,16 @@ orbs:
 
 ######################## Commands ########################
 commands:
+  install_gh_cli:
+    parameters:
+      version:
+        default: 2.4.0
+        type: string
+    steps:
+      - run: |
+          wget https://github.com/cli/cli/releases/download/v<<parameters.version>>/gh_<<parameters.version>>_linux_amd64.tar.gz
+          tar -xvf gh_<<parameters.version>>_linux_amd64.tar.gz
+          mv ./gh_<<parameters.version>>_linux_amd64/bin/gh /usr/local/bin
   comment:
     parameters:
       content:
@@ -154,10 +164,11 @@ workflows:
           context:
             - ghcr-credentials
             - github-credentials
-      - cargo-audit:
+      - update-cargo-audit-log:
           context:
             - ghcr-credentials
             - github-credentials
+          <<: *only_main_branches
 
   chainflip-backend-checks:
     jobs:
@@ -404,18 +415,29 @@ jobs:
       - store_artifacts:
           path: target/doc/
 
-  cargo-audit:
+  update-cargo-audit-log:
     <<: *cargo-base-job
     shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
       - checkout
       - merge_target
+      - install_gh_cli
       - run: sccache --show-stats
       - run: |
           cargo install --force cargo-audit
           cargo generate-lockfile
-      - run: >
-          cargo audit
+      - run: |
+          apt-get install -y gettext
+          wget https://github.com/cli/cli/releases/download/v2.4.0/gh_2.4.0_linux_amd64.tar.gz
+          tar -xvf gh_2.4.0_linux_amd64.tar.gz
+          cargo-audit audit --json > audit.json
+          export advisory=$(cat audit.json | jq '.vulnerabilities.list[].advisory | {id,package,title,description,date,url}')
+          export warnings=$(cat audit.json | jq '.warnings | keys[] as $k| .[$k] | .[] | {kind,package}')
+          export date=$(date)
+          cat .circleci/templates/audit-log.md | envsubst > /tmp/audit-log.md
+          gh issue edit 1175 --body-file /tmp/audit-log.md
+
+
 
   git-clone-contracts-repo:
     resource_class: small
