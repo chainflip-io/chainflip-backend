@@ -1,9 +1,5 @@
-use super::tests::KeygenContext;
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use csv;
     use serde_json;
     use std::collections::{BTreeSet, HashMap};
@@ -12,8 +8,7 @@ mod tests {
     use std::{env, io};
 
     use crate::multisig::client::ensure_unsorted;
-    use crate::multisig::KeygenOptions;
-    use crate::testing::assert_ok;
+    use crate::multisig::client::tests::run_keygen_with_high_key_failure;
     use state_chain_runtime::AccountId;
 
     const ENV_VAR_OUTPUT_FILE: &str = "KEYSHARES_JSON_OUTPUT";
@@ -97,72 +92,37 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
         println!("Generating keys");
 
         let account_ids = ensure_unsorted(node_name_to_id_map.values().cloned().collect(), 0);
-        let mut keygen_context =
-            KeygenContext::new_with_account_ids(account_ids.clone(), KeygenOptions::default());
 
-        let valid_keygen_states = {
+        let (key_id, nodes) = {
             let mut count = 0;
-            let value = loop {
+            loop {
                 if count >= 20 {
                     panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
                 }
-                let valid_keygen_states = keygen_context.generate_with_ceremony_id(count).await;
 
-                if valid_keygen_states.key_ready_data().is_some() {
-                    break valid_keygen_states;
+                if let Ok((key_id, nodes)) =
+                    run_keygen_with_high_key_failure(account_ids.clone()).await
+                {
+                    break (key_id, nodes);
                 }
                 count += 1;
-            };
-            value
+            }
         };
-
-        // Check that we can use the above keys
-        let active_ids: Vec<_> = {
-            use rand::prelude::*;
-
-            ensure_unsorted(
-                account_ids
-                    .choose_multiple(
-                        &mut StdRng::seed_from_u64(0),
-                        utilities::success_threshold_from_share_count(account_ids.len() as u32)
-                            as usize,
-                    )
-                    .cloned()
-                    .collect(),
-                0,
-            )
-        };
-
-        assert_ok!(
-            keygen_context
-                .sign_custom(&active_ids, None)
-                .await
-                .sign_finished
-                .outcome
-                .result
-        );
 
         // Print the output
-        let pub_key = hex::encode(
-            valid_keygen_states
-                .key_ready_data()
-                .expect("successful keygen")
-                .pubkey
-                .serialize(),
-        );
-        println!("Pubkey is (66 chars, 33 bytes): {:?}", pub_key);
-
-        let secret_keys = &valid_keygen_states
-            .key_ready_data()
-            .expect("successful keygen")
-            .sec_keys;
+        println!("Pubkey is (66 chars, 33 bytes): {}", key_id);
 
         let mut output: HashMap<String, String> = node_name_to_id_map
             .iter()
             .map(|(node_name, account_id)| {
                 let secret = hex::encode(
-                    bincode::serialize(&secret_keys[&account_id].clone())
-                        .expect(&format!("Could not serialize secret for {}", node_name)),
+                    bincode::serialize(
+                        &nodes[&account_id]
+                            .client
+                            .get_key(&key_id)
+                            .expect("key must be present"),
+                    )
+                    .expect(&format!("Could not serialize secret for {}", node_name)),
                 );
                 println!("{}'s secret: {:?}", &node_name, &secret);
                 (node_name.to_string(), secret.clone())
@@ -170,7 +130,7 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
             .collect();
 
         // Output the secret shares and the Pubkey to a file if the env var exists
-        output.insert("AGG_KEY".to_string(), pub_key);
+        output.insert("AGG_KEY".to_string(), key_id.to_string());
         if let Ok(output_file_path) = env::var(ENV_VAR_OUTPUT_FILE) {
             println!("Outputting key shares to {}", output_file_path);
             let mut file = File::create(&output_file_path)

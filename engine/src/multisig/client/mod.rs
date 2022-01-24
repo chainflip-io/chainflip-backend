@@ -58,7 +58,7 @@ pub struct SchnorrSignature {
     pub r: secp256k1::PublicKey,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThresholdParameters {
     /// Total number of key shares (equals the total number of parties in keygen)
     pub share_count: usize,
@@ -90,6 +90,9 @@ pub enum MultisigData {
     Signing(SigningData),
 }
 
+derive_try_from_variant!(KeygenData, MultisigData::Keygen, MultisigData);
+derive_try_from_variant!(SigningData, MultisigData::Signing, MultisigData);
+
 impl From<SigningData> for MultisigData {
     fn from(data: SigningData) -> Self {
         MultisigData::Signing(data)
@@ -108,14 +111,17 @@ pub struct MultisigMessage {
     data: MultisigData,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CeremonyAbortReason {
+    // Isn't used, but will once we re-enable unauthorised reporting this will be used again
     Unauthorised,
     Timeout,
     Invalid,
 }
 
-pub type CeremonyOutcomeResult<Output> = Result<Output, (CeremonyAbortReason, Vec<AccountId>)>;
+/// (Abort reason, blamed ceremony ids)
+pub type CeremonyError = (CeremonyAbortReason, Vec<AccountId>);
+pub type CeremonyOutcomeResult<Output> = Result<Output, CeremonyError>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
@@ -162,6 +168,9 @@ pub enum MultisigOutcome {
     Keygen(KeygenOutcome),
     Ignore,
 }
+
+derive_try_from_variant!(SigningOutcome, MultisigOutcome::Signing, MultisigOutcome);
+derive_try_from_variant!(KeygenOutcome, MultisigOutcome::Keygen, MultisigOutcome);
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)

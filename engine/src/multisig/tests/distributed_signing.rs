@@ -126,11 +126,16 @@ async fn coordinate_keygen_and_signing(
             .map_err(|_| "Receiver dropped")
             .unwrap();
 
+        let message_2 = [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
+            .as_bytes()
+             .try_into()
+             .unwrap();
+
         n.multisig_instruction_tx
             .send(MultisigInstruction::Sign(SigningInfo::new(
                 2, /* ceremony_id */
                 key_id.clone(),
-                MessageHash(super::fixtures::MESSAGE2.clone()),
+                MessageHash(message_2),
                 ensure_unsorted(signer_ids.clone(), i as u64),
             )))
             .map_err(|_| "Receiver dropped")

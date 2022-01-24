@@ -52,7 +52,7 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     Keygen(KeygenInfo),
     Sign(SigningInfo),
