@@ -80,7 +80,6 @@ impl Default for RotationStatus {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -567,18 +566,10 @@ impl<T: Config> Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	/// We provide an implementation for this as we do this at genesis
-	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		None
-	}
-
 	/// If we have a set of confirmed validators we roll them in over two blocks
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		// We have a confirmed set of validators from our last auction
 		// We first return the new winners and then to finalise we start a new epoch
-		let AuctionResult { winners, minimum_active_bid } =
-			T::Auctioneer::auction_result().expect("everything starts with an auction");
-
 		match ReadyToRotate::<T>::get() {
 			RotationStatus::Idle => {
 				log::warn!(target: "cf-validator", "we shouldn't reach here and we will see the same \
@@ -587,21 +578,37 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			},
 			RotationStatus::AwaitingCompletion => {
 				ReadyToRotate::<T>::put(RotationStatus::Ready);
-				Some(winners)
+				Some(
+					T::Auctioneer::auction_result()
+						.expect("everything starts with an auction")
+						.winners,
+				)
 			},
 			RotationStatus::Ready => {
 				ReadyToRotate::<T>::set(RotationStatus::Idle);
-				// Start the new epoch
-				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
 				None
 			},
 		}
 	}
 
+	/// We provide an implementation for this as we already have a set of validators with keys at
+	/// genesis
+	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		None
+	}
+
 	/// The current session is ending
 	fn end_session(_end_index: SessionIndex) {}
+
 	/// The session is starting
-	fn start_session(_start_index: SessionIndex) {}
+	fn start_session(_start_index: SessionIndex) {
+		if ReadyToRotate::<T>::get() == RotationStatus::Ready {
+			let AuctionResult { winners, minimum_active_bid } =
+				T::Auctioneer::auction_result().expect("everything starts with an auction");
+			// Start the new epoch
+			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+		}
+	}
 }
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
