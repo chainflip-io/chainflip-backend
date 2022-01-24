@@ -169,14 +169,12 @@ pub mod pallet {
 					T::EpochTransitionHandler::on_epoch_ending();
 				}
 
-				if let Ok(phase) = T::Auctioneer::process() {
+				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
 					// Auction completed when we return to the state of `WaitingForBids`
-					if let AuctionPhase::WaitingForBids = phase {
-						if Force::<T>::get() {
-							Force::<T>::set(false);
-						}
-						ReadyToRotate::<T>::put(RotationStatus::AwaitingCompletion);
+					if Force::<T>::get() {
+						Force::<T>::set(false);
 					}
+					ReadyToRotate::<T>::put(RotationStatus::AwaitingCompletion);
 				}
 			}
 			0
