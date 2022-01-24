@@ -19,7 +19,7 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
-const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
+const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 // 50k FLIP in Fliperinos
@@ -473,6 +473,7 @@ fn testnet_genesis(
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
+			minimum_stake: MIN_STAKE,
 		},
 		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),

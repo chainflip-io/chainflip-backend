@@ -37,6 +37,7 @@ utilities = {path = '../../utilities'}
 # Substrate dependencies
 jsonrpc-core = '18.0.0'
 structopt = '0.3.8'
+cf-chains = {path = "../chains"}
 
 # Substrate dependencies
 [dependencies.frame-benchmarking]

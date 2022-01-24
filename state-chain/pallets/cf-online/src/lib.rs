@@ -67,7 +67,7 @@ pub mod pallet {
 		/// We verify if the node is online checking first if they are banned and if they are not
 		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			return match Nodes::<T>::try_get(validator_id) {
+			match Nodes::<T>::try_get(validator_id) {
 				Ok(node) => {
 					let current_block_number = frame_system::Pallet::<T>::current_block_number();
 					!node.is_banned(current_block_number) &&

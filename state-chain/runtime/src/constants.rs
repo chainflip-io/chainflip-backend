@@ -47,4 +47,7 @@ pub mod common {
 
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
+
+	/// The minimum stake, 40_000 x 10^18
+	pub const MIN_STAKE: FlipBalance = 40_000 * 10u128.pow(18);
 }
