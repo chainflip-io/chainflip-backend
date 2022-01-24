@@ -9,6 +9,10 @@ pub(crate) mod v1 {
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
 		assert!(P::on_chain_storage_version() == releases::V0, "Storage version too high.");
 
+		if CurrentPhase::<T>::get() != AuctionPhase::WaitingForBids {
+			CurrentPhase::<T>::set(AuctionPhase::WaitingForBids);
+		}
+
 		log::info!(
 			target: "runtime::cf_auction",
 			"migration: Auction storage version v1 PRE migration checks successful!"
