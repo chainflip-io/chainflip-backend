@@ -1,16 +1,35 @@
+use crate::migrations::v1::v0_types::VaultV0;
+
 use super::*;
-use frame_support::storage::migration::*;
+use cf_chains::ChainId;
 #[cfg(feature = "try-runtime")]
 use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+use frame_support::{storage::migration::*, Hashable};
+use sp_std::convert::TryInto;
+
+const PALLET_NAME_V0: &'static [u8] = b"Vaults";
+
+const PALLET_NAME_V1: &'static [u8] = b"EthereumVault";
 
 pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
 	log::info!("🏯 migrate_storage to V1");
 	// The pallet has been renamed.
-	move_pallet(b"Vaults", b"EthereumVault");
+	move_pallet(PALLET_NAME_V0, PALLET_NAME_V1);
 
-	//
-	// storage_iter("EthereumVault", "Vaults")
-	// 	.
+	// The old vaults were indexed by ChainId - we need to construct the Storage suffix by
+	// hashing the Ethereum ChainId and then write the data back using the new storage
+	// accessors.
+	for (epoch, old_vault) in
+		storage_key_iter_with_suffix::<EpochIndex, VaultV0<T, I>, Blake2_128Concat>(
+			PALLET_NAME_V1,
+			b"Vaults",
+			ChainId::Ethereum.blake2_128_concat().as_slice(),
+		)
+		.drain()
+	{
+		let new_vault: Vault<T::Chain> = old_vault.try_into().expect("");
+		Vaults::<T, I>::insert(epoch, new_vault);
+	}
 
 	releases::V1.put::<Pallet<T, I>>();
 	0
@@ -53,9 +72,7 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 }
 
 mod v0_types {
-	use std::convert::TryInto;
-
-	use crate::*;
+	use super::*;
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 	pub struct VaultV0<T: Config<I>, I: 'static = ()> {
