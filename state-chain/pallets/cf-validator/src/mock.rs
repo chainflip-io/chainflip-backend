@@ -122,7 +122,7 @@ pub struct AuctionBehaviour {
 }
 
 // Timing constants for test
-pub const SESSION_ROTATION_BLOCKS: u64 = 2;
+pub const SESSION_ROTATION_BLOCKS: u64 = 3;
 pub const SHORT_CONFIRMATION_BLOCKS: u64 = 1;
 pub const LONG_CONFIRMATION_BLOCKS: u64 = 10;
 pub const SHORT_ROTATION: u64 = SHORT_CONFIRMATION_BLOCKS + SESSION_ROTATION_BLOCKS;
@@ -397,8 +397,8 @@ pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
 		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
-		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
 		Session::on_initialize(System::block_number());
+		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
 	}
 }
 
