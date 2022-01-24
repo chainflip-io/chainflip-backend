@@ -228,7 +228,7 @@ impl Settings {
         };
         // Don't override the healthcheck settings unless something has changed
         if health_check != HealthCheck::default() {
-            settings.health_check = Option::Some(health_check);
+            settings.health_check = Some(health_check);
         }
 
         // Signing
