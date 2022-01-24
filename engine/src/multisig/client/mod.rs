@@ -174,16 +174,13 @@ derive_try_from_variant!(KeygenOutcome, MultisigOutcome::Keygen, MultisigOutcome
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
-#[derive(Clone)]
 pub struct MultisigClient<S>
 where
     S: KeyDB,
 {
-    my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
     multisig_outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -203,7 +200,6 @@ where
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
-            my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
@@ -212,7 +208,6 @@ where
                 logger,
             ),
             multisig_outcome_sender,
-            outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
             logger: logger.clone(),
@@ -426,10 +421,6 @@ where
 
     pub fn get_db(&self) -> &S {
         self.key_store.get_db()
-    }
-
-    pub fn get_my_account_id(&self) -> AccountId {
-        self.my_account_id.clone()
     }
 
     pub fn force_stage_timeout(&mut self) {
