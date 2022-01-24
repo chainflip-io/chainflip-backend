@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::KeyDB;
-use rocksdb::{IteratorMode, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
@@ -23,10 +23,16 @@ const DATA_VERSION: u32 = 1;
 /// Key used to store the `DATA_VERSION` value in the `METADATA_COLUMN`
 pub const DATA_VERSION_KEY: &[u8; 12] = b"data_version";
 
+// Prefixes for the `DATA_COLUMN`
+const PREFIX_SIZE: usize = 4;
+const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
+
 /// Column family names
-const DATA_COLUMN: &'static str = "data";
-const METADATA_COLUMN: &'static str = "metadata";
-const COLUMN_FAMILIES: &'static [&'static str] = &[DATA_COLUMN, METADATA_COLUMN];
+// All data is stored in `DATA_COLUMN` with a prefix for key spaces
+const DATA_COLUMN: &str = "data";
+// This column is just for data version info. No prefix is used.
+const METADATA_COLUMN: &str = "metadata";
+const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
 macro_rules! get_metadata_column_handle {
     ($db:expr) => {{
@@ -42,6 +48,7 @@ macro_rules! get_data_column_handle {
     }};
 }
 
+/// Migrates the db forward one version migration at a time
 fn migrate_db(db: &mut DB, from_version: u32, to_version: u32) -> Result<(), anyhow::Error> {
     assert!(from_version < to_version, "Invalid migration");
 
@@ -61,7 +68,8 @@ fn migrate_db(db: &mut DB, from_version: u32, to_version: u32) -> Result<(), any
     Ok(())
 }
 
-// Moving column `col0` to column `keygen`
+// Moving the keygen data from column `col0` to `data` and adding a prefix
+// Also adding data version to the metadata column
 fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
@@ -71,16 +79,17 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     let old_cf_name = "col0";
 
     let old_cf = db
-        .cf_handle(&old_cf_name)
-        .expect(&format!("Should get column {}", &old_cf_name));
+        .cf_handle(old_cf_name)
+        .unwrap_or_else(|| panic!("Should get column {}", &old_cf_name));
 
     let new_cf = db.cf_handle("data").expect("Should get column data");
 
     // Read the data from the old column and add it to the new column via the batch write
     for (k, v) in db.iterator_cf(old_cf, IteratorMode::Start) {
-        // TODO: add a prefix to the keygen data so we can store other stuff in the same column
-        batch.put_cf(new_cf, &k, v);
-        batch.delete_cf(old_cf, k)
+        // Add the prefix to the key
+        let key = [KEYGEN_DATA_PREFIX.iter().cloned().collect(), k.clone()].concat();
+        batch.put_cf(new_cf, &key, v);
+        batch.delete_cf(old_cf, k);
     }
 
     // Write the batch
@@ -89,12 +98,13 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     })?;
 
     // Delete the old column family
-    db.drop_cf(&old_cf_name)
-        .expect(&format!("Should drop old column family {}", old_cf_name));
+    db.drop_cf(old_cf_name)
+        .unwrap_or_else(|_| panic!("Should drop old column family {}", old_cf_name));
 
     Ok(())
 }
 
+/// Used is every migration to update the db data version in the same batch write as the migration operation
 fn add_version_to_batch_write(db: &DB, data_version: u32, batch: &mut WriteBatch) {
     batch.put_cf(
         get_metadata_column_handle!(db),
@@ -103,6 +113,7 @@ fn add_version_to_batch_write(db: &DB, data_version: u32, batch: &mut WriteBatch
     );
 }
 
+/// Update the db data version to the latest DATA_VERSION
 fn write_latest_data_version(db: &DB) {
     db.put_cf(
         get_metadata_column_handle!(db),
@@ -112,6 +123,8 @@ fn write_latest_data_version(db: &DB) {
     .expect("Failed to write data version");
 }
 
+/// Get the data version from the metadata column in the db.
+/// If no `DATA_VERSION_KEY` exists, it will return 0.
 fn read_data_version(db: &DB, logger: &slog::Logger) -> u32 {
     match db
         .get_cf(get_metadata_column_handle!(db), DATA_VERSION_KEY)
@@ -144,23 +157,52 @@ impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Result<Self> {
         let logger = logger.new(o!(COMPONENT_KEY => "PersistentKeyDB"));
 
-        // Build a list of column families
-        let mut cfs: HashSet<String> = COLUMN_FAMILIES.iter().map(|s| s.to_string()).collect();
+        // Build a list of column families with default descriptors
+        let mut cfs_check: HashSet<String> = HashSet::new();
+        let mut cfs: HashMap<String, ColumnFamilyDescriptor> = COLUMN_FAMILIES
+            .iter()
+            .map(|s| {
+                (
+                    s.to_string(),
+                    ColumnFamilyDescriptor::new((*s).to_string(), Options::default()),
+                )
+            })
+            .collect();
         let has_existing_db = path.exists();
         if has_existing_db {
             // Add the column families found in the existing db, they might be needed for migration.
             for cf in
                 DB::list_cf(&Options::default(), path).expect("Should get list of column families")
             {
-                cfs.insert(cf.clone());
+                cfs.insert(
+                    cf.clone(),
+                    ColumnFamilyDescriptor::new(cf.clone(), Options::default()),
+                );
+                cfs_check.insert(cf.clone());
             }
         }
 
-        // Open the db or create a new one if it doesn't exist
+        // Override the default descriptors and create the columns that we need
+        let mut cfopts = Options::default();
+        cfopts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
+        cfs.insert(
+            DATA_COLUMN.to_string(),
+            ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts),
+        );
+        cfs.insert(
+            METADATA_COLUMN.to_string(),
+            ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
+        );
+
         let mut opts = Options::default();
         opts.create_missing_column_families(true);
         opts.create_if_missing(true);
-        let mut db = DB::open_cf(&opts, &path, &cfs)
+
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> =
+            cfs.into_iter().map(|(_, cf_desc)| cf_desc).collect();
+
+        // Open the db or create a new one if it doesn't exist
+        let mut db = DB::open_cf_descriptors(&opts, &path, cf_descriptors)
             .map_err(anyhow::Error::msg)
             .context(format!("Failed to open database at: {}", path.display()))?;
 
@@ -197,9 +239,9 @@ impl PersistentKeyDB {
             }
         } else {
             // Check for unused data columns
-            let junk_columns: HashSet<String> = cfs
+            let junk_columns: HashSet<String> = cfs_check
                 .iter()
-                .filter(|column| COLUMN_FAMILIES.iter().find(|s| s == column).is_none())
+                .filter(|column| !COLUMN_FAMILIES.iter().any(|s| s == column))
                 .cloned()
                 .collect();
             if junk_columns.iter().len() > 0 {
@@ -213,16 +255,18 @@ impl PersistentKeyDB {
 }
 
 impl KeyDB for PersistentKeyDB {
-    // TODO: Add prefix to keygen data
     fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo) {
         // TODO: this error should be handled better
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
+        // Add the prefix to the key
+        let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
+
         self.db
             .put_cf(
                 get_data_column_handle!(&self.db),
-                &key_id.0,
+                key,
                 &keygen_result_info_encoded,
             )
             .unwrap_or_else(|_| {
@@ -235,9 +279,9 @@ impl KeyDB for PersistentKeyDB {
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
-            .iterator_cf(get_data_column_handle!(&self.db), IteratorMode::Start)
+            .prefix_iterator_cf(get_data_column_handle!(&self.db), KEYGEN_DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
-                let key_id: KeyId = KeyId(key_id.into());
+                let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
                     Ok(keygen_info) => {
                         slog::info!(
@@ -277,7 +321,7 @@ mod tests {
         opts.create_if_missing(true);
         let db = DB::open_cf(&opts, &path, COLUMN_FAMILIES).expect("Should open db file");
 
-        // write the version data
+        // Write the version data
         db.put_cf(
             get_metadata_column_handle!(&db),
             DATA_VERSION_KEY,
@@ -285,6 +329,12 @@ mod tests {
         )
         .expect("Should write DATA_VERSION");
     }
+
+    // Just a random key
+    const TEST_KEY: [u8; 33] = [
+        3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132, 93,
+        195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
+    ];
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
     const KEYGEN_RESULT_INFO_HEX: &'static str = "21000000000000000356815a968986af7dd8f84c365429435fba940a8b854129e78739d6d5a5ba74222000000000000000a0687cf58d7838802724b5a0ce902b421605488990c2a1156833743c68cc792303000000000000002100000000000000027cf4fe1aabd5862729d8f96ab07cf175f058fc7b4f79f3fd4fc4f9fba399dbb42100000000000000030bf033482c62d78902ff482b625dd99f025fcd429689123495bd5c5c6224cfda210000000000000002ee6ff7fd3bad3942708e965e728d8923784d36eb57f09d23aa75d8743a27c59b030000000000000030000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a0300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e010000000000000030000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427502000000000000000300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e30000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427530000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a03000000000000000100000000000000";
@@ -359,15 +409,11 @@ mod tests {
             bashful_secret_bin.as_ref()
         ));
         let logger = new_test_logger();
-        // just a random key
-        let key: [u8; 33] = [
-            3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132,
-            93, 195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
-        ];
-        let key_id = KeyId(key.into());
+
+        let key_id = KeyId(TEST_KEY.into());
 
         // Create a db that is data version 0.
-        // No metadata column and the keygen data column is named 'col0'
+        // No metadata column, the keygen data column is named 'col0' and has no prefix
         {
             let mut opts = Options::default();
             opts.create_missing_column_families(true);
@@ -376,7 +422,7 @@ mod tests {
 
             let cf = db.cf_handle("col0").unwrap();
 
-            db.put_cf(cf, &key, &bashful_secret_bin)
+            db.put_cf(cf, &key_id.0.clone(), &bashful_secret_bin)
                 .expect("Should write key share");
         }
 
@@ -410,17 +456,19 @@ mod tests {
             bashful_secret_bin.as_ref()
         ));
         let logger = new_test_logger();
-        // just a random key
-        let key: [u8; 33] = [
-            3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132,
-            93, 195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
-        ];
-        let key_id = KeyId(key.into());
+
+        let key_id = KeyId(TEST_KEY.into());
         let db_path = Path::new("db1");
         let _ = std::fs::remove_dir_all(db_path);
         {
             let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let db = p_db.db;
+
+            let key = [
+                KEYGEN_DATA_PREFIX.iter().cloned().collect(),
+                key_id.0.clone(),
+            ]
+            .concat();
 
             db.put_cf(get_data_column_handle!(&db), &key, &bashful_secret_bin)
                 .expect("Should write key share");
@@ -456,7 +504,6 @@ mod tests {
             p_db.update_key(&key_id, &keygen_result_info);
 
             let keys_before = p_db.load_keys();
-            // there should be no key [0; 33] yet
             assert!(keys_before.get(&key_id).is_some());
         }
         // clean up
