@@ -107,7 +107,12 @@ where
                 (
                     stage_data.clone(),
                     OutgoingMultisigStageMessages::Broadcast(
-                        common.all_idxs.iter().map(idx_to_id).collect(),
+                        common
+                            .all_idxs
+                            .iter()
+                            .filter(|idx| **idx != common.own_idx)
+                            .map(idx_to_id)
+                            .collect(),
                         MultisigMessage {
                             ceremony_id: common.ceremony_id,
                             data: ceremony_data.into(),
