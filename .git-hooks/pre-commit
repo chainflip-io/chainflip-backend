@@ -1,0 +1,34 @@
+    cat <<\EOF
+Running: cargo fmt -- --check
+EOF
+
+diff=$(cargo fmt -- --check)
+result=$?
+
+if [[ ${result} -ne 0 ]] ; then
+    cat <<\EOF
+There are some code style issues, run `cargo fmt` first.
+EOF
+    exit 1
+fi
+
+cat <<\EOF
+Running: cargo clippy -- -D warnings
+EOF
+
+diff=$(cargo clippy -- -D warnings)
+result=$?
+
+if [[ ${result} -ne 0 ]] ; then
+    cat <<\EOF
+
+-----------------------------
+Clippy encountered warnings which prevent you from committing.
+
+Please check these with `cargo clippy` and solve before retrying the commit.
+-----------------------------
+EOF
+    exit 1
+fi
+
+exit 0
