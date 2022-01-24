@@ -80,7 +80,7 @@ commands:
       - run: |
           set -x
           pr_response=$(curl --location --request GET "https://api.github.com/repos/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME/pulls?head=$CIRCLE_PROJECT_USERNAME:$CIRCLE_BRANCH&state=open" \
-          -u tomjohnburton:$GITHUB_TOKEN)
+          -u chainflip-bot:$GITHUB_TOKEN)
 
           if [ $(echo $pr_response | jq length) -eq 0 ]; then
             echo "No PR found to update - keep calm and carry on"
@@ -88,7 +88,7 @@ commands:
             pr_comment_url=$(echo $pr_response | jq -r ".[]._links.comments.href")
 
             curl --location --request POST "$pr_comment_url" \
-            -u tomjohnburton:$GITHUB_TOKEN \
+            -u chainflip-bot:$GITHUB_TOKEN \
             --header 'Content-Type: application/json' \
             --data-raw "{\"body\": \"<< parameters.content >>\"}"
           fi
