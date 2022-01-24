@@ -240,7 +240,7 @@ workflows:
           context:
             - ghcr-credentials
             - github-credentials
-            - do-credentials
+            - aws-credentials
             - infura-endpoints
 
 ######################## /Workflows ########################
@@ -553,8 +553,7 @@ jobs:
     steps:
       - checkout:
           path: chainflip-backend
-      - doctl/initialize
-      - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
+      - run: aws eks update-kubeconfig --name euc1-staging
       - attach_workspace:
           at: ./
       - add_ssh_keys:
