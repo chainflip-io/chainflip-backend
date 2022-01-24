@@ -5,7 +5,8 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    multisig::client::utils::PartyIdxMapping, multisig_p2p::OutgoingMultisigStageMessages,
+    multisig::{client::utils::PartyIdxMapping, crypto::Rng},
+    multisig_p2p::OutgoingMultisigStageMessages,
 };
 
 /// Outcome of a given ceremony stage
@@ -65,6 +66,7 @@ pub struct CeremonyCommon {
     pub outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     pub validator_mapping: Arc<PartyIdxMapping>,
     pub logger: slog::Logger,
+    pub rng: Rng,
 }
 
 impl CeremonyCommon {

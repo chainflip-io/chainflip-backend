@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client::{self, MultisigOutcome};
+use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use state_chain_runtime::AccountId;
 
@@ -215,8 +216,13 @@ impl CeremonyManager {
     }
 
     /// Process a keygen request
-    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
-        // TODO: Consider similiarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
+    pub fn on_keygen_request(
+        &mut self,
+        rng: Rng,
+        keygen_info: KeygenInfo,
+        keygen_options: KeygenOptions,
+    ) {
+        // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
         let KeygenInfo {
             ceremony_id,
@@ -261,6 +267,7 @@ impl CeremonyManager {
                 own_idx: our_idx,
                 all_idxs: signer_idxs,
                 logger: logger.clone(),
+                rng,
             };
 
             let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
@@ -281,6 +288,7 @@ impl CeremonyManager {
     /// Process a request to sign
     pub fn on_request_to_sign(
         &mut self,
+        rng: Rng,
         data: MessageHash,
         key_info: KeygenResultInfo,
         signers: Vec<AccountId>,
@@ -343,6 +351,7 @@ impl CeremonyManager {
                 own_idx,
                 all_idxs: signer_idxs,
                 logger: self.logger.clone(),
+                rng,
             };
 
             let processor = AwaitCommitments1::new(
