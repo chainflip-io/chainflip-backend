@@ -579,20 +579,16 @@ impl CeremonyVisitor {
         &mut self,
         _messages: &StageMessages<OtherStageData>,
     ) -> Option<()> {
-        if match self {
-            CeremonyVisitor::Complete => false,
+        match self {
+            CeremonyVisitor::Complete => Some(()),
             CeremonyVisitor::StageNumber(stage) => {
                 if 0 == *stage {
-                    true
+                    None
                 } else {
                     *stage = stage.checked_sub(1).unwrap();
-                    false
+                    Some(())
                 }
             }
-        } {
-            None
-        } else {
-            Some(())
         }
     }
 }
