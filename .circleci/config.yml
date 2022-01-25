@@ -387,6 +387,8 @@ jobs:
     <<: *cargo-base-job
     steps:
       - checkout
+      - attach_workspace:
+          at: ./
       - run: source ./state-chain/scripts/performance-test.sh
 
   # Check and test the entire chainflip-backend.
