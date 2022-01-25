@@ -160,12 +160,10 @@ pub mod pallet {
 		/// Get all of the Validators which match the condition of having submitted their
 		/// heartbeat this interval, and are not currently banned.
 		pub fn online_validators() -> Vec<T::ValidatorId> {
-			let online_validators = T::EpochInfo::current_validators()
+			T::EpochInfo::current_validators()
 				.into_iter()
 				.filter(|validator_id| Self::is_online(&validator_id))
-				.collect();
-
-			online_validators
+				.collect()
 		}
 	}
 
