@@ -3,7 +3,7 @@ mod helpers;
 mod keygen_unit_tests;
 
 pub use helpers::{
-    new_nodes, run_keygen_with_high_key_failure, standard_signing, KeygenCeremonyRunner,
+    new_nodes, run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
     SigningCeremonyRunner,
 };
 

@@ -551,7 +551,7 @@ async fn should_handle_invalid_commitments() {
 async fn should_handle_not_compatible_keygen() {
     let mut counter = 0;
     loop {
-        if let Err(()) = run_keygen_with_high_key_failure(ACCOUNT_IDS.clone()).await {
+        if let Err(()) = run_keygen_with_err_on_high_pubkey(ACCOUNT_IDS.clone()).await {
             break;
         } else {
             // We have a 50/50 chance of failing each time, so we should have failed keygen within 40 tries

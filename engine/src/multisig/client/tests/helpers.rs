@@ -740,7 +740,7 @@ pub async fn run_keygen(
     standard_keygen(keygen_ceremony).await
 }
 
-pub async fn run_keygen_with_high_key_failure<AccountIds: IntoIterator<Item = AccountId>>(
+pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
     account_ids: AccountIds,
 ) -> Result<(KeyId, HashMap<AccountId, Node>), ()> {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
@@ -756,10 +756,12 @@ pub async fn run_keygen_with_high_key_failure<AccountIds: IntoIterator<Item = Ac
         .try_complete::<keygen::SecretShare3, _, _>(stage_2_messages.clone())
         .await
     {
-        Ok(_) => {
+        Ok((reason, blamed)) => {
             for (_, node) in &keygen_ceremony.nodes {
                 assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
             }
+            assert_eq!(CeremonyAbortReason::Invalid, reason);
+            assert!(blamed.is_empty());
             Err(())
         }
         Err(stage_3_messages) => {
@@ -771,24 +773,7 @@ pub async fn run_keygen_with_high_key_failure<AccountIds: IntoIterator<Item = Ac
                 .await;
             let key_id = assert_ok!(keygen_ceremony.complete(stage_5_messages.clone()).await);
 
-            // Check Key Works
-            let (mut signing_ceremony, non_signing_nodes) = SigningCeremonyRunner::new(
-                keygen_ceremony.nodes,
-                1,
-                key_id.clone(),
-                MESSAGE_HASH.clone(),
-                Rng::from_entropy(),
-            );
-            let (_, _) = standard_signing(&mut signing_ceremony).await;
-
-            Ok((
-                key_id,
-                signing_ceremony
-                    .nodes
-                    .into_iter()
-                    .chain(non_signing_nodes.into_iter())
-                    .collect(),
-            ))
+            Ok((key_id, keygen_ceremony.nodes))
         }
     }
 }

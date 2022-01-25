@@ -8,7 +8,11 @@ mod tests {
     use std::{env, io};
 
     use crate::multisig::client::ensure_unsorted;
-    use crate::multisig::client::tests::run_keygen_with_high_key_failure;
+    use crate::multisig::client::tests::{
+        run_keygen_with_err_on_high_pubkey, standard_signing, SigningCeremonyRunner,
+    };
+    use crate::multisig::crypto::Rng;
+    use crate::multisig::tests::fixtures::MESSAGE_HASH;
     use state_chain_runtime::AccountId;
 
     const ENV_VAR_OUTPUT_FILE: &str = "KEYSHARES_JSON_OUTPUT";
@@ -98,14 +102,32 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
             loop {
                 if count >= 20 {
                     panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
-                }
+                } else {
+                    if let Ok((key_id, nodes)) =
+                        run_keygen_with_err_on_high_pubkey(account_ids.clone()).await
+                    {
+                        // Check Key Works
+                        use rand_legacy::FromEntropy;
+                        let (mut signing_ceremony, non_signing_nodes) = SigningCeremonyRunner::new(
+                            nodes,
+                            1,
+                            key_id.clone(),
+                            MESSAGE_HASH.clone(),
+                            Rng::from_entropy(),
+                        );
+                        standard_signing(&mut signing_ceremony).await;
 
-                if let Ok((key_id, nodes)) =
-                    run_keygen_with_high_key_failure(account_ids.clone()).await
-                {
-                    break (key_id, nodes);
+                        break (
+                            key_id,
+                            signing_ceremony
+                                .nodes
+                                .into_iter()
+                                .chain(non_signing_nodes)
+                                .collect::<HashMap<_, _>>(),
+                        );
+                    }
+                    count += 1;
                 }
-                count += 1;
             }
         };
 
