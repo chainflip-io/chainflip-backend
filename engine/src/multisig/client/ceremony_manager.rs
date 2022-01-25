@@ -83,7 +83,7 @@ impl CeremonyManager {
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
 
-                    self.signing_states.remove(&ceremony_id);
+                    self.signing_states.remove(ceremony_id);
                 }
             }
         }
@@ -104,7 +104,7 @@ impl CeremonyManager {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
-                    self.keygen_states.remove(&ceremony_id);
+                    self.keygen_states.remove(ceremony_id);
                 }
             }
         }
