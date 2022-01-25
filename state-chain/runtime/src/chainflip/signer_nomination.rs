@@ -1,4 +1,4 @@
-use crate::{Runtime, Validator};
+use crate::{Online, Runtime, Validator};
 use cf_traits::{Chainflip, EpochInfo};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
@@ -44,7 +44,7 @@ pub struct RandomSignerNomination;
 
 /// Returns a list of online validators.
 fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	<Validator as EpochInfo>::current_validators()
+	Online::online_validators()
 }
 
 impl cf_traits::SignerNomination for RandomSignerNomination {
