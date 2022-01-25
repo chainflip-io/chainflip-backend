@@ -1,16 +1,20 @@
-use crate::migrations::v1::v0_types::VaultV0;
+use crate::migrations::v1::v0_types::{VaultRotationStatusV0, VaultV0};
 
 use super::*;
 use cf_chains::ChainId;
 #[cfg(feature = "try-runtime")]
 use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 use frame_support::{storage::migration::*, Hashable};
-use sp_std::convert::TryInto;
+use frame_system::pallet_prelude::BlockNumberFor;
+use sp_std::convert::{TryFrom, TryInto};
 
 const PALLET_NAME_V0: &'static [u8] = b"Vaults";
 
 const PALLET_NAME_V1: &'static [u8] = b"EthereumVault";
 
+/// V1 Storage migration.
+///
+/// It *should* work during a rotation, but we should try to avoid it.
 pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
 	log::info!("🏯 migrate_storage to V1");
 	// The pallet has been renamed.
@@ -19,6 +23,8 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 	// The old vaults were indexed by ChainId - we need to construct the Storage suffix by
 	// hashing the Ethereum ChainId and then write the data back using the new storage
 	// accessors.
+	// If the conversion between old and new fails (it shouldn't!), we print an error and
+	// continue.
 	for (epoch, old_vault) in
 		storage_key_iter_with_suffix::<EpochIndex, VaultV0<T, I>, Blake2_128Concat>(
 			PALLET_NAME_V1,
@@ -27,8 +33,50 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		)
 		.drain()
 	{
-		let new_vault: Vault<T::Chain> = old_vault.try_into().expect("");
-		Vaults::<T, I>::insert(epoch, new_vault);
+		old_vault
+			.try_into()
+			.map(|new_vault: Vault<T::Chain>| Vaults::<T, I>::insert(epoch, new_vault))
+			.unwrap_or_else(|e| {
+				log::error!("Unable to convert Vault from V0 to V1: {:?}", e);
+			});
+	}
+
+	// The Nonce value needs to be moved from a double map to simple map.
+	take_storage_item::<_, _, Blake2_128Concat>(PALLET_NAME_V1, b"ChainNonces", ChainId::Ethereum)
+		.map(|nonce: Nonce| {
+			ChainNonce::<T, I>::put(nonce);
+		})
+		.unwrap_or_else(|| {
+			log::info!("🏯 No nonce value to migrate.");
+		});
+
+	// If possible we should avoid upgrading during a rotation, but just in case...
+	if let Some(status_v0) = take_storage_item::<_, VaultRotationStatusV0<T, I>, Blake2_128Concat>(
+		PALLET_NAME_V1,
+		b"PendingVaultRotations",
+		ChainId::Ethereum,
+	) {
+		// let status = status_v0.try_into();
+		// PendingVaultRotations::<T, I>::set(status);
+		match VaultRotationStatus::<T, I>::try_from(status_v0) {
+			Ok(status) => PendingVaultRotations::<T, I>::set(Some(status)),
+			Err(e) => log::error!("Failed to convert VaultRotationStatus from V0 to V1: {:?}", e),
+		}
+	} else {
+		log::info!("🏯 No pending vault rotations to migrate.");
+	}
+
+	if let Some(resolution_pending) = take_storage_item::<
+		_,
+		Vec<(ChainId, BlockNumberFor<T>)>,
+		Identity,
+	>(PALLET_NAME_V1, b"KeygenResolutionPending", ())
+	{
+		if let Some((Ethereum::CHAIN_ID, block_number)) = resolution_pending.first() {
+			KeygenResolutionPendingSince::<T, I>::put(block_number);
+		}
+	} else {
+		log::info!("🏯 No pending vault rotations to migrate.");
 	}
 
 	releases::V1.put::<Pallet<T, I>>();
@@ -41,7 +89,7 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 
 	let pre_migration_id_counter: u64 =
 		get_storage_value(b"Vaults", b"KeygenCeremonyIdCounter", b"").unwrap_or_else(|| {
-			log::warn!("Couldn't extract old id counter, assuming default");
+			log::warn!("🏯 Couldn't extract old id counter, assuming default");
 			Default::default()
 		});
 
@@ -144,11 +192,7 @@ mod v0_types {
 		},
 	}
 
-	impl<T: Config<I>, I: 'static> TryFrom<VaultRotationStatusV0<T, I>> for VaultRotationStatus<T, I>
-	where
-		// TLegacy: Config<()> + Chainflip<ValidatorId = <T as Chainflip>::ValidatorId>,
-		<T::Chain as ChainCrypto>::TransactionHash: TryFrom<Vec<u8>>,
-	{
+	impl<T: Config<I>, I: 'static> TryFrom<VaultRotationStatusV0<T, I>> for VaultRotationStatus<T, I> {
 		type Error = &'static str;
 
 		fn try_from(old: VaultRotationStatusV0<T, I>) -> Result<Self, Self::Error> {
@@ -163,12 +207,32 @@ mod v0_types {
 				},
 				VaultRotationStatusV0::AwaitingRotation { new_public_key, _phantom } =>
 					Self::AwaitingRotation { new_public_key: new_public_key.try_into()? },
-				VaultRotationStatusV0::Complete { tx_hash, _phantom } => Self::Complete {
-					tx_hash: tx_hash.try_into().map_err(|_| {
-						"Unable to convert Vec<u8> bytes to a valid TransactionHash"
-					})?,
-				},
+				VaultRotationStatusV0::Complete { tx_hash, _phantom } =>
+					Self::Complete { tx_hash: vec_to_hash::<T::Chain>(tx_hash)? },
 			})
 		}
+	}
+
+	/// This is a bit of a hack. It abuses the fact that we know the V0 transaction hash was
+	/// always 32 bytes. We can't convert directly, so we use Encode/Decode to get the bytes
+	/// into the correct format.
+	///
+	/// # Panics
+	///
+	/// Note this can panic if the length of the provided vec is less than 32 bytes.
+	fn vec_to_hash<T: ChainCrypto>(v: Vec<u8>) -> Result<T::TransactionHash, &'static str> {
+		let mut hash = [0u8; 32];
+		hash.copy_from_slice(&v[..32]);
+		let encoded_hash = hash.encode();
+		<T::TransactionHash as Decode>::decode(&mut &encoded_hash[..])
+			.map_err(|_| "Unable to convert Vec<u8> bytes to a valid TransactionHash")
+	}
+
+	#[test]
+	fn vec_to_hash_honours_assumptions() {
+		let v: Vec<u8> = [[0xcf; 16], [0x42; 16]].concat();
+		let h: [u8; 32] = v.clone().try_into().unwrap();
+
+		assert_eq!(cf_chains::eth::H256::from(h), vec_to_hash::<Ethereum>(v).unwrap());
 	}
 }
