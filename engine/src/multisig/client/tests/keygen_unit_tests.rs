@@ -217,8 +217,8 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         keygen::BlameResponse6,
         keygen::VerifyBlameResponses7
     );
-
-    assert_ok!(ceremony.complete(messages).await);
+    ceremony.distribute_messages(messages);
+    ceremony.complete().await;
 }
 
 /// If one or more parties send an invalid secret share both the first
@@ -284,10 +284,8 @@ async fn should_report_on_invalid_blame_response() {
     let messages = ceremony
         .run_stage::<keygen::VerifyBlameResponses7, _, _>(messages)
         .await;
-
-    ceremony
-        .complete_with_error(messages, &[bad_node_id.clone()])
-        .await;
+    ceremony.distribute_messages(messages);
+    ceremony.complete_with_error(&[bad_node_id.clone()]).await;
 }
 
 #[tokio::test]
@@ -318,8 +316,9 @@ async fn should_abort_on_blames_at_invalid_indexes() {
     let stage_5_messages = keygen_ceremony
         .run_stage::<keygen::VerifyComplaints5, _, _>(stage_4_messages)
         .await;
+    keygen_ceremony.distribute_messages(stage_5_messages);
     keygen_ceremony
-        .complete_with_error(stage_5_messages, &[bad_node_id.clone()])
+        .complete_with_error(&[bad_node_id.clone()])
         .await;
 }
 
@@ -509,8 +508,9 @@ async fn should_handle_inconsistent_broadcast_comm1() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
+    ceremony.distribute_messages(messages);
     ceremony
-        .complete_with_error(messages, &[bad_account_id.clone()])
+        .complete_with_error(&[bad_account_id.clone()])
         .await;
 }
 
@@ -539,9 +539,8 @@ async fn should_handle_invalid_commitments() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
-    ceremony
-        .complete_with_error(messages, &[bad_account_id])
-        .await;
+    ceremony.distribute_messages(messages);
+    ceremony.complete_with_error(&[bad_account_id]).await;
 }
 
 // Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
@@ -735,7 +734,8 @@ mod timeout {
 
             let messages = helpers::run_stages!(ceremony, messages, Complaints4, VerifyComplaints5);
 
-            assert_ok!(ceremony.complete(messages).await);
+            ceremony.distribute_messages(messages);
+            ceremony.complete().await;
         }
     }
 }

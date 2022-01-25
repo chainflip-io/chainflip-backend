@@ -141,8 +141,9 @@ async fn should_handle_invalid_local_sig() {
     let messages = signing_ceremony
         .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
         .await;
+    signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(messages, &[bad_account_id])
+        .complete_with_error(&[bad_account_id])
         .await;
     assert!(signing_ceremony
         .nodes
@@ -164,8 +165,9 @@ async fn should_handle_inconsistent_broadcast_com1() {
     let messages = signing_ceremony
         .run_stage::<frost::VerifyComm2, _, _>(messages)
         .await;
+    signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(messages, &[bad_account_id])
+        .complete_with_error(&[bad_account_id])
         .await;
     assert!(signing_ceremony
         .nodes
@@ -195,8 +197,9 @@ async fn should_handle_inconsistent_broadcast_sig3() {
     let messages = signing_ceremony
         .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
         .await;
+    signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(messages, &[bad_account_id])
+        .complete_with_error(&[bad_account_id])
         .await;
     assert!(signing_ceremony
         .nodes
@@ -609,7 +612,8 @@ async fn should_ignore_rts_with_used_ceremony_id() {
         frost::LocalSig3,
         frost::VerifyLocalSig4
     );
-    assert_ok!(signing_ceremony.complete(messages).await);
+    signing_ceremony.distribute_messages(messages);
+    signing_ceremony.complete().await;
 
     let signers = signing_ceremony.nodes.keys().cloned().collect();
     let node = signing_ceremony.nodes.values_mut().next().unwrap();
@@ -701,8 +705,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
         frost::LocalSig3,
         frost::VerifyLocalSig4
     );
-
-    assert_ok!(signing_ceremony.complete(messages).await);
+    signing_ceremony.distribute_messages(messages);
+    signing_ceremony.complete().await;
 }
 
 #[tokio::test]
@@ -717,7 +721,8 @@ async fn should_sign_with_all_parties() {
         frost::LocalSig3,
         frost::VerifyLocalSig4
     );
-    assert_ok!(signing_ceremony.complete(messages).await);
+    signing_ceremony.distribute_messages(messages);
+    signing_ceremony.complete().await;
 }
 
 mod timeout {
@@ -815,8 +820,8 @@ mod timeout {
                 frost::LocalSig3,
                 frost::VerifyLocalSig4
             );
-
-            assert_ok!(signing_ceremony.complete(messages).await);
+            signing_ceremony.distribute_messages(messages);
+            signing_ceremony.complete().await;
         }
 
         #[tokio::test]
@@ -850,7 +855,8 @@ mod timeout {
             let messages =
                 helpers::run_stages!(signing_ceremony, messages, frost::VerifyLocalSig4,);
 
-            assert_ok!(signing_ceremony.complete(messages).await);
+            signing_ceremony.distribute_messages(messages);
+            signing_ceremony.complete().await;
         }
 
         // This covers 2b
@@ -870,9 +876,9 @@ mod timeout {
                     &non_sending_party_id,
                 )
                 .await;
-
+            signing_ceremony.distribute_messages(messages);
             signing_ceremony
-                .complete_with_error(messages, &[non_sending_party_id])
+                .complete_with_error(&[non_sending_party_id])
                 .await;
         }
 
@@ -898,9 +904,9 @@ mod timeout {
                     &non_sending_party_id,
                 )
                 .await;
-
+            signing_ceremony.distribute_messages(messages);
             signing_ceremony
-                .complete_with_error(messages, &[non_sending_party_id])
+                .complete_with_error(&[non_sending_party_id])
                 .await;
         }
     }
@@ -927,7 +933,8 @@ mod timeout {
             let messages = ceremony
                 .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
                 .await;
-            assert_ok!(ceremony.complete(messages).await);
+            ceremony.distribute_messages(messages);
+            ceremony.complete().await;
         }
 
         #[tokio::test]
@@ -947,11 +954,7 @@ mod timeout {
 
             ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
 
-            assert_ok!(
-                ceremony
-                    .complete::<frost::SigningData>(Default::default())
-                    .await
-            );
+            ceremony.complete().await;
         }
 
         // These two cover 1b
@@ -977,10 +980,7 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error::<frost::SigningData>(
-                    Default::default(),
-                    &[non_sending_party_id_1],
-                )
+                .complete_with_error(&[non_sending_party_id_1])
                 .await
         }
 
@@ -1011,12 +1011,8 @@ mod timeout {
             // bad party two times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
-            // TODO: Probably remove distribute from inside complete?
             signing_ceremony
-                .complete_with_error::<frost::SigningData>(
-                    Default::default(),
-                    &[non_sending_party_id_1],
-                )
+                .complete_with_error(&[non_sending_party_id_1])
                 .await
         }
     }

@@ -329,24 +329,6 @@ where
         self.gather_outgoing_messages().await
     }
 
-    // Maybe want to remove gather from request, distribute from complete, make run_stage gather then distr instead of vice versa, and then try_complete (instead of try_complete_else_run_stage) wouldn't need the distribute_messages call
-    pub async fn try_complete_else_run_stage<
-        NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
-        StageData: Into<CeremonyData>,
-        Error: Display,
-    >(
-        &mut self,
-        messages: StageMessages<StageData>,
-    ) -> Result<CeremonyError, StageMessages<NextStageData>> {
-        self.distribute_messages(messages);
-
-        if let Some(result) = self.try_gather_outcomes().await {
-            Ok(result.unwrap_err())
-        } else {
-            Err(self.gather_outgoing_messages().await)
-        }
-    }
-
     pub async fn try_gather_outcomes(
         &mut self,
     ) -> Option<Result<<Self as CeremonyRunnerStrategy<Output>>::MappedOutcome, CeremonyError>>
@@ -382,23 +364,19 @@ where
         )
     }
 
-    pub async fn complete<StageData: Into<CeremonyData>>(
-        &mut self,
-        messages: StageMessages<StageData>,
-    ) -> Result<<Self as CeremonyRunnerStrategy<Output>>::MappedOutcome, CeremonyError> {
-        self.distribute_messages(messages);
-
-        self.try_gather_outcomes().await.unwrap()
+    pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy<Output>>::MappedOutcome {
+        assert_ok!(self.try_gather_outcomes().await.unwrap())
     }
 
-    pub async fn complete_with_error<StageData: Into<CeremonyData>>(
-        &mut self,
-        messages: StageMessages<StageData>,
-        bad_account_ids: &[AccountId],
-    ) {
-        let (reason, blamed) = self.complete(messages).await.unwrap_err();
+    pub async fn try_complete_with_error(&mut self, bad_account_ids: &[AccountId]) -> Option<()> {
+        let (reason, blamed) = self.try_gather_outcomes().await?.unwrap_err();
         assert_eq!(CeremonyAbortReason::Invalid, reason);
         assert_eq!(bad_account_ids, &blamed[..]);
+        Some(())
+    }
+
+    pub async fn complete_with_error(&mut self, bad_account_ids: &[AccountId]) {
+        self.try_complete_with_error(bad_account_ids).await.unwrap();
     }
 
     pub fn request_without_gather(&mut self) {
@@ -665,9 +643,10 @@ pub fn standard_signing_coroutine<'a>(
         visitor.yield_ceremony(&stage_3_messages)?;
         let stage_4_messages = ceremony.run_stage(stage_3_messages.clone()).await;
         visitor.yield_ceremony(&stage_4_messages)?;
+        ceremony.distribute_messages(stage_4_messages.clone());
 
         Some((
-            assert_ok!(ceremony.complete(stage_4_messages.clone()).await),
+            ceremony.complete().await,
             vec![
                 into_generic_stage_data(stage_1_messages.clone()),
                 into_generic_stage_data(stage_2_messages.clone()),
@@ -710,7 +689,8 @@ pub async fn standard_keygen(
     let stage_3_messages = keygen_ceremony.run_stage(stage_2_messages.clone()).await;
     let stage_4_messages = keygen_ceremony.run_stage(stage_3_messages.clone()).await;
     let stage_5_messages = keygen_ceremony.run_stage(stage_4_messages.clone()).await;
-    let key_id = assert_ok!(keygen_ceremony.complete(stage_5_messages.clone()).await);
+    keygen_ceremony.distribute_messages(stage_5_messages.clone());
+    let key_id = keygen_ceremony.complete().await;
 
     (
         key_id,
@@ -743,28 +723,29 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     );
     let stage_1_messages = keygen_ceremony.request().await;
     let stage_2_messages = keygen_ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages.clone())
+        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
         .await;
-    match keygen_ceremony
-        .try_complete_else_run_stage::<keygen::SecretShare3, _, _>(stage_2_messages.clone())
-        .await
-    {
-        Ok((reason, blamed)) => {
+    keygen_ceremony.distribute_messages(stage_2_messages);
+    match keygen_ceremony.try_complete_with_error(&[]).await {
+        Some(_) => {
             for (_, node) in &keygen_ceremony.nodes {
                 assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
             }
-            assert_eq!(CeremonyAbortReason::Invalid, reason);
-            assert!(blamed.is_empty());
             Err(())
         }
-        Err(stage_3_messages) => {
-            let stage_4_messages = keygen_ceremony
-                .run_stage::<keygen::Complaints4, _, _>(stage_3_messages.clone())
+        None => {
+            let stage_3_messages = keygen_ceremony
+                .gather_outgoing_messages::<keygen::SecretShare3, _>()
                 .await;
-            let stage_5_messages = keygen_ceremony
-                .run_stage::<keygen::VerifyComplaints5, _, _>(stage_4_messages.clone())
-                .await;
-            let key_id = assert_ok!(keygen_ceremony.complete(stage_5_messages.clone()).await);
+            let stage_5_messages = run_stages!(
+                keygen_ceremony,
+                stage_3_messages,
+                keygen::Complaints4,
+                keygen::VerifyComplaints5
+            );
+            keygen_ceremony.distribute_messages(stage_5_messages);
+
+            let key_id = keygen_ceremony.complete().await;
 
             Ok((key_id, keygen_ceremony.nodes))
         }
@@ -808,7 +789,8 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
         visitor.yield_ceremony(&stage_6_messages)?;
         let stage_7_messages = ceremony.run_stage(stage_6_messages.clone()).await;
         visitor.yield_ceremony(&stage_7_messages)?;
-        let key_id = assert_ok!(ceremony.complete(stage_7_messages.clone()).await);
+        ceremony.distribute_messages(stage_7_messages.clone());
+        let key_id = ceremony.complete().await;
 
         Some((
             key_id,
