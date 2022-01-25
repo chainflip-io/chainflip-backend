@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{btree_map::Entry, BTreeMap},
     convert::{TryFrom, TryInto},
     net::Ipv6Addr,
     sync::Arc,
@@ -272,10 +272,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                                 if let Some((existing_peer_id, _, _)) = account_to_peer.get(&account_id) {
                                     peer_to_account.remove(&existing_peer_id);
                                 }
-                                if peer_to_account.contains_key(&peer_id) {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
-                                } else {
-                                    peer_to_account.insert(peer_id, account_id.clone());
+                                if let Entry::Vacant(entry) = peer_to_account.entry(peer_id) {
+                                    entry.insert(account_id.clone());
                                     account_to_peer.insert(account_id, (peer_id, port, ip_address));
                                     if cfe_peer_id != peer_id {
                                         if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
@@ -284,6 +282,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                                             slog::info!(logger, "Added peer {} to reserved set", peer_id);
                                         }
                                     }
+                                } else {
+                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 }
                             }
                             AccountPeerMappingChange::Unregistered => {
