@@ -251,7 +251,7 @@ where
         }
     }
 
-    pub async fn gather_outgoing_messages<
+    async fn gather_outgoing_messages<
         NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
         Error: Display,
     >(
