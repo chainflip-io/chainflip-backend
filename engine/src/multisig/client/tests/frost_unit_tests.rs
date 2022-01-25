@@ -391,17 +391,18 @@ async fn pending_rts_should_expire() {
     let keygen_ceremony_id = 1;
     let signing_ceremony_id = 1;
     let target_account_id = &ACCOUNT_IDS[0];
-    let (key_id, _, _) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        keygen_ceremony_id,
-    )
-    .await;
 
-    let mut keygen_ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        keygen_ceremony_id,
-        Rng::from_seed([8; 32]),
-    );
+    let new_keygen_ceremony = || {
+        KeygenCeremonyRunner::new(
+            new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
+            keygen_ceremony_id,
+            Rng::from_seed([8; 32]),
+        )
+    };
+
+    let keygen_ceremony = new_keygen_ceremony();
+    let (key_id, _, _) = helpers::standard_keygen(keygen_ceremony).await;
+    let mut keygen_ceremony = new_keygen_ceremony();
     let messages = keygen_ceremony.request().await;
     run_stages!(
         keygen_ceremony,
