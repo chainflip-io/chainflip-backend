@@ -1,4 +1,4 @@
-use crate::{Online, Runtime, Validator};
+use crate::{Runtime, Validator};
 use cf_traits::{Chainflip, EpochInfo};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
@@ -43,20 +43,8 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 pub struct RandomSignerNomination;
 
 /// Returns a list of online validators.
-///
-/// TODO: When #1037 is merged, use the more efficient EpochInfo::current_validators()
 fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-		.filter_map(
-			|(id, _)| {
-				if <Online as cf_traits::IsOnline>::is_online(&id) {
-					Some(id)
-				} else {
-					None
-				}
-			},
-		)
-		.collect()
+	<Validator as EpochInfo>::current_validators()
 }
 
 impl cf_traits::SignerNomination for RandomSignerNomination {
