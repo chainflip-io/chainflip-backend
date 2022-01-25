@@ -435,29 +435,4 @@ where
 
         self.cleanup();
     }
-
-    /// Conditionally force timeout for a stage depending on what
-    /// current stage is
-    pub fn ensure_stage_finalized_signing(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
-        // TODO: use enums for stage names/idx
-
-        dbg!(self.ceremony_manager.get_signing_stage_for(ceremony_id));
-
-        if &self.ceremony_manager.get_signing_stage_for(ceremony_id)
-            == &Some(stage_name.to_string())
-        {
-            self.force_stage_timeout();
-        }
-    }
-
-    /// Conditionally force timeout for a stage depending on what
-    /// current stage is
-    pub fn ensure_stage_finalized_keygen(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
-        dbg!(self.ceremony_manager.get_keygen_stage_for(ceremony_id));
-
-        if &self.ceremony_manager.get_keygen_stage_for(ceremony_id) == &Some(stage_name.to_string())
-        {
-            self.force_stage_timeout();
-        }
-    }
 }
