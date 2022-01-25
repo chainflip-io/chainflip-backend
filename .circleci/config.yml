@@ -112,14 +112,14 @@ commands:
   commit_complexity_changes:
     steps:
       - run:
-        name: Commit changes to current branch
-        command: |
-          # setup git  user
-          git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
-          git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
+          name: Commit changes to current branch
+          command: |
+            # setup git  user
+            git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
+            git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
 
-          git add state-chain/benchmarking
-          git commit -m "automatic commit of performance test results in pipeline"
+            git add state-chain/benchmarking
+            git commit -m "automatic commit of performance test results in pipeline"
 
 ######################## /Commands ########################
 
