@@ -42,22 +42,17 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 /// Nominates pseudo-random signers based on the provided seed.
 pub struct RandomSignerNomination;
 
-/// Returns a list of online validators.
-fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	Online::online_validators()
-}
-
 impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		let online_validators = get_online_validators();
+		let online_validators = Online::online_validators();
 		select_one(seed_from_hashable(seed), online_validators)
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
 		let threshold = <Validator as EpochInfo>::consensus_threshold();
-		let online_validators = get_online_validators();
+		let online_validators = Online::online_validators();
 		try_select_random_subset(seed_from_hashable(seed), threshold as usize, online_validators)
 	}
 }
