@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::KeyDB;
-use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
@@ -34,25 +34,24 @@ const DATA_COLUMN: &str = "data";
 const METADATA_COLUMN: &str = "metadata";
 const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
-macro_rules! get_metadata_column_handle {
-    ($db:expr) => {{
-        $db.cf_handle(METADATA_COLUMN)
-            .unwrap_or_else(|| panic!("Should get column family handle for {}", METADATA_COLUMN))
-    }};
+fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
+    get_column_handle(db, METADATA_COLUMN)
 }
 
-macro_rules! get_data_column_handle {
-    ($db:expr) => {{
-        $db.cf_handle(DATA_COLUMN)
-            .unwrap_or_else(|| panic!("Should get column family handle for {}", DATA_COLUMN))
-    }};
+fn get_data_column_handle(db: &DB) -> &ColumnFamily {
+    get_column_handle(db, DATA_COLUMN)
+}
+
+fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
+    db.cf_handle(column_name)
+        .unwrap_or_else(|| panic!("Should get column family handle for {}", column_name))
 }
 
 /// Migrates the db forward one version migration at a time
-fn migrate_db(db: &mut DB, from_version: u32, to_version: u32) -> Result<(), anyhow::Error> {
-    assert!(from_version < to_version, "Invalid migration");
+fn migrate_db_to_latest(db: &mut DB, from_version: u32) -> Result<(), anyhow::Error> {
+    assert!(from_version < DATA_VERSION, "Invalid migration");
 
-    for version in (from_version + 1)..=to_version {
+    for version in (from_version + 1)..=DATA_VERSION {
         match version {
             1 => {
                 migration_0_to_1(db)?;
@@ -107,27 +106,28 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
 /// Used is every migration to update the db data version in the same batch write as the migration operation
 fn add_version_to_batch_write(db: &DB, data_version: u32, batch: &mut WriteBatch) {
     batch.put_cf(
-        get_metadata_column_handle!(db),
+        get_metadata_column_handle(db),
         DATA_VERSION_KEY,
         data_version.to_be_bytes(),
     );
 }
 
 /// Update the db data version to the latest DATA_VERSION
-fn write_latest_data_version(db: &DB) {
+fn write_latest_data_version(db: &DB) -> Result<u32> {
     db.put_cf(
-        get_metadata_column_handle!(db),
+        get_metadata_column_handle(db),
         DATA_VERSION_KEY,
         DATA_VERSION.to_be_bytes(),
     )
-    .expect("Failed to write data version");
+    .map_err(|e| anyhow::Error::msg(format!("Failed to write data version: {}", e)))?;
+    Ok(DATA_VERSION)
 }
 
 /// Get the data version from the metadata column in the db.
 /// If no `DATA_VERSION_KEY` exists, it will return 0.
 fn read_data_version(db: &DB, logger: &slog::Logger) -> u32 {
     match db
-        .get_cf(get_metadata_column_handle!(db), DATA_VERSION_KEY)
+        .get_cf(get_metadata_column_handle(db), DATA_VERSION_KEY)
         .expect("Should querying for data_version")
     {
         Some(version) => {
@@ -171,49 +171,61 @@ impl PersistentKeyDB {
         let has_existing_db = path.exists();
         if has_existing_db {
             // Add the column families found in the existing db, they might be needed for migration.
-            for cf in
-                DB::list_cf(&Options::default(), path).expect("Should get list of column families")
-            {
-                cfs.insert(
-                    cf.clone(),
-                    ColumnFamilyDescriptor::new(cf.clone(), Options::default()),
-                );
-                cfs_check.insert(cf.clone());
-            }
+            cfs = cfs
+                .into_iter()
+                .chain(
+                    DB::list_cf(&Options::default(), path)
+                        .expect("Should get list of column families")
+                        .into_iter()
+                        .filter_map(|cf| {
+                            // Filter out the `default` column because we don't use it
+                            if cf == "default" {
+                                None
+                            } else {
+                                cfs_check.insert(cf.clone());
+                                Some((
+                                    cf.clone(),
+                                    ColumnFamilyDescriptor::new(cf, Options::default()),
+                                ))
+                            }
+                        }),
+                )
+                .collect();
         }
 
         // Override the default descriptors and create the columns that we need
-        let mut cfopts = Options::default();
-        cfopts.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
+        let mut cfopts_for_prefix = Options::default();
+        cfopts_for_prefix
+            .set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
         cfs.insert(
             DATA_COLUMN.to_string(),
-            ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts),
+            // The DATA_COLUMN must use a descriptor with a prefix extractor
+            ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix),
         );
         cfs.insert(
             METADATA_COLUMN.to_string(),
             ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
         );
 
-        let mut opts = Options::default();
-        opts.create_missing_column_families(true);
-        opts.create_if_missing(true);
+        let mut create_missing_db_and_cols_opts = Options::default();
+        create_missing_db_and_cols_opts.create_missing_column_families(true);
+        create_missing_db_and_cols_opts.create_if_missing(true);
 
         let cf_descriptors: Vec<ColumnFamilyDescriptor> =
             cfs.into_iter().map(|(_, cf_desc)| cf_desc).collect();
 
         // Open the db or create a new one if it doesn't exist
-        let mut db = DB::open_cf_descriptors(&opts, &path, cf_descriptors)
-            .map_err(anyhow::Error::msg)
-            .context(format!("Failed to open database at: {}", path.display()))?;
+        let mut db =
+            DB::open_cf_descriptors(&create_missing_db_and_cols_opts, &path, cf_descriptors)
+                .map_err(anyhow::Error::msg)
+                .context(format!("Failed to open database at: {}", path.display()))?;
 
         // We must check if the database is new or not, so we don't try and migrate from version 0.
         // Because version 0 had no metadata, we cant tell the difference between version 0 and a new db.
-        let data_version = match has_existing_db {
-            false => {
-                write_latest_data_version(&db);
-                DATA_VERSION
-            }
-            true => read_data_version(&db, &logger),
+        let data_version = if has_existing_db {
+            read_data_version(&db, &logger)
+        } else {
+            write_latest_data_version(&db)?
         };
 
         if data_version != DATA_VERSION {
@@ -227,8 +239,7 @@ impl PersistentKeyDB {
                     DATA_VERSION
                 );
                 // Preform migrations
-                migrate_db(&mut db, data_version, DATA_VERSION)
-                    .expect("Failed to migrate database");
+                migrate_db_to_latest(&mut db, data_version).expect("Failed to migrate database");
             } else {
                 // Automatic backwards migration is not supported
                 return Err(anyhow::Error::msg(
@@ -244,9 +255,9 @@ impl PersistentKeyDB {
                 .filter(|column| !COLUMN_FAMILIES.iter().any(|s| s == column))
                 .cloned()
                 .collect();
-            if junk_columns.iter().len() > 0 {
+            if junk_columns.len() > 0 {
                 // Just a warning for now. We can delete the columns if this becomes a problem in the future.
-                slog::warn!(logger, "Unknown columns found in db: {:?}", junk_columns)
+                slog::warn!(logger, "Unknown columns found in db: {:?}", junk_columns);
             }
         }
 
@@ -260,13 +271,12 @@ impl KeyDB for PersistentKeyDB {
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        // Add the prefix to the key
-        let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
+        let key_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
         self.db
             .put_cf(
-                get_data_column_handle!(&self.db),
-                key,
+                get_data_column_handle(&self.db),
+                key_with_prefix,
                 &keygen_result_info_encoded,
             )
             .unwrap_or_else(|_| {
@@ -279,7 +289,7 @@ impl KeyDB for PersistentKeyDB {
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
-            .prefix_iterator_cf(get_data_column_handle!(&self.db), KEYGEN_DATA_PREFIX)
+            .prefix_iterator_cf(get_data_column_handle(&self.db), KEYGEN_DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
                 let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
@@ -323,7 +333,7 @@ mod tests {
 
         // Write the version data
         db.put_cf(
-            get_metadata_column_handle!(&db),
+            get_metadata_column_handle(&db),
             DATA_VERSION_KEY,
             version_data.to_be_bytes(),
         )
@@ -373,7 +383,7 @@ mod tests {
 
             // Get version number
             let data_version = db
-                .get_cf(get_metadata_column_handle!(&db), DATA_VERSION_KEY)
+                .get_cf(get_metadata_column_handle(&db), DATA_VERSION_KEY)
                 .expect("Should get from metadata column")
                 .expect("No version data found");
             let data_version: [u8; 4] = data_version.try_into().expect("Version should be a u32");
@@ -470,7 +480,7 @@ mod tests {
             ]
             .concat();
 
-            db.put_cf(get_data_column_handle!(&db), &key, &bashful_secret_bin)
+            db.put_cf(get_data_column_handle(&db), &key, &bashful_secret_bin)
                 .expect("Should write key share");
         }
 
