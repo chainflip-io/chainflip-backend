@@ -109,6 +109,18 @@ commands:
               # if it should pass, wrap this in `if [[ -n "$target_branch" ]]; then`
               git fetch && git merge origin/$target_branch --no-edit
             fi
+  commit_complexity_changes:
+    steps:
+      - run:
+        name: Commit changes to current branch
+        command: |
+          # setup git  user
+          git config --global user.email $( git log --format='%ae' $CIRCLE_SHA1^! )
+          git config --global user.name $( git log --format='%an' $CIRCLE_SHA1^! )
+
+          git add state-chain/benchmarking
+          git commit -m "automatic commit of performance test results in pipeline"
+
 ######################## /Commands ########################
 
 ######################## Workflows ########################
@@ -390,6 +402,7 @@ jobs:
       - attach_workspace:
           at: ./
       - run: source ./state-chain/scripts/performance-test.sh
+      - commit_complexity_changes
 
   # Check and test the entire chainflip-backend.
   # We run sccache --show-stats multiple times;
