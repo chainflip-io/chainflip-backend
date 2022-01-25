@@ -157,7 +157,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 
     let mut peer_to_account = account_to_peer
         .iter()
-        .map(|(account_id, (peer_id, _, _))| (peer_id.clone(), account_id.clone()))
+        .map(|(account_id, (peer_id, _, _))| (*peer_id, account_id.clone()))
         .collect::<BTreeMap<_, _>>();
 
     slog::info!(
