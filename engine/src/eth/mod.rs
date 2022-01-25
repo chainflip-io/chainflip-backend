@@ -399,7 +399,7 @@ pub trait EthObserver {
         let best_safe_block_number = safe_head_stream
             .next()
             .await
-            .ok_or(anyhow::Error::msg("No block headers in safe stream"))?
+            .ok_or_else(|| anyhow::Error::msg("No block headers in safe stream"))?
             .number
             .expect("all blocks in safe stream have numbers");
         let future_logs =
