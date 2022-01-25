@@ -31,7 +31,6 @@ type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-#[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,

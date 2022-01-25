@@ -31,7 +31,6 @@ use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
 /// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
-#[derive(Clone)]
 pub struct AwaitCommitments1 {
     common: CeremonyCommon,
     own_commitment: DKGUnverifiedCommitment,
@@ -98,7 +97,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1
 }
 
 /// Stage 2: verify broadcasts of Stage 1 data
-#[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: CeremonyCommon,
     commitments: HashMap<usize, Option<Comm1>>,
@@ -201,7 +199,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
 }
 
 /// Stage 3: distribute (distinct) secret shares of our secret to each party
-#[derive(Clone)]
 struct SecretSharesStage3 {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
@@ -280,7 +277,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
 /// During this stage parties have a chance to complain about
 /// a party sending a secret share that isn't valid when checked
 /// against the commitments
-#[derive(Clone)]
 struct ComplaintsStage4 {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
@@ -322,7 +318,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 
     }
 }
 
-#[derive(Clone)]
 struct VerifyComplaintsBroadcastStage5 {
     common: CeremonyCommon,
     received_complaints: HashMap<usize, Option<Complaints4>>,
@@ -466,7 +461,6 @@ fn compute_keygen_result_info(
     }
 }
 
-#[derive(Clone)]
 struct BlameResponsesStage6 {
     common: CeremonyCommon,
     complaints: HashMap<usize, Complaints4>,
@@ -539,7 +533,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
     }
 }
 
-#[derive(Clone)]
 struct VerifyBlameResponsesBroadcastStage7 {
     common: CeremonyCommon,
     // Blame responses received from other parties in the previous communication round

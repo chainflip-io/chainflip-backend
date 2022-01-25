@@ -24,7 +24,7 @@ pub enum DataToSend<T> {
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
-pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
+pub trait BroadcastStageProcessor<D, Result>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
     type Message: Clone + Into<D> + TryFrom<D>;
@@ -44,7 +44,6 @@ pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-#[derive(Clone)]
 pub struct BroadcastStage<D, Result, P>
 where
     P: BroadcastStageProcessor<D, Result>,

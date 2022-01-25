@@ -1,6 +1,5 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -30,7 +29,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
-pub trait CeremonyStage: DynClone + std::fmt::Display {
+pub trait CeremonyStage: std::fmt::Display {
     // Message type to be processed by a particular stage
     type Message;
     // Result to return if the ceremony is successful

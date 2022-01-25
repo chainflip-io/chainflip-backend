@@ -120,10 +120,9 @@ fn generate_zkp_of_secret(
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
 
-#[derive(Clone)]
 pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
 
 /// Generate a secret and derive shares and commitments from it.
@@ -224,7 +223,7 @@ pub struct DKGUnverifiedCommitment {
 }
 
 /// Commitments that have already been checked against the ZKP
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DKGCommitment {
     commitments: CoefficientCommitments,
 }
