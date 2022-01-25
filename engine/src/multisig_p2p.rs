@@ -275,8 +275,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                                 if peer_to_account.contains_key(&peer_id) {
                                     slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 } else {
-                                    peer_to_account.insert(peer_id.clone(), account_id.clone());
-                                    account_to_peer.insert(account_id, (peer_id.clone(), port, ip_address));
+                                    peer_to_account.insert(peer_id, account_id.clone());
+                                    account_to_peer.insert(account_id, (peer_id, port, ip_address));
                                     if cfe_peer_id != peer_id {
                                         if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
                                             slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
