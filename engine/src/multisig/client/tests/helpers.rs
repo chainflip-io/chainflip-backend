@@ -63,13 +63,6 @@ pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 
-pub fn get_stage_for_keygen_ceremony(
-    client: &MultisigClientNoDB,
-    ceremony_id: CeremonyId,
-) -> Option<String> {
-    client.ceremony_manager.get_keygen_stage_for(ceremony_id)
-}
-
 pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
     tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv())
         .await
@@ -753,7 +746,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages.clone())
         .await;
     match keygen_ceremony
-        .try_complete::<keygen::SecretShare3, _, _>(stage_2_messages.clone())
+        .try_complete_else_run_stage::<keygen::SecretShare3, _, _>(stage_2_messages.clone())
         .await
     {
         Ok((reason, blamed)) => {
@@ -873,20 +866,13 @@ pub fn gen_invalid_signing_comm1(mut rng: &mut Rng) -> SigningCommitment {
 
 const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
-pub fn get_stage_for_signing_ceremony(
-    c: &MultisigClientNoDB,
-    ceremony_id: CeremonyId,
-) -> Option<String> {
-    c.ceremony_manager.get_signing_stage_for(ceremony_id)
-}
-
 impl MultisigClientNoDB {
     pub fn ensure_ceremony_at_signing_stage(
         &self,
         stage_number: usize,
         ceremony_id: CeremonyId,
     ) -> Result<()> {
-        let stage = get_stage_for_signing_ceremony(self, ceremony_id);
+        let stage = self.ceremony_manager.get_signing_stage_for(ceremony_id);
         let is_at_stage = match stage_number {
             STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
@@ -911,7 +897,7 @@ impl MultisigClientNoDB {
         stage_number: usize,
         ceremony_id: CeremonyId,
     ) -> Result<()> {
-        let stage = get_stage_for_keygen_ceremony(self, ceremony_id);
+        let stage = self.ceremony_manager.get_keygen_stage_for(ceremony_id);
         let is_at_stage = match stage_number {
             STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
