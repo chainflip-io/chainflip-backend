@@ -8,6 +8,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -19,8 +20,8 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping,
+	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, HasPeerMapping,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -63,10 +64,22 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum RotationStatus {
+	Idle,
+	AwaitingCompletion,
+	Ready,
+}
+
+impl Default for RotationStatus {
+	fn default() -> Self {
+		RotationStatus::Idle
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -144,6 +157,27 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// We expect this to return true when a rotation has been forced, it is now scheduled
+			// or we are currently in a rotation
+			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
+				// At the start of each auction we notify that we are approaching the end of the
+				// current epoch.  TODO Could this be best in another trait such as `Auctioneer`?
+				if T::Auctioneer::phase() == AuctionPhase::WaitingForBids {
+					T::EpochTransitionHandler::on_epoch_ending();
+				}
+
+				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
+					// Auction completed when we return to the state of `WaitingForBids`
+					if Force::<T>::get() {
+						Force::<T>::set(false);
+					}
+					Rotation::<T>::put(RotationStatus::AwaitingCompletion);
+				}
+			}
+			0
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
 				releases::V1.put::<Pallet<T>>();
@@ -367,6 +401,11 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
+	/// State of the current rotation
+	#[pallet::storage]
+	#[pallet::getter(fn rotation)]
+	pub type Rotation<T: Config> = StorageValue<_, RotationStatus, ValueQuery>;
+
 	/// A list of the current validators
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
@@ -460,36 +499,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(now: T::BlockNumber) -> bool {
-		// If we are waiting on bids let's see if we want to start a new rotation
-		match T::Auctioneer::phase() {
-			AuctionPhase::WaitingForBids => {
-				// If the session should end, start an auction.  We evaluate the first two steps
-				// of the auction, validate and select winners, as one.  If this fails we force a
-				// new rotation attempt.
-				if Self::should_rotate(now) {
-					// The current epoch is on the way out
-					T::EpochTransitionHandler::on_epoch_ending();
-					let processed =
-						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
-					if !processed {
-						Force::<T>::set(true);
-					}
-					return processed
-				}
-
-				false
-			},
-			AuctionPhase::ValidatorsSelected(..) => {
-				// Confirmation of winners, we need to finally process them
-				// This checks whether this is confirmable via the `AuctionConfirmation` trait
-				T::Auctioneer::process().is_ok()
-			},
-			_ => {
-				// Do nothing more
-				false
-			},
-		}
+	fn should_end_session(_now: T::BlockNumber) -> bool {
+		Rotation::<T>::get() != RotationStatus::Idle
 	}
 }
 
@@ -508,6 +519,8 @@ impl<T: Config> Pallet<T> {
 		Bond::<T>::set(new_bond);
 		// Set the block this epoch starts at
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+		// If we were in an emergency, mark as completed
+		Self::emergency_rotation_completed();
 
 		// Calculate the new epoch index
 		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
@@ -549,38 +562,49 @@ impl<T: Config> Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	/// Prepare candidates for a new session
+	/// If we have a set of confirmed validators we roll them in over two blocks
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		match T::Auctioneer::phase() {
-			// Successfully completed the process, these are the next set of validators to be used
-			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
-			// A rotation has occurred, we emit an event of the new epoch and compile a list of
-			// validators for validator lookup
-			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
-				// If we have a set of winners
-				if !winners.is_empty() {
-					// Reset forced rotation flag
-					if Force::<T>::get() {
-						Force::<T>::set(false);
-					}
-					// If we were in an emergency, mark as completed
-					Self::emergency_rotation_completed();
-					// Start the new epoch
-					Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
-				}
-
-				let _ = T::Auctioneer::process();
+		// We have a confirmed set of validators from our last auction
+		// We first return the new winners and then to finalise we start a new epoch
+		match Rotation::<T>::get() {
+			RotationStatus::Idle => {
+				log::warn!(target: "cf-validator", "we shouldn't reach here and we will see the same \
+													validators in the next epoch");
 				None
 			},
-			// Return
-			_ => None,
+			RotationStatus::AwaitingCompletion => {
+				Rotation::<T>::put(RotationStatus::Ready);
+				Some(
+					T::Auctioneer::auction_result()
+						.expect("everything starts with an auction")
+						.winners,
+				)
+			},
+			RotationStatus::Ready => {
+				Rotation::<T>::set(RotationStatus::Idle);
+				None
+			},
 		}
+	}
+
+	/// We provide an implementation for this as we already have a set of validators with keys at
+	/// genesis
+	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		None
 	}
 
 	/// The current session is ending
 	fn end_session(_end_index: SessionIndex) {}
+
 	/// The session is starting
-	fn start_session(_start_index: SessionIndex) {}
+	fn start_session(_start_index: SessionIndex) {
+		if Rotation::<T>::get() == RotationStatus::Ready {
+			let AuctionResult { winners, minimum_active_bid } =
+				T::Auctioneer::auction_result().expect("everything starts with an auction");
+			// Start the new epoch
+			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+		}
+	}
 }
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {

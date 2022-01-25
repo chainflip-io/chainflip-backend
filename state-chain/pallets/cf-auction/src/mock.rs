@@ -59,10 +59,10 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 
 pub fn run_auction() {
 	AuctionPallet::process()
-		.and(AuctionPallet::process().and_then(|_| {
+		.and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process().and(AuctionPallet::process())
-		}))
+			AuctionPallet::process()
+		})
 		.unwrap();
 
 	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
