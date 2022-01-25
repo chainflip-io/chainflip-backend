@@ -105,7 +105,7 @@ where
             DataToSend::Broadcast(stage_data) => {
                 let ceremony_data: D = stage_data.clone().into();
                 (
-                    stage_data.clone(),
+                    stage_data,
                     OutgoingMultisigStageMessages::Broadcast(
                         common.all_idxs.iter().map(idx_to_id).collect(),
                         MultisigMessage {
