@@ -154,13 +154,7 @@ pub trait CeremonyRunnerStrategy<Outcome> {
     fn multisig_instruction(&self) -> MultisigInstruction;
 }
 
-pub struct CeremonyRunner<
-    CeremonyData: Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
-    Outcome,
-    CeremonyRunnerData,
-> where
-    CeremonyOutcome<CeremonyId, Outcome>: TryFrom<MultisigOutcome>,
-{
+pub struct CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData> {
     pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
     pub ceremony_data: CeremonyRunnerData,
@@ -168,17 +162,16 @@ pub struct CeremonyRunner<
     _phantom: std::marker::PhantomData<(CeremonyData, Outcome)>,
 }
 
-impl<
-        CeremonyData: Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
-        Outcome: PartialEq + std::fmt::Debug,
-        CeremonyRunnerData,
-    > CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData>
+impl<CeremonyData, Outcome, CeremonyRunnerData>
+    CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData>
 where
+    CeremonyData:
+        Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
+    Outcome: PartialEq + std::fmt::Debug,
     CeremonyOutcome<CeremonyId, Outcome>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
-    CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData>: CeremonyRunnerStrategy<Outcome>,
-    <CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData> as CeremonyRunnerStrategy<
-        Outcome,
-    >>::InitialStageData: TryFrom<CeremonyData, Error = CeremonyData> + Clone,
+    Self: CeremonyRunnerStrategy<Outcome>,
+    <Self as CeremonyRunnerStrategy<Outcome>>::InitialStageData:
+        TryFrom<CeremonyData, Error = CeremonyData> + Clone,
 {
     // May wish to change the method of reusing existing clients for other ceremonies
     pub fn inner_new(
