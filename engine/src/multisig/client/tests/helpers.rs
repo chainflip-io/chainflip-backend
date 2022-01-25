@@ -627,7 +627,7 @@ pub async fn for_each_stage<
     }
 }
 
-pub fn into_generic_stage_data<CeremonyData, StageData: Into<CeremonyData>>(
+fn into_generic_stage_data<CeremonyData, StageData: Into<CeremonyData>>(
     messages: StageMessages<StageData>,
 ) -> StageMessages<CeremonyData> {
     messages
