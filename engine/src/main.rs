@@ -33,9 +33,11 @@ async fn main() {
 
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
-    HealthMonitor::new(&settings.health_check, &root_logger)
-        .run()
-        .await;
+    if let Some(health_check_settings) = &settings.health_check {
+        HealthMonitor::new(&health_check_settings, &root_logger)
+            .run()
+            .await;
+    }
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
