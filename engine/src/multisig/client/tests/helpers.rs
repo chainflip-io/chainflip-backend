@@ -119,14 +119,14 @@ pub fn new_node(account_id: AccountId, keygen_options: KeygenOptions) -> Node {
 }
 
 impl Node {
-    pub async fn try_recv_outcome<Outcome: PartialEq + std::fmt::Debug>(
+    pub async fn try_recv_outcome<Output: PartialEq + std::fmt::Debug>(
         &mut self,
-    ) -> Option<CeremonyOutcome<CeremonyId, Outcome>>
+    ) -> Option<CeremonyOutcome<CeremonyId, Output>>
     where
-        CeremonyOutcome<CeremonyId, Outcome>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
+        CeremonyOutcome<CeremonyId, Output>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
     {
         Some(
-            CeremonyOutcome::<CeremonyId, Outcome>::try_from(
+            CeremonyOutcome::<CeremonyId, Output>::try_from(
                 recv_with_timeout(&mut self.multisig_outcome_receiver).await?,
             )
             .unwrap(),
@@ -144,33 +144,33 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>>(
         .collect()
 }
 
-pub trait CeremonyRunnerStrategy<Outcome> {
+pub trait CeremonyRunnerStrategy<Output> {
     type MappedOutcome: std::fmt::Debug;
     type InitialStageData;
     const CEREMONY_FAILED_TAG: &'static str;
 
-    fn post_successful_complete_check(&self, outcome: Outcome) -> Self::MappedOutcome;
+    fn post_successful_complete_check(&self, outcome: Output) -> Self::MappedOutcome;
 
     fn multisig_instruction(&self) -> MultisigInstruction;
 }
 
-pub struct CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData> {
+pub struct CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> {
     pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
     pub ceremony_data: CeremonyRunnerData,
     pub rng: Rng,
-    _phantom: std::marker::PhantomData<(CeremonyData, Outcome)>,
+    _phantom: std::marker::PhantomData<(CeremonyData, Output)>,
 }
 
-impl<CeremonyData, Outcome, CeremonyRunnerData>
-    CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData>
+impl<CeremonyData, Output, CeremonyRunnerData>
+    CeremonyRunner<CeremonyData, Output, CeremonyRunnerData>
 where
     CeremonyData:
         Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
-    Outcome: PartialEq + std::fmt::Debug,
-    CeremonyOutcome<CeremonyId, Outcome>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
-    Self: CeremonyRunnerStrategy<Outcome>,
-    <Self as CeremonyRunnerStrategy<Outcome>>::InitialStageData:
+    Output: PartialEq + std::fmt::Debug,
+    CeremonyOutcome<CeremonyId, Output>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
+    Self: CeremonyRunnerStrategy<Output>,
+    <Self as CeremonyRunnerStrategy<Output>>::InitialStageData:
         TryFrom<CeremonyData, Error = CeremonyData> + Clone,
 {
     // May wish to change the method of reusing existing clients for other ceremonies
@@ -357,7 +357,7 @@ where
 
     pub async fn try_gather_outcomes(
         &mut self,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy<Outcome>>::MappedOutcome, CeremonyError>>
+    ) -> Option<Result<<Self as CeremonyRunnerStrategy<Output>>::MappedOutcome, CeremonyError>>
     {
         let outcomes = stream::iter(self.nodes.iter_mut())
             .then(|(account_id, node)| async move {
@@ -365,16 +365,16 @@ where
 
                 if let Err(_) = &outcome.result {
                     assert!(node.tag_cache.contains_tag(
-                        <Self as CeremonyRunnerStrategy<Outcome>>::CEREMONY_FAILED_TAG
+                        <Self as CeremonyRunnerStrategy<Output>>::CEREMONY_FAILED_TAG
                     ));
                 }
 
                 Some((account_id.clone(), outcome))
             })
-            .collect::<Vec<Option<(AccountId, CeremonyOutcome<CeremonyId, Outcome>)>>>()
+            .collect::<Vec<Option<(AccountId, CeremonyOutcome<CeremonyId, Output>)>>>()
             .await
             .into_iter()
-            .collect::<Option<HashMap<AccountId, CeremonyOutcome<CeremonyId, Outcome>>>>()?;
+            .collect::<Option<HashMap<AccountId, CeremonyOutcome<CeremonyId, Output>>>>()?;
 
         let _ceremony_id = all_same(outcomes.iter().map(|(_account_id, outcome)| outcome.id))
             .expect("Inconsistent ceremony ids in the ceremony outcomes");
@@ -393,7 +393,7 @@ where
     pub async fn complete<StageData: Into<CeremonyData>>(
         &mut self,
         messages: StageMessages<StageData>,
-    ) -> Result<<Self as CeremonyRunnerStrategy<Outcome>>::MappedOutcome, CeremonyError> {
+    ) -> Result<<Self as CeremonyRunnerStrategy<Output>>::MappedOutcome, CeremonyError> {
         self.distribute_messages(messages);
 
         self.try_gather_outcomes().await.unwrap()
@@ -423,8 +423,8 @@ where
         AccountId,
         HashMap<
             AccountId,
-            <CeremonyRunner<CeremonyData, Outcome, CeremonyRunnerData> as CeremonyRunnerStrategy<
-                Outcome,
+            <CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> as CeremonyRunnerStrategy<
+                Output,
             >>::InitialStageData,
         >,
     > {
