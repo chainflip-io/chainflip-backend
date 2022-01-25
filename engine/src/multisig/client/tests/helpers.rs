@@ -549,6 +549,7 @@ pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashM
     )
 }
 
+/// Filters out messages that aren't for receiver_id and splits them into those from sender_id and the others
 pub fn split_messages_for<StageData>(
     messages: StageMessages<StageData>,
     receiver_id: &AccountId,
