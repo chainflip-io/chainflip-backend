@@ -156,6 +156,7 @@ impl Scalar {
     }
 }
 
+// TODO: Look at how to dedup these adds
 impl std::ops::Add for &Scalar {
     type Output = Scalar;
 
@@ -168,7 +169,7 @@ impl std::ops::Add for Scalar {
     type Output = Scalar;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Scalar>::add(&self, &rhs)
     }
 }
 
@@ -236,6 +237,8 @@ impl std::ops::Mul<&Scalar> for &Point {
     }
 }
 
+// TODO: Look at how to dedup these adds
+// (See above impl Add for Scalar too)
 impl std::ops::Add for &Point {
     type Output = Point;
 
@@ -248,7 +251,7 @@ impl std::ops::Add for Point {
     type Output = Point;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Point>::add(&self, &rhs)
     }
 }
 
