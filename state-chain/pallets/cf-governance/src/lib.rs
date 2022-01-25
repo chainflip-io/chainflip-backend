@@ -86,10 +86,10 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Count how many proposals ever has been submitted
+	/// Count how many proposals have ever been submitted
 	#[pallet::storage]
-	#[pallet::getter(fn number_of_proposals)]
-	pub(super) type ProposalCount<T> = StorageValue<_, u32, ValueQuery>;
+	#[pallet::getter(fn proposal_id_counter)]
+	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Pipeline of proposals which will get executed in the next block
 	#[pallet::storage]
@@ -371,14 +371,14 @@ impl<T: Config> Pallet<T> {
 		// Insert a new proposal
 		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: vec![] });
 		// Update the proposal counter
-		ProposalCount::<T>::put(id);
+		ProposalIdCounter::<T>::put(id);
 		// Add the proposal to the active proposals array
 		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
 		id
 	}
 	/// Returns the next proposal id
 	fn get_next_id() -> ProposalId {
-		ProposalCount::<T>::get().add(1)
+		ProposalIdCounter::<T>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
 	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {

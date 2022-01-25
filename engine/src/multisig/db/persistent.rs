@@ -21,9 +21,7 @@ pub struct PersistentKeyDB {
 impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::default();
-        // TODO: Update to kvdb 14 and then can pass in &Path
-        let db = Database::open(&config, path.to_str().expect("Invalid path"))
-            .expect("could not open database");
+        let db = Database::open(&config, path).expect("could not open database");
 
         PersistentKeyDB {
             db,

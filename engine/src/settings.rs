@@ -38,7 +38,7 @@ pub struct Eth {
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 pub struct HealthCheck {
     pub hostname: String,
     pub port: u16,
@@ -61,7 +61,7 @@ pub struct Settings {
     pub node_p2p: P2P,
     pub state_chain: StateChain,
     pub eth: Eth,
-    pub health_check: HealthCheck,
+    pub health_check: Option<HealthCheck>,
     pub signing: Signing,
     #[serde(default)]
     pub log: Log,
@@ -218,13 +218,18 @@ impl Settings {
             settings.eth.private_key_file = opt
         };
 
-        // Health Check
+        // Health Check - this is optional
+        let mut health_check = HealthCheck::default();
         if let Some(opt) = opts.health_check_hostname {
-            settings.health_check.hostname = opt
+            health_check.hostname = opt;
         };
         if let Some(opt) = opts.health_check_port {
-            settings.health_check.port = opt
+            health_check.port = opt;
         };
+        // Don't override the healthcheck settings unless something has changed
+        if health_check != HealthCheck::default() {
+            settings.health_check = Some(health_check);
+        }
 
         // Signing
         if let Some(opt) = opts.signing_db_file {
@@ -406,9 +411,12 @@ mod tests {
 
         assert_eq!(
             opts.health_check_hostname.unwrap(),
-            settings.health_check.hostname
+            settings.health_check.as_ref().unwrap().hostname
         );
-        assert_eq!(opts.health_check_port.unwrap(), settings.health_check.port);
+        assert_eq!(
+            opts.health_check_port.unwrap(),
+            settings.health_check.as_ref().unwrap().port
+        );
 
         assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 

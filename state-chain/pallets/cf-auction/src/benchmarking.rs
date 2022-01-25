@@ -6,9 +6,6 @@ use super::*;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 
-#[allow(unused)]
-use crate::Pallet as Auction;
-
 benchmarks! {
 	set_active_validator_range {
 		let range = (2, 100);

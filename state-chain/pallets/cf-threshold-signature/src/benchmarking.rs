@@ -5,9 +5,6 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite};
 
-#[allow(unused)]
-use crate::Pallet;
-
 benchmarks_instance_pallet! {
 	signature_success {} : {}
 	signature_failed {} : {}
