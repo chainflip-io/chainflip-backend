@@ -173,7 +173,6 @@ where
     <Self as CeremonyRunnerStrategy<Output>>::InitialStageData:
         TryFrom<CeremonyData, Error = CeremonyData> + Clone,
 {
-    // May wish to change the method of reusing existing clients for other ceremonies
     pub fn inner_new(
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
