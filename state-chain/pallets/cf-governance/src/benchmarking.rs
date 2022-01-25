@@ -15,7 +15,7 @@ benchmarks! {
 		<Members<T>>::put(vec![caller.clone()]);
 	}: _(RawOrigin::Signed(caller.clone()), call)
 	verify {
-		assert_eq!(ProposalCount::<T>::get(), 1);
+		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
 	approve {
 		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
@@ -24,7 +24,7 @@ benchmarks! {
 		Pallet::<T>::push_proposal(Box::new(call));
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 	verify {
-		assert_eq!(ProposalCount::<T>::get(), 1);
+		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();

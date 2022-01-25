@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
@@ -150,7 +150,7 @@ benchmarks! {
 	on_initialize_worst_case {
 		let b in 0 .. 150 as u32;
 		let accounts = create_accounts::<T>(150);
-		// let caller: T::AccountId = whitelisted_caller();
+
 		let eth_addr: EthereumAddress = [42u8; 20];
 		let now = Duration::from_millis(100);
 		// Push a claim
@@ -165,4 +165,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+// impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
