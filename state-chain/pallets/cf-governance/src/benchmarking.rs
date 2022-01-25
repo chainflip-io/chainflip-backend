@@ -25,8 +25,6 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 	verify {
 		assert_eq!(ProposalCount::<T>::get(), 1);
-		// TODO: Figure out why this is not working
-		// assert!(Proposals::<T>::get(1).approved.contains(&caller));
 	}
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();
