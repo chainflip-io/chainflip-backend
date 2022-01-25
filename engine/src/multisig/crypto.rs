@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Point {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Point::deserialize(&bytes)
-            .map(|x| Point(x))
+            .map(Point)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for Scalar {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Scalar::deserialize(&bytes)
-            .map(|x| Scalar(x))
+            .map(Scalar)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -144,7 +144,7 @@ impl Scalar {
     }
 
     pub fn invert(&self) -> Option<Self> {
-        self.0.invert().map(|x| Scalar(x))
+        self.0.invert().map(Scalar)
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
