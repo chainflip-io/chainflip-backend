@@ -161,7 +161,7 @@ pub struct CeremonyRunner<
 > where
     CeremonyOutcome<CeremonyId, Outcome>: TryFrom<MultisigOutcome>,
 {
-    pub nodes: HashMap<AccountId, Node>, // Maybe use a hashmap here
+    pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
     pub ceremony_data: CeremonyRunnerData,
     pub rng: Rng,
