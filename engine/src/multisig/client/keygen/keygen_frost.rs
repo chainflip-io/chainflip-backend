@@ -159,7 +159,7 @@ fn generate_secret_and_shares(
     let commitments: Vec<_> = [secret.clone()]
         .iter()
         .chain(&coefficients)
-        .map(|scalar| Point::from_scalar(&scalar))
+        .map(|scalar| Point::from_scalar(scalar))
         .collect();
 
     // Generate shares
