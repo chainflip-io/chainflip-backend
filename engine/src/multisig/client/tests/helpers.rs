@@ -336,8 +336,8 @@ where
         self.gather_outgoing_messages().await
     }
 
-    // TODO This is a bad abstraction (Probably Want to remove distribute from complete, make run_stage gather then distr instead of vice versa, and then add a try_complete())
-    pub async fn try_complete<
+    // Maybe want to remove gather from request, distribute from complete, make run_stage gather then distr instead of vice versa, and then try_complete (instead of try_complete_else_run_stage) wouldn't need the distribute_messages call
+    pub async fn try_complete_else_run_stage<
         NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
         StageData: Into<CeremonyData>,
         Error: Display,
