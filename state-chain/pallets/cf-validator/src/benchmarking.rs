@@ -61,4 +61,5 @@ benchmarks! {
 	}
 }
 
+// TODO: add the test execution we we've a solution for the register_peer_id benchmark
 // impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
