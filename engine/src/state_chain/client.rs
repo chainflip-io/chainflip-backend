@@ -12,6 +12,7 @@ use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
+use pallet_cf_environment::cfe::CfeSettings;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -730,6 +731,27 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .await?;
 
         Ok(epoch.last().expect("should have epoch").to_owned())
+    }
+
+    pub async fn get_cfe_settings(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<CfeSettings> {
+        let cfe_settings = self
+            .get_from_storage_with_key::<CfeSettings>(
+                block_hash,
+                StorageKey(
+                    pallet_cf_environment::CfeSettings::<state_chain_runtime::Runtime>::hashed_key(
+                    )
+                    .into(),
+                ),
+            )
+            .await?;
+
+        Ok(cfe_settings
+            .last()
+            .expect("should have CfeSettings")
+            .to_owned())
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
