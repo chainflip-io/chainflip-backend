@@ -199,8 +199,10 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Updates the cfe settings and emits an event with the updated values
 	fn do_cfe_config_update(update_settings: &dyn Fn(&mut cfe::CfeSettings) -> cfe::CfeSettings) {
-		CfeSettings::<T>::mutate(|settings| {
-			Self::deposit_event(Event::UpdatedCFESettings(update_settings(settings)));
+		let new_settings = CfeSettings::<T>::mutate(|settings| {
+			update_settings(settings);
+			*settings
 		});
+		Self::deposit_event(Event::UpdatedCFESettings(new_settings));
 	}
 }
