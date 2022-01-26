@@ -518,13 +518,28 @@ where
 	}
 }
 
-impl<T, I: 'static> cf_traits::ThresholdSigner<T> for Pallet<T, I>
+impl<T, I: 'static> cf_traits::ThresholdSigner<T::TargetChain> for Pallet<T, I>
 where
 	T: Config<I>,
 {
-	type Context = T::SigningContext;
+	type RequestId = CeremonyId;
+	type Error = Error<T, I>;
+	type Callback = <T as Chainflip>::Call;
 
-	fn request_signature(context: Self::Context) -> u64 {
-		Self::request_signature(context)
+	fn request_signature(context: <T::TargetChain as ChainCrypto>::Payload) -> Self::RequestId {
+		todo!()
+	}
+
+	fn register_callback(
+		request_id: Self::RequestId,
+		call: Self::Callback,
+	) -> Result<(), Self::Error> {
+		todo!()
+	}
+
+	fn signature_result(
+		request_id: Self::RequestId,
+	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
+		todo!()
 	}
 }
