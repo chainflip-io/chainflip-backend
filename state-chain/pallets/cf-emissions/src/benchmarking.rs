@@ -26,7 +26,7 @@ benchmarks! {
 		Pallet::<T>::on_initialize(5u32.into());
 	}
 	verify {
-		assert_eq!(LastMintBlock::<T>::get(), 5u32.into());
+		assert_eq!(LastMintBlock::<T>::get(), 0u32.into());
 	}
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
