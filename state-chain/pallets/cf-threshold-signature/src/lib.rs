@@ -61,8 +61,8 @@ pub mod pallet {
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
-		/// Signing context for generating the payload and success callback.
-		pub chain_signing_context: T::SigningContext,
+		/// The payload that should be signed over.
+		pub payload: <T::TargetChain as ChainCrypto>::Payload,
 	}
 
 	impl<T: Config<I>, I: 'static> RequestContext<T, I> {
@@ -137,13 +137,13 @@ pub mod pallet {
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChain: Chain + ChainCrypto;
 
-		/// The context definition for this instance.
-		type SigningContext: SigningContext<
-				Self,
-				Chain = Self::TargetChain,
-				ThresholdSignatureOrigin = Origin<Self, I>,
-			> + Member
-			+ FullCodec;
+		// /// The context definition for this instance.
+		// type SigningContext: SigningContext<
+		// 		Self,
+		// 		Chain = Self::TargetChain,
+		// 		ThresholdSignatureOrigin = Origin<Self, I>,
+		// 	> + Member
+		// 	+ FullCodec;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -246,7 +246,7 @@ pub mod pallet {
 
 					// Initiate a new attempt.
 					Self::request_attempt(
-						failed_ceremony_context.chain_signing_context,
+						failed_ceremony_context.payload,
 						failed_ceremony_context.attempt.wrapping_add(1),
 					);
 					Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id))
@@ -276,7 +276,7 @@ pub mod pallet {
 
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&T::KeyProvider::current_key(),
-					&context.chain_signing_context.get_payload(),
+					&context.payload,
 					signature,
 				) {
 					ValidTransaction::with_tag_prefix("ThresholdSignature")
@@ -326,18 +326,19 @@ pub mod pallet {
 			})?;
 
 			// Dispatch the callback.
-			let dispatch_result = context
-				.chain_signing_context
-				.dispatch_callback(Origin(Default::default()), signature);
+			todo!();
+			// let dispatch_result = context
+			// 	.payload
+			// 	.dispatch_callback(Origin(Default::default()), signature);
 
 			// Emit the result in an event.
-			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
-				id,
-				dispatch_result.map(|_| ()).map_err(|e| {
-					log::error!("Threshold dispatch failed for ceremony {}.", id);
-					e.error
-				}),
-			));
+			// Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
+			// 	id,
+			// 	dispatch_result.map(|_| ()).map_err(|e| {
+			// 		log::error!("Threshold dispatch failed for ceremony {}.", id);
+			// 		e.error
+			// 	}),
+			// ));
 
 			Ok(().into())
 		}
@@ -430,12 +431,12 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
-	pub fn request_signature(context: T::SigningContext) -> u64 {
-		Self::request_attempt(context, 0)
+	fn request_signature(payload: <T::TargetChain as ChainCrypto>::Payload) -> u64 {
+		Self::request_attempt(payload, 0)
 	}
 
 	/// Emits a request event, stores its context, and returns its id.
-	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
+	fn request_attempt(payload: <T::TargetChain as ChainCrypto>::Payload, attempt: u8) -> u64 {
 		// Get a new id.
 		let id = SigningCeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -444,9 +445,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Get the current signing key.
 		let key_id = T::KeyProvider::current_key_id();
-
-		// Construct the payload.
-		let payload = context.get_payload();
 
 		// Select nominees for threshold signature.
 		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed((id, attempt)) {
@@ -459,7 +457,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
-					chain_signing_context: context,
+					payload: payload.clone(),
 				},
 			);
 
@@ -477,7 +475,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,
-					chain_signing_context: context,
+					payload,
 				},
 			);
 
@@ -526,8 +524,8 @@ where
 	type Error = Error<T, I>;
 	type Callback = <T as Chainflip>::Call;
 
-	fn request_signature(context: <T::TargetChain as ChainCrypto>::Payload) -> Self::RequestId {
-		todo!()
+	fn request_signature(payload: <T::TargetChain as ChainCrypto>::Payload) -> Self::RequestId {
+		Self::request_signature(payload)
 	}
 
 	fn register_callback(
