@@ -1,4 +1,4 @@
-//! Benchmarking setup for pallet-template
+en//! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -76,23 +76,6 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(PendingVaultRotations::<T, I>::exists());
-	}
-	on_initialize_none {
-		let current_block: T::BlockNumber = 0u32.into();
-		KeygenResolutionPendingSince::<T, I>::put(current_block);
-		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
-		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
-
-		PendingVaultRotations::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
-		);
-	} : {
-		Pallet::<T, I>::on_initialize(11u32.into());
-	}
-	verify {
-		// TODO: Check what is wrong with this.
-		// assert!(!KeygenResolutionPendingSince::<T, I>::exists());
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
