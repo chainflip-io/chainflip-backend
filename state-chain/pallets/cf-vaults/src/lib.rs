@@ -309,7 +309,9 @@ pub mod pallet {
 						if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
 							T::KeygenResponseGracePeriod::get()
 						{
-							weight += T::WeightInfo::on_initialize_none();
+							weight += T::WeightInfo::on_initialize_failure(
+								response_status.remaining_candidates.len() as u32,
+							);
 							log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
 							Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
 								keygen_ceremony_id,
