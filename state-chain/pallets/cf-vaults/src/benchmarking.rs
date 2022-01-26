@@ -105,8 +105,12 @@ benchmarks_instance_pallet! {
 		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(AggKey::from_pubkey_compressed([0xbb; 33]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
 	verify {
-		// TODO: Check what is wrong with this.
-		// assert!(KeygenResolutionPendingSince::<T, I>::exists());
+		let rotation = PendingVaultRotations::<T, I>::get().unwrap();
+		assert!(matches!(
+			rotation,
+			VaultRotationStatus::AwaitingKeygen { response_status, .. }
+				if response_status.response_count() == 1
+		))
 	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
