@@ -214,7 +214,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation(1))]
+		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation())]
 		pub fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -235,7 +235,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation(1))]
+		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation())]
 		pub fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,

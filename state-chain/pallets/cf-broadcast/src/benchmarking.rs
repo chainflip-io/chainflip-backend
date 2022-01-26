@@ -3,9 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
 
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
