@@ -4,7 +4,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
+use frame_support::traits::{OnInitialize, OnRuntimeUpgrade};
 use frame_system::RawOrigin;
 
 const MINT_INTERVAL: u32 = 100;
@@ -26,7 +26,7 @@ benchmarks! {
 		Pallet::<T>::on_initialize(5u32.into());
 	}
 	verify {
-		assert_eq!(LastMintBlock::<T>::get(), 5u32.into());
+		assert_eq!(LastMintBlock::<T>::get(), 0u32.into());
 	}
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
@@ -35,6 +35,26 @@ benchmarks! {
 	}
 	verify {
 		assert_eq!(LastMintBlock::<T>::get(), MINT_INTERVAL.into());
+	}
+	update_mint_interval {
+	}: _(RawOrigin::Root, (50 as u32).into())
+	verify {
+		 let mint_interval = Pallet::<T>::mint_interval();
+		 assert_eq!(mint_interval, (50 as u32).into());
+	}
+	// Benchmark for the runtime migration v1
+	on_runtime_upgrade_v1 {
+		releases::V0.put::<Pallet<T>>();
+	} : {
+		Pallet::<T>::on_runtime_upgrade();
+	} verify {
+		assert_eq!(MintInterval::<T>::get(), 100u32.into());
+	}
+	// Benchmark for a runtime upgrade in which we do nothing
+	on_runtime_upgrade {
+		releases::V1.put::<Pallet<T>>();
+	} : {
+		Pallet::<T>::on_runtime_upgrade();
 	}
 }
 

@@ -111,7 +111,6 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type Penalty = MockOfflinePenalty;

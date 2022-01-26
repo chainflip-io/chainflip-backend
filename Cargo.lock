@@ -4968,6 +4968,7 @@ dependencies = [
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -5033,6 +5034,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "pallet-cf-online",
  "pallet-cf-validator",
  "parity-scale-codec",
