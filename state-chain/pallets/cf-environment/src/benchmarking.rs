@@ -22,14 +22,14 @@ benchmarks! {
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Pallet::<T>::cfe_settings().max_retry_attempts, 2);
+		assert_eq!(Pallet::<T>::cfe_settings().max_extrinsic_retry_attempts, 2);
 	}
 	update_max_stage_duration {
 		let call = Call::<T>::update_max_stage_duration(3);
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Pallet::<T>::cfe_settings().max_stage_duration, 3);
+		assert_eq!(Pallet::<T>::cfe_settings().max_ceremony_stage_duration, 3);
 	}
 	update_pending_sign_duration {
 		let call = Call::<T>::update_pending_sign_duration(4);

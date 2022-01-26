@@ -23,9 +23,9 @@ pub mod cfe {
 		/// to sign for the next key, if other nodes are ahead of us)
 		pub pending_sign_duration: u32,
 		/// Maximum duration a ceremony stage can last
-		pub max_stage_duration: u32,
+		pub max_ceremony_stage_duration: u32,
 		/// Number of times to retry after incrementing the nonce on a nonce error
-		pub max_retry_attempts: u32,
+		pub max_extrinsic_retry_attempts: u32,
 	}
 }
 
@@ -108,11 +108,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_max_retry_attempts())]
 		pub fn update_max_retry_attempts(
 			origin: OriginFor<T>,
-			max_retry_attempts: u32,
+			max_extrinsic_retry_attempts: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.max_retry_attempts = max_retry_attempts;
+				settings.max_extrinsic_retry_attempts = max_extrinsic_retry_attempts;
 				*settings
 			});
 			Ok(().into())
@@ -125,11 +125,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
 		pub fn update_max_stage_duration(
 			origin: OriginFor<T>,
-			max_stage_duration: u32,
+			max_ceremony_stage_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.max_stage_duration = max_stage_duration;
+				settings.max_ceremony_stage_duration = max_ceremony_stage_duration;
 				*settings
 			});
 			Ok(().into())
@@ -160,8 +160,8 @@ pub mod pallet {
 		pub ethereum_chain_id: u64,
 		pub eth_block_safety_margin: u32,
 		pub pending_sign_duration: u32,
-		pub max_stage_duration: u32,
-		pub max_retry_attempts: u32,
+		pub max_ceremony_stage_duration: u32,
+		pub max_extrinsic_retry_attempts: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -173,8 +173,8 @@ pub mod pallet {
 				ethereum_chain_id: Default::default(),
 				eth_block_safety_margin: Default::default(),
 				pending_sign_duration: Default::default(),
-				max_stage_duration: Default::default(),
-				max_retry_attempts: Default::default(),
+				max_ceremony_stage_duration: Default::default(),
+				max_extrinsic_retry_attempts: Default::default(),
 			}
 		}
 	}
@@ -189,8 +189,8 @@ pub mod pallet {
 			CfeSettings::<T>::set(cfe::CfeSettings {
 				eth_block_safety_margin: self.eth_block_safety_margin,
 				pending_sign_duration: self.pending_sign_duration,
-				max_stage_duration: self.max_stage_duration,
-				max_retry_attempts: self.max_retry_attempts,
+				max_ceremony_stage_duration: self.max_ceremony_stage_duration,
+				max_extrinsic_retry_attempts: self.max_extrinsic_retry_attempts,
 			});
 		}
 	}
