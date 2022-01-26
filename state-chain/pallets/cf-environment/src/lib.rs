@@ -94,7 +94,7 @@ pub mod pallet {
 			eth_block_safety_margin: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.eth_block_safety_margin = eth_block_safety_margin;
 			});
 			Ok(().into())
@@ -110,7 +110,7 @@ pub mod pallet {
 			max_extrinsic_retry_attempts: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.max_extrinsic_retry_attempts = max_extrinsic_retry_attempts;
 			});
 			Ok(().into())
@@ -126,7 +126,7 @@ pub mod pallet {
 			max_ceremony_stage_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.max_ceremony_stage_duration = max_ceremony_stage_duration;
 			});
 			Ok(().into())
@@ -142,7 +142,7 @@ pub mod pallet {
 			pending_sign_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.pending_sign_duration = pending_sign_duration;
 			});
 			Ok(().into())
