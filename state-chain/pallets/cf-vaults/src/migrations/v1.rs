@@ -217,22 +217,46 @@ mod v0_types {
 	/// always 32 bytes. We can't convert directly, so we use Encode/Decode to get the bytes
 	/// into the correct format.
 	///
-	/// # Panics
-	///
-	/// Note this can panic if the length of the provided vec is less than 32 bytes.
-	fn vec_to_hash<T: ChainCrypto>(v: Vec<u8>) -> Result<T::TransactionHash, &'static str> {
+	/// If the provided vec is too large, it is truncated. If it's too small, it zero-pads.
+	fn vec_to_hash<T: ChainCrypto>(mut v: Vec<u8>) -> Result<T::TransactionHash, &'static str> {
 		let mut hash = [0u8; 32];
+		if v.len() < 32 {
+			let padding = [0u8].repeat(32 - v.len());
+			v.extend_from_slice(&padding[..]);
+		}
 		hash.copy_from_slice(&v[..32]);
 		let encoded_hash = hash.encode();
 		<T::TransactionHash as Decode>::decode(&mut &encoded_hash[..])
 			.map_err(|_| "Unable to convert Vec<u8> bytes to a valid TransactionHash")
 	}
 
-	#[test]
-	fn vec_to_hash_honours_assumptions() {
-		let v: Vec<u8> = [[0xcf; 16], [0x42; 16]].concat();
-		let h: [u8; 32] = v.clone().try_into().unwrap();
+	#[cfg(test)]
+	mod test_super {
+		use super::*;
 
-		assert_eq!(cf_chains::eth::H256::from(h), vec_to_hash::<Ethereum>(v).unwrap());
+		#[test]
+		fn vec_to_hash_conversion_exact() {
+			let v: Vec<u8> = [[0xcf; 16], [0x42; 16]].concat();
+			let h: [u8; 32] = v.clone().try_into().unwrap();
+
+			assert_eq!(cf_chains::eth::H256::from(h), vec_to_hash::<Ethereum>(v).unwrap());
+		}
+
+		#[test]
+		fn vec_to_hash_conversion_smaller() {
+			let v: Vec<u8> = vec![0xcf; 16];
+			let h: [u8; 32] = [&v[..], &[0u8; 16][..]].concat().try_into().unwrap();
+
+			assert_eq!(cf_chains::eth::H256::from(h), vec_to_hash::<Ethereum>(v).unwrap());
+		}
+
+		#[test]
+		fn vec_to_hash_conversion_larger() {
+			let mut v: Vec<u8> = [[0xcf; 16], [0x42; 16]].concat();
+			let h: [u8; 32] = v.clone().try_into().unwrap();
+			v.extend_from_slice(b"hello");
+
+			assert_eq!(cf_chains::eth::H256::from(h), vec_to_hash::<Ethereum>(v).unwrap());
+		}
 	}
 }
