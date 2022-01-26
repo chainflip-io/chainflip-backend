@@ -350,7 +350,7 @@ pub trait HasPeerMapping {
 
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
-/// otherwise they are considered offline.  
+/// otherwise they are considered offline.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
 	/// Those nodes that are considered offline
