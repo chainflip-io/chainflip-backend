@@ -615,7 +615,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn start_vault_rotation_for_chain(candidates: Vec<T::ValidatorId>) -> DispatchResult {
+	fn start_vault_rotation(candidates: Vec<T::ValidatorId>) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
 		ensure!(!PendingVaultRotations::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
@@ -678,14 +678,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-// TODO: Implement this on Runtime instead of pallet.
+// TODO: Implement this on Runtime instead of pallet so that we can rotate multiple vaults.
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 	type RotationError = DispatchError;
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
-		// We only support Ethereum for now.
-		Self::start_vault_rotation_for_chain(candidates)
+		Self::start_vault_rotation(candidates)
 	}
 
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
