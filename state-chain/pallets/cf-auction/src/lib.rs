@@ -9,7 +9,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod migrations;
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -28,6 +30,14 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::{cmp::min, prelude::*};
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - Update for AuctionPhase for CurrentPhase
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -39,6 +49,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -89,7 +100,34 @@ pub mod pallet {
 
 	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+	}
 
 	/// Current phase of the auction
 	#[pallet::storage]
@@ -299,110 +337,99 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// A new auction has started, store and emit the event
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
-				let mut bidders = T::BidderProvider::get_bidders();
+				let mut bids = T::BidderProvider::get_bidders();
 				// Number one rule - If we have a bid at 0 then please leave
-				bidders.retain(|(_, amount)| !amount.is_zero());
+				bids.retain(|(_, amount)| !amount.is_zero());
 				// Determine if this validator is qualified for bidding
-				bidders.retain(|(validator_id, _)| {
+				bids.retain(|(validator_id, _)| {
 					<Pallet<T> as QualifyValidator>::is_qualified(validator_id)
 				});
+				let number_of_bidders = bids.len() as u32;
+				let (min_number_of_validators, max_number_of_validators) =
+					ActiveValidatorSizeRange::<T>::get();
 				// Final rule - Confirm we have our set size
-				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
+				if number_of_bidders < min_number_of_validators {
 					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
-						bidders.len(),
-						ActiveValidatorSizeRange::<T>::get().0
+						number_of_bidders,
+						min_number_of_validators
 					);
 					return Err(AuctionError::MinValidatorSize)
 				};
 
-				let phase = AuctionPhase::BidsTaken(bidders);
-				CurrentPhase::<T>::put(phase.clone());
+				// We sort by bid and cut the size of the set based on auction size range
+				// If we have a valid set, within the size range, we store this set as the
+				// 'winners' of this auction, change the state to 'Completed' and store the
+				// minimum bid needed to be included in the set.
+				bids.sort_unstable_by_key(|k| k.1);
+				bids.reverse();
 
-				Ok(phase)
-			},
-			// We sort by bid and cut the size of the set based on auction size range
-			// If we have a valid set, within the size range, we store this set as the
-			// 'winners' of this auction, change the state to 'Completed' and store the
-			// minimum bid needed to be included in the set.
-			AuctionPhase::BidsTaken(mut bids) => {
-				if !bids.is_empty() {
-					bids.sort_unstable_by_key(|k| k.1);
-					bids.reverse();
+				let mut target_validator_group_size =
+					min(max_number_of_validators, number_of_bidders) as usize;
+				let mut next_validator_group: Vec<_> =
+					bids.iter().take(target_validator_group_size as usize).collect();
 
-					let max_number_of_validators = ActiveValidatorSizeRange::<T>::get().1;
-					let number_of_bidders = bids.len() as u32;
-					let mut target_validator_group_size =
-						min(max_number_of_validators, number_of_bidders) as usize;
-					let mut next_validator_group: Vec<_> =
-						bids.iter().take(target_validator_group_size as usize).collect();
-
-					if T::EmergencyRotation::emergency_rotation_in_progress() {
-						// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
-						// of existing BVs in the validating set.  We ensure this by using the last
-						// MAB to understand who were BVs and ensure we only maintain the required
-						// amount under this level to avoid a superminority of low collateralised
-						// nodes.
-						if let Some(AuctionResult { minimum_active_bid, .. }) =
-							LastAuctionResult::<T>::get()
+				if T::EmergencyRotation::emergency_rotation_in_progress() {
+					// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
+					// of existing BVs in the validating set.  We ensure this by using the last
+					// MAB to understand who were BVs and ensure we only maintain the required
+					// amount under this level to avoid a superminority of low collateralised
+					// nodes.
+					if let Some(AuctionResult { minimum_active_bid, .. }) =
+						LastAuctionResult::<T>::get()
+					{
+						if let Some(new_target_validator_group_size) = next_validator_group
+							.iter()
+							.position(|(_, amount)| amount < &minimum_active_bid)
 						{
-							if let Some(new_target_validator_group_size) = next_validator_group
-								.iter()
-								.position(|(_, amount)| amount < &minimum_active_bid)
-							{
-								let number_of_existing_backup_validators =
-									(target_validator_group_size - new_target_validator_group_size)
-										as u32 * (T::ActiveToBackupValidatorRatio::get() - 1) /
-										T::ActiveToBackupValidatorRatio::get();
+							let number_of_existing_backup_validators =
+								(target_validator_group_size - new_target_validator_group_size)
+									as u32 * (T::ActiveToBackupValidatorRatio::get() - 1) /
+									T::ActiveToBackupValidatorRatio::get();
 
-								let number_of_backup_validators_to_be_included =
-									(number_of_existing_backup_validators as u32).saturating_mul(
-										T::PercentageOfBackupValidatorsInEmergency::get(),
-									) / 100;
+							let number_of_backup_validators_to_be_included =
+								(number_of_existing_backup_validators as u32).saturating_mul(
+									T::PercentageOfBackupValidatorsInEmergency::get(),
+								) / 100;
 
-								target_validator_group_size = new_target_validator_group_size +
-									number_of_backup_validators_to_be_included as usize;
+							target_validator_group_size = new_target_validator_group_size +
+								number_of_backup_validators_to_be_included as usize;
 
-								next_validator_group.truncate(target_validator_group_size);
-							}
+							next_validator_group.truncate(target_validator_group_size);
 						}
 					}
-
-					let minimum_active_bid =
-						next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
-
-					let validating_set: Vec<_> = next_validator_group
-						.iter()
-						.map(|(validator_id, _)| (*validator_id).clone())
-						.collect();
-
-					let backup_group_size =
-						target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
-
-					let remaining_bidders: Vec<_> =
-						bids.iter().skip(target_validator_group_size as usize).collect();
-
-					let phase = AuctionPhase::ValidatorsSelected(
-						validating_set.clone(),
-						minimum_active_bid,
-					);
-
-					RemainingBidders::<T>::put(remaining_bidders);
-					BackupGroupSize::<T>::put(backup_group_size);
-					CurrentPhase::<T>::put(phase.clone());
-
-					Self::deposit_event(Event::AuctionCompleted(
-						<CurrentAuctionIndex<T>>::get(),
-						validating_set.clone(),
-					));
-
-					T::Handler::start_vault_rotation(validating_set)
-						.map_err(|_| AuctionError::Abort)?;
-
-					return Ok(phase)
 				}
 
-				return Err(AuctionError::Empty)
+				let minimum_active_bid =
+					next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
+
+				let validating_set: Vec<_> = next_validator_group
+					.iter()
+					.map(|(validator_id, _)| (*validator_id).clone())
+					.collect();
+
+				let backup_group_size =
+					target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
+
+				let remaining_bidders: Vec<_> =
+					bids.iter().skip(target_validator_group_size as usize).collect();
+
+				let phase =
+					AuctionPhase::ValidatorsSelected(validating_set.clone(), minimum_active_bid);
+
+				RemainingBidders::<T>::put(remaining_bidders);
+				BackupGroupSize::<T>::put(backup_group_size);
+				CurrentPhase::<T>::put(phase.clone());
+
+				Self::deposit_event(Event::AuctionCompleted(
+					<CurrentAuctionIndex<T>>::get(),
+					validating_set.clone(),
+				));
+
+				T::Handler::start_vault_rotation(validating_set)
+					.map_err(|_| AuctionError::Abort)?;
+
+				return Ok(phase)
 			},
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
@@ -443,25 +470,18 @@ impl<T: Config> Auctioneer for Pallet<T> {
 							ChainflipAccountState::Passive,
 						);
 
-						let phase = AuctionPhase::ConfirmedValidators(winners, minimum_active_bid);
-						// Set phase
-						CurrentPhase::<T>::put(phase.clone());
+						// Store the result
+						LastAuctionResult::<T>::put(AuctionResult { winners, minimum_active_bid });
+						CurrentPhase::<T>::put(AuctionPhase::default());
 
 						Self::deposit_event(Event::AuctionConfirmed(
 							CurrentAuctionIndex::<T>::get(),
 						));
 
-						Ok(phase)
+						Ok(AuctionPhase::default())
 					},
 					Err(_) => Err(AuctionError::NotConfirmed),
 				}
-			},
-			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
-				// Store the result
-				LastAuctionResult::<T>::put(AuctionResult { winners, minimum_active_bid });
-				Self::deposit_event(Event::AwaitingBidders);
-				CurrentPhase::<T>::put(AuctionPhase::default());
-				Ok(AuctionPhase::default())
 			},
 		}
 		.map_err(|e| {

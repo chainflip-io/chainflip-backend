@@ -6,9 +6,6 @@ use super::*;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 
-#[allow(unused)]
-use crate::Pallet as Reputation;
-
 benchmarks! {
 	update_accrual_ratio {
 	} : _(RawOrigin::Root, 2, (151 as u32).into())
@@ -21,14 +18,14 @@ benchmarks! {
 	on_runtime_upgrade {
 		releases::V1.put::<Pallet<T>>();
 	} : {
-		Reputation::<T>::on_runtime_upgrade();
+		Pallet::<T>::on_runtime_upgrade();
 	} verify {
 		assert_eq!(ReputationPointPenalty::<T>::get(), ReputationPenalty { points: 1, blocks: (10 as u32).into() });
 	}
 	on_runtime_upgrade_v1 {
 		releases::V0.put::<Pallet<T>>();
 	} : {
-		Reputation::<T>::on_runtime_upgrade();
+		Pallet::<T>::on_runtime_upgrade();
 	}
 
 }

@@ -8,25 +8,26 @@ use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_call
 use frame_system::RawOrigin;
 use pallet_cf_flip::FlipIssuance;
 
-#[allow(unused)]
-use crate::Pallet as Rewards;
-
 benchmarks! {
 	redeem_rewards {
-		let caller = whitelisted_caller();
+		let caller: T::AccountId = whitelisted_caller();
 		// Define use balances
-		let rewards_entitlement: T::Balance = T::Balance::from(10000 as u32);
-		let apportioned_rewards: T::Balance = T::Balance::from(2 as u32);
-		let reserved_balance: T::Balance = T::Balance::from(200000 as u32);
+		let rewards_entitlement: T::Balance = T::Balance::from(10_000u32);
+		let apportioned_rewards: T::Balance = T::Balance::from(2u32);
+		let reserved_balance: T::Balance = T::Balance::from(200_000u32);
 		// Mint to reserve
 		let mint = FlipIssuance::<T>::mint(reserved_balance);
 		let deposit = Flip::deposit_reserves(VALIDATOR_REWARDS, reserved_balance);
 		let _ = mint.offset(deposit);
 		// Setup
-		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, 4 as u32);
+		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, 4u32);
 		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, rewards_entitlement);
 		ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, &caller, apportioned_rewards);
-	}: _(RawOrigin::Signed(caller))
+	}: _(RawOrigin::Signed(caller.clone().into()))
+	verify {
+		let actual_rewards = ApportionedRewards::<T>::get(&VALIDATOR_REWARDS, caller).expect("ApportionedRewards is none during benchmark verification!");
+		assert_eq!(T::Balance::from(2500u32), actual_rewards);
+	}
 }
 
 impl_benchmark_test_suite!(

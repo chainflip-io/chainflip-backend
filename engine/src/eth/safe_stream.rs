@@ -99,7 +99,6 @@ where
                     let logs = eth_rpc
                         .get_logs(
                             FilterBuilder::default()
-                                //todo: is there an "at block"
                                 .from_block(BlockNumber::Number(block_number))
                                 .to_block(BlockNumber::Number(block_number))
                                 .address(vec![contract_address])

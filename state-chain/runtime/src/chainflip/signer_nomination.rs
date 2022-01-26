@@ -133,7 +133,20 @@ mod tests {
 			// collision should be quite low.
 			assert_ne!(
 				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed + 100, 2, set.clone()).unwrap()),
+				BTreeSet::from_iter(
+					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
+				),
+			);
+		}
+	}
+
+	#[test]
+	fn same_seed_same_set() {
+		let set = (0..150).collect::<Vec<_>>();
+		for seed in 0..100 {
+			assert_eq!(
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
 			);
 		}
 	}
