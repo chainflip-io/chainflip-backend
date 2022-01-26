@@ -3,7 +3,7 @@ use crate::{
 	KeygenResolutionPendingSince, PendingVaultRotations, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::AggKey;
-use cf_traits::{Chainflip, EpochInfo, VaultRotator};
+use cf_traits::{Chainflip, EpochInfo};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
