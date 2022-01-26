@@ -502,7 +502,7 @@ where
 	type Callback: UnfilteredDispatchable;
 
 	/// Initiate a signing request and return the request id.
-	fn request_signature(context: C::Payload) -> Self::RequestId;
+	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available.
 	fn register_callback(
