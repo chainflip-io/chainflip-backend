@@ -493,19 +493,44 @@ pub trait KeyProvider<C: ChainCrypto> {
 }
 
 /// Api trait for pallets that need to sign things.
-pub trait ThresholdSigner<T>
+pub trait ThresholdSigner<C>
 where
-	T: Chainflip,
+	C: ChainCrypto,
 {
-	type Context: SigningContext<T>;
+	type RequestId: Copy;
+	type Error: Into<DispatchError>;
+	type Callback: UnfilteredDispatchable;
 
 	/// Initiate a signing request and return the request id.
-	fn request_signature(context: Self::Context) -> u64;
+	fn request_signature(context: C::Payload) -> Self::RequestId;
 
-	/// Initiate a transaction signing request and return the request id.
-	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
-		Self::request_signature(transaction.into())
+	/// Register a callback to be dispatched when the signature is available.
+	fn register_callback(
+		request_id: Self::RequestId,
+		call: Self::Callback,
+	) -> Result<(), Self::Error>;
+
+	/// Attempt to retrieve a requested signature.
+	fn signature_result(request_id: Self::RequestId) -> AsyncResult<C::ThresholdSignature>;
+
+	/// Request a signature and register a callback for when the signature is available.
+	fn request_signature_with_callback(
+		payload: C::Payload,
+		callback: Self::Callback,
+	) -> Result<Self::RequestId, Self::Error> {
+		let id = Self::request_signature(payload);
+		Self::register_callback(id, callback)?;
+		Ok(id)
 	}
+}
+
+pub enum AsyncResult<R> {
+	/// Result is ready.
+	Ready(R),
+	/// Result is requested but not available. (still being generated)
+	Pending,
+	/// Result is void. (not yet requested or has already been used)
+	Void,
 }
 
 /// Types, methods and state for requesting and processing a threshold signature.
