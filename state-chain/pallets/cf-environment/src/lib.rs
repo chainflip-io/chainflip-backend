@@ -94,9 +94,8 @@ pub mod pallet {
 			eth_block_safety_margin: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.eth_block_safety_margin = eth_block_safety_margin;
-				*settings
 			});
 			Ok(().into())
 		}
@@ -111,9 +110,8 @@ pub mod pallet {
 			max_extrinsic_retry_attempts: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.max_extrinsic_retry_attempts = max_extrinsic_retry_attempts;
-				*settings
 			});
 			Ok(().into())
 		}
@@ -128,9 +126,8 @@ pub mod pallet {
 			max_ceremony_stage_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.max_ceremony_stage_duration = max_ceremony_stage_duration;
-				*settings
 			});
 			Ok(().into())
 		}
@@ -145,9 +142,8 @@ pub mod pallet {
 			pending_sign_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.pending_sign_duration = pending_sign_duration;
-				*settings
 			});
 			Ok(().into())
 		}
@@ -198,7 +194,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Updates the cfe settings and emits an event with the updated values
-	fn do_cfe_config_update(update_settings: impl Fn(&mut cfe::CfeSettings) -> cfe::CfeSettings) {
+	fn do_cfe_config_update(update_settings: impl Fn(&mut cfe::CfeSettings)) {
 		let new_settings = CfeSettings::<T>::mutate(|settings| {
 			update_settings(settings);
 			*settings
