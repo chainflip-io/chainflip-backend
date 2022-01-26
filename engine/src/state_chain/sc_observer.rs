@@ -20,6 +20,52 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
+async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    block_hash: H256,
+) -> (ChainflipAccountData, bool) {
+    let new_account_data = state_chain_client
+        .get_account_data(block_hash)
+        .await
+        .expect("Could not get account data");
+
+    let current_epoch = state_chain_client
+        .epoch_at_block(block_hash)
+        .await
+        .expect("Could not get current epoch");
+
+    let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
+        last_active_epoch + 1 == current_epoch
+    } else {
+        false
+    };
+
+    (new_account_data, is_outgoing)
+}
+
+async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    block_hash: H256,
+    account_data: ChainflipAccountData,
+    sm_window_sender: &UnboundedSender<BlockHeightWindow>,
+    km_window_sender: &UnboundedSender<BlockHeightWindow>,
+) -> anyhow::Result<()> {
+    let eth_vault = state_chain_client
+        .get_vault(
+            block_hash,
+            account_data
+                .last_active_epoch
+                .expect("we are active or outgoing"),
+            ChainId::Ethereum,
+        )
+        .await?;
+    sm_window_sender
+        .send(eth_vault.active_window.clone())
+        .unwrap();
+    km_window_sender.send(eth_vault.active_window).unwrap();
+    Ok(())
+}
+
 pub async fn start<BlockStream, RpcClient, EthRpc>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
@@ -56,52 +102,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
         .await
         .expect("Should be able to submit first heartbeat");
-
-    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
-        block_hash: H256,
-    ) -> (ChainflipAccountData, bool) {
-        let new_account_data = state_chain_client
-            .get_account_data(block_hash)
-            .await
-            .expect("Could not get account data");
-
-        let current_epoch = state_chain_client
-            .epoch_at_block(block_hash)
-            .await
-            .expect("Could not get current epoch");
-
-        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-            last_active_epoch + 1 == current_epoch
-        } else {
-            false
-        };
-
-        (new_account_data, is_outgoing)
-    }
-
-    async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
-        block_hash: H256,
-        account_data: ChainflipAccountData,
-        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-        km_window_sender: &UnboundedSender<BlockHeightWindow>,
-    ) -> anyhow::Result<()> {
-        let eth_vault = state_chain_client
-            .get_vault(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-                ChainId::Ethereum,
-            )
-            .await?;
-        sm_window_sender
-            .send(eth_vault.active_window.clone())
-            .unwrap();
-        km_window_sender.send(eth_vault.active_window).unwrap();
-        Ok(())
-    }
 
     // Initialise the account state
     let (mut account_data, mut is_outgoing) =
