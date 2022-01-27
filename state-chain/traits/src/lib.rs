@@ -516,14 +516,15 @@ where
 	/// Request a signature and register a callback for when the signature is available.
 	fn request_signature_with_callback(
 		payload: C::Payload,
-		callback: Self::Callback,
+		callback: impl Fn(Self::RequestId) -> Self::Callback,
 	) -> Result<Self::RequestId, Self::Error> {
 		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback)?;
+		Self::register_callback(id, callback(id))?;
 		Ok(id)
 	}
 }
 
+#[derive(Clone, Copy, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
 pub enum AsyncResult<R> {
 	/// Result is ready.
 	Ready(R),
@@ -531,6 +532,12 @@ pub enum AsyncResult<R> {
 	Pending,
 	/// Result is void. (not yet requested or has already been used)
 	Void,
+}
+
+impl<R> Default for AsyncResult<R> {
+	fn default() -> Self {
+		Self::Void
+	}
 }
 
 /// Types, methods and state for requesting and processing a threshold signature.
