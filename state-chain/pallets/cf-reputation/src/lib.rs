@@ -238,7 +238,7 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 		type Penalty = T::Penalty;
 
-		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId) -> Weight {
+		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId) {
 			// Confirm validator is present
 			if !Reputations::<T>::contains_key(validator_id) {
 				log::error!(
@@ -246,8 +246,7 @@ pub mod pallet {
 					"Cannot find Validator {:?} to report.",
 					validator_id
 				);
-				// probably shouldn't return 0 - but what should the weight be?
-				return 0
+				return
 			}
 
 			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
@@ -262,7 +261,7 @@ pub mod pallet {
 				penalty,
 			));
 
-			Self::update_reputation(validator_id, penalty.neg())
+			Self::update_reputation(validator_id, penalty.neg());
 		}
 	}
 
