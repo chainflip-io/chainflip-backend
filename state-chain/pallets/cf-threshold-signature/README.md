@@ -20,6 +20,10 @@ request is made upon initialization of the next block.
   resolving a callback to be executed upon reception of a valid threshold signature.
 - `Nominees`: The set of validators that have been selected to participate in the threshold signing ceremony.
 - `CeremonyId`: A unique id for each attempted signing ceremony.
+- `RequestId`: A unique id for each threshold signature request.
+- `Payload`: The payload that will be signed over.
+- `Callback`: A callback to be dispatched when the signature becomes available.
+- `RequestId`: A unique id for each threshold signature request.
 
 ## Dependencies
 
