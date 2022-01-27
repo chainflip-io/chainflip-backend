@@ -2,11 +2,19 @@ use cf_chains::ChainId;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
+use pallet_cf_environment::cfe::CfeSettings;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
 use state_chain_runtime::AccountId;
-use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    iter::FromIterator,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
@@ -81,6 +89,12 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
     km_window_sender: UnboundedSender<BlockHeightWindow>,
+    // == CFE Settings Atomics
+    eth_block_safety_margin: Arc<AtomicU32>,
+    pending_sign_duration_secs: Arc<AtomicU32>,
+    max_ceremony_stage_duration_secs: Arc<AtomicU32>,
+    max_extrinsic_retry_attempts: Arc<AtomicU32>,
+    // ====
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -399,6 +413,27 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                     let _ = state_chain_client
                                         .submit_signed_extrinsic(&logger, response_extrinsic)
                                         .await;
+                                }
+                                state_chain_runtime::Event::Environment(
+                                    pallet_cf_environment::Event::UpdatedCFESettings(CfeSettings {
+                                        eth_block_safety_margin: new_eth_block_safety_margin,
+                                        pending_sign_duration_secs: new_pending_sign_duration_secs,
+                                        max_ceremony_stage_duration_secs:
+                                            new_max_ceremony_stage_duration_secs,
+                                        max_extrinsic_retry_attempts:
+                                            new_max_extrinsic_retry_attempts,
+                                    }),
+                                ) => {
+                                    eth_block_safety_margin
+                                        .store(new_eth_block_safety_margin, Ordering::Relaxed);
+                                    pending_sign_duration_secs
+                                        .store(new_pending_sign_duration_secs, Ordering::Relaxed);
+                                    max_ceremony_stage_duration_secs.store(
+                                        new_max_ceremony_stage_duration_secs,
+                                        Ordering::Relaxed,
+                                    );
+                                    max_extrinsic_retry_attempts
+                                        .store(new_max_extrinsic_retry_attempts, Ordering::Relaxed);
                                 }
                                 ignored_event => {
                                     // ignore events we don't care about

@@ -1,3 +1,5 @@
+use std::sync::{atomic::AtomicU32, Arc};
+
 use chainflip_engine::{
     eth::{
         self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
@@ -10,6 +12,7 @@ use chainflip_engine::{
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
+use pallet_cf_environment::cfe::CfeSettings;
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
 use sp_core::{storage::StorageKey, U256};
@@ -141,6 +144,30 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
+    let (
+        eth_block_safety_margin,
+        pending_sign_duration,
+        max_ceremony_stage_duration,
+        max_extrinsic_retry_attempts,
+    ) = {
+        let CfeSettings {
+            eth_block_safety_margin,
+            pending_sign_duration_secs,
+            max_ceremony_stage_duration_secs,
+            max_extrinsic_retry_attempts,
+        } = state_chain_client
+            .get_cfe_settings(latest_block_hash)
+            .await
+            .expect("Should get initial CfeSettings from the SC");
+
+        (
+            Arc::new(AtomicU32::new(eth_block_safety_margin)),
+            Arc::new(AtomicU32::new(pending_sign_duration_secs)),
+            Arc::new(AtomicU32::new(max_ceremony_stage_duration_secs)),
+            Arc::new(AtomicU32::new(max_extrinsic_retry_attempts)),
+        )
+    };
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -178,6 +205,12 @@ async fn main() {
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,
+            // == CFE Settings Atomics ==
+            eth_block_safety_margin,
+            pending_sign_duration,
+            max_ceremony_stage_duration,
+            max_extrinsic_retry_attempts,
+            // ====
             latest_block_hash,
             &root_logger
         ),
