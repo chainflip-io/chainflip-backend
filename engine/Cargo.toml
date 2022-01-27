@@ -42,8 +42,6 @@ jsonrpc-ws-server = "18.0.0"
 websocket = "0.24"
 ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
-# kvdb-rocksdb is tied to substrate deps
-rocksdb = "0.17.0"
 lazy_static = "1.4"
 num = "0.4.0"
 parking_lot = "0.11"
@@ -83,6 +81,12 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
+
+[dependencies.rocksdb]
+version = "0.17.0"
+default-features = false
+features = ["lz4"]
+
 
 # substrate deps
 [dependencies.substrate-subxt]
