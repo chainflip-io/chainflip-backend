@@ -29,8 +29,8 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 // CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
 const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
-const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
-const PENDING_SIGN_DURATION_DEFAULT: u32 = 10;
+const MAX_STAGE_DURATION_SECS_DEFAULT: u32 = 300;
+const PENDING_SIGN_DURATION_SECS_DEFAULT: u32 = 10;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -63,8 +63,8 @@ pub struct StateChainEnvironment {
 	genesis_stake_amount: u128,
 	// CFE config values starts here
 	eth_block_safety_margin: u32,
-	pending_sign_duration: u32,
-	max_ceremony_stage_duration: u32,
+	pending_sign_duration_secs: u32,
+	max_ceremony_stage_duration_secs: u32,
 	max_extrinsic_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -107,13 +107,13 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u32>()
 		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
 
-	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
-		.unwrap_or(format!("{}", MAX_STAGE_DURATION_DEFAULT))
+	let max_ceremony_stage_duration_secs = env::var("MAX_CEREMONY_STAGE_DURATION")
+		.unwrap_or(format!("{}", MAX_STAGE_DURATION_SECS_DEFAULT))
 		.parse::<u32>()
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 
-	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
-		.unwrap_or(format!("{}", PENDING_SIGN_DURATION_DEFAULT))
+	let pending_sign_duration_secs = env::var("PENDING_SIGN_DURATION")
+		.unwrap_or(format!("{}", PENDING_SIGN_DURATION_SECS_DEFAULT))
 		.parse::<u32>()
 		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
 
@@ -125,8 +125,8 @@ pub fn get_environment() -> StateChainEnvironment {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
-		max_ceremony_stage_duration,
+		pending_sign_duration_secs,
+		max_ceremony_stage_duration_secs,
 		max_extrinsic_retry_attempts,
 	}
 }
@@ -152,8 +152,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
-		max_ceremony_stage_duration,
+		pending_sign_duration_secs,
+		max_ceremony_stage_duration_secs,
 		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
@@ -180,8 +180,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					key_manager_address,
 					ethereum_chain_id,
 					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
+					pending_sign_duration_secs,
+					max_ceremony_stage_duration_secs,
 					max_extrinsic_retry_attempts,
 				},
 				eth_init_agg_key,
@@ -219,8 +219,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
-		max_ceremony_stage_duration,
+		pending_sign_duration_secs,
+		max_ceremony_stage_duration_secs,
 		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
@@ -253,8 +253,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					key_manager_address,
 					ethereum_chain_id,
 					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
+					pending_sign_duration_secs,
+					max_ceremony_stage_duration_secs,
 					max_extrinsic_retry_attempts,
 				},
 				eth_init_agg_key,
@@ -318,8 +318,8 @@ fn chainflip_three_node_testnet_config_from_env(
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
-		max_ceremony_stage_duration,
+		pending_sign_duration_secs,
+		max_ceremony_stage_duration_secs,
 		max_extrinsic_retry_attempts,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
@@ -376,8 +376,8 @@ fn chainflip_three_node_testnet_config_from_env(
 					key_manager_address,
 					ethereum_chain_id,
 					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
+					pending_sign_duration_secs,
+					max_ceremony_stage_duration_secs,
 					max_extrinsic_retry_attempts,
 				},
 				eth_init_agg_key,
@@ -422,8 +422,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
-		max_ceremony_stage_duration,
+		pending_sign_duration_secs,
+		max_ceremony_stage_duration_secs,
 		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
@@ -502,8 +502,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					key_manager_address,
 					ethereum_chain_id,
 					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
+					pending_sign_duration_secs,
+					max_ceremony_stage_duration_secs,
 					max_extrinsic_retry_attempts,
 				},
 				eth_init_agg_key,

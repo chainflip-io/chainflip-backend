@@ -18,12 +18,12 @@ pub mod cfe {
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
-		/// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key
-		/// that is supposed to sign this message to be generated. (Since we can receive requests
-		/// to sign for the next key, if other nodes are ahead of us)
-		pub pending_sign_duration: u32,
-		/// Maximum duration a ceremony stage can last
-		pub max_ceremony_stage_duration: u32,
+		/// Defines how long a signing ceremony remains pending in seconds. i.e. how long it waits
+		/// for the key that is supposed to sign this message to be generated. (Since we can
+		/// receive requests to sign for the next key, if other nodes are ahead of us)
+		pub pending_sign_duration_secs: u32,
+		/// Maximum duration a ceremony stage can last in seconds
+		pub max_ceremony_stage_duration_secs: u32,
 		/// Number of times to retry after incrementing the nonce on a nonce error
 		pub max_extrinsic_retry_attempts: u32,
 	}
@@ -127,7 +127,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
-				settings.max_ceremony_stage_duration = max_ceremony_stage_duration;
+				settings.max_ceremony_stage_duration_secs = max_ceremony_stage_duration_secs;
 			});
 			Ok(().into())
 		}
@@ -142,8 +142,9 @@ pub mod pallet {
 			pending_sign_duration: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
-				settings.pending_sign_duration = pending_sign_duration;
+			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+				settings.pending_sign_duration_secs = pending_sign_duration_secs;
+				*settings
 			});
 			Ok(().into())
 		}
@@ -155,8 +156,8 @@ pub mod pallet {
 		pub key_manager_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub eth_block_safety_margin: u32,
-		pub pending_sign_duration: u32,
-		pub max_ceremony_stage_duration: u32,
+		pub pending_sign_duration_secs: u32,
+		pub max_ceremony_stage_duration_secs: u32,
 		pub max_extrinsic_retry_attempts: u32,
 	}
 
@@ -168,8 +169,8 @@ pub mod pallet {
 				key_manager_address: Default::default(),
 				ethereum_chain_id: Default::default(),
 				eth_block_safety_margin: Default::default(),
-				pending_sign_duration: Default::default(),
-				max_ceremony_stage_duration: Default::default(),
+				pending_sign_duration_secs: Default::default(),
+				max_ceremony_stage_duration_secs: Default::default(),
 				max_extrinsic_retry_attempts: Default::default(),
 			}
 		}
@@ -184,8 +185,8 @@ pub mod pallet {
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(cfe::CfeSettings {
 				eth_block_safety_margin: self.eth_block_safety_margin,
-				pending_sign_duration: self.pending_sign_duration,
-				max_ceremony_stage_duration: self.max_ceremony_stage_duration,
+				pending_sign_duration_secs: self.pending_sign_duration_secs,
+				max_ceremony_stage_duration_secs: self.max_ceremony_stage_duration_secs,
 				max_extrinsic_retry_attempts: self.max_extrinsic_retry_attempts,
 			});
 		}
