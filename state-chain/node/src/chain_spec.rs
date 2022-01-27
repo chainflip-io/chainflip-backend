@@ -28,7 +28,7 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
 // CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
-const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
+const MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
 const MAX_STAGE_DURATION_SECS_DEFAULT: u32 = 300;
 const PENDING_SIGN_DURATION_SECS_DEFAULT: u32 = 10;
 
@@ -103,7 +103,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
 	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS_DEFAULT))
+		.unwrap_or(format!("{}", MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT))
 		.parse::<u32>()
 		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
 
