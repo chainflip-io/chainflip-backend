@@ -246,7 +246,7 @@ pub mod pallet {
 					"Cannot find Validator {:?} to report.",
 					validator_id
 				);
-				return;
+				return
 			}
 
 			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
