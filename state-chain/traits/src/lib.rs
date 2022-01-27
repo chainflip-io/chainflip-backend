@@ -109,12 +109,9 @@ impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 pub enum AuctionPhase<ValidatorId, Amount> {
 	/// Waiting for bids
 	WaitingForBids,
-	/// Bids are now taken and validated
-	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	/// We have ran the auction and have a set of validators with minimum active bid.
+	/// We have ran the auction and have a set of validators with minimum active bid awaiting
+	/// confirmation
 	ValidatorsSelected(Vec<ValidatorId>, Amount),
-	/// The confirmed set of validators
-	ConfirmedValidators(Vec<ValidatorId>, Amount),
 }
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
@@ -202,7 +199,6 @@ pub trait VaultRotator {
 /// An error has occurred during an auction
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
-	Empty,
 	MinValidatorSize,
 	InvalidRange,
 	Abort,
@@ -354,7 +350,7 @@ pub trait HasPeerMapping {
 
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
-/// otherwise they are considered offline.  
+/// otherwise they are considered offline.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct NetworkState<ValidatorId: Default> {
 	/// Those nodes that are considered offline

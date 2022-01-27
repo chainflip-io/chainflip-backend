@@ -163,7 +163,7 @@ impl NonceProvider<Ethereum> for Test {
 	}
 }
 
-pub const MINT_INTERVAL: u64 = 5;
+pub const MINT_INTERVAL: u64 = 100;
 
 parameter_types! {
 	pub const MintInterval: u64 = MINT_INTERVAL;
@@ -195,7 +195,6 @@ impl pallet_cf_emissions::Config for Test {
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
-	type MintInterval = MintInterval;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
 	type SigningContext = MockEthSigningContext;

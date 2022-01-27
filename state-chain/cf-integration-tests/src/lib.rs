@@ -754,7 +754,7 @@ mod tests {
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"
 				);
-				assert_eq!(Governance::number_of_proposals(), 0, "no proposal for governance");
+				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
 					Emissions::validator_emission_inflation(),
@@ -1033,7 +1033,7 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(2);
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(
 						GENESIS_EPOCH + 2,
 						Validator::epoch_index(),
@@ -1334,7 +1334,7 @@ mod tests {
 					);
 
 					// Start an auction and wait for rotation
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(
 						GENESIS_EPOCH + 1,
