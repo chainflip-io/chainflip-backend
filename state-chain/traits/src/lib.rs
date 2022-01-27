@@ -557,10 +557,7 @@ pub mod offline_conditions {
 
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
-		fn report(
-			condition: OfflineCondition,
-			validator_id: &Self::ValidatorId,
-		) -> Weight;
+		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId) -> Weight;
 	}
 
 	/// We report on nodes that should be banned
