@@ -138,7 +138,7 @@ fn happy_path() {
 			tick(&[cfe]);
 
 			// Request is complete
-			assert!(DogeThresholdSigner::pending_request(ceremony_id).is_none());
+			assert!(DogeThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
 			// Callback has executed.
 			assert!(MockCallback::<Doge>::has_executed());
@@ -165,7 +165,7 @@ fn fail_path_with_timeout() {
 			tick(&cfes[..]);
 
 			// Request is still pending waiting for account 1.
-			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
+			let request_context = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
 			// Account 1 has 1 blame vote against it.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 1)]));
@@ -191,7 +191,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let pending = DogeThresholdSigner::pending_request(ceremony_id + 1).unwrap();
+			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id + 1).unwrap();
 			assert_eq!(pending.attempt, request_context.attempt + 1);
 			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
 			assert_eq!(
@@ -224,7 +224,7 @@ fn fail_path_no_timeout() {
 			tick(&cfes[..]);
 
 			// Request is still in pending state but scheduled for retry.
-			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
+			let request_context = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert!(request_context.retry_scheduled);
 
 			// Account 1 has 4 blame votes against it.
@@ -254,7 +254,7 @@ fn fail_path_no_timeout() {
 			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let pending = DogeThresholdSigner::pending_request(ceremony_id + 1).unwrap();
+			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id + 1).unwrap();
 			assert_eq!(pending.attempt, request_context.attempt + 1);
 			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
 			assert_eq!(
@@ -280,7 +280,7 @@ fn test_not_enough_signers_for_threshold() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
-			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
+			let request_context = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert!(request_context.retry_scheduled);
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			assert_eq!(DogeThresholdSigner::retry_queues(retry_block).len(), 1);
@@ -298,12 +298,10 @@ mod unsigned_validation {
 	fn valid_unsigned_extrinsic() {
 		new_test_ext().execute_with(|| {
 			// Initiate request
-			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
-				message: "Woof!".to_string(),
-			});
+			let (_, ceremony_id) = DogeThresholdSigner::request_signature("Woof!".to_string());
 			assert_ok!(Test::validate_unsigned(
 				TransactionSource::External,
-				&DogeCall::signature_success(request_id, DogeSig::Valid).into()
+				&DogeCall::signature_success(ceremony_id, DogeSig::Valid).into()
 			));
 		});
 	}
@@ -326,13 +324,11 @@ mod unsigned_validation {
 	fn reject_invalid_signature() {
 		new_test_ext().execute_with(|| {
 			// Initiate request
-			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
-				message: "Woof!".to_string(),
-			});
+			let (_, ceremony_id) = DogeThresholdSigner::request_signature("Woof!".to_string());
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
-					&DogeCall::signature_success(request_id, DogeSig::Invalid).into()
+					&DogeCall::signature_success(ceremony_id, DogeSig::Invalid).into()
 				)
 				.unwrap_err(),
 				InvalidTransaction::BadProof.into()
@@ -358,24 +354,24 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::RequestContext;
+	use crate::CeremonyContext;
 	use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
-	) -> RequestContext<Test, Instance1> {
+	) -> CeremonyContext<Test, Instance1> {
 		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
-		RequestContext::<Test, Instance1> {
-			attempt: 0,
+		CeremonyContext::<Test, Instance1> {
+			request_id: 0,
 			retry_scheduled: false,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
-			chain_signing_context: Default::default(),
+			_phantom: Default::default(),
 		}
 	}
 
-	fn report(context: &mut RequestContext<Test, Instance1>, reporter: u64, blamed: Vec<u64>) {
+	fn report(context: &mut CeremonyContext<Test, Instance1>, reporter: u64, blamed: Vec<u64>) {
 		for i in blamed {
 			*context.blame_counts.entry(i).or_default() += 1;
 		}

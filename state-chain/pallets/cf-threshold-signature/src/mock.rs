@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, iter::FromIterator};
 
-use crate::{self as pallet_cf_threshold_signature, EnsureThresholdSigned};
+use crate::{self as pallet_cf_threshold_signature, EnsureThresholdSigned, OpenRequests};
 use cf_chains::{eth, ChainCrypto};
 use cf_traits::{Chainflip, SigningContext};
 use codec::{Decode, Encode};
@@ -221,8 +221,9 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type RuntimeOrigin = Origin;
+	type Call = Call;
 	type TargetChain = Doge;
-	type SigningContext = DogeThresholdSignerContext;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
@@ -258,11 +259,10 @@ impl ExtBuilder {
 	pub fn with_pending_request(mut self, message: &'static str) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
-				message: message.to_string(),
-			});
-			let pending = DogeThresholdSigner::pending_request(request_id).unwrap();
-			assert_eq!(pending.attempt, 0);
+			let (request_id, ceremony_id) = DogeThresholdSigner::request_signature(message.into());
+			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let (_, attempts) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			assert_eq!(attempts, 0);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or(Default::default()))
