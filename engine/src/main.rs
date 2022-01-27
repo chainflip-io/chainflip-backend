@@ -151,7 +151,7 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
-    let (eth_block_safety_margin, pending_sign_duration, max_ceremony_stage_duration) = {
+    let (eth_block_safety_margin, pending_sign_duration_secs, max_ceremony_stage_duration_secs) = {
         let CfeSettings {
             eth_block_safety_margin,
             pending_sign_duration_secs,
@@ -210,8 +210,8 @@ async fn main() {
             km_window_sender,
             // == CFE Settings Atomics ==
             eth_block_safety_margin,
-            pending_sign_duration,
-            max_ceremony_stage_duration,
+            pending_sign_duration_secs,
+            max_ceremony_stage_duration_secs,
             max_extrinsic_retry_attempts,
             // ====
             latest_block_hash,
