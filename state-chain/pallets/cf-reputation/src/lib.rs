@@ -242,7 +242,8 @@ pub mod pallet {
 			// Confirm validator is present
 			if !Reputations::<T>::contains_key(validator_id) {
 				log::error!(
-					"OfflineReporter::report - cannot find Validator {:?} to report.",
+					target: "cf-reputation",
+					"Cannot find Validator {:?} to report.",
 					validator_id
 				);
 				// probably shouldn't return 0 - but what should the weight be?
