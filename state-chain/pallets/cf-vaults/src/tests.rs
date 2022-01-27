@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome,
-	KeygenResolutionPendingSince, PendingVaultRotations, Vault, VaultRotationStatus, Vaults,
+	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::AggKey;
 use cf_traits::{Chainflip, EpochInfo};
@@ -68,7 +68,7 @@ fn keygen_success() {
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
 
 		assert_matches!(
-			PendingVaultRotations::<MockRuntime, _>::get().unwrap(),
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
 	});
@@ -195,7 +195,7 @@ fn keygen_report_success() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_matches!(
-			PendingVaultRotations::<MockRuntime, _>::get().unwrap(),
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
 	})
@@ -385,7 +385,7 @@ fn vault_key_rotated() {
 
 		// Status is complete.
 		assert_eq!(
-			PendingVaultRotations::<MockRuntime, _>::get(),
+			PendingVaultRotation::<MockRuntime, _>::get(),
 			Some(VaultRotationStatus::Complete { tx_hash: TX_HASH.into() }),
 		);
 	});

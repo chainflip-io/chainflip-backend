@@ -47,14 +47,14 @@ benchmarks_instance_pallet! {
 			let _ = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
 		}
 
-		PendingVaultRotations::<T, I>::put(
+		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(!PendingVaultRotations::<T, I>::exists());
+		assert!(!PendingVaultRotation::<T, I>::exists());
 	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = 0u32.into();
@@ -68,27 +68,27 @@ benchmarks_instance_pallet! {
 			let _ = keygen_response_status.add_success_vote(&validator_id, AggKey::from_pubkey_compressed(NEW_PUBLIC_KEY));
 		}
 
-		PendingVaultRotations::<T, I>::put(
+		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(PendingVaultRotations::<T, I>::exists());
+		assert!(PendingVaultRotation::<T, I>::exists());
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
 		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
 		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
-		PendingVaultRotations::<T, I>::put(
+		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen { keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
 		);
 		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(AggKey::from_pubkey_compressed([0xbb; 33]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
 	verify {
-		let rotation = PendingVaultRotations::<T, I>::get().unwrap();
+		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
 		assert!(matches!(
 			rotation,
 			VaultRotationStatus::AwaitingKeygen { response_status, .. }
@@ -98,7 +98,7 @@ benchmarks_instance_pallet! {
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
 		let new_public_key = AggKey::from_pubkey_compressed([0xbb; 33]);
-		PendingVaultRotations::<T, I>::put(
+		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated(new_public_key, 5u64, Decode::decode(&mut &TX_HASH[..]).unwrap());

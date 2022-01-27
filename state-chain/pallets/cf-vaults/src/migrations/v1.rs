@@ -56,10 +56,8 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		b"PendingVaultRotations",
 		ChainId::Ethereum,
 	) {
-		// let status = status_v0.try_into();
-		// PendingVaultRotations::<T, I>::set(status);
 		match VaultRotationStatus::<T, I>::try_from(status_v0) {
-			Ok(status) => PendingVaultRotations::<T, I>::set(Some(status)),
+			Ok(status) => PendingVaultRotation::<T, I>::set(Some(status)),
 			Err(e) => log::error!("Failed to convert VaultRotationStatus from V0 to V1: {:?}", e),
 		}
 	} else {

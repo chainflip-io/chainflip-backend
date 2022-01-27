@@ -294,7 +294,7 @@ pub mod pallet {
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				response_status,
-			}) = PendingVaultRotations::<T, I>::get()
+			}) = PendingVaultRotation::<T, I>::get()
 			{
 				match response_status.consensus_outcome() {
 					Some(KeygenOutcome::Success(new_public_key)) => {
@@ -357,7 +357,7 @@ pub mod pallet {
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_vault_rotations)]
-	pub type PendingVaultRotations<T: Config<I>, I: 'static = ()> =
+	pub type PendingVaultRotation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultRotationStatus<T, I>>;
 
 	/// Threshold key nonces for this chain.
@@ -452,7 +452,7 @@ pub mod pallet {
 
 			// There is a rotation happening.
 			let mut rotation =
-				PendingVaultRotations::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
@@ -478,7 +478,7 @@ pub mod pallet {
 				},
 			}
 
-			PendingVaultRotations::<T, I>::put(rotation);
+			PendingVaultRotation::<T, I>::put(rotation);
 
 			Ok(().into())
 		}
@@ -510,7 +510,7 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let rotation =
-				PendingVaultRotations::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
 			let expected_new_key = ensure_variant!(
 				VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
@@ -541,7 +541,7 @@ pub mod pallet {
 				}
 			})?;
 
-			PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
 			// For the new epoch we create a new vault with the new public key and its active
 			// window at for the block after that reported
@@ -610,7 +610,7 @@ impl<T: Config<I>, I: 'static> NonceProvider<Ethereum> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn no_active_chain_vault_rotations() -> bool {
-		if let Some(status) = PendingVaultRotations::<T, I>::get() {
+		if let Some(status) = PendingVaultRotation::<T, I>::get() {
 			matches!(status, VaultRotationStatus::<T, I>::Complete { .. })
 		} else {
 			true
@@ -620,14 +620,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_vault_rotation(candidates: Vec<T::ValidatorId>) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
-		ensure!(!PendingVaultRotations::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
+		ensure!(!PendingVaultRotation::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
 
 		let ceremony_id = KeygenCeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::new(
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
 			ceremony_id,
 			BTreeSet::from_iter(candidates.clone()),
 		));
@@ -649,7 +649,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<Self as NonceProvider<Ethereum>>::next_nonce(),
 			new_public_key,
 		));
-		PendingVaultRotations::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
 	}
@@ -674,7 +674,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		KeygenResolutionPendingSince::<T, I>::kill();
 		// TODO: Instead of deleting the storage entirely, we should probably reset to some initial
 		// state.
-		PendingVaultRotations::<T, I>::kill();
+		PendingVaultRotation::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
 		T::RotationHandler::vault_rotation_aborted();
 	}
@@ -692,7 +692,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	fn finalize_rotation() -> Result<(), Self::RotationError> {
 		if Pallet::<T, I>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotations::<T, I>::kill();
+			PendingVaultRotation::<T, I>::kill();
 			Self::deposit_event(Event::<T, I>::VaultsRotated);
 			Ok(())
 		} else {
