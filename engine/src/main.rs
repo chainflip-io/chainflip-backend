@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicU32, Arc};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 
 use chainflip_engine::{
     eth::{
@@ -51,10 +54,14 @@ async fn main() {
     let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
         .expect("Failed to create ETH broadcaster");
 
-    let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
-            .await
-            .expect("Failed to connect to state chain");
+    let (
+        latest_block_hash,
+        state_chain_block_stream,
+        state_chain_client,
+        max_extrinsic_retry_attempts,
+    ) = state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
+        .await
+        .expect("Failed to connect to state chain");
 
     state_chain_client
         .submit_signed_extrinsic(
@@ -144,27 +151,23 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
-    let (
-        eth_block_safety_margin,
-        pending_sign_duration,
-        max_ceremony_stage_duration,
-        max_extrinsic_retry_attempts,
-    ) = {
+    let (eth_block_safety_margin, pending_sign_duration, max_ceremony_stage_duration) = {
         let CfeSettings {
             eth_block_safety_margin,
             pending_sign_duration_secs,
             max_ceremony_stage_duration_secs,
-            max_extrinsic_retry_attempts,
+            max_extrinsic_retry_attempts: max_extrinsic_retry_attempts_init,
         } = state_chain_client
             .get_cfe_settings(latest_block_hash)
             .await
             .expect("Should get initial CfeSettings from the SC");
 
+        // we already initialised max_extrinsic_retry attempts when we created the SC client
+        max_extrinsic_retry_attempts.store(max_extrinsic_retry_attempts_init, Ordering::Relaxed);
         (
             Arc::new(AtomicU32::new(eth_block_safety_margin)),
             Arc::new(AtomicU32::new(pending_sign_duration_secs)),
             Arc::new(AtomicU32::new(max_ceremony_stage_duration_secs)),
-            Arc::new(AtomicU32::new(max_extrinsic_retry_attempts)),
         )
     };
 

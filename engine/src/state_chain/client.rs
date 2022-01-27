@@ -43,7 +43,6 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
-use crate::constants::MAX_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -298,6 +297,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
+    max_extrinsic_retry_attempts: Arc<AtomicU32>,
 }
 
 // use this events key, to save creating chain metadata in the tests
@@ -332,6 +332,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             runtime_version: RwLock::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
+            max_extrinsic_retry_attempts: Arc::new(AtomicU32::new(10)),
         }
     }
 }
@@ -348,7 +349,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
         let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
-        for _ in 0..MAX_RETRY_ATTEMPTS {
+        let max_retry_attempts = self.max_extrinsic_retry_attempts.load(Ordering::Relaxed);
+        for _ in 0..max_retry_attempts {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
@@ -776,6 +778,7 @@ pub async fn connect_to_state_chain(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
+    Arc<AtomicU32>,
 )> {
     use substrate_subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
@@ -939,6 +942,11 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
+    use chainflip_node::chain_spec::MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT;
+
+    let max_extrinsic_retry_attempts =
+        Arc::new(AtomicU32::new(MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT));
+
     Ok((
         latest_block_hash,
         block_header_stream,
@@ -971,7 +979,9 @@ pub async fn connect_to_state_chain(
                 )
                 .value::<u32>()
                 .expect("Could not decode HeartbeatBlockInterval to u32"),
+                max_extrinsic_retry_attempts: max_extrinsic_retry_attempts.clone()
         }),
+        max_extrinsic_retry_attempts
     ))
 }
 

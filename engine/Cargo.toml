@@ -83,6 +83,7 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
+chainflip-node = { path="../state-chain/node"}
 
 # substrate deps
 [dependencies.substrate-subxt]
