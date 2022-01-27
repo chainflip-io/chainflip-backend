@@ -1,25 +1,27 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU32, Arc};
 
 use cf_chains::{eth::UnsignedTransaction, ChainId};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use frame_system::{AccountInfo, Phase};
+use futures::Stream;
 use mockall::predicate::{self, eq};
 use pallet_cf_validator::CurrentEpoch;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
 use sp_core::{storage::StorageKey, H256, U256};
 use sp_runtime::{AccountId32, Digest};
 use state_chain_runtime::{Header, Runtime};
+use tokio::sync::mpsc::UnboundedReceiver;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcClient, MockEthRpcApi},
+    eth::{EthBroadcaster, EthRpcApi, EthRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
     multisig::{MultisigInstruction, MultisigOutcome},
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
             mock_account_storage_key, mock_events_key, test_utils::storage_change_set_from,
-            MockStateChainRpcApi, StateChainClient, OUR_ACCOUNT_ID_BYTES,
+            MockStateChainRpcApi, StateChainClient, StateChainRpcApi, OUR_ACCOUNT_ID_BYTES,
         },
         sc_observer,
     },
@@ -68,6 +70,59 @@ const WINDOW_EPOCH_THREE_END: BlockHeightWindow = BlockHeightWindow {
 
 /// ETH Window for epoch three initially. No end known
 const WINDOW_EPOCH_FOUR_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 40, to: None };
+
+async fn run_sco_return_witness_channels<RpcClient, BlockStream, EthRpc>(
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    sc_block_stream: BlockStream,
+    eth_broadcaster: EthBroadcaster<EthRpc>,
+    initial_block_hash: H256,
+    logger: &slog::Logger,
+) -> (
+    UnboundedReceiver<BlockHeightWindow>,
+    UnboundedReceiver<BlockHeightWindow>,
+)
+where
+    RpcClient: StateChainRpcApi,
+    EthRpc: EthRpcApi,
+    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
+{
+    let (multisig_instruction_sender, _multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
+
+    let (sm_window_sender, sm_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (km_window_sender, km_window_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+
+    let eth_block_safety_margin = Arc::new(AtomicU32::new(50));
+    let pending_sign_duration_secs = Arc::new(AtomicU32::new(50));
+    let max_ceremony_stage_duration_secs = Arc::new(AtomicU32::new(50));
+    let max_extrinsic_retry_attempts = Arc::new(AtomicU32::new(50));
+
+    sc_observer::start(
+        state_chain_client,
+        sc_block_stream,
+        eth_broadcaster,
+        multisig_instruction_sender,
+        account_peer_mapping_change_sender,
+        multisig_outcome_receiver,
+        sm_window_sender,
+        km_window_sender,
+        eth_block_safety_margin,
+        pending_sign_duration_secs,
+        max_ceremony_stage_duration_secs,
+        max_extrinsic_retry_attempts,
+        initial_block_hash,
+        &logger,
+    )
+    .await;
+
+    (km_window_receiver, sm_window_receiver)
+}
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup() {
@@ -130,32 +185,15 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
-    let logger = new_test_logger();
-
     let eth_rpc_mock = MockEthRpcApi::new();
 
+    let logger = new_test_logger();
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -244,27 +282,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -334,27 +355,10 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -367,24 +371,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
 #[tokio::test]
 async fn backup_checks_account_data_every_block() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     mock_state_chain_rpc_client
@@ -431,19 +417,20 @@ async fn backup_checks_account_data_every_block() {
         mock_state_chain_rpc_client,
     ));
 
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
     // two empty blocks in the stream (empty because all queries for the events of a block will
     // return no events, see above)
     let sc_block_stream = tokio_stream::iter(vec![Ok(test_header(20)), Ok(test_header(21))]);
 
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -456,12 +443,6 @@ async fn backup_checks_account_data_every_block() {
 
 #[tokio::test]
 async fn validator_to_validator_on_new_epoch_event() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -472,18 +453,6 @@ async fn validator_to_validator_on_new_epoch_event() {
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
     ]);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -601,19 +570,20 @@ async fn validator_to_validator_on_new_epoch_event() {
             )])
         });
 
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
 
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -645,12 +615,6 @@ async fn validator_to_validator_on_new_epoch_event() {
 
 #[tokio::test]
 async fn backup_to_validator_on_new_epoch() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -661,18 +625,6 @@ async fn backup_to_validator_on_new_epoch() {
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
     ]);
-
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -783,19 +735,20 @@ async fn backup_to_validator_on_new_epoch() {
             )])
         });
 
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
 
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -974,27 +927,10 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -1027,7 +963,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 #[tokio::test]
 async fn only_encodes_and_signs_when_active_and_specified() {
     // === FAKE BLOCKHEADERS ===
-
     let block_header = test_header(21);
     let sc_block_stream = tokio_stream::iter(vec![Ok(block_header.clone())]);
 
@@ -1154,27 +1089,10 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-    sc_observer::start(
+    let (mut km_window_receiver, mut sm_window_receiver) = run_sco_return_witness_channels(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
-        account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
-        sm_window_sender,
-        km_window_sender,
         initial_block_hash,
         &logger,
     )
@@ -1200,7 +1118,7 @@ async fn run_the_sc_observer() {
     let settings = new_test_settings().unwrap();
     let logger = logging::test_utils::new_test_logger();
 
-    let (initial_block_hash, block_stream, state_chain_client) =
+    let (initial_block_hash, block_stream, state_chain_client, _) =
         crate::state_chain::client::connect_to_state_chain(&settings.state_chain, false, &logger)
             .await
             .unwrap();
@@ -1221,6 +1139,11 @@ async fn run_the_sc_observer() {
     let (km_window_sender, _km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    let eth_block_safety_margin = Arc::new(AtomicU32::new(10));
+    let pending_sign_duration_secs = Arc::new(AtomicU32::new(10));
+    let max_ceremony_stage_duration_secs = Arc::new(AtomicU32::new(10));
+    let max_extrinsic_retry_attempts = Arc::new(AtomicU32::new(10));
+
     sc_observer::start(
         state_chain_client,
         block_stream,
@@ -1230,6 +1153,10 @@ async fn run_the_sc_observer() {
         multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
+        eth_block_safety_margin,
+        pending_sign_duration_secs,
+        max_ceremony_stage_duration_secs,
+        max_extrinsic_retry_attempts,
         initial_block_hash,
         &logger,
     )

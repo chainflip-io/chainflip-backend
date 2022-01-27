@@ -51,6 +51,9 @@ use mockall::automock;
 
 use async_trait::async_trait;
 
+#[cfg(test)]
+const MAX_RETRY_ATTEMPTS: usize = 10;
+
 ////////////////////
 // IMPORTANT: The types used here must match those in the state chain
 
@@ -332,7 +335,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             runtime_version: RwLock::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
-            max_extrinsic_retry_attempts: Arc::new(AtomicU32::new(10)),
+            max_extrinsic_retry_attempts: Arc::new(AtomicU32::new(MAX_RETRY_ATTEMPTS as u32)),
         }
     }
 }
@@ -1054,7 +1057,7 @@ mod tests {
             Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
                 .unwrap();
         let logger = logging::test_utils::new_test_logger();
-        let (_, mut block_stream, state_chain_client) =
+        let (_, mut block_stream, state_chain_client, _) =
             connect_to_state_chain(&settings.state_chain, false, &logger)
                 .await
                 .expect("Could not connect");
