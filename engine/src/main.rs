@@ -209,7 +209,7 @@ async fn main() {
             sm_window_sender,
             km_window_sender,
             // == CFE Settings Atomics ==
-            eth_block_safety_margin,
+            eth_block_safety_margin.clone(),
             pending_sign_duration_secs,
             max_ceremony_stage_duration_secs,
             max_extrinsic_retry_attempts,
@@ -223,6 +223,7 @@ async fn main() {
             &eth_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
+            eth_block_safety_margin.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
@@ -230,6 +231,7 @@ async fn main() {
             &eth_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
+            eth_block_safety_margin,
             &root_logger,
         ),
     );

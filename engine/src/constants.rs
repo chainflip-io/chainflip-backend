@@ -1,8 +1,5 @@
 use std::time::Duration;
 
-/// Number of blocks we wait until we deem it safe (from reorgs)
-pub const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
-
 // ======= Keygen and signing =======
 //
 /// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key that is supposed to sign this message

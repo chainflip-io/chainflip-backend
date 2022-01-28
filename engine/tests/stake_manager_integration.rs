@@ -37,7 +37,7 @@ pub async fn test_all_stake_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     let sm_events = stake_manager
-        .event_stream(&eth_rpc_client, 0, &root_logger)
+        .event_stream(&eth_rpc_client, 0, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))

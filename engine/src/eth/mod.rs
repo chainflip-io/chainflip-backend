@@ -23,14 +23,21 @@ use web3::{
 
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
-    constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
+    constants::{ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
     eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{
+    fmt::Debug,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -77,6 +84,7 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
     eth_rpc: &EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
+    block_safety_margin: Arc<AtomicU32>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
@@ -114,6 +122,7 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
             let logger = logger.clone();
             let contract_observer = contract_observer.clone();
             let state_chain_client = state_chain_client.clone();
+            let block_safety_margin = block_safety_margin.clone();
             option_handle_end_block = Some((
                 tokio::spawn(async move {
                     slog::info!(
@@ -121,8 +130,16 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
                         "Start observing from ETH block: {}",
                         received_window.from
                     );
+                    // we want to load the value here.
+                    let current_block_safety_margin = block_safety_margin.load(Ordering::Relaxed);
+
                     let mut event_stream = contract_observer
-                        .event_stream(&eth_rpc, received_window.from, &logger)
+                        .event_stream(
+                            &eth_rpc,
+                            received_window.from,
+                            current_block_safety_margin,
+                            &logger,
+                        )
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -376,6 +393,7 @@ pub trait EthObserver {
         eth_rpc: &EthRpc,
         // usually the start of the validator's active window
         from_block: u64,
+        block_safety_margin: u32,
         logger: &slog::Logger,
     ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
     {
@@ -393,7 +411,7 @@ pub trait EthObserver {
         let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
 
         let mut safe_head_stream =
-            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+            safe_eth_log_header_stream(eth_head_stream, block_safety_margin as u64);
 
         // the first block that we know is safe, we should use to pass around as the current block
         let best_safe_block_number = safe_head_stream
