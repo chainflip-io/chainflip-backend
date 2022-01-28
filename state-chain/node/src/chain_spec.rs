@@ -558,14 +558,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake: MIN_STAKE,
 		},
-		auction: AuctionConfig {
-			validator_size_range: (min_validators, MAX_VALIDATORS),
-			winners: initial_authorities
-				.iter()
-				.map(|(validator_id, ..)| validator_id.clone())
-				.collect::<Vec<AccountId>>(),
-			minimum_active_bid: genesis_stake_amount,
-		},
+		auction: AuctionConfig { validator_size_range: (min_validators, MAX_VALIDATORS) },
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },

@@ -131,6 +131,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Online = Online;
 	type PeerMapping = pallet_cf_validator::Pallet<Self>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	type QualifyValidator = cf_traits::ValidatorChecked<Self>;
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
@@ -493,7 +494,7 @@ construct_runtime!(
 		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
-		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Pallet, Config<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},

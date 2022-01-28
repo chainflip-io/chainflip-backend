@@ -497,7 +497,6 @@ mod tests {
 
 	pub struct ExtBuilder {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
-		winners: Vec<AccountId>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
 		max_validators: u32,
@@ -508,7 +507,6 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				accounts: vec![],
-				winners: vec![],
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
 				max_validators: MAX_VALIDATORS,
@@ -520,11 +518,6 @@ mod tests {
 	impl ExtBuilder {
 		fn accounts(mut self, accounts: Vec<(AccountId, FlipBalance)>) -> Self {
 			self.accounts = accounts;
-			self
-		}
-
-		fn winners(mut self, winners: Vec<AccountId>) -> Self {
-			self.winners = winners;
 			self
 		}
 
@@ -579,12 +572,12 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			pallet_cf_auction::GenesisConfig::<Runtime> {
+			GenesisBuild::<Runtime>::assimilate_storage(
+				&pallet_cf_auction::GenesisConfig {
 				validator_size_range: (self.min_validators, self.max_validators),
-				winners: self.winners.clone(),
-				minimum_active_bid: TOTAL_ISSUANCE / 100,
-			}
-			.assimilate_storage(storage)
+				},
+				storage,
+			)
 			.unwrap();
 
 			GenesisBuild::<Runtime>::assimilate_storage(
@@ -658,11 +651,6 @@ mod tests {
 					(AccountId::from(BOB), GENESIS_BALANCE),
 					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
-				.winners(vec![
-					AccountId::from(ALICE),
-					AccountId::from(BOB),
-					AccountId::from(CHARLIE),
-				])
 				.root(AccountId::from(ERIN))
 		}
 
@@ -694,7 +682,7 @@ mod tests {
 				);
 
 				let accounts =
-					[AccountId::from(ALICE), AccountId::from(BOB), AccountId::from(CHARLIE)];
+					[AccountId::from(CHARLIE), AccountId::from(BOB), AccountId::from(ALICE)];
 
 				for account in accounts.iter() {
 					assert_eq!(
@@ -706,19 +694,14 @@ mod tests {
 
 				assert_eq!(
 					Auction::current_auction_index(),
-					0,
-					"we should have had no auction yet"
+					1,
+					"we should have had the genesis auction"
 				);
-				let AuctionResult { winners, minimum_active_bid } =
-					Auction::auction_result().expect("an auction result");
-				assert_eq!(minimum_active_bid, GENESIS_BALANCE);
-				assert_eq!(winners, accounts);
 
-				assert_eq!(
-					Session::validators(),
-					accounts,
-					"the validators are those expected at genesis"
-				);
+				assert_eq!(Validator::bond(), GENESIS_BALANCE);
+				let mut validators = Validator::validators();
+				validators.sort();
+				assert_eq!(validators, accounts, "the validators are those expected at genesis");
 
 				assert_eq!(
 					Validator::epoch_number_of_blocks(),
@@ -1328,6 +1311,12 @@ mod tests {
 					}
 
 					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"we should have ran auction at genesis"
+					);
+
+					assert_eq!(
 						1,
 						Validator::epoch_index(),
 						"We should still be in the first epoch"
@@ -1336,6 +1325,13 @@ mod tests {
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+
+					assert_eq!(
+						Auction::current_auction_index(),
+						2,
+						"we should have ran 2 auctions now"
+					);
+
 					assert_eq!(
 						GENESIS_EPOCH + 1,
 						Validator::epoch_index(),
@@ -1380,8 +1376,8 @@ mod tests {
 
 					assert_eq!(
 						Auction::current_auction_index(),
-						2,
-						"this should be the second auction"
+						3,
+						"this should be the third auction"
 					);
 
 					// Run things to a successful vault rotation
