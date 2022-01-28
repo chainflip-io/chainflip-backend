@@ -16,7 +16,7 @@ benchmarks! {
 	force_rotation {
 	}: _(RawOrigin::Root)
 	verify {
-		assert_eq!(Pallet::<T>::force(), true)
+		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();

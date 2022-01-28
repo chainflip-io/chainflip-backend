@@ -11,14 +11,13 @@ pub mod weights;
 
 pub use weights::WeightInfo;
 
-#[cfg(test)]
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping, ValidatorUnchecked, VaultRotationHandler,
+	HasPeerMapping, VaultRotationHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -79,7 +78,7 @@ impl<ValidatorId, Amount> Default for RotationStatus<ValidatorId, Amount> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{QualifyConfig, ValidatorChecked, VaultRotator};
+	use cf_traits::{QualifyConfig, ValidatorChecked, ValidatorUnchecked, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
