@@ -1,6 +1,6 @@
 mod tests {
 	use crate::{mock::*, Error, *};
-	use cf_traits::{ActiveValidatorRange, AuctionError, IsOutgoing};
+	use cf_traits::{AuctionError, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
@@ -12,8 +12,7 @@ mod tests {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 	}
 
-	fn initialise_validator(range: ActiveValidatorRange, epoch: u64) {
-		assert_ok!(MockAuctioneer::set_active_range(range));
+	fn initialise_validator(epoch: u64) {
 		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::epoch_index(),
@@ -45,7 +44,7 @@ mod tests {
 	}
 
 	#[test]
-	fn changing_epoch() {
+	fn changing_epoch_block_size() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(
 				<Test as Config>::MinEpoch::get(),
@@ -76,12 +75,14 @@ mod tests {
 	fn should_request_emergency_rotation() {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
-			initialise_validator((2, 10), epoch);
+			initialise_validator(epoch);
 			ValidatorPallet::request_emergency_rotation();
 			let mut events = frame_system::Pallet::<Test>::events();
 			assert_eq!(
 				events.pop().expect("an event").event,
-				mock::Event::ValidatorPallet(crate::Event::ForceRotationRequested()),
+				mock::Event::ValidatorPallet(crate::Event::RotationStatusUpdated(
+					RotationStatus::RunAuction
+				)),
 				"should emit event of a force rotation being requested"
 			);
 			assert_eq!(
@@ -105,18 +106,20 @@ mod tests {
 	fn should_retry_rotation_until_success() {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
-			initialise_validator((2, 10), epoch);
-			MockAuctioneer::set_behaviour(Err(AuctionError::MinValidatorSize));
+			initialise_validator(epoch);
+			MockAuctioneer::set_run_behaviour(Err(AuctionError::MinValidatorSize));
 			run_to_block(epoch);
-			move_forward_blocks(SHORT_ROTATION);
+			// Move forward a few blocks, the auction will be failing
+			move_forward_blocks(100);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::epoch_index(),
 				GENESIS_EPOCH,
 				"we should still be in the first epoch"
 			);
-			// The auction runs more than expected and we move to next epoch
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], LONG_CONFIRMATION_BLOCKS);
-			move_forward_blocks(LONG_ROTATION);
+			// The auction now runs
+			MockAuctioneer::set_run_behaviour(Ok(Default::default()));
+
+			move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
 			assert_next_epoch();
 		});
 	}
@@ -125,13 +128,13 @@ mod tests {
 	fn should_be_unable_to_force_rotation_during_a_rotation() {
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
-			initialise_validator((2, 10), epoch);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_CONFIRMATION_BLOCKS);
+			initialise_validator(epoch);
+			MockAuctioneer::set_run_behaviour(Ok(Default::default()));
 			run_to_block(epoch);
-			assert_matches!(MockAuctioneer::phase(), AuctionPhase::ValidatorsSelected(..));
+			assert_eq!(ValidatorPallet::rotation_phase(), RotationStatus::RunAuction);
 			assert_noop!(
 				ValidatorPallet::force_rotation(Origin::root()),
-				Error::<Test>::AuctionInProgress
+				Error::<Test>::RotationInProgress
 			);
 		});
 	}
@@ -139,12 +142,17 @@ mod tests {
 	#[test]
 	fn should_rotate_when_forced() {
 		new_test_ext().execute_with(|| {
-			initialise_validator((2, 10), 100);
-			let new_validators = vec![3, 4];
-			MockAuctioneer::create_auction_scenario(0, &new_validators, SHORT_CONFIRMATION_BLOCKS);
+			initialise_validator(100);
+			let new_validators = vec![1, 2];
+			MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
+				winners: new_validators.clone(),
+				minimum_active_bid: Zero::zero(),
+				auction_index: 1,
+			}));
+
 			// Force an auction at the next block
 			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			move_forward_blocks(SHORT_ROTATION);
+			move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
@@ -157,9 +165,11 @@ mod tests {
 	#[test]
 	fn should_have_outgoers_after_rotation() {
 		new_test_ext().execute_with(|| {
-			initialise_validator((2, 10), 1);
-			MockAuctioneer::create_auction_scenario(0, &[1, 2], SHORT_CONFIRMATION_BLOCKS);
-			move_forward_blocks(SHORT_ROTATION);
+			let epoch = 10;
+			initialise_validator(epoch);
+			MockAuctioneer::set_run_behaviour(Ok(Default::default()));
+			run_to_block(epoch);
+			move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
 			assert_next_epoch();
 			let outgoing_validators = outgoing_validators();
 			assert_eq!(
@@ -178,16 +188,16 @@ mod tests {
 		// ran through an auction and that the winners of this auction become the validating set
 		new_test_ext().execute_with(|| {
 			let epoch = 10;
-			initialise_validator((2, 10), epoch);
+			initialise_validator(epoch);
 
 			let bond = 10;
 			let new_validators = vec![1, 2];
 
-			MockAuctioneer::create_auction_scenario(
-				bond,
-				&new_validators,
-				SHORT_CONFIRMATION_BLOCKS,
-			);
+			MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
+				winners: new_validators.clone(),
+				minimum_active_bid: bond,
+				auction_index: 1,
+			}));
 
 			assert_eq!(
 				mock::current_validators(),
@@ -201,16 +211,13 @@ mod tests {
 				&DUMMY_GENESIS_VALIDATORS[..],
 				"we should still be validating with the genesis validators"
 			);
-			move_forward_blocks(SHORT_ROTATION);
-
+			move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
+			assert_next_epoch();
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::current_validators(),
 				new_validators,
 				"the new validators are now validating"
 			);
-			// Complete the auction process
-			move_forward_blocks(1);
-			assert_next_epoch();
 			assert_eq!(min_bid(), bond, "bond should be updated");
 		});
 	}
@@ -218,13 +225,17 @@ mod tests {
 	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
-			// We should have a set of validators on genesis with a minimum bid of 0 set
+			// We should have a set of validators on genesis with a minimum bid set
 			assert_eq!(
 				current_validators(),
 				DUMMY_GENESIS_VALIDATORS,
 				"We should have a set of validators at genesis"
 			);
-			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
+			assert_eq!(
+				min_bid(),
+				MINIMUM_ACTIVE_BID_AT_GENESIS,
+				"We should have a minimum bid at genesis"
+			);
 			assert_eq!(
 				<ValidatorPallet as EpochInfo>::epoch_index(),
 				GENESIS_EPOCH,
