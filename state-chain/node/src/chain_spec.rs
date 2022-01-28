@@ -28,9 +28,9 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
 // CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
-pub const MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
+pub const MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT: u32 = 10;
 const MAX_STAGE_DURATION_SECS_DEFAULT: u32 = 300;
-const PENDING_SIGN_DURATION_SECS_DEFAULT: u32 = 10;
+const PENDING_SIGN_DURATION_SECS_DEFAULT: u32 = 500;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {

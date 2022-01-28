@@ -123,7 +123,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
 		pub fn update_max_stage_duration(
 			origin: OriginFor<T>,
-			max_ceremony_stage_duration: u32,
+			max_ceremony_stage_duration_secs: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
@@ -139,12 +139,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_pending_sign_duration())]
 		pub fn update_pending_sign_duration(
 			origin: OriginFor<T>,
-			pending_sign_duration: u32,
+			pending_sign_duration_secs: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
+			Self::do_cfe_config_update(|settings: &mut cfe::CfeSettings| {
 				settings.pending_sign_duration_secs = pending_sign_duration_secs;
-				*settings
 			});
 			Ok(().into())
 		}
