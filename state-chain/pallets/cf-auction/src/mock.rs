@@ -3,10 +3,10 @@ use crate as pallet_cf_auction;
 use cf_traits::{
 	impl_mock_online,
 	mocks::{
-		chainflip_account::MockChainflipAccount,
-		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
+		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo,
 	},
-	Bid, ChainflipAccountData, EmergencyRotation,
+	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -20,7 +20,7 @@ use std::{cell::RefCell, collections::HashMap};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-pub type Amount = u64;
+pub type Amount = u128;
 pub type ValidatorId = u64;
 
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
@@ -46,7 +46,7 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 		for bid_number in (1..=number_of_bids as u64).rev() {
 			let validator_id = bid_number * group as u64;
 			MockOnline::set_online(&validator_id, true);
-			(*cell).push((validator_id, bid_number * 100));
+			(*cell).push((validator_id, (bid_number * 100).into()));
 		}
 	});
 }
@@ -57,15 +57,17 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 	});
 }
 
-pub fn run_auction() {
-	AuctionPallet::process()
-		.and_then(|_| {
-			clear_confirmation();
-			AuctionPallet::process()
-		})
-		.unwrap();
+pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
+	let auction_result = <AuctionPallet as Auctioneer>::run_auction::<MockQualifyValidator>()
+		.expect("the auction should run");
 
-	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+	<AuctionPallet as Auctioneer>::confirm_auction(auction_result.clone())
+		.expect("this should confirm as auction index will match");
+
+	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
+	MockEpochInfo::set_validators(auction_result.winners.clone());
+
+	auction_result
 }
 
 pub fn last_event() -> mock::Event {
@@ -73,7 +75,7 @@ pub fn last_event() -> mock::Event {
 }
 
 // The set we would expect
-pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
+pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();
 	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
 	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
@@ -86,7 +88,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -143,31 +145,34 @@ impl EmergencyRotation for MockEmergencyRotation {
 
 impl_mock_online!(ValidatorId);
 
-pub struct MockPeerMapping;
-
-impl HasPeerMapping for MockPeerMapping {
+pub struct MockQualifyValidator;
+impl QualifyValidator for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
-	fn has_peer_mapping(_validator_id: &Self::ValidatorId) -> bool {
-		true
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		MockOnline::is_online(validator_id)
 	}
+}
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+	type Call = Call;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
 }
 
 impl Config for Test {
 	type Event = Event;
-	type Amount = Amount;
-	type ValidatorId = ValidatorId;
 	type BidderProvider = MockBidderProvider;
-	type Registrar = Test;
 	type MinValidators = MinValidators;
-	type Handler = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
-	type Online = MockOnline;
-	type PeerMapping = MockPeerMapping;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type QualifyValidator = MockQualifyValidator;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -190,13 +195,10 @@ impl BidderProvider for MockBidderProvider {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
-	let (winners, minimum_active_bid) = expected_validating_set();
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-			winners,
-			minimum_active_bid,
 		},
 	};
 
