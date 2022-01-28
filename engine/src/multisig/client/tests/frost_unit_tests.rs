@@ -103,6 +103,9 @@ async fn should_delay_comm1_before_rts() {
 
     let mut signing_ceremony = new_signing_ceremony().await;
 
+    // Send comm1 messages from the other clients
+    signing_ceremony.distribute_messages(signing_messages.stage_1_messages);
+
     assert_ok!(signing_ceremony.nodes[test_id]
         .client
         .ensure_ceremony_at_signing_stage(
@@ -110,7 +113,7 @@ async fn should_delay_comm1_before_rts() {
             signing_ceremony.ceremony_id
         ));
 
-    signing_ceremony.distribute_messages(signing_messages.stage_1_messages);
+    // Now we get the request to sign (effectively receiving the request from our StateChain)
 
     signing_ceremony.request().await;
 
