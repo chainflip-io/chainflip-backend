@@ -399,7 +399,7 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {
-	fn execute(code: Vec<u8>) -> bool {
+	fn do_upgrade(code: Vec<u8>) -> bool {
 		match System::set_code(frame_system::RawOrigin::Root.into(), code) {
 			Ok(_) => true,
 			Err(_) => false,

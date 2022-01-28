@@ -616,12 +616,16 @@ pub trait QualifyValidator {
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// TODO: add description
+/// Handles the check of execution conditions for an runtime upgrade
 pub trait ExecutionCondition {
-	/// TODO: add description
+	/// Returns true/false if the conditions for performning and runtime upgrade are
+	/// satisfied
 	fn is_satisfied() -> bool;
 }
 
+/// Handles an runtime upgrade
 pub trait RuntimeUpgrade {
-	fn execute(code: Vec<u8>) -> bool;
+	/// Calls the system pallet set_code method and returns true/false if the
+	/// upgrade was successful
+	fn do_upgrade(code: Vec<u8>) -> bool;
 }

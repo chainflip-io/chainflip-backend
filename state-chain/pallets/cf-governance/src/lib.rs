@@ -213,7 +213,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Performs a runtime upgrade of the chain flip runtime
+		/// Performs a runtime upgrade of the Chainflip runtime
 		/// **Can only be called via the Governance Origin**
 		///
 		/// ## Events
@@ -235,21 +235,14 @@ pub mod pallet {
 			// Ensure execution conditions
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 
-			// Execute the runtime upgrade
-			// let result =
-			// 	frame_system::Pallet::<T>::set_code(frame_system::RawOrigin::Root.into(), code);
-
-			// If successfully emit an additional event
-			// if let Ok(_) = result {
-			// 	Self::deposit_event(Event::UpdatedChainflipRuntime);
-			// }
-
-			if T::RuntimeUpgrade::execute(code) {
-				Self::deposit_event(Event::UpdatedChainflipRuntime);
-				Ok(().into())
-			} else {
-				Err(Error::<T>::UpgradeHasFailed.into())
+			// Do the upgrade and return an error if it has failed
+			if !T::RuntimeUpgrade::do_upgrade(code) {
+				return Err(Error::<T>::UpgradeHasFailed.into())
 			}
+
+			// If successful emit an event to inform about the new upgrade
+			Self::deposit_event(Event::UpdatedChainflipRuntime);
+			Ok(().into())
 		}
 
 		/// Approve a proposal by a given proposal id

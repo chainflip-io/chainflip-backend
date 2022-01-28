@@ -74,7 +74,7 @@ impl ExecutionCondition for UpgradeConditionMock {
 pub struct RuntimeUpgradeMock;
 
 impl RuntimeUpgrade for RuntimeUpgradeMock {
-	fn execute(_: Vec<u8>) -> bool {
+	fn do_upgrade(_: Vec<u8>) -> bool {
 		UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone())
 	}
 }
