@@ -2,7 +2,7 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	Error, VoteMask, Votes,
 };
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	let events = frame_system::Pallet::<T>::events()
@@ -103,17 +103,19 @@ fn only_validators_can_witness() {
 }
 
 #[test]
-fn delegated_call_should_throw_error() {
+fn delegated_call_should_emit_but_not_return_error() {
 	new_test_ext().execute_with(|| {
 		// Our callable extrinsic which will fail when called
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
-		// The first witness.  Here there is no error as we don't dispatch the call until
-		// we reach the threshold which is 2 for our tests
+
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
-		// This should return the error `NoneValue`
-		assert_eq!(
-			Witnesser::witness(Origin::signed(BOBSON), call.clone()),
-			Err(pallet_dummy::Error::<Test>::NoneValue.into())
-		);
+		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
+
+		// The second witness should have triggered the failing call.
+		assert_event_sequence::<Test>(vec![crate::Event::<Test>::WitnessExecuted(
+			Hashable::blake2_256(&call),
+			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
+		)
+		.into()]);
 	});
 }

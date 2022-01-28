@@ -754,7 +754,7 @@ mod tests {
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"
 				);
-				assert_eq!(Governance::number_of_proposals(), 0, "no proposal for governance");
+				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
 					Emissions::validator_emission_inflation(),
