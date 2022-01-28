@@ -572,25 +572,16 @@ async fn should_ignore_rts_with_duplicate_signer() {
         MESSAGE_HASH.clone(),
         signer_ids,
     );
-    signing_ceremony
-        .nodes
-        .get_mut(&node_0_id)
-        .unwrap()
-        .client
-        .process_multisig_instruction(
-            MultisigInstruction::Sign(sign_info),
-            &mut signing_ceremony.rng,
-        );
 
-    assert_ok!(signing_ceremony
-        .nodes
-        .get_mut(&node_0_id)
-        .unwrap()
-        .client
-        .ensure_ceremony_at_signing_stage(
-            STAGE_FINISHED_OR_NOT_STARTED,
-            signing_ceremony.ceremony_id
-        ));
+    let client = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap().client;
+    client.process_multisig_instruction(
+        MultisigInstruction::Sign(sign_info),
+        &mut signing_ceremony.rng,
+    );
+    assert_ok!(client.ensure_ceremony_at_signing_stage(
+        STAGE_FINISHED_OR_NOT_STARTED,
+        signing_ceremony.ceremony_id
+    ));
 
     // The rts should not have started a ceremony and we should see an error tag
     assert!(signing_ceremony
