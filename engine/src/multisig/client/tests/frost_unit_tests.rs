@@ -295,8 +295,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let unknown_signer_id = AccountId::new([0; 32]);
     assert!(!signing_ceremony.nodes.keys().contains(&unknown_signer_id));
 
-    let mut signer_ids: Vec<AccountId> =
-        signing_ceremony.nodes.keys().map(|id| id.clone()).collect();
+    let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
     signer_ids[1] = unknown_signer_id;
 
     let node_0 = signing_ceremony.nodes.get_mut(&signer_ids[0]).unwrap();
@@ -323,7 +322,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_ignore_rts_if_not_participating() {
     let (mut signing_ceremony, non_signing_nodes) = new_signing_ceremony_with_keygen().await;
 
-    let signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().map(|id| id.clone()).collect();
+    let signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
 
     let (_, mut non_signing_node) = non_signing_nodes.into_iter().next().unwrap(); // TODO Use select_account_ids
 
@@ -564,8 +563,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
 
     let [node_0_id] = signing_ceremony.select_account_ids();
 
-    let mut signer_ids: Vec<AccountId> =
-        signing_ceremony.nodes.keys().map(|id| id.clone()).collect();
+    let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
     signer_ids[1] = signer_ids[2].clone();
 
     let sign_info = SigningInfo::new(
