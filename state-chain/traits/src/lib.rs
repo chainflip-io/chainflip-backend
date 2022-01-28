@@ -546,13 +546,6 @@ pub mod offline_conditions {
 		TransactionFailedOnTransmission,
 	}
 
-	/// Error on reporting an offline condition.
-	#[derive(Debug, PartialEq)]
-	pub enum ReportError {
-		/// Validator doesn't exist
-		UnknownValidator,
-	}
-
 	pub trait OfflinePenalty {
 		fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool);
 	}
@@ -564,10 +557,7 @@ pub mod offline_conditions {
 
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid
-		fn report(
-			condition: OfflineCondition,
-			validator_id: &Self::ValidatorId,
-		) -> Result<Weight, ReportError>;
+		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId);
 	}
 
 	/// We report on nodes that should be banned
