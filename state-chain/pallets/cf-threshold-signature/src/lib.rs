@@ -219,7 +219,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn signatures)]
 	pub type Signatures<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, CeremonyId, AsyncResult<SignatureFor<T, I>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureFor<T, I>>, ValueQuery>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.

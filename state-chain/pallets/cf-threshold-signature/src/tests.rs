@@ -4,8 +4,11 @@ use std::{
 	iter::{FromIterator, IntoIterator},
 };
 
-use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
-use cf_traits::Chainflip;
+use crate::{
+	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
+	Error, OpenRequests, RequestId,
+};
+use cf_traits::{AsyncResult, Chainflip};
 use frame_support::{
 	assert_noop, assert_ok,
 	instances::Instance1,
@@ -19,6 +22,19 @@ fn bounded_set_from_iter<T: Ord, S: Get<u32>>(
 	members: impl IntoIterator<Item = T>,
 ) -> BoundedBTreeSet<T, S> {
 	BoundedBTreeSet::try_from(BTreeSet::from_iter(members)).unwrap()
+}
+
+fn get_ceremony_context(
+	ceremony_id: CeremonyId,
+	expected_request_id: RequestId,
+	expected_attempt: AttemptCount,
+) -> CeremonyContext<Test, Instance1> {
+	let (request_id, attempt) =
+		DogeThresholdSigner::open_requests(ceremony_id).expect("Expected a request_id");
+	assert_eq!(request_id, expected_request_id);
+	assert_eq!(attempt, expected_attempt);
+	DogeThresholdSigner::pending_ceremonies(ceremony_id)
+		.expect(&format!("Expected a ceremony with id {:?}", ceremony_id))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -133,6 +149,7 @@ fn happy_path() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let (request_id, _attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -140,8 +157,38 @@ fn happy_path() {
 			// Request is complete
 			assert!(DogeThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
-			// Callback has executed.
-			assert!(MockCallback::<Doge>::has_executed());
+			// Signature is available
+			assert!(matches!(
+				DogeThresholdSigner::signatures(request_id),
+				AsyncResult::Ready(VALID_SIGNATURE)
+			));
+		});
+}
+
+#[test]
+fn callback_executes() {
+	const NOMINEES: [u64; 2] = [1, 2];
+	const VALIDATORS: [u64; 3] = [1, 2, 3];
+	ExtBuilder::new()
+		.with_validators(VALIDATORS)
+		.with_nominees(NOMINEES)
+		.with_pending_request("Woof!")
+		.build()
+		.execute_with(|| {
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let (request_id, _attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
+
+			tick(&[cfe]);
+
+			// Request is complete
+			assert!(DogeThresholdSigner::pending_ceremonies(ceremony_id).is_none());
+
+			// Signature is available
+			assert!(matches!(
+				DogeThresholdSigner::signatures(request_id),
+				AsyncResult::Ready(VALID_SIGNATURE)
+			));
 		});
 }
 
@@ -156,6 +203,7 @@ fn fail_path_with_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let (request_id, attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -191,11 +239,9 @@ fn fail_path_with_timeout() {
 			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id + 1).unwrap();
-			assert_eq!(pending.attempt, request_context.attempt + 1);
-			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
+			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
 			assert_eq!(
-				pending.remaining_respondents,
+				context.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 		});
@@ -212,6 +258,7 @@ fn fail_path_no_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let (request_id, attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -254,9 +301,7 @@ fn fail_path_no_timeout() {
 			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id + 1).unwrap();
-			assert_eq!(pending.attempt, request_context.attempt + 1);
-			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
+			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
