@@ -1,8 +1,11 @@
-use std::{collections::BTreeSet, iter::FromIterator};
+use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
 
-use crate::{self as pallet_cf_threshold_signature, EnsureThresholdSigned, OpenRequests};
+use crate::{
+	self as pallet_cf_threshold_signature, EnsureThresholdSigned, LiveCeremonies, OpenRequests,
+	RequestId,
+};
 use cf_chains::{eth, ChainCrypto};
-use cf_traits::{Chainflip, SigningContext};
+use cf_traits::{AsyncResult, Chainflip, ThresholdSigner};
 use codec::{Decode, Encode};
 use frame_support::{
 	instances::Instance1,
@@ -109,19 +112,24 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<bool> = Default::default();
 }
 
-pub struct MockCallback<C: ChainCrypto>(pub String, pub C::ThresholdSignature);
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
 impl MockCallback<Doge> {
-	pub fn call() {
+	pub fn new(id: RequestId) -> Self {
+		Self(id, Default::default())
+	}
+
+	pub fn call(self) {
+		assert!(matches!(
+			DogeThresholdSigner::signature_result(self.0),
+			AsyncResult::Ready(VALID_SIGNATURE)
+		));
 		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = true);
 	}
 
 	pub fn has_executed() -> bool {
 		CALL_DISPATCHED.with(|cell| *cell.borrow())
-	}
-
-	pub fn reset() {
-		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = false);
 	}
 }
 
@@ -133,7 +141,7 @@ impl UnfilteredDispatchable for MockCallback<Doge> {
 		origin: Self::Origin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
-		Self::call();
+		self.call();
 		Ok(().into())
 	}
 }
@@ -159,8 +167,6 @@ impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 
 // Mock OfflineReporter
 cf_traits::impl_mock_offline_conditions!(u64);
-
-// Mock SigningContext
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct Doge;
@@ -197,23 +203,6 @@ pub struct DogeThresholdSignerContext {
 pub const VALID_SIGNATURE: DogeSig = DogeSig::Valid;
 pub const INVALID_SIGNATURE: DogeSig = DogeSig::Invalid;
 
-impl SigningContext<Test> for DogeThresholdSignerContext {
-	type Chain = Doge;
-	type Callback = MockCallback<Doge>;
-	type ThresholdSignatureOrigin = crate::Origin<Test, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		self.message.clone()
-	}
-
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		MockCallback(self.message.clone(), signature)
-	}
-}
-
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
@@ -222,7 +211,7 @@ parameter_types! {
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type RuntimeOrigin = Origin;
-	type Call = Call;
+	type ThresholdCallable = MockCallback<Doge>;
 	type TargetChain = Doge;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
@@ -256,23 +245,80 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn with_pending_request(mut self, message: &'static str) -> Self {
+	pub fn with_request(mut self, message: &'static str) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let (request_id, ceremony_id) = DogeThresholdSigner::request_signature(message.into());
+			let request_id =
+				<DogeThresholdSigner as ThresholdSigner<_>>::request_signature(message.into());
+			let (ceremony_id, attempt) = DogeThresholdSigner::live_ceremonies(request_id).unwrap();
 			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			let (_, attempts) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
-			assert_eq!(attempts, 0);
+			assert_eq!(DogeThresholdSigner::open_requests(ceremony_id).unwrap().2, message);
+			assert_eq!(attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or(Default::default()))
 			);
+			assert!(matches!(DogeThresholdSigner::signatures(request_id), AsyncResult::Pending));
 		});
 		self
 	}
 
-	pub fn build(self) -> sp_io::TestExternalities {
-		self.ext
+	pub fn with_request_and_callback(
+		mut self,
+		message: &'static str,
+		callback_gen: impl Fn(RequestId) -> MockCallback<Doge>,
+	) -> Self {
+		self.ext.execute_with(|| {
+			// Initiate request
+			let request_id =
+				DogeThresholdSigner::request_signature_with_callback(message.into(), callback_gen)
+					.unwrap();
+			let (ceremony_id, attempt) = DogeThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			assert_eq!(DogeThresholdSigner::open_requests(ceremony_id).unwrap().2, message);
+			assert_eq!(attempt, 0);
+			assert_eq!(
+				pending.remaining_respondents,
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or(Default::default()))
+			);
+			assert!(matches!(DogeThresholdSigner::signatures(request_id), AsyncResult::Pending));
+			assert!(DogeThresholdSigner::request_callback(request_id).is_some());
+		});
+		self
+	}
+
+	pub fn build(self) -> TestExternalitiesWithCheck {
+		TestExternalitiesWithCheck { ext: self.ext }
+	}
+}
+
+/// Wraps the TestExternalities so that we can run consistency checks before and after each test.
+pub struct TestExternalitiesWithCheck {
+	ext: sp_io::TestExternalities,
+}
+
+impl TestExternalitiesWithCheck {
+	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
+		self.ext.execute_with(|| {
+			Self::do_consistency_check();
+			let r = f();
+			Self::do_consistency_check();
+			r
+		})
+	}
+
+	/// Checks conditions that should always hold.
+	pub fn do_consistency_check() {
+		OpenRequests::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt, _))| {
+			assert_eq!(LiveCeremonies::<Test, _>::get(request_id).unwrap(), (ceremony_id, attempt));
+		});
+		LiveCeremonies::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt))| {
+			assert!(matches!(
+				OpenRequests::<Test, _>::get(request_id),
+				Some((ceremony_id_read, attempt_read, _))
+					if (ceremony_id_read, attempt_read) == (ceremony_id, attempt),
+			));
+		});
 	}
 }
 

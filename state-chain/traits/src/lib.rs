@@ -507,7 +507,7 @@ where
 	/// Register a callback to be dispatched when the signature is available.
 	fn register_callback(
 		request_id: Self::RequestId,
-		call: Self::Callback,
+		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
@@ -516,10 +516,10 @@ where
 	/// Request a signature and register a callback for when the signature is available.
 	fn request_signature_with_callback(
 		payload: C::Payload,
-		callback: impl Fn(Self::RequestId) -> Self::Callback,
+		callback_generator: impl Fn(Self::RequestId) -> Self::Callback,
 	) -> Result<Self::RequestId, Self::Error> {
 		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback(id))?;
+		Self::register_callback(id, callback_generator(id))?;
 		Ok(id)
 	}
 }

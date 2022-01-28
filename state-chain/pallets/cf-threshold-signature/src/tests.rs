@@ -29,7 +29,7 @@ fn get_ceremony_context(
 	expected_request_id: RequestId,
 	expected_attempt: AttemptCount,
 ) -> CeremonyContext<Test, Instance1> {
-	let (request_id, attempt) =
+	let (request_id, attempt, _) =
 		DogeThresholdSigner::open_requests(ceremony_id).expect("Expected a request_id");
 	assert_eq!(request_id, expected_request_id);
 	assert_eq!(attempt, expected_attempt);
@@ -139,17 +139,17 @@ impl MockCfe {
 }
 
 #[test]
-fn happy_path() {
+fn happy_path_no_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const VALIDATORS: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
 		.with_validators(VALIDATORS)
 		.with_nominees(NOMINEES)
-		.with_pending_request("Woof!")
+		.with_request("Woof!")
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
-			let (request_id, _attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			let (request_id, ..) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -162,21 +162,24 @@ fn happy_path() {
 				DogeThresholdSigner::signatures(request_id),
 				AsyncResult::Ready(VALID_SIGNATURE)
 			));
+
+			// No callback was provided.
+			assert!(!MockCallback::has_executed());
 		});
 }
 
 #[test]
-fn callback_executes() {
+fn happy_path_with_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const VALIDATORS: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
 		.with_validators(VALIDATORS)
 		.with_nominees(NOMINEES)
-		.with_pending_request("Woof!")
+		.with_request_and_callback("Woof!", MockCallback::new)
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
-			let (request_id, _attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			let (request_id, ..) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -184,11 +187,11 @@ fn callback_executes() {
 			// Request is complete
 			assert!(DogeThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
-			// Signature is available
-			assert!(matches!(
-				DogeThresholdSigner::signatures(request_id),
-				AsyncResult::Ready(VALID_SIGNATURE)
-			));
+			// Callback has triggered.
+			assert!(MockCallback::has_executed());
+
+			// Signature has been consumed.
+			assert!(matches!(DogeThresholdSigner::signatures(request_id), AsyncResult::Void));
 		});
 }
 
@@ -199,11 +202,11 @@ fn fail_path_with_timeout() {
 	ExtBuilder::new()
 		.with_validators(VALIDATORS)
 		.with_nominees(NOMINEES)
-		.with_pending_request("Woof!")
+		.with_request("Woof!")
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
-			let (request_id, attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			let (request_id, attempt, _) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -254,11 +257,11 @@ fn fail_path_no_timeout() {
 	ExtBuilder::new()
 		.with_validators(VALIDATORS)
 		.with_nominees(NOMINEES)
-		.with_pending_request("Woof!")
+		.with_request("Woof!")
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
-			let (request_id, attempt) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
+			let (request_id, attempt, _) = DogeThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -321,7 +324,7 @@ fn test_not_enough_signers_for_threshold() {
 	ExtBuilder::new()
 		.with_validators(VALIDATORS)
 		.with_nominees(NOMINEES)
-		.with_pending_request("Woof!")
+		.with_request("Woof!")
 		.build()
 		.execute_with(|| {
 			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
@@ -407,7 +410,6 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
-			request_id: 0,
 			retry_scheduled: false,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
