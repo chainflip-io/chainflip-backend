@@ -15,16 +15,24 @@ mod ceremony_manager;
 #[cfg(test)]
 mod genesis;
 
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use crate::{
-    common::format_iterator,
+    common::{format_iterator, make_periodic_stream},
     eth::utils::pubkey_to_eth_addr,
-    logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{crypto::Rng, KeyDB, KeyId, MultisigInstruction},
+    logging::{CEREMONY_ID_KEY, COMPONENT_KEY, REQUEST_TO_SIGN_EXPIRED},
+    multisig::{
+        crypto::{self, Rng},
+        KeyDB, KeyId, MultisigInstruction,
+    },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
+use futures::{Future, StreamExt};
+use slog::o;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -33,7 +41,10 @@ use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    oneshot,
+};
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
@@ -49,6 +60,8 @@ use self::{
 };
 
 pub use keygen::KeygenOptions;
+
+use super::{KeygenInfo, MessageHash, SigningInfo};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -166,7 +179,6 @@ pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutc
 pub enum MultisigOutcome {
     Signing(SigningOutcome),
     Keygen(KeygenOutcome),
-    Ignore,
 }
 
 derive_try_from_variant!(SigningOutcome, MultisigOutcome::Signing, MultisigOutcome);
@@ -179,8 +191,7 @@ where
     S: KeyDB,
 {
     key_store: KeyStore<S>,
-    pub ceremony_manager: CeremonyManager,
-    multisig_outcome_sender: MultisigOutcomeSender,
+    multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -191,145 +202,76 @@ impl<S> MultisigClient<S>
 where
     S: KeyDB,
 {
-    pub fn new(
+    pub fn inner_new(
         my_account_id: AccountId,
         db: S,
-        multisig_outcome_sender: MultisigOutcomeSender,
+        multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
-    ) -> Self {
-        MultisigClient {
-            key_store: KeyStore::new(db),
-            ceremony_manager: CeremonyManager::new(
-                my_account_id,
-                multisig_outcome_sender.clone(),
-                outgoing_p2p_message_sender.clone(),
-                logger,
-            ),
-            multisig_outcome_sender,
-            pending_requests_to_sign: Default::default(),
+    ) -> (Self, CeremonyManager) {
+        let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
+
+        (
+            MultisigClient {
+                key_store: KeyStore::new(db),
+                multisig_instruction_sender,
+                pending_requests_to_sign: Default::default(),
+                keygen_options,
+                logger: logger.clone(),
+            },
+            CeremonyManager::new(my_account_id, outgoing_p2p_message_sender.clone(), &logger),
+        )
+    }
+
+    pub fn new(
+        my_account_id: AccountId,
+        db: S,
+        mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
+        outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+        keygen_options: KeygenOptions,
+        logger: &slog::Logger,
+    ) -> (Self, impl Future) {
+        let (multisig_instruction_sender, mut multisig_instruction_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+
+        let (multisig_client, mut ceremony_manager) = Self::inner_new(
+            my_account_id,
+            db,
+            multisig_instruction_sender,
+            outgoing_p2p_message_sender,
             keygen_options,
-            logger: logger.clone(),
-        }
-    }
+            logger,
+        );
 
-    /// Clean up expired states
-    pub fn cleanup(&mut self) {
-        slog::trace!(self.logger, "Cleaning up multisig states");
-        self.ceremony_manager.cleanup();
+        (multisig_client, async move {
+            // Stream outputs () approximately every ten seconds
+            let mut cleanup_stream = make_periodic_stream(Duration::from_secs(10));
 
-        // cleanup stale signing_info in pending_requests_to_sign
-        let logger = &self.logger;
+            use rand_legacy::FromEntropy;
+            let mut rng = crypto::Rng::from_entropy();
 
-        let mut expired_ceremony_ids = vec![];
-
-        self.pending_requests_to_sign
-            .retain(|key_id, pending_signing_infos| {
-                pending_signing_infos.retain(|pending| {
-                    if pending.should_expire_at < Instant::now() {
-                        let ceremony_id = pending.signing_info.ceremony_id;
-
-                        slog::warn!(
-                            logger,
-                            #REQUEST_TO_SIGN_EXPIRED,
-                            "Request to sign expired waiting for key id: {:?}",
-                            key_id;
-                            CEREMONY_ID_KEY => ceremony_id,
-                        );
-
-                        expired_ceremony_ids.push(ceremony_id);
-                        return false;
+            loop {
+                tokio::select! {
+                    Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
+                        ceremony_manager.process_p2p_message(sender_id, message);
                     }
-                    true
-                });
-                !pending_signing_infos.is_empty()
-            });
-
-        for id in expired_ceremony_ids {
-            if let Err(err) = self
-                .multisig_outcome_sender
-                .send(MultisigOutcome::Keygen(KeygenOutcome::timeout(id, vec![])))
-            {
-                slog::error!(
-                    self.logger,
-                    "Could not send KeygenOutcome::timeout: {}",
-                    err
-                );
-            }
-        }
-    }
-
-    /// Process `instruction` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_instruction(
-        &mut self,
-        instruction: MultisigInstruction,
-        rng: &mut Rng,
-    ) {
-        match instruction {
-            MultisigInstruction::Keygen(keygen_info) => {
-                // For now disable generating a new key when we already have one
-
-                use rand_legacy::{Rng as _, SeedableRng};
-
-                slog::debug!(
-                    self.logger,
-                    "Received a keygen request, participants: {}",
-                    format_iterator(&keygen_info.signers);
-                    CEREMONY_ID_KEY => keygen_info.ceremony_id
-                );
-                let rng = Rng::from_seed(rng.gen());
-
-                self.ceremony_manager
-                    .on_keygen_request(rng, keygen_info, self.keygen_options);
-            }
-            MultisigInstruction::Sign(sign_info) => {
-                let key_id = &sign_info.key_id;
-
-                slog::debug!(
-                    self.logger,
-                    "Received a request to sign, message_hash: {}, signers: {}",
-                    sign_info.data, format_iterator(&sign_info.signers);
-                    CEREMONY_ID_KEY => sign_info.ceremony_id
-                );
-                match self.key_store.get_key(key_id) {
-                    Some(keygen_result_info) => {
-                        use rand_legacy::{Rng as _, SeedableRng};
-                        let rng = Rng::from_seed(rng.gen());
-
-                        self.ceremony_manager.on_request_to_sign(
-                            rng,
-                            sign_info.data,
-                            keygen_result_info.clone(),
-                            sign_info.signers,
-                            sign_info.ceremony_id,
-                        );
+                    Some(msg) = multisig_instruction_receiver.recv() => {
+                        ceremony_manager.process_multisig_instruction(msg, &mut rng);
                     }
-                    None => {
-                        // The key is not ready, delay until either it is ready or timeout
-
-                        slog::debug!(
-                            self.logger,
-                            "Delaying a request to sign for unknown key: {:?}",
-                            sign_info.key_id;
-                            CEREMONY_ID_KEY => sign_info.ceremony_id
-                        );
-
-                        self.pending_requests_to_sign
-                            .entry(sign_info.key_id.clone())
-                            .or_default()
-                            .push(PendingSigningInfo::new(sign_info));
+                    Some(()) = cleanup_stream.next() => {
+                        ceremony_manager.cleanup();
                     }
                 }
             }
-        }
+        })
     }
 
     /// Process requests to sign that required the key in `key_info`
-    fn process_pending_requests_to_sign(&mut self, key_info: KeygenResultInfo) {
+    fn process_pending_requests_to_sign(&mut self, keygen_result_info: KeygenResultInfo) {
         if let Some(reqs) = self
             .pending_requests_to_sign
-            .remove(&KeyId(key_info.key.get_public_key_bytes()))
+            .remove(&KeyId(keygen_result_info.key.get_public_key_bytes()))
         {
             for pending in reqs {
                 let signing_info = pending.signing_info;
@@ -339,74 +281,121 @@ where
                     CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
-                use rand_legacy::FromEntropy;
-
-                let rng = Rng::from_entropy();
-
-                self.ceremony_manager.on_request_to_sign(
-                    rng,
-                    signing_info.data,
-                    key_info.clone(),
-                    signing_info.signers,
-                    signing_info.ceremony_id,
-                )
+                self.multisig_instruction_sender
+                    .send(MultisigInstruction::Sign((
+                        signing_info,
+                        keygen_result_info.clone(),
+                    )))
+                    .unwrap();
             }
         }
     }
 
-    fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
-        self.key_store
-            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
-        self.process_pending_requests_to_sign(key_info.clone());
+    /// Clean up expired states
+    pub fn cleanup(&mut self) {
+        //slog::trace!(self.logger, "Cleaning up multisig states");
 
-        // NOTE: we only notify the SC after we have successfully saved the key
+        // cleanup stale signing_info in pending_requests_to_sign
 
-        if let Err(err) =
-            self.multisig_outcome_sender
-                .send(MultisigOutcome::Keygen(KeygenOutcome::success(
-                    ceremony_id,
-                    key_info.key.get_public_key().get_element(),
-                )))
-        {
-            // TODO: alert
-            slog::error!(
-                self.logger,
-                "Could not send KeygenOutcome::Success: {}",
-                err
-            );
-        }
-    }
+        let now = Instant::now();
+        let logger = &self.logger;
 
-    /// Process message from another validator
-    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
-        match message {
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Keygen(data),
-            } => {
-                // NOTE: we should be able to process Keygen messages
-                // even when we are "signing"... (for example, if we want to
-                // generate a new key)
+        self.pending_requests_to_sign
+            .retain(|key_id, pending_signing_infos| {
+                // TODO: Use drain_filter once stablized
+                let (expired, pending) = std::mem::take(pending_signing_infos)
+                    .into_iter()
+                    .partition(|pending_signing_info| pending_signing_info.should_expire_at < now);
+                *pending_signing_infos = pending;
 
-                if let Some(key) =
-                    self.ceremony_manager
-                        .process_keygen_data(sender_id, ceremony_id, data)
-                {
-                    self.on_key_generated(ceremony_id, key);
+                for expired_pending_signing_info in expired {
+                    slog::warn!(
+                        logger,
+                        #REQUEST_TO_SIGN_EXPIRED,
+                        "Request to sign expired waiting for key id: {:?}",
+                        key_id;
+                        CEREMONY_ID_KEY => expired_pending_signing_info.signing_info.ceremony_id,
+                    );
+
+                    expired_pending_signing_info
+                        .signing_info
+                        .result_sender
+                        .send(Err((CeremonyAbortReason::Timeout, vec![])))
+                        .unwrap();
                 }
-            }
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Signing(data),
-            } => {
-                // NOTE: we should be able to process Signing messages
-                // even when we are generating a new key (for example,
-                // we should be able to receive phase1 messages before we've
-                // finalized the signing key locally)
-                self.ceremony_manager
-                    .process_signing_data(sender_id, ceremony_id, data);
-            }
+
+                !pending_signing_infos.is_empty()
+            });
+    }
+
+    pub async fn keygen(
+        &mut self,
+        ceremony_id: CeremonyId,
+        signers: Vec<AccountId>,
+    ) -> Option<Result<secp256k1::PublicKey, CeremonyError>> {
+        let (result_sender, result_receiver) = oneshot::channel();
+
+        let keygen_info = KeygenInfo {
+            ceremony_id,
+            signers,
+            result_sender,
+        };
+
+        self.multisig_instruction_sender
+            .send(MultisigInstruction::Keygen((
+                keygen_info,
+                self.keygen_options.clone(),
+            )))
+            .unwrap();
+
+        match result_receiver.await {
+            Ok(result) => Some(result.map(|key_info| {
+                use crate::multisig::crypto::ECPoint;
+
+                // Wrap these in a mutex, lock here
+                self.key_store
+                    .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
+                self.process_pending_requests_to_sign(key_info.clone());
+
+                key_info.key.get_public_key().get_element()
+            })),
+            Err(_) => None,
         }
+    }
+
+    pub async fn sign(
+        &mut self,
+        ceremony_id: CeremonyId,
+        signers: Vec<AccountId>,
+        key_id: KeyId,
+        data: MessageHash,
+    ) -> Option<Result<SchnorrSignature, (CeremonyAbortReason, Vec<AccountId>)>> {
+        let (result_sender, result_receiver) = oneshot::channel();
+
+        let signing_info = SigningInfo {
+            data,
+            ceremony_id,
+            key_id: key_id.clone(),
+            signers,
+            result_sender,
+        };
+
+        // Wrap in a mutex, lock here (See above)
+        if let Some(keygen_result_info) = self.key_store.get_key(&key_id) {
+            self.multisig_instruction_sender
+                .send(MultisigInstruction::Sign((
+                    signing_info,
+                    keygen_result_info.clone(),
+                )))
+                .unwrap();
+        } else {
+            self.pending_requests_to_sign
+                .entry(key_id)
+                .or_default()
+                .push(PendingSigningInfo::new(signing_info));
+        }
+
+        result_receiver.await.ok()
     }
 }
 

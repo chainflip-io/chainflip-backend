@@ -6,8 +6,7 @@ pub mod frost_stages;
 use std::{sync::Arc, time::Instant};
 
 use pallet_cf_vaults::CeremonyId;
-
-use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 use crate::{
     constants::PENDING_SIGN_DURATION,
@@ -16,14 +15,15 @@ use crate::{
 
 use state_chain_runtime::AccountId;
 
-use super::common::KeygenResult;
+use super::{common::KeygenResult, CeremonyError, SchnorrSignature};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Debug)]
 pub struct SigningInfo {
     pub data: MessageHash,
     pub ceremony_id: CeremonyId,
     pub key_id: KeyId,
     pub signers: Vec<AccountId>,
+    pub result_sender: oneshot::Sender<Result<SchnorrSignature, CeremonyError>>,
 }
 
 impl SigningInfo {
@@ -32,12 +32,14 @@ impl SigningInfo {
         key_id: KeyId,
         data: MessageHash,
         signers: Vec<AccountId>,
+        result_sender: oneshot::Sender<Result<SchnorrSignature, CeremonyError>>,
     ) -> Self {
         SigningInfo {
             data,
             ceremony_id,
             key_id,
             signers,
+            result_sender,
         }
     }
 }

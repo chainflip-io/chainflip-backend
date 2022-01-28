@@ -5,7 +5,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, MultisigClient, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -68,15 +68,9 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
 
-    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
-    let (multisig_instruction_sender, multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     // TODO: Merge this into the MultisigInstruction channel
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-
-    let (multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -141,19 +135,18 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
+    let (multisig_client, multisig_future) = MultisigClient::new(
+        state_chain_client.our_account_id.clone(),
+        db,
+        incoming_p2p_message_receiver,
+        outgoing_p2p_message_sender,
+        multisig::KeygenOptions::default(),
+        &root_logger,
+    );
+
     tokio::join!(
         // Start signing components
-        multisig::start_client(
-            state_chain_client.our_account_id.clone(),
-            db,
-            multisig_instruction_receiver,
-            multisig_outcome_sender,
-            incoming_p2p_message_receiver,
-            outgoing_p2p_message_sender,
-            shutdown_client_rx,
-            multisig::KeygenOptions::default(),
-            &root_logger,
-        ),
+        multisig_future,
         async {
             multisig_p2p::start(
                 &settings,
@@ -172,9 +165,8 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_instruction_sender,
+            multisig_client,
             account_peer_mapping_change_sender,
-            multisig_outcome_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,

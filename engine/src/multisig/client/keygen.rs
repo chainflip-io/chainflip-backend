@@ -6,7 +6,6 @@ mod keygen_stages;
 pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use pallet_cf_vaults::CeremonyId;
-use serde::{Deserialize, Serialize};
 
 pub use keygen_data::{
     BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
@@ -18,15 +17,19 @@ pub use keygen_frost::HashContext;
 pub use keygen_stages::AwaitCommitments1;
 
 use state_chain_runtime::AccountId;
+use tokio::sync::oneshot;
+
+use super::{CeremonyError, KeygenResultInfo};
 
 /// Information necessary for the multisig client to start a new keygen ceremony
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Debug)]
 pub struct KeygenInfo {
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
+    pub result_sender: oneshot::Sender<Result<KeygenResultInfo, CeremonyError>>,
 }
 
-#[derive(Clone, Copy)] // TODO Doesn't need to derive Copy
+#[derive(Debug, Clone, Copy)] // TODO Doesn't need to derive Copy
 pub struct KeygenOptions {
     /// This is intentionally private to ensure that the only
     /// way to unset this flag with via test-only constructor
@@ -55,10 +58,15 @@ impl KeygenOptions {
 }
 
 impl KeygenInfo {
-    pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
+    pub fn new(
+        ceremony_id: CeremonyId,
+        signers: Vec<AccountId>,
+        result_sender: oneshot::Sender<Result<KeygenResultInfo, CeremonyError>>,
+    ) -> Self {
         KeygenInfo {
             ceremony_id,
             signers,
+            result_sender,
         }
     }
 }

@@ -25,7 +25,7 @@ use crate::{
         client::{
             keygen::{HashContext, KeygenOptions, SecretShare3},
             signing, CeremonyAbortReason, CeremonyError, CeremonyOutcome, MultisigData,
-            ThresholdParameters,
+            ThresholdParameters, ceremony_manager::CeremonyManager,
         },
         crypto::Rng,
         KeyId, MessageHash, MultisigInstruction, SchnorrSignature,
@@ -83,21 +83,24 @@ pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 
 pub struct Node {
     pub client: MultisigClientNoDB,
-    pub multisig_outcome_receiver: UnboundedReceiver<MultisigOutcome>,
+    pub ceremony_manager: CeremonyManager,
+    pub incoming_p2p_message_sender: UnboundedReceiver<(AccountId, MultisigMessage)>,
     pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     pub tag_cache: TagCache,
 }
 
 pub fn new_node(account_id: AccountId, keygen_options: KeygenOptions) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
-    let (multisig_outcome_sender, multisig_outcome_receiver) =
+    let (multisig_nstruction_sender, multisig_instruction_receiver) =
+    tokio::sync::mpsc::unbounded_channel();
+    let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let client = MultisigClient::new(
+    let (client, ceremony_manager) = MultisigClient::inner_new(
         account_id,
         KeyDBMock::new(),
-        multisig_outcome_sender,
+
         outgoing_p2p_message_sender,
         keygen_options,
         &logger,
@@ -105,7 +108,8 @@ pub fn new_node(account_id: AccountId, keygen_options: KeygenOptions) -> Node {
 
     Node {
         client,
-        multisig_outcome_receiver,
+        ceremony_manager,
+        incoming_p2p_message_sender,
         outgoing_p2p_message_receiver,
         tag_cache,
     }

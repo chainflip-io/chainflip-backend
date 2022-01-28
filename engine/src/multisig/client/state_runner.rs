@@ -2,20 +2,24 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc, time::Instant};
 
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
+use tokio::sync::oneshot;
 
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
     logging::CEREMONY_ID_KEY,
-    multisig::client::common::{ProcessMessageResult, StageResult},
+    multisig::client::{
+        common::{ProcessMessageResult, StageResult},
+        CeremonyAbortReason,
+    },
 };
 use state_chain_runtime::AccountId;
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
+use super::{common::CeremonyStage, utils::PartyIdxMapping, CeremonyError, MultisigOutcomeSender};
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: MultisigOutcomeSender,
+    pub result_sender: oneshot::Sender<Result<CeremonyResult, CeremonyError>>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
@@ -54,7 +58,7 @@ where
         ceremony_id: CeremonyId,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: MultisigOutcomeSender,
+        result_sender: oneshot::Sender<Result<CeremonyResult, CeremonyError>>,
     ) -> Result<()> {
         assert_eq!(
             self.ceremony_id, ceremony_id,
@@ -84,9 +88,7 @@ where
         Ok(())
     }
 
-    fn finalize_current_stage(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    fn finalize_current_stage(&mut self) -> bool {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -117,30 +119,32 @@ where
                 // attacks possible.
                 self.should_expire_at += MAX_STAGE_DURATION;
 
-                self.process_delayed();
-                return None;
+                self.process_delayed()
             }
-            StageResult::Error(bad_validators, reason) => {
-                return Some(Err((
-                    authorised_state.idx_mapping.get_ids(bad_validators),
-                    reason,
-                )));
+            StageResult::Error(bad_validators, _reason) => {
+                let bad_validators = authorised_state.idx_mapping.get_ids(bad_validators);
+
+                // TODO This take leaves this state runner in a bad state (As if the ceremony hadn't been started). This odd behaviour could cause people to introduce bugs, it can be avoided though via a refactor
+                self.inner
+                    .take()
+                    .unwrap()
+                    .result_sender
+                    .send(Err((CeremonyAbortReason::Invalid, bad_validators))); // TODO .unwrap();
+                true
             }
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
 
-                return Some(Ok(result));
+                // TODO This take leaves this state runner in a bad state (As if the ceremony hadn't been started). This odd behaviour could cause people to introduce bugs, it can be avoided though via a refactor
+                self.inner.take().unwrap().result_sender.send(Ok(result)); // TODO .unwrap();
+                true
             }
         }
     }
 
     /// Process message from a peer, returning ceremony outcome if
     /// the ceremony stage machine cannot progress any further
-    pub fn process_message(
-        &mut self,
-        sender_id: AccountId,
-        data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    pub fn process_message(&mut self, sender_id: AccountId, data: CeremonyData) -> bool {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -151,6 +155,7 @@ where
         match &mut self.inner {
             None => {
                 self.add_delayed(sender_id, data);
+                false
             }
             Some(authorised_state) => {
                 let stage = authorised_state.stage.as_mut().expect(
@@ -158,35 +163,37 @@ where
                 );
 
                 // Check that the sender is a possible participant in the ceremony
-                let sender_idx = match authorised_state.idx_mapping.get_idx(&sender_id) {
-                    Some(idx) => idx,
+                match authorised_state.idx_mapping.get_idx(&sender_id) {
+                    Some(sender_idx) => {
+                        // Check if we should delay this message for the next stage to use
+                        if stage.should_delay(&data) {
+                            self.add_delayed(sender_id, data);
+                            false
+                        } else {
+                            if let ProcessMessageResult::Ready =
+                                stage.process_message(sender_idx, data)
+                            {
+                                self.finalize_current_stage()
+                            } else {
+                                false
+                            }
+                        }
+                    }
                     None => {
                         slog::debug!(
                             self.logger,
                             "Sender {} is not a valid participant",
                             sender_id
                         );
-                        return None;
+                        false
                     }
-                };
-
-                // Check if we should delay this message for the next stage to use
-                if stage.should_delay(&data) {
-                    self.add_delayed(sender_id, data);
-                    return None;
-                }
-
-                if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
-                    return self.finalize_current_stage();
                 }
             }
         }
-
-        None
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(&mut self) {
+    pub fn process_delayed(&mut self) -> bool {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -196,9 +203,11 @@ where
                 m,
                 id,
             );
-            // TODO: The bug I talked about is here. This is problematic as what if this process_message call results in the completion of ceremony. It will not ever call on_key_generated().
-            self.process_message(id, m);
+            if self.process_message(id, m) {
+                return true;
+            }
         }
+        false
     }
 
     /// Delay message to be processed in the next stage
@@ -238,9 +247,7 @@ where
 
     /// Check if the stage has timed out, and if so, proceed according to the
     /// protocol rules for the stage
-    pub fn try_expiring(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    pub fn try_expiring(&mut self) -> bool {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
@@ -257,10 +264,7 @@ where
                         format_iterator(&reported_ids)
                     );
 
-                    Some(Err((
-                        reported_ids,
-                        anyhow::Error::msg("ceremony expired before being authorized"),
-                    )))
+                    true
                 }
                 Some(_authorised_state) => {
                     // We can't simply abort here as we don't know whether other
@@ -279,7 +283,7 @@ where
                 }
             }
         } else {
-            None
+            false
         }
     }
 
