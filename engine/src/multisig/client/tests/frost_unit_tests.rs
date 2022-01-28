@@ -680,15 +680,21 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     let message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
     signing_ceremony.distribute_message(&node_1_id, &node_0_id, message);
 
-    // expire the ceremony here
-
-    let messages = signing_ceremony.request().await;
+    assert_eq!(
+        signing_ceremony
+            .nodes
+            .get(&node_0_id)
+            .unwrap()
+            .client
+            .ceremony_manager
+            .get_signing_states_len(),
+        1
+    );
 
     let node_0 = signing_ceremony.get_mut_node(&node_0_id);
-
-    assert_eq!(node_0.client.ceremony_manager.get_signing_states_len(), 1);
-
     node_0.client.force_stage_timeout();
+
+    let messages = signing_ceremony.request().await;
 
     let messages = helpers::run_stages!(
         signing_ceremony,
