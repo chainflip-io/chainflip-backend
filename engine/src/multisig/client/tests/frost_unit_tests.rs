@@ -279,17 +279,15 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let unknown_signer_id = AccountId::new([0; 32]);
     assert!(!signing_ceremony.nodes.keys().contains(&unknown_signer_id));
 
-    let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
-    signer_ids[1] = unknown_signer_id;
+    let mut signers: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
+    signers[1] = unknown_signer_id;
 
-    let node_0 = signing_ceremony.nodes.get_mut(&signer_ids[0]).unwrap();
+    let sign_info = SigningInfo {
+        signers: signers.clone(),
+        ..signing_ceremony.signing_info()
+    };
 
-    let sign_info = SigningInfo::new(
-        signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_runner_data.key_id,
-        signing_ceremony.ceremony_runner_data.message_hash.clone(),
-        signer_ids,
-    );
+    let node_0 = signing_ceremony.nodes.get_mut(&signers[0]).unwrap();
     node_0.client.process_multisig_instruction(
         multisig::MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
@@ -306,16 +304,14 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_ignore_rts_if_not_participating() {
     let (mut signing_ceremony, non_signing_nodes) = new_signing_ceremony_with_keygen().await;
 
-    let signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
+    let signers: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
 
     let (_, mut non_signing_node) = non_signing_nodes.into_iter().next().unwrap(); // TODO Use select_account_ids
 
-    let sign_info = SigningInfo::new(
-        signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_runner_data.key_id,
-        signing_ceremony.ceremony_runner_data.message_hash.clone(),
-        signer_ids,
-    );
+    let sign_info = SigningInfo {
+        signers: signers.clone(),
+        ..signing_ceremony.signing_info()
+    };
     non_signing_node.client.process_multisig_instruction(
         multisig::MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
@@ -334,11 +330,11 @@ async fn should_ignore_rts_if_not_participating() {
 async fn should_ignore_rts_with_incorrect_number_of_signers() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
+    let mut signers: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
 
     assert_ok!(signing_ceremony
         .nodes
-        .get(&signer_ids[0])
+        .get(&signers[0])
         .unwrap()
         .client
         .ensure_ceremony_at_signing_stage(
@@ -347,16 +343,14 @@ async fn should_ignore_rts_with_incorrect_number_of_signers() {
         ));
 
     // the request to sign will have one less signer than necessary
-    signer_ids.pop();
+    signers.pop();
 
-    let node_0 = signing_ceremony.nodes.get_mut(&signer_ids[0]).unwrap();
+    let sign_info = SigningInfo {
+        signers: signers.clone(),
+        ..signing_ceremony.signing_info()
+    };
 
-    let sign_info = SigningInfo::new(
-        signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_runner_data.key_id,
-        MESSAGE_HASH.clone(),
-        signer_ids,
-    );
+    let node_0 = signing_ceremony.nodes.get_mut(&signers[0]).unwrap();
     node_0.client.process_multisig_instruction(
         multisig::MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
@@ -534,12 +528,10 @@ async fn should_ignore_rts_with_duplicate_signer() {
     let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
     signer_ids[1] = signer_ids[2].clone();
 
-    let sign_info = SigningInfo::new(
-        signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_runner_data.key_id.clone(),
-        MESSAGE_HASH.clone(),
-        signer_ids,
-    );
+    let sign_info = SigningInfo {
+        signers: signer_ids.clone(),
+        ..signing_ceremony.signing_info()
+    };
 
     let client = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap().client;
     client.process_multisig_instruction(
@@ -573,17 +565,13 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     signing_ceremony.distribute_messages(messages);
     signing_ceremony.complete().await;
 
-    let signers = signing_ceremony.nodes.keys().cloned().collect();
+    let sign_info = signing_ceremony.signing_info();
+
     let node = signing_ceremony.nodes.values_mut().next().unwrap();
 
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
     node.client.process_multisig_instruction(
-        MultisigInstruction::Sign(SigningInfo::new(
-            signing_ceremony.ceremony_id,
-            signing_ceremony.ceremony_runner_data.key_id.clone(),
-            signing_ceremony.ceremony_runner_data.message_hash.clone(),
-            signers,
-        )),
+        MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
     );
 

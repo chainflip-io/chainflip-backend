@@ -500,6 +500,15 @@ impl SigningCeremonyRunner {
             non_signers,
         )
     }
+
+    pub fn signing_info(&self) -> SigningInfo {
+        SigningInfo::new(
+            self.ceremony_id,
+            self.ceremony_runner_data.key_id.clone(),
+            self.ceremony_runner_data.message_hash.clone(),
+            self.nodes.keys().cloned().collect(),
+        )
+    }
 }
 
 pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashMap<AccountId, Node>)
