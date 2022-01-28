@@ -213,7 +213,7 @@ fn upgrade_runtime_successfully() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::Governance(crate::Event::UpdatedChainflipRuntime),
+			crate::mock::Event::Governance(crate::Event::UpgradeChainflipRuntime),
 		);
 	});
 }

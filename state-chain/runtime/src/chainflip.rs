@@ -22,7 +22,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
-use frame_system::Call::set_code;
+
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;

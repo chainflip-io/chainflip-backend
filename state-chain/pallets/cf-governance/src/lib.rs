@@ -140,8 +140,8 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
-		/// The Chainflip runtime was updated
-		UpdatedChainflipRuntime,
+		/// The Chainflip runtime has been upgraded
+		UpgradeChainflipRuntime,
 	}
 
 	#[pallet::error]
@@ -158,7 +158,7 @@ pub mod pallet {
 		MajorityNotReached,
 		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
 		UpgradeConditionsNotMet,
-		/// RuntimeUpgrade has failed
+		/// A runtime upgrade was not successful
 		UpgradeHasFailed,
 	}
 
@@ -241,7 +241,7 @@ pub mod pallet {
 			}
 
 			// If successful emit an event to inform about the new upgrade
-			Self::deposit_event(Event::UpdatedChainflipRuntime);
+			Self::deposit_event(Event::UpgradeChainflipRuntime);
 			Ok(().into())
 		}
 
