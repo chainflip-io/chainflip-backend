@@ -7,9 +7,8 @@ use crate::{
             signing::frost,
             tests::helpers::{
                 gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
-                new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
-                standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner,
-                STAGE_FINISHED_OR_NOT_STARTED,
+                new_signing_ceremony_with_keygen, run_stages, split_messages_for, standard_signing,
+                KeygenCeremonyRunner, SigningCeremonyRunner, STAGE_FINISHED_OR_NOT_STARTED,
             },
             tests::*,
             KeygenOptions,
@@ -82,25 +81,10 @@ async fn should_delay_stage_data() {
 async fn should_delay_comm1_before_rts() {
     let test_id = &ACCOUNT_IDS[0];
 
-    let new_signing_ceremony = || async {
-        let (key_id, _, nodes) = run_keygen(
-            new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-            1,
-        )
-        .await;
-        SigningCeremonyRunner::new(
-            nodes,
-            1,
-            key_id,
-            MESSAGE_HASH.clone(),
-            Rng::from_seed([4; 32]),
-        )
-        .0
-    };
-    let mut signing_ceremony = new_signing_ceremony().await;
+    let mut signing_ceremony = new_signing_ceremony_with_keygen().await.0;
     let (_, signing_messages) = standard_signing(&mut signing_ceremony).await;
 
-    let mut signing_ceremony = new_signing_ceremony().await;
+    let mut signing_ceremony = new_signing_ceremony_with_keygen().await.0;
 
     // Send comm1 messages from the other clients
     signing_ceremony.distribute_messages(signing_messages.stage_1_messages);
@@ -444,23 +428,7 @@ async fn pending_rts_should_expire() {
 async fn should_ignore_unexpected_message_for_stage() {
     for_each_stage(
         1..=SIGNING_STAGES,
-        || {
-            Box::pin(async {
-                let (key_id, _, nodes) = run_keygen(
-                    new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-                    1,
-                )
-                .await;
-                SigningCeremonyRunner::new(
-                    nodes,
-                    1,
-                    key_id,
-                    MESSAGE_HASH.clone(),
-                    Rng::from_seed([4; 32]),
-                )
-                .0
-            })
-        },
+        || Box::pin(async { new_signing_ceremony_with_keygen().await.0 }),
         standard_signing_coroutine,
         |stage_number, mut ceremony, (_, messages, _)| async move {
             let get_messages_for_stage = |stage_index: usize| {
