@@ -574,16 +574,18 @@ pub async fn for_each_stage<
     F: Future<Output = ()>,
 >(
     stages: Stages,
-    g: impl Fn() -> BoxFuture<'a, CeremonyType>,
-    c: impl for<'s> Fn(
+    ceremony_runner_fn: impl Fn() -> BoxFuture<'a, CeremonyType>,
+    ceremony_runner_coroutine: impl for<'s> Fn(
         &'s mut CeremonyVisitor,
         &'s mut CeremonyType,
     ) -> BoxFuture<'s, Option<CeremonyOutput>>,
-    f: impl Fn(usize, CeremonyType, CeremonyOutput) -> F,
+    stage_logic: impl Fn(usize, CeremonyType, CeremonyOutput) -> F,
 ) {
     let mut visitor = CeremonyVisitor::Complete;
-    let mut ceremony = g().await;
-    let output = c(&mut visitor, &mut ceremony).await.unwrap();
+    let mut ceremony = ceremony_runner_fn().await;
+    let output = ceremony_runner_coroutine(&mut visitor, &mut ceremony)
+        .await
+        .unwrap();
 
     for stage in stages {
         let mut visitor = CeremonyVisitor::StageNumber(
@@ -591,10 +593,10 @@ pub async fn for_each_stage<
                 .checked_sub(1)
                 .expect("Stages should be indexed from 1"),
         );
-        let mut ceremony = g().await;
-        c(&mut visitor, &mut ceremony).await;
+        let mut ceremony = ceremony_runner_fn().await;
+        ceremony_runner_coroutine(&mut visitor, &mut ceremony).await;
 
-        f(stage, ceremony, output.clone()).await;
+        stage_logic(stage, ceremony, output.clone()).await;
     }
 }
 
