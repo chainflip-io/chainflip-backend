@@ -113,7 +113,6 @@ async fn should_delay_comm1_before_rts() {
         ));
 
     // Now we get the request to sign (effectively receiving the request from our StateChain)
-
     signing_ceremony.request().await;
 
     // It should advance to stage 2 right away if the comm1's were delayed correctly
@@ -303,8 +302,8 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
     let sign_info = SigningInfo::new(
         signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_data.key_id,
-        signing_ceremony.ceremony_data.message_hash.clone(),
+        signing_ceremony.ceremony_runner_data.key_id,
+        signing_ceremony.ceremony_runner_data.message_hash.clone(),
         signer_ids,
     );
     node_0.client.process_multisig_instruction(
@@ -329,8 +328,8 @@ async fn should_ignore_rts_if_not_participating() {
 
     let sign_info = SigningInfo::new(
         signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_data.key_id,
-        signing_ceremony.ceremony_data.message_hash.clone(),
+        signing_ceremony.ceremony_runner_data.key_id,
+        signing_ceremony.ceremony_runner_data.message_hash.clone(),
         signer_ids,
     );
     non_signing_node.client.process_multisig_instruction(
@@ -370,7 +369,7 @@ async fn should_ignore_rts_with_incorrect_number_of_signers() {
 
     let sign_info = SigningInfo::new(
         signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_data.key_id,
+        signing_ceremony.ceremony_runner_data.key_id,
         MESSAGE_HASH.clone(),
         signer_ids,
     );
@@ -569,7 +568,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
 
     let sign_info = SigningInfo::new(
         signing_ceremony.ceremony_id,
-        signing_ceremony.ceremony_data.key_id.clone(),
+        signing_ceremony.ceremony_runner_data.key_id.clone(),
         MESSAGE_HASH.clone(),
         signer_ids,
     );
@@ -613,8 +612,8 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     node.client.process_multisig_instruction(
         MultisigInstruction::Sign(SigningInfo::new(
             signing_ceremony.ceremony_id,
-            signing_ceremony.ceremony_data.key_id.clone(),
-            signing_ceremony.ceremony_data.message_hash.clone(),
+            signing_ceremony.ceremony_runner_data.key_id.clone(),
+            signing_ceremony.ceremony_runner_data.message_hash.clone(),
             signers,
         )),
         &mut signing_ceremony.rng,
@@ -680,6 +679,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     let message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
     signing_ceremony.distribute_message(&node_1_id, &node_0_id, message);
+
+    // expire the ceremony here
 
     let messages = signing_ceremony.request().await;
 

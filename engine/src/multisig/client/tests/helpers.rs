@@ -150,7 +150,7 @@ pub trait CeremonyRunnerStrategy<Output> {
 pub struct CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> {
     pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
-    pub ceremony_data: CeremonyRunnerData,
+    pub ceremony_runner_data: CeremonyRunnerData,
     pub rng: Rng,
     _phantom: std::marker::PhantomData<(CeremonyData, Output)>,
 }
@@ -169,13 +169,13 @@ where
     pub fn inner_new(
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
-        ceremony_data: CeremonyRunnerData,
+        ceremony_runner_data: CeremonyRunnerData,
         rng: Rng,
     ) -> Self {
         Self {
             nodes,
             ceremony_id,
-            ceremony_data,
+            ceremony_runner_data,
             rng,
             _phantom: Default::default(),
         }
@@ -457,7 +457,7 @@ impl CeremonyRunnerStrategy<SchnorrSignature> for SigningCeremonyRunner {
     const CEREMONY_FAILED_TAG: &'static str = SIGNING_CEREMONY_FAILED;
 
     fn post_successful_complete_check(&self, signature: SchnorrSignature) -> Self::MappedOutcome {
-        verify_sig_with_aggkey(&signature, &self.ceremony_data.key_id)
+        verify_sig_with_aggkey(&signature, &self.ceremony_runner_data.key_id)
             .expect("Should be valid signature");
         signature
     }
@@ -465,8 +465,8 @@ impl CeremonyRunnerStrategy<SchnorrSignature> for SigningCeremonyRunner {
     fn multisig_instruction(&self) -> MultisigInstruction {
         MultisigInstruction::Sign(SigningInfo::new(
             self.ceremony_id,
-            self.ceremony_data.key_id.clone(),
-            self.ceremony_data.message_hash.clone(),
+            self.ceremony_runner_data.key_id.clone(),
+            self.ceremony_runner_data.message_hash.clone(),
             self.nodes.keys().cloned().collect(),
         ))
     }
