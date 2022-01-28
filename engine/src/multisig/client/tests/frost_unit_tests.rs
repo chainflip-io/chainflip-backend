@@ -41,14 +41,13 @@ async fn should_delay_stage_data() {
                 split_messages_for(messages[stage_index].clone(), &test_account, &late_sender)
             };
 
+            // Receive the data of this stage and the next stage from all but one client
             let (late_msg, msgs) = get_messages_for_stage(stage_number - 1);
-
             ceremony.distribute_messages(msgs);
-
             let (next_late_msg, next_msgs) = get_messages_for_stage(stage_number);
-
             ceremony.distribute_messages(next_msgs);
 
+            // Now receive the final client's data to advance the stage
             assert_ok!(ceremony.nodes[&test_account]
                 .client
                 .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id));
