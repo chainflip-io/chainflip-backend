@@ -192,9 +192,8 @@ async fn should_handle_inconsistent_broadcast_sig3() {
     );
 
     let [bad_account_id] = signing_ceremony.select_account_ids();
-    let invalid_local_sig = gen_invalid_local_sig(&mut signing_ceremony.rng);
     for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
-        *message = invalid_local_sig.clone();
+        *message = gen_invalid_local_sig(&mut signing_ceremony.rng);
     }
 
     let messages = signing_ceremony
