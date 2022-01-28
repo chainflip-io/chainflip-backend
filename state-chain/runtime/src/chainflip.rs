@@ -122,7 +122,7 @@ impl VaultRotationHandler for ChainflipVaultRotationHandler {
 	type ValidatorId = AccountId;
 
 	fn vault_rotation_aborted() {
-		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
+		<Validator as VaultRotationHandler>::vault_rotation_aborted();
 	}
 }
 
