@@ -24,6 +24,7 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_traits::{ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
@@ -70,6 +71,10 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+		/// Provides the logic if a runtime can be performed
+		type UpgradeCondition: ExecutionCondition;
+		/// Provides to implementation for a runtime upgrade
+		type RuntimeUpgrade: RuntimeUpgrade;
 	}
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -135,6 +140,8 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
+		/// The Chainflip runtime was updated
+		UpdatedChainflipRuntime,
 	}
 
 	#[pallet::error]
@@ -149,6 +156,10 @@ pub mod pallet {
 		DecodeOfCallFailed,
 		/// The majority was not reached when the execution was triggered
 		MajorityNotReached,
+		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
+		UpgradeConditionsNotMet,
+		/// RuntimeUpgrade has failed
+		UpgradeHasFailed,
 	}
 
 	#[pallet::call]
@@ -200,6 +211,45 @@ pub mod pallet {
 			// Set the new members of the governance
 			Members::<T>::put(accounts);
 			Ok(().into())
+		}
+
+		/// Performs a runtime upgrade of the chain flip runtime
+		/// **Can only be called via the Governance Origin**
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn chainflip_runtime_upgrade(
+			origin: OriginFor<T>,
+			code: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			// Ensure the extrinsic was executed by the governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			// Ensure execution conditions
+			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
+
+			// Execute the runtime upgrade
+			// let result =
+			// 	frame_system::Pallet::<T>::set_code(frame_system::RawOrigin::Root.into(), code);
+
+			// If successfully emit an additional event
+			// if let Ok(_) = result {
+			// 	Self::deposit_event(Event::UpdatedChainflipRuntime);
+			// }
+
+			if T::RuntimeUpgrade::execute(code) {
+				Self::deposit_event(Event::UpdatedChainflipRuntime);
+				Ok(().into())
+			} else {
+				Err(Error::<T>::UpgradeHasFailed.into())
+			}
 		}
 
 		/// Approve a proposal by a given proposal id

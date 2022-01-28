@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use crate as pallet_cf_governance;
 
+const DUMMY_WASM_BLOB: Vec<u8> = vec![];
+
 fn mock_extrinsic() -> Box<Call> {
 	let call =
 		Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
@@ -200,4 +202,50 @@ fn sudo_extrinsic() {
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
 	});
+}
+
+#[test]
+fn upgrade_runtime_successfully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			DUMMY_WASM_BLOB
+		));
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::Governance(crate::Event::UpdatedChainflipRuntime),
+		);
+	});
+}
+
+#[test]
+fn wrong_upgrade_conditions() {
+	// Set the mock to return false
+	UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = false);
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+				DUMMY_WASM_BLOB
+			),
+			<Error<Test>>::UpgradeConditionsNotMet
+		);
+	});
+	// Set the mock back to default
+	UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = true);
+}
+
+#[test]
+fn error_during_runtime_upgrade() {
+	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = false);
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+				DUMMY_WASM_BLOB
+			),
+			<Error<Test>>::UpgradeHasFailed
+		);
+	});
+	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = true);
 }

@@ -615,3 +615,13 @@ pub trait QualifyValidator {
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
+
+/// TODO: add description
+pub trait ExecutionCondition {
+	/// TODO: add description
+	fn is_satisfied() -> bool;
+}
+
+pub trait RuntimeUpgrade {
+	fn execute(code: Vec<u8>) -> bool;
+}

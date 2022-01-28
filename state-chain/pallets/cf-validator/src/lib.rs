@@ -21,7 +21,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, HasPeerMapping,
+	EpochTransitionHandler, ExecutionCondition, HasPeerMapping,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -674,5 +674,13 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
+	}
+}
+
+pub struct NotDuringRotation<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
+	fn is_satisfied() -> bool {
+		matches!(Rotation::<T>::get(), RotationStatus::Idle)
 	}
 }
