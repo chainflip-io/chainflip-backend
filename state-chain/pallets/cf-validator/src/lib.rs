@@ -12,16 +12,13 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, HasPeerMapping,
+	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	HasPeerMapping, ValidatorUnchecked, VaultRotationHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -65,13 +62,15 @@ pub struct PercentageRange {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum RotationStatus {
+pub enum RotationStatus<ValidatorId, Amount> {
 	Idle,
-	AwaitingCompletion,
-	Ready,
+	RunAuction,
+	AwaitingVaults(AuctionResult<ValidatorId, Amount>),
+	VaultsRotated(AuctionResult<ValidatorId, Amount>),
+	SessionRotating(AuctionResult<ValidatorId, Amount>),
 }
 
-impl Default for RotationStatus {
+impl<ValidatorId, Amount> Default for RotationStatus<ValidatorId, Amount> {
 	fn default() -> Self {
 		RotationStatus::Idle
 	}
@@ -80,6 +79,7 @@ impl Default for RotationStatus {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::{QualifyConfig, ValidatorChecked, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -116,6 +116,12 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
+		/// The lifecycle of a vault rotation
+		type VaultRotator: VaultRotator<ValidatorId = Self::ValidatorId>;
+
+		/// Configure what we are intested in qualifying
+		type QualifyConfig: QualifyConfig<ValidatorId = Self::ValidatorId>;
+
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
@@ -124,12 +130,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// The rotation is aborted
+		RotationAborted,
 		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
-		/// A new epoch has been forced
-		ForceRotationRequested(),
+		/// Rotation status updated \[rotation_status\]
+		RotationStatusUpdated(RotationStatusOf<T>),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
@@ -143,37 +151,79 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		NoValidators,
 		/// Epoch block number supplied is invalid
 		InvalidEpoch,
-		/// During an auction we can't update certain state
-		AuctionInProgress,
+		/// A rotation is in progress
+		RotationInProgress,
 		/// Validator Peer mapping overlaps with an existing mapping
 		AccountPeerMappingOverlap,
 		/// Invalid signature
 		InvalidAccountPeerMappingSignature,
 	}
 
+	type RotationStatusOf<T> =
+		RotationStatus<<T as frame_system::Config>::AccountId, <T as Config>::Amount>;
+
+	impl<T: Config> Pallet<T> {
+		pub(crate) fn update_rotation_status(new_status: RotationStatusOf<T>) {
+			RotationPhase::<T>::put(new_status.clone());
+			Self::deposit_event(Event::RotationStatusUpdated(new_status));
+		}
+	}
+
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
-			// We expect this to return true when a rotation has been forced, it is now scheduled
-			// or we are currently in a rotation
-			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
-				// At the start of each auction we notify that we are approaching the end of the
-				// current epoch.  TODO Could this be best in another trait such as `Auctioneer`?
-				if T::Auctioneer::phase() == AuctionPhase::WaitingForBids {
-					T::EpochTransitionHandler::on_epoch_ending();
-				}
-
-				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
-					// Auction completed when we return to the state of `WaitingForBids`
-					if Force::<T>::get() {
-						Force::<T>::set(false);
+			match RotationPhase::<T>::get() {
+				RotationStatus::Idle => {
+					let blocks_per_epoch = BlocksPerEpoch::<T>::get();
+					if blocks_per_epoch > Zero::zero() {
+						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
+						let diff = block_number.saturating_sub(current_epoch_started_at);
+						if diff >= blocks_per_epoch {
+							Self::update_rotation_status(RotationStatus::RunAuction);
+						}
 					}
-					Rotation::<T>::put(RotationStatus::AwaitingCompletion);
-				}
+				},
+				RotationStatus::RunAuction => match T::Auctioneer::run_auction::<
+					ValidatorChecked<T::QualifyConfig>,
+				>() {
+					Ok(auction_result) => {
+						// TODO Do we handle an error at starting the vault rotation as an abort or
+						// just simply log?
+						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
+						{
+							Ok(_) => Self::update_rotation_status(RotationStatus::AwaitingVaults(
+								auction_result,
+							)),
+							Err(e) =>
+								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e),
+						}
+					},
+					Err(e) =>
+						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e),
+				},
+				RotationStatus::AwaitingVaults(auction_result) =>
+					match T::VaultRotator::finalize_rotation() {
+						Ok(_) => match T::Auctioneer::confirm_auction(auction_result.clone()) {
+							Ok(_) => Self::update_rotation_status(RotationStatus::VaultsRotated(
+								auction_result,
+							)),
+							Err(e) =>
+								log::warn!(target: "cf-validator", "failed to confirm auction {:?}", e),
+						},
+						// TODO is this too verbose as we will be seeing this on every block until
+						// we finalize a vault rotation
+						Err(e) =>
+							log::warn!(target: "cf-validator", "finalizing a vault rotation failed due to error: {:?}", e),
+					},
+				RotationStatus::VaultsRotated(auction_result) => {
+					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
+				},
+				RotationStatus::SessionRotating(_) => {
+					Self::update_rotation_status(RotationStatus::Idle);
+				},
 			}
 			0
 		}
@@ -218,20 +268,25 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [AuctionInProgress](Error::AuctionInProgress)
+		/// - [RotationInProgress](Error::RotationInProgress)
 		/// - [InvalidEpoch](Error::InvalidEpoch)
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
+			// TODO Governance
 			ensure_root(origin)?;
-			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
+			ensure!(
+				RotationPhase::<T>::get() == RotationStatus::Idle,
+				Error::<T>::RotationInProgress
+			);
 			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
 			BlocksPerEpoch::<T>::set(number_of_blocks);
 			Self::deposit_event(Event::EpochDurationChanged(old_epoch, number_of_blocks));
+
 			Ok(().into())
 		}
 
@@ -247,12 +302,17 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [AuctionInProgress](Error::AuctionInProgress)
+		/// - [RotationInProgress](Error::RotationInProgress)
 		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			// TODO Governance
 			ensure_root(origin)?;
-			ensure!(T::Auctioneer::waiting_on_bids(), Error::<T>::AuctionInProgress);
-			Self::force_validator_rotation();
+			ensure!(
+				RotationPhase::<T>::get() == RotationStatus::Idle,
+				Error::<T>::RotationInProgress
+			);
+			Self::update_rotation_status(RotationStatus::RunAuction);
+
 			Ok(().into())
 		}
 
@@ -371,11 +431,6 @@ pub mod pallet {
 		}
 	}
 
-	/// Force auction on next block
-	#[pallet::storage]
-	#[pallet::getter(fn force)]
-	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
-
 	/// An emergency rotation has been requested
 	#[pallet::storage]
 	#[pallet::getter(fn emergency_rotation_requested)]
@@ -401,10 +456,11 @@ pub mod pallet {
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
-	/// State of the current rotation
+	/// The rotation phase we are currently at
 	#[pallet::storage]
-	#[pallet::getter(fn rotation)]
-	pub type Rotation<T: Config> = StorageValue<_, RotationStatus, ValueQuery>;
+	#[pallet::getter(fn rotation_phase)]
+	pub type RotationPhase<T: Config> =
+		StorageValue<_, RotationStatus<T::ValidatorId, T::Amount>, ValueQuery>;
 
 	/// A list of the current validators
 	#[pallet::storage]
@@ -453,17 +509,17 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-
-			if let Some(AuctionResult { minimum_active_bid, winners }) =
-				T::Auctioneer::auction_result()
-			{
-				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
-			} else {
-				log::warn!(
-					"Unavailable genesis auction so we have no current validating set! \
-							Forcing a rotation will resolve this if we have stakers available"
-				);
-			}
+			// Run an auction on genesis. We use `ValidatorUnchecked` to skip
+			// any valdation for the bidders which are our genesis nodes which
+			// are already staked
+			let auction_result = T::Auctioneer::run_auction::<ValidatorUnchecked<T::ValidatorId>>()
+				.expect("an auction is run for our genesis bidders");
+			T::Auctioneer::confirm_auction(auction_result.clone())
+				.expect("the auction is confirmed");
+			Pallet::<T>::start_new_epoch(
+				&auction_result.winners,
+				auction_result.minimum_active_bid,
+			);
 		}
 	}
 }
@@ -488,8 +544,9 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
+	// TODO refactor this name
 	fn is_auction_phase() -> bool {
-		!T::Auctioneer::waiting_on_bids()
+		RotationPhase::<T>::get() != RotationStatus::Idle
 	}
 
 	fn active_validator_count() -> u32 {
@@ -500,7 +557,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
-		Rotation::<T>::get() != RotationStatus::Idle
+		matches!(
+			RotationPhase::<T>::get(),
+			RotationStatus::VaultsRotated(_) | RotationStatus::SessionRotating(_)
+		)
 	}
 }
 
@@ -534,56 +594,15 @@ impl<T: Config> Pallet<T> {
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
 	}
-
-	/// Check whether we should based on either a force rotation or we have reach the epoch
-	/// block number
-	fn should_rotate(now: T::BlockNumber) -> bool {
-		if Force::<T>::get() {
-			return true
-		}
-
-		let blocks_per_epoch = BlocksPerEpoch::<T>::get();
-		if blocks_per_epoch == Zero::zero() {
-			return false
-		}
-		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
-		let diff = now.saturating_sub(current_epoch_started_at);
-
-		diff >= blocks_per_epoch
-	}
-
-	fn force_validator_rotation() -> Weight {
-		Force::<T>::set(true);
-		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
-
-		T::DbWeight::get().reads_writes(0, 1)
-	}
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// If we have a set of confirmed validators we roll them in over two blocks
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		// We have a confirmed set of validators from our last auction
-		// We first return the new winners and then to finalise we start a new epoch
-		match Rotation::<T>::get() {
-			RotationStatus::Idle => {
-				log::warn!(target: "cf-validator", "we shouldn't reach here and we will see the same \
-													validators in the next epoch");
-				None
-			},
-			RotationStatus::AwaitingCompletion => {
-				Rotation::<T>::put(RotationStatus::Ready);
-				Some(
-					T::Auctioneer::auction_result()
-						.expect("everything starts with an auction")
-						.winners,
-				)
-			},
-			RotationStatus::Ready => {
-				Rotation::<T>::set(RotationStatus::Idle);
-				None
-			},
+		match RotationPhase::<T>::get() {
+			RotationStatus::VaultsRotated(auction_result) => Some(auction_result.winners),
+			_ => None,
 		}
 	}
 
@@ -598,11 +617,11 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if Rotation::<T>::get() == RotationStatus::Ready {
-			let AuctionResult { winners, minimum_active_bid } =
-				T::Auctioneer::auction_result().expect("everything starts with an auction");
-			// Start the new epoch
-			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+		if let RotationStatus::SessionRotating(AuctionResult {
+			winners, minimum_active_bid, ..
+		}) = RotationPhase::<T>::get()
+		{
+			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid)
 		}
 	}
 }
@@ -639,7 +658,8 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
+			Self::update_rotation_status(RotationStatus::RunAuction);
+			return T::DbWeight::get().reads_writes(1, 2)
 		}
 
 		T::DbWeight::get().reads_writes(1, 0)
@@ -674,5 +694,17 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
+	}
+}
+
+impl<T: Config> VaultRotationHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	// The vault rotation has aborted, we reset the ongoing rotation
+	fn vault_rotation_aborted() {
+		// Quietly check state and reset
+		if RotationPhase::<T>::get() != RotationStatus::Idle {
+			Self::deposit_event(Event::RotationAborted);
+			Self::update_rotation_status(RotationStatus::Idle);
+		}
 	}
 }
