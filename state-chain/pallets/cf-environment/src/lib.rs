@@ -2,9 +2,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
