@@ -23,6 +23,8 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
 
+use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -399,10 +401,11 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {
-	fn do_upgrade(code: Vec<u8>) -> bool {
-		match System::set_code(frame_system::RawOrigin::Root.into(), code) {
-			Ok(_) => true,
-			Err(_) => false,
-		}
+	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
+		// match System::set_code(frame_system::RawOrigin::Root.into(), code) {
+		// 	Ok(_) => true,
+		// 	Err(_) => false,
+		// }
+		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }

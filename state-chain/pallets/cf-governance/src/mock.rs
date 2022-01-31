@@ -2,7 +2,10 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
 use cf_traits::{mocks::time_source, ExecutionCondition, RuntimeUpgrade};
-use frame_support::parameter_types;
+use frame_support::{
+	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo},
+	ensure, parameter_types,
+};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -74,8 +77,14 @@ impl ExecutionCondition for UpgradeConditionMock {
 pub struct RuntimeUpgradeMock;
 
 impl RuntimeUpgrade for RuntimeUpgradeMock {
-	fn do_upgrade(_: Vec<u8>) -> bool {
-		UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone())
+	fn do_upgrade(_: Vec<u8>) -> DispatchResultWithPostInfo {
+		// TODO: at the moment this is not returning the error.
+		// fix this to make the error_during_runtime_upgrade test passing...
+		ensure!(
+			UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone()),
+			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
+		);
+		Ok(().into())
 	}
 }
 

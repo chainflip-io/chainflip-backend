@@ -627,5 +627,5 @@ pub trait ExecutionCondition {
 pub trait RuntimeUpgrade {
 	/// Calls the system pallet set_code method and returns true/false if the
 	/// upgrade was successful
-	fn do_upgrade(code: Vec<u8>) -> bool;
+	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
 }

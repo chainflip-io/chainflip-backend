@@ -235,13 +235,13 @@ pub mod pallet {
 			// Ensure execution conditions
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 
-			// Do the upgrade and return an error if it has failed
-			if !T::RuntimeUpgrade::do_upgrade(code) {
-				return Err(Error::<T>::UpgradeHasFailed.into())
+			match T::RuntimeUpgrade::do_upgrade(code) {
+				Ok(_) => Self::deposit_event(Event::UpgradeChainflipRuntime),
+				Err(err) => Self::deposit_event(Event::FailedExecution(err.error)),
 			}
 
 			// If successful emit an event to inform about the new upgrade
-			Self::deposit_event(Event::UpgradeChainflipRuntime);
+			// Self::deposit_event(Event::UpgradeChainflipRuntime);
 			Ok(().into())
 		}
 
