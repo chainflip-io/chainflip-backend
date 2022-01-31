@@ -1,4 +1,5 @@
 #!/bin/sh
+[[ -z $DEBUG ]] && set -x
 # Number of steps across component ranges
 STEPS=20
 # Number of times we repeat a benchmark
