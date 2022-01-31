@@ -430,6 +430,9 @@ async fn pending_rts_should_expire() {
         .client
         .force_stage_timeout();
 
+    // TODO: Complete the keygen ceremony above, to ensure we still don't progress,
+    // even after the keygen is completed?
+
     // Should be no pending request to sign.
     assert_ok!(signing_ceremony.nodes[target_account_id]
         .client
@@ -450,26 +453,26 @@ async fn should_ignore_unexpected_message_for_stage() {
         || Box::pin(async { new_signing_ceremony_with_keygen().await.0 }),
         standard_signing_coroutine,
         |stage_number, mut ceremony, (_, messages, _)| async move {
+            let previous_stage = stage_number - 1;
+            let test_node_id = &ACCOUNT_IDS[0];
+
             let get_messages_for_stage = |stage_index: usize| {
-                split_messages_for(
-                    messages[stage_index].clone(),
-                    &ACCOUNT_IDS[0],
-                    &ACCOUNT_IDS[1],
-                )
+                split_messages_for(messages[stage_index].clone(), test_node_id, &ACCOUNT_IDS[1])
             };
 
-            let (msg_from_1, other_msgs) = get_messages_for_stage(stage_number - 1);
-
+            // Get the messagess from all but one client for the previous stage
+            let (msg_from_1, other_msgs) = get_messages_for_stage(previous_stage);
             ceremony.distribute_messages(other_msgs.clone());
 
             // Receive messages from all unexpected stages (not the current stage or the next)
-            for ignored_stage_index in (0..stage_number - 1).chain(stage_number + 1..SIGNING_STAGES)
-            {
+            for ignored_stage_index in (0..previous_stage).chain(stage_number + 1..SIGNING_STAGES) {
                 let (msg_from_1, _) = get_messages_for_stage(ignored_stage_index);
                 ceremony.distribute_messages(msg_from_1);
             }
+
+            // We should not have progressed further when receiving unexpected messages
             assert!(
-                ceremony.nodes[&ACCOUNT_IDS[0]]
+                ceremony.nodes[test_node_id]
                     .client
                     .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
                     .is_ok(),
@@ -479,7 +482,7 @@ async fn should_ignore_unexpected_message_for_stage() {
             // Receive a duplicate message
             ceremony.distribute_messages(other_msgs);
             assert!(
-                ceremony.nodes[&ACCOUNT_IDS[0]]
+                ceremony.nodes[test_node_id]
                     .client
                     .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
                     .is_ok(),
@@ -496,7 +499,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                     .collect(),
             );
             assert!(
-                ceremony.nodes[&ACCOUNT_IDS[0]]
+                ceremony.nodes[test_node_id]
                     .client
                     .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
                     .is_ok(),
@@ -515,7 +518,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                     .collect(),
             );
             assert!(
-                ceremony.nodes[&ACCOUNT_IDS[0]]
+                ceremony.nodes[test_node_id]
                     .client
                     .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
                     .is_ok(),
@@ -525,10 +528,11 @@ async fn should_ignore_unexpected_message_for_stage() {
             // Receive the last message and advance the stage
             ceremony.distribute_messages(msg_from_1);
             assert!(
-                ceremony.nodes[&ACCOUNT_IDS[0]]
+                ceremony.nodes[test_node_id]
                     .client
                     .ensure_ceremony_at_signing_stage(
                         if stage_number + 1 > SIGNING_STAGES {
+                            // The keygen finished
                             STAGE_FINISHED_OR_NOT_STARTED
                         } else {
                             stage_number + 1
@@ -550,6 +554,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
 
     let [node_0_id] = signing_ceremony.select_account_ids();
 
+    // Send the request to sign with a duplicate id in the list of signers
     let mut signer_ids: Vec<AccountId> = signing_ceremony.nodes.keys().cloned().collect();
     signer_ids[1] = signer_ids[2].clone();
 
@@ -557,18 +562,18 @@ async fn should_ignore_rts_with_duplicate_signer() {
         signers: signer_ids.clone(),
         ..signing_ceremony.signing_info()
     };
-
     let client = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap().client;
     client.process_multisig_instruction(
         MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
     );
+
+    // The rts should not have started a ceremony and we should see an error tag
     assert_ok!(client.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
 
-    // The rts should not have started a ceremony and we should see an error tag
     assert!(signing_ceremony
         .get_mut_node(&node_0_id)
         .tag_cache
@@ -587,14 +592,13 @@ async fn should_ignore_rts_with_used_ceremony_id() {
         frost::LocalSig3,
         frost::VerifyLocalSig4
     );
+    // Finish a signing ceremony
     signing_ceremony.distribute_messages(messages);
     signing_ceremony.complete().await;
 
-    let sign_info = signing_ceremony.signing_info();
-
-    let node = signing_ceremony.nodes.values_mut().next().unwrap();
-
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
+    let sign_info = signing_ceremony.signing_info();
+    let node = signing_ceremony.nodes.values_mut().next().unwrap();
     node.client.process_multisig_instruction(
         MultisigInstruction::Sign(sign_info),
         &mut signing_ceremony.rng,
@@ -634,6 +638,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
     let (_, signing_messages) = helpers::standard_signing(&mut signing_ceremony).await;
 
+    // Receive comm1 from a used ceremony id
     signing_ceremony.distribute_message(
         &node_1_id,
         &node_0_id,
@@ -646,10 +651,21 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
             .clone(),
     );
 
+    // The message should have been ignored and no ceremony was started
+    // In this case, the ceremony would be unauthorised, so we must check how many signing states exist
+    // to see if a unauthorised state was created.
     assert_ok!(signing_ceremony
         .get_mut_node(&node_0_id)
         .client
         .ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED, signing_ceremony_id));
+    assert_eq!(
+        signing_ceremony
+            .get_mut_node(&node_0_id)
+            .client
+            .ceremony_manager
+            .get_signing_states_len(),
+        0
+    );
 }
 
 #[tokio::test]
