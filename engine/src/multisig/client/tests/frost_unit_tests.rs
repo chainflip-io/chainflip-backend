@@ -64,6 +64,7 @@ async fn should_delay_stage_data() {
                 .client
                 .ensure_ceremony_at_signing_stage(
                     if stage_number + 2 > SIGNING_STAGES {
+                        // The keygen finished
                         STAGE_FINISHED_OR_NOT_STARTED
                     } else {
                         stage_number + 2
@@ -117,6 +118,7 @@ async fn should_handle_invalid_local_sig() {
         frost::LocalSig3
     );
 
+    // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
     let invalid_sig3 = gen_invalid_local_sig(&mut signing_ceremony.rng);
     for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
@@ -142,6 +144,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 
     let mut messages = signing_ceremony.request().await;
 
+    // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
     for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
         *message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
@@ -173,6 +176,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
         frost::LocalSig3
     );
 
+    // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
     for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
         *message = gen_invalid_local_sig(&mut signing_ceremony.rng);
@@ -203,7 +207,11 @@ async fn should_ignore_duplicate_rts() {
     assert_ok!(signing_ceremony.nodes[&test_id]
         .client
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
+
+    // Send another request to sign with the same ceremony_id and key_id
     signing_ceremony.request_without_gather();
+
+    // The request should have been rejected and the existing ceremony is unchanged
     assert_ok!(signing_ceremony.nodes[&test_id]
         .client
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
@@ -222,6 +230,8 @@ async fn should_delay_rts_until_key_is_ready() {
             Rng::from_seed([8; 32]),
         )
     };
+
+    let test_node_id = &ACCOUNT_IDS[0];
 
     let keygen_ceremony = new_keygen_ceremony();
     let (key_id, _, _) = helpers::standard_keygen(keygen_ceremony).await;
@@ -245,6 +255,7 @@ async fn should_delay_rts_until_key_is_ready() {
         Rng::from_seed([4; 32]),
     );
 
+    // Send the request to sign
     signing_ceremony.request_without_gather();
 
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
@@ -257,17 +268,19 @@ async fn should_delay_rts_until_key_is_ready() {
         Rng::from_seed([8; 32]),
     );
 
-    assert_ok!(keygen_ceremony.nodes[&ACCOUNT_IDS[0]]
+    // The request to sign should have been delayed, so the stage is unaffected
+    assert_ok!(keygen_ceremony.nodes[test_node_id]
         .client
         .ensure_ceremony_at_signing_stage(
             STAGE_FINISHED_OR_NOT_STARTED,
             signing_ceremony.ceremony_id
         ));
 
+    // Complete the keygen by sending the ver5 from each other client to the test node
     keygen_ceremony.distribute_messages(messages);
 
     // Now that the keygen completed, the rts should have been processed
-    assert_ok!(keygen_ceremony.nodes[&ACCOUNT_IDS[0]]
+    assert_ok!(keygen_ceremony.nodes[test_node_id]
         .client
         .ensure_ceremony_at_signing_stage(1, signing_ceremony.ceremony_id));
 }
