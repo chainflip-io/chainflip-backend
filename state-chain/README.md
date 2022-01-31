@@ -31,7 +31,7 @@ cargo build --release
 To benchmark the node for a production release you can run:
 
 ```sh
-source state-chain/scripts/benchmark-all.sh
+./state-chain/scripts/benchmark-all.sh
 ```
 
 This script is building the node, executing the benchmarks, updating the weight files and guide you through adding the diff of any benchmark.
