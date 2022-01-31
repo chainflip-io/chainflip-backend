@@ -673,15 +673,7 @@ impl<T: Config> Pallet<T> {
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
 		for offender in offenders {
-			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender)
-				.unwrap_or_else(|e| {
-					log::error!(
-						"Unable to report ParticipateKeygenFailed for signer {:?}: {:?}",
-						offender,
-						e
-					);
-					0
-				});
+			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender);
 		}
 
 		Self::deposit_event(Event::KeygenFailure(ceremony_id, chain_id));

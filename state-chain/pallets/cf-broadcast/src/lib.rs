@@ -530,11 +530,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		failed: FailedBroadcastAttempt<T, I>,
 		offline_condition: OfflineCondition,
 	) {
-		T::OfflineReporter::report(offline_condition, signer).unwrap_or_else(|_| {
-			// Should never fail unless the validator doesn't exist.
-			log::error!("Unable to report unknown validator {:?}", signer);
-			0
-		});
+		T::OfflineReporter::report(offline_condition, signer);
 		Self::schedule_retry(failed);
 	}
 
