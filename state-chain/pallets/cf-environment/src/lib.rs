@@ -65,9 +65,7 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::event]
-	pub enum Event<T: Config> {
-		UpdatedCFESettings(cfe::CfeSettings),
-	}
+	pub enum Event<T: Config> {}
 
 	#[pallet::error]
 	pub enum Error<T> {}
