@@ -658,9 +658,11 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     let [node_0_id, node_1_id] = signing_ceremony.select_account_ids();
 
+    // Receive comm1 messages for an unauthorised signing_ceremony
     let message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
     signing_ceremony.distribute_message(&node_1_id, &node_0_id, message);
 
+    // Check the unauthorised ceremony was created
     assert_eq!(
         signing_ceremony
             .nodes
@@ -672,11 +674,12 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
         1
     );
 
+    // Timeout the unauthorised ceremony
     let node_0 = signing_ceremony.get_mut_node(&node_0_id);
     node_0.client.force_stage_timeout();
 
+    // Do a signing ceremony as normal, using the default signing_ceremony
     let messages = signing_ceremony.request().await;
-
     let messages = helpers::run_stages!(
         signing_ceremony,
         messages,
@@ -685,9 +688,12 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
         frost::VerifyLocalSig4
     );
     signing_ceremony.distribute_messages(messages);
+
+    // completes successfully, because the ceremony_id was not consumed prior
     signing_ceremony.complete().await;
 }
 
+// TODO: Come back and do this such that it signs with all parties
 #[tokio::test]
 async fn should_sign_with_all_parties() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -770,7 +776,6 @@ mod timeout {
         // If a party times out during a regular stage,
         // and the majority of nodes agree on this in the following
         // (broadcast verification) stage, the party gets reported
-
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -838,8 +843,10 @@ mod timeout {
             signing_ceremony.complete().await;
         }
 
-        // This covers 2b
-
+        // These covers 2b
+        // If a party times out during a regular stage,
+        // and the majority of nodes agree on this in the following
+        // (broadcast verification) stage, the party gets reported
         #[tokio::test]
         async fn offline_party_should_be_reported_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -894,6 +901,7 @@ mod timeout {
 
         use super::*;
 
+        // These cover 1a
         #[tokio::test]
         async fn recover_if_agree_on_values_stage2() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -936,12 +944,14 @@ mod timeout {
             ceremony.complete().await;
         }
 
-        // These two cover 1b
-
+        // These cover 1b
         #[tokio::test]
         async fn report_if_cannot_agree_on_values_stage_2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
+            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
+            // (NB: Ideally it should, but we can't due to the limitations of the protocol)
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
@@ -967,6 +977,9 @@ mod timeout {
         async fn report_if_cannot_agree_on_values_stage_4() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
+            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
+            // (NB: Ideally it should, but we can't due to the limitations of the protocol)
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
