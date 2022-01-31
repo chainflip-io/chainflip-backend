@@ -712,31 +712,18 @@ async fn should_sign_with_all_parties() {
 
 mod timeout {
 
-    // What should be tested w.r.t timeouts:
-
-    // 0. [ignored] If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
-    //           (i.e. whoever send stage data for the ceremony)
-
-    // 1a. [done] If timeout during a broadcast verification stage, and we have enough data, we can recover
-    // 1b. [done] If timeout during a broadcast verification stage, and we don't have enough data to
-    //            recover some of the parties messages, we report those parties (note that we can't report
-    //            the parties that were responsible for the timeout in the first place as we would need
-    //            another round of "voting" which can also timeout, and then we are back where we started)
-
-    // 2a.        If timeout during a regular stage, but the majority of nodes can agree on all values,
-    //            we proceed with the ceremony and use the data received by the majority
-    // 2b. [done] If timeout during a regular stage, and the majority of nodes didn't receive the data
-    //            from some nodes (i.e. they vote on value `None`), those nodes are reported
-    // 2c.        Same as [2b], but the nodes are reported if the majority can't agree on any one value
-    //            (even if all values are `Some(...)` such as when a node does an inconsistent broadcast)
-
-    // 3.         If timeout before the key is ready, the ceremony should be ignored, but need to ensure that
+    // TODO:
+    // - Same as the tests for `offline_party_should_be_reported_*`, but the nodes are reported if the majority can't agree on any one value
+    // (even if all values are `Some(...)` such as when a node does an inconsistent broadcast)
+    // - If timeout before the key is ready, the ceremony should be ignored, but need to ensure that
     //    we return a response
 
     use super::*;
 
     /* TODO: Refactor once feature re-enabled
-    // This covers [0]
+
+    // If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
+    // (i.e. whoever send stage data for the ceremony)
     #[tokio::test]
     #[ignore = "functionality disabled as SC does not expect this response"]
     async fn should_report_on_timeout_before_request_to_sign() {
@@ -772,10 +759,13 @@ mod timeout {
 
         use super::*;
 
-        // These cover 2a
-        // If a party times out during a regular stage,
-        // and the majority of nodes agree on this in the following
-        // (broadcast verification) stage, the party gets reported
+        // ======================
+
+        // The following tests cover:
+        // If timeout during a regular stage, but the majority of nodes can agree on all values,
+        // we proceed with the ceremony and use the data received by the majority. If majority of nodes
+        // agree on a party timing out in the following stage (broadcast verification), the party gets reported
+
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -843,10 +833,14 @@ mod timeout {
             signing_ceremony.complete().await;
         }
 
-        // These covers 2b
-        // If a party times out during a regular stage,
-        // and the majority of nodes agree on this in the following
-        // (broadcast verification) stage, the party gets reported
+        // ======================
+
+        // ======================
+
+        // The following tests cover:
+        // If timeout during a regular stage, and the majority of nodes didn't receive the data
+        // from some nodes (i.e. they vote on value `None`), those nodes are reported
+
         #[tokio::test]
         async fn offline_party_should_be_reported_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -895,13 +889,19 @@ mod timeout {
                 .complete_with_error(&[non_sending_party_id])
                 .await;
         }
+
+        // ======================
     }
 
     mod during_broadcast_verification_stage {
 
         use super::*;
 
-        // These cover 1a
+        // ======================
+
+        // The following tests cover:
+        // If timeout during a broadcast verification stage, and we have enough data, we can recover
+
         #[tokio::test]
         async fn recover_if_agree_on_values_stage2() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -944,7 +944,16 @@ mod timeout {
             ceremony.complete().await;
         }
 
-        // These cover 1b
+        // ======================
+
+        // ======================
+
+        // The following tests cover:
+        // If timeout during a broadcast verification stage, and we don't have enough data to
+        // recover some of the parties messages, we report those parties (note that we can't report
+        // the parties that were responsible for the timeout in the first place as we would need
+        // another round of "voting" which can also timeout, and then we are back where we started)
+
         #[tokio::test]
         async fn report_if_cannot_agree_on_values_stage_2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
@@ -1007,5 +1016,7 @@ mod timeout {
                 .complete_with_error(&[non_sending_party_id_1])
                 .await
         }
+
+        // ======================
     }
 }
