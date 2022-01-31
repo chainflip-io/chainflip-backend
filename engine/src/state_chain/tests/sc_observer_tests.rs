@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use cf_chains::{eth::UnsignedTransaction, ChainId};
+use cf_chains::{
+    eth::{AggKey, UnsignedTransaction},
+    Ethereum,
+};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
@@ -8,7 +11,7 @@ use pallet_cf_validator::CurrentEpoch;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
 use sp_core::{storage::StorageKey, H256, U256};
 use sp_runtime::{AccountId32, Digest};
-use state_chain_runtime::{Header, Runtime};
+use state_chain_runtime::{EthereumInstance, Header, Runtime};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -107,16 +110,15 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .expect_storage_events_at()
         .with(
             eq(Some(initial_block_hash)),
-            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
-                &3,
-                &ChainId::Ethereum,
-            ))),
+            eq(StorageKey(
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3),
+            )),
         )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![0; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
@@ -215,16 +217,15 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .expect_storage_events_at()
         .with(
             eq(Some(initial_block_hash)),
-            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
-                &2,
-                &ChainId::Ethereum,
-            ))),
+            eq(StorageKey(
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&2),
+            )),
         )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![0; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_TWO_END,
                 },
                 initial_block_hash,
@@ -537,7 +538,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .returning(move |_, _| Ok(vec![storage_change_set_from(4, H256::default())]));
 
     // get the current vault
-    let vault_key = StorageKey(Vaults::<Runtime>::hashed_key_for(&3, &ChainId::Ethereum));
+    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
 
     // get the vault on start up because we're active
     mock_state_chain_rpc_client
@@ -546,8 +547,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![0; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
@@ -555,7 +556,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         });
 
     let vault_key_after_new_epoch =
-        StorageKey(Vaults::<Runtime>::hashed_key_for(&4, &ChainId::Ethereum));
+        StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4));
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
@@ -566,8 +567,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![1; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_FOUR_INITIAL,
                 },
                 new_epoch_block_header_hash,
@@ -740,16 +741,15 @@ async fn backup_to_validator_on_new_epoch() {
         .expect_storage_events_at()
         .with(
             eq(Some(new_epoch_block_header.hash())),
-            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
-                &4,
-                &ChainId::Ethereum,
-            ))),
+            eq(StorageKey(
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4),
+            )),
         )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![1; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_FOUR_INITIAL,
                 },
                 new_epoch_block_header_hash,
@@ -904,7 +904,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .returning(move |_, _| Ok(vec![storage_change_set_from(4, H256::default())]));
 
     // get the current vault
-    let vault_key = StorageKey(Vaults::<Runtime>::hashed_key_for(&3, &ChainId::Ethereum));
+    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
 
     // get the vault on start up because we're active
     mock_state_chain_rpc_client
@@ -913,8 +913,8 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![0; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,
@@ -928,8 +928,8 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![1; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_END,
                 },
                 new_epoch_block_header_hash,
@@ -1093,16 +1093,15 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         .expect_storage_events_at()
         .with(
             eq(Some(initial_block_hash)),
-            eq(StorageKey(Vaults::<Runtime>::hashed_key_for(
-                &3,
-                &ChainId::Ethereum,
-            ))),
+            eq(StorageKey(
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3),
+            )),
         )
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
-                Vault {
-                    public_key: vec![0; 33],
+                Vault::<Ethereum> {
+                    public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
                 },
                 initial_block_hash,

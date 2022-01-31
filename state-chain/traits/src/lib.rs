@@ -103,6 +103,14 @@ impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	}
 }
 
+pub struct CurrentEpochIndex<T>(PhantomData<T>);
+
+impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
+	fn get() -> u32 {
+		T::EpochInfo::epoch_index()
+	}
+}
+
 /// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

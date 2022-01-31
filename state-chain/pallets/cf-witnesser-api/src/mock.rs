@@ -34,7 +34,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Pallet, Call, Event<T>, Config},
+		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage, Origin<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Event<T>, Storage},
@@ -247,8 +247,9 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
-impl pallet_cf_vaults::Config for Test {
+impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
+	type Chain = Ethereum;
 	type RotationHandler = Self;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;

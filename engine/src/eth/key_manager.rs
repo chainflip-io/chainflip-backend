@@ -7,7 +7,6 @@ use crate::{
     eth::{utils, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
-use cf_chains::ChainId;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -130,11 +129,10 @@ impl EthObserver for KeyManager {
                 let _ = state_chain_client
                     .submit_signed_extrinsic(
                         logger,
-                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                            ChainId::Ethereum,
-                            new_key.serialize().to_vec(),
+                        pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
+                            cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
                             event.block_number,
-                            event.tx_hash.to_fixed_bytes().to_vec(),
+                            event.tx_hash,
                         ),
                     )
                     .await;
