@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks_instance_pallet;
 
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
@@ -26,5 +26,3 @@ benchmarks_instance_pallet! {
 	transmission_success {} : {}
 	transmission_failure {} : {}
 }
-
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
