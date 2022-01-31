@@ -960,7 +960,7 @@ mod timeout {
 
             // bad party 1 will timeout during a broadcast verification stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (NB: Ideally it should, but we can't due to the limitations of the protocol)
+            // (Ideally it should be reported, but we can't due to the limitations of the protocol)
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
@@ -988,7 +988,7 @@ mod timeout {
 
             // bad party 1 will timeout during a broadcast verification stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (NB: Ideally it should, but we can't due to the limitations of the protocol)
+            // (Ideally it should be reported, but we can't due to the limitations of the protocol
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
