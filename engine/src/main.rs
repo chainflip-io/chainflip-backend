@@ -1,8 +1,3 @@
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
-
 use chainflip_engine::{
     eth::{
         self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
@@ -58,7 +53,12 @@ async fn main() {
         latest_block_hash,
         state_chain_block_stream,
         state_chain_client,
-        max_extrinsic_retry_attempts,
+        CfeSettings {
+            eth_block_safety_margin,
+            pending_sign_duration_secs,
+            max_ceremony_stage_duration_secs,
+            max_extrinsic_retry_attempts: _,
+        },
     ) = state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
         .await
         .expect("Failed to connect to state chain");
@@ -151,26 +151,6 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
-    let (eth_block_safety_margin, pending_sign_duration_secs, max_ceremony_stage_duration_secs) = {
-        let CfeSettings {
-            eth_block_safety_margin,
-            pending_sign_duration_secs,
-            max_ceremony_stage_duration_secs,
-            max_extrinsic_retry_attempts: max_extrinsic_retry_attempts_init,
-        } = state_chain_client
-            .get_cfe_settings(latest_block_hash)
-            .await
-            .expect("Should get initial CfeSettings from the SC");
-
-        // we already initialised max_extrinsic_retry attempts when we created the SC client
-        max_extrinsic_retry_attempts.store(max_extrinsic_retry_attempts_init, Ordering::Relaxed);
-        (
-            Arc::new(AtomicU32::new(eth_block_safety_margin)),
-            Arc::new(AtomicU32::new(pending_sign_duration_secs)),
-            Arc::new(AtomicU32::new(max_ceremony_stage_duration_secs)),
-        )
-    };
-
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -208,12 +188,6 @@ async fn main() {
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,
-            // == CFE Settings Atomics ==
-            eth_block_safety_margin.clone(),
-            pending_sign_duration_secs,
-            max_ceremony_stage_duration_secs,
-            max_extrinsic_retry_attempts,
-            // ====
             latest_block_hash,
             &root_logger
         ),
@@ -223,7 +197,7 @@ async fn main() {
             &eth_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
-            eth_block_safety_margin.clone(),
+            eth_block_safety_margin as u64,
             &root_logger,
         ),
         eth::start_contract_observer(
@@ -231,7 +205,7 @@ async fn main() {
             &eth_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
-            eth_block_safety_margin,
+            eth_block_safety_margin as u64,
             &root_logger,
         ),
     );

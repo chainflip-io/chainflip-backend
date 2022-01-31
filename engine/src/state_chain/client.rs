@@ -300,7 +300,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
-    max_extrinsic_retry_attempts: Arc<AtomicU32>,
+    max_extrinsic_retry_attempts: usize,
 }
 
 // use this events key, to save creating chain metadata in the tests
@@ -335,7 +335,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             runtime_version: RwLock::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
             signer: PairSigner::new(Pair::generate().0),
-            max_extrinsic_retry_attempts: Arc::new(AtomicU32::new(MAX_RETRY_ATTEMPTS as u32)),
+            max_extrinsic_retry_attempts: 10,
         }
     }
 }
@@ -352,8 +352,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
         let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
-        let max_retry_attempts = self.max_extrinsic_retry_attempts.load(Ordering::Relaxed);
-        for _ in 0..max_retry_attempts {
+        for _ in 0..self.max_extrinsic_retry_attempts {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
@@ -781,7 +780,7 @@ pub async fn connect_to_state_chain(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
-    Arc<AtomicU32>,
+    CfeSettings,
 )> {
     use substrate_subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
@@ -945,46 +944,51 @@ pub async fn connect_to_state_chain(
         chain_rpc_client,
     };
 
-    use chainflip_node::chain_spec::MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT;
+    let mut state_chain_client = StateChainClient {
+        nonce: AtomicU32::new(account_nonce),
+        runtime_version: RwLock::new(
+            state_chain_rpc_client
+                .fetch_runtime_version(latest_block_hash)
+                .await?,
+        ),
+        genesis_hash: try_unwrap_value(
+            state_chain_rpc_client
+                .chain_rpc_client
+                .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+                .await
+                .map_err(rpc_error_into_anyhow_error)?,
+            anyhow::Error::msg("Genesis block doesn't exist?"),
+        )?,
+        signer: signer.clone(),
+        state_chain_rpc_client,
+        our_account_id,
+        // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
+        events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
+        heartbeat_block_interval: metadata
+            .module("Reputation")
+            .expect("No module 'Reputation' in chain metadata")
+            .constant("HeartbeatBlockInterval")
+            .expect(
+                "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
+            )
+            .value::<u32>()
+            .expect("Could not decode HeartbeatBlockInterval to u32"),
+        max_extrinsic_retry_attempts: Default::default(),
+    };
 
-    let max_extrinsic_retry_attempts =
-        Arc::new(AtomicU32::new(MAX_EXTRINSIC_RETRY_ATTEMPTS_DEFAULT));
+    let cfe_settings = state_chain_client
+        .get_cfe_settings(latest_block_hash)
+        .await
+        .unwrap();
+
+    state_chain_client.max_extrinsic_retry_attempts =
+        cfe_settings.max_extrinsic_retry_attempts as usize;
 
     Ok((
         latest_block_hash,
         block_header_stream,
-        Arc::new(StateChainClient {
-            nonce: AtomicU32::new(account_nonce),
-            runtime_version: RwLock::new(
-                state_chain_rpc_client
-                    .fetch_runtime_version(latest_block_hash)
-                    .await?,
-            ),
-            genesis_hash: try_unwrap_value(
-                state_chain_rpc_client
-                    .chain_rpc_client
-                    .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                    .await
-                    .map_err(rpc_error_into_anyhow_error)?,
-                anyhow::Error::msg("Genesis block doesn't exist?"),
-            )?,
-            signer: signer.clone(),
-            state_chain_rpc_client,
-            our_account_id,
-            // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
-            events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
-            heartbeat_block_interval: metadata
-                .module("Reputation")
-                .expect("No module 'Reputation' in chain metadata")
-                .constant("HeartbeatBlockInterval")
-                .expect(
-                    "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
-                )
-                .value::<u32>()
-                .expect("Could not decode HeartbeatBlockInterval to u32"),
-                max_extrinsic_retry_attempts: max_extrinsic_retry_attempts.clone()
-        }),
-        max_extrinsic_retry_attempts
+        Arc::new(state_chain_client),
+        cfe_settings,
     ))
 }
 

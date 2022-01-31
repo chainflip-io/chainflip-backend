@@ -12,7 +12,7 @@ use super::EthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
-    safety_margin: u64,
+    block_safety_margin: u64,
 ) -> impl Stream<Item = BlockHeader>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
@@ -53,7 +53,7 @@ where
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
-                        .saturating_add(U64::from(safety_margin))
+                        .saturating_add(U64::from(block_safety_margin))
                         <= number
                     {
                         break Some((

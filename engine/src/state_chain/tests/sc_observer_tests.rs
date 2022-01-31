@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicU32, Arc};
+use std::sync::Arc;
 
 use cf_chains::{eth::UnsignedTransaction, ChainId};
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
@@ -98,11 +98,6 @@ where
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    let eth_block_safety_margin = Arc::new(AtomicU32::new(50));
-    let pending_sign_duration_secs = Arc::new(AtomicU32::new(50));
-    let max_ceremony_stage_duration_secs = Arc::new(AtomicU32::new(50));
-    let max_extrinsic_retry_attempts = Arc::new(AtomicU32::new(50));
-
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -112,10 +107,6 @@ where
         multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
-        eth_block_safety_margin,
-        pending_sign_duration_secs,
-        max_ceremony_stage_duration_secs,
-        max_extrinsic_retry_attempts,
         initial_block_hash,
         &logger,
     )
@@ -1139,11 +1130,6 @@ async fn run_the_sc_observer() {
     let (km_window_sender, _km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
-    let eth_block_safety_margin = Arc::new(AtomicU32::new(10));
-    let pending_sign_duration_secs = Arc::new(AtomicU32::new(10));
-    let max_ceremony_stage_duration_secs = Arc::new(AtomicU32::new(10));
-    let max_extrinsic_retry_attempts = Arc::new(AtomicU32::new(10));
-
     sc_observer::start(
         state_chain_client,
         block_stream,
@@ -1153,10 +1139,6 @@ async fn run_the_sc_observer() {
         multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
-        eth_block_safety_margin,
-        pending_sign_duration_secs,
-        max_ceremony_stage_duration_secs,
-        max_extrinsic_retry_attempts,
         initial_block_hash,
         &logger,
     )

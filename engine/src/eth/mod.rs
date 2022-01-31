@@ -30,14 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::{
-    fmt::Debug,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -84,7 +77,7 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
     eth_rpc: &EthRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
-    block_safety_margin: Arc<AtomicU32>,
+    block_safety_margin: u64,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
@@ -102,6 +95,8 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
 
     while let Some(received_window) = window_receiver.recv().await {
         if let Some((handle, end_at_block)) = option_handle_end_block.take() {
+            // We have a thread running
+
             // if we already have a thread, we want to tell it when to stop and await on it
             if let Some(window_to) = received_window.to {
                 if end_at_block.lock().await.is_none() {
@@ -122,7 +117,6 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
             let logger = logger.clone();
             let contract_observer = contract_observer.clone();
             let state_chain_client = state_chain_client.clone();
-            let block_safety_margin = block_safety_margin.clone();
             option_handle_end_block = Some((
                 tokio::spawn(async move {
                     slog::info!(
@@ -130,16 +124,8 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
                         "Start observing from ETH block: {}",
                         received_window.from
                     );
-                    // we want to load the value here.
-                    let current_block_safety_margin = block_safety_margin.load(Ordering::Relaxed);
-
                     let mut event_stream = contract_observer
-                        .event_stream(
-                            &eth_rpc,
-                            received_window.from,
-                            current_block_safety_margin,
-                            &logger,
-                        )
+                        .event_stream(&eth_rpc, received_window.from, block_safety_margin, &logger)
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -321,7 +307,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
                 .unwrap();
         Self {
-            eth_rpc: eth_rpc,
+            eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
@@ -388,12 +374,14 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    /// Get an event stream for the contract, returning the stream only if the head of the stream is
+    /// ahead of from_block (otherwise it will wait until we have reached from_block)
     async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
         eth_rpc: &EthRpc,
         // usually the start of the validator's active window
         from_block: u64,
-        block_safety_margin: u32,
+        block_safety_margin: u64,
         logger: &slog::Logger,
     ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
     {
@@ -405,60 +393,72 @@ pub trait EthObserver {
             hex::encode(deployed_address)
         );
 
-        // Start future log stream before requesting current block number, so we can return the block it's safe to get
-        // the past blocks for
-
         let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
 
-        let mut safe_head_stream =
-            safe_eth_log_header_stream(eth_head_stream, block_safety_margin as u64);
-
-        // the first block that we know is safe, we should use to pass around as the current block
-        let best_safe_block_number = safe_head_stream
-            .next()
-            .await
-            .ok_or(anyhow::Error::msg("No block headers in safe stream"))?
-            .number
-            .expect("all blocks in safe stream have numbers");
-        let future_logs =
-            filtered_log_stream_by_contract(safe_head_stream, eth_rpc.clone(), deployed_address)
-                .await;
+        let mut safe_head_stream = safe_eth_log_header_stream(eth_head_stream, block_safety_margin);
 
         let from_block = U64::from(from_block);
+        // only allow pulling from the stream once we are actually at our from_block number
+        while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
+            let best_safe_block_number = current_best_safe_block_header
+                .number
+                .expect("Should have block number");
+            // we only want to start observering once we reach the from_block specified
+            if best_safe_block_number < from_block {
+                slog::trace!(
+                    logger,
+                    "Not witnessing until ETH block `{}` Received block `{}` from stream.",
+                    from_block,
+                    best_safe_block_number
+                );
+                continue;
+            } else {
+                // our chain_head is above the from_block number
+                // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
+                let past_logs = eth_rpc
+                    .get_logs(
+                        FilterBuilder::default()
+                            // from_block and to_block are *inclusive*
+                            .from_block(BlockNumber::Number(from_block))
+                            .to_block(BlockNumber::Number(best_safe_block_number))
+                            .address(vec![deployed_address])
+                            .build(),
+                    )
+                    .await
+                    .context("Failed to fetch past ETH logs")?;
 
-        // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
-        let past_logs = if from_block <= best_safe_block_number {
-            eth_rpc
-                .get_logs(
-                    FilterBuilder::default()
-                        // from_block and to_block are *inclusive*
-                        .from_block(BlockNumber::Number(from_block))
-                        .to_block(BlockNumber::Number(best_safe_block_number))
-                        .address(vec![deployed_address])
-                        .build(),
+                let future_logs = filtered_log_stream_by_contract(
+                    safe_head_stream,
+                    eth_rpc.clone(),
+                    deployed_address,
                 )
-                .await
-                .context("Failed to fetch past ETH logs")?
-        } else {
-            vec![]
-        };
+                .await;
 
-        slog::info!(logger, "Future logs fetched");
-        let logger = logger.clone();
+                slog::info!(logger, "Future logs fetched");
+                let logger = logger.clone();
 
-        Ok(Box::new(
-            tokio_stream::iter(past_logs)
-                .chain(future_logs)
-                .map(
-                    move |unparsed_log| -> Result<EventWithCommon<Self::EventParameters>, anyhow::Error> {
-                        let result_event = EventWithCommon::<Self::EventParameters>::decode(&decode_log, unparsed_log);
-                        if let Ok(ok_result) = &result_event {
-                            slog::debug!(logger, "Received ETH log {}", ok_result);
-                        }
-                        result_event
-                    },
-                ),
-        ))
+                return Ok(
+                    Box::new(
+                        tokio_stream::iter(past_logs).chain(future_logs).map(
+                            move |unparsed_log| -> Result<
+                                EventWithCommon<Self::EventParameters>,
+                                anyhow::Error,
+                            > {
+                                let result_event = EventWithCommon::<Self::EventParameters>::decode(
+                                    &decode_log,
+                                    unparsed_log,
+                                );
+                                if let Ok(ok_result) = &result_event {
+                                    slog::debug!(logger, "Received ETH log {}", ok_result);
+                                }
+                                result_event
+                            },
+                        ),
+                    ),
+                );
+            }
+        }
+        Err(anyhow::Error::msg("No events in safe head stream"))
     }
 
     fn decode_log_closure(
