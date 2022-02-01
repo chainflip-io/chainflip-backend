@@ -71,13 +71,13 @@ async fn should_report_on_timeout_before_keygen_request() {
     // Force all ceremonies to time out
     node.client.force_stage_timeout();
 
-    let (_, blamed) = node
+    let (_, reported) = node
         .try_recv_outcome::<secp256k1::PublicKey>()
         .await
         .unwrap()
         .result
         .unwrap_err();
-    assert_eq!(&[bad_account_id], &blamed[..]);
+    assert_eq!(&[bad_account_id], &reported[..]);
 }
 
 #[tokio::test]
@@ -249,7 +249,7 @@ async fn should_report_on_invalid_blame_response() {
         keygen::SecretShare3
     );
 
-    // stage 3 - with account 0 sending account 1 a bad secret share
+    // stage 3 - with bad_node_id, and target_node_id sending a bad secret share
     *messages
         .get_mut(&bad_node_id)
         .unwrap()
@@ -270,6 +270,7 @@ async fn should_report_on_invalid_blame_response() {
         keygen::BlameResponse6
     );
 
+    // stage 7 -  bad_node_id also sends a bad blame responses, and so gets blamed when ceremony finished
     let secret_share = SecretShare3::create_random(&mut ceremony.rng);
     for (_, message) in messages.get_mut(&bad_node_id).unwrap() {
         *message = keygen::BlameResponse6(

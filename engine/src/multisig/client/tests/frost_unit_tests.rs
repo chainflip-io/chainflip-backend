@@ -23,7 +23,7 @@ use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
 
-use super::helpers::{self, for_each_stage, standard_signing_coroutine};
+use super::helpers::{self, for_each_stage, run_keygen, standard_signing_coroutine};
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
@@ -696,7 +696,19 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 // TODO: Come back and do this such that it signs with all parties
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-    let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
+    let (key_id, _messages, nodes) = run_keygen(
+        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
+        1,
+    )
+    .await;
+
+    let mut signing_ceremony = SigningCeremonyRunner::new_without_select(
+        nodes,
+        1,
+        key_id,
+        MESSAGE_HASH.clone(),
+        Rng::from_seed([4; 32]),
+    );
 
     let messages = signing_ceremony.request().await;
     let messages = helpers::run_stages!(
