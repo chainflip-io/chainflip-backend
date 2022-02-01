@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, OpenRequests, RequestId,
+	Error, RequestId,
 };
 use cf_traits::{AsyncResult, Chainflip};
 use frame_support::{

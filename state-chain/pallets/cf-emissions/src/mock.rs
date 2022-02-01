@@ -1,10 +1,7 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use cf_chains::{
-	eth::{self, SchnorrVerificationComponents},
-	AlwaysVerifiesCoin, ChainCrypto, Ethereum,
-};
+use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto, Ethereum};
 use frame_support::{
 	parameter_types,
 	traits::{Imbalance, UnfilteredDispatchable},

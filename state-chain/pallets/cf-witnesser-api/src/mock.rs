@@ -1,11 +1,7 @@
 use crate as pallet_cf_witness_api;
-use codec::{Decode, Encode};
 use std::time::Duration;
 
-use cf_chains::{
-	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
-	ChainCrypto, Ethereum,
-};
+use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Ethereum};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{
@@ -84,38 +80,6 @@ impl NonceProvider<Ethereum> for Test {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct MockSigningContext;
-
-impl From<RegisterClaim> for MockSigningContext {
-	fn from(_: RegisterClaim) -> Self {
-		unimplemented!()
-	}
-}
-
-impl From<SetAggKeyWithAggKey> for MockSigningContext {
-	fn from(_: SetAggKeyWithAggKey) -> Self {
-		unimplemented!()
-	}
-}
-
-impl cf_traits::SigningContext<Test> for MockSigningContext {
-	type Chain = Ethereum;
-	type Callback = Call;
-	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Test, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		Default::default()
-	}
-
-	fn resolve_callback(
-		&self,
-		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		Call::System(frame_system::Call::remark(b"Hello".to_vec()))
-	}
-}
-
 pub struct AccountIdU64(u64);
 
 impl AsRef<[u8; 32]> for AccountIdU64 {
@@ -156,13 +120,13 @@ impl IsType<u64> for AccountIdU64 {
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
+	type ThresholdCallable = Call;
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type ClaimTTL = ClaimTTL;
 	type StakerId = AccountIdU64;
 	type NonceProvider = Self;
-	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
@@ -191,8 +155,9 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type RuntimeOrigin = Origin;
+	type ThresholdCallable = Call;
 	type TargetChain = Ethereum;
-	type SigningContext = MockSigningContext;
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 	type OfflineReporter = MockOfflineReporter;
@@ -252,10 +217,10 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Chain = Ethereum;
 	type RotationHandler = Self;
 	type OfflineReporter = MockOfflineReporter;
-	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
+	type SetAggKeyWithAggKey = SetAggKeyWithAggKey;
 }
 
 impl pallet_cf_witness_api::Config for Test {
