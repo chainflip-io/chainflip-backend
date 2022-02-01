@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::eth::{update_flip_supply::UpdateFlipSupply, ChainflipContractCall};
-use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
+use cf_traits::{NonceProvider, ThresholdSigner};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;

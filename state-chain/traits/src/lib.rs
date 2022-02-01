@@ -557,35 +557,6 @@ impl<R> Default for AsyncResult<R> {
 	}
 }
 
-/// Types, methods and state for requesting and processing a threshold signature.
-pub trait SigningContext<T: Chainflip> {
-	/// The chain that this context applies to.
-	type Chain: Chain + ChainCrypto;
-	/// The callback that will be dispatched when we receive the signature.
-	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
-	/// The origin that is authorised to dispatch the callback, ie. the origin that represents
-	/// a valid, verifiied, threshold signature.
-	type ThresholdSignatureOrigin: Into<T::Origin>;
-
-	/// Returns the signing payload.
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload;
-
-	/// Returns the callback to be triggered on success.
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback;
-
-	/// Dispatches the success callback.
-	fn dispatch_callback(
-		&self,
-		origin: Self::ThresholdSignatureOrigin,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature).dispatch_bypass_filter(origin.into())
-	}
-}
-
 pub mod offline_conditions {
 	use super::*;
 	pub type ReputationPoints = i32;

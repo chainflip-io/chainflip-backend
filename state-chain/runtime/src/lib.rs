@@ -5,7 +5,7 @@ mod chainflip;
 pub mod constants;
 #[cfg(test)]
 mod tests;
-use cf_chains::Ethereum;
+use cf_chains::{eth, Ethereum};
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -172,10 +172,10 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Chain = Ethereum;
 	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
+	type SetAggKeyWithAggKey = eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -363,8 +363,8 @@ impl pallet_cf_staking::Config for Runtime {
 	type StakerId = AccountId;
 	type Flip = Flip;
 	type NonceProvider = EthereumVault;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type ThresholdCallable = Call;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
@@ -390,7 +390,6 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
@@ -448,9 +447,10 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type RuntimeOrigin = Origin;
+	type ThresholdCallable = Call;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;

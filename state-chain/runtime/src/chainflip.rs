@@ -4,26 +4,26 @@ mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;
 
 use super::{
-	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
-	Validator, Witnesser,
+	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Validator,
+	Witnesser,
 };
 use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
+		update_flip_supply::UpdateFlipSupply,
 	},
-	ChainCrypto, Ethereum,
+	Ethereum,
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, StakeHandler, StakeTransfer,
+	VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::*, weights::Weight};
+use frame_support::weights::Weight;
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -249,79 +249,61 @@ pub enum EthereumSigningContext {
 	UpdateFlipSupply(UpdateFlipSupply),
 }
 
-impl From<RegisterClaim> for EthereumSigningContext {
-	fn from(call: RegisterClaim) -> Self {
-		EthereumSigningContext::PostClaimSignature(call)
-	}
-}
+// impl SigningContext<Runtime> for EthereumSigningContext {
+// 	type Chain = cf_chains::Ethereum;
+// 	type Callback = Call;
+// 	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Runtime, Instance1>;
 
-impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
-	fn from(call: SetAggKeyWithAggKey) -> Self {
-		EthereumSigningContext::SetAggKeyWithAggKeyBroadcast(call)
-	}
-}
+// 	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+// 		match self {
+// 			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
+// 			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
+// 			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
+// 		}
+// 	}
 
-impl From<UpdateFlipSupply> for EthereumSigningContext {
-	fn from(call: UpdateFlipSupply) -> Self {
-		EthereumSigningContext::UpdateFlipSupply(call)
-	}
-}
+// 	fn resolve_callback(
+// 		&self,
+// 		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
+// 	) -> Self::Callback {
+// 		match self {
+// 			Self::PostClaimSignature(claim) =>
+// 				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
+// 					claim.node_id.into(),
+// 					signature,
+// 				)
+// 				.into(),
+// 			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
+// 				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
+// 					call.clone(),
+// 					&signature,
+// 					Environment::key_manager_address().into(),
+// 				)),
+// 			),
+// 			Self::UpdateFlipSupply(call) =>
+// 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+// 					contract_call_to_unsigned_tx(
+// 						call.clone(),
+// 						&signature,
+// 						Environment::stake_manager_address().into(),
+// 					),
+// 				)),
+// 		}
+// 	}
+// }
 
-impl SigningContext<Runtime> for EthereumSigningContext {
-	type Chain = cf_chains::Ethereum;
-	type Callback = Call;
-	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Runtime, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		match self {
-			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
-			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
-			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
-		}
-	}
-
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		match self {
-			Self::PostClaimSignature(claim) =>
-				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
-					claim.node_id.into(),
-					signature,
-				)
-				.into(),
-			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
-				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
-					call.clone(),
-					&signature,
-					Environment::key_manager_address().into(),
-				)),
-			),
-			Self::UpdateFlipSupply(call) =>
-				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					contract_call_to_unsigned_tx(
-						call.clone(),
-						&signature,
-						Environment::stake_manager_address().into(),
-					),
-				)),
-		}
-	}
-}
-
-fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
-	call: C,
-	signature: &eth::SchnorrVerificationComponents,
-	contract_address: Address,
-) -> eth::UnsignedTransaction {
-	eth::UnsignedTransaction {
-		chain_id: Environment::ethereum_chain_id(),
-		contract: contract_address,
-		data: call.abi_encode_with_signature(signature),
-		..Default::default()
-	}
-}
+// fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
+// 	call: C,
+// 	signature: &eth::SchnorrVerificationComponents,
+// 	contract_address: Address,
+// ) -> eth::UnsignedTransaction {
+// 	eth::UnsignedTransaction {
+// 		chain_id: Environment::ethereum_chain_id(),
+// 		contract: contract_address,
+// 		data: call.abi_encode_with_signature(signature),
+// 		..Default::default()
+// 	}
+// }
 
 pub struct EthereumBroadcastConfig;
 
