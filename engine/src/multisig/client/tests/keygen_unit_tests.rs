@@ -71,13 +71,13 @@ async fn should_report_on_timeout_before_keygen_request() {
     // Force all ceremonies to time out
     node.client.force_stage_timeout();
 
-    let (_, blamed) = node
+    let (_, reported) = node
         .try_recv_outcome::<secp256k1::PublicKey>()
         .await
         .unwrap()
         .result
         .unwrap_err();
-    assert_eq!(&[bad_account_id], &blamed[..]);
+    assert_eq!(&[bad_account_id], &reported[..]);
 }
 
 #[tokio::test]

@@ -119,7 +119,7 @@ pub enum CeremonyAbortReason {
     Invalid,
 }
 
-/// (Abort reason, blamed ceremony ids)
+/// (Abort reason, reported ceremony ids)
 pub type CeremonyError = (CeremonyAbortReason, Vec<AccountId>);
 pub type CeremonyOutcomeResult<Output> = Result<Output, CeremonyError>;
 

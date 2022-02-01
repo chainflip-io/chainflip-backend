@@ -355,8 +355,8 @@ where
 
         Some(
             all_same(outcomes.into_iter().map(|(_, outcome)| {
-                outcome.result.map_err(|(reason, blamed)| {
-                    (reason, blamed.into_iter().sorted().collect::<Vec<_>>())
+                outcome.result.map_err(|(reason, reported)| {
+                    (reason, reported.into_iter().sorted().collect::<Vec<_>>())
                 })
             }))
             .expect("Ceremony results weren't consistent for all nodes")
@@ -369,9 +369,9 @@ where
     }
 
     pub async fn try_complete_with_error(&mut self, bad_account_ids: &[AccountId]) -> Option<()> {
-        let (reason, blamed) = self.try_gather_outcomes().await?.unwrap_err();
+        let (reason, reported) = self.try_gather_outcomes().await?.unwrap_err();
         assert_eq!(CeremonyAbortReason::Invalid, reason);
-        assert_eq!(bad_account_ids, &blamed[..]);
+        assert_eq!(bad_account_ids, &reported[..]);
         Some(())
     }
 
