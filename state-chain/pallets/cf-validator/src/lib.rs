@@ -233,7 +233,7 @@ pub mod pallet {
 			percentage: Percentage,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(0u8 == percentage || 100u8 > percentage, Error::<T>::InvalidClaimPeriod);
+			ensure!(percentage > 0 && 100 > percentage, Error::<T>::InvalidClaimPeriod);
 			ClaimPeriodAsPercentage::<T>::set(percentage);
 			Self::deposit_event(Event::ClaimPeriodUpdated(percentage));
 

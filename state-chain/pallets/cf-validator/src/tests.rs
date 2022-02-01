@@ -56,6 +56,12 @@ mod tests {
 				Error::<Test>::InvalidClaimPeriod
 			);
 
+			let invalid_claim_period = 0;
+			assert_noop!(
+				ValidatorPallet::update_period_for_claims(Origin::root(), invalid_claim_period),
+				Error::<Test>::InvalidClaimPeriod
+			);
+
 			let blocks_per_epoch = 42;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), blocks_per_epoch));
 			assert!(<ValidatorPallet as EpochInfo>::claims_allowed(), "should be able to claim");
