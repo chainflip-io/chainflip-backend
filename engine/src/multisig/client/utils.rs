@@ -77,13 +77,13 @@ macro_rules! derive_from_enum {
 macro_rules! derive_try_from_variant {
     ($variant: ty, $variant_path: path, $enum: ty) => {
         impl std::convert::TryFrom<$enum> for $variant {
-            type Error = &'static str;
+            type Error = $enum;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {
                 if let $variant_path(x) = data {
                     Ok(x)
                 } else {
-                    Err(stringify!($enum))
+                    Err(data)
                 }
             }
         }
