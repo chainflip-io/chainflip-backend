@@ -158,6 +158,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// Check expiry of epoch and store last expired
+			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
+				LastExpiredEpoch::<T>::set(epoch_index);
+			}
+
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
 			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
@@ -437,6 +442,15 @@ pub mod pallet {
 	pub type ValidatorCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
 
+	/// The last expired epoch index
+	#[pallet::storage]
+	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// A map storing the expiry block numbers for old epochs
+	#[pallet::storage]
+	pub type EpochExpiries<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
@@ -468,9 +482,18 @@ pub mod pallet {
 	}
 }
 
+pub struct LastExpiredEpochGetter<T: Config>(PhantomData<T>);
+
+impl<T: Config> Get<EpochIndex> for LastExpiredEpochGetter<T> {
+	fn get() -> EpochIndex {
+		LastExpiredEpoch::<T>::get()
+	}
+}
+
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type LastExpiredEpoch = LastExpiredEpochGetter<T>;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()
@@ -519,6 +542,12 @@ impl<T: Config> Pallet<T> {
 		Bond::<T>::set(new_bond);
 		// Set the block this epoch starts at
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+		// Set the expiry block number for the outgoing set
+		EpochExpiries::<T>::insert(
+			CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get(),
+			CurrentEpoch::<T>::get(),
+		);
+
 		// If we were in an emergency, mark as completed
 		Self::emergency_rotation_completed();
 

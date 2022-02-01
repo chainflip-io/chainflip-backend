@@ -69,6 +69,7 @@ macro_rules! impl_mock_epoch_info {
 		impl EpochInfo for MockEpochInfo {
 			type ValidatorId = $account_id;
 			type Amount = $balance;
+			type LastExpiredEpoch = ();
 
 			fn current_validators() -> Vec<Self::ValidatorId> {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())

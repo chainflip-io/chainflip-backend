@@ -67,6 +67,8 @@ pub trait EpochInfo {
 	/// An amount
 	type Amount;
 
+	type LastExpiredEpoch: Get<EpochIndex>;
+
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 
