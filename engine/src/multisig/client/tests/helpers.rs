@@ -472,6 +472,24 @@ impl CeremonyRunnerStrategy<SchnorrSignature> for SigningCeremonyRunner {
     }
 }
 impl SigningCeremonyRunner {
+    pub fn new_without_select(
+        nodes: HashMap<AccountId, Node>,
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        message_hash: MessageHash,
+        rng: Rng,
+    ) -> Self {
+        Self::inner_new(
+            nodes,
+            ceremony_id,
+            SigningCeremonyRunnerData {
+                key_id,
+                message_hash,
+            },
+            rng,
+        )
+    }
+
     pub fn new(
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
@@ -488,15 +506,7 @@ impl SigningCeremonyRunner {
         );
 
         (
-            Self::inner_new(
-                signers,
-                ceremony_id,
-                SigningCeremonyRunnerData {
-                    key_id,
-                    message_hash,
-                },
-                rng,
-            ),
+            Self::new_without_select(signers, ceremony_id, key_id, message_hash, rng),
             non_signers,
         )
     }
