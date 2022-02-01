@@ -410,7 +410,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo clippy -- -D warnings
+          cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
           sccache --show-stats
 
   cargo-doc:

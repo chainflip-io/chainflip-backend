@@ -573,7 +573,7 @@ pub type RawSignedTransaction = Vec<u8>;
 /// **TODO: In-depth review to ensure correctness.**
 pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
-	signed: &RawSignedTransaction,
+	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
 ) -> Result<(), TransactionVerificationError> {
 	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
