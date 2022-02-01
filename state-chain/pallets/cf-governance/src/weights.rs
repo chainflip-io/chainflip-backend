@@ -41,7 +41,7 @@ pub trait WeightInfo {
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance Members (r:1 w:0)
-	// Storage: Governance ProposalCount (r:1 w:1)
+	// Storage: Governance ProposalIdCounter (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Governance ExpiryTime (r:1 w:0)
 	// Storage: Governance ActiveProposals (r:1 w:1)
@@ -103,7 +103,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: Governance Members (r:1 w:0)
-	// Storage: Governance ProposalCount (r:1 w:1)
+	// Storage: Governance ProposalIdCounter (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Governance ExpiryTime (r:1 w:0)
 	// Storage: Governance ActiveProposals (r:1 w:1)

@@ -138,6 +138,7 @@ parameter_types! {
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
+	type Chain = Ethereum;
 	type RotationHandler = MockRotationHandler;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockEthSigningContext;
@@ -155,8 +156,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
-			ethereum_deployment_block: 0,
+			vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
+			deployment_block: 0,
 		},
 	};
 

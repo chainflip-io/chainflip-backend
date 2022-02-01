@@ -304,7 +304,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
                 .unwrap();
         Self {
-            eth_rpc: eth_rpc,
+            eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
@@ -371,6 +371,8 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    /// Get an event stream for the contract, returning the stream only if the head of the stream is
+    /// ahead of from_block (otherwise it will wait until we have reached from_block)
     async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
         &self,
         eth_rpc: &EthRpc,
@@ -387,60 +389,73 @@ pub trait EthObserver {
             hex::encode(deployed_address)
         );
 
-        // Start future log stream before requesting current block number, so we can return the block it's safe to get
-        // the past blocks for
-
         let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
 
         let mut safe_head_stream =
             safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
-        // the first block that we know is safe, we should use to pass around as the current block
-        let best_safe_block_number = safe_head_stream
-            .next()
-            .await
-            .ok_or_else(|| anyhow::Error::msg("No block headers in safe stream"))?
-            .number
-            .expect("all blocks in safe stream have numbers");
-        let future_logs =
-            filtered_log_stream_by_contract(safe_head_stream, eth_rpc.clone(), deployed_address)
+        let from_block = U64::from(from_block);
+        // only allow pulling from the stream once we are actually at our from_block number
+        while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
+            let best_safe_block_number = current_best_safe_block_header
+                .number
+                .expect("Should have block number");
+            // we only want to start observering once we reach the from_block specified
+            if best_safe_block_number < from_block {
+                slog::trace!(
+                    logger,
+                    "Not witnessing until ETH block `{}` Received block `{}` from stream.",
+                    from_block,
+                    best_safe_block_number
+                );
+                continue;
+            } else {
+                // our chain_head is above the from_block number
+                // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
+                let past_logs = eth_rpc
+                    .get_logs(
+                        FilterBuilder::default()
+                            // from_block and to_block are *inclusive*
+                            .from_block(BlockNumber::Number(from_block))
+                            .to_block(BlockNumber::Number(best_safe_block_number))
+                            .address(vec![deployed_address])
+                            .build(),
+                    )
+                    .await
+                    .context("Failed to fetch past ETH logs")?;
+
+                let future_logs = filtered_log_stream_by_contract(
+                    safe_head_stream,
+                    eth_rpc.clone(),
+                    deployed_address,
+                )
                 .await;
 
-        let from_block = U64::from(from_block);
+                slog::info!(logger, "Future logs fetched");
+                let logger = logger.clone();
 
-        // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
-        let past_logs = if from_block <= best_safe_block_number {
-            eth_rpc
-                .get_logs(
-                    FilterBuilder::default()
-                        // from_block and to_block are *inclusive*
-                        .from_block(BlockNumber::Number(from_block))
-                        .to_block(BlockNumber::Number(best_safe_block_number))
-                        .address(vec![deployed_address])
-                        .build(),
-                )
-                .await
-                .context("Failed to fetch past ETH logs")?
-        } else {
-            vec![]
-        };
-
-        slog::info!(logger, "Future logs fetched");
-        let logger = logger.clone();
-
-        Ok(Box::new(
-            tokio_stream::iter(past_logs)
-                .chain(future_logs)
-                .map(
-                    move |unparsed_log| -> Result<EventWithCommon<Self::EventParameters>, anyhow::Error> {
-                        let result_event = EventWithCommon::<Self::EventParameters>::decode(&decode_log, unparsed_log);
-                        if let Ok(ok_result) = &result_event {
-                            slog::debug!(logger, "Received ETH log {}", ok_result);
-                        }
-                        result_event
-                    },
-                ),
-        ))
+                return Ok(
+                    Box::new(
+                        tokio_stream::iter(past_logs).chain(future_logs).map(
+                            move |unparsed_log| -> Result<
+                                EventWithCommon<Self::EventParameters>,
+                                anyhow::Error,
+                            > {
+                                let result_event = EventWithCommon::<Self::EventParameters>::decode(
+                                    &decode_log,
+                                    unparsed_log,
+                                );
+                                if let Ok(ok_result) = &result_event {
+                                    slog::debug!(logger, "Received ETH log {}", ok_result);
+                                }
+                                result_event
+                            },
+                        ),
+                    ),
+                );
+            }
+        }
+        Err(anyhow::Error::msg("No events in safe head stream"))
     }
 
     fn decode_log_closure(

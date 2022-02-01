@@ -184,7 +184,7 @@ impl<T: Config> Pallet<T> {
 	/// 1. Look up the account id in the list of validators.
 	/// 2. Get the list of votes for the call, or an empty list if this is the first vote.
 	/// 3. Add the account's vote to the list.
-	/// 4. Check the number of votes against the reuquired threshold.
+	/// 4. Check the number of votes against the required threshold.
 	/// 5. If the threshold is exceeded, execute the voted-on `call`.
 	///
 	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator
@@ -249,18 +249,16 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		let threshold = ConsensusThreshold::<T>::get() as usize;
-		if num_votes == threshold {
+		if num_votes == ConsensusThreshold::<T>::get() as usize {
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
-			result
-		} else {
-			Ok(().into())
 		}
+
+		Ok(().into())
 	}
 }
 
