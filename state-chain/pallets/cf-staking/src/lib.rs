@@ -585,7 +585,7 @@ impl<T: Config> Pallet<T> {
 		// Calculate the maximum that would remain after this claim and ensure it won't be less than
 		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
 		// this will need to be handled in a refactor of that trait(?)
-		let remaining = T::Flip::stakeable_balance(&account_id)
+		let remaining = T::Flip::stakeable_balance(account_id)
 			.checked_sub(&amount)
 			.ok_or(Error::<T>::InvalidClaim)?;
 

@@ -70,15 +70,17 @@ pub struct StateChainEnvironment {
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
 	let stake_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let key_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
+		.unwrap_or_else(|_| ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
 	let eth_init_agg_key =
@@ -86,7 +88,6 @@ pub fn get_environment() -> StateChainEnvironment {
 			.unwrap()
 			.try_into()
 			.expect("ETH_INIT_AGG_KEY Cast to agg pub key failed");
-
 	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
 		.unwrap_or(format!("{}", ETH_DEPLOYMENT_BLOCK_DEFAULT))
 		.parse::<u64>()
