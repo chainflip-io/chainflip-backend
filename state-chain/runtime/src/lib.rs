@@ -697,6 +697,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
 			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
+			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -740,7 +741,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
-			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
+			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
