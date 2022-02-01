@@ -271,8 +271,7 @@ impl ExtBuilder {
 		self.ext.execute_with(|| {
 			// Initiate request
 			let request_id =
-				DogeThresholdSigner::request_signature_with_callback(message.into(), callback_gen)
-					.unwrap();
+				DogeThresholdSigner::request_signature_with_callback(message.into(), callback_gen);
 			let (ceremony_id, attempt) = DogeThresholdSigner::live_ceremonies(request_id).unwrap();
 			let pending = DogeThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(DogeThresholdSigner::open_requests(ceremony_id).unwrap().2, message);

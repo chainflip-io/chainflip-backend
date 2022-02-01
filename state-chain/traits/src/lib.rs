@@ -497,14 +497,15 @@ pub trait ThresholdSigner<C>
 where
 	C: ChainCrypto,
 {
-	type RequestId: Copy;
+	type RequestId: Member + Parameter + Copy;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
-	/// Register a callback to be dispatched when the signature is available.
+	/// Register a callback to be dispatched when the signature is available. Can fail if the
+	/// provided request_id does not exist.
 	fn register_callback(
 		request_id: Self::RequestId,
 		on_signature_ready: Self::Callback,
@@ -514,13 +515,20 @@ where
 	fn signature_result(request_id: Self::RequestId) -> AsyncResult<C::ThresholdSignature>;
 
 	/// Request a signature and register a callback for when the signature is available.
+	///
+	/// Since the callback is registered immediately, it should never fail.
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl Fn(Self::RequestId) -> Self::Callback,
-	) -> Result<Self::RequestId, Self::Error> {
+	) -> Self::RequestId {
 		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback_generator(id))?;
-		Ok(id)
+		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
+			log::error!(
+				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
+				e.into()
+			);
+		});
+		id
 	}
 }
 
@@ -532,6 +540,15 @@ pub enum AsyncResult<R> {
 	Pending,
 	/// Result is void. (not yet requested or has already been used)
 	Void,
+}
+
+impl<R> AsyncResult<R> {
+	pub fn ready_or_else<E>(self, e: impl FnOnce() -> E) -> Result<R, E> {
+		match self {
+			AsyncResult::Ready(s) => Ok(s),
+			_ => Err(e()),
+		}
+	}
 }
 
 impl<R> Default for AsyncResult<R> {

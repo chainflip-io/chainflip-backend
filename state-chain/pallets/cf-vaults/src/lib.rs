@@ -4,11 +4,11 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainCrypto, Ethereum};
+use cf_chains::{Chain, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider, SigningContext,
-	ThresholdSigner, VaultRotationHandler, VaultRotator,
+	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider, ThresholdSigner,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -258,7 +258,7 @@ pub mod pallet {
 		/// The chain that managed by this vault.
 		/// TODO: Remove the constraint on AggKey, currently required for compatibility with the
 		/// `ThresholdSigner`.
-		type Chain: Chain + ChainCrypto<AggKey = cf_chains::eth::AggKey>;
+		type Chain: Chain + ChainCrypto;
 
 		/// Rotation handler.
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
@@ -266,11 +266,11 @@ pub mod pallet {
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 
-		/// Top-level signing context needs to support `SetAggKeyWithAggKey`.
-		type SigningContext: From<SetAggKeyWithAggKey> + SigningContext<Self, Chain = Self::Chain>;
-
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self::Chain>;
+
+		/// The SetAggKeyWithAggKey transaction for this chain.
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -645,10 +645,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 		KeygenResolutionPendingSince::<T, I>::kill();
 
-		T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
-			<Self as NonceProvider<Ethereum>>::next_nonce(),
-			new_public_key,
-		));
+		T::ThresholdSigner::request_signature_with_callback(
+			T::SetAggKeyWithAggKey::new_unsigned(
+				<Self as NonceProvider<Ethereum>>::next_nonce(),
+				new_public_key,
+			)
+			.to_payload(),
+			|_id| todo!("broadcast the transaction."),
+		);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});

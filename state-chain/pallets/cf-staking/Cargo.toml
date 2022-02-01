@@ -17,7 +17,6 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = {path = '../../traits', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
 pallet-cf-validator = {path = '../cf-validator', default-features = false}
-pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-features = false}
 
 # Non-substrate external deps
 log = { version = '0.4.14', default-features = false }
@@ -81,7 +80,6 @@ std = [
   'cf-chains/std',
   'cf-traits/std',
   'pallet-cf-validator/std',
-  'pallet-cf-threshold-signature/std',
   'codec/std',
   'scale-info/std',
   'log/std',

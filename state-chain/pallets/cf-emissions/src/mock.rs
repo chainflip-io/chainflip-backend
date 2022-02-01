@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use cf_chains::{eth, ChainCrypto, Ethereum};
+use cf_chains::{
+	eth::{self, SchnorrVerificationComponents},
+	AlwaysVerifiesCoin, ChainCrypto, Ethereum,
+};
 use frame_support::{
 	parameter_types,
 	traits::{Imbalance, UnfilteredDispatchable},
@@ -15,7 +18,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::WaivedFees;
+use cf_traits::{AsyncResult, WaivedFees};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -23,7 +26,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, NonceProvider, RewardsDistribution, SigningContext, ThresholdSigner,
+	Chainflip, NonceProvider, RewardsDistribution, ThresholdSigner,
 };
 
 pub type AccountId = u64;
@@ -98,38 +101,25 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-pub struct MockEthSigningContext;
+pub struct MockThresholdSigner;
 
-impl From<eth::update_flip_supply::UpdateFlipSupply> for MockEthSigningContext {
-	fn from(_: eth::update_flip_supply::UpdateFlipSupply) -> Self {
-		MockEthSigningContext
-	}
-}
-
-impl SigningContext<Test> for MockEthSigningContext {
-	type Chain = Ethereum;
+impl ThresholdSigner<Ethereum> for MockThresholdSigner {
+	type RequestId = u32;
+	type Error = &'static str;
 	type Callback = MockCallback;
-	type ThresholdSignatureOrigin = Origin;
 
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+	fn request_signature(_: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
 		Default::default()
 	}
 
-	fn resolve_callback(
-		&self,
-		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		MockCallback
+	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
+		Ok(())
 	}
-}
 
-pub struct MockThresholdSigner;
-
-impl ThresholdSigner<Test> for MockThresholdSigner {
-	type Context = MockEthSigningContext;
-
-	fn request_signature(_context: Self::Context) -> u64 {
-		0
+	fn signature_result(
+		_: Self::RequestId,
+	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
+		AsyncResult::Ready(SchnorrVerificationComponents::default())
 	}
 }
 
@@ -197,7 +187,6 @@ impl pallet_cf_emissions::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
-	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
 	type WeightInfo = ();
 }

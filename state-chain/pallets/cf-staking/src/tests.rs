@@ -6,12 +6,10 @@ use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
-use pallet_cf_threshold_signature::Instance1;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
-type SigningEvent = pallet_cf_threshold_signature::Event<Test, Instance1>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
@@ -82,10 +80,11 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A.into());
 		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B.into());
 
+		// Two threshold signature requests should have been made.
+		assert_eq!(MockThresholdSigner::received_requests().len(), 2);
+
 		assert_event_stack!(
-			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from BOB
-			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
 			Event::Staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
@@ -243,12 +242,14 @@ fn staked_and_claimed_events_must_match() {
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
+		// Threshold signature request should have been made.
+		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
+
 		assert_event_stack!(
 			Event::Staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
 				assert_eq!(claimed_amount, STAKE);
 			},
 			Event::System(frame_system::Event::KilledAccount(ALICE)),
-			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // Claim debited from account
 			Event::Staking(crate::Event::Staked(ALICE, added, total)) => {
 				assert_eq!(added, STAKE);
@@ -303,17 +304,16 @@ fn signature_is_inserted() {
 		// Claim it.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
-		assert_event_stack!(
-			Event::Signer(SigningEvent::ThresholdSignatureRequest(id, ..)) => {
-				// Insert a signature.
-				assert_ok!(Signer::signature_success(
-					Origin::none(),
-					id,
-					Default::default()));
-			}
-		);
+		// Threshold signature request should have been made.
+		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
 
-		assert_event_stack!(_, Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)));
+		// Threshold signature generated.
+		MockThresholdSigner::on_signature_ready(&ALICE).unwrap();
+
+		assert_event_stack!(
+			Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)),
+			Event::Flip(pallet_cf_flip::Event::BalanceSettled(_, ImbalanceSource::External, _, _))
+		);
 
 		// Check storage for the signature.
 		assert!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature());
@@ -418,7 +418,7 @@ fn claim_expiry() {
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_secs(4));
-		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, ETH_DUMMY_SIG));
+		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, 0));
 
 		// Trigger expiry.
 		Pallet::<Test>::expire_pending_claims();
@@ -496,7 +496,6 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::Signer(SigningEvent::ThresholdSignatureRequest(..)),
 			_, // claim debited from ALICE
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE

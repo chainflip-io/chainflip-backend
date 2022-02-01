@@ -25,6 +25,8 @@ use sp_std::{
 	str, vec,
 };
 
+use crate::Ethereum;
+
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
@@ -90,6 +92,16 @@ impl Tokenizable for SigData {
 			Token::Uint(self.nonce),
 			Token::Address(self.k_times_g_addr),
 		])
+	}
+}
+
+impl crate::SetAggKeyWithAggKey<Ethereum> for set_agg_key_with_agg_key::SetAggKeyWithAggKey {
+	fn new_unsigned(nonce: u64, key: <Ethereum as crate::ChainCrypto>::AggKey) -> Self {
+		Self::new_unsigned(nonce, key)
+	}
+
+	fn to_payload(self) -> <Ethereum as crate::ChainCrypto>::Payload {
+		self.signing_payload()
 	}
 }
 

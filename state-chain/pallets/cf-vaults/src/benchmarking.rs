@@ -3,8 +3,8 @@
 
 use super::*;
 
-use cf_chains::eth::AggKey;
 use cf_traits::EpochInfo;
+use codec::{Decode, Encode};
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
@@ -30,6 +30,11 @@ fn generate_validator_set<T: Config<I>, I: 'static>(
 	}
 	validator_set.insert(caller);
 	validator_set
+}
+
+fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
+	let encoded = key.encode();
+	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
 }
 
 benchmarks_instance_pallet! {
@@ -65,7 +70,7 @@ benchmarks_instance_pallet! {
 
 		for i in 0..120 {
 			let validator_id = account("doogle", i, 0);
-			let _ = keygen_response_status.add_success_vote(&validator_id, AggKey::from_pubkey_compressed(NEW_PUBLIC_KEY));
+			let _ = keygen_response_status.add_success_vote(&validator_id, aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..]));
 		}
 
 		PendingVaultRotation::<T, I>::put(
@@ -85,7 +90,7 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen { keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
 		);
-		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(AggKey::from_pubkey_compressed([0xbb; 33]));
+		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
 	verify {
 		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
@@ -97,7 +102,7 @@ benchmarks_instance_pallet! {
 	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
-		let new_public_key = AggKey::from_pubkey_compressed([0xbb; 33]);
+		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);

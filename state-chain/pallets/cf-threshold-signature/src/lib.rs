@@ -19,7 +19,6 @@ use cf_traits::{
 	AsyncResult, Chainflip, KeyProvider, SignerNomination,
 };
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	ensure,
 	traits::{EnsureOrigin, Get},
 };

@@ -134,7 +134,13 @@ mod v0_types {
 		type Error = &'static str;
 
 		fn try_from(old: VaultV0<T, I>) -> Result<Self, Self::Error> {
-			Ok(Self { public_key: old.public_key.try_into()?, active_window: old.active_window })
+			Ok(Self {
+				public_key: old
+					.public_key
+					.try_into()
+					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
+				active_window: old.active_window,
+			})
 		}
 	}
 
@@ -166,7 +172,11 @@ mod v0_types {
 				success_votes: old
 					.success_votes
 					.into_iter()
-					.map(|(key, votes)| key.try_into().map(|key| (key, votes)))
+					.map(|(key, votes)| {
+						key.try_into()
+							.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")
+							.map(|key| (key, votes))
+					})
 					.collect::<Result<_, _>>()?,
 				blame_votes: old.blame_votes,
 			})
@@ -204,7 +214,11 @@ mod v0_types {
 					response_status: response_status.try_into()?,
 				},
 				VaultRotationStatusV0::AwaitingRotation { new_public_key, _phantom } =>
-					Self::AwaitingRotation { new_public_key: new_public_key.try_into()? },
+					Self::AwaitingRotation {
+						new_public_key: new_public_key.try_into().map_err(|_| {
+							"Unable to convert Vec<u8> public key to AggKey format."
+						})?,
+					},
 				VaultRotationStatusV0::Complete { tx_hash, _phantom } =>
 					Self::Complete { tx_hash: vec_to_hash::<T::Chain>(tx_hash)? },
 			})

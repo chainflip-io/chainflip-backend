@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
+use cf_chains::eth::{update_flip_supply::UpdateFlipSupply, ChainflipContractCall};
 use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -88,11 +88,8 @@ pub mod pallet {
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
-		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
-		type SigningContext: From<UpdateFlipSupply> + SigningContext<Self, Chain = Ethereum>;
-
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Ethereum>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -310,14 +307,18 @@ impl<T: Config> Pallet<T> {
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
 		// TODO: extend the BlockNumber type in a nice to avoid this parse here
-		let block_as_u32: u32 = block_number.saturated_into();
-		let transaction = UpdateFlipSupply::new_unsigned(
-			T::NonceProvider::next_nonce(),
-			total_supply,
-			block_as_u32,
-		);
+		let block_number: u32 = block_number.saturated_into();
+
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_transaction_signature(transaction);
+		T::ThresholdSigner::request_signature_with_callback(
+			UpdateFlipSupply::new_unsigned(
+				T::NonceProvider::next_nonce(),
+				total_supply,
+				block_number,
+			)
+			.signing_payload(),
+			|_id| todo!("broadcast the transaction"),
+		);
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to

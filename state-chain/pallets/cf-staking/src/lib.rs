@@ -14,12 +14,8 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::eth::{
-	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents, Uint,
-};
-use cf_traits::{
-	Bid, BidderProvider, EpochInfo, NonceProvider, SigningContext, StakeTransfer, ThresholdSigner,
-};
+use cf_chains::eth::{register_claim::RegisterClaim, ChainflipContractCall, Uint};
+use cf_traits::{Bid, BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
 use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -42,6 +38,7 @@ const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::Ethereum;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -62,6 +59,9 @@ pub mod pallet {
 	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The type containing all calls that are dispatchable from the threshold source.
+		type ThresholdCallable: From<Call<Self>>; // + Member + Parameter;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
@@ -84,13 +84,10 @@ pub mod pallet {
 		>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
-
-		/// Top-level signing context needs to support `RegisterClaim`.
-		type SigningContext: From<RegisterClaim> + SigningContext<Self>;
+		type NonceProvider: NonceProvider<Ethereum>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
 
 		/// Ensure that only threshold signature consensus can post a signature.
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
@@ -209,6 +206,9 @@ pub mod pallet {
 
 		/// Below the minimum stake
 		BelowMinimumStake,
+
+		/// The claim signature could not be found.
+		SignatureNotReady,
 	}
 
 	#[pallet::call]
@@ -384,9 +384,16 @@ pub mod pallet {
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			signature: SchnorrVerificationComponents,
+			signature_request_id: <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
+
+			let signature = T::ThresholdSigner::signature_result(signature_request_id)
+				.ready_or_else(|| {
+					// This should never happen unless there is a mistake in the implementation.
+					log::error!("Callback triggered with no signature.");
+					Error::<T>::SignatureNotReady
+				})?;
 
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
@@ -611,7 +618,9 @@ impl<T: Config> Pallet<T> {
 		);
 
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_transaction_signature(transaction.clone());
+		T::ThresholdSigner::request_signature_with_callback(transaction.signing_payload(), |id| {
+			Call::<T>::post_claim_signature(account_id.clone(), id).into()
+		});
 
 		// Store the claim params for later.
 		PendingClaims::<T>::insert(account_id, transaction);

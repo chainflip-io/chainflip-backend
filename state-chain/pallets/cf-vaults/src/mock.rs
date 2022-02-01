@@ -11,8 +11,11 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{eth, ChainCrypto};
-use cf_traits::Chainflip;
+use cf_chains::{
+	eth::{self, SchnorrVerificationComponents},
+	ChainCrypto,
+};
+use cf_traits::{AsyncResult, Chainflip};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -97,38 +100,25 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-pub struct MockEthSigningContext;
+pub struct MockThresholdSigner;
 
-impl From<eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey> for MockEthSigningContext {
-	fn from(_: eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey) -> Self {
-		MockEthSigningContext
-	}
-}
-
-impl SigningContext<MockRuntime> for MockEthSigningContext {
-	type Chain = Ethereum;
+impl ThresholdSigner<Ethereum> for MockThresholdSigner {
+	type RequestId = u32;
+	type Error = &'static str;
 	type Callback = MockCallback;
-	type ThresholdSignatureOrigin = Origin;
 
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
+	fn request_signature(_: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
 		Default::default()
 	}
 
-	fn resolve_callback(
-		&self,
-		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		MockCallback
+	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
+		Ok(())
 	}
-}
 
-pub struct MockThresholdSigner;
-
-impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
-	type Context = MockEthSigningContext;
-
-	fn request_signature(_context: Self::Context) -> u64 {
-		0
+	fn signature_result(
+		_: Self::RequestId,
+	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
+		AsyncResult::Ready(SchnorrVerificationComponents::default())
 	}
 }
 
@@ -141,8 +131,8 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Chain = Ethereum;
 	type RotationHandler = MockRotationHandler;
 	type OfflineReporter = MockOfflineReporter;
-	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
+	type SetAggKeyWithAggKey = eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey;
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }

@@ -20,7 +20,7 @@ pub trait Chain {
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Ord;
+	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord;
 	type Payload: Member + Parameter;
 	type ThresholdSignature: Member + Parameter;
 	type TransactionHash: Member + Parameter;
@@ -91,12 +91,18 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
+pub trait SetAggKeyWithAggKey<C: ChainCrypto> {
+	fn new_unsigned(nonce: u64, key: C::AggKey) -> Self;
+
+	fn to_payload(self) -> C::Payload;
+}
+
 #[cfg(feature = "mocks")]
 pub mod mock {
 	use super::*;
 
 	impl ChainCrypto for AlwaysVerifiesCoin {
-		type AggKey = Vec<u8>;
+		type AggKey = [u8; 32];
 		type Payload = Vec<u8>;
 		type ThresholdSignature = Vec<u8>;
 		type TransactionHash = Vec<u8>;
@@ -111,7 +117,7 @@ pub mod mock {
 	}
 
 	impl ChainCrypto for UnverifiableCoin {
-		type AggKey = Vec<u8>;
+		type AggKey = [u8; 32];
 		type Payload = Vec<u8>;
 		type ThresholdSignature = Vec<u8>;
 		type TransactionHash = Vec<u8>;
