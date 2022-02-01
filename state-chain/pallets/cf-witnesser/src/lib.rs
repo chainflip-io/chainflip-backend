@@ -249,18 +249,16 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		let threshold = ConsensusThreshold::<T>::get() as usize;
-		if num_votes == threshold {
+		if num_votes == ConsensusThreshold::<T>::get() as usize {
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
-			result
-		} else {
-			Ok(().into())
 		}
+
+		Ok(().into())
 	}
 }
 

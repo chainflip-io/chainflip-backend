@@ -233,15 +233,7 @@ pub mod pallet {
 						T::OfflineReporter::report(
 							OfflineCondition::ParticipateSigningFailed,
 							&offender,
-						)
-						.unwrap_or_else(|e| {
-							log::error!(
-								"Unable to report ParticipateSigningFailed for participant {:?}: {:?}",
-								offender,
-								e
-							);
-							0
-						});
+						);
 					}
 
 					// Initiate a new attempt.

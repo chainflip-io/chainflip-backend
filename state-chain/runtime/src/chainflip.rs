@@ -1,7 +1,11 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+pub mod chain_instances;
+mod signer_nomination;
+pub use signer_nomination::RandomSignerNomination;
+
 use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
-	Validator, Vaults, Witnesser,
+	Validator, Witnesser,
 };
 use crate::{
 	Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval, System,
@@ -11,14 +15,14 @@ use cf_chains::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
 		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
 	},
-	Chain, ChainCrypto, Ethereum,
+	ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
-	StakeHandler, StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, SigningContext, StakeHandler,
+	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -36,9 +40,6 @@ use sp_runtime::{
 use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
 
 use cf_traits::RuntimeUpgrade;
-
-mod signer_nomination;
-pub use signer_nomination::RandomSignerNomination;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -346,27 +347,6 @@ impl BroadcastConfig for EthereumBroadcastConfig {
 		eth::verify_transaction(unsigned_tx, signed_tx, address)
 			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
 			.ok()
-	}
-}
-
-/// Simple Ethereum-specific key provider that reads from the vault.
-pub struct EthereumKeyProvider;
-
-impl KeyProvider<Ethereum> for EthereumKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id() -> Self::KeyId {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
-			.expect("Ethereum is always supported.")
-			.public_key
-	}
-
-	fn current_key() -> <Ethereum as ChainCrypto>::AggKey {
-		Vaults::vaults(Validator::epoch_index(), <Ethereum as Chain>::CHAIN_ID)
-			.expect("Ethereum is always supported.")
-			.public_key
-			.try_into()
-			.expect("TODO: make it so this call can't fail.")
 	}
 }
 

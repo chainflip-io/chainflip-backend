@@ -2,10 +2,7 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
 use cf_traits::{mocks::time_source, ExecutionCondition, RuntimeUpgrade};
-use frame_support::{
-	dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo},
-	ensure, parameter_types,
-};
+use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{

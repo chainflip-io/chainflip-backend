@@ -5,9 +5,9 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
-	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, VaultsConfig, WASM_BINARY,
+	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -28,9 +28,9 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
 // CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
-const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
+const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 10;
 const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
-const PENDING_SIGN_DURATION_DEFAULT: u32 = 10;
+const PENDING_SIGN_DURATION_DEFAULT: u32 = 500;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -571,9 +571,9 @@ fn testnet_genesis(
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
 		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
-		vaults: VaultsConfig {
-			ethereum_vault_key: eth_init_agg_key.to_vec(),
-			ethereum_deployment_block,
+		ethereum_vault: EthereumVaultConfig {
+			vault_key: eth_init_agg_key.to_vec(),
+			deployment_block: ethereum_deployment_block,
 		},
 		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
