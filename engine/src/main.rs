@@ -1,22 +1,30 @@
 use chainflip_engine::{
-    eth::{self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster},
+    eth::{
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
+        EthRpcClient,
+    },
     health::HealthMonitor,
     logging,
     multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
-    p2p::{self, AccountId},
+    multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
-use sp_core::storage::StorageKey;
+use sp_core::{storage::StorageKey, U256};
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
-    let settings =
-        Settings::new(CommandLineOptions::from_args()).expect("Failed to initialise settings");
+    let settings = match Settings::new(CommandLineOptions::from_args()) {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!("Error reading settings: {}", error);
+            return;
+        }
+    };
 
     let root_logger = logging::utils::new_json_logger_with_tag_filter(
         settings.log.whitelist.clone(),
@@ -25,25 +33,25 @@ async fn main() {
 
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
-    HealthMonitor::new(&settings.health_check, &root_logger)
-        .run()
-        .await;
+    if let Some(health_check_settings) = &settings.health_check {
+        HealthMonitor::new(&health_check_settings, &root_logger)
+            .run()
+            .await;
+    }
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let web3 = eth::new_synced_web3_client(&settings.eth, &root_logger)
+    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
         .await
-        .expect("Failed to create Web3 WebSocket");
+        .expect("Should create EthRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &root_logger)
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
         .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-        state_chain::client::connect_to_state_chain(&settings.state_chain, &root_logger)
+        state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
             .await
             .expect("Failed to connect to state chain");
-
-    let account_id = AccountId(*state_chain_client.our_account_id.as_ref());
 
     state_chain_client
         .submit_signed_extrinsic(
@@ -81,6 +89,36 @@ async fn main() {
     let (km_window_sender, km_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
 
+    {
+        // ensure configured eth node is pointing to the correct chain id
+        let chain_id_from_sc = U256::from(state_chain_client
+        .get_environment_value::<u64>(
+            latest_block_hash,
+            StorageKey(
+                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
+                )
+                .into(),
+            ),
+        )
+        .await
+        .expect("Should get EthereumChainId from SC"));
+
+        let chain_id_from_eth = eth_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
+
+        if chain_id_from_sc != chain_id_from_eth {
+            slog::error!(
+            &root_logger,
+            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
+            chain_id_from_eth,
+            chain_id_from_sc
+        );
+            return;
+        }
+    }
+
     let stake_manager_address = state_chain_client
         .get_environment_value(
             latest_block_hash,
@@ -99,13 +137,14 @@ async fn main() {
         >::hashed_key().into()))
         .await
         .expect("Should get KeyManager address from SC");
+
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
     tokio::join!(
         // Start signing components
         multisig::start_client(
-            account_id.clone(),
+            state_chain_client.our_account_id.clone(),
             db,
             multisig_instruction_receiver,
             multisig_outcome_sender,
@@ -116,7 +155,7 @@ async fn main() {
             &root_logger,
         ),
         async {
-            p2p::start(
+            multisig_p2p::start(
                 &settings,
                 state_chain_client.clone(),
                 latest_block_hash,
@@ -145,14 +184,14 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            &web3,
+            &eth_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            &web3,
+            &eth_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,

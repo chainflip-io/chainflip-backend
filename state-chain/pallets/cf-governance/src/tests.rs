@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalCount,
+	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
 };
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
@@ -172,7 +172,7 @@ fn several_open_proposals() {
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
 		assert_ok!(Governance::propose_governance_extrinsic(Origin::signed(BOB), mock_extrinsic()));
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(2)),);
-		assert_eq!(ProposalCount::<Test>::get(), 2);
+		assert_eq!(ProposalIdCounter::<Test>::get(), 2);
 	});
 }
 

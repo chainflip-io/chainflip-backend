@@ -18,6 +18,10 @@ mod tests {
 				);
 			}
 
+			let expected_backup_group_size = winners.len() as u32 / BACKUP_VALIDATOR_RATIO;
+
+			assert_eq!(AuctionPallet::backup_group_size(), expected_backup_group_size);
+
 			assert_eq!(
 				AuctionPallet::auction_result(),
 				Some(AuctionResult { winners, minimum_active_bid })
@@ -40,12 +44,6 @@ mod tests {
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 			// Check we are in the bidders phase
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			// Now move to the next phase, this should be the BidsTaken phase
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
-				if bids == MockBidderProvider::get_bidders());
-			// Read storage to confirm has been changed to BidsTaken
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bids)
-				if bids == MockBidderProvider::get_bidders());
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
@@ -69,10 +67,6 @@ mod tests {
 			clear_confirmation();
 			// and finally we complete the process, a list of confirmed validators
 			let (new_winners, new_minimum_active_bid) = expected_validating_set();
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(validators, minimum_active_bid))
-				if (validators.clone(), minimum_active_bid) == (new_winners.clone(), new_minimum_active_bid)
-			);
-
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 
 			assert_eq!(
@@ -437,7 +431,6 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
 			generate_bids(2, BIDDER_GROUP_A);
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
 			assert_matches!(
 				AuctionPallet::process(),
 				Ok(AuctionPhase::ValidatorsSelected(..))
@@ -455,8 +448,6 @@ mod tests {
 	#[test]
 	fn should_abort_on_error_in_starting_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
-				if bids == MockBidderProvider::get_bidders());
 			// Signal we want to error on vault rotation
 			MockVaultRotator::error_on_start_vault_rotation();
 			assert_matches!(AuctionPallet::process(), Err(..));
@@ -485,10 +476,8 @@ mod tests {
 			}
 
 			// Run through an auction
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(..)));
 			clear_confirmation();
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ConfirmedValidators(..)));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 
 			// Confirm we just have the good bidders in our new auction result

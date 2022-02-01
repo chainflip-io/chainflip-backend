@@ -16,7 +16,7 @@ mod tests {
 	};
 
 	use cf_chains::ChainId;
-	use cf_traits::{BlockNumber, FlipBalance, IsOnline};
+	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
@@ -276,7 +276,7 @@ mod tests {
 										ChainId::Ethereum,
 										KeygenOutcome::Success(public_key),
 									).expect(&format!(
-										"should be able to report keygen outcome from node: {:?}",
+										"should be able to report keygen outcome from node: {}",
 										self.node_id)
 									);
 								}
@@ -300,7 +300,7 @@ mod tests {
 		}
 
 		// Create an account, generate and register the session keys
-		fn setup_account(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_account(node_id: &NodeId, seed: &String) {
 			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
 
 			let key = SessionKeys {
@@ -315,14 +315,16 @@ mod tests {
 			));
 		}
 
-		fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 			use sp_core::Encode;
 			assert_ok!(state_chain_runtime::Validator::register_peer_id(
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				peer_keypair.public(),
-				peer_keypair.sign(&node_id.encode()[..])
+				0,
+				0,
+				peer_keypair.sign(&node_id.encode()[..]),
 			));
 		}
 
@@ -485,6 +487,7 @@ mod tests {
 	pub const ERIN: [u8; 32] = [0xfc; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
+	const GENESIS_EPOCH: EpochIndex = 1;
 
 	pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 		TPublic::Pair::from_string(&format!("//{}", seed), None)
@@ -550,9 +553,12 @@ mod tests {
 				.assimilate_storage(storage)
 				.unwrap();
 
-			pallet_cf_staking::GenesisConfig::<Runtime> { genesis_stakers: self.accounts.clone() }
-				.assimilate_storage(storage)
-				.unwrap();
+			pallet_cf_staking::GenesisConfig::<Runtime> {
+				genesis_stakers: self.accounts.clone(),
+				minimum_stake: MIN_STAKE,
+			}
+			.assimilate_storage(storage)
+			.unwrap();
 
 			pallet_session::GenesisConfig::<Runtime> {
 				keys: self
@@ -603,6 +609,12 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
+			pallet_cf_validator::GenesisConfig::<Runtime> {
+				blocks_per_epoch: self.blocks_per_epoch,
+			}
+			.assimilate_storage(storage)
+			.unwrap();
+
 			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
@@ -613,12 +625,6 @@ mod tests {
 				},
 				storage,
 			)
-			.unwrap();
-
-			pallet_cf_validator::GenesisConfig::<Runtime> {
-				blocks_per_epoch: self.blocks_per_epoch,
-			}
-			.assimilate_storage(storage)
 			.unwrap();
 		}
 
@@ -748,7 +754,7 @@ mod tests {
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"
 				);
-				assert_eq!(Governance::number_of_proposals(), 0, "no proposal for governance");
+				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
 					Emissions::validator_emission_inflation(),
@@ -773,9 +779,9 @@ mod tests {
 				for account in accounts.iter() {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account);
 					assert_eq!(
-						Some(0),
+						Some(1),
 						account_data.last_active_epoch,
-						"validator should be active in the genesis epoch(0)"
+						"validator should be active in the genesis epoch(1)"
 					);
 					assert_eq!(ChainflipAccountState::Validator, account_data.state);
 				}
@@ -792,6 +798,7 @@ mod tests {
 
 	mod epoch {
 		use super::*;
+		use crate::tests::network::{setup_account, setup_peer_mapping};
 		use cf_traits::{
 			AuctionPhase, AuctionResult, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo,
@@ -866,7 +873,7 @@ mod tests {
 						testnet.set_active(node, true);
 					}
 
-					assert_eq!(0, Validator::epoch_index());
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
@@ -876,7 +883,7 @@ mod tests {
 						"we should have ran several auctions"
 					);
 
-					assert_eq!(1, Validator::epoch_index());
+					assert_eq!(2, Validator::epoch_index());
 				});
 		}
 
@@ -891,13 +898,17 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
+			const ACTIVE_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
+				.max_validators(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					// A network with a set of passive nodes
-					let (mut testnet, nodes) =
-						network::Network::create(5, &Validator::current_validators());
+					let (mut testnet, nodes) = network::Network::create(
+						ACTIVE_SET_SIZE as u8,
+						&Validator::current_validators(),
+					);
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -910,6 +921,14 @@ mod tests {
 					for keyless_node in &keyless_nodes {
 						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
 					}
+
+					// A late staker which we will use after the auction.  They are yet to stake
+					// and will do after the auction with the intention of being a backup validator
+					let late_staker = testnet.create_node();
+					testnet.set_active(&late_staker, true);
+					let seed = late_staker.to_string();
+					setup_account(&late_staker, &seed);
+					setup_peer_mapping(&late_staker, &seed);
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
@@ -944,7 +963,11 @@ mod tests {
 						"we should be back waiting for bids after a successful auction and rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					let AuctionResult { mut winners, minimum_active_bid } =
 						Auction::last_auction_result().expect("last auction result");
@@ -998,10 +1021,24 @@ mod tests {
 						);
 					}
 
+					// A late staker comes along, they should become a backup validator as they have
+					// everything in place
+					testnet.stake_manager_contract.stake(late_staker.clone(), stake_amount);
+					testnet.move_forward_blocks(1);
+					assert_eq!(
+						ChainflipAccountState::Backup,
+						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
+						"late staker should be a backup validator"
+					);
+
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(2);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+					assert_eq!(
+						GENESIS_EPOCH + 2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 				});
 		}
 	}
@@ -1036,7 +1073,11 @@ mod tests {
 					// Move forward one block to process events
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(0, Validator::epoch_index(), "We should be in the genesis epoch");
+					assert_eq!(
+						GENESIS_EPOCH,
+						Validator::epoch_index(),
+						"We should be in the genesis epoch"
+					);
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
@@ -1071,15 +1112,15 @@ mod tests {
 					}
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
-						"We should still be in the genesis epoch"
+						"We should still be in the first epoch"
 					);
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
-					assert_eq!(1, Validator::epoch_index(), "We should still be in the new epoch");
+					assert_eq!(2, Validator::epoch_index(), "We should still be in the new epoch");
 
 					// We should be able to claim again outside of the auction
 					// At the moment we have a pending claim so we would expect an error here for
@@ -1142,13 +1183,14 @@ mod tests {
 	}
 
 	mod validators {
-		use crate::tests::{genesis, network, NodeId, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
 			Validator,
 		};
+		use std::collections::HashMap;
 
 		#[test]
 		// We have a set of backup validators who receive rewards
@@ -1177,7 +1219,9 @@ mod tests {
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
 					// An initial stake which is superior to the genesis stakes
-					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
+					// The current validators would have been rewarded on us leaving the current
+					// epoch so let's up the stakes for the passive nodes.
+					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
@@ -1187,7 +1231,7 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
@@ -1200,7 +1244,11 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(1, Validator::epoch_index(), "We should still be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in a new epoch"
+					);
 
 					// assert list of validators as being the new nodes
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
@@ -1228,13 +1276,23 @@ mod tests {
 						"we should have new backup validators"
 					);
 
+					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
+						current_backup_validators
+							.iter()
+							.map(|validator_id| {
+								(validator_id.clone(), Flip::stakeable_balance(&validator_id))
+							})
+							.collect::<Vec<(NodeId, FlipBalance)>>()
+							.into_iter()
+							.collect();
+
 					// Move forward a heartbeat, emissions should be shared to backup validators
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
-					for backup_validator in &current_backup_validators {
-						assert!(INITIAL_STAKE < Flip::stakeable_balance(backup_validator));
+					for (backup_validator, pre_balance) in backup_validator_balances {
+						assert!(pre_balance < Flip::stakeable_balance(&backup_validator));
 					}
 				});
 		}
@@ -1270,15 +1328,19 @@ mod tests {
 					}
 
 					assert_eq!(
-						0,
+						1,
 						Validator::epoch_index(),
-						"We should still be in the genesis epoch"
+						"We should still be in the first epoch"
 					);
 
 					// Start an auction and wait for rotation
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
@@ -1307,7 +1369,11 @@ mod tests {
 						"we should have requested an emergency rotation"
 					);
 
-					assert_eq!(1, Validator::epoch_index(), "We should be in the same epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the same epoch"
+					);
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
@@ -1320,7 +1386,11 @@ mod tests {
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 2,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					// Emergency state reset
 					assert!(

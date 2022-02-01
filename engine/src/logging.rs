@@ -11,12 +11,16 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
+// ==== Logging Trace/Debug Tag constants ====
+pub const LOG_ACCOUNT_STATE: &str = "T1";
+
 pub mod utils {
 
     use super::COMPONENT_KEY;
     const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
     const LOCATION_INDENT: &str = "    \x1b[0;34m-->\x1b[0m";
 
+    use chrono;
     use slog::{o, Drain, Fuse, Key, Level, OwnedKVList, Record, Serializer, KV};
     use std::collections::HashSet;
     use std::sync::Arc;
@@ -143,22 +147,28 @@ pub mod utils {
     }
 
     /// Creates a custom json drain that includes the tag as a key
+    /// and a different level name format
     fn new_json_drain() -> Fuse<slog_json::Json<std::io::Stdout>> {
         slog_json::Json::new(std::io::stdout())
-            .add_default_keys()
-            .add_key_value(
-                slog::o!("tag" => slog::PushFnValue(move |rec : &slog::Record, ser| {
-                    ser.emit(rec.tag())
-                })),
-            )
+            .add_key_value(slog::o!(
+            "ts" => slog::PushFnValue(move |_ : &Record, ser| {
+                ser.emit(chrono::Utc::now().to_rfc3339())
+            }),
+            "level" => slog::FnValue(move |rec : &Record| {
+                rec.level().as_str().to_lowercase()
+            }),
+            "msg" => slog::PushFnValue(move |rec : &Record, ser| {
+                ser.emit(rec.msg())
+            }),
+            "tag" => slog::PushFnValue(move |rec : &slog::Record, ser| {
+                ser.emit(rec.tag())
+            })))
             .build()
             .fuse()
     }
 
     pub struct RuntimeTagFilter<D> {
         pub drain: D,
-        // pub whitelist: Arc<Vec<String>>,
-        // pub blacklist: Arc<Vec<String>>,
         pub whitelist: Arc<HashSet<String>>,
         pub blacklist: Arc<HashSet<String>>,
     }

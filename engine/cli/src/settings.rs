@@ -40,7 +40,6 @@ pub enum CFCommand {
 pub struct CLISettings {
     pub state_chain: StateChain,
 
-    // NB: from_block isn't used here
     pub eth: Eth,
 }
 

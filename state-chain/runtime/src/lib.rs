@@ -50,7 +50,6 @@ pub use cf_traits::{BlockNumber, FlipBalance};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
-use pallet_cf_reputation::ReputationPenalty;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -158,6 +157,8 @@ impl pallet_cf_validator::Config for Runtime {
 
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -366,6 +367,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -377,10 +379,6 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 }
 
-parameter_types! {
-	pub const MintInterval: u32 = 100_000;
-}
-
 impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type FlipBalance = FlipBalance;
@@ -388,7 +386,6 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type BlocksPerDay = BlocksPerDay;
-	type MintInterval = MintInterval;
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
@@ -419,18 +416,15 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = 150;
-	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OfflinePenalty;
-	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
 }
@@ -542,6 +536,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
+	(),
 >;
 
 impl_runtime_apis! {
@@ -667,6 +662,15 @@ impl_runtime_apis! {
 		}
 	}
 
+	#[cfg(feature = "try-runtime")]
+	impl frame_try_runtime::TryRuntime<Block> for Runtime {
+		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
+			// Use unwrap here otherwise the error is swallowed silently.
+			let weight = Executive::try_runtime_upgrade().unwrap();
+			Ok((weight, BlockWeights::get().max_block))
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn benchmark_metadata(extra: bool) -> (
@@ -692,6 +696,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
 			list_benchmark!(list, extra, pallet_cf_vaults, Vaults);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
+			list_benchmark!(list, extra, pallet_cf_environment, Environment);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -735,6 +740,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
+			add_benchmark!(params, batches, pallet_cf_environment, Environment);
 			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 

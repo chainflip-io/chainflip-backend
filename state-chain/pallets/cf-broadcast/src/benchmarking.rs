@@ -7,9 +7,6 @@ use frame_benchmarking::{
 	benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
 
-#[allow(unused)]
-use crate::Pallet;
-
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
 	start_broadcast {} : {}

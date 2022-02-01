@@ -5,25 +5,25 @@ use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
-use sp_runtime::AccountId32;
+use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    eth::EthBroadcaster,
-    logging::COMPONENT_KEY,
+    eth::{EthBroadcaster, EthRpcApi},
+    logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
         SigningInfo, SigningOutcome,
     },
-    p2p::{self, AccountId, AccountPeerMappingChange},
+    multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-pub async fn start<BlockStream, RpcClient>(
+pub async fn start<BlockStream, RpcClient, EthRpc>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster,
+    eth_broadcaster: EthBroadcaster<EthRpc>,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
@@ -35,20 +35,21 @@ pub async fn start<BlockStream, RpcClient>(
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
     km_window_sender: UnboundedSender<BlockHeightWindow>,
-    latest_block_hash: H256,
+    initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
+    EthRpc: EthRpcApi,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let heartbeat_block_interval = state_chain_client.get_heartbeat_block_interval();
+    let blocks_per_heartbeat = std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
 
     slog::info!(
         logger,
         "Sending heartbeat every {} blocks",
-        heartbeat_block_interval,
+        blocks_per_heartbeat
     );
 
     state_chain_client
@@ -104,12 +105,12 @@ pub async fn start<BlockStream, RpcClient>(
 
     // Initialise the account state
     let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), latest_block_hash).await;
+        get_current_account_state(state_chain_client.clone(), initial_block_hash).await;
 
     if account_data.state == ChainflipAccountState::Validator || is_outgoing {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
-            latest_block_hash,
+            initial_block_hash,
             account_data,
             &sm_window_sender,
             &km_window_sender,
@@ -121,19 +122,19 @@ pub async fn start<BlockStream, RpcClient>(
     let mut sc_block_stream = Box::pin(sc_block_stream);
     while let Some(result_block_header) = sc_block_stream.next().await {
         match result_block_header {
-            Ok(block_header) => {
-                let block_hash = block_header.hash();
+            Ok(current_block_header) => {
+                let current_block_hash = current_block_header.hash();
                 slog::debug!(
                     logger,
                     "Processing SC block {} with block hash: {:#x}",
-                    block_header.number,
-                    block_hash
+                    current_block_header.number,
+                    current_block_hash
                 );
 
                 let mut received_new_epoch = false;
 
                 // Process this block's events
-                match state_chain_client.get_events(block_hash).await {
+                match state_chain_client.get_events(current_block_hash).await {
                     Ok(events) => {
                         for (_phase, event, _topics) in events {
                             match event {
@@ -146,13 +147,18 @@ pub async fn start<BlockStream, RpcClient>(
                                     pallet_cf_validator::Event::PeerIdRegistered(
                                         account_id,
                                         peer_id,
+                                        port,
+                                        ip_address,
                                     ),
                                 ) => {
                                     account_peer_mapping_change_sender
                                         .send((
-                                            AccountId(*account_id.as_ref()),
+                                            account_id,
                                             peer_id,
-                                            AccountPeerMappingChange::Registered,
+                                            AccountPeerMappingChange::Registered(
+                                                port,
+                                                ip_address.into(),
+                                            ),
                                         ))
                                         .unwrap();
                                 }
@@ -164,7 +170,7 @@ pub async fn start<BlockStream, RpcClient>(
                                 ) => {
                                     account_peer_mapping_change_sender
                                         .send((
-                                            AccountId(*account_id.as_ref()),
+                                            account_id,
                                             peer_id,
                                             AccountPeerMappingChange::Unregistered,
                                         ))
@@ -177,13 +183,8 @@ pub async fn start<BlockStream, RpcClient>(
                                         validator_candidates,
                                     ),
                                 ) => {
-                                    let signers: Vec<_> = validator_candidates
-                                        .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
-                                        .collect();
-
                                     let gen_new_key_event = MultisigInstruction::Keygen(
-                                        KeygenInfo::new(ceremony_id, signers),
+                                        KeygenInfo::new(ceremony_id, validator_candidates),
                                     );
 
                                     multisig_instruction_sender
@@ -196,12 +197,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Keygen(KeygenOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(pubkey) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected keygen ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(pubkey) => {
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -210,19 +214,15 @@ pub async fn start<BlockStream, RpcClient>(
                                                         ),
                                                     ))
                                                     .await;
-                                            }
-                                            Err((err, bad_account_ids)) => {
-                                                slog::error!(
-                                                    logger,
-                                                    "Keygen failed with error: {:?}",
-                                                    err
-                                                );
-                                                let bad_account_ids: Vec<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
-
-                                                let _ = state_chain_client
+                                                }
+                                                Err((err, bad_account_ids)) => {
+                                                    slog::error!(
+                                                        logger,
+                                                        "Keygen ceremony failed with error: {:?}",
+                                                        err;
+                                                        CEREMONY_ID_KEY => ceremony_id,
+                                                    );
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
                                                         chain_id,
@@ -231,8 +231,9 @@ pub async fn start<BlockStream, RpcClient>(
                                                         ),
                                                     ))
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
@@ -252,16 +253,11 @@ pub async fn start<BlockStream, RpcClient>(
                                         payload,
                                     ),
                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                    let signers: Vec<_> = validators
-                                        .iter()
-                                        .map(|v| p2p::AccountId(v.clone().into()))
-                                        .collect();
-
                                     let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
                                         ceremony_id,
                                         KeyId(key_id),
                                         MessageHash(payload.to_fixed_bytes()),
-                                        signers,
+                                        validators,
                                     ));
 
                                     // The below will be replaced with one shot channels
@@ -275,12 +271,15 @@ pub async fn start<BlockStream, RpcClient>(
                                         .await
                                         .expect("Channel closed!")
                                     {
-                                        MultisigOutcome::Signing(SigningOutcome {
-                                            id: _,
-                                            result,
-                                        }) => match result {
-                                            Ok(sig) => {
-                                                let _ = state_chain_client
+                                        MultisigOutcome::Signing(SigningOutcome { id, result }) => {
+                                            assert_eq!(
+                                                id, ceremony_id,
+                                                "unexpected signing ceremony id"
+                                            );
+
+                                            match result {
+                                                Ok(sig) => {
+                                                    let _ = state_chain_client
                                                     .submit_unsigned_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::signature_success(
@@ -289,23 +288,27 @@ pub async fn start<BlockStream, RpcClient>(
                                                         )
                                                     )
                                                     .await;
-                                            }
-                                            Err((_, bad_account_ids)) => {
-                                                let bad_account_ids: BTreeSet<_> = bad_account_ids
-                                                    .iter()
-                                                    .map(|v| AccountId32::from(v.0))
-                                                    .collect();
-                                                let _ = state_chain_client
+                                                }
+                                                Err((err, bad_account_ids)) => {
+                                                    slog::error!(
+                                                        logger,
+                                                        "Signing ceremony failed with error: {:?}",
+                                                        err;
+                                                        CEREMONY_ID_KEY => ceremony_id,
+                                                    );
+
+                                                    let _ = state_chain_client
                                                     .submit_signed_extrinsic(
                                                         &logger,
                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
                                                             ceremony_id,
-                                                            bad_account_ids
+                                                            bad_account_ids.into_iter().collect()
                                                         )
                                                     )
                                                     .await;
+                                                }
                                             }
-                                        },
+                                        }
                                         MultisigOutcome::Ignore => {
                                             // ignore
                                         }
@@ -402,7 +405,7 @@ pub async fn start<BlockStream, RpcClient>(
                                     slog::trace!(
                                         logger,
                                         "Ignoring event at block {}: {:?}",
-                                        block_header.number,
+                                        current_block_header.number,
                                         ignored_event
                                     );
                                 }
@@ -413,7 +416,7 @@ pub async fn start<BlockStream, RpcClient>(
                         slog::error!(
                             logger,
                             "Failed to decode events at block {}. {}",
-                            block_header.number,
+                            current_block_header.number,
                             error,
                         );
                     }
@@ -427,7 +430,8 @@ pub async fn start<BlockStream, RpcClient>(
                 // need to send anything to them
                 if received_new_epoch {
                     let (new_account_data, new_is_outgoing) =
-                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                        get_current_account_state(state_chain_client.clone(), current_block_hash)
+                            .await;
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
 
@@ -435,7 +439,7 @@ pub async fn start<BlockStream, RpcClient>(
                     {
                         send_windows_to_witness_processes(
                             state_chain_client.clone(),
-                            latest_block_hash,
+                            current_block_hash,
                             account_data,
                             &sm_window_sender,
                             &km_window_sender,
@@ -450,32 +454,30 @@ pub async fn start<BlockStream, RpcClient>(
                     // If we are Backup or Passive, we must update our state on every block, since it's possible
                     // we move between Backup and Passive on every block
                     let (new_account_data, new_is_outgoing) =
-                        get_current_account_state(state_chain_client.clone(), block_hash).await;
+                        get_current_account_state(state_chain_client.clone(), current_block_hash)
+                            .await;
                     account_data = new_account_data;
                     is_outgoing = new_is_outgoing;
                 }
 
+                slog::trace!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  account_data.state; 
+                "is_outgoing" => is_outgoing, "last_active_epoch" => account_data.last_active_epoch);
+
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
                 // cause issues (if we tried to send on one of the interval boundaries)
-
-                // TEMP: This should only submit if the account state is Validator, Backup or Passive.
-                // this is to fix an issue (on release/soundcheck) where an update of stake
-                // does not update status of the nodes to backup: https://github.com/chainflip-io/chainflip-backend/issues/1042
-                if ((block_header.number + (heartbeat_block_interval / 2))
-                    % (heartbeat_block_interval / 2))
-                    == 0
+                if (matches!(account_data.state, ChainflipAccountState::Backup)
+                    || matches!(account_data.state, ChainflipAccountState::Validator)
+                    || is_outgoing)
+                    && ((current_block_header.number
+                        + (state_chain_client.heartbeat_block_interval / 2))
+                        % blocks_per_heartbeat
+                        == 0)
                 {
-                    let state = if is_outgoing {
-                        format!("{:?} + Outgoing", account_data.state)
-                    } else {
-                        format!("{:?}", account_data.state)
-                    };
                     slog::info!(
                         logger,
-                        "({:?}) Sending heartbeat at block: {}",
-                        state,
-                        block_header.number
+                        "Sending heartbeat at block: {}",
+                        current_block_header.number
                     );
                     let _ = state_chain_client
                         .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
@@ -486,55 +488,5 @@ pub async fn start<BlockStream, RpcClient>(
                 slog::error!(logger, "Failed to decode block header: {}", error,);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{eth, logging, settings};
-
-    use super::*;
-
-    #[tokio::test]
-    #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
-    async fn run_the_sc_observer() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let logger = logging::test_utils::new_test_logger();
-
-        let (latest_block_hash, block_stream, state_chain_client) =
-            crate::state_chain::client::connect_to_state_chain(&settings.state_chain, &logger)
-                .await
-                .unwrap();
-
-        let (multisig_instruction_sender, _multisig_instruction_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-        let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-            tokio::sync::mpsc::unbounded_channel();
-        let (_multisig_outcome_sender, multisig_outcome_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
-
-        let web3 = eth::new_synced_web3_client(&settings.eth, &logger)
-            .await
-            .unwrap();
-        let eth_broadcaster = EthBroadcaster::new(&settings.eth, web3.clone(), &logger).unwrap();
-
-        let (sm_window_sender, _sm_window_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-        let (km_window_sender, _km_window_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-
-        start(
-            state_chain_client,
-            block_stream,
-            eth_broadcaster,
-            multisig_instruction_sender,
-            account_peer_mapping_change_sender,
-            multisig_outcome_receiver,
-            sm_window_sender,
-            km_window_sender,
-            latest_block_hash,
-            &logger,
-        )
-        .await;
     }
 }

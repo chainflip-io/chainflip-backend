@@ -7,6 +7,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds MintInterval storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -16,18 +24,18 @@ use sp_runtime::traits::Zero;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		offline_conditions::*, Chainflip, EpochInfo, Heartbeat, NetworkState, Slashing,
-	};
+	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	/// The credits one earns being online, equivalent to a blocktime online
@@ -57,10 +65,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// The number of reputation points we lose for every x blocks offline
-		#[pallet::constant]
-		type ReputationPointPenalty: Get<ReputationPenalty<Self::BlockNumber>>;
-
 		/// The floor and ceiling values for a reputation score
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
@@ -74,9 +78,6 @@ pub mod pallet {
 		/// Penalise
 		type Penalty: OfflinePenalty;
 
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
@@ -85,7 +86,32 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>();
+				return T::WeightInfo::on_runtime_upgrade_v1()
+			}
+			T::WeightInfo::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+	}
 
 	/// The ratio at which one accrues Reputation points in exchange for online credits
 	#[pallet::storage]
@@ -100,6 +126,12 @@ pub mod pallet {
 	pub type Reputations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn reputation_point_penalty)]
+	/// The number of reputation points we lose for every x blocks offline
+	pub(super) type ReputationPointPenalty<T: Config> =
+		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -107,6 +139,8 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation points has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
+		/// The value for ReputationPointPenalty has been updated
+		ReputationPointPenaltyUpdated(ReputationPenalty<BlockNumberFor<T>>),
 	}
 
 	#[pallet::error]
@@ -154,6 +188,22 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+		/// Updates the value for the ReputationPointPenalty storage item
+		///
+		/// ## Events
+		///
+		/// - [ReputationPointPenaltyUpdated](Event::ReputationPointPenaltyUpdated)
+		#[pallet::weight(T::WeightInfo::update_reputation_point_penalty())]
+		pub fn update_reputation_point_penalty(
+			origin: OriginFor<T>,
+			value: ReputationPenalty<BlockNumberFor<T>>,
+		) -> DispatchResultWithPostInfo {
+			// Ensure we are root when setting this
+			let _ = ensure_root(origin)?;
+			ReputationPointPenalty::<T>::put(value.clone());
+			Self::deposit_event(Event::ReputationPointPenaltyUpdated(value));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -178,6 +228,7 @@ pub mod pallet {
 				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
+			ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
 		}
 	}
 
@@ -197,12 +248,12 @@ pub mod pallet {
 			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
 
 			if to_ban {
-				T::Banned::ban(&validator_id);
+				T::Banned::ban(validator_id);
 			}
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
-				condition.clone(),
+				condition,
 				penalty,
 			));
 
@@ -239,7 +290,6 @@ pub mod pallet {
 				Reputations::<T>::mutate(
 					validator_id,
 					|Reputation { online_credits, reputation_points }| {
-						// Accrue some online credits of `HeartbeatInterval` size
 						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points
@@ -270,8 +320,9 @@ pub mod pallet {
 					|Reputation { online_credits, reputation_points }| {
 						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 							// Update reputation points
+							// TODO: refactor to make it not panic!
 							let ReputationPenalty { points, blocks } =
-								T::ReputationPointPenalty::get();
+								ReputationPointPenalty::<T>::get();
 							let interval: u32 =
 								T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
 							let blocks: u32 = blocks.try_into().unwrap_or(0);

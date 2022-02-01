@@ -15,6 +15,7 @@ pub use weights::WeightInfo;
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::Zero;
+use sp_std::vec::Vec;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -67,7 +68,7 @@ pub mod pallet {
 		/// We verify if the node is online checking first if they are banned and if they are not
 		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			return match Nodes::<T>::try_get(validator_id) {
+			match Nodes::<T>::try_get(validator_id) {
 				Ok(node) => {
 					let current_block_number = frame_system::Pallet::<T>::current_block_number();
 					!node.is_banned(current_block_number) &&
@@ -154,6 +155,15 @@ pub mod pallet {
 				});
 
 			NetworkState { online, offline }
+		}
+
+		/// Get all of the Validators which match the condition of having submitted their
+		/// heartbeat this interval, and are not currently banned.
+		pub fn online_validators() -> Vec<T::ValidatorId> {
+			T::EpochInfo::current_validators()
+				.into_iter()
+				.filter(|validator_id| Self::is_online(&validator_id))
+				.collect()
 		}
 	}
 

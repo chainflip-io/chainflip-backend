@@ -31,14 +31,16 @@ hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
+chrono = "0.4.19"
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
 jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
-websocket = "0.24"
 
+websocket = "0.24"
+ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
 # kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.14.0"
@@ -66,7 +68,7 @@ generic-array= "0.14"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
-cf-p2p = {path = "../state-chain/client/cf-p2p"}
+multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
@@ -135,3 +137,5 @@ mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
+csv = "1.1.6"
+tempdir = "0.3.7"

@@ -42,32 +42,17 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 /// Nominates pseudo-random signers based on the provided seed.
 pub struct RandomSignerNomination;
 
-/// Returns a list of online validators.
-///
-/// TODO: When #1037 is merged, use the more efficient EpochInfo::current_validators()
-fn get_online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	pallet_cf_validator::ValidatorLookup::<Runtime>::iter()
-		.filter_map(|(id, _)| {
-			if <Online as cf_traits::IsOnline>::is_online(&id) {
-				Some(id.clone())
-			} else {
-				None
-			}
-		})
-		.collect()
-}
-
 impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		let online_validators = get_online_validators();
+		let online_validators = Online::online_validators();
 		select_one(seed_from_hashable(seed), online_validators)
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
 		let threshold = <Validator as EpochInfo>::consensus_threshold();
-		let online_validators = get_online_validators();
+		let online_validators = Online::online_validators();
 		try_select_random_subset(seed_from_hashable(seed), threshold as usize, online_validators)
 	}
 }
@@ -131,7 +116,20 @@ mod tests {
 			// collision should be quite low.
 			assert_ne!(
 				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed + 100, 2, set.clone()).unwrap()),
+				BTreeSet::from_iter(
+					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
+				),
+			);
+		}
+	}
+
+	#[test]
+	fn same_seed_same_set() {
+		let set = (0..150).collect::<Vec<_>>();
+		for seed in 0..100 {
+			assert_eq!(
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
 			);
 		}
 	}
