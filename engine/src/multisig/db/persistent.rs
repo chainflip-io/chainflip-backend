@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::TryInto, path::Path};
 
 use super::KeyDB;
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
@@ -55,6 +55,8 @@ impl PersistentKeyDB {
             ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix),
         );
 
+        let mut keys_from_kvdb: HashMap<KeyId, KeygenResultInfo> = HashMap::new();
+
         if path.exists() {
             // Add the column families found in the existing db, they might be needed for migration.
             DB::list_cf(&Options::default(), path)
@@ -69,6 +71,12 @@ impl PersistentKeyDB {
                         );
                     }
                 });
+
+            // Load the keys using kvdb for a special migration.
+            if cfs.contains_key("col0") {
+                slog::info!(logger, "Loading keys using kvdb");
+                keys_from_kvdb = load_keys_using_kvdb(&path, &logger);
+            }
         }
 
         let mut create_missing_db_and_cols_opts = Options::default();
@@ -88,7 +96,15 @@ impl PersistentKeyDB {
         migrate_db_to_latest(&mut db, &logger)
                     .expect(&format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", path.display()));
 
-        Ok(PersistentKeyDB { db, logger })
+        // Import the keys from the kvdb migration
+        let mut p_kdb = PersistentKeyDB { db, logger };
+        if !keys_from_kvdb.is_empty() {
+            for (key_id, key) in keys_from_kvdb {
+                p_kdb.update_key(&key_id, &key);
+            }
+        }
+
+        Ok(p_kdb)
     }
 }
 
@@ -229,33 +245,11 @@ fn migrate_db_to_latest(db: &mut DB, logger: &slog::Logger) -> Result<(), anyhow
     Ok(())
 }
 
-// Moving the keygen data from column `col0` to `data` and adding a prefix
-// Also adding schema version to the metadata column
+// Just adding schema version to the metadata column and delete col0 if it exists
 fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
     add_schema_version_to_batch_write(db, 1, &mut batch);
-
-    // Get column handles
-    let old_cf_name = "col0";
-    let old_cf_option = db.cf_handle(old_cf_name);
-
-    // Move the data from the 'col0' column if it exists
-    if let Some(old_cf) = old_cf_option {
-        let new_cf = db.cf_handle("data").expect("Should get column data");
-
-        // Read the data from the old column and add it to the new column via the batch write
-        for (old_key, old_value) in db.iterator_cf(old_cf, IteratorMode::Start) {
-            // Add the prefix to the key
-            let key_with_prefix = [
-                KEYGEN_DATA_PREFIX.iter().cloned().collect(),
-                old_key.clone(),
-            ]
-            .concat();
-            batch.put_cf(new_cf, &key_with_prefix, old_value);
-            batch.delete_cf(old_cf, old_key);
-        }
-    }
 
     // Write the batch
     db.write(batch).map_err(|e| {
@@ -263,12 +257,46 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     })?;
 
     // Delete the old column family
-    if old_cf_option.is_some() {
+    let old_cf_name = "col0";
+    if db.cf_handle("col0").is_some() {
         db.drop_cf(old_cf_name)
             .unwrap_or_else(|_| panic!("Should drop old column family {}", old_cf_name));
     }
 
     Ok(())
+}
+
+// The compression used by kvdb is different from rust_rocksdb,
+// so we must use kvdb to load the keys during migration from schema version 0 to 1
+// TODO: Some time in the future when no schema version 0 db's exist (in testnet or elsewhere),
+//       we may want to delete this legacy special migration code.
+fn load_keys_using_kvdb(path: &Path, logger: &slog::Logger) -> HashMap<KeyId, KeygenResultInfo> {
+    let config = kvdb_rocksdb::DatabaseConfig::default();
+    let db = kvdb_rocksdb::Database::open(&config, path).expect("could not open kvdb database");
+    db.iter(0)
+        .filter_map(|(key_id, key_info)| {
+            let key_id: KeyId = KeyId(key_id.into());
+            match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
+                Ok(keygen_info) => {
+                    slog::info!(
+                        logger,
+                        "Loaded key_info (key_id: {}) from kvdb database",
+                        key_id
+                    );
+                    Some((key_id, keygen_info))
+                }
+                Err(err) => {
+                    slog::error!(
+                        logger,
+                        "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
+                        key_id,
+                        err
+                    );
+                    None
+                }
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -381,18 +409,19 @@ mod tests {
 
         let key_id = KeyId(TEST_KEY.into());
 
-        // Create a db that is schema version 0.
-        // No metadata column, the keygen data column is named 'col0' and has no prefix
+        // Create a db that is schema version 0 using kvdb.
+        // No metadata column, the keygen data column is named 'col0' and has no prefix.
+        // The compression used by kvdb is different from rust_rocksdb, so we must use kvdb here.
         {
-            let mut opts = Options::default();
-            opts.create_missing_column_families(true);
-            opts.create_if_missing(true);
-            let db = DB::open_cf(&opts, &db_path, vec!["col0"]).expect("Should open db file");
+            let db = kvdb_rocksdb::Database::open(
+                &kvdb_rocksdb::DatabaseConfig::default(),
+                db_path.to_str().expect("Invalid path"),
+            )
+            .unwrap();
 
-            let cf = db.cf_handle("col0").unwrap();
-
-            db.put_cf(cf, &key_id.0.clone(), &bashful_secret_bin)
-                .expect("Should write key share");
+            let mut tx = db.transaction();
+            tx.put_vec(0, &key_id.0.clone(), bashful_secret_bin);
+            db.write(tx).unwrap();
         }
 
         // Load the old db and see if the keygen data is migrated and schema version is updated
