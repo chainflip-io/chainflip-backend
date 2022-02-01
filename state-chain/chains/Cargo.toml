@@ -10,7 +10,7 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
 
 # Ethereum
-ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
+ethabi = {default-features = false, features = ['parity-codec'], path = '../../../ethabi/ethabi'}
 ethereum = {default-features = false, version = "0.10"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
@@ -56,6 +56,7 @@ default = ['std']
 std = [
     'codec/std',
     'ethabi/std',
+    'ethabi/full-serde',
     'ethereum/std',
     'frame-support/std',
     'frame-system/std',

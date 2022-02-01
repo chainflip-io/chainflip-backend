@@ -22,9 +22,6 @@ pallet-cf-threshold-signature = {path = '../cf-threshold-signature', default-fea
 pallet-cf-broadcast = {path = '../cf-broadcast', default-features = false}
 pallet-cf-witnesser = {path = '../cf-witnesser', default-features = false}
 
-# External dependencies
-ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
-
 # Parity deps
 [dependencies.codec]
 default-features = false

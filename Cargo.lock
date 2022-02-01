@@ -782,7 +782,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
+ "ethabi 14.1.0",
  "ethereum",
  "frame-support",
  "frame-system",
@@ -1843,18 +1843,6 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
-]
-
-[[package]]
-name = "ethabi"
-version = "14.1.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=114a29d#114a29de12b8b2d5af4de17c44634dd006b9997a"
-dependencies = [
- "anyhow",
- "ethereum-types",
- "hex",
- "sha3",
- "uint",
 ]
 
 [[package]]
@@ -5167,7 +5155,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
