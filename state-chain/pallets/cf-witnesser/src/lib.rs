@@ -157,6 +157,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
 			origin: OriginFor<T>,
+			// TODO: Not possible to fix the clippy warning here. At the moment we
+			// need to ignore it on a global level.
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
