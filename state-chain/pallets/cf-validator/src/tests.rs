@@ -33,6 +33,53 @@ mod tests {
 	}
 
 	#[test]
+	fn should_update_claims_period() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(ValidatorPallet::claim_period_as_percentage(), CLAIM_PERCENTAGE_AT_GENESIS);
+
+			let percentage_claim_period = 40;
+			assert_ok!(ValidatorPallet::update_period_for_claims(
+				Origin::root(),
+				percentage_claim_period
+			));
+			assert_eq!(
+				last_event(),
+				mock::Event::ValidatorPallet(crate::Event::ClaimPeriodUpdated(
+					percentage_claim_period
+				)),
+				"should emit event on updating claim period"
+			);
+			assert_eq!(ValidatorPallet::claim_period_as_percentage(), percentage_claim_period);
+			let invalid_claim_period = 101;
+			assert_noop!(
+				ValidatorPallet::update_period_for_claims(Origin::root(), invalid_claim_period),
+				Error::<Test>::InvalidClaimPeriod
+			);
+
+			let blocks_per_epoch = 42;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), blocks_per_epoch));
+			assert!(<ValidatorPallet as EpochInfo>::claims_allowed(), "should be able to claim");
+
+			// Move to the first block we are blocked to claim
+			let block_in_no_claims = percentage_claim_period as u64 * blocks_per_epoch / 100;
+			move_forward_blocks(block_in_no_claims);
+			assert_eq!(
+				false,
+				<ValidatorPallet as EpochInfo>::claims_allowed(),
+				"should *not* be able to claim"
+			);
+
+			// Increase the claim period, being on the same block we should be able to claim now
+			let percentage_claim_period = percentage_claim_period + 1;
+			assert_ok!(ValidatorPallet::update_period_for_claims(
+				Origin::root(),
+				percentage_claim_period
+			));
+			assert!(<ValidatorPallet as EpochInfo>::claims_allowed(), "should be able to claim");
+		});
+	}
+
+	#[test]
 	fn you_have_to_be_priviledged() {
 		new_test_ext().execute_with(|| {
 			// Run through the sudo extrinsics to be sure they are what they are

@@ -30,7 +30,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
+	AtLeast32BitUnsigned, BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
 
@@ -77,6 +77,7 @@ impl Default for RotationStatus {
 	}
 }
 
+pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -116,6 +117,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
@@ -139,6 +143,8 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
 		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
+		/// Ratio of claim period updated \[percentage\]
+		ClaimPeriodUpdated(Percentage),
 	}
 
 	#[pallet::error]
@@ -152,6 +158,8 @@ pub mod pallet {
 		AccountPeerMappingOverlap,
 		/// Invalid signature
 		InvalidAccountPeerMappingSignature,
+		/// Invalid claim period
+		InvalidClaimPeriod,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -208,6 +216,29 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Update the percentage of the epoch period that claims are permitted
+		///
+		/// The dispatch origin of this function must be governance
+		///
+		/// ## Events
+		///
+		/// - [ClaimPeriodUpdated](Event::ClaimPeriodUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidClaimPeriod](Error::InvalidClaimPeriod)
+		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
+		pub fn update_period_for_claims(
+			origin: OriginFor<T>,
+			percentage: Percentage,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(0u8 == percentage || 100u8 > percentage, Error::<T>::InvalidClaimPeriod);
+			ClaimPeriodAsPercentage::<T>::set(percentage);
+			Self::deposit_event(Event::ClaimPeriodUpdated(percentage));
+
+			Ok(().into())
+		}
 		/// Sets the number of blocks an epoch should run for
 		///
 		/// The dispatch origin of this function must be root.
@@ -371,6 +402,11 @@ pub mod pallet {
 		}
 	}
 
+	/// Percentage of epoch we allow claims
+	#[pallet::storage]
+	#[pallet::getter(fn claim_period_as_percentage)]
+	pub(super) type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+
 	/// Force auction on next block
 	#[pallet::storage]
 	#[pallet::getter(fn force)]
@@ -440,12 +476,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
+		pub claim_period_as_percentage: Percentage,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { blocks_per_epoch: Zero::zero() }
+			Self { blocks_per_epoch: Zero::zero(), claim_period_as_percentage: Zero::zero() }
 		}
 	}
 
@@ -453,6 +490,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 
 			if let Some(AuctionResult { minimum_active_bid, winners }) =
 				T::Auctioneer::auction_result()
@@ -488,8 +526,16 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
-	fn is_auction_phase() -> bool {
-		!T::Auctioneer::waiting_on_bids()
+	fn claims_allowed() -> bool {
+		// start + ((epoch * percentage) / 100)
+		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
+			BlocksPerEpoch::<T>::get()
+				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
+				.checked_div(&100u32.into())
+				.expect("we are likely seeing this because ClaimPeriodAsPercentage isn't configured correctly"),
+		);
+
+		last_block_for_claims >= frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn active_validator_count() -> u32 {

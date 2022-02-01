@@ -543,7 +543,10 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		validator: ValidatorConfig { blocks_per_epoch: 8 * HOURS },
+		validator: ValidatorConfig {
+			blocks_per_epoch: 8 * HOURS,
+			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+		},
 		session: SessionConfig {
 			keys: initial_authorities
 				.iter()

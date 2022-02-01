@@ -153,6 +153,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_environment::Config for Runtime {

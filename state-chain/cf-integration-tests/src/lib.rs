@@ -611,6 +611,7 @@ mod tests {
 
 			pallet_cf_validator::GenesisConfig::<Runtime> {
 				blocks_per_epoch: self.blocks_per_epoch,
+				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -1048,10 +1049,10 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		// Stakers cannot unstake during the conclusion of the auction
-		// We have a set of nodes that are staked and that are included in the auction
-		// Moving block by block of an auction we shouldn't be able to claim stake
-		fn cannot_claim_stake_during_auction() {
+		// Stakers cannot claim when we are out of the claiming period (50% of the epoch)
+		// We have a set of nodes that are staked and can claim in the claiming period and
+		// not claim when out of the period
+		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
 			const MAX_VALIDATORS: u32 = 3;
 			super::genesis::default()
@@ -1088,16 +1089,10 @@ mod tests {
 						));
 					}
 
-					// Move to new epoch
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-					// Start auction
-					testnet.move_forward_blocks(1);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
+					let end_of_claim_period =
+						EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_CLAIMABLE as u32 / 100;
+					// Move to end of the claim period
+					System::set_block_number(end_of_claim_period + 1);
 
 					// We will try to claim some stake
 					for node in &nodes {
@@ -1107,7 +1102,7 @@ mod tests {
 								stake_amount,
 								ETH_ZERO_ADDRESS
 							),
-							Error::<Runtime>::NoClaimsDuringAuctionPhase
+							Error::<Runtime>::NoClaimsAllowed
 						);
 					}
 
@@ -1117,6 +1112,14 @@ mod tests {
 						"We should still be in the first epoch"
 					);
 
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Start auction
+					testnet.move_forward_blocks(1);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
