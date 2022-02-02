@@ -1,5 +1,5 @@
 #[macro_use]
-mod utils;
+pub(crate) mod utils;
 mod ceremony_id_tracker;
 mod common;
 mod key_store;

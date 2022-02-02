@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod mock;
 mod persistent;
+mod temp_account_id_migration;
 
 use std::collections::HashMap;
 

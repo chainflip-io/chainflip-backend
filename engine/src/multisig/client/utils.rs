@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 /// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PartyIdxMapping {
-    id_to_idx: HashMap<AccountId, usize>,
+    pub id_to_idx: HashMap<AccountId, usize>,
     // TODO: create SortedVec and use it here:
     // Sorted Account Ids
-    account_ids: Vec<AccountId>,
+    pub account_ids: Vec<AccountId>,
 }
 
 impl PartyIdxMapping {
