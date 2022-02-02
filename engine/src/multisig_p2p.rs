@@ -71,11 +71,13 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
+    let runtime_version = state_chain_client.runtime_version.read().await.impl_version;
+
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
             != account_to_peer.get(&state_chain_client.our_account_id)
         {
-            state_chain_client
+            let peer_id_submission = state_chain_client
                 .submit_signed_extrinsic(
                     logger,
                     pallet_cf_validator::Call::register_peer_id(
@@ -89,9 +91,15 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                         .unwrap(),
                     ),
                 )
-                .await?;
+                .await;
+            if peer_id_submission.is_err() {
+                slog::warn!(
+                    logger,
+                    "Could not register peer id. Runtime version {}.",
+                    runtime_version
+                )
+            }
         }
-
         Ok(())
     } else {
         Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file confugration option.", peer_id, cfe_peer_id)))
