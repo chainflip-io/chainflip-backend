@@ -16,7 +16,7 @@ use crate::{
 
 use state_chain_runtime::AccountId;
 
-use super::common::KeygenResult;
+pub use super::common::KeygenResult;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {

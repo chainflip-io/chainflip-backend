@@ -66,7 +66,11 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
+    let mut db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
+
+    // TODO: Remove this. This is temporary. After soundcheckers have updated the CFE versions, so this migration
+    // will have completed
+    db.migrate_db_to_new_account_id();
 
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -14,8 +17,9 @@ pub const DB_COL_KEYGEN_RESULT_INFO: u32 = 0;
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
     /// Rocksdb database instance
-    db: Database,
-    logger: slog::Logger,
+    pub path: PathBuf,
+    pub db: Database,
+    pub logger: slog::Logger,
 }
 
 impl PersistentKeyDB {
@@ -24,6 +28,7 @@ impl PersistentKeyDB {
         let db = Database::open(&config, path).expect("could not open database");
 
         PersistentKeyDB {
+            path: path.into(),
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
         }
