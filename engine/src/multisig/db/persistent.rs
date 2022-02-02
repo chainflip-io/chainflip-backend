@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, path::Path};
+use std::{collections::HashMap, convert::TryInto, iter::FromIterator, path::Path};
 
 use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
@@ -28,6 +28,10 @@ const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
 const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
 const METADATA_COLUMN: &str = "metadata";
+// The default column that rust_rocksdb uses (we ignore)
+const DEFAULT_COLUMN_NAME: &str = "default";
+// KVDB_rocksdb (legacy) naming for the data column. Used for migration
+const LEGACY_DATA_COLUMN_NAME: &str = "col0";
 
 /// Database for keys and persistent metadata
 pub struct PersistentKeyDB {
@@ -39,21 +43,22 @@ impl PersistentKeyDB {
     pub fn new(path: &Path, logger: &slog::Logger) -> Result<Self> {
         let logger = logger.new(o!(COMPONENT_KEY => "PersistentKeyDB"));
 
-        // Build a list of column families with descriptors
-        let mut cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::new();
-        cfs.insert(
-            METADATA_COLUMN.to_string(),
-            ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
-        );
-
         // Use a prefix extractor on the data column
         let mut cfopts_for_prefix = Options::default();
         cfopts_for_prefix
             .set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
-        cfs.insert(
-            DATA_COLUMN.to_string(),
-            ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix),
-        );
+
+        // Build a list of column families with descriptors
+        let mut cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
+            (
+                METADATA_COLUMN.to_string(),
+                ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
+            ),
+            (
+                DATA_COLUMN.to_string(),
+                ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix),
+            ),
+        ]);
 
         let mut keys_from_kvdb: HashMap<KeyId, KeygenResultInfo> = HashMap::new();
 
@@ -64,7 +69,7 @@ impl PersistentKeyDB {
                 .into_iter()
                 .for_each(|cf_name| {
                     // Filter out the `default` column because we don't use it
-                    if cf_name != "default" && !cfs.contains_key(&cf_name) {
+                    if cf_name != DEFAULT_COLUMN_NAME && !cfs.contains_key(&cf_name) {
                         cfs.insert(
                             cf_name.clone(),
                             ColumnFamilyDescriptor::new(cf_name, Options::default()),
@@ -72,10 +77,15 @@ impl PersistentKeyDB {
                     }
                 });
 
-            // Load the keys using kvdb for a special migration.
-            if cfs.contains_key("col0") {
-                slog::info!(logger, "Loading keys using kvdb");
-                keys_from_kvdb = load_keys_using_kvdb(&path, &logger);
+            // Load the keys using kvdb for a special migration (not included in `migrate_db_to_latest`).
+            // The compression algo used by default by rust_rocksdb collides with system libs, so we use an alternate algo (lz4).
+            // Now that the compression used by kvdb is different from rust_rocksdb we must
+            // use kvdb to load the keys during migration from schema version 0 to 1.
+            // TODO: Some time in the future when no schema version 0 db's exist (in testnet or elsewhere),
+            //       we may want to delete this legacy special migration code.
+            if cfs.contains_key(LEGACY_DATA_COLUMN_NAME) {
+                keys_from_kvdb = load_keys_using_kvdb(path, &logger)
+                    .context("Failed to migrate data from kvdb database")?;
             }
         }
 
@@ -94,7 +104,7 @@ impl PersistentKeyDB {
 
         // Preform migrations and write the schema version
         migrate_db_to_latest(&mut db, &logger)
-                    .expect(&format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", path.display()));
+                    .unwrap_or_else(|_| panic!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", path.display()));
 
         // Import the keys from the kvdb migration
         let mut p_kdb = PersistentKeyDB { db, logger };
@@ -199,7 +209,7 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
         }
         // If we can't find a db_schema_version, we assume it's the first one
         None => {
-            slog::info!(
+            slog::warn!(
                 logger,
                 "Did not find db_schema_version in existing database. Assuming db_schema_version of 0"
             );
@@ -210,7 +220,7 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
 
 /// Migrates the db forward one version migration at a time to the latest `DB_SCHEMA_VERSION`
 fn migrate_db_to_latest(db: &mut DB, logger: &slog::Logger) -> Result<(), anyhow::Error> {
-    let db_schema_version = read_schema_version(&db, &logger);
+    let db_schema_version = read_schema_version(db, logger);
 
     if db_schema_version > DB_SCHEMA_VERSION {
         return Err(anyhow::Error::msg(
@@ -257,8 +267,8 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     })?;
 
     // Delete the old column family
-    let old_cf_name = "col0";
-    if db.cf_handle("col0").is_some() {
+    let old_cf_name = LEGACY_DATA_COLUMN_NAME;
+    if db.cf_handle(LEGACY_DATA_COLUMN_NAME).is_some() {
         db.drop_cf(old_cf_name)
             .unwrap_or_else(|_| panic!("Should drop old column family {}", old_cf_name));
     }
@@ -266,14 +276,20 @@ fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// The compression used by kvdb is different from rust_rocksdb,
-// so we must use kvdb to load the keys during migration from schema version 0 to 1
-// TODO: Some time in the future when no schema version 0 db's exist (in testnet or elsewhere),
-//       we may want to delete this legacy special migration code.
-fn load_keys_using_kvdb(path: &Path, logger: &slog::Logger) -> HashMap<KeyId, KeygenResultInfo> {
+// Load the keys using kvdb for a special migration (not included in `migrate_db_to_latest`).
+fn load_keys_using_kvdb(
+    path: &Path,
+    logger: &slog::Logger,
+) -> Result<HashMap<KeyId, KeygenResultInfo>, anyhow::Error> {
+    slog::info!(logger, "Loading keys using kvdb");
+
     let config = kvdb_rocksdb::DatabaseConfig::default();
-    let db = kvdb_rocksdb::Database::open(&config, path).expect("could not open kvdb database");
-    db.iter(0)
+    let db = kvdb_rocksdb::Database::open(&config, path)
+        .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
+
+    // Load the keys from column 0 (aka "col0")
+    Ok(db
+        .iter(0)
         .filter_map(|(key_id, key_info)| {
             let key_id: KeyId = KeyId(key_id.into());
             match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
@@ -296,7 +312,7 @@ fn load_keys_using_kvdb(path: &Path, logger: &slog::Logger) -> HashMap<KeyId, Ke
                 }
             }
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -437,7 +453,29 @@ mod tests {
         {
             let cfs = DB::list_cf(&Options::default(), &db_path)
                 .expect("Should get list of column families");
-            assert!(cfs.iter().find(|s| *s == &"col0".to_string()).is_none());
+            assert!(cfs
+                .iter()
+                .find(|s| *s == &LEGACY_DATA_COLUMN_NAME.to_string())
+                .is_none());
+        }
+
+        // clean up
+        std::fs::remove_dir_all(db_path).unwrap();
+    }
+
+    #[test]
+    fn should_not_migrate_backwards() {
+        let db_path = Path::new("db5");
+        let _ = std::fs::remove_dir_all(db_path);
+
+        // Create a db with schema version + 1
+        open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
+
+        // Open the db and make sure the `migrate_db_to_latest` errors
+        {
+            let mut db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
+                .expect("Should open db file");
+            assert!(migrate_db_to_latest(&mut db, &new_test_logger()).is_err());
         }
 
         // clean up
