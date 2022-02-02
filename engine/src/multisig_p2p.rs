@@ -71,7 +71,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
-    let runtime_version = state_chain_client.runtime_version.read().await.impl_version;
+    let runtime_version = state_chain_client.runtime_version.read().await.spec_version;
 
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
