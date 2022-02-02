@@ -1,4 +1,5 @@
-//! TODO: This is temp migration code. Remove this after validators on Souncheck have upgraded their CFEsuse std::collections::HashMap;
+//! TODO: This is temp migration code. Remove this after validators on Souncheck have upgraded their CFEs
+use std::collections::HashMap;
 
 use std::ffi::OsString;
 use std::sync::Arc;
