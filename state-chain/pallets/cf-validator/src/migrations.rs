@@ -3,7 +3,7 @@ use frame_support::traits::Get;
 
 use super::*;
 
-pub(crate) mod v1 {
+pub mod v1 {
 	use super::*;
 
 	#[cfg(feature = "try-runtime")]
@@ -29,7 +29,9 @@ pub(crate) mod v1 {
 		// determine the bond to set.  Although we can derive the winners and hence the
 		// active validating set from the same storage item as the bond we want to maintain
 		// continuity with the genesis version(0) by reading this from the session pallet.
-		if let Some(AuctionResult { minimum_active_bid, .. }) = T::Auctioneer::auction_result() {
+		let auction_weight = if let Some(AuctionResult { minimum_active_bid, .. }) =
+			T::Auctioneer::auction_result()
+		{
 			// Set the bond to that of the last auction result
 			Bond::<T>::put(minimum_active_bid);
 			let validators = <pallet_session::Pallet<T>>::validators();
@@ -42,7 +44,14 @@ pub(crate) mod v1 {
 				"migration: Migration failed, there is no auction result."
 			);
 			T::DbWeight::get().reads(1)
-		}
+		};
+
+		// Peer mappings can't be updated - delete them to force all Cfes to re-submit.
+		AccountPeerMapping::<T>::remove_all(None);
+		MappedPeers::<T>::remove_all(None);
+
+		// Not sure if this is accurate but probably good enough.
+		auction_weight + T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]
