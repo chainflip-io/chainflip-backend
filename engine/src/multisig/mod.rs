@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{logging::COMPONENT_KEY, p2p::AccountId};
+use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use futures::StreamExt;
 use slog::o;
+use state_chain_runtime::AccountId;
 
 pub use client::{
     KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,
@@ -51,7 +52,7 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     Keygen(KeygenInfo),
     Sign(SigningInfo),
@@ -64,7 +65,7 @@ pub fn start_client<S>(
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
-    outgoing_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
+    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
@@ -87,9 +88,10 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
-            Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))
-        }));
+        let mut cleanup_stream = common::make_periodic_stream(Duration::from_secs(10));
+
+        use rand_legacy::FromEntropy;
+        let mut rng = crypto::Rng::from_entropy();
 
         loop {
             tokio::select! {
@@ -97,7 +99,7 @@ where
                     client.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg);
+                    client.process_multisig_instruction(msg, &mut rng);
                 }
                 Some(()) = cleanup_stream.next() => {
                     client.cleanup();

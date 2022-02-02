@@ -20,9 +20,7 @@ mod benchmarking;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		offline_conditions::*, Chainflip, EpochInfo, Heartbeat, NetworkState, Slashing,
-	};
+	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -73,9 +71,6 @@ pub mod pallet {
 
 		/// Penalise
 		type Penalty: OfflinePenalty;
-
-		/// Information about the current epoch.
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -197,12 +192,12 @@ pub mod pallet {
 			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
 
 			if to_ban {
-				T::Banned::ban(&validator_id);
+				T::Banned::ban(validator_id);
 			}
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
-				condition.clone(),
+				condition,
 				penalty,
 			));
 
@@ -239,7 +234,6 @@ pub mod pallet {
 				Reputations::<T>::mutate(
 					validator_id,
 					|Reputation { online_credits, reputation_points }| {
-						// Accrue some online credits of `HeartbeatInterval` size
 						*online_credits += Self::online_credit_reward();
 						let (rewarded_points, credits) = AccrualRatio::<T>::get();
 						// If we have hit a number of credits to earn reputation points

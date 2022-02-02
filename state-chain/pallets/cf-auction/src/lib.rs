@@ -17,9 +17,10 @@ pub use weights::WeightInfo;
 extern crate assert_matches;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionError, AuctionPhase, AuctionResult, Auctioneer, BidderProvider,
-	ChainflipAccount, ChainflipAccountState, EmergencyRotation, HasPeerMapping, IsOnline,
-	RemainingBid, StakeHandler, VaultRotationHandler, VaultRotator,
+	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionPhase, AuctionResult, Auctioneer,
+	BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
+	HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler,
+	VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -220,6 +221,10 @@ pub mod pallet {
 				);
 			}
 
+			BackupGroupSize::<T>::put(
+				self.winners.len() as u32 / T::ActiveToBackupValidatorRatio::get(),
+			);
+
 			LastAuctionResult::<T>::put(AuctionResult {
 				winners: self.winners.clone(),
 				minimum_active_bid: self.minimum_active_bid,
@@ -228,10 +233,27 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> QualifyValidator for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		// Rule #1 - They are registered
+		// Rule #2 - They have a registered peer id
+		// Rule #3 - Confirm that the validators are 'online'
+		T::Registrar::is_registered(validator_id) &&
+			T::PeerMapping::has_peer_mapping(validator_id) &&
+			T::Online::is_online(validator_id)
+	}
+}
+
 impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
+
+	fn auction_index() -> AuctionIndex {
+		CurrentAuctionIndex::<T>::get()
+	}
 
 	fn active_range() -> ActiveValidatorRange {
 		ActiveValidatorSizeRange::<T>::get()
@@ -278,15 +300,13 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				let mut bidders = T::BidderProvider::get_bidders();
-				// Rule #1 - If we have a bid at 0 then please leave
+				// Number one rule - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
-				// Rule #2 - They are registered
-				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #3 - They have a registered peer id
-				bidders.retain(|(id, _)| T::PeerMapping::has_peer_mapping(id));
-				// Rule #4 - Confirm that the validators are 'online'
-				bidders.retain(|(id, _)| T::Online::is_online(id));
-				// Rule #5 - Confirm we have our set size
+				// Determine if this validator is qualified for bidding
+				bidders.retain(|(validator_id, _)| {
+					<Pallet<T> as QualifyValidator>::is_qualified(validator_id)
+				});
+				// Final rule - Confirm we have our set size
 				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					log::error!(
 						"[cf-auction] insufficient bidders to proceed. {} < {}",
@@ -310,12 +330,12 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					bids.sort_unstable_by_key(|k| k.1);
 					bids.reverse();
 
-					let validator_set_target_size = ActiveValidatorSizeRange::<T>::get().1;
+					let max_number_of_validators = ActiveValidatorSizeRange::<T>::get().1;
 					let number_of_bidders = bids.len() as u32;
-					let mut validator_group_size =
-						min(validator_set_target_size, number_of_bidders) as usize;
-					let mut validating_set: Vec<_> =
-						bids.iter().take(validator_group_size as usize).collect();
+					let mut target_validator_group_size =
+						min(max_number_of_validators, number_of_bidders) as usize;
+					let mut next_validator_group: Vec<_> =
+						bids.iter().take(target_validator_group_size as usize).collect();
 
 					if T::EmergencyRotation::emergency_rotation_in_progress() {
 						// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
@@ -326,42 +346,41 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						if let Some(AuctionResult { minimum_active_bid, .. }) =
 							LastAuctionResult::<T>::get()
 						{
-							if let Some(number_of_validators) = validating_set
+							if let Some(new_target_validator_group_size) = next_validator_group
 								.iter()
 								.position(|(_, amount)| amount < &minimum_active_bid)
 							{
-								// Number of backup validators in existing set
-								let number_of_backup_validators =
-									(validator_group_size - number_of_validators) * 2 / 3;
+								let number_of_existing_backup_validators =
+									(target_validator_group_size - new_target_validator_group_size)
+										as u32 * (T::ActiveToBackupValidatorRatio::get() - 1) /
+										T::ActiveToBackupValidatorRatio::get();
 
-								let desired_number_of_backup_validators =
-									(number_of_backup_validators as u32).saturating_mul(
+								let number_of_backup_validators_to_be_included =
+									(number_of_existing_backup_validators as u32).saturating_mul(
 										T::PercentageOfBackupValidatorsInEmergency::get(),
 									) / 100;
 
-								validator_group_size = number_of_validators +
-									desired_number_of_backup_validators as usize;
+								target_validator_group_size = new_target_validator_group_size +
+									number_of_backup_validators_to_be_included as usize;
 
-								validating_set.truncate(validator_group_size);
+								next_validator_group.truncate(target_validator_group_size);
 							}
 						}
 					}
 
 					let minimum_active_bid =
-						validating_set.last().map(|(_, bid)| *bid).unwrap_or_default();
+						next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
 
-					let validating_set: Vec<_> = validating_set
+					let validating_set: Vec<_> = next_validator_group
 						.iter()
 						.map(|(validator_id, _)| (*validator_id).clone())
 						.collect();
 
-					let backup_group_size = min(
-						number_of_bidders - validator_group_size as u32,
-						validator_set_target_size / T::ActiveToBackupValidatorRatio::get(),
-					);
+					let backup_group_size =
+						target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
 
 					let remaining_bidders: Vec<_> =
-						bids.iter().skip(validator_group_size as usize).collect();
+						bids.iter().skip(target_validator_group_size as usize).collect();
 
 					let phase = AuctionPhase::ValidatorsSelected(
 						validating_set.clone(),
@@ -505,6 +524,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		if let Ok(index) = remaining_bidders.binary_search_by(|bid| new_bid.0.cmp(&bid.0)) {
 			remaining_bidders[index] = new_bid;
+			Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 		}
 	}
 
@@ -514,10 +534,10 @@ impl<T: Config> Pallet<T> {
 		remaining_bids.reverse();
 
 		let lowest_backup_validator_bid =
-			Self::lowest_bid(&Self::current_backup_validators(&remaining_bids));
+			Self::lowest_bid(&Self::current_backup_validators(remaining_bids));
 
 		let highest_passive_node_bid =
-			Self::highest_bid(&Self::current_passive_nodes(&remaining_bids));
+			Self::highest_bid(&Self::current_passive_nodes(remaining_bids));
 
 		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
@@ -556,7 +576,14 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	type Amount = T::Amount;
 
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+		// This would only happen if we had a active set of less than 3, not likely
 		if BackupGroupSize::<T>::get() == 0 {
+			return
+		}
+
+		// We validate that the staker is qualified and can be considered to be a BV if the stake
+		// meets the requirements
+		if !<Pallet<T> as QualifyValidator>::is_qualified(validator_id) {
 			return
 		}
 
@@ -570,7 +597,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 						Pallet::<T>::adjust_group(validator_id, true, remaining_bidders);
 					} else if amount > HighestPassiveNodeBid::<T>::get() {
 						let remaining_bidders = &mut RemainingBidders::<T>::get();
@@ -578,7 +604,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 					}
 				},
 				ChainflipAccountState::Backup =>
@@ -588,7 +613,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 							remaining_bidders,
 							(validator_id.clone(), amount),
 						);
-						Pallet::<T>::sort_remaining_bidders(remaining_bidders);
 						if amount < LowestBackupValidatorBid::<T>::get() {
 							Pallet::<T>::adjust_group(
 								validator_id,
@@ -600,5 +624,17 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				_ => {},
 			}
 		}
+	}
+}
+
+impl<T: Config> BackupValidators for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn backup_validators() -> Vec<Self::ValidatorId> {
+		RemainingBidders::<T>::get()
+			.iter()
+			.take(BackupGroupSize::<T>::get() as usize)
+			.map(|(validator_id, _)| validator_id.clone())
+			.collect()
 	}
 }

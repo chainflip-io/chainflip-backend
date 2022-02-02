@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use crate::p2p::AccountId;
+use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
 
@@ -77,13 +77,13 @@ macro_rules! derive_from_enum {
 macro_rules! derive_try_from_variant {
     ($variant: ty, $variant_path: path, $enum: ty) => {
         impl std::convert::TryFrom<$enum> for $variant {
-            type Error = &'static str;
+            type Error = $enum;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {
                 if let $variant_path(x) = data {
                     Ok(x)
                 } else {
-                    Err(stringify!($enum))
+                    Err(data)
                 }
             }
         }
@@ -115,9 +115,9 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let a = AccountId(['A' as u8; 32]);
-        let b = AccountId(['B' as u8; 32]);
-        let c = AccountId(['C' as u8; 32]);
+        let a = AccountId::new(['A' as u8; 32]);
+        let b = AccountId::new(['B' as u8; 32]);
+        let c = AccountId::new(['C' as u8; 32]);
 
         let signers = [a, c.clone(), b];
 
