@@ -291,7 +291,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
 
-    runtime_version: RwLock<sp_version::RuntimeVersion>,
+    pub runtime_version: RwLock<sp_version::RuntimeVersion>,
     genesis_hash: state_chain_runtime::Hash,
     pub signer:
         substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
