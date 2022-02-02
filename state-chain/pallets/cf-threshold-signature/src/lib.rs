@@ -33,6 +33,14 @@ use sp_std::{
 	prelude::*,
 };
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - Rename CeremonyIdCounter -> SigningCeremonyIdCounter
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 pub type CeremonyId = u64;
 
 #[frame_support::pallet]
@@ -40,9 +48,10 @@ pub mod pallet {
 	use super::*;
 	use codec::FullCodec;
 	use frame_support::{
-		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+		dispatch::{DispatchResultWithPostInfo, GetStorageVersion, UnfilteredDispatchable},
 		pallet_prelude::*,
-		storage::bounded_btree_set::BoundedBTreeSet,
+		storage::{bounded_btree_set::BoundedBTreeSet, migration},
+		traits::PalletInfo,
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
@@ -169,6 +178,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// A counter to generate fresh ceremony ids.
@@ -262,6 +272,33 @@ pub mod pallet {
 			num_retries as u64 *
 				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
 		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if <Self as GetStorageVersion>::on_chain_storage_version() == releases::V0 {
+				releases::V1.put::<Self>();
+
+				// The ceremony id storage item has been renamed.
+				if let Some(id_counter) = migration::take_storage_value::<CeremonyId>(
+					T::PalletInfo::name::<Self>()
+						.expect("This can't fail in a runtime built with `construct_runtime`")
+						.as_bytes(),
+					b"CeremonyIdCounter",
+					b"",
+				) {
+					SigningCeremonyIdCounter::<T, I>::put(id_counter);
+					T::DbWeight::get().reads_writes(2, 2)
+				} else {
+					log::warn!("Runtime upgrade expected an id counter but none was found.");
+					T::DbWeight::get().reads_writes(2, 1)
+				}
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		fn offchain_worker(_n: BlockNumberFor<T>) {}
+
+		fn integrity_test() {}
 	}
 
 	#[pallet::origin]
