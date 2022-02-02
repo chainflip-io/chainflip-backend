@@ -5,7 +5,7 @@ crate::impl_mock_epoch_info!(u64, u128, u32);
 macro_rules! impl_mock_epoch_info {
 	($account_id:ty, $balance:ty, $epoch_index:ty) => {
 		use std::cell::RefCell;
-		use $crate::EpochInfo;
+		use $crate::{EpochIndex, EpochInfo};
 
 		pub struct MockEpochInfo;
 
@@ -66,9 +66,28 @@ macro_rules! impl_mock_epoch_info {
 			}
 		}
 
+		thread_local! {
+			pub static LAST_EXPIRED_EPOCH: RefCell<EpochIndex> = RefCell::new(0);
+		}
+
+		pub struct MockLastExpiredEpoch(EpochIndex);
+
+		impl MockLastExpiredEpoch {
+			pub fn set_last_expired_epoch(last_expired_epoch: EpochIndex) {
+				LAST_EXPIRED_EPOCH.with(|cell| *(cell.borrow_mut()) = last_expired_epoch);
+			}
+		}
+
+		impl frame_support::traits::Get<EpochIndex> for MockLastExpiredEpoch {
+			fn get() -> EpochIndex {
+				LAST_EXPIRED_EPOCH.with(|cell| *cell.borrow())
+			}
+		}
+
 		impl EpochInfo for MockEpochInfo {
 			type ValidatorId = $account_id;
 			type Amount = $balance;
+			type LastExpiredEpoch = MockLastExpiredEpoch;
 
 			fn current_validators() -> Vec<Self::ValidatorId> {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())

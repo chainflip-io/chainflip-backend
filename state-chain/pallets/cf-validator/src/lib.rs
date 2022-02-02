@@ -471,6 +471,7 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type LastExpiredEpoch = ();
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()

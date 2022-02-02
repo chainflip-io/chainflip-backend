@@ -2,6 +2,10 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	Error, VoteMask, Votes,
 };
+use cf_traits::{
+	mocks::epoch_info::{MockEpochInfo, MockLastExpiredEpoch},
+	EpochTransitionHandler,
+};
 use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -117,5 +121,51 @@ fn delegated_call_should_emit_but_not_return_error() {
 			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
 		)
 		.into()]);
+	});
+}
+
+#[test]
+fn can_continue_to_witness_for_old_epochs() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
+		// Run through a few epochs; 1, 2 and 3
+		let current_epoch = 3;
+		for _ in 0..current_epoch {
+			MockEpochInfo::incr_epoch();
+			<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		}
+		// The last expired epoch
+		let expired_epoch = 2;
+		MockLastExpiredEpoch::set_last_expired_epoch(expired_epoch);
+
+		// Witness a call for this expired epoch
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			expired_epoch,
+			Default::default()
+		));
+
+		// Try to witness in an epoch that has expired
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(ALISSA),
+				call.clone(),
+				expired_epoch - 1,
+				Default::default()
+			),
+			Error::<Test>::EpochExpired
+		);
+
+		// And an epoch that doesn't yet exist
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(ALISSA),
+				call.clone(),
+				current_epoch + 1,
+				Default::default()
+			),
+			Error::<Test>::UnauthorisedWitness
+		);
 	});
 }
