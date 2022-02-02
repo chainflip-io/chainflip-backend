@@ -237,15 +237,22 @@ fn wrong_upgrade_conditions() {
 
 #[test]
 fn error_during_runtime_upgrade() {
+	// Set the mock to return false
 	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = false);
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Governance::chainflip_runtime_upgrade(
-				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
-				DUMMY_WASM_BLOB
-			),
-			<Error<Test>>::UpgradeHasFailed
+		// Expect the extrinsic to succeed
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			DUMMY_WASM_BLOB
+		));
+		// But emit an event with the thrown error
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::Governance(crate::Event::FailedExecution(
+				frame_system::Error::<Test>::FailedToExtractRuntimeVersion.into()
+			))
 		);
 	});
+	// Set the mock back to default
 	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = true);
 }

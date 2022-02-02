@@ -75,8 +75,6 @@ pub struct RuntimeUpgradeMock;
 
 impl RuntimeUpgrade for RuntimeUpgradeMock {
 	fn do_upgrade(_: Vec<u8>) -> DispatchResultWithPostInfo {
-		// TODO: at the moment this is not returning the error.
-		// fix this to make the error_during_runtime_upgrade test passing...
 		ensure!(
 			UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone()),
 			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
