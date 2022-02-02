@@ -235,14 +235,15 @@ pub mod pallet {
 			// Ensure execution conditions
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 
-			match T::RuntimeUpgrade::do_upgrade(code) {
-				Ok(_) => Self::deposit_event(Event::UpgradeChainflipRuntime),
-				Err(err) => Self::deposit_event(Event::FailedExecution(err.error)),
+			// Do the runtime upgrade
+			let runtime_upgrade = T::RuntimeUpgrade::do_upgrade(code);
+
+			// Emit an additional event if it was successful
+			if let Ok(_) = runtime_upgrade {
+				Self::deposit_event(Event::UpgradeChainflipRuntime);
 			}
 
-			// If successful emit an event to inform about the new upgrade
-			// Self::deposit_event(Event::UpgradeChainflipRuntime);
-			Ok(().into())
+			runtime_upgrade
 		}
 
 		/// Approve a proposal by a given proposal id
