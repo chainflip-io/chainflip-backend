@@ -42,7 +42,6 @@ jsonrpc-ws-server = "18.0.0"
 websocket = "0.24"
 ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
-# kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.14.0"
 lazy_static = "1.4"
 num = "0.4.0"
@@ -83,6 +82,15 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
+
+[dependencies.rocksdb]
+version = "0.17.0"
+# Disabling of default features, and using lz4 compression is primarily to avoid linker issues
+# resulting from the default compression using libs that conflict with the system libs
+# https://github.com/rust-rocksdb/rust-rocksdb/pull/555
+default-features = false
+features = ["lz4"]
+
 
 # substrate deps
 [dependencies.substrate-subxt]
