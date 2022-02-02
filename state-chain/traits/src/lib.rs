@@ -66,7 +66,7 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
-
+	/// A getter for last expired epoch
 	type LastExpiredEpoch: Get<EpochIndex>;
 
 	/// The current set of validators
