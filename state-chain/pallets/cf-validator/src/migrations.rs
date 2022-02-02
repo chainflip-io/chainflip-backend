@@ -1,5 +1,5 @@
 use cf_traits::{AuctionResult, Auctioneer};
-use frame_support::traits::Get;
+use frame_support::{storage::migration, traits::Get};
 
 use super::*;
 
@@ -46,9 +46,12 @@ pub mod v1 {
 			T::DbWeight::get().reads(1)
 		};
 
-		// Peer mappings can't be updated - delete them to force all Cfes to re-submit.
-		AccountPeerMapping::<T>::remove_all(None);
-		MappedPeers::<T>::remove_all(None);
+		for (_, (account_id, key)) in migration::storage_iter::<(T::AccountId, Ed25519PublicKey)>(
+			b"Validator",
+			b"AccountPeerMapping",
+		) {
+			AccountPeerMapping::<T>::insert(account_id.clone(), (account_id, key, 0u16, 0u128));
+		}
 
 		// Not sure if this is accurate but probably good enough.
 		auction_weight + T::DbWeight::get().writes(2)
