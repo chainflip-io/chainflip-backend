@@ -37,7 +37,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
-use sp_std::{cmp::min, convert::TryInto, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, marker::PhantomData, prelude::*};
 
 use cf_traits::RuntimeUpgrade;
 
@@ -382,10 +382,6 @@ pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {
 	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
-		// match System::set_code(frame_system::RawOrigin::Root.into(), code) {
-		// 	Ok(_) => true,
-		// 	Err(_) => false,
-		// }
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }
