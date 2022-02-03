@@ -538,24 +538,26 @@ impl<T: Config> Pallet<T> {
 		for validator in new_validators {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
+
+		// Calculate the new epoch index
+		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
+			*epoch = epoch.saturating_add(One::one());
+			(*epoch - 1, *epoch)
+		});
+
 		// The new bond set
 		Bond::<T>::set(new_bond);
-		// Set the block this epoch starts at
-		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 		// Set the expiry block number for the outgoing set
 		EpochExpiries::<T>::insert(
-			CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get(),
-			CurrentEpoch::<T>::get(),
+			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
+			old_epoch,
 		);
+
+		// Set the block this epoch starts at
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
 		// If we were in an emergency, mark as completed
 		Self::emergency_rotation_completed();
-
-		// Calculate the new epoch index
-		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
-			*epoch = epoch.saturating_add(One::one());
-			*epoch
-		});
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
