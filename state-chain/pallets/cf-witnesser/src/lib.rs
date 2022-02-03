@@ -228,8 +228,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
 		ensure!(
-			epoch_index >
-				<<T::EpochInfo as EpochInfo>::LastExpiredEpoch as Get<EpochIndex>>::get(),
+			epoch_index > <<T::EpochInfo as EpochInfo>::LastExpiredEpoch as Get<EpochIndex>>::get(),
 			Error::<T>::EpochExpired
 		);
 
