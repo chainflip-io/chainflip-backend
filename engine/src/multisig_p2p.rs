@@ -65,9 +65,10 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .get_local_listen_addresses()
         .await?
         .into_iter()
+        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
         .sorted()
         .dedup()
-        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
+        .sorted_by_key(|(_, _, ip_address)| !ip_address.is_global())
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
