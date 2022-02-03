@@ -64,14 +64,7 @@ impl KeyDB for PersistentKeyDB {
             .filter_map(|(key_id, key_info)| {
                 let key_id: KeyId = KeyId(key_id.into());
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                    Ok(keygen_info) => {
-                        slog::info!(
-                            self.logger,
-                            "Loaded key_info (key_id: {}) from database",
-                            key_id
-                        );
-                        Some((key_id, keygen_info))
-                    }
+                    Ok(keygen_info) => Some((key_id, keygen_info)),
                     Err(err) => {
                         slog::error!(
                             self.logger,

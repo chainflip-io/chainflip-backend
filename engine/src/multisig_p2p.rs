@@ -71,11 +71,13 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
+    let runtime_version = state_chain_client.runtime_version.read().await.spec_version;
+
     if *cfe_peer_id == peer_id {
         if Some(&(peer_id, port, ip_address))
             != account_to_peer.get(&state_chain_client.our_account_id)
         {
-            state_chain_client
+            let peer_id_submission = state_chain_client
                 .submit_signed_extrinsic(
                     logger,
                     pallet_cf_validator::Call::register_peer_id(
@@ -89,9 +91,15 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                         .unwrap(),
                     ),
                 )
-                .await?;
+                .await;
+            if peer_id_submission.is_err() {
+                slog::warn!(
+                    logger,
+                    "Could not register peer id. Runtime version {}.",
+                    runtime_version
+                )
+            }
         }
-
         Ok(())
     } else {
         Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file confugration option.", peer_id, cfe_peer_id)))
@@ -133,12 +141,28 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     .await
     .map_err(rpc_error_into_anyhow_error)?;
 
-    let mut account_to_peer = state_chain_client
+    // horrible hack for soundcheck
+
+    // IF runtime_version < 109
+    //      <AccountId, Public, 0, 0>
+    // ELSE
+    //      <AccountId, Public, u16, Ipv6Addr>
+
+    let runtime_version = state_chain_client.runtime_version.read().await.clone();
+
+    let mut account_to_peer;
+    slog::info!(logger, "Runtime version {}", runtime_version);
+    if runtime_version.spec_version >= 109 {
+        slog::info!(
+            logger,
+            "Using new peer mapping tuple type, <(AccountId, Public, u16, Ipv6Addr)>"
+        );
+        account_to_peer = state_chain_client
         .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
-                    .into(),
+                .into(),
             ),
         )
         .await?
@@ -154,6 +178,33 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
             ))
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
+    } else {
+        slog::info!(
+            logger,
+            "Using old peer mapping tuple type, <(AccountId, Public)>"
+        );
+        account_to_peer = state_chain_client
+        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public)>(
+            latest_block_hash,
+            StorageKey(
+                pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
+                .into(),
+            ),
+        )
+        .await?
+        .into_iter()
+        .map(|(account_id, public_key)| {
+            Ok((
+                account_id,
+                (
+                    public_key_to_peer_id(&public_key)?,
+                    0,
+                    0.into(),
+                )
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    }
 
     let mut peer_to_account = account_to_peer
         .iter()
