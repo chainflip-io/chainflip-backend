@@ -2,10 +2,7 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	Error, VoteMask, Votes,
 };
-use cf_traits::{
-	mocks::epoch_info::{MockEpochInfo, MockLastExpiredEpoch},
-	EpochInfo, EpochTransitionHandler,
-};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -54,7 +51,8 @@ fn call_on_threshold() {
 
 		// Check the deposited event to get the vote count.
 		let call_hash = frame_support::Hashable::blake2_256(&*call);
-		let stored_vec = Votes::<Test>::get(0, call_hash).unwrap_or(vec![]);
+		let stored_vec =
+			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or(vec![]);
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
@@ -140,7 +138,7 @@ fn can_continue_to_witness_for_old_epochs() {
 
 		// The last expired epoch
 		let expired_epoch = 1;
-		MockLastExpiredEpoch::set_last_expired_epoch(expired_epoch);
+		MockEpochInfo::set_last_expired_epoch(expired_epoch);
 
 		// Witness a call for one before the current epoch which has yet to expire
 		assert_ok!(Witnesser::witness_at_epoch(

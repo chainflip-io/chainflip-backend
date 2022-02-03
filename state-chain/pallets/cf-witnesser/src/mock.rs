@@ -94,6 +94,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
+		MockEpochInfo::incr_epoch();
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &VALIDATORS, Default::default());
 	});
 

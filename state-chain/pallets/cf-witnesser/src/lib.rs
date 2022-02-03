@@ -25,7 +25,7 @@ use frame_support::{
 	},
 	ensure,
 	pallet_prelude::Member,
-	traits::{EnsureOrigin, Get},
+	traits::EnsureOrigin,
 	Hashable,
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
@@ -227,10 +227,7 @@ impl<T: Config> Pallet<T> {
 		_block_number: T::BlockNumber,
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
-		ensure!(
-			epoch_index > <<T::EpochInfo as EpochInfo>::LastExpiredEpoch as Get<EpochIndex>>::get(),
-			Error::<T>::EpochExpired
-		);
+		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
 		// Look up the signer in the list of validators
 		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
