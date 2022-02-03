@@ -127,18 +127,16 @@ where
                 self.should_expire_at += MAX_STAGE_DURATION;
 
                 self.process_delayed();
-                return None;
+                None
             }
-            StageResult::Error(bad_validators, reason) => {
-                return Some(Err((
-                    authorised_state.idx_mapping.get_ids(bad_validators),
-                    reason,
-                )));
-            }
+            StageResult::Error(bad_validators, reason) => Some(Err((
+                authorised_state.idx_mapping.get_ids(bad_validators),
+                reason,
+            ))),
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
 
-                return Some(Ok(result));
+                Some(Ok(result))
             }
         }
     }

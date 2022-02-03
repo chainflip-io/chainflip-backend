@@ -410,8 +410,9 @@ jobs:
       - checkout
       - merge_target
       - run: sccache --show-stats
+      # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy
+          cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
           sccache --show-stats
 
   cargo-doc:

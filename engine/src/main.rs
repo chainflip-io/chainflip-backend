@@ -34,7 +34,7 @@ async fn main() {
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
     if let Some(health_check_settings) = &settings.health_check {
-        HealthMonitor::new(&health_check_settings, &root_logger)
+        HealthMonitor::new(health_check_settings, &root_logger)
             .run()
             .await;
     }

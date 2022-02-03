@@ -462,7 +462,7 @@ fn compute_keygen_result_info(
             },
             party_public_keys,
         }),
-        validator_map: common.validator_mapping.clone(),
+        validator_map: common.validator_mapping,
     }
 }
 

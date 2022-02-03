@@ -168,7 +168,7 @@ impl Settings {
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
         let settings = Self::from_default_file(
-            &match &opts.config_path.clone() {
+            match &opts.config_path.clone() {
                 Some(path) => path,
                 None => "config/Default.toml",
             },

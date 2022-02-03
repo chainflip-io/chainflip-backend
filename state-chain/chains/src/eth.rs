@@ -128,10 +128,7 @@ impl ParityBit {
 	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
 	///
 	/// Returns `None` if conversion was not possible for this chain id.
-	pub(super) fn to_eth_recovery_id(
-		&self,
-		chain_id: u64,
-	) -> Option<ethereum::TransactionRecoveryId> {
+	pub(super) fn eth_recovery_id(&self, chain_id: u64) -> Option<ethereum::TransactionRecoveryId> {
 		let offset = match self {
 			ParityBit::Odd => 36,
 			ParityBit::Even => 35,
@@ -576,7 +573,7 @@ pub type RawSignedTransaction = Vec<u8>;
 /// **TODO: In-depth review to ensure correctness.**
 pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
-	signed: &RawSignedTransaction,
+	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
 ) -> Result<(), TransactionVerificationError> {
 	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
@@ -598,7 +595,7 @@ pub fn verify_transaction(
 	let parity_to_recovery_id = |odd: bool, chain_id: u64| {
 		let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
 		parity
-			.to_eth_recovery_id(chain_id)
+			.eth_recovery_id(chain_id)
 			.ok_or(TransactionVerificationError::InvalidChainId)
 	};
 	let (r, s, v) = match decoded_tx {

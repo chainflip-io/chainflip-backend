@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Point {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Point::deserialize(&bytes)
-            .map(|x| Point(x))
+            .map(Point)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for Scalar {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Scalar::deserialize(&bytes)
-            .map(|x| Scalar(x))
+            .map(Scalar)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -144,7 +144,7 @@ impl Scalar {
     }
 
     pub fn invert(&self) -> Option<Self> {
-        self.0.invert().map(|x| Scalar(x))
+        self.0.invert().map(Scalar)
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -156,6 +156,7 @@ impl Scalar {
     }
 }
 
+// TODO: Look at how to dedup these adds
 impl std::ops::Add for &Scalar {
     type Output = Scalar;
 
@@ -168,7 +169,7 @@ impl std::ops::Add for Scalar {
     type Output = Scalar;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Scalar>::add(&self, &rhs)
     }
 }
 
@@ -236,6 +237,8 @@ impl std::ops::Mul<&Scalar> for &Point {
     }
 }
 
+// TODO: Look at how to dedup these adds
+// (See above impl Add for Scalar too)
 impl std::ops::Add for &Point {
     type Output = Point;
 
@@ -248,7 +251,7 @@ impl std::ops::Add for Point {
     type Output = Point;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Point>::add(&self, &rhs)
     }
 }
 

@@ -179,7 +179,7 @@ mod tests_read_clean_and_decode_hex_str_file {
 /// Makes a stream that outputs () approximately every duration
 pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
     Box::pin(futures::stream::unfold((), move |_| async move {
-        Some((tokio::time::sleep(duration.clone()).await, ()))
+        Some((tokio::time::sleep(duration).await, ()))
     }))
 }
 

@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{btree_map::Entry, BTreeMap},
     convert::{TryFrom, TryInto},
     net::Ipv6Addr,
     sync::Arc,
@@ -67,8 +67,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .into_iter()
         .sorted()
         .dedup()
-        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
-        .next()
+        .find(|(_, _, ip_address)| !ip_address.is_loopback())
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
     if *cfe_peer_id == peer_id {
@@ -157,7 +156,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 
     let mut peer_to_account = account_to_peer
         .iter()
-        .map(|(account_id, (peer_id, _, _))| (peer_id.clone(), account_id.clone()))
+        .map(|(account_id, (peer_id, _, _))| (*peer_id, account_id.clone()))
         .collect::<BTreeMap<_, _>>();
 
     slog::info!(
@@ -219,7 +218,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                         incoming_p2p_message_sender.send((
                             account_id.clone(),
                             bincode::deserialize::<MultisigMessage>(&serialised_message[..]).with_context(|| format!("Failed to deserialise message from Validator {}.", account_id))?
-                        )).map_err(anyhow::Error::new).with_context(|| format!("Failed to send message via channel"))?;
+                        )).map_err(anyhow::Error::new).with_context(|| "Failed to send message via channel".to_string())?;
                         Ok(account_id)
                     } else {
                         Err(anyhow::Error::msg(format!("Missing Account Id mapping for Peer Id: {}", peer_id)))
@@ -238,7 +237,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     logger: &slog::Logger
                 ) {
                     match async {
-                        account_ids.clone().into_iter().map(|account_id| match account_to_peer.get(&account_id) {
+                        account_ids.clone().into_iter().map(|account_id| match account_to_peer.get(account_id) {
                             Some((peer_id, _, _)) => Ok(peer_id.into()),
                             None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
                         }).collect::<Result<Vec<_>, _>>()
@@ -270,13 +269,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                         match account_peer_mapping_change {
                             AccountPeerMappingChange::Registered(port, ip_address) => {
                                 if let Some((existing_peer_id, _, _)) = account_to_peer.get(&account_id) {
-                                    peer_to_account.remove(&existing_peer_id);
+                                    peer_to_account.remove(existing_peer_id);
                                 }
-                                if peer_to_account.contains_key(&peer_id) {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
-                                } else {
-                                    peer_to_account.insert(peer_id.clone(), account_id.clone());
-                                    account_to_peer.insert(account_id, (peer_id.clone(), port, ip_address));
+                                if let Entry::Vacant(entry) = peer_to_account.entry(peer_id) {
+                                    entry.insert(account_id.clone());
+                                    account_to_peer.insert(account_id, (peer_id, port, ip_address));
                                     if cfe_peer_id != peer_id {
                                         if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
                                             slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
@@ -284,6 +281,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                                             slog::info!(logger, "Added peer {} to reserved set", peer_id);
                                         }
                                     }
+                                } else {
+                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
                                 }
                             }
                             AccountPeerMappingChange::Unregistered => {
