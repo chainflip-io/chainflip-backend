@@ -61,7 +61,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (peer_id, port, ip_address) = state_chain_client
+    let (peer_id, port, _ip_address) = state_chain_client
         .get_local_listen_addresses()
         .await?
         .into_iter()
@@ -70,6 +70,10 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .filter(|(_, _, ip_address)| !ip_address.is_loopback())
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
+
+    let ip_address = public_ip::addr_v6()
+        .await
+        .expect("Couldn't get nodes public ip address");
 
     let runtime_version = state_chain_client.runtime_version.read().await.spec_version;
 
