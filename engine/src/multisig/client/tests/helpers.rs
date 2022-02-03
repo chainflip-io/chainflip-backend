@@ -472,7 +472,7 @@ impl CeremonyRunnerStrategy<SchnorrSignature> for SigningCeremonyRunner {
     }
 }
 impl SigningCeremonyRunner {
-    pub fn new_without_select(
+    pub fn new_with_all_signers(
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
@@ -490,7 +490,7 @@ impl SigningCeremonyRunner {
         )
     }
 
-    pub fn new(
+    pub fn new_with_threshold_subset_of_signers(
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
@@ -506,7 +506,7 @@ impl SigningCeremonyRunner {
         );
 
         (
-            Self::new_without_select(signers, ceremony_id, key_id, message_hash, rng),
+            Self::new_with_all_signers(signers, ceremony_id, key_id, message_hash, rng),
             non_signers,
         )
     }
@@ -529,7 +529,7 @@ pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashM
     )
     .await;
 
-    SigningCeremonyRunner::new(
+    SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
         1,
         key_id,

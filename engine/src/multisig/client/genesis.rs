@@ -108,13 +108,14 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
                     {
                         // Check Key Works
                         use rand_legacy::FromEntropy;
-                        let (mut signing_ceremony, non_signing_nodes) = SigningCeremonyRunner::new(
-                            nodes,
-                            1,
-                            key_id.clone(),
-                            MESSAGE_HASH.clone(),
-                            Rng::from_entropy(),
-                        );
+                        let (mut signing_ceremony, non_signing_nodes) =
+                            SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+                                nodes,
+                                1,
+                                key_id.clone(),
+                                MESSAGE_HASH.clone(),
+                                Rng::from_entropy(),
+                            );
                         standard_signing(&mut signing_ceremony).await;
 
                         break (

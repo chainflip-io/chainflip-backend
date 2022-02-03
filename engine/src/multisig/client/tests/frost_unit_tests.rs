@@ -247,13 +247,14 @@ async fn should_delay_rts_until_key_is_ready() {
         keygen::VerifyComplaints5
     );
 
-    let (mut signing_ceremony, non_signing_nodes) = SigningCeremonyRunner::new(
-        keygen_ceremony.nodes,
-        1,
-        key_id,
-        MESSAGE_HASH.clone(),
-        Rng::from_seed([4; 32]),
-    );
+    let (mut signing_ceremony, non_signing_nodes) =
+        SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+            keygen_ceremony.nodes,
+            1,
+            key_id,
+            MESSAGE_HASH.clone(),
+            Rng::from_seed([4; 32]),
+        );
 
     // Send the request to sign
     signing_ceremony.request_without_gather();
@@ -405,7 +406,7 @@ async fn pending_rts_should_expire() {
     );
 
     // Send request to sign with the key id currently unknown to the client
-    let (mut signing_ceremony, _) = SigningCeremonyRunner::new(
+    let (mut signing_ceremony, _) = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         keygen_ceremony.nodes,
         signing_ceremony_id,
         key_id,
@@ -609,7 +610,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
     let signing_ceremony_id = 1;
 
-    let mut signing_ceremony = SigningCeremonyRunner::new(
+    let mut signing_ceremony = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
         signing_ceremony_id,
         key_id,
@@ -702,7 +703,7 @@ async fn should_sign_with_all_parties() {
     )
     .await;
 
-    let mut signing_ceremony = SigningCeremonyRunner::new_without_select(
+    let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         nodes,
         1,
         key_id,
