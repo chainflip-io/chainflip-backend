@@ -237,7 +237,7 @@ async fn should_report_on_invalid_blame_response() {
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
     );
-    let [bad_node_id, target_node_id] = ceremony.select_account_ids();
+    let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
 
     // stage 1
     let messages = ceremony.request().await;
@@ -249,17 +249,17 @@ async fn should_report_on_invalid_blame_response() {
         keygen::SecretShare3
     );
 
-    // stage 3 - with bad_node_id, and target_node_id sending a bad secret share
+    // stage 3 - with bad_node_id_1, and bad_node_id_2 sending a bad secret share
     *messages
-        .get_mut(&bad_node_id)
+        .get_mut(&bad_node_id_1)
         .unwrap()
         .get_mut(&target_node_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
 
     *messages
-        .get_mut(&target_node_id)
+        .get_mut(&bad_node_id_2)
         .unwrap()
-        .get_mut(&ACCOUNT_IDS[3])
+        .get_mut(&target_node_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
 
     let mut messages = helpers::run_stages!(
@@ -270,12 +270,12 @@ async fn should_report_on_invalid_blame_response() {
         keygen::BlameResponse6
     );
 
-    // stage 7 -  bad_node_id also sends a bad blame responses, and so gets blamed when ceremony finished
+    // stage 7 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
     let secret_share = SecretShare3::create_random(&mut ceremony.rng);
-    for (_, message) in messages.get_mut(&bad_node_id).unwrap() {
+    for (_, message) in messages.get_mut(&bad_node_id_1).unwrap() {
         *message = keygen::BlameResponse6(
             std::iter::once((
-                party_idx_mapping.get_idx(&target_node_id).unwrap(),
+                party_idx_mapping.get_idx(&bad_node_id_2).unwrap(),
                 secret_share.clone(),
             ))
             .collect(),
@@ -286,7 +286,7 @@ async fn should_report_on_invalid_blame_response() {
         .run_stage::<keygen::VerifyBlameResponses7, _, _>(messages)
         .await;
     ceremony.distribute_messages(messages);
-    ceremony.complete_with_error(&[bad_node_id.clone()]).await;
+    ceremony.complete_with_error(&[bad_node_id_1.clone()]).await;
 }
 
 #[tokio::test]
