@@ -56,12 +56,6 @@ mod tests {
 				Error::<Test>::InvalidClaimPeriod
 			);
 
-			let invalid_claim_period = 0;
-			assert_noop!(
-				ValidatorPallet::update_period_for_claims(Origin::root(), invalid_claim_period),
-				Error::<Test>::InvalidClaimPeriod
-			);
-
 			let blocks_per_epoch = 42;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), blocks_per_epoch));
 			assert!(<ValidatorPallet as EpochInfo>::is_auction_phase(), "should be able to claim");
@@ -82,6 +76,14 @@ mod tests {
 				percentage_claim_period
 			));
 			assert!(<ValidatorPallet as EpochInfo>::is_auction_phase(), "should be able to claim");
+
+			let no_claims_at_all = 0;
+			assert_ok!(ValidatorPallet::update_period_for_claims(Origin::root(), no_claims_at_all));
+			assert_eq!(
+				false,
+				<ValidatorPallet as EpochInfo>::is_auction_phase(),
+				"no claims possible"
+			);
 		});
 	}
 
