@@ -8,34 +8,39 @@ use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
 
+use crate::eth::BlockHeaderable;
+
 use super::EthRpcApi;
 
-pub fn safe_eth_log_header_stream<BlockHeaderStream>(
+pub fn safe_eth_log_header_stream<BlockHeaderStream, EthBlockHeader>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = BlockHeader>
+) -> impl Stream<Item = EthBlockHeader>
 where
-    BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
+    BlockHeaderStream: Stream<Item = Result<EthBlockHeader, web3::Error>>,
+    EthBlockHeader: BlockHeaderable,
 {
-    struct StreamAndBlocks<BlockHeaderStream>
+    // Unfold state struct
+    struct StreamAndBlocks<BlockHeaderStream, EthBlockHeader>
     where
-        BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
+        BlockHeaderStream: Stream<Item = Result<EthBlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        unsafe_blocks: VecDeque<BlockHeader>,
+        unsafe_blocks: VecDeque<EthBlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
         unsafe_blocks: Default::default(),
     };
+
     Box::pin(stream::unfold(init_data, move |mut state| async move {
         let loop_state = loop {
             if let Some(header) = state.stream.next().await {
                 let header = header.unwrap();
-                let number = header.number.unwrap();
+                let number = header.number().unwrap();
 
                 if let Some(last_unsafe_block_header) = state.unsafe_blocks.back() {
-                    let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
+                    let last_unsafe_block_number = last_unsafe_block_header.number().unwrap();
                     assert!(number <= last_unsafe_block_number + 1);
                     if number <= last_unsafe_block_number {
                         // if we receive two of the same block number then we still need to drop the first
@@ -51,7 +56,7 @@ where
 
                 if let Some(header) = state.unsafe_blocks.front() {
                     if header
-                        .number
+                        .number()
                         .expect("all blocks on the chain have block numbers")
                         .saturating_add(U64::from(safety_margin))
                         <= number

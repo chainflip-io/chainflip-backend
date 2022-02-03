@@ -1,3 +1,4 @@
+mod http_observer;
 pub mod key_manager;
 pub mod stake_manager;
 
@@ -15,11 +16,14 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use web3::types::H2048;
 use web3::{
     api::SubscriptionStream,
     ethabi::Address,
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
+
+use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
@@ -30,7 +34,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc, time::Duration};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -43,6 +47,42 @@ use tokio_stream::{Stream, StreamExt};
 use event_common::EventWithCommon;
 
 use async_trait::async_trait;
+
+pub trait BlockHeaderable {
+    fn hash(&self) -> Option<H256>;
+
+    fn logs_bloom(&self) -> Option<H2048>;
+
+    fn number(&self) -> Option<U64>;
+}
+
+impl BlockHeaderable for web3::types::BlockHeader {
+    fn hash(&self) -> Option<H256> {
+        self.hash
+    }
+
+    fn logs_bloom(&self) -> Option<H2048> {
+        Some(self.logs_bloom)
+    }
+
+    fn number(&self) -> Option<U64> {
+        self.number
+    }
+}
+
+impl<TX> BlockHeaderable for web3::types::Block<TX> {
+    fn hash(&self) -> Option<H256> {
+        self.hash
+    }
+
+    fn logs_bloom(&self) -> Option<H2048> {
+        self.logs_bloom
+    }
+
+    fn number(&self) -> Option<U64> {
+        self.number
+    }
+}
 
 #[cfg(test)]
 use mockall::automock;
@@ -372,30 +412,23 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    /// Get an event stream for the contract, returning the stream only if the head of the stream is
-    /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
+    async fn ws_event_stream<BlockHeaderStream, EthRpc>(
         &self,
-        eth_rpc: &EthRpc,
-        // usually the start of the validator's active window
         from_block: u64,
+        deployed_address: H160,
+        safe_head_stream: BlockHeaderStream,
+        decode_log: Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>,
+        eth_rpc: &EthRpc,
         logger: &slog::Logger,
-    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>,
+    >
+    where
+        BlockHeaderStream: Stream<Item = BlockHeader> + 'static + Send,
+        EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
     {
-        let deployed_address = self.get_deployed_address();
-        let decode_log = self.decode_log_closure()?;
-        slog::info!(
-            logger,
-            "Subscribing to Ethereum events from contract at address: {:?}",
-            hex::encode(deployed_address)
-        );
-
-        let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
-
-        let mut safe_head_stream =
-            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
-
         let from_block = U64::from(from_block);
+        let mut safe_head_stream = Box::pin(safe_head_stream);
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = current_best_safe_block_header
@@ -435,7 +468,7 @@ pub trait EthObserver {
 
                 let logger = logger.clone();
                 return Ok(
-                    Box::new(
+                    Box::pin(
                         tokio_stream::iter(past_logs).chain(future_logs).map(
                             move |unparsed_log| -> Result<
                                 EventWithCommon<Self::EventParameters>,
@@ -456,6 +489,44 @@ pub trait EthObserver {
             }
         }
         Err(anyhow::Error::msg("No events in safe head stream"))
+    }
+
+    /// Get an event stream for the contract, returning the stream only if the head of the stream is
+    /// ahead of from_block (otherwise it will wait until we have reached from_block)
+    async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
+        &self,
+        eth_rpc: &EthRpc,
+        // usually the start of the validator's active window
+        from_block: u64,
+        logger: &slog::Logger,
+    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
+    {
+        let deployed_address = self.get_deployed_address();
+        let decode_log = self.decode_log_closure()?;
+        slog::info!(
+            logger,
+            "Subscribing to Ethereum events from contract at address: {:?}",
+            hex::encode(deployed_address)
+        );
+
+        let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
+
+        let safe_head_stream = safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+
+        let ws_stream = self
+            .ws_event_stream(
+                from_block,
+                deployed_address,
+                safe_head_stream,
+                decode_log,
+                eth_rpc,
+                logger,
+            )
+            .await;
+
+        // we get events from the ws stream
+
+        Err(anyhow::Error::msg("NO stream, RIP"))
     }
 
     fn decode_log_closure(
