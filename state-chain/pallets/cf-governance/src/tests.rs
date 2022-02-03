@@ -221,7 +221,7 @@ fn upgrade_runtime_successfully() {
 #[test]
 fn wrong_upgrade_conditions() {
 	// Set the mock to return false
-	UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = false);
+	UpgradeConditionMock::set(false);
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Governance::chainflip_runtime_upgrade(
@@ -231,14 +231,13 @@ fn wrong_upgrade_conditions() {
 			<Error<Test>>::UpgradeConditionsNotMet
 		);
 	});
-	// Set the mock back to default
-	UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = true);
 }
 
 #[test]
 fn error_during_runtime_upgrade() {
 	// Set the mock to return false
-	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = false);
+	RuntimeUpgradeMock::set(false);
+	UpgradeConditionMock::set(true);
 	new_test_ext().execute_with(|| {
 		// Expect the extrinsic to succeed
 		assert_noop!(
@@ -249,6 +248,4 @@ fn error_during_runtime_upgrade() {
 			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
 		);
 	});
-	// Set the mock back to default
-	UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = true);
 }

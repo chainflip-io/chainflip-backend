@@ -71,6 +71,12 @@ impl ExecutionCondition for UpgradeConditionMock {
 	}
 }
 
+impl UpgradeConditionMock {
+	pub fn set(mode: bool) {
+		UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = mode);
+	}
+}
+
 pub struct RuntimeUpgradeMock;
 
 impl RuntimeUpgrade for RuntimeUpgradeMock {
@@ -80,6 +86,12 @@ impl RuntimeUpgrade for RuntimeUpgradeMock {
 			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
 		);
 		Ok(().into())
+	}
+}
+
+impl RuntimeUpgradeMock {
+	pub fn set(mode: bool) {
+		UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = mode);
 	}
 }
 
