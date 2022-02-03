@@ -80,7 +80,7 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> EpochIndex;
 
-	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
+	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
