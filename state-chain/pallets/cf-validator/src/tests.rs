@@ -147,7 +147,6 @@ mod tests {
 			MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
 				winners: new_validators.clone(),
 				minimum_active_bid: Zero::zero(),
-				auction_index: 1,
 			}));
 
 			// Force an auction at the next block
@@ -196,7 +195,6 @@ mod tests {
 			MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
 				winners: new_validators.clone(),
 				minimum_active_bid: bond,
-				auction_index: 1,
 			}));
 
 			assert_eq!(

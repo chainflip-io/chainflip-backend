@@ -20,20 +20,12 @@ mod tests {
 			assert_eq!(
 				last_event(),
 				mock::Event::AuctionPallet(crate::Event::AuctionCompleted(
-					auction_result.auction_index,
 					expected_winning_set().0
 				)),
 			);
 
 			<AuctionPallet as Auctioneer>::confirm_auction(auction_result.clone())
 				.expect("this should confirm as auction index will match");
-
-			assert_eq!(
-				last_event(),
-				mock::Event::AuctionPallet(crate::Event::AuctionConfirmed(
-					auction_result.auction_index
-				)),
-			);
 
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 			let AuctionResult { winners, minimum_active_bid, .. } = run_complete_auction();
@@ -43,42 +35,6 @@ mod tests {
 				expected_winning_set(),
 				"running subsequent auction with new bidders should new winners"
 			);
-		});
-	}
-
-	#[test]
-	fn should_restart_auction_and_discard_old() {
-		new_test_ext().execute_with(|| {
-			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
-
-			let first_auction_result =
-				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
-					.expect("the auction should run");
-
-			assert_eq!(
-				(first_auction_result.winners.clone(), first_auction_result.minimum_active_bid),
-				expected_winning_set(),
-				"run first auction and expect winners"
-			);
-
-			let second_auction_result =
-				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
-					.expect("the auction should run");
-
-			assert_eq!(
-				(second_auction_result.winners.clone(), second_auction_result.minimum_active_bid),
-				expected_winning_set(),
-				"run second auction and expect winners"
-			);
-
-			assert_noop!(
-				<AuctionPallet as Auctioneer>::confirm_auction(first_auction_result.clone()),
-				AuctionError::InvalidIndex
-			);
-
-			assert_ok!(<AuctionPallet as Auctioneer>::confirm_auction(
-				second_auction_result.clone()
-			));
 		});
 	}
 

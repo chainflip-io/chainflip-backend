@@ -6,7 +6,7 @@ use frame_support::{
 };
 
 use cf_traits::{
-	mocks::chainflip_account::MockChainflipAccount, AuctionError, AuctionIndex, AuctionResult, Bid,
+	mocks::chainflip_account::MockChainflipAccount, AuctionError, AuctionResult, Bid,
 	BidderProvider, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing, QualifyConfig,
 	QualifyValidator, VaultRotator,
 };
@@ -105,7 +105,6 @@ impl pallet_session::Config for Test {
 pub struct MockAuctioneer;
 
 thread_local! {
-	pub static AUCTION_INDEX: RefCell<AuctionIndex> = RefCell::new(0);
 	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, AuctionError>> = RefCell::new(Ok(Default::default()));
 	pub static AUCTION_CONFIRM_BEHAVIOUR: RefCell<Result<(), AuctionError>> = RefCell::new(Ok(()));
 }
@@ -119,13 +118,6 @@ impl MockAuctioneer {
 	pub fn set_confirm_behaviour(behaviour: Result<(), AuctionError>) {
 		AUCTION_CONFIRM_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
-		});
-	}
-
-	pub fn next_auction() {
-		AUCTION_INDEX.with(|cell| {
-			let mut current_auction = cell.borrow_mut();
-			*current_auction = *current_auction + 1;
 		});
 	}
 }
@@ -148,10 +140,6 @@ impl Auctioneer for MockAuctioneer {
 		_auction: AuctionResult<Self::ValidatorId, Self::Amount>,
 	) -> Result<(), AuctionError> {
 		AUCTION_CONFIRM_BEHAVIOUR.with(|cell| *cell.borrow())
-	}
-
-	fn auction_index() -> AuctionIndex {
-		AUCTION_INDEX.with(|cell| *(*cell).borrow())
 	}
 }
 
@@ -283,7 +271,6 @@ pub const BLOCKS_TO_SESSION_ROTATION: u64 = 4;
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	// Initialise the auctioneer with an auction result
 	MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
-		auction_index: 1,
 		winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
 		minimum_active_bid: MINIMUM_ACTIVE_BID_AT_GENESIS,
 	}));

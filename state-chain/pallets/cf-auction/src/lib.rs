@@ -14,9 +14,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionResult, Auctioneer, BackupValidators,
-	BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo,
-	QualifyValidator, RemainingBid, StakeHandler,
+	ActiveValidatorRange, AuctionError, AuctionResult, Auctioneer, BackupValidators,
+	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
+	EpochInfo, QualifyValidator, RemainingBid, StakeHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -27,7 +27,6 @@ use sp_std::{cmp::min, prelude::*};
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AuctionIndex, Chainflip, ChainflipAccount, EmergencyRotation, RemainingBid};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -69,11 +68,6 @@ pub mod pallet {
 	pub(super) type ActiveValidatorSizeRange<T: Config> =
 		StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
-	/// The index of the auction we are running
-	#[pallet::storage]
-	#[pallet::getter(fn current_auction_index)]
-	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, AuctionIndex, ValueQuery>;
-
 	/// The remaining set of bidders after an auction
 	#[pallet::storage]
 	#[pallet::getter(fn remaining_bidders)]
@@ -99,9 +93,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An auction has a set of winners \[auction_index, winners\]
-		AuctionCompleted(AuctionIndex, Vec<T::ValidatorId>),
-		/// The auction has been confirmed off-chain \[auction_index\]
-		AuctionConfirmed(AuctionIndex),
+		AuctionCompleted(Vec<T::ValidatorId>),
 		/// The active validator range upper limit has changed \[before, after\]
 		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
 	}
@@ -181,10 +173,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
-	fn auction_index() -> AuctionIndex {
-		CurrentAuctionIndex::<T>::get()
-	}
-
 	// Run some basic rules on what we consider as valid bidders
 	// At the moment this includes checking that their bid is more than 0, which
 	// shouldn't be possible and whether they have registered their session keys
@@ -195,11 +183,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	where
 		Q: QualifyValidator<ValidatorId = T::ValidatorId>,
 	{
-		// A new auction has started, store and emit the event
-		let auction_index = CurrentAuctionIndex::<T>::mutate(|idx| {
-			*idx += 1;
-			*idx
-		});
 		let mut bids = T::BidderProvider::get_bidders();
 		// Number one rule - If we have a bid at 0 then please leave
 		bids.retain(|(_, amount)| !amount.is_zero());
@@ -274,9 +257,9 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		RemainingBidders::<T>::put(remaining_bidders);
 		BackupGroupSize::<T>::put(backup_group_size);
 
-		Self::deposit_event(Event::AuctionCompleted(auction_index, winners.clone()));
+		Self::deposit_event(Event::AuctionCompleted(winners.clone()));
 
-		Ok(AuctionResult { auction_index, winners, minimum_active_bid })
+		Ok(AuctionResult { winners, minimum_active_bid })
 	}
 
 	// Things have gone well and we have a set of 'Winners', congratulations.
@@ -285,11 +268,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	fn confirm_auction(
 		auction: AuctionResult<Self::ValidatorId, Self::Amount>,
 	) -> Result<(), AuctionError> {
-		ensure!(
-			CurrentAuctionIndex::<T>::get() == auction.auction_index,
-			AuctionError::InvalidIndex
-		);
-
 		let update_status = |validators: Vec<T::ValidatorId>, state| {
 			for validator_id in validators {
 				T::ChainflipAccount::update_state(&validator_id.into(), state);
@@ -316,8 +294,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			passive_nodes.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
 			ChainflipAccountState::Passive,
 		);
-
-		Self::deposit_event(Event::AuctionConfirmed(CurrentAuctionIndex::<T>::get()));
 
 		Ok(())
 	}

@@ -18,7 +18,6 @@ pub type BlockNumber = u32;
 pub type FlipBalance = u128;
 /// The type used as an epoch index.
 pub type EpochIndex = u32;
-pub type AuctionIndex = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -136,7 +135,6 @@ pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
 /// A successful auction result
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct AuctionResult<ValidatorId, Amount> {
-	pub auction_index: AuctionIndex,
 	pub winners: Vec<ValidatorId>,
 	pub minimum_active_bid: Amount,
 }
@@ -146,18 +144,15 @@ pub type ActiveValidatorRange = (u32, u32);
 
 /// Auctioneer
 ///
-/// The auctioneer is responsible in running and confirming an auction.  With the provided
-/// `BidderProvider` the bidders are selected and returned as an `AuctionResult` calling
-/// `run_aucion()`. It is required that for an auction to be accepted `confirm_auction()` will need
-/// to be called with result of the previous auction run.  A new auction is ran on each call of
-/// `resolve_auction()` which discards the previous auction run.
+/// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
+/// returned as an `AuctionResult` calling `run_aucion()`. It is required that for an auction to be
+/// accepted `confirm_auction()` will need to be called with result of the previous auction run.  A
+/// new auction is ran on each call of `resolve_auction()` which discards the previous auction run.
 
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
 
-	/// The current auction index
-	fn auction_index() -> AuctionIndex;
 	/// Run an auction by qualifying a validator
 	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
 	where

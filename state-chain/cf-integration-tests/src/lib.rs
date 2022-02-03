@@ -660,7 +660,6 @@ mod tests {
 		// - The minimum active bid is set at the stake for a genesis validator
 		// - The genesis validators are available via validator_lookup()
 		// - The genesis validators are in the session
-		// - No auction has been run yet
 		// - The genesis validators are considered offline for this heartbeat interval
 		// - No emissions have been made
 		// - No rewards have been distributed
@@ -690,12 +689,6 @@ mod tests {
 						"the account has its stake"
 					);
 				}
-
-				assert_eq!(
-					Auction::current_auction_index(),
-					1,
-					"we should have had the genesis auction"
-				);
 
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
 				let mut validators = Validator::validators();
@@ -781,7 +774,7 @@ mod tests {
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
-		use state_chain_runtime::{Auction, HeartbeatBlockInterval, Validator};
+		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -829,22 +822,11 @@ mod tests {
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"we should have ran an auction"
-					);
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
 					// Next block, another auction
 					testnet.move_forward_blocks(1);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						2,
-						"we should have ran another auction"
-					);
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -857,11 +839,6 @@ mod tests {
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
-					assert!(
-						Auction::current_auction_index() > 2,
-						"we should have ran several auctions"
-					);
-
 					assert_eq!(2, Validator::epoch_index());
 				});
 		}
@@ -871,7 +848,6 @@ mod tests {
 		// set to 100
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
-		// - A new auction index has been generated
 		// - We have two nodes that haven't registered their session keys
 		// - New validators have the state of Validator with the last active epoch stored
 		// - Nodes without keys state remains passive with `None` as their last active epoch
@@ -911,12 +887,6 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					// We should be in auction 1
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -1053,12 +1023,6 @@ mod tests {
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 					// Start auction
 					testnet.move_forward_blocks(1);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
 
 					// We will try to claim some stake
 					for node in &nodes {
@@ -1197,12 +1161,6 @@ mod tests {
 						"We should still be in the genesis epoch"
 					);
 
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
-
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(
@@ -1289,12 +1247,6 @@ mod tests {
 					}
 
 					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"we should have ran auction at genesis"
-					);
-
-					assert_eq!(
 						1,
 						Validator::epoch_index(),
 						"We should still be in the first epoch"
@@ -1303,12 +1255,6 @@ mod tests {
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						2,
-						"we should have ran 2 auctions now"
-					);
 
 					assert_eq!(
 						GENESIS_EPOCH + 1,
@@ -1351,12 +1297,6 @@ mod tests {
 
 					// The next block should see an auction started
 					testnet.move_forward_blocks(1);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						3,
-						"this should be the third auction"
-					);
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);

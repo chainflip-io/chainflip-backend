@@ -511,8 +511,9 @@ pub mod pallet {
 			// Run an auction on genesis. We use `ValidatorUnchecked` to skip
 			// any valdation for the bidders which are our genesis nodes which
 			// are already staked
-			let auction_result = T::Auctioneer::resolve_auction::<ValidatorUnchecked<T::ValidatorId>>()
-				.expect("an auction is run for our genesis bidders");
+			let auction_result =
+				T::Auctioneer::resolve_auction::<ValidatorUnchecked<T::ValidatorId>>()
+					.expect("an auction is run for our genesis bidders");
 			T::Auctioneer::confirm_auction(auction_result.clone())
 				.expect("the auction is confirmed");
 			Pallet::<T>::start_new_epoch(
