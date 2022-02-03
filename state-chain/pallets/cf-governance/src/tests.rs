@@ -2,7 +2,7 @@ use crate::{
 	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
 };
 use cf_traits::mocks::time_source;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_err, assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
 
 use crate as pallet_cf_governance;
@@ -213,14 +213,13 @@ fn upgrade_runtime_successfully() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::Governance(crate::Event::UpgradeChainflipRuntime),
+			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});
 }
 
 #[test]
 fn wrong_upgrade_conditions() {
-	// Set the mock to return false
 	UpgradeConditionMock::set(false);
 	new_test_ext().execute_with(|| {
 		assert_noop!(
@@ -235,17 +234,20 @@ fn wrong_upgrade_conditions() {
 
 #[test]
 fn error_during_runtime_upgrade() {
-	// Set the mock to return false
 	RuntimeUpgradeMock::set(false);
 	UpgradeConditionMock::set(true);
 	new_test_ext().execute_with(|| {
-		// Expect the extrinsic to succeed
-		assert_noop!(
-			Governance::chainflip_runtime_upgrade(
-				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
-				DUMMY_WASM_BLOB
-			),
-			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
+		// assert_noop! is not working when we emit an event and
+		// the result is an error
+		let result = Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			DUMMY_WASM_BLOB,
+		);
+		assert_eq!(result.is_err(), true);
+		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});
 }

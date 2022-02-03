@@ -140,8 +140,8 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
-		/// The Chainflip runtime has been upgraded
-		UpgradeChainflipRuntime,
+		/// The upgrade conditions for a runtime upgrade were satisfied
+		UpgradeConditionsSatisfied,
 	}
 
 	#[pallet::error]
@@ -231,19 +231,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
-
 			// Ensure execution conditions
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
-
+			// Emit an additional event
+			Self::deposit_event(Event::UpgradeConditionsSatisfied);
 			// Do the runtime upgrade
-			let runtime_upgrade = T::RuntimeUpgrade::do_upgrade(code);
-
-			// Emit an additional event if it was successful
-			if let Ok(_) = runtime_upgrade {
-				Self::deposit_event(Event::UpgradeChainflipRuntime);
-			}
-
-			runtime_upgrade
+			T::RuntimeUpgrade::do_upgrade(code)
 		}
 
 		/// Approve a proposal by a given proposal id
