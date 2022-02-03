@@ -272,6 +272,8 @@ pub mod pallet {
 			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
+			// TODO ensure! is non-private IP / valid IP
+
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
