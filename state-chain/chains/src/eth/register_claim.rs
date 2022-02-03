@@ -1,9 +1,12 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
+use super::{
+	ethabi_function, ethabi_param, ChainflipContractCall, SchnorrVerificationComponents, SigData,
+	Tokenizable,
+};
 
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
+use ethabi::{ethereum_types::H256, Address, ParamType, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
@@ -80,10 +83,10 @@ impl RegisterClaim {
 	/// the json abi definition is currently not supported in no-std, so instead swe hard-code it
 	/// here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"registerClaim",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						// msgHash
@@ -96,14 +99,11 @@ impl RegisterClaim {
 						ParamType::Address,
 					]),
 				),
-				Param::new("nodeID", ParamType::FixedBytes(32)),
-				Param::new("amount", ParamType::Uint(256)),
-				Param::new("staker", ParamType::Address),
-				Param::new("expiryTime", ParamType::Uint(48)),
+				ethabi_param("nodeID", ParamType::FixedBytes(32)),
+				ethabi_param("amount", ParamType::Uint(256)),
+				ethabi_param("staker", ParamType::Address),
+				ethabi_param("expiryTime", ParamType::Uint(48)),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }

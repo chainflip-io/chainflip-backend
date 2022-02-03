@@ -1,9 +1,12 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{AggKey, ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
+use super::{
+	ethabi_function, ethabi_param, AggKey, ChainflipContractCall, SchnorrVerificationComponents,
+	SigData, Tokenizable,
+};
 
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Uint};
+use ethabi::{ethereum_types::H256, ParamType, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
@@ -57,10 +60,10 @@ impl SetAggKeyWithAggKey {
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"setAggKeyWithAggKey",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						ParamType::Uint(256),
@@ -69,14 +72,11 @@ impl SetAggKeyWithAggKey {
 						ParamType::Address,
 					]),
 				),
-				Param::new(
+				ethabi_param(
 					"newKey",
 					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
 				),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }

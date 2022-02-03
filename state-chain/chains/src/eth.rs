@@ -36,6 +36,21 @@ pub trait Tokenizable {
 	fn tokenize(self) -> Token;
 }
 
+#[allow(deprecated)]
+fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {
+	ethabi::Function {
+		name: name.into(),
+		inputs: params,
+		outputs: vec![],
+		constant: None,
+		state_mutability: ethabi::StateMutability::NonPayable,
+	}
+}
+
+fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
+	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
+}
+
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]

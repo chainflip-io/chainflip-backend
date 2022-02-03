@@ -1,10 +1,12 @@
 use crate::eth::Tokenizable;
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Token, Uint};
+use ethabi::{ethereum_types::H256, ParamType, Token, Uint};
 use frame_support::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData};
+use super::{
+	ethabi_function, ethabi_param, ChainflipContractCall, SchnorrVerificationComponents, SigData,
+};
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UpdateFlipSupply {
@@ -67,10 +69,10 @@ impl UpdateFlipSupply {
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"updateFlipSupply",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						ParamType::Uint(256),
@@ -79,12 +81,9 @@ impl UpdateFlipSupply {
 						ParamType::Address,
 					]),
 				),
-				Param::new("newTotalSupply", ParamType::Uint(256)),
-				Param::new("stateChainBlockNumber", ParamType::Uint(256)),
+				ethabi_param("newTotalSupply", ParamType::Uint(256)),
+				ethabi_param("stateChainBlockNumber", ParamType::Uint(256)),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }
