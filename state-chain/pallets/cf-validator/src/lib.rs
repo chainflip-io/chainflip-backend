@@ -185,7 +185,7 @@ pub mod pallet {
 						}
 					}
 				},
-				RotationStatus::RunAuction => match T::Auctioneer::run_auction::<
+				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction::<
 					ValidatorChecked<T::QualifyConfig>,
 				>() {
 					Ok(auction_result) => {
@@ -511,7 +511,7 @@ pub mod pallet {
 			// Run an auction on genesis. We use `ValidatorUnchecked` to skip
 			// any valdation for the bidders which are our genesis nodes which
 			// are already staked
-			let auction_result = T::Auctioneer::run_auction::<ValidatorUnchecked<T::ValidatorId>>()
+			let auction_result = T::Auctioneer::resolve_auction::<ValidatorUnchecked<T::ValidatorId>>()
 				.expect("an auction is run for our genesis bidders");
 			T::Auctioneer::confirm_auction(auction_result.clone())
 				.expect("the auction is confirmed");

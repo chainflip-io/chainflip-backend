@@ -150,17 +150,16 @@ pub type ActiveValidatorRange = (u32, u32);
 /// `BidderProvider` the bidders are selected and returned as an `AuctionResult` calling
 /// `run_aucion()`. It is required that for an auction to be accepted `confirm_auction()` will need
 /// to be called with result of the previous auction run.  A new auction is ran on each call of
-/// `run_auction()` which discards the previous auction run.
+/// `resolve_auction()` which discards the previous auction run.
 
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
-	type BidderProvider;
 
 	/// The current auction index
 	fn auction_index() -> AuctionIndex;
 	/// Run an auction by qualifying a validator
-	fn run_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
+	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
 	where
 		Q: QualifyValidator<ValidatorId = Self::ValidatorId>;
 	/// Confirm a previously run auction

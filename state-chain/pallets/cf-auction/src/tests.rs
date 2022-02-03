@@ -9,7 +9,7 @@ mod tests {
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
 			let auction_result =
-				<AuctionPallet as Auctioneer>::run_auction::<MockQualifyValidator>()
+				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
 					.expect("the auction should run");
 
 			assert_eq!(
@@ -52,7 +52,7 @@ mod tests {
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
 			let first_auction_result =
-				<AuctionPallet as Auctioneer>::run_auction::<MockQualifyValidator>()
+				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
 					.expect("the auction should run");
 
 			assert_eq!(
@@ -62,7 +62,7 @@ mod tests {
 			);
 
 			let second_auction_result =
-				<AuctionPallet as Auctioneer>::run_auction::<MockQualifyValidator>()
+				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
 					.expect("the auction should run");
 
 			assert_eq!(
@@ -443,7 +443,7 @@ mod tests {
 
 			// Confirm we just have the good bidders in our new auction result
 			assert_eq!(
-				<AuctionPallet as Auctioneer>::run_auction::<MockQualifyValidator>()
+				<AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
 					.expect("we should have an auction")
 					.winners,
 				good_bidders

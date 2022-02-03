@@ -133,9 +133,8 @@ impl MockAuctioneer {
 impl Auctioneer for MockAuctioneer {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	type BidderProvider = MockBidderProvider;
 
-	fn run_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
+	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
 	where
 		Q: QualifyValidator<ValidatorId = Self::ValidatorId>,
 	{
@@ -194,11 +193,6 @@ impl ValidatorRegistration<ValidatorId> for Test {
 }
 
 pub struct MockBidderProvider;
-impl MockBidderProvider {
-	pub fn set_bidders(bidders: Vec<Bid<ValidatorId, Amount>>) {
-		BIDDERS.with(|cell| (*cell.borrow_mut()) = bidders)
-	}
-}
 
 impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;

@@ -180,7 +180,6 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type BidderProvider = T::BidderProvider;
 
 	fn auction_index() -> AuctionIndex {
 		CurrentAuctionIndex::<T>::get()
@@ -192,7 +191,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	// to be able to actual join the validating set.  If we manage to pass these tests
 	// we kill the last set of winners stored, set the bond to 0, store this set of
 	// bidders and change our state ready for an 'Auction' to be ran
-	fn run_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
+	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
 	where
 		Q: QualifyValidator<ValidatorId = T::ValidatorId>,
 	{
