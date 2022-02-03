@@ -14,7 +14,7 @@ macro_rules! impl_mock_epoch_info {
 			pub static NEXT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
-			pub static CAN_CLAIM: RefCell<bool> = RefCell::new(true);
+			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(true);
 		}
 
 		impl MockEpochInfo {
@@ -62,7 +62,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			pub fn set_claiming_allowed(is_auction: bool) {
-				CAN_CLAIM.with(|cell| *(cell.borrow_mut()) = is_auction);
+				AUCTION_PHASE.with(|cell| *(cell.borrow_mut()) = is_auction);
 			}
 		}
 
@@ -86,8 +86,8 @@ macro_rules! impl_mock_epoch_info {
 				EPOCH.with(|cell| *cell.borrow())
 			}
 
-			fn claims_allowed() -> bool {
-				CAN_CLAIM.with(|cell| *cell.borrow())
+			fn is_auction_phase() -> bool {
+				AUCTION_PHASE.with(|cell| *cell.borrow())
 			}
 
 			fn active_validator_count() -> u32 {

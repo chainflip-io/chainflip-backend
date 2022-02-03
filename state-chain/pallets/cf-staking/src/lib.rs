@@ -194,8 +194,8 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Claims are not available at the moment
-		NoClaimsAllowed,
+		/// We are in the auction phase
+		AuctionPhase,
 
 		/// Failed to encode the signed claim payload.
 		ClaimEncodingFailed,
@@ -260,7 +260,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim)
-		/// - [NoClaimsAllowed](Error::NoClaimsAllowed)
+		/// - [AuctionPhase](Error::AuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		///
 		/// ## Dependencies
@@ -568,7 +568,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
 		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(T::EpochInfo::claims_allowed(), Error::<T>::NoClaimsAllowed);
+		ensure!(T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
 		// If a claim already exists, return an error. The validator must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.

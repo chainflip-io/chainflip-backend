@@ -64,14 +64,14 @@ mod tests {
 
 			let blocks_per_epoch = 42;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), blocks_per_epoch));
-			assert!(<ValidatorPallet as EpochInfo>::claims_allowed(), "should be able to claim");
+			assert!(<ValidatorPallet as EpochInfo>::is_auction_phase(), "should be able to claim");
 
 			// Move to the first block we are blocked to claim
 			let block_in_no_claims = percentage_claim_period as u64 * blocks_per_epoch / 100;
 			move_forward_blocks(block_in_no_claims);
 			assert_eq!(
 				false,
-				<ValidatorPallet as EpochInfo>::claims_allowed(),
+				<ValidatorPallet as EpochInfo>::is_auction_phase(),
 				"should *not* be able to claim"
 			);
 
@@ -81,7 +81,7 @@ mod tests {
 				Origin::root(),
 				percentage_claim_period
 			));
-			assert!(<ValidatorPallet as EpochInfo>::claims_allowed(), "should be able to claim");
+			assert!(<ValidatorPallet as EpochInfo>::is_auction_phase(), "should be able to claim");
 		});
 	}
 

@@ -1102,7 +1102,7 @@ mod tests {
 								stake_amount,
 								ETH_ZERO_ADDRESS
 							),
-							Error::<Runtime>::NoClaimsAllowed
+							Error::<Runtime>::AuctionPhase
 						);
 					}
 

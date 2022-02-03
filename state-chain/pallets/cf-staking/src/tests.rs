@@ -474,7 +474,7 @@ fn no_claims_allowed_out_of_claim_period() {
 		// Claiming is not allowed.
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
-			<Error<Test>>::NoClaimsAllowed
+			<Error<Test>>::AuctionPhase
 		);
 	});
 }

@@ -526,13 +526,13 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
-	fn claims_allowed() -> bool {
+	fn is_auction_phase() -> bool {
 		// start + ((epoch * percentage) / 100)
 		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
 			BlocksPerEpoch::<T>::get()
 				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
 				.checked_div(&100u32.into())
-				.expect("we are likely seeing this because ClaimPeriodAsPercentage isn't configured correctly"),
+				.unwrap_or_default(),
 		);
 
 		last_block_for_claims >= frame_system::Pallet::<T>::current_block_number()
