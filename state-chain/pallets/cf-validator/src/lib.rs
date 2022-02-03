@@ -482,18 +482,13 @@ pub mod pallet {
 	}
 }
 
-pub struct LastExpiredEpochGetter<T: Config>(PhantomData<T>);
-
-impl<T: Config> Get<EpochIndex> for LastExpiredEpochGetter<T> {
-	fn get() -> EpochIndex {
-		LastExpiredEpoch::<T>::get()
-	}
-}
-
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type LastExpiredEpoch = LastExpiredEpochGetter<T>;
+
+	fn last_expired_epoch() -> EpochIndex {
+		LastExpiredEpoch::<T>::get()
+	}
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()

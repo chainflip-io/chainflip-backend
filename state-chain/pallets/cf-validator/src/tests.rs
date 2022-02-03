@@ -47,7 +47,7 @@ mod tests {
 			// Epoch 1 would now expire as it was rotated at block 10 when we moved
 			// to epoch 2 and would expire at block 10 + epoch_blocks(10)
 			ValidatorPallet::on_initialize(2 * epoch_blocks);
-			assert_eq!(1, <ValidatorPallet as Store>::LastExpiredEpoch::get());
+			assert_eq!(1, <ValidatorPallet as EpochInfo>::last_expired_epoch());
 		});
 	}
 
