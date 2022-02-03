@@ -96,7 +96,7 @@ pub mod pallet {
 		u16,
 	>;
 
-	/// Track epoch's and their associated validator count
+	/// Track epochs and their associated validator count
 	#[pallet::storage]
 	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
 
@@ -228,7 +228,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
 		ensure!(
-			epoch_index >=
+			epoch_index >
 				<<T::EpochInfo as EpochInfo>::LastExpiredEpoch as Get<EpochIndex>>::get(),
 			Error::<T>::EpochExpired
 		);
@@ -239,7 +239,7 @@ impl<T: Config> Pallet<T> {
 
 		// The number of validators for the epoch
 		let num_validators = EpochValidatorCount::<T>::get(epoch_index)
-			.expect("we would have all epochs counted for when we rotate in a new epoch");
+			.expect("This value is updated alongside ValidatorIndex, so if we have a validator, we have a validator count.");
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);

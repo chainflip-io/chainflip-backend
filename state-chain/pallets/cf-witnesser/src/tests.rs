@@ -4,7 +4,7 @@ use crate::{
 };
 use cf_traits::{
 	mocks::epoch_info::{MockEpochInfo, MockLastExpiredEpoch},
-	EpochTransitionHandler,
+	EpochInfo, EpochTransitionHandler,
 };
 use frame_support::{assert_noop, assert_ok, Hashable};
 
@@ -129,20 +129,24 @@ fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
 		// Run through a few epochs; 1, 2 and 3
-		let current_epoch = 3;
-		for _ in 0..current_epoch {
-			MockEpochInfo::incr_epoch();
-			<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
-		}
+		MockEpochInfo::incr_epoch(); // 1 - Alice
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		MockEpochInfo::incr_epoch(); // 2 - Alice
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		MockEpochInfo::incr_epoch(); // 3 - Bob
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON], Default::default());
+
+		let current_epoch = MockEpochInfo::epoch_index();
+
 		// The last expired epoch
-		let expired_epoch = 2;
+		let expired_epoch = 1;
 		MockLastExpiredEpoch::set_last_expired_epoch(expired_epoch);
 
-		// Witness a call for this expired epoch
+		// Witness a call for one before the current epoch which has yet to expire
 		assert_ok!(Witnesser::witness_at_epoch(
 			Origin::signed(ALISSA),
 			call.clone(),
-			expired_epoch,
+			current_epoch - 1,
 			Default::default()
 		));
 
@@ -151,11 +155,30 @@ fn can_continue_to_witness_for_old_epochs() {
 			Witnesser::witness_at_epoch(
 				Origin::signed(ALISSA),
 				call.clone(),
-				expired_epoch - 1,
+				expired_epoch,
 				Default::default()
 			),
 			Error::<Test>::EpochExpired
 		);
+
+		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(BOBSON),
+				call.clone(),
+				current_epoch - 1,
+				Default::default()
+			),
+			Error::<Test>::UnauthorisedWitness
+		);
+
+		// But can witness in an epoch we are in
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			current_epoch,
+			Default::default()
+		));
 
 		// And an epoch that doesn't yet exist
 		assert_noop!(

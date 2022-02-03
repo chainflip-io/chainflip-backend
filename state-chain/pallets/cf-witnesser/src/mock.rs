@@ -88,13 +88,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	let validators = [ALISSA, BOBSON, CHARLEMAGNE];
-	MockEpochInfo::set_validators([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
+	const VALIDATORS: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
+	MockEpochInfo::set_validators(VALIDATORS.to_vec());
 
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &validators, Default::default());
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &VALIDATORS, Default::default());
 	});
 
 	ext
