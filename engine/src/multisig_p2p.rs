@@ -71,9 +71,10 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .next()
         .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
 
-    let ip_address = public_ip::addr_v6()
-        .await
-        .expect("Couldn't get nodes public ip address");
+    let ip_address = match public_ip::addr().await.expect("Could not get public ip") {
+        std::net::IpAddr::V4(v4) => v4.to_ipv6_mapped(),
+        std::net::IpAddr::V6(v6) => v6,
+    };
 
     let runtime_version = state_chain_client.runtime_version.read().await.spec_version;
 
