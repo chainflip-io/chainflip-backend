@@ -16,7 +16,7 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use web3::types::H2048;
+use web3::types::{Block, H2048};
 use web3::{
     api::SubscriptionStream,
     ethabi::Address,
@@ -220,6 +220,8 @@ pub trait EthWsRpcApi: EthRpcApi {
 #[async_trait]
 pub trait EthHttpRpcApi: EthRpcApi {
     async fn block_number(&self) -> Result<U64>;
+
+    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
 }
 
 /// Wraps the web3 library, so can use a trait to make testing easier
@@ -372,6 +374,10 @@ impl EthRpcApi for EthHttpRpcClient {
 impl EthHttpRpcApi for EthHttpRpcClient {
     async fn block_number(&self) -> Result<U64> {
         Ok(self.web3.eth().block_number().await?)
+    }
+
+    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>> {
+        Ok(self.web3.eth().block(block_number.into()).await?)
     }
 }
 
@@ -660,6 +666,43 @@ fn decode_shared_event_closure(
             }
         },
     )
+}
+
+#[cfg(test)]
+pub mod mocks {
+    use super::*;
+
+    use mockall::mock;
+
+    // Create a mock of the http interface of web3
+    mock! {
+        // MockEthHttpRpc will be the name of the mock
+        pub EthHttpRpc {}
+
+        #[async_trait]
+        impl EthRpcApi for EthHttpRpc {
+            async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+
+            async fn sign_transaction(
+                &self,
+                tx: TransactionParameters,
+                key: &SecretKey,
+            ) -> Result<SignedTransaction>;
+
+            async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
+
+            async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
+
+            async fn chain_id(&self) -> Result<U256>;
+        }
+
+        #[async_trait]
+        impl EthHttpRpcApi for EthHttpRpc {
+            async fn block_number(&self) -> Result<U64>;
+
+            async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
+        }
+    }
 }
 
 #[cfg(test)]

@@ -11,26 +11,25 @@ use web3::{
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
+use super::EthHttpRpcApi;
+
 const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 // TODO: Look into how providers generally handle reorgs on HTTP
 // polls the HTTP endpoint every x seconds, returning the next head when it progresses
-pub async fn polling_http_head_stream() -> impl Stream<Item = Block<H256>> {
-    let transport = web3::transports::Http::new(
-        "https://1ef2e10ce62d41a1a0741f8d84e91e3c.eth.rpc.rivet.cloud/",
-    )
-    .unwrap();
-
-    struct StreamState {
+pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
+    eth_http_rpc: EthHttpRpc,
+) -> impl Stream<Item = Block<H256>> {
+    struct StreamState<EthHttpRpc> {
         last_block_fetched: U64,
         last_block_yielded: U64,
-        web3: Web3<Http>,
+        eth_http_rpc: EthHttpRpc,
     }
 
     let init_data = StreamState {
         last_block_fetched: U64::from(0),
         last_block_yielded: U64::from(0),
-        web3: web3::Web3::new(transport),
+        eth_http_rpc,
     };
 
     Box::pin(stream::unfold(init_data, move |mut state| async move {
@@ -38,7 +37,7 @@ pub async fn polling_http_head_stream() -> impl Stream<Item = Block<H256>> {
             // TODO: Check this is the correct sleep
             std::thread::sleep(HTTP_POLL_INTERVAL);
 
-            let unsafe_block_number = state.web3.eth().block_number().await.unwrap();
+            let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
             println!("Got eth block number {}", unsafe_block_number);
 
             if unsafe_block_number < state.last_block_fetched {
@@ -57,8 +56,7 @@ pub async fn polling_http_head_stream() -> impl Stream<Item = Block<H256>> {
 
                 // we can emit the block 5 less than this
                 let block = state
-                    .web3
-                    .eth()
+                    .eth_http_rpc
                     .block(safe_block_number.into())
                     .await
                     .unwrap()
@@ -73,8 +71,7 @@ pub async fn polling_http_head_stream() -> impl Stream<Item = Block<H256>> {
                 for return_block_number in last_block_yielded_u64 + 1..unsafe_block_number.as_u64()
                 {
                     let block = state
-                        .web3
-                        .eth()
+                        .eth_http_rpc
                         .block(U64::from(return_block_number).into())
                         .await
                         .unwrap()
@@ -89,13 +86,24 @@ pub async fn polling_http_head_stream() -> impl Stream<Item = Block<H256>> {
     }))
 }
 
+#[cfg(test)]
 mod tests {
+
+    use mockall::mock;
+
+    use crate::eth::{EthHttpRpcApi, EthRpcApi};
 
     use super::*;
 
+    use crate::eth::mocks::MockEthHttpRpc;
+    use async_trait::async_trait;
+
     #[tokio::test]
     async fn test_http_stream() {
-        while let Some(block) = polling_http_head_stream().await.next().await {
+        let mock_eth_http_rpc = MockEthHttpRpc::new();
+
+        let mut stream = polling_http_head_stream(mock_eth_http_rpc).await;
+        while let Some(block) = stream.next().await {
             println!("Here's the block: {}", block.number.unwrap());
         }
     }
@@ -130,7 +138,4 @@ mod tests {
             // let logs = web3.eth().logs().await;
         }
     }
-
-    #[tokio::test]
-    async fn test_http_observer() {}
 }
