@@ -23,8 +23,6 @@ use web3::{
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -34,7 +32,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -114,16 +112,16 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
+pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc>(
     contract_observer: ContractObserver,
-    eth_rpc: &EthRpc,
+    eth_rpc: &EthWsRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
     RpcClient: 'static + StateChainRpcApi + Sync + Send,
-    EthRpc: 'static + EthRpcApi + Sync + Send + Clone,
+    EthWsRpc: 'static + EthWsRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -207,22 +205,30 @@ pub trait EthRpcApi {
 
     async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
 
-    async fn subscribe_new_heads(
-        &self,
-    ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
-
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
     async fn chain_id(&self) -> Result<U256>;
 }
 
+#[async_trait]
+pub trait EthWsRpcApi: EthRpcApi {
+    async fn subscribe_new_heads(
+        &self,
+    ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
+}
+
+#[async_trait]
+pub trait EthHttpRpcApi: EthRpcApi {
+    async fn block_number(&self) -> Result<U64>;
+}
+
 /// Wraps the web3 library, so can use a trait to make testing easier
 #[derive(Clone)]
-pub struct EthRpcClient {
+pub struct EthWsRpcClient {
     web3: Web3<web3::transports::WebSocket>,
 }
 
-impl EthRpcClient {
+impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
         slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
@@ -262,7 +268,7 @@ impl EthRpcClient {
 }
 
 #[async_trait]
-impl EthRpcApi for EthRpcClient {
+impl EthRpcApi for EthWsRpcClient {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
         self.web3
             .eth()
@@ -291,10 +297,62 @@ impl EthRpcApi for EthRpcClient {
             .context("Failed to send raw transaction")
     }
 
+    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
+        self.web3
+            .eth()
+            .logs(filter)
+            .await
+            .context("Failed to fetch ETH logs")
+    }
+
+    async fn chain_id(&self) -> Result<U256> {
+        Ok(self.web3.eth().chain_id().await?)
+    }
+}
+
+#[async_trait]
+impl EthWsRpcApi for EthWsRpcClient {
     async fn subscribe_new_heads(
         &self,
     ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
         Ok(self.web3.eth_subscribe().subscribe_new_heads().await?)
+    }
+}
+
+/// Wraps the web3 library, so can use a trait to make testing easier
+#[derive(Clone)]
+pub struct EthHttpRpcClient {
+    web3: Web3<web3::transports::Http>,
+}
+
+#[async_trait]
+impl EthRpcApi for EthHttpRpcClient {
+    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
+        self.web3
+            .eth()
+            .estimate_gas(req, block)
+            .await
+            .context("Failed to estimate gas")
+    }
+
+    async fn sign_transaction(
+        &self,
+        tx: TransactionParameters,
+        key: &SecretKey,
+    ) -> Result<SignedTransaction> {
+        self.web3
+            .accounts()
+            .sign_transaction(tx, SecretKeyRef::from(key))
+            .await
+            .context("Failed to sign transaction")
+    }
+
+    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
+        self.web3
+            .eth()
+            .send_raw_transaction(rlp)
+            .await
+            .context("Failed to send raw transaction")
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
@@ -307,6 +365,13 @@ impl EthRpcApi for EthRpcClient {
 
     async fn chain_id(&self) -> Result<U256> {
         Ok(self.web3.eth().chain_id().await?)
+    }
+}
+
+#[async_trait]
+impl EthHttpRpcApi for EthHttpRpcClient {
+    async fn block_number(&self) -> Result<U64> {
+        Ok(self.web3.eth().block_number().await?)
     }
 }
 
@@ -493,9 +558,9 @@ pub trait EthObserver {
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream<EthRpc: 'static + EthRpcApi + Send + Sync + Clone>(
+    async fn event_stream<EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone>(
         &self,
-        eth_rpc: &EthRpc,
+        eth_rpc: &EthWsRpc,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,

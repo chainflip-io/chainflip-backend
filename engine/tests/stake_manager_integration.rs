@@ -6,7 +6,7 @@ use std::str::FromStr;
 use chainflip_engine::{
     eth::{
         stake_manager::{StakeManager, StakeManagerEvent},
-        EthObserver, EthRpcClient,
+        EthObserver, EthWsRpcClient,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},
@@ -27,7 +27,7 @@ pub async fn test_all_stake_manager_events() {
     let settings =
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
         .expect("Couldn't create EthRpcClient");
 

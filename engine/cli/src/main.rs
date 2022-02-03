@@ -1,6 +1,6 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{EthBroadcaster, EthRpcClient},
+    eth::{EthBroadcaster, EthWsRpcClient},
     state_chain::client::connect_to_state_chain,
 };
 use futures::StreamExt;
@@ -199,7 +199,7 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, logger)
+    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, logger)
         .await
         .expect("Unable to create EthRpcClient");
 

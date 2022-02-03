@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, EthObserver, EthRpcClient},
+    eth::{key_manager::KeyManager, EthObserver, EthWsRpcClient},
     logging::utils,
     settings::Settings,
 };
@@ -16,7 +16,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
         .expect("Couldn't create EthRpcClient");
 

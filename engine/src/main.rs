@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
         self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
-        EthRpcClient,
+        EthWsRpcClient,
     },
     health::HealthMonitor,
     logging,
@@ -41,7 +41,7 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
         .expect("Should create EthRpcClient");
 
