@@ -54,12 +54,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_epoch_ending() {
-		// Apportion rewards for the current validators
-		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
-		});
-	}
+	fn on_epoch_ending() {}
 
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
@@ -70,10 +65,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Rollover the rewards.
-		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
-		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.

@@ -10,8 +10,8 @@ mod benchmarking;
 #[cfg(test)]
 mod mock;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 use cf_traits::{RewardRollover, Rewarder, RewardsDistribution};
 use frame_support::{
@@ -97,56 +97,56 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Rewarder for Pallet<T> {
-	type AccountId = T::AccountId;
+// impl<T: Config> Rewarder for Pallet<T> {
+// 	type AccountId = T::AccountId;
 
-	fn reward_all() -> Result<(), DispatchError> {
-		// Sanity check in case we screwed up with the accounting.
-		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
+// 	fn reward_all() -> Result<(), DispatchError> {
+// 		// Sanity check in case we screwed up with the accounting.
+// 		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
 
-		// Credit each validator with their due rewards.
-		for (account_id, already_received) in
-			ApportionedRewards::<T>::iter_prefix(VALIDATOR_REWARDS)
-		{
-			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
-		}
+// 		// Credit each validator with their due rewards.
+// 		for (account_id, already_received) in
+// 			ApportionedRewards::<T>::iter_prefix(VALIDATOR_REWARDS)
+// 		{
+// 			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
+// 		}
 
-		Ok(())
-	}
-}
+// 		Ok(())
+// 	}
+// }
 
-impl<T: Config> RewardRollover for Pallet<T> {
-	type AccountId = T::AccountId;
+// impl<T: Config> RewardRollover for Pallet<T> {
+// 	type AccountId = T::AccountId;
 
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
-	/// are available. 1. Checks that all entitlements can be honoured, ie. there are enough
-	/// reserves. 2. Credits all current beneficiaries with any remaining reward entitlements.
-	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
-	/// 4. Resets the apportioned rewards counter to zero.
-	/// 5. Updates the list of beneficiaries.
-	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError> {
-		// Sanity check in case we screwed up with the accounting.
-		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
+// 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
+// 	/// are available. 1. Checks that all entitlements can be honoured, ie. there are enough
+// 	/// reserves. 2. Credits all current beneficiaries with any remaining reward entitlements.
+// 	/// 3. If any dust is left over in the reserve, keeps it for the next reward period.
+// 	/// 4. Resets the apportioned rewards counter to zero.
+// 	/// 5. Updates the list of beneficiaries.
+// 	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError> {
+// 		// Sanity check in case we screwed up with the accounting.
+// 		ensure!(Self::sufficient_reserves(), Error::<T>::InsufficientReserves);
 
-		// Credit each validator with their remaining due rewards.
-		for (account_id, already_received) in
-			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
-		{
-			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
-		}
+// 		// Credit each validator with their remaining due rewards.
+// 		for (account_id, already_received) in
+// 			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
+// 		{
+// 			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
+// 		}
 
-		// Roll over any dust remaining in the reserve.
-		let dust = Flip::<T>::reserved_balance(VALIDATOR_REWARDS);
-		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, dust);
+// 		// Roll over any dust remaining in the reserve.
+// 		let dust = Flip::<T>::reserved_balance(VALIDATOR_REWARDS);
+// 		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, dust);
 
-		// Set the new beneficiaries
-		for account_id in new_beneficiaries {
-			ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, account_id, T::Balance::zero())
-		}
-		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, new_beneficiaries.len() as u32);
-		Ok(())
-	}
-}
+// 		// Set the new beneficiaries
+// 		for account_id in new_beneficiaries {
+// 			ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, account_id, T::Balance::zero())
+// 		}
+// 		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, new_beneficiaries.len() as u32);
+// 		Ok(())
+// 	}
+// }
 
 impl<T: Config> Pallet<T> {
 	/// The amount of rewards still due to this account.
@@ -209,24 +209,16 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// An implementation of [RewardsDistribution] that simply credits the rewards to an on-chain
-/// reserve so that it can be allocated at a later point.
-pub struct OnDemandRewardsDistribution<T>(PhantomData<T>);
+// impl<T: Config> RewardsDistribution for OnDemandRewardsDistribution<T> {
+// 	type Balance = T::Balance;
+// 	type Surplus = Surplus<T>;
 
-impl<T: Config> RewardsDistribution for OnDemandRewardsDistribution<T> {
-	type Balance = T::Balance;
-	type Surplus = Surplus<T>;
-
-	fn distribute(rewards: Self::Surplus) {
-		let reward_amount = rewards.peek();
-		let deposit = Flip::<T>::deposit_reserves(VALIDATOR_REWARDS, reward_amount);
-		let _ = rewards.offset(deposit);
-		RewardsEntitlement::<T>::mutate(VALIDATOR_REWARDS, |amount| {
-			*amount = amount.saturating_add(reward_amount);
-		});
-	}
-
-	fn execution_weight() -> frame_support::dispatch::Weight {
-		T::DbWeight::get().reads_writes(1, 2)
-	}
-}
+// 	fn distribute(rewards: Self::Surplus) {
+// 		let reward_amount = rewards.peek();
+// 		let deposit = Flip::<T>::deposit_reserves(VALIDATOR_REWARDS, reward_amount);
+// 		let _ = rewards.offset(deposit);
+// 		RewardsEntitlement::<T>::mutate(VALIDATOR_REWARDS, |amount| {
+// 			*amount = amount.saturating_add(reward_amount);
+// 		});
+// 	}
+// }

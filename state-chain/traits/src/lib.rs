@@ -8,7 +8,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};

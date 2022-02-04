@@ -122,8 +122,6 @@ pub fn new_test_ext(
 			<Flip as StakeTransfer>::credit_stake(&acct, amt);
 			beneficiaries.push(acct.clone());
 		}
-		// Rollover to initialize pallet state.
-		assert_ok!(<FlipRewards as RewardRollover>::rollover(&beneficiaries));
 	});
 	ext
 }
