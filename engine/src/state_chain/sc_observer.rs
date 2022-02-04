@@ -462,13 +462,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
                 // cause issues (if we tried to send on one of the interval boundaries)
-                if (matches!(account_data.state, ChainflipAccountState::Backup)
-                    || matches!(account_data.state, ChainflipAccountState::Validator)
-                    || is_outgoing)
-                    && ((current_block_header.number
-                        + (state_chain_client.heartbeat_block_interval / 2))
-                        % blocks_per_heartbeat
-                        == 0)
+                if (current_block_header.number + (state_chain_client.heartbeat_block_interval / 2))
+                    % blocks_per_heartbeat
+                    == 0
                 {
                     slog::info!(
                         logger,
