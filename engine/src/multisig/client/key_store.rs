@@ -5,7 +5,6 @@ use crate::multisig::{KeyDB, KeyId};
 use super::common::KeygenResultInfo;
 
 // Successfully generated multisig keys live here
-#[derive(Clone)]
 pub struct KeyStore<S>
 where
     S: KeyDB,

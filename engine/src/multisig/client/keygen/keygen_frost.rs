@@ -5,7 +5,7 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
     client::ThresholdParameters,
-    crypto::{Point, Scalar},
+    crypto::{Point, Rng, Scalar},
 };
 
 /// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
@@ -48,9 +48,9 @@ pub struct ShamirShare {
 
 #[cfg(test)]
 impl ShamirShare {
-    pub fn create_random() -> Self {
+    pub fn create_random(mut rng: &mut Rng) -> Self {
         ShamirShare {
-            value: Scalar::random(),
+            value: Scalar::random(&mut rng),
         }
     }
 }
@@ -99,8 +99,13 @@ fn generate_dkg_challenge(
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
-fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -> ZKPSignature {
-    let nonce = Scalar::random();
+fn generate_zkp_of_secret(
+    mut rng: &mut Rng,
+    secret: Scalar,
+    context: &HashContext,
+    index: usize,
+) -> ZKPSignature {
+    let nonce = Scalar::random(&mut rng);
     let nonce_commitment = Point::from_scalar(&nonce);
 
     let secret_commitment = Point::from_scalar(&secret);
@@ -115,25 +120,25 @@ fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
 
-#[derive(Clone)]
 pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
 
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
 pub fn generate_shares_and_commitment(
+    mut rng: &mut Rng,
     context: &HashContext,
     index: usize,
     params: ThresholdParameters,
 ) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
-        generate_secret_and_shares(params.share_count, params.threshold);
+        generate_secret_and_shares(&mut rng, params.share_count, params.threshold);
 
     // Zero-knowledge proof of `secret`
-    let zkp = generate_zkp_of_secret(secret, context, index);
+    let zkp = generate_zkp_of_secret(&mut rng, secret, context, index);
 
     // Secret will be zeroized on drop here
 
@@ -145,15 +150,19 @@ pub fn generate_shares_and_commitment(
 
 // NOTE: shares should be sent after participants have exchanged commitments
 fn generate_secret_and_shares(
+    mut rng: &mut Rng,
     n: usize,
     t: usize,
 ) -> (Scalar, CoefficientCommitments, HashMap<usize, ShamirShare>) {
     // Our secret contribution to the aggregate key
-    let secret = Scalar::random();
+    let secret = Scalar::random(&mut rng);
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::random()).collect();
+    let coefficients: Vec<_> = (0..t)
+        .into_iter()
+        .map(|_| Scalar::random(&mut rng))
+        .collect();
 
     // (Figure 1: Round 1, Step 3)
     let commitments: Vec<_> = [secret.clone()]
@@ -214,7 +223,7 @@ pub struct DKGUnverifiedCommitment {
 }
 
 /// Commitments that have already been checked against the ZKP
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DKGCommitment {
     commitments: CoefficientCommitments,
 }
@@ -299,7 +308,10 @@ mod tests {
         let n = 7;
         let threshold = 5;
 
-        let (secret, _commitments, shares) = generate_secret_and_shares(n, threshold);
+        use rand_legacy::SeedableRng;
+        let mut rng = Rng::from_seed([0; 32]);
+
+        let (secret, _commitments, shares) = generate_secret_and_shares(&mut rng, n, threshold);
 
         assert_eq!(secret, reconstruct_secret(&shares));
     }
@@ -311,11 +323,15 @@ mod tests {
 
         let context = HashContext([0; 32]);
 
+        use rand_legacy::SeedableRng;
+        let mut rng = Rng::from_seed([0; 32]);
+
         let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
             .map(|idx| {
-                let (secret, shares_commitments, shares) = generate_secret_and_shares(n, t);
+                let (secret, shares_commitments, shares) =
+                    generate_secret_and_shares(&mut rng, n, t);
                 // Zero-knowledge proof of `secret`
-                let zkp = generate_zkp_of_secret(secret, &context, idx);
+                let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
                 let dkg_commitment = DKGUnverifiedCommitment {
                     commitments: shares_commitments,
