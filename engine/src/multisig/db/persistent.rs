@@ -348,7 +348,7 @@ mod tests {
     ];
 
     // To generate this, you can use the test in engine/src/signing/client/client_inner/genesis.rs
-    const KEYGEN_RESULT_INFO_HEX: &'static str = "21000000000000000356815a968986af7dd8f84c365429435fba940a8b854129e78739d6d5a5ba74222000000000000000a0687cf58d7838802724b5a0ce902b421605488990c2a1156833743c68cc792303000000000000002100000000000000027cf4fe1aabd5862729d8f96ab07cf175f058fc7b4f79f3fd4fc4f9fba399dbb42100000000000000030bf033482c62d78902ff482b625dd99f025fcd429689123495bd5c5c6224cfda210000000000000002ee6ff7fd3bad3942708e965e728d8923784d36eb57f09d23aa75d8743a27c59b030000000000000030000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a0300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e010000000000000030000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427502000000000000000300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e30000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427530000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a03000000000000000100000000000000";
+    const KEYGEN_RESULT_INFO_HEX: &str = "21000000000000000356815a968986af7dd8f84c365429435fba940a8b854129e78739d6d5a5ba74222000000000000000a0687cf58d7838802724b5a0ce902b421605488990c2a1156833743c68cc792303000000000000002100000000000000027cf4fe1aabd5862729d8f96ab07cf175f058fc7b4f79f3fd4fc4f9fba399dbb42100000000000000030bf033482c62d78902ff482b625dd99f025fcd429689123495bd5c5c6224cfda210000000000000002ee6ff7fd3bad3942708e965e728d8923784d36eb57f09d23aa75d8743a27c59b030000000000000030000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a0300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e010000000000000030000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427502000000000000000300000000000000300000000000000035444a565645595044465a6a6a394a744a5245327647767065536e7a42415541373456585053706b474b684a5348624e30000000000000003546396f664342574c4d46586f747970587462556e624c586b4d315a39417334374752684444464a4473784b6770427530000000000000003547653178463155334555674b6947596a4c43576d6763444858516e66474e45756a775859546a5368463647636d595a03000000000000000100000000000000";
 
     #[test]
     fn can_create_new_database() {
@@ -356,7 +356,7 @@ mod tests {
         let db_path = Path::new("db_new");
 
         {
-            assert_ok!(PersistentKeyDB::new(&db_path, &logger));
+            assert_ok!(PersistentKeyDB::new(db_path, &logger));
             assert!(db_path.exists());
         }
 
@@ -373,7 +373,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_path);
         assert!(!db_path.exists());
         {
-            assert_ok!(PersistentKeyDB::new(&db_path, &logger));
+            assert_ok!(PersistentKeyDB::new(db_path, &logger));
         }
 
         assert!(db_path.exists());
@@ -403,8 +403,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_path);
 
         {
-            open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION);
-            assert_ok!(PersistentKeyDB::new(&db_path, &new_test_logger()));
+            open_db_and_write_version_data(db_path, DB_SCHEMA_VERSION);
+            assert_ok!(PersistentKeyDB::new(db_path, &new_test_logger()));
         }
 
         // clean up
@@ -436,13 +436,13 @@ mod tests {
             .unwrap();
 
             let mut tx = db.transaction();
-            tx.put_vec(0, &key_id.0.clone(), bashful_secret_bin);
+            tx.put_vec(0, &key_id.0, bashful_secret_bin);
             db.write(tx).unwrap();
         }
 
         // Load the old db and see if the keygen data is migrated and schema version is updated
         {
-            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
@@ -453,10 +453,9 @@ mod tests {
         {
             let cfs = DB::list_cf(&Options::default(), &db_path)
                 .expect("Should get list of column families");
-            assert!(cfs
+            assert!(!cfs
                 .iter()
-                .find(|s| *s == &LEGACY_DATA_COLUMN_NAME.to_string())
-                .is_none());
+                .any(|s| s == &LEGACY_DATA_COLUMN_NAME.to_string()));
         }
 
         // clean up
@@ -469,7 +468,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_path);
 
         // Create a db with schema version + 1
-        open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
+        open_db_and_write_version_data(db_path, DB_SCHEMA_VERSION + 1);
 
         // Open the db and make sure the `migrate_db_to_latest` errors
         {
@@ -497,21 +496,17 @@ mod tests {
         let db_path = Path::new("db1");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
             let db = p_db.db;
 
-            let key = [
-                KEYGEN_DATA_PREFIX.iter().cloned().collect(),
-                key_id.0.clone(),
-            ]
-            .concat();
+            let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
             db.put_cf(get_data_column_handle(&db), &key, &bashful_secret_bin)
                 .expect("Should write key share");
         }
 
         {
-            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
@@ -527,7 +522,7 @@ mod tests {
         let db_path = Path::new("db2");
         let _ = std::fs::remove_dir_all(db_path);
         {
-            let mut p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+            let mut p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
 
             let keys_before = p_db.load_keys();
             // there should be no key [0; 33] yet

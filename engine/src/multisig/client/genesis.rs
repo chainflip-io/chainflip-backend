@@ -35,33 +35,21 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
         let mut node_ids: BTreeSet<AccountId> = BTreeSet::new();
         reader
                 .records()
-                .filter_map(|result| match result {
-                    Ok(result) => Some(result),
-                    Err(e) => {
-                        panic!("Error reading csv record: {}", e);
-                    }
-                })
-                .filter_map(|record| {
-                    match record.deserialize::<Record>(None) {
-                        Ok((name, id)) => {
-                            // Check for duplicate names and ids
-                            assert!(
-                                node_names.insert(name.clone()),
-                                "Duplicate node name {} in csv",
-                                &name
-                            );
-                            assert!(
-                                node_ids.insert(id.clone()),
-                                "Duplicate node id {} reused by {}",
-                                &id,
-                                &name
-                            );
-                            Some((name, id))
-                        },
-                        Err(e) => {
-                            panic!("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas. Error: {}", e);
-                        }
-                    }
+                .map(|result_record| {
+                    let (name, id) = result_record.expect("Error reading csv record").deserialize::<Record>(None).expect("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas.");
+                    // Check for duplicate names and ids
+                    assert!(
+                        node_names.insert(name.clone()),
+                        "Duplicate node name {} in csv",
+                        &name
+                    );
+                    assert!(
+                        node_ids.insert(id.clone()),
+                        "Duplicate node id {} reused by {}",
+                        &id,
+                        &name
+                    );
+                    (name, id)
                 })
                 .collect::<HashMap<String, AccountId>>()
     }
@@ -140,15 +128,15 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
             .map(|(node_name, account_id)| {
                 let secret = hex::encode(
                     bincode::serialize(
-                        &nodes[&account_id]
+                        &nodes[account_id]
                             .client
                             .get_key(&key_id)
                             .expect("key must be present"),
                     )
-                    .expect(&format!("Could not serialize secret for {}", node_name)),
+                    .unwrap_or_else(|_| panic!("Could not serialize secret for {}", node_name)),
                 );
                 println!("{}'s secret: {:?}", &node_name, &secret);
-                (node_name.to_string(), secret.clone())
+                (node_name.to_string(), secret)
             })
             .collect();
 
@@ -157,11 +145,11 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
         if let Ok(output_file_path) = env::var(ENV_VAR_OUTPUT_FILE) {
             println!("Outputting key shares to {}", output_file_path);
             let mut file = File::create(&output_file_path)
-                .expect(&format!("Cant create file {}", output_file_path));
+                .unwrap_or_else(|_| panic!("Cant create file {}", output_file_path));
 
             let json_output = serde_json::to_string(&output).expect("Should make output into json");
             file.write_all(json_output.as_bytes())
-                .expect(&format!("Failed to write to file {}", output_file_path));
+                .unwrap_or_else(|_| panic!("Failed to write to file {}", output_file_path));
         } else {
             println!("No output file defined with {}", ENV_VAR_OUTPUT_FILE);
         }

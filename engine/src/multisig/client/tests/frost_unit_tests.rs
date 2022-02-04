@@ -121,7 +121,7 @@ async fn should_handle_invalid_local_sig() {
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
     let invalid_sig3 = gen_invalid_local_sig(&mut signing_ceremony.rng);
-    for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = invalid_sig3.clone();
     }
 
@@ -146,7 +146,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
-    for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
     }
 
@@ -178,7 +178,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
-    for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = gen_invalid_local_sig(&mut signing_ceremony.rng);
     }
 

@@ -13,10 +13,10 @@ EOF
 fi
 
 cat <<\EOF
-Running: cargo clippy -- -D warnings
+Running: cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
 EOF
 
-diff=$(cargo clippy -- -D warnings)
+diff=$(cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces)
 result=$?
 
 if [[ ${result} -ne 0 ]] ; then

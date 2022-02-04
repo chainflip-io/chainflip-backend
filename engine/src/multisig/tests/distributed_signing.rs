@@ -201,7 +201,7 @@ async fn distributed_signing() {
         let p2p_client = network.new_client(id.clone());
         let logger = logger.clone();
 
-        let db = KeyDBMock::new();
+        let db = KeyDBMock::default();
 
         let (multisig_instruction_tx, multisig_instruction_rx) =
             tokio::sync::mpsc::unbounded_channel();

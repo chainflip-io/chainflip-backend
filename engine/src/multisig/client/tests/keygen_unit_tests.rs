@@ -164,7 +164,7 @@ async fn should_delay_stage_data() {
             ceremony.distribute_messages(late_messages_next);
 
             // Check that the stage correctly advanced or finished
-            assert_ok!(ceremony.nodes[&target_account_id]
+            assert_ok!(ceremony.nodes[target_account_id]
                 .client
                 .ensure_ceremony_at_keygen_stage(
                     if stage_number + 2 > KEYGEN_STAGES {
@@ -207,7 +207,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         .get_mut(&ACCOUNT_IDS[0])
         .unwrap()
         .get_mut(&ACCOUNT_IDS[1])
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
+        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let messages = helpers::run_stages!(
         ceremony,
@@ -254,13 +254,13 @@ async fn should_report_on_invalid_blame_response() {
         .get_mut(&bad_node_id_1)
         .unwrap()
         .get_mut(&target_node_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
+        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     *messages
         .get_mut(&bad_node_id_2)
         .unwrap()
         .get_mut(&target_node_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
+        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let mut messages = helpers::run_stages!(
         ceremony,
@@ -272,7 +272,7 @@ async fn should_report_on_invalid_blame_response() {
 
     // stage 7 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
     let secret_share = SecretShare3::create_random(&mut ceremony.rng);
-    for (_, message) in messages.get_mut(&bad_node_id_1).unwrap() {
+    for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse6(
             std::iter::once((
                 party_idx_mapping.get_idx(&bad_node_id_2).unwrap(),
@@ -310,7 +310,7 @@ async fn should_abort_on_blames_at_invalid_indexes() {
     );
 
     let bad_node_id = &ACCOUNT_IDS[1];
-    for (_, message) in stage_4_messages.get_mut(bad_node_id).unwrap() {
+    for message in stage_4_messages.get_mut(bad_node_id).unwrap().values_mut() {
         *message = keygen::Complaints4(vec![1, usize::MAX]);
     }
 
@@ -502,7 +502,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 
     // Make one of the nodes send different comm1 to most of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    for (_, message) in messages.get_mut(bad_account_id).unwrap() {
+    for message in messages.get_mut(bad_account_id).unwrap().values_mut() {
         *message = gen_invalid_keygen_comm1(&mut ceremony.rng);
     }
 
@@ -533,7 +533,7 @@ async fn should_handle_invalid_commitments() {
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
     let invalid_comm1 = gen_invalid_keygen_comm1(&mut ceremony.rng);
-    for (_, message) in messages.get_mut(&bad_account_id).unwrap() {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = invalid_comm1.clone();
     }
 

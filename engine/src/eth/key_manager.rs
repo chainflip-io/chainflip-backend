@@ -222,7 +222,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, true);
+                    assert!(signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                 }
@@ -245,7 +245,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
+                    assert!(!signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }
@@ -268,7 +268,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
+                    assert!(!signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
                 }

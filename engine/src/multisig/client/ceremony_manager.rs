@@ -443,11 +443,11 @@ impl CeremonyManager {
 #[cfg(test)]
 impl CeremonyManager {
     pub fn expire_all(&mut self) {
-        for (_, state) in &mut self.signing_states {
+        for state in self.signing_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());
         }
 
-        for (_, state) in &mut self.keygen_states {
+        for state in self.keygen_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());
         }
     }

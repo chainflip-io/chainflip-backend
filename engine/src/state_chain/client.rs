@@ -1065,7 +1065,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
@@ -1284,7 +1284,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);

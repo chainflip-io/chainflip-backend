@@ -136,7 +136,7 @@ mod tests_read_clean_and_decode_hex_str_file {
     use super::*;
     use tempdir::TempDir;
 
-    fn with_file<C: FnOnce(PathBuf) -> () + std::panic::UnwindSafe>(text: &[u8], closure: C) {
+    fn with_file<C: FnOnce(PathBuf) + std::panic::UnwindSafe>(text: &[u8], closure: C) {
         let dir = TempDir::new("tests").unwrap();
         let file_path = dir.path().join("foo.txt");
         let result = catch_unwind(|| {
