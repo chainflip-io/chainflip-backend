@@ -204,23 +204,14 @@ pub mod pallet {
 						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
-					match T::VaultRotator::finalize_rotation() {
-						Ok(_) => match T::Auctioneer::confirm_auction(auction_result.clone()) {
-							Ok(_) => Self::update_rotation_status(RotationStatus::VaultsRotated(
-								auction_result,
-							)),
-							Err(e) =>
-								log::warn!(target: "cf-validator", "failed to confirm auction {:?}", e),
-						},
-						// TODO is this too verbose as we will be seeing this on every block until
-						// we finalize a vault rotation
-						Err(e) =>
-							log::warn!(target: "cf-validator", "finalizing a vault rotation failed due to error: {:?}", e),
+					if T::VaultRotator::finalize_rotation() {
+						Self::update_rotation_status(RotationStatus::VaultsRotated(auction_result));
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
-				RotationStatus::SessionRotating(_) => {
+				RotationStatus::SessionRotating(auction_result) => {
+					T::Auctioneer::update_validator_status(auction_result.clone());
 					Self::update_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -514,8 +505,7 @@ pub mod pallet {
 			let auction_result =
 				T::Auctioneer::resolve_auction::<ValidatorUnchecked<T::ValidatorId>>()
 					.expect("an auction is run for our genesis bidders");
-			T::Auctioneer::confirm_auction(auction_result.clone())
-				.expect("the auction is confirmed");
+			T::Auctioneer::update_validator_status(auction_result.clone());
 			Pallet::<T>::start_new_epoch(
 				&auction_result.winners,
 				auction_result.minimum_active_bid,

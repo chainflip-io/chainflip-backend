@@ -265,9 +265,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	// Things have gone well and we have a set of 'Winners', congratulations.
 	// We are ready to call this an auction a day resetting the bidders in storage and
 	// setting the state ready for a new set of 'Bidders'
-	fn confirm_auction(
-		auction: AuctionResult<Self::ValidatorId, Self::Amount>,
-	) -> Result<(), AuctionError> {
+	fn update_validator_status(auction: AuctionResult<Self::ValidatorId, Self::Amount>) {
 		let update_status = |validators: Vec<T::ValidatorId>, state| {
 			for validator_id in validators {
 				T::ChainflipAccount::update_state(&validator_id.into(), state);
@@ -294,8 +292,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			passive_nodes.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
 			ChainflipAccountState::Passive,
 		);
-
-		Ok(())
 	}
 }
 

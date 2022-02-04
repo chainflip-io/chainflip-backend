@@ -145,9 +145,9 @@ pub type ActiveValidatorRange = (u32, u32);
 /// Auctioneer
 ///
 /// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_aucion()`. It is required that for an auction to be
-/// accepted `confirm_auction()` will need to be called with result of the previous auction run.  A
-/// new auction is ran on each call of `resolve_auction()` which discards the previous auction run.
+/// returned as an `AuctionResult` calling `run_aucion()`. The result would then be provided to
+/// `update_validator_status()` when have rotated the active set.  A new auction is ran on each call
+/// of `resolve_auction()` which discards the previous auction run.
 
 pub trait Auctioneer {
 	type ValidatorId;
@@ -157,10 +157,9 @@ pub trait Auctioneer {
 	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
 	where
 		Q: QualifyValidator<ValidatorId = Self::ValidatorId>;
-	/// Confirm a previously run auction
-	fn confirm_auction(
-		auction: AuctionResult<Self::ValidatorId, Self::Amount>,
-	) -> Result<(), AuctionError>;
+
+	/// Update validator status based on the auction result
+	fn update_validator_status(auction: AuctionResult<Self::ValidatorId, Self::Amount>);
 }
 
 pub trait BackupValidators {
@@ -187,14 +186,12 @@ pub trait VaultRotator {
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), Self::RotationError>;
+	fn finalize_rotation() -> bool;
 }
 
 /// An error has occurred during an auction
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
-	/// An invalid index has been provided when referencing an auction
-	InvalidIndex,
 	/// Insufficient number of bidders
 	MinValidatorSize,
 }

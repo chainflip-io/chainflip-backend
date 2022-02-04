@@ -2,7 +2,7 @@ use crate::VaultRotator;
 use std::cell::RefCell;
 
 thread_local! {
-	pub static TO_CONFIRM: RefCell<Result<(), MockError>> = RefCell::new(Err(MockError));
+	pub static TO_CONFIRM: RefCell<bool> = RefCell::new(true);
 	pub static ERROR_ON_START: RefCell<bool> = RefCell::new(false);
 }
 
@@ -14,7 +14,7 @@ pub struct MockError;
 
 // Helper function to clear the confirmation result
 pub fn clear_confirmation() {
-	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
+	TO_CONFIRM.with(|l| *l.borrow_mut() = false);
 }
 
 impl Mock {
@@ -41,11 +41,11 @@ impl VaultRotator for Mock {
 			return Err(MockError)
 		}
 
-		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(MockError));
+		TO_CONFIRM.with(|l| *l.borrow_mut() = true);
 		Ok(())
 	}
 
-	fn finalize_rotation() -> Result<(), Self::RotationError> {
-		TO_CONFIRM.with(|l| *l.borrow())
+	fn finalize_rotation() -> bool {
+		!TO_CONFIRM.with(|l| *l.borrow())
 	}
 }

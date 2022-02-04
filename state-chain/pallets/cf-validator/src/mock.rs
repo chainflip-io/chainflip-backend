@@ -106,17 +106,11 @@ pub struct MockAuctioneer;
 
 thread_local! {
 	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, AuctionError>> = RefCell::new(Ok(Default::default()));
-	pub static AUCTION_CONFIRM_BEHAVIOUR: RefCell<Result<(), AuctionError>> = RefCell::new(Ok(()));
 }
 
 impl MockAuctioneer {
 	pub fn set_run_behaviour(behaviour: Result<AuctionResult<ValidatorId, Amount>, AuctionError>) {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
-			*cell.borrow_mut() = behaviour;
-		});
-	}
-	pub fn set_confirm_behaviour(behaviour: Result<(), AuctionError>) {
-		AUCTION_CONFIRM_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
 		});
 	}
@@ -136,11 +130,7 @@ impl Auctioneer for MockAuctioneer {
 		})
 	}
 
-	fn confirm_auction(
-		_auction: AuctionResult<Self::ValidatorId, Self::Amount>,
-	) -> Result<(), AuctionError> {
-		AUCTION_CONFIRM_BEHAVIOUR.with(|cell| *cell.borrow())
-	}
+	fn update_validator_status(_auction: AuctionResult<Self::ValidatorId, Self::Amount>) {}
 }
 
 pub struct MockIsOutgoing;
@@ -230,8 +220,8 @@ impl VaultRotator for MockVaultRotator {
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), Self::RotationError> {
-		Ok(())
+	fn finalize_rotation() -> bool {
+		true
 	}
 }
 

@@ -24,8 +24,7 @@ mod tests {
 				)),
 			);
 
-			<AuctionPallet as Auctioneer>::confirm_auction(auction_result.clone())
-				.expect("this should confirm as auction index will match");
+			<AuctionPallet as Auctioneer>::update_validator_status(auction_result.clone());
 
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 			let AuctionResult { winners, minimum_active_bid, .. } = run_complete_auction();

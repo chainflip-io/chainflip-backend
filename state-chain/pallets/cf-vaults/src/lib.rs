@@ -692,16 +692,15 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		Self::start_vault_rotation_for_chain(candidates, ChainId::Ethereum)
 	}
 
-	fn finalize_rotation() -> Result<(), Self::RotationError> {
+	fn finalize_rotation() -> bool {
 		if Pallet::<T>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
 			PendingVaultRotations::<T>::remove_all(None);
 			Self::deposit_event(Event::VaultsRotated);
-			Ok(())
-		} else {
-			// Wait on confirmation
-			Err(Error::<T>::NotConfirmed.into())
+			return true
 		}
+
+		false
 	}
 }
 
