@@ -4,8 +4,8 @@ mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;
 
 use super::{
-	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
-	Validator, Witnesser,
+	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards,
+	Runtime, Validator, Witnesser,
 };
 use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
@@ -17,15 +17,19 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
+	BackupValidators, BlockAuthor, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, RewardsDistribution,
+	SigningContext, StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::{instances::*, weights::Weight};
+use frame_support::{instances::*, traits::SignedImbalance, weights::Weight};
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
+
+use crate::sp_api_hidden_includes_construct_runtime::hidden_include::traits::Imbalance;
+use pallet_cf_flip::Surplus;
+
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
@@ -368,5 +372,26 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::InvalidTransactionAuthored => (15, false),
 			OfflineCondition::TransactionFailedOnTransmission => (15, false),
 		}
+	}
+}
+
+pub struct AuthorshipManager;
+
+impl BlockAuthor for AuthorshipManager {
+	type AccountId = AccountId;
+	fn get() -> Self::AccountId {
+		Authorship::author()
+	}
+}
+
+pub struct BlockAuthorRewardDistribution;
+
+impl RewardsDistribution for BlockAuthorRewardDistribution {
+	type Balance = FlipBalance;
+	type Surplus = Surplus<Runtime>;
+
+	fn distribute(rewards: Self::Surplus) {
+		let current_block_author = Authorship::author();
+		Flip::settle_imbalance(&current_block_author, rewards);
 	}
 }

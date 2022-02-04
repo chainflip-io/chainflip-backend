@@ -172,9 +172,9 @@ parameter_types! {
 
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
 
-pub struct MockRewardsDistribution<T>(PhantomData<T>);
+pub struct MockRewardsDistribution;
 
-impl RewardsDistribution for MockRewardsDistribution<Test> {
+impl RewardsDistribution for MockRewardsDistribution {
 	type Balance = u128;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 
@@ -183,10 +183,6 @@ impl RewardsDistribution for MockRewardsDistribution<Test> {
 		let deposit = Flip::deposit_reserves(*b"RSVR", reward_amount);
 		let _ = rewards.offset(deposit);
 	}
-
-	fn execution_weight() -> frame_support::dispatch::Weight {
-		1
-	}
 }
 
 impl pallet_cf_emissions::Config for Test {
@@ -194,7 +190,7 @@ impl pallet_cf_emissions::Config for Test {
 	type FlipBalance = u128;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
-	type RewardsDistribution = MockRewardsDistribution<Self>;
+	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
 	type SigningContext = MockEthSigningContext;

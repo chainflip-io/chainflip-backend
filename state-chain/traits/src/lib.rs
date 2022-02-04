@@ -305,13 +305,10 @@ pub trait Issuance {
 pub trait RewardsDistribution {
 	type Balance;
 	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance> + Into<SignedImbalance<Self::Balance, Self::Surplus>>;
+	type Surplus: Imbalance<Self::Balance>;
 
 	/// Distribute some rewards.
 	fn distribute(rewards: Self::Surplus);
-
-	/// The execution weight of calling the distribution function.
-	fn execution_weight() -> Weight;
 }
 
 pub trait RewardRollover {
@@ -612,4 +609,11 @@ pub trait QualifyValidator {
 	type ValidatorId;
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+}
+
+/// Looks up the current block author
+pub trait BlockAuthor {
+	type AccountId;
+	/// Returns the account id of the current block author
+	fn get() -> Self::AccountId;
 }

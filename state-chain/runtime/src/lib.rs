@@ -386,7 +386,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type FlipBalance = FlipBalance;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
