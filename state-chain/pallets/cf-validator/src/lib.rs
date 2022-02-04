@@ -510,6 +510,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
+	fn last_expired_epoch() -> EpochIndex {
+		Default::default()
+	}
+
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()
 	}
