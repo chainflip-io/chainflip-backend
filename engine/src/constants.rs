@@ -10,7 +10,7 @@ pub const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
 pub const PENDING_SIGN_DURATION: Duration = Duration::from_secs(500); // TODO Look at this value
 
 /// Maximum duration a ceremony stage can last
-pub const MAX_STAGE_DURATION: Duration = Duration::from_secs(300); // TODO Look at this value
+pub const MAX_STAGE_DURATION: Duration = Duration::from_secs(120); // TODO Look at this value
 
 // ======= State chain client =======
 
