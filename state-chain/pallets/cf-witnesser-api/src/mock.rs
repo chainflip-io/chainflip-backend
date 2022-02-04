@@ -166,6 +166,7 @@ impl pallet_cf_staking::Config for Test {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 type Amount = u128;

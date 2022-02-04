@@ -61,6 +61,16 @@ parameters:
 
 ######################## Commands ########################
 commands:
+  install_gh_cli:
+    parameters:
+      version:
+        default: 2.4.0
+        type: string
+    steps:
+      - run: |
+          wget https://github.com/cli/cli/releases/download/v<<parameters.version>>/gh_<<parameters.version>>_linux_amd64.tar.gz
+          tar -xvf gh_<<parameters.version>>_linux_amd64.tar.gz
+          mv ./gh_<<parameters.version>>_linux_amd64/bin/gh /usr/local/bin
   send_notification:
     parameters:
       failure_message:
@@ -125,48 +135,53 @@ workflows:
             - ghcr-credentials
 
   # We run docs separately to the main flow, so it doesn't slow the process down.
-  chainflip-backend-docs:
+  chainflip-backend-non-blocking:
     when:
       not: <<pipeline.parameters.build_testnet>>
     jobs:
-      - cargo-doc-validator-package:
+      - cargo-doc:
           context:
             - ghcr-credentials
             - github-credentials
+      - update-cargo-audit-log:
+          context:
+            - ghcr-credentials
+            - github-credentials
+          <<: *only_main_branches
 
   chainflip-backend-checks:
     when:
       not: <<pipeline.parameters.build_testnet>>
     jobs:
-      - cargo-clippy-validator-package:
+      - cargo-clippy:
           requires:
-            - cargo-fmt-validator-package
+            - cargo-fmt
           context:
             - ghcr-credentials
             - github-credentials
           <<: *ignore_main_branches
 
       # The follow jobs always run, regardless of PR or merge.
-      - cargo-check-validator-package:
+      - cargo-check:
           requires:
-            - cargo-fmt-validator-package
+            - cargo-fmt
           context:
             - ghcr-credentials
             - github-credentials
-      - cargo-fmt-validator-package:
+      - cargo-fmt:
           context:
             - ghcr-credentials
             - github-credentials
-      - cargo-build-and-test-validator-package:
+      - cargo-build-and-test:
           requires:
-            - cargo-fmt-validator-package
+            - cargo-fmt
           context:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
       - test-single-node:
           requires:
-            - cargo-build-and-test-validator-package
+            - cargo-build-and-test
           context:
             - ghcr-credentials
             - do-credentials
@@ -199,7 +214,7 @@ workflows:
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
     jobs:
-      - cargo-build-and-test-validator-package:
+      - cargo-build-and-test:
           context:
             - ghcr-credentials
             - discord-webhooks
@@ -210,7 +225,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
           extra_build_args: "--build-arg SERVICE=chainflip-engine --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package
+            - cargo-build-and-test
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -220,7 +235,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
           extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
           requires:
-            - cargo-build-and-test-validator-package
+            - cargo-build-and-test
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -292,7 +307,7 @@ jobs:
           image: <<parameters.image>>
           tag: <<parameters.tag>>
 
-  cargo-fmt-validator-package:
+  cargo-fmt:
     executor: rust-base
     steps:
       - checkout
@@ -304,7 +319,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-build-and-test-validator-package-integration:
+  cargo-build-and-test-integration:
     <<: *cargo-base-job
     executor: rust-poetry
     steps:
@@ -341,7 +356,7 @@ jobs:
       - send_notification:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
 
-  cargo-build-and-test-validator-package:
+  cargo-build-and-test:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -366,7 +381,7 @@ jobs:
   # We run sccache --show-stats multiple times;
   # First to check connection, and once after each
   # cargo function to track the performance of the compilation.
-  cargo-check-validator-package:
+  cargo-check:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -374,11 +389,11 @@ jobs:
       - run: sccache --show-stats
       - run:
           environment:
-              RUSTFLAGS: -D warnings
+            RUSTFLAGS: -D warnings
           command: |
             cargo check --all-targets --all-features --locked --release
             sccache --show-stats
-  cargo-test-validator-package:
+  cargo-test:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -387,7 +402,7 @@ jobs:
       - run: |
           cargo test --lib --locked --release
           sccache --show-stats
-  cargo-clippy-validator-package:
+  cargo-clippy:
     <<: *cargo-base-job
     steps:
       - checkout
@@ -397,7 +412,7 @@ jobs:
           cargo clippy
           sccache --show-stats
 
-  cargo-doc-validator-package:
+  cargo-doc:
     <<: *cargo-base-job
     shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
     steps:
@@ -409,6 +424,30 @@ jobs:
           sccache --show-stats
       - store_artifacts:
           path: target/doc/
+
+  update-cargo-audit-log:
+    <<: *cargo-base-job
+    shell: /bin/bash # Circle's beautiful way of ignoring failures 🙄
+    steps:
+      - checkout
+      - merge_target
+      - install_gh_cli
+      - run: sccache --show-stats
+      - run: |
+          cargo install --force cargo-audit
+          cargo generate-lockfile
+      - run: |
+          apt-get install -y gettext
+          wget https://github.com/cli/cli/releases/download/v2.4.0/gh_2.4.0_linux_amd64.tar.gz
+          tar -xvf gh_2.4.0_linux_amd64.tar.gz
+          cargo-audit audit --json > audit.json
+          export advisory=$(cat audit.json | jq '.vulnerabilities.list[].advisory | {id,package,title,description,date,url}')
+          export warnings=$(cat audit.json | jq '.warnings | keys[] as $k| .[$k] | .[] | {kind,package}')
+          export date=$(date)
+          cat .circleci/templates/audit-log.md | envsubst > /tmp/audit-log.md
+          gh issue edit 1175 --body-file /tmp/audit-log.md
+
+
 
   git-clone-contracts-repo:
     resource_class: small

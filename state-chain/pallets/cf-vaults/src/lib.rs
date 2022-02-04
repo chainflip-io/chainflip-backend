@@ -80,7 +80,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
 	pub fn success_threshold(&self) -> u32 {
-		utilities::threshold_from_share_count(self.candidate_count).saturating_add(1)
+		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// Accumulate a success vote into the keygen status.
@@ -155,9 +155,7 @@ impl<T: Config> KeygenResponseStatus<T> {
 
 		// If no nodes will ever conclusively be considered failed, we return None to signify that
 		// we can't make a decision.
-		if possible.peek().is_none() {
-			return None
-		}
+		possible.peek()?;
 
 		if possible.clone().any(|(_, vote_count)| *vote_count < self.success_threshold()) {
 			// We are still waiting for more reponses before drawing a conclusion.
@@ -278,26 +276,25 @@ pub mod pallet {
 				{
 					match response_status.consensus_outcome() {
 						Some(KeygenOutcome::Success(new_public_key)) => {
-							weight += T::WeightInfo::on_keygen_success();
+							weight += T::WeightInfo::on_initialize_success();
 							Self::on_keygen_success(keygen_ceremony_id, chain_id, new_public_key)
 								.unwrap_or_else(|e| {
 									log::error!(
 										"Failed to report success of keygen ceremony {}: {:?}. Reporting failure instead.",
 										keygen_ceremony_id, e
 									);
-									weight += T::WeightInfo::on_keygen_failure();
 									Self::on_keygen_failure(keygen_ceremony_id, chain_id, vec![]);
 								});
 						},
 						Some(KeygenOutcome::Failure(offenders)) => {
-							weight += T::WeightInfo::on_keygen_failure();
+							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							Self::on_keygen_failure(keygen_ceremony_id, chain_id, offenders);
 						},
 						None => {
 							if current_block.saturating_sub(since_block) >=
 								T::KeygenResponseGracePeriod::get()
 							{
-								weight += T::WeightInfo::on_keygen_failure();
+								weight += T::WeightInfo::on_initialize_none();
 								log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
 								Self::deposit_event(Event::<T>::KeygenGracePeriodElapsed(
 									keygen_ceremony_id,
@@ -579,7 +576,7 @@ pub mod pallet {
 				.expect("Can't build genesis without a valid ethereum vault key.");
 
 			Vaults::<T>::insert(
-				0,
+				T::EpochInfo::epoch_index(),
 				ChainId::Ethereum,
 				Vault {
 					public_key: self.ethereum_vault_key.clone(),
@@ -667,7 +664,7 @@ impl<T: Config> Pallet<T> {
 			chain_id,
 			VaultRotationStatus::<T>::AwaitingRotation { new_public_key },
 		);
-		Ok(().into())
+		Ok(())
 	}
 
 	fn on_keygen_failure(

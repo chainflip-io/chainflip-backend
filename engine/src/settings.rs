@@ -34,12 +34,11 @@ impl StateChain {
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Eth {
-    pub from_block: u64,
     pub node_endpoint: String,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 pub struct HealthCheck {
     pub hostname: String,
     pub port: u16,
@@ -62,7 +61,7 @@ pub struct Settings {
     pub node_p2p: P2P,
     pub state_chain: StateChain,
     pub eth: Eth,
-    pub health_check: HealthCheck,
+    pub health_check: Option<HealthCheck>,
     pub signing: Signing,
     #[serde(default)]
     pub log: Log,
@@ -104,9 +103,6 @@ pub struct CommandLineOptions {
     #[structopt(flatten)]
     eth_opts: EthSharedOptions,
 
-    #[structopt(long = "eth.from_block")]
-    eth_from_block: Option<u64>,
-
     // Health Check Settings
     #[structopt(long = "health_check.hostname")]
     health_check_hostname: Option<String>,
@@ -127,7 +123,6 @@ impl CommandLineOptions {
             log_blacklist: None,
             node_key_file: None,
             state_chain_opts: StateChainOptions::default(),
-            eth_from_block: None,
             eth_opts: EthSharedOptions::default(),
             health_check_hostname: None,
             health_check_port: None,
@@ -172,14 +167,37 @@ impl Settings {
     /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
-        let mut settings = match opts.config_path {
-            Some(path) => Self::from_file(&path)?,
-            None => Self::from_file("config/Default.toml")?,
-        };
+        let settings = Self::from_default_file(
+            &match &opts.config_path.clone() {
+                Some(path) => path,
+                None => "config/Default.toml",
+            },
+            opts,
+        )?;
 
-        // Override the settings with the cmd line options
+        Ok(settings)
+    }
 
-        // P2P
+    /// Validates the formatting of some settings
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
+        parse_websocket_url(&self.eth.node_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+        self.state_chain.validate_settings()?;
+
+        is_valid_db_path(self.signing.db_file.as_path())
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Load settings from a TOML file
+    /// If opts contains another file name, it'll use that as the default
+    pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
+        let mut s = Config::new();
+        s.merge(File::with_name(file))?;
+        let mut settings: Settings = s.try_into()?;
+
         if let Some(opt) = opts.node_key_file {
             settings.node_p2p.node_key_file = opt
         };
@@ -193,9 +211,6 @@ impl Settings {
         };
 
         // Eth
-        if let Some(opt) = opts.eth_from_block {
-            settings.eth.from_block = opt
-        };
         if let Some(opt) = opts.eth_opts.eth_node_endpoint {
             settings.eth.node_endpoint = opt
         };
@@ -203,13 +218,18 @@ impl Settings {
             settings.eth.private_key_file = opt
         };
 
-        // Health Check
+        // Health Check - this is optional
+        let mut health_check = HealthCheck::default();
         if let Some(opt) = opts.health_check_hostname {
-            settings.health_check.hostname = opt
+            health_check.hostname = opt;
         };
         if let Some(opt) = opts.health_check_port {
-            settings.health_check.port = opt
+            health_check.port = opt;
         };
+        // Don't override the healthcheck settings unless something has changed
+        if health_check != HealthCheck::default() {
+            settings.health_check = Some(health_check);
+        }
 
         // Signing
         if let Some(opt) = opts.signing_db_file {
@@ -229,42 +249,14 @@ impl Settings {
 
         Ok(settings)
     }
-
-    /// Validates the formatting of some settings
-    pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.eth.node_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        self.state_chain.validate_settings()?;
-
-        is_valid_db_path(self.signing.db_file.as_path())
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        Ok(())
-    }
-
-    /// Load settings from a TOML file
-    pub fn from_file(file: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-
-        // merging in the configuration file
-        s.merge(File::with_name(file))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        let s: Settings = s.try_into()?;
-
-        // make sure the settings are clean
-        s.validate_settings()?;
-
-        Ok(s)
-    }
 }
 
 /// Parse the URL and check that it is a valid websocket url
 pub fn parse_websocket_url(url: &str) -> Result<Url> {
     let issue_list_url = Url::parse(url)?;
-    if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
-        return Err(anyhow::Error::msg("Wrong scheme"));
+    let scheme = issue_list_url.scheme();
+    if scheme != "ws" && scheme != "wss" {
+        return Err(anyhow::Error::msg(format!("Invalid scheme: `{}`", scheme)));
     }
     if issue_list_url.host() == None
         || issue_list_url.username() != ""
@@ -273,7 +265,7 @@ pub fn parse_websocket_url(url: &str) -> Result<Url> {
         || issue_list_url.fragment() != None
         || issue_list_url.cannot_be_a_base()
     {
-        return Err(anyhow::Error::msg("Invalid URL data"));
+        return Err(anyhow::Error::msg("Invalid URL data."));
     }
 
     Ok(issue_list_url)
@@ -292,7 +284,7 @@ pub mod test_utils {
 
     /// Loads the settings from the "config/Testing.toml" file
     pub fn new_test_settings() -> Result<Settings, ConfigError> {
-        Settings::from_file("config/Testing.toml")
+        Settings::from_default_file("config/Testing.toml", CommandLineOptions::default())
     }
 }
 
@@ -305,7 +297,9 @@ mod tests {
 
     #[test]
     fn init_default_config() {
-        let settings = Settings::new(CommandLineOptions::new()).unwrap();
+        let settings =
+            Settings::from_default_file("config/Default.toml", CommandLineOptions::default())
+                .unwrap();
 
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
@@ -382,7 +376,6 @@ mod tests {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
-            eth_from_block: Some(1234),
             eth_opts: EthSharedOptions {
                 eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
                 eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
@@ -407,7 +400,6 @@ mod tests {
             settings.state_chain.signing_key_file
         );
 
-        assert_eq!(opts.eth_from_block.unwrap(), settings.eth.from_block);
         assert_eq!(
             opts.eth_opts.eth_node_endpoint.unwrap(),
             settings.eth.node_endpoint
@@ -419,9 +411,12 @@ mod tests {
 
         assert_eq!(
             opts.health_check_hostname.unwrap(),
-            settings.health_check.hostname
+            settings.health_check.as_ref().unwrap().hostname
         );
-        assert_eq!(opts.health_check_port.unwrap(), settings.health_check.port);
+        assert_eq!(
+            opts.health_check_port.unwrap(),
+            settings.health_check.as_ref().unwrap().port
+        );
 
         assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 

@@ -3,7 +3,7 @@ use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
 	Validator, Vaults, Witnesser,
 };
-use crate::{BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
+use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -13,10 +13,10 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BlockEmissions, BondRotation, Chainflip, ChainflipAccount, ChainflipAccountState,
+	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, SigningContext, StakeHandler,
-	StakeTransfer, VaultRotationHandler,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
+	StakeHandler, StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -24,6 +24,7 @@ use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
+	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 	RuntimeDebug,
 };
@@ -48,6 +49,13 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
+	fn on_epoch_ending() {
+		// Apportion rewards for the current validators
+		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
+			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
+		});
+	}
+
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -59,9 +67,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.
 		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover: {:?}!", err);
+			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
 		});
-		Validator::generate_lookup(new_validators);
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
@@ -85,6 +92,8 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 	type ValidatorId = AccountId;
 	type Amount = T::Amount;
 
+	fn on_epoch_ending() {}
+
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -93,7 +102,7 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 		// Update the last active epoch for the new validating set
 		let epoch_index = Validator::epoch_index();
 		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(&validator, epoch_index);
+			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
 		}
 	}
 }
@@ -127,7 +136,7 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
 }
 
 struct BackupValidatorEmissions;
@@ -141,7 +150,10 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[&Self::ValidatorId]) -> Weight {
+	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
+		if backup_validators.is_empty() {
+			return 0
+		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
@@ -159,16 +171,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(&Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
 			.iter()
 			.map(|backup_validator| {
 				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(*backup_validator);
+					Self::StakeTransfer::stakeable_balance(backup_validator);
 				let reward_scaling_factor =
 					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
 				total_rewards += reward;
-				(*backup_validator, reward)
+				(backup_validator.clone(), reward)
 			})
 			.collect();
 
@@ -177,7 +189,11 @@ impl RewardDistribution for BackupValidatorEmissions {
 			rewards = rewards
 				.into_iter()
 				.map(|(validator_id, reward)| {
-					(validator_id, (reward * emissions_cap) / total_rewards)
+					(
+						validator_id,
+						multiply_by_rational(reward, emissions_cap, total_rewards)
+							.unwrap_or_default(),
+					)
 				})
 				.collect();
 		}
@@ -209,16 +225,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		// We pay rewards to online backup validators on each heartbeat interval
-		let backup_validators: Vec<&Self::ValidatorId> = network_state
-			.online
-			.iter()
-			.filter(|account_id| {
-				ChainflipAccountStore::<Runtime>::get(*account_id).state ==
-					ChainflipAccountState::Backup
-			})
-			.collect();
-
+		let backup_validators = <Auction as BackupValidators>::backup_validators();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are within the emergency rotation range
@@ -364,14 +371,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 	type Call = Call;
 
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
-		let is_gov_call = match call {
-			Call::Governance(_) => true,
-			_ => false,
-		};
-		if is_gov_call {
+		if matches!(call, Call::Governance(_)) {
 			return super::Governance::members().contains(caller)
 		}
-		return false
+		false
 	}
 }
 

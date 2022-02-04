@@ -24,19 +24,13 @@ use sp_std::{
 	prelude::*,
 	str, vec,
 };
-//------------------------//
-// TODO: these should be on-chain constants or config items. See github issue #520.
+
+// Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
-pub fn stake_manager_contract_address() -> [u8; 20] {
-	const ADDR: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
-	let mut buffer = [0u8; 20];
-	buffer.copy_from_slice(hex::decode(ADDR).unwrap().as_slice());
-	buffer
-}
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;
@@ -238,9 +232,9 @@ impl AggKey {
 
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&nonce));
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(nonce));
 		let e = {
-			let challenge = self.message_challenge(&msg_hash, &k_times_g_addr);
+			let challenge = self.message_challenge(msg_hash, &k_times_g_addr);
 			let mut s = Scalar::default();
 			let mut bytes = [0u8; 32];
 			bytes.copy_from_slice(&challenge);

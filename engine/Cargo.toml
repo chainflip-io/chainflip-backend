@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 name = "chainflip-engine"
-version = "0.1.1"
+version = "0.2.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -24,6 +24,7 @@ bs58 = "0.4"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
 failure = "0.1.8"
+fs_extra = "1.2.0"
 futures = "0.3.14"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
@@ -31,14 +32,18 @@ hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
+chrono = "0.4.19"
+# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
+rand_legacy = { package = "rand", version = "0.6" }
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
 jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
-websocket = "0.24"
 
+websocket = "0.24"
+ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
 # kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.14.0"
@@ -63,10 +68,11 @@ web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 zeroize = "1.4.3"
 libp2p = "0.39.1"
 generic-array= "0.14"
+public-ip = "0.2.2"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
-cf-p2p = {path = "../state-chain/client/cf-p2p"}
+multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
@@ -135,3 +141,5 @@ mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
+csv = "1.1.6"
+tempdir = "0.3.7"

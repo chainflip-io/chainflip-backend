@@ -93,10 +93,15 @@ pub struct KeyShare {
     pub x_i: Scalar,
 }
 
+// Ideally, we want to use a concrete implementation (like ChaCha20) instead of StdRng
+// to prevent it from potentially changing from under us (but it needs to be compatible
+// with rand_legacy)
+pub type Rng = rand_legacy::rngs::StdRng;
+
 #[cfg(test)]
 impl Point {
-    pub fn random() -> Self {
-        Point::from_scalar(&Scalar::random())
+    pub fn random(mut rng: &mut Rng) -> Self {
+        Point::from_scalar(&Scalar::random(&mut rng))
     }
 }
 
@@ -120,8 +125,13 @@ impl Point {
 }
 
 impl Scalar {
-    pub fn random() -> Self {
-        Scalar(Secp256k1Scalar::random())
+    pub fn random(mut rng: &mut Rng) -> Self {
+        use curv::elliptic::curves::secp256_k1::SK;
+
+        let scalar = secp256k1::SecretKey::new(&mut rng);
+
+        let scalar = Secp256k1Scalar::from_underlying(Some(SK(scalar)));
+        Scalar(scalar)
     }
 
     pub fn zero() -> Self {

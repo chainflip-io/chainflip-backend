@@ -47,4 +47,7 @@ pub mod common {
 
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
+
+	/// The minimum stake for Soundcheck is 1_000 tFLIP
+	pub const MIN_STAKE: FlipBalance = 1_000 * 10u128.pow(18);
 }
