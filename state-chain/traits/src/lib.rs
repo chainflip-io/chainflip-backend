@@ -610,10 +610,3 @@ pub trait QualifyValidator {
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
-
-/// Looks up the current block author
-pub trait BlockAuthor {
-	type AccountId;
-	/// Returns the account id of the current block author
-	fn get() -> Self::AccountId;
-}

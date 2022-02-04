@@ -17,7 +17,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BackupValidators, BlockAuthor, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
+	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
 	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, RewardsDistribution,
 	SigningContext, StakeHandler, StakeTransfer, VaultRotationHandler,
@@ -363,15 +363,6 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::InvalidTransactionAuthored => (15, false),
 			OfflineCondition::TransactionFailedOnTransmission => (15, false),
 		}
-	}
-}
-
-pub struct AuthorshipManager;
-
-impl BlockAuthor for AuthorshipManager {
-	type AccountId = AccountId;
-	fn get() -> Self::AccountId {
-		Authorship::author()
 	}
 }
 
