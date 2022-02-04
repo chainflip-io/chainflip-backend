@@ -543,10 +543,10 @@ pub enum AsyncResult<R> {
 }
 
 impl<R> AsyncResult<R> {
-	pub fn ready_or_else<E>(self, e: impl FnOnce() -> E) -> Result<R, E> {
+	pub fn ready_or_else<E>(self, e: impl FnOnce(Self) -> E) -> Result<R, E> {
 		match self {
 			AsyncResult::Ready(s) => Ok(s),
-			_ => Err(e()),
+			_ => Err(e(self)),
 		}
 	}
 }

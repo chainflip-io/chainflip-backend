@@ -389,9 +389,9 @@ pub mod pallet {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let signature = T::ThresholdSigner::signature_result(signature_request_id)
-				.ready_or_else(|| {
+				.ready_or_else(|r| {
 					// This should never happen unless there is a mistake in the implementation.
-					log::error!("Callback triggered with no signature.");
+					log::error!("Callback triggered with no signature. Signature status {:?}", r);
 					Error::<T>::SignatureNotReady
 				})?;
 
