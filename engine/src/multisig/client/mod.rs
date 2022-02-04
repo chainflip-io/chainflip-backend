@@ -15,13 +15,13 @@ mod ceremony_manager;
 #[cfg(test)]
 mod genesis;
 
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{KeyDB, KeyId, MultisigInstruction},
+    multisig::{client::utils::PartyIdxMapping, KeyDB, KeyId, MultisigInstruction},
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -49,6 +49,8 @@ use self::{
 };
 
 pub use keygen::KeygenOptions;
+
+use super::{KeygenInfo, SigningInfo};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -256,12 +258,104 @@ where
         }
     }
 
+    fn single_party_keygen(&mut self, keygen_info: KeygenInfo) {
+        slog::info!(self.logger, "Performing solo keygen");
+
+        if !keygen_info.signers.contains(&self.my_account_id) {
+            slog::warn!(
+                self.logger,
+                "Keygen request ignored: we are not among participants"
+            );
+
+            // TODO: remove this once parallel ceremonies PR is merged
+            self.multisig_outcome_sender
+                .send(MultisigOutcome::Ignore)
+                .unwrap();
+            return;
+        }
+
+        use crate::multisig::crypto::{KeyShare, Point, Scalar};
+        use common::KeygenResult;
+
+        let params = ThresholdParameters::from_share_count(1);
+
+        let (secret_key, public_key) = loop {
+            let secret_key = Scalar::random();
+            let public_key = Point::from_scalar(&secret_key);
+
+            if keygen::is_contract_compatible(&public_key.get_element()) {
+                break (secret_key, public_key);
+            }
+        };
+
+        let key_result_info = KeygenResultInfo {
+            key: Arc::new(KeygenResult {
+                key_share: KeyShare {
+                    y: public_key,
+                    x_i: secret_key,
+                },
+                // This is not going to be used in solo ceremonies
+                party_public_keys: vec![public_key],
+            }),
+            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&keygen_info.signers)),
+            params,
+        };
+
+        self.on_key_generated(keygen_info.ceremony_id, key_result_info);
+    }
+
+    fn single_party_signing(
+        &mut self,
+        sign_info: SigningInfo,
+        keygen_result_info: KeygenResultInfo,
+    ) {
+        use crate::multisig::crypto::{Point, Scalar};
+
+        slog::info!(self.logger, "Performing solo signing");
+
+        if !sign_info.signers.contains(&self.my_account_id) {
+            slog::warn!(
+                self.logger,
+                "Signing request ignored: we are not among participants"
+            );
+
+            // TODO: remove this once parallel ceremonies PR is merged
+            self.multisig_outcome_sender
+                .send(MultisigOutcome::Ignore)
+                .unwrap();
+            return;
+        }
+
+        let key = &keygen_result_info.key.key_share;
+
+        let nonce = Scalar::random();
+        let r = Point::from_scalar(&nonce);
+
+        let sigma = signing::frost::generate_contract_schnorr_sig(
+            key.x_i.clone(),
+            key.y,
+            r,
+            nonce,
+            &sign_info.data.0,
+        );
+
+        let sig = SchnorrSignature {
+            s: *sigma.as_bytes(),
+            r: r.get_element(),
+        };
+
+        self.multisig_outcome_sender
+            .send(MultisigOutcome::Signing(SigningOutcome {
+                id: sign_info.ceremony_id,
+                result: Ok(sig),
+            }))
+            .unwrap();
+    }
+
     /// Process `instruction` issued internally (i.e. from SC or another local module)
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
             MultisigInstruction::Keygen(keygen_info) => {
-                // For now disable generating a new key when we already have one
-
                 slog::debug!(
                     self.logger,
                     "Received a keygen request, participants: {}",
@@ -269,8 +363,12 @@ where
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
 
-                self.ceremony_manager
-                    .on_keygen_request(keygen_info, self.keygen_options);
+                if keygen_info.signers.len() == 1 {
+                    self.single_party_keygen(keygen_info);
+                } else {
+                    self.ceremony_manager
+                        .on_keygen_request(keygen_info, self.keygen_options);
+                }
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
@@ -281,14 +379,20 @@ where
                     sign_info.data, format_iterator(&sign_info.signers);
                     CEREMONY_ID_KEY => sign_info.ceremony_id
                 );
-                match self.key_store.get_key(key_id) {
+
+                let key = self.key_store.get_key(key_id).cloned();
+                match key {
                     Some(keygen_result_info) => {
-                        self.ceremony_manager.on_request_to_sign(
-                            sign_info.data,
-                            keygen_result_info.clone(),
-                            sign_info.signers,
-                            sign_info.ceremony_id,
-                        );
+                        if sign_info.signers.len() == 1 {
+                            self.single_party_signing(sign_info, keygen_result_info);
+                        } else {
+                            self.ceremony_manager.on_request_to_sign(
+                                sign_info.data,
+                                keygen_result_info,
+                                sign_info.signers,
+                                sign_info.ceremony_id,
+                            );
+                        }
                     }
                     None => {
                         // The key is not ready, delay until either it is ready or timeout
