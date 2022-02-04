@@ -21,7 +21,7 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{KeyDB, KeyId, MultisigInstruction},
+    multisig::{crypto::Rng, KeyDB, KeyId, MultisigInstruction},
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -58,7 +58,7 @@ pub struct SchnorrSignature {
     pub r: secp256k1::PublicKey,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThresholdParameters {
     /// Total number of key shares (equals the total number of parties in keygen)
     pub share_count: usize,
@@ -90,6 +90,9 @@ pub enum MultisigData {
     Signing(SigningData),
 }
 
+derive_try_from_variant!(KeygenData, MultisigData::Keygen, MultisigData);
+derive_try_from_variant!(SigningData, MultisigData::Signing, MultisigData);
+
 impl From<SigningData> for MultisigData {
     fn from(data: SigningData) -> Self {
         MultisigData::Signing(data)
@@ -108,14 +111,17 @@ pub struct MultisigMessage {
     data: MultisigData,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CeremonyAbortReason {
+    // Isn't used, but will once we re-enable unauthorised reporting this will be used again
     Unauthorised,
     Timeout,
     Invalid,
 }
 
-pub type CeremonyOutcomeResult<Output> = Result<Output, (CeremonyAbortReason, Vec<AccountId>)>;
+/// (Abort reason, reported ceremony ids)
+pub type CeremonyError = (CeremonyAbortReason, Vec<AccountId>);
+pub type CeremonyOutcomeResult<Output> = Result<Output, CeremonyError>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
@@ -163,18 +169,18 @@ pub enum MultisigOutcome {
     Ignore,
 }
 
+derive_try_from_variant!(SigningOutcome, MultisigOutcome::Signing, MultisigOutcome);
+derive_try_from_variant!(KeygenOutcome, MultisigOutcome::Keygen, MultisigOutcome);
+
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
-#[derive(Clone)]
 pub struct MultisigClient<S>
 where
     S: KeyDB,
 {
-    my_account_id: AccountId,
     key_store: KeyStore<S>,
     pub ceremony_manager: CeremonyManager,
     multisig_outcome_sender: MultisigOutcomeSender,
-    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
     keygen_options: KeygenOptions,
@@ -194,16 +200,14 @@ where
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
-            my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 multisig_outcome_sender.clone(),
-                outgoing_p2p_message_sender.clone(),
+                outgoing_p2p_message_sender,
                 logger,
             ),
             multisig_outcome_sender,
-            outgoing_p2p_message_sender,
             pending_requests_to_sign: Default::default(),
             keygen_options,
             logger: logger.clone(),
@@ -257,10 +261,16 @@ where
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
+    pub fn process_multisig_instruction(
+        &mut self,
+        instruction: MultisigInstruction,
+        rng: &mut Rng,
+    ) {
         match instruction {
             MultisigInstruction::Keygen(keygen_info) => {
                 // For now disable generating a new key when we already have one
+
+                use rand_legacy::{Rng as _, SeedableRng};
 
                 slog::debug!(
                     self.logger,
@@ -268,9 +278,10 @@ where
                     format_iterator(&keygen_info.signers);
                     CEREMONY_ID_KEY => keygen_info.ceremony_id
                 );
+                let rng = Rng::from_seed(rng.gen());
 
                 self.ceremony_manager
-                    .on_keygen_request(keygen_info, self.keygen_options);
+                    .on_keygen_request(rng, keygen_info, self.keygen_options);
             }
             MultisigInstruction::Sign(sign_info) => {
                 let key_id = &sign_info.key_id;
@@ -283,7 +294,11 @@ where
                 );
                 match self.key_store.get_key(key_id) {
                     Some(keygen_result_info) => {
+                        use rand_legacy::{Rng as _, SeedableRng};
+                        let rng = Rng::from_seed(rng.gen());
+
                         self.ceremony_manager.on_request_to_sign(
+                            rng,
                             sign_info.data,
                             keygen_result_info.clone(),
                             sign_info.signers,
@@ -324,7 +339,12 @@ where
                     CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 
+                use rand_legacy::FromEntropy;
+
+                let rng = Rng::from_entropy();
+
                 self.ceremony_manager.on_request_to_sign(
+                    rng,
                     signing_info.data,
                     key_info.clone(),
                     signing_info.signers,
@@ -403,10 +423,6 @@ where
         self.key_store.get_db()
     }
 
-    pub fn get_my_account_id(&self) -> AccountId {
-        self.my_account_id.clone()
-    }
-
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
 
@@ -418,30 +434,5 @@ where
         });
 
         self.cleanup();
-    }
-
-    /// Conditionally force timeout for a stage depending on what
-    /// current stage is
-    pub fn ensure_stage_finalized_signing(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
-        // TODO: use enums for stage names/idx
-
-        dbg!(self.ceremony_manager.get_signing_stage_for(ceremony_id));
-
-        if &self.ceremony_manager.get_signing_stage_for(ceremony_id)
-            == &Some(stage_name.to_string())
-        {
-            self.force_stage_timeout();
-        }
-    }
-
-    /// Conditionally force timeout for a stage depending on what
-    /// current stage is
-    pub fn ensure_stage_finalized_keygen(&mut self, ceremony_id: CeremonyId, stage_name: &str) {
-        dbg!(self.ceremony_manager.get_keygen_stage_for(ceremony_id));
-
-        if &self.ceremony_manager.get_keygen_stage_for(ceremony_id) == &Some(stage_name.to_string())
-        {
-            self.force_stage_timeout();
-        }
     }
 }

@@ -13,21 +13,13 @@ use state_chain_runtime::AccountId;
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
 
-#[derive(Clone)]
-pub struct StateAuthorised<CeremonyData, CeremonyResult>
-where
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
-{
+pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
     pub result_sender: MultisigOutcomeSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
-#[derive(Clone)]
-pub struct StateRunner<CeremonyData, CeremonyResult>
-where
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
-{
+pub struct StateRunner<CeremonyData, CeremonyResult> {
     logger: slog::Logger,
     ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
@@ -41,7 +33,6 @@ where
 impl<CeremonyData, CeremonyResult> StateRunner<CeremonyData, CeremonyResult>
 where
     CeremonyData: Display,
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
@@ -127,18 +118,16 @@ where
                 self.should_expire_at += MAX_STAGE_DURATION;
 
                 self.process_delayed();
-                return None;
+                None
             }
-            StageResult::Error(bad_validators, reason) => {
-                return Some(Err((
-                    authorised_state.idx_mapping.get_ids(bad_validators),
-                    reason,
-                )));
-            }
+            StageResult::Error(bad_validators, reason) => Some(Err((
+                authorised_state.idx_mapping.get_ids(bad_validators),
+                reason,
+            ))),
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
 
-                return Some(Ok(result));
+                Some(Ok(result))
             }
         }
     }

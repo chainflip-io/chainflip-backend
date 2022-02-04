@@ -5,6 +5,7 @@ use super::*;
 
 pub(crate) mod v1 {
 	use super::*;
+	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
@@ -35,6 +36,8 @@ pub(crate) mod v1 {
 			let validators = <pallet_session::Pallet<T>>::validators();
 			// Set the validating set from the session pallet
 			Validators::<T>::put(validators);
+			// Set the claim percentage
+			ClaimPeriodAsPercentage::<T>::put(PERCENTAGE_CLAIM_PERIOD);
 			T::DbWeight::get().reads_writes(2, 2)
 		} else {
 			log::error!(
@@ -55,6 +58,8 @@ pub(crate) mod v1 {
 		assert_eq!(minimum_active_bid, Bond::<T>::get());
 
 		assert_eq!(<pallet_session::Pallet<T>>::validators(), Validators::<T>::get());
+
+		assert_eq!(ClaimPeriodAsPercentage::<T>::get(), PERCENTAGE_CLAIM_PERIOD);
 
 		log::info!(
 			target: "runtime::cf_validator",

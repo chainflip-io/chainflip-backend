@@ -131,7 +131,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	fn success_result(&self) -> Option<AggKeyFor<T, I>> {
 		self.success_votes.iter().find_map(|(key, votes)| {
 			if *votes >= self.success_threshold() {
-				Some(key.clone())
+				Some(*key)
 			} else {
 				None
 			}
@@ -318,7 +318,7 @@ pub mod pallet {
 							));
 							Self::on_keygen_failure(
 								keygen_ceremony_id,
-								response_status.remaining_candidates.clone(),
+								response_status.remaining_candidates,
 							);
 						}
 					},
@@ -526,9 +526,7 @@ pub mod pallet {
 					expected_new_key,
 					new_public_key,
 				);
-				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(
-					new_public_key.clone(),
-				));
+				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
 			}
 
 			// We update the current epoch with an active window for the outgoers
