@@ -365,11 +365,7 @@ mod tests {
     async fn if_block_numbers_increment_by_one_progresses_at_block_margin() {
         let mut mock_eth_http_rpc = MockEthHttpRpc::new();
 
-        // ensure these looped calls occur in order
-        let mut seq_numbers = Sequence::new();
-
-        // TODO: Try unify these
-        let mut seq_blocks = Sequence::new();
+        let mut seq = Sequence::new();
 
         let block_range = 10..20;
 
@@ -377,56 +373,24 @@ mod tests {
             mock_eth_http_rpc
                 .expect_block_number()
                 .times(1)
-                .in_sequence(&mut seq_numbers)
+                .in_sequence(&mut seq)
                 .returning(move || Ok(U64::from(block_number)));
 
             mock_eth_http_rpc
                 .expect_block()
                 .times(1)
-                .in_sequence(&mut seq_blocks)
+                .in_sequence(&mut seq)
                 .returning(move |number| dummy_block(number.as_u64()));
         }
 
         let mut stream = polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL).await;
         for block_number in block_range {
-            println!("Testing block_number: {}", block_number);
             if let Some(block) = stream.next().await {
                 assert_eq!(
                     block.number.unwrap(),
                     U64::from(block_number - ETH_BLOCK_SAFETY_MARGIN)
                 );
             };
-        }
-    }
-
-    #[tokio::test]
-    async fn run_http_eth_shit() {
-        let transport = web3::transports::Http::new(
-            "https://1ef2e10ce62d41a1a0741f8d84e91e3c.eth.rpc.rivet.cloud/",
-        )
-        .unwrap();
-
-        let web3 = web3::Web3::new(transport);
-
-        for _ in 1..10 {
-            let block_number = web3.eth().block_number().await.unwrap();
-            println!("Got eth block number {}", block_number);
-
-            // let block_id = block_number;
-            let block = web3
-                .eth()
-                .block(block_number.into())
-                .await
-                .unwrap()
-                .unwrap();
-
-            println!("Here's the block number from the block: {:?}", block.number);
-
-            println!("Here's the txs from the block: {:?}", block.transactions);
-            // let head = web3.eth().(block_number);
-            std::thread::sleep(Duration::from_secs(6));
-
-            // let logs = web3.eth().logs().await;
         }
     }
 }
