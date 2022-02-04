@@ -216,6 +216,7 @@ where
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
+        slog::trace!(self.logger, "Checking for expired multisig states");
         self.ceremony_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
