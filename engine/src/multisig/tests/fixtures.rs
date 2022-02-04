@@ -9,5 +9,5 @@ lazy_static! {
         .as_bytes()
         .try_into()
         .unwrap();
-    pub static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
+    pub static ref MESSAGE_HASH: MessageHash = MessageHash(*MESSAGE);
 }

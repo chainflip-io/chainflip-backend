@@ -231,22 +231,19 @@ mod tests {
 							Event::EthereumThresholdSigner(
 								// A threshold has been met for this signature
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
-									match self.engine_state {
+									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										EngineState::Rotation => {
-											let ethereum_block_number: u64 = 100;
-											let tx_hash = [1u8; 32];
+										let ethereum_block_number: u64 = 100;
+										let tx_hash = [1u8; 32];
 
-											let public_key = (&*self.signer).borrow_mut().proposed_public_key();
+										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
 
-											state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
-												Origin::signed(self.node_id.clone()),
-												public_key,
-												ethereum_block_number,
-												tx_hash.into(),
-											).expect("should be able to vault key rotation for node");
-										},
-										_ => {}
+										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
+											Origin::signed(self.node_id.clone()),
+											public_key,
+											ethereum_block_number,
+											tx_hash.into(),
+										).expect("should be able to vault key rotation for node");
 									}
 							},
 							Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
@@ -272,10 +269,7 @@ mod tests {
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
 										KeygenOutcome::Success(public_key),
-									).expect(&format!(
-										"should be able to report keygen outcome from node: {}",
-										self.node_id)
-									);
+									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
 					);
@@ -297,8 +291,8 @@ mod tests {
 		}
 
 		// Create an account, generate and register the session keys
-		pub(crate) fn setup_account(node_id: &NodeId, seed: &String) {
-			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
+		pub(crate) fn setup_account(node_id: &NodeId, seed: &str) {
+			assert_ok!(frame_system::Provider::<Runtime>::created(node_id));
 
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
@@ -312,7 +306,7 @@ mod tests {
 			));
 		}
 
-		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &str) {
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 			use sp_core::Encode;
@@ -392,7 +386,7 @@ mod tests {
 			}
 
 			pub fn create_node(&mut self) -> NodeId {
-				let node_id = self.next_node_id().into();
+				let node_id = self.next_node_id();
 				self.add_node(&node_id);
 				node_id
 			}
@@ -444,7 +438,7 @@ mod tests {
 
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
-						for (_, engine) in &self.engines {
+						for engine in self.engines.values() {
 							engine.on_contract_event(&event);
 						}
 					}
@@ -462,12 +456,12 @@ mod tests {
 					self.last_event += events.len();
 
 					// State chain events
-					for (_, engine) in self.engines.iter_mut() {
+					for engine in self.engines.values_mut() {
 						engine.handle_state_chain_events(&events);
 					}
 
 					// A completed block notification
-					for (_, engine) in &self.engines {
+					for engine in self.engines.values() {
 						engine.on_block(System::block_number());
 					}
 					System::set_block_number(System::block_number() + 1);
@@ -1218,7 +1212,7 @@ mod tests {
 					let mut genesis_validators = Validator::current_validators();
 					let (mut testnet, _) = network::Network::create(
 						(MAX_VALIDATORS + BACKUP_VALDATORS) as u8,
-						&genesis_validators.clone(),
+						&genesis_validators,
 					);
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
@@ -1284,7 +1278,7 @@ mod tests {
 						current_backup_validators
 							.iter()
 							.map(|validator_id| {
-								(validator_id.clone(), Flip::stakeable_balance(&validator_id))
+								(validator_id.clone(), Flip::stakeable_balance(validator_id))
 							})
 							.collect::<Vec<(NodeId, FlipBalance)>>()
 							.into_iter()
@@ -1363,7 +1357,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
-						assert_eq!(false, Online::is_online(node), "the node should be offline");
+						assert!(Online::is_online(node), "the node should be offline");
 					}
 
 					// The network state should now be in an emergency and that the validator
@@ -1410,7 +1404,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &nodes {
-						assert_eq!(false, Online::is_online(node), "the node should be offline");
+						assert!(Online::is_online(node), "the node should be offline");
 					}
 
 					assert!(

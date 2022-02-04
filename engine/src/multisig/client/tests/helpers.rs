@@ -96,7 +96,7 @@ pub fn new_node(account_id: AccountId, keygen_options: KeygenOptions) -> Node {
         tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::new(
         account_id,
-        KeyDBMock::new(),
+        KeyDBMock::default(),
         multisig_outcome_sender,
         outgoing_p2p_message_sender,
         keygen_options,
@@ -182,7 +182,7 @@ where
     }
 
     pub fn get_mut_node(&mut self, account_id: &AccountId) -> &mut Node {
-        self.nodes.get_mut(&account_id).unwrap()
+        self.nodes.get_mut(account_id).unwrap()
     }
 
     pub fn select_account_ids<const COUNT: usize>(&self) -> [AccountId; COUNT] {
@@ -337,7 +337,7 @@ where
             .then(|(account_id, node)| async move {
                 let outcome = node.try_recv_outcome().await?;
 
-                if let Err(_) = &outcome.result {
+                if outcome.result.is_err() {
                     assert!(node.tag_cache.contains_tag(
                         <Self as CeremonyRunnerStrategy<Output>>::CEREMONY_FAILED_TAG
                     ));
@@ -381,7 +381,7 @@ where
 
     pub fn request_without_gather(&mut self) {
         let instruction = self.multisig_instruction();
-        for (_, node) in self.nodes.iter_mut().sorted_by_key(|(id, _)| id.clone()) {
+        for (_, node) in self.nodes.iter_mut().sorted_by_key(|(id, _)| (*id).clone()) {
             node.client
                 .process_multisig_instruction(instruction.clone(), &mut self.rng);
         }
@@ -749,7 +749,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony.try_complete_with_error(&[]).await {
         Some(_) => {
-            for (_, node) in &keygen_ceremony.nodes {
+            for node in keygen_ceremony.nodes.values() {
                 assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
             }
             Err(())
@@ -800,7 +800,7 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
             .get_mut(&node_id_0)
             .unwrap()
             .get_mut(&node_id_1)
-            .unwrap() = SecretShare3::create_random(&mut ceremony.rng).into();
+            .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
         let stage_4_messages = ceremony.run_stage(stage_3_messages.clone()).await;
         visitor.yield_ceremony(&stage_4_messages)?;
@@ -927,7 +927,7 @@ impl MultisigClientNoDB {
 pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<()> {
     // Get the aggkey
     let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
-    let agg_key = AggKey::from_pubkey_compressed(pk_ser.clone());
+    let agg_key = AggKey::from_pubkey_compressed(*pk_ser);
 
     // Verify the signature with the aggkey
     agg_key

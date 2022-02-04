@@ -115,9 +115,9 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let a = AccountId::new(['A' as u8; 32]);
-        let b = AccountId::new(['B' as u8; 32]);
-        let c = AccountId::new(['C' as u8; 32]);
+        let a = AccountId::new([b'A'; 32]);
+        let b = AccountId::new([b'B'; 32]);
+        let c = AccountId::new([b'C'; 32]);
 
         let signers = [a, c.clone(), b];
 

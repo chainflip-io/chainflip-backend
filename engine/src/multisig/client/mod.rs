@@ -204,7 +204,7 @@ where
             ceremony_manager: CeremonyManager::new(
                 my_account_id,
                 multisig_outcome_sender.clone(),
-                outgoing_p2p_message_sender.clone(),
+                outgoing_p2p_message_sender,
                 logger,
             ),
             multisig_outcome_sender,
