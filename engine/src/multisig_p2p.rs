@@ -61,6 +61,8 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     account_to_peer: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
+    // TODO Don't Register Private Ips on Live chains
+
     let (peer_id, port, ip_address) = state_chain_client
         .get_local_listen_addresses()
         .await?
