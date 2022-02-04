@@ -1357,7 +1357,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
-						assert!(Online::is_online(node), "the node should be offline");
+						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
 					// The network state should now be in an emergency and that the validator
@@ -1404,7 +1404,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &nodes {
-						assert!(Online::is_online(node), "the node should be offline");
+						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
 					assert!(
