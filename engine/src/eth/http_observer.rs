@@ -52,11 +52,12 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             let safe_block_number = unsafe_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
             println!("Got eth block number {}", unsafe_block_number);
 
-            if unsafe_block_number < state.last_block_fetched {
-                panic!("NOOO, we shouldn't ever go backwards on HTTP (I think, waiting for rivet to get back to me)");
-            } else if unsafe_block_number == state.last_block_fetched {
-                println!("Our unsafe block number is the same as the last fetched block");
-                // ignore - we will wait until next poll to go again
+            if unsafe_block_number <= state.last_block_fetched {
+                // wait until we get back to where we were
+                println!(
+                    "Our unsafe block number is less than or the same as the last fetched block"
+                );
+                continue;
             } else if (state.last_block_yielded == U64::from(0)
                 && state.last_block_fetched == U64::from(0))
                 || unsafe_block_number == state.last_block_fetched + U64::from(1)
@@ -299,6 +300,65 @@ mod tests {
                 expected_skipped_block_number
             );
         }
+    }
+
+    #[tokio::test]
+    async fn if_block_number_decreases_from_last_request_wait_until_back_to_prev_latest_block() {
+        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+
+        let mut seq = Sequence::new();
+
+        let first_block_number = U64::from(10);
+        mock_eth_http_rpc
+            .expect_block_number()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move || Ok(first_block_number));
+
+        let first_safe_block_number = first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
+        mock_eth_http_rpc
+            .expect_block()
+            .times(1)
+            .with(eq(first_safe_block_number))
+            .in_sequence(&mut seq)
+            .returning(move |n| dummy_block(n.as_u64()));
+
+        let num_blocks_backwards = 2;
+        let back_to_block_number = first_block_number - U64::from(num_blocks_backwards);
+
+        for n in back_to_block_number.as_u64()..=first_block_number.as_u64() + 1 {
+            mock_eth_http_rpc
+                .expect_block_number()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(move || Ok(U64::from(n)));
+        }
+
+        // This is the next block that should be yielded. It shouldn't matter if the chain
+        // head has decreased due to sync / reorgs
+        let next_safe_block_number = first_safe_block_number + U64::from(1);
+        mock_eth_http_rpc
+            .expect_block()
+            .times(1)
+            .with(eq(next_safe_block_number))
+            .in_sequence(&mut seq)
+            .returning(move |n| dummy_block(n.as_u64()));
+
+        // first block should come in as expected
+        let mut stream = polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL).await;
+        let expected_first_returned_block_number =
+            first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
+        assert_eq!(
+            stream.next().await.unwrap().number.unwrap(),
+            expected_first_returned_block_number
+        );
+
+        // We do not want any repeat blocks, we will just wait until we can return the next safe
+        // block, after the one we've already returned
+        assert_eq!(
+            stream.next().await.unwrap().number.unwrap(),
+            next_safe_block_number
+        );
     }
 
     #[tokio::test]
