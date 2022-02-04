@@ -63,6 +63,7 @@ impl CeremonyManager {
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
     pub fn cleanup(&mut self) {
+        slog::trace!(self.logger, "Checking for expired multisig states");
         // Copy the keys so we can iterate over them while at the same time
         // removing the elements as we go
         let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
