@@ -24,9 +24,9 @@ pub(crate) mod v1 {
 
 	pub fn migrate<T: Config>() -> frame_support::weights::Weight {
 		// Current version is is genesis, upgrade to version 1
-		// Changes are the addition of two storage items: `Validators` and `Bond`
-		// We are using `Auctioneer::auction_result()` as the last successful auction to
-		// determine the bond to set.  Although we can derive the winners and hence the
+		// Changes are the addition of two storage items: `Validators`, `Bond` and
+		// `LastExpiredEpoch` We are using `Auctioneer::auction_result()` as the last successful
+		// auction to determine the bond to set.  Although we can derive the winners and hence the
 		// active validating set from the same storage item as the bond we want to maintain
 		// continuity with the genesis version(0) by reading this from the session pallet.
 		if let Some(AuctionResult { minimum_active_bid, .. }) = T::Auctioneer::auction_result() {
@@ -35,7 +35,10 @@ pub(crate) mod v1 {
 			let validators = <pallet_session::Pallet<T>>::validators();
 			// Set the validating set from the session pallet
 			Validators::<T>::put(validators);
-			T::DbWeight::get().reads_writes(2, 2)
+			// Set last expired epoch to the previous one
+			let current_epoch_index = CurrentEpoch::<T>::get();
+			LastExpiredEpoch::<T>::put(current_epoch_index.saturating_sub(1));
+			T::DbWeight::get().reads_writes(3, 3)
 		} else {
 			log::error!(
 				target: "runtime::cf_validator",
@@ -55,6 +58,10 @@ pub(crate) mod v1 {
 		assert_eq!(minimum_active_bid, Bond::<T>::get());
 
 		assert_eq!(<pallet_session::Pallet<T>>::validators(), Validators::<T>::get());
+
+		let current_epoch_index = CurrentEpoch::<T>::get();
+
+		assert_eq!(LastExpiredEpoch::<T>::get(), current_epoch_index.saturating_sub(1));
 
 		log::info!(
 			target: "runtime::cf_validator",

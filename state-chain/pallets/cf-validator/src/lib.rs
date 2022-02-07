@@ -38,7 +38,7 @@ pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
 	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds Bond and Validator storage items
+	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items
 	pub const V1: StorageVersion = StorageVersion::new(1);
 }
 
