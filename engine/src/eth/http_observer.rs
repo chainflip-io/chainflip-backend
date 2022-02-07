@@ -16,8 +16,6 @@ use super::EthHttpRpcApi;
 
 const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-// TODO: Look into how providers generally handle reorgs on HTTP
-// polls the HTTP endpoint every x seconds, returning the next head when it progresses
 pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
