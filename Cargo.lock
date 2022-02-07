@@ -989,9 +989,11 @@ dependencies = [
  "pallet-cf-witnesser-api",
  "parity-scale-codec",
  "parking_lot 0.11.2",
+ "rand 0.6.5",
  "rand 0.8.4",
  "regex",
  "reqwest",
+ "rocksdb",
  "sc-rpc-api",
  "secp256k1",
  "serde 1.0.130",
@@ -4968,7 +4970,6 @@ dependencies = [
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",

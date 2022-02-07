@@ -1,4 +1,4 @@
-use cf_chains::ChainId;
+use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
@@ -88,12 +88,11 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
         let eth_vault = state_chain_client
-            .get_vault(
+            .get_vault::<Ethereum>(
                 block_hash,
                 account_data
                     .last_active_epoch
                     .expect("we are active or outgoing"),
-                ChainId::Ethereum,
             )
             .await?;
         sm_window_sender
@@ -176,10 +175,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                         ))
                                         .unwrap();
                                 }
-                                state_chain_runtime::Event::Vaults(
+                                state_chain_runtime::Event::EthereumVault(
                                     pallet_cf_vaults::Event::KeygenRequest(
                                         ceremony_id,
-                                        chain_id,
                                         validator_candidates,
                                     ),
                                 ) => {
@@ -208,9 +206,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
-                                                        chain_id,
                                                         pallet_cf_vaults::KeygenOutcome::Success(
-                                                            pubkey.serialize().to_vec(),
+                                                            cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
                                                         ),
                                                     ))
                                                     .await;
@@ -225,7 +222,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     let _ = state_chain_client
                                                     .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                                         ceremony_id,
-                                                        chain_id,
                                                         pallet_cf_vaults::KeygenOutcome::Failure(
                                                             BTreeSet::from_iter(bad_account_ids),
                                                         ),
@@ -466,13 +462,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                 // If we are Backup, Validator or outoing, we need to send a heartbeat
                 // we send it in the middle of the online interval (so any node sync issues don't
                 // cause issues (if we tried to send on one of the interval boundaries)
-                if (matches!(account_data.state, ChainflipAccountState::Backup)
-                    || matches!(account_data.state, ChainflipAccountState::Validator)
-                    || is_outgoing)
-                    && ((current_block_header.number
-                        + (state_chain_client.heartbeat_block_interval / 2))
-                        % blocks_per_heartbeat
-                        == 0)
+                if (current_block_header.number + (state_chain_client.heartbeat_block_interval / 2))
+                    % blocks_per_heartbeat
+                    == 0
                 {
                     slog::info!(
                         logger,

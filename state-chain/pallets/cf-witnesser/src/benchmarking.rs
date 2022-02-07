@@ -14,12 +14,11 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
 		let epoch = T::EpochInfo::epoch_index();
 		ValidatorIndex::<T>::insert(&epoch, caller.clone(), 0u16);
-		NumValidators::<T>::set(1);
+		EpochValidatorCount::<T>::insert(&epoch, 1);
 		// TODO: currently we don't measure the actual execution path
 		// we need to set the threshold to 1 to do this.
 		// Unfortunately, this is blocked by the fact that we can't pass
 		// a witness call here - for now.
-		ConsensusThreshold::<T>::set(2);
 	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()))
 	verify {
 		let call_hash = Hashable::blake2_256(&call);

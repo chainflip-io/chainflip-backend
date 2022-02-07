@@ -5,6 +5,7 @@ use super::*;
 
 pub(crate) mod v1 {
 	use super::*;
+	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
@@ -38,7 +39,9 @@ pub(crate) mod v1 {
 			// Set last expired epoch to the previous one
 			let current_epoch_index = CurrentEpoch::<T>::get();
 			LastExpiredEpoch::<T>::put(current_epoch_index.saturating_sub(1));
-			T::DbWeight::get().reads_writes(3, 3)
+			// Set the claim percentage
+			ClaimPeriodAsPercentage::<T>::put(PERCENTAGE_CLAIM_PERIOD);
+			T::DbWeight::get().reads_writes(3, 4)
 		} else {
 			log::error!(
 				target: "runtime::cf_validator",
@@ -62,6 +65,7 @@ pub(crate) mod v1 {
 		let current_epoch_index = CurrentEpoch::<T>::get();
 
 		assert_eq!(LastExpiredEpoch::<T>::get(), current_epoch_index.saturating_sub(1));
+		assert_eq!(ClaimPeriodAsPercentage::<T>::get(), PERCENTAGE_CLAIM_PERIOD);
 
 		log::info!(
 			target: "runtime::cf_validator",

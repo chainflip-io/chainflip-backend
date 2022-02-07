@@ -50,6 +50,8 @@ pub trait Witnesser {
 	type AccountId;
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
+	/// The type for block numbers
+	type BlockNumber;
 
 	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
 	/// number of witnesses have been made.
@@ -59,6 +61,13 @@ pub trait Witnesser {
 	/// be enforced by adding a salt or nonce to the function arguments.
 	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
+	/// Witness an event, as above, during a specific epoch
+	fn witness_at_epoch(
+		who: Self::AccountId,
+		call: Self::Call,
+		epoch: EpochIndex,
+		block_number: Self::BlockNumber,
+	) -> DispatchResultWithPostInfo;
 }
 
 pub trait EpochInfo {
@@ -83,7 +92,7 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> EpochIndex;
 
-	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
+	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
@@ -103,6 +112,14 @@ pub struct CurrentThreshold<T>(PhantomData<T>);
 impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	fn get() -> u32 {
 		T::EpochInfo::consensus_threshold()
+	}
+}
+
+pub struct CurrentEpochIndex<T>(PhantomData<T>);
+
+impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
+	fn get() -> u32 {
+		T::EpochInfo::epoch_index()
 	}
 }
 

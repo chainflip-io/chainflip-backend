@@ -7,7 +7,6 @@ use crate::{
     eth::{utils, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
-use cf_chains::ChainId;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -130,11 +129,10 @@ impl EthObserver for KeyManager {
                 let _ = state_chain_client
                     .submit_signed_extrinsic(
                         logger,
-                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                            ChainId::Ethereum,
-                            new_key.serialize().to_vec(),
+                        pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
+                            cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
                             event.block_number,
-                            event.tx_hash.to_fixed_bytes().to_vec(),
+                            event.tx_hash,
                         ),
                     )
                     .await;
@@ -224,7 +222,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, true);
+                    assert!(signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                 }
@@ -247,7 +245,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
+                    assert!(!signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }
@@ -270,7 +268,7 @@ mod tests {
                     old_key,
                     new_key,
                 } => {
-                    assert_eq!(signed, false);
+                    assert!(!signed);
                     assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
                     assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
                 }

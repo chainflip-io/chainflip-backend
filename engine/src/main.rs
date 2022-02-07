@@ -34,7 +34,7 @@ async fn main() {
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
     if let Some(health_check_settings) = &settings.health_check {
-        HealthMonitor::new(&health_check_settings, &root_logger)
+        HealthMonitor::new(health_check_settings, &root_logger)
             .run()
             .await;
     }
@@ -66,7 +66,8 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger);
+    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
+        .expect("Failed to open database");
 
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =
