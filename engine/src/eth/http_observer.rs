@@ -59,6 +59,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 && state.last_block_fetched == U64::from(0))
                 || unsafe_block_number == state.last_block_fetched + U64::from(1)
             {
+                assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN);
                 // We enter this when we have progressed, or if this is the first iteration
                 // we should progress to the next block
                 println!(

@@ -56,6 +56,7 @@ where
                     .expect("block should have block number");
 
                 if current_item_block_number > state.last_yielded_block_number {
+                    assert!(current_item_block_number + 1 == state.last_yielded_block_number);
                     slog::info!(
                         state.logger,
                         "Returning block number: {} from {} stream",
@@ -79,6 +80,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::{f32::consts::E, time::Duration};
+
     use futures::stream;
 
     use super::*;
@@ -87,13 +90,82 @@ mod tests {
         logging::test_utils::new_test_logger,
     };
 
+    fn interleaved_streams(
+        // contains the streams in the order they will return
+        items: Vec<(DynBlockHeader, TranpsortProtocol)>,
+    ) -> (
+        // http
+        Pin<Box<dyn Stream<Item = DynBlockHeader>>>,
+        // ws
+        Pin<Box<dyn Stream<Item = DynBlockHeader>>>,
+    ) {
+        let mut http_items = Vec::new();
+        let mut ws_items = Vec::new();
+        let mut total_delay_increment = 0;
+        // todo init this properly
+        let mut type_last_returned = TranpsortProtocol::Http;
+        for (item, protocol) in items {
+            // TODO: Include delay factor
+            // if we are returning the same, we can just go the next, since we are ordered
+            let delay = Duration::from_millis(if protocol == type_last_returned {
+                0
+            } else {
+                total_delay_increment = total_delay_increment + 1;
+                total_delay_increment
+            });
+
+            match protocol {
+                TranpsortProtocol::Http => http_items.push((item, delay)),
+                TranpsortProtocol::Ws => ws_items.push((item, delay)),
+            };
+
+            type_last_returned = protocol;
+        }
+
+        let delayed_stream = |items: Vec<(DynBlockHeader, Duration)>| {
+            let items = items.into_iter();
+            Box::pin(stream::unfold(items, |mut items| async move {
+                while let Some((i, d)) = items.next() {
+                    tokio::time::sleep(d).await;
+                    return Some((i, items));
+                }
+                None
+            }))
+        };
+
+        (delayed_stream(http_items), delayed_stream(ws_items))
+    }
+
+    fn num_to_dyn_block_header(block_number: u64) -> DynBlockHeader {
+        let block_header: DynBlockHeader = Box::new(dummy_block(block_number).unwrap().unwrap());
+        block_header
+    }
+
+    #[tokio::test]
+    async fn test_interleaved() {
+        let logger = new_test_logger();
+        let mut items: Vec<(DynBlockHeader, TranpsortProtocol)> = Vec::new();
+        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Ws));
+        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Ws));
+        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Http));
+        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Http));
+
+        let (http_stream, ws_stream) = interleaved_streams(items);
+
+        let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
+
+        while let Some(item) = merged_stream.next().await {
+            println!("Here's the item: {}", item);
+        }
+    }
+
     #[tokio::test]
     async fn empty_inners_returns_none() {
         let logger = new_test_logger();
-        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = Box<dyn BlockHeaderable>>>> =
+        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = DynBlockHeader>>> =
             Box::pin(stream::empty());
 
-        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = Box<dyn BlockHeaderable>>>> =
+        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = DynBlockHeader>>> =
             Box::pin(stream::empty());
 
         let mut merged_stream = merged_stream(
@@ -121,7 +193,9 @@ mod tests {
             .collect();
         let http_stream = stream::iter(http_blocks);
 
-        let ws_blocks: Vec<_> = (11..16)
+        let blocks_in_front = 11..16;
+        let ws_blocks: Vec<_> = blocks_in_front
+            .clone()
             .into_iter()
             .map(|i| {
                 let ws_block_header: Box<dyn BlockHeaderable> =
@@ -132,7 +206,7 @@ mod tests {
         let ws_stream = stream::iter(ws_blocks);
 
         let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
-        for expected_block_number in 11..16 {
+        for expected_block_number in blocks_in_front {
             let block_number = merged_stream.next().await.unwrap();
             assert_eq!(block_number, U64::from(expected_block_number));
         }
