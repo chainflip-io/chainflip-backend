@@ -359,17 +359,15 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> BlockEmissions for Pallet<T> {
 	type Balance = T::FlipBalance;
 
-	fn update_validator_block_emission(emission: Self::Balance) -> Weight {
+	fn update_validator_block_emission(emission: Self::Balance) {
 		ValidatorEmissionPerBlock::<T>::put(emission);
-		T::DbWeight::get().writes(1)
 	}
 
-	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight {
+	fn update_backup_validator_block_emission(emission: Self::Balance) {
 		BackupValidatorEmissionPerBlock::<T>::put(emission);
-		T::DbWeight::get().writes(1)
 	}
 
-	fn calculate_block_emissions() -> Weight {
+	fn calculate_block_emissions() {
 		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
 			const DAYS_IN_YEAR: u32 = 365;
 
@@ -386,16 +384,13 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
 			BackupValidatorEmissionInflation::<T>::get(),
 		));
-
-		0
 	}
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	// TODO: remove weight and delegate benchmarking to the calling components
-	fn trigger_emissions() -> Weight {
+	fn trigger_emissions() {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
 		Self::mint_rewards_for_block(current_block_number);
-		0
 	}
 }

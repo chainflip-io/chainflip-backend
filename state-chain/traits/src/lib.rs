@@ -342,7 +342,7 @@ pub trait Rewarder {
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
-	fn trigger_emissions() -> Weight;
+	fn trigger_emissions();
 }
 
 /// A nonce.
@@ -399,7 +399,7 @@ impl<ValidatorId: Default> NetworkState<ValidatorId> {
 /// To handle those emergency rotations
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
-	fn request_emergency_rotation() -> Weight;
+	fn request_emergency_rotation();
 	/// Is there an emergency rotation in progress
 	fn emergency_rotation_in_progress() -> bool;
 	/// Signal that the emergency rotation has completed
@@ -475,7 +475,7 @@ pub trait Slashing {
 	/// Block number
 	type BlockNumber;
 	/// Function which implements the slashing logic
-	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
 /// Something that can nominate signers from the set of active validators.
@@ -593,23 +593,20 @@ pub trait Heartbeat {
 	type ValidatorId: Default;
 	type BlockNumber;
 	/// A heartbeat has been submitted
-	fn heartbeat_submitted(
-		validator_id: &Self::ValidatorId,
-		block_number: Self::BlockNumber,
-	) -> Weight;
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);
 	/// Called on every heartbeat interval with the current network state
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight;
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }
 
 /// Updating and calculating emissions per block for validators and backup validators
 pub trait BlockEmissions {
 	type Balance;
 	/// Update the emissions per block for a validator
-	fn update_validator_block_emission(emission: Self::Balance) -> Weight;
+	fn update_validator_block_emission(emission: Self::Balance);
 	/// Update the emissions per block for a backup validator
-	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight;
+	fn update_backup_validator_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
-	fn calculate_block_emissions() -> Weight;
+	fn calculate_block_emissions();
 }
 
 /// Checks if the caller can execute free transactions

@@ -129,9 +129,8 @@ parameter_types! {
 pub struct MockEmergencyRotation;
 
 impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
-		0
 	}
 
 	fn emergency_rotation_in_progress() -> bool {

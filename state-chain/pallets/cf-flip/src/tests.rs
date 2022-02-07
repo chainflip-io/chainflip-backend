@@ -512,7 +512,7 @@ mod test_slashing {
 			Flip::set_validator_bond(&ALICE, BOND);
 			// Set the slashing rate to 5%
 			SlashingRate::<Test>::set(SLASHING_RATE);
-			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE), 0);
+			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);
 			let balance_after = Flip::total_balance_of(&ALICE);
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
