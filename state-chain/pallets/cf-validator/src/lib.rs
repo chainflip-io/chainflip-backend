@@ -21,7 +21,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, HasPeerMapping,
+	EpochTransitionHandler, ExecutionCondition, HasPeerMapping,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -38,7 +38,7 @@ pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
 	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds Bond and Validator storage items
+	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items
 	pub const V1: StorageVersion = StorageVersion::new(1);
 }
 
@@ -166,6 +166,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// Check expiry of epoch and store last expired
+			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
+				LastExpiredEpoch::<T>::set(epoch_index);
+			}
+
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
 			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
@@ -467,6 +472,15 @@ pub mod pallet {
 	pub type ValidatorCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
 
+	/// The last expired epoch index
+	#[pallet::storage]
+	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// A map storing the expiry block numbers for old epochs
+	#[pallet::storage]
+	pub type EpochExpiries<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
@@ -505,7 +519,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type Amount = T::Amount;
 
 	fn last_expired_epoch() -> EpochIndex {
-		Default::default()
+		LastExpiredEpoch::<T>::get()
 	}
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
@@ -559,18 +573,26 @@ impl<T: Config> Pallet<T> {
 		for validator in new_validators {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
-		// The new bond set
-		Bond::<T>::set(new_bond);
-		// Set the block this epoch starts at
-		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-		// If we were in an emergency, mark as completed
-		Self::emergency_rotation_completed();
 
 		// Calculate the new epoch index
-		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
+		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
-			*epoch
+			(*epoch - 1, *epoch)
 		});
+
+		// The new bond set
+		Bond::<T>::set(new_bond);
+		// Set the expiry block number for the outgoing set
+		EpochExpiries::<T>::insert(
+			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
+			old_epoch,
+		);
+
+		// Set the block this epoch starts at
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+
+		// If we were in an emergency, mark as completed
+		Self::emergency_rotation_completed();
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
@@ -725,5 +747,13 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
+	}
+}
+
+pub struct NotDuringRotation<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
+	fn is_satisfied() -> bool {
+		matches!(Rotation::<T>::get(), RotationStatus::Idle)
 	}
 }

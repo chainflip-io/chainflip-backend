@@ -380,6 +380,8 @@ impl pallet_cf_governance::Config for Runtime {
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
+	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
+	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 }
 
 impl pallet_cf_emissions::Config for Runtime {

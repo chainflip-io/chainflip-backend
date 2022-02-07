@@ -608,3 +608,16 @@ pub trait QualifyValidator {
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
+
+/// Handles the check of execution conditions
+pub trait ExecutionCondition {
+	/// Returns true/false if the condition is satisfied
+	fn is_satisfied() -> bool;
+}
+
+/// Performs a runtime upgrade
+pub trait RuntimeUpgrade {
+	/// Applies the wasm code of a runtime upgrade and returns the
+	/// information about the execution
+	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
+}
