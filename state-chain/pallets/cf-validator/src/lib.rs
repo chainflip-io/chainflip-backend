@@ -60,16 +60,21 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
+type AuctionResultOf<T> =
+	AuctionResult<<T as frame_system::Config>::AccountId, <T as Config>::Amount>;
+
+type RotationStatusOf<T> = RotationStatus<AuctionResultOf<T>>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum RotationStatus<ValidatorId, Amount> {
+pub enum RotationStatus<T> {
 	Idle,
 	RunAuction,
-	AwaitingVaults(AuctionResult<ValidatorId, Amount>),
-	VaultsRotated(AuctionResult<ValidatorId, Amount>),
-	SessionRotating(AuctionResult<ValidatorId, Amount>),
+	AwaitingVaults(T),
+	VaultsRotated(T),
+	SessionRotating(T),
 }
 
-impl<ValidatorId, Amount> Default for RotationStatus<ValidatorId, Amount> {
+impl<T> Default for RotationStatus<T> {
 	fn default() -> Self {
 		RotationStatus::Idle
 	}
@@ -159,9 +164,6 @@ pub mod pallet {
 		/// Invalid signature
 		InvalidAccountPeerMappingSignature,
 	}
-
-	type RotationStatusOf<T> =
-		RotationStatus<<T as frame_system::Config>::AccountId, <T as Config>::Amount>;
 
 	impl<T: Config> Pallet<T> {
 		pub(crate) fn update_rotation_status(new_status: RotationStatusOf<T>) {
@@ -449,8 +451,7 @@ pub mod pallet {
 	/// The rotation phase we are currently at
 	#[pallet::storage]
 	#[pallet::getter(fn rotation_phase)]
-	pub type RotationPhase<T: Config> =
-		StorageValue<_, RotationStatus<T::ValidatorId, T::Amount>, ValueQuery>;
+	pub type RotationPhase<T: Config> = StorageValue<_, RotationStatusOf<T>, ValueQuery>;
 
 	/// A list of the current validators
 	#[pallet::storage]

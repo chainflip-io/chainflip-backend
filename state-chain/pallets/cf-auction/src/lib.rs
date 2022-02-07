@@ -4,6 +4,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -24,12 +25,21 @@ pub use pallet::*;
 use sp_runtime::traits::{One, Zero};
 use sp_std::{cmp::min, prelude::*};
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - Remove AuctionPhase and LastAuctionResult
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -60,7 +70,34 @@ pub mod pallet {
 
 	/// Pallet implements \[Hooks\] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+	}
 
 	/// Size range for number of validators we want in our validating set
 	#[pallet::storage]
