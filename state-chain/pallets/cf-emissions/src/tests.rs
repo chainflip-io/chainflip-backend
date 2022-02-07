@@ -39,7 +39,7 @@ mod tests {
 				Emissions::update_validator_block_emission(emissions_per_block);
 
 				let before = Flip::<Test>::total_issuance();
-				let _weights = Emissions::mint_rewards_for_block(block_number);
+				Emissions::mint_rewards_for_block(block_number);
 				let after = Flip::<Test>::total_issuance();
 
 				assert_eq!(before + expected_mint, after);
@@ -72,14 +72,14 @@ mod tests {
 			Emissions::update_validator_block_emission(EMISSION_RATE);
 
 			let before = Flip::<Test>::total_issuance();
-			let _weights = Emissions::mint_rewards_for_block(BLOCK_NUMBER);
+			Emissions::mint_rewards_for_block(BLOCK_NUMBER);
 			let after = Flip::<Test>::total_issuance();
 
 			assert_eq!(before + EMISSION_RATE * BLOCK_NUMBER as u128, after);
 
 			// Minting again at the same block should have no effect.
 			let before = after;
-			let _weights = Emissions::mint_rewards_for_block(BLOCK_NUMBER);
+			Emissions::mint_rewards_for_block(BLOCK_NUMBER);
 			let after = Flip::<Test>::total_issuance();
 
 			assert_eq!(before, after);

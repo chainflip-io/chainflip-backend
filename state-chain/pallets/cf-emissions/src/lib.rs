@@ -388,7 +388,6 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
-	// TODO: remove weight and delegate benchmarking to the calling components
 	fn trigger_emissions() {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
 		Self::mint_rewards_for_block(current_block_number);
