@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) mod v1 {
 	use super::*;
-	use frame_support::storage::migration::*;
+	use frame_support::{generate_storage_alias, storage::migration::*};
 	mod v0_types {
 		use super::*;
 		use codec::{Decode, Encode};
@@ -13,6 +13,8 @@ pub(crate) mod v1 {
 			pub minimum_active_bid: Amount,
 		}
 	}
+
+	generate_storage_alias!(Validator, Force => Value<()>);
 
 	// Retrieve from storage AuctionResult as defined in v0 of the auction pallet
 	fn get_v0_auction_result<T: Config>(
@@ -52,7 +54,9 @@ pub(crate) mod v1 {
 			let validators = <pallet_session::Pallet<T>>::validators();
 			// Set the validating set from the session pallet
 			Validators::<T>::put(validators);
-			T::DbWeight::get().reads_writes(2, 2)
+			// Kill the Force
+			Force::kill();
+			T::DbWeight::get().reads_writes(2, 3)
 		} else {
 			log::error!(
 				target: "runtime::cf_validator",
@@ -64,22 +68,20 @@ pub(crate) mod v1 {
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn post_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
-		assert_eq!(P::on_chain_storage_version(), releases::V1);
-		// Read back from v0 storage from Auction pallet
-		let v0_types::AuctionResult { minimum_active_bid, .. } = get_v0_auction_result::<T>()
-			.expect("if we don't have a previous auction then we shouldn't be upgrading");
+		use frame_support::assert_err;
 
-		assert_eq!(
-			minimum_active_bid,
-			Bond::<T>::get(),
-			"bond should be set to last auction result"
-		);
+		assert_eq!(P::on_chain_storage_version(), releases::V1);
+
+		assert!(Bond::<T>::get() > Zero::zero(), "bond should be set to last auction result");
 
 		assert_eq!(
 			<pallet_session::Pallet<T>>::validators(),
 			Validators::<T>::get(),
 			"session validators should match"
 		);
+
+		// We should expect no values for the Force item
+		assert_err!(Force::try_get(), ());
 
 		log::info!(
 			target: "runtime::cf_validator",

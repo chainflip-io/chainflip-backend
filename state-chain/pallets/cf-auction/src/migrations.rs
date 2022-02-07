@@ -17,7 +17,7 @@ pub(crate) mod v1 {
 
 		log::info!(
 			target: "runtime::cf_auction",
-			"migration: Auction storage version v1 PRE migration checks successful!",
+			"🔨 migration: Auction storage version v1 PRE migration checks successful! ✅",
 		);
 
 		Ok(())
@@ -29,19 +29,27 @@ pub(crate) mod v1 {
 		CurrentPhase::kill();
 		LastAuctionResult::kill();
 
+		log::info!(
+			target: "runtime::cf_auction",
+			"🔨 migration: Auction storage completed for version 1 successful! ✅"
+		);
+
 		T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn post_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
+		use frame_support::assert_err;
+
 		assert_eq!(P::on_chain_storage_version(), releases::V1);
 
-		assert!(CurrentPhase::exists(), "CurrentPhase should be gone");
-		assert!(LastAuctionResult::exists(), "LastAuctionResult should be gone");
+		// We should expect no values for these items
+		assert_err!(CurrentPhase::try_get(), ());
+		assert_err!(LastAuctionResult::try_get(), ());
 
 		log::info!(
 			target: "runtime::cf_auction",
-			"migration: Auction storage version v1 POST migration checks successful!"
+			"🔨 migration: Auction storage version v1 POST migration checks successful! ✅"
 		);
 
 		Ok(())
