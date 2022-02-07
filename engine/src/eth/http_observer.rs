@@ -44,8 +44,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 break 'block_safety_loop Some((block, state));
             }
 
-            // TODO: Check this is the correct sleep
-            std::thread::sleep(poll_interval);
+            tokio::time::sleep(poll_interval).await;
 
             println!("About to query for block number");
             let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
