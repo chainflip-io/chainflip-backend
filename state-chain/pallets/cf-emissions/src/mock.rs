@@ -165,10 +165,9 @@ pub const MINT_INTERVAL: u64 = 100;
 
 parameter_types! {
 	pub const MintInterval: u64 = MINT_INTERVAL;
-
 }
 
-cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
 pub struct MockRewardsDistribution;
 

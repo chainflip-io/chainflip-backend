@@ -14,6 +14,13 @@ issue!
 
 ### Code style
 
+The best way to ensure that your code is easy to merge, is to copy the project's pre-commit hook into your local `.git/` directory. You can do this with:
+
+```bash
+cp .git-hooks/pre-commit .git/hooks/
+chmod +x .git/hooks/pre-commit
+```
+
 Since much of the project is reliant on parity substrate, please take inspiration from
 parity's [Substrate code style](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md) where possible.
 Please see this as a guideline rather than rigidly enforced rules. We will define and enforce formatting rules

@@ -47,6 +47,8 @@ use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
 
+// TODO: Not possible to fix the clippy warning here. At the moment we
+// need to ignore it on a global level.
 #[derive(Error, Debug)]
 pub enum EventParseError {
     #[error("Unexpected event signature in log subscription: {0:?}")]

@@ -228,7 +228,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("latest_block_hash RPC API failed")?
-            .ok_or(anyhow::Error::msg("Latest block hash could not be fetched"))?
+            .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
             .hash())
     }
 
@@ -496,11 +496,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     extrinsic,
                     tx_hash
                 );
-                return Ok(tx_hash);
+                Ok(tx_hash)
             }
             Err(err) => {
                 slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
-                return Err(err);
+                Err(err)
             }
         }
     }
@@ -1065,7 +1065,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
@@ -1284,7 +1284,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);

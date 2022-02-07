@@ -173,11 +173,10 @@ async fn request_claim(
                                     "Submitted claim to Ethereum successfully with tx_hash: {:#x}",
                                     tx_hash
                                 );
-                                break 'outer;
                             } else {
                                 println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim.");
-                                break 'outer;
                             }
+                            break 'outer;
                         }
                     }
                 }

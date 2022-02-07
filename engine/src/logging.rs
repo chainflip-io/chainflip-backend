@@ -246,11 +246,6 @@ pub mod test_utils {
                 .filter(|log_tag| *log_tag == tag)
                 .count()
         }
-
-        /// clear the tag cache
-        pub fn clear(&mut self) {
-            self.log.lock().expect("Should be able to get lock").clear();
-        }
     }
 
     impl Drain for TagCache {
@@ -320,7 +315,7 @@ mod tests {
     #[test]
     fn test_logging_tags() {
         // Create a logger and tag cache
-        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
         let logger2 = logger.clone();
 
         // Print a bunch of stuff with tags
@@ -333,10 +328,6 @@ mod tests {
         assert_eq!(tag_cache.get_tag_count("E1234"), 2);
         assert!(tag_cache.contains_tag("2222"));
         assert!(!tag_cache.contains_tag("not_tagged"));
-
-        // Check that clearing the cache works
-        tag_cache.clear();
-        assert!(!tag_cache.contains_tag("E1234"));
     }
 
     #[test]

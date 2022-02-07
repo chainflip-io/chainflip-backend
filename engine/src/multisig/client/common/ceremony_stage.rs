@@ -1,11 +1,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use dyn_clone::DynClone;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    multisig::client::utils::PartyIdxMapping, multisig_p2p::OutgoingMultisigStageMessages,
+    multisig::{client::utils::PartyIdxMapping, crypto::Rng},
+    multisig_p2p::OutgoingMultisigStageMessages,
 };
 
 /// Outcome of a given ceremony stage
@@ -29,7 +29,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
-pub trait CeremonyStage: DynClone + std::fmt::Display {
+pub trait CeremonyStage: std::fmt::Display {
     // Message type to be processed by a particular stage
     type Message;
     // Result to return if the ceremony is successful
@@ -65,6 +65,7 @@ pub struct CeremonyCommon {
     pub outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     pub validator_mapping: Arc<PartyIdxMapping>,
     pub logger: slog::Logger,
+    pub rng: Rng,
 }
 
 impl CeremonyCommon {
