@@ -22,7 +22,6 @@ pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
-	dispatch::Weight,
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
