@@ -825,7 +825,6 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-online",
  "pallet-cf-reputation",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -918,7 +917,6 @@ dependencies = [
  "futures 0.3.17",
  "hex",
  "pallet-cf-environment",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -5046,24 +5044,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-rewards"
-version = "0.1.0"
-dependencies = [
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-cf-flip",
- "pallet-cf-validator",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
@@ -8593,7 +8573,6 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-online",
  "pallet-cf-reputation",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",

@@ -18,7 +18,6 @@ utilities = {path = "../../utilities"}
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 
 # State chain
-pallet-cf-rewards = {path = "../../state-chain/pallets/cf-rewards"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
