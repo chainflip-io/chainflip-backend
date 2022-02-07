@@ -156,7 +156,7 @@ impl MockAuctioneer {
 	) -> AuctionBehaviour {
 		AuctionBehaviour {
 			confirmation_in_blocks,
-			winners: bids.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
+			winners: bids.iter().map(|(validator_id, _)| *validator_id).collect(),
 			minimum_active_bid,
 		}
 	}
@@ -178,7 +178,7 @@ impl MockAuctioneer {
 	pub fn next_auction() {
 		AUCTION_INDEX.with(|cell| {
 			let mut current_auction = cell.borrow_mut();
-			*current_auction = *current_auction + 1;
+			*current_auction += 1;
 		});
 	}
 }
@@ -317,7 +317,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
-				&validator,
+				validator,
 				ValidatorPallet::epoch_index(),
 			);
 		}
@@ -345,7 +345,7 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+pub const DUMMY_GENESIS_VALIDATORS: &[u64] = &[u64::MAX];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

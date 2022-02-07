@@ -120,7 +120,7 @@ pub fn new_test_ext(
 		let mut beneficiaries = vec![];
 		for (acct, amt) in accounts {
 			<Flip as StakeTransfer>::credit_stake(&acct, amt);
-			beneficiaries.push(acct.clone());
+			beneficiaries.push(acct);
 		}
 		// Rollover to initialize pallet state.
 		assert_ok!(<FlipRewards as RewardRollover>::rollover(&beneficiaries));

@@ -141,7 +141,7 @@ mod test_update_flip_supply {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			stake_manager_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

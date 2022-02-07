@@ -8,11 +8,9 @@ use std::time::Duration;
 use crate as pallet_cf_governance;
 
 fn mock_extrinsic() -> Box<Call> {
-	let call =
-		Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
-			EVE, PETER, MAX,
-		])));
-	call
+	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
+		EVE, PETER, MAX,
+	])))
 }
 
 fn next_block() {

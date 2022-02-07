@@ -238,7 +238,7 @@ fn test_rollover() {
 		check_balance_integrity();
 
 		// Do a rollover.
-		assert_ok!(<FlipRewards as RewardRollover>::rollover(&vec![CHARLIE, ALICE]));
+		assert_ok!(<FlipRewards as RewardRollover>::rollover(&[CHARLIE, ALICE]));
 
 		// Rewards should be fully distributed and entitlements reset to zero
 		assert_eq!(Flip::total_issuance(), 1_051);
@@ -272,7 +272,7 @@ fn test_rollover() {
 		check_balance_integrity();
 
 		// Do another rollover.
-		assert_ok!(FlipRewards::rollover(&vec![]));
+		assert_ok!(FlipRewards::rollover(&[]));
 
 		assert_eq!(Flip::total_issuance(), 1_100);
 		assert_balances![
