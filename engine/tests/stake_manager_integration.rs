@@ -6,7 +6,7 @@ use std::str::FromStr;
 use chainflip_engine::{
     eth::{
         stake_manager::{StakeManager, StakeManagerEvent},
-        EthObserver, EthWsRpcClient,
+        EthHttpRpcClient, EthObserver, EthWsRpcClient,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},
@@ -27,9 +27,12 @@ pub async fn test_all_stake_manager_events() {
     let settings =
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
         .expect("Couldn't create EthRpcClient");
+
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth).expect("Couldn't create EthHttpRpcClient");
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let stake_manager = StakeManager::new(H160::default()).unwrap();
@@ -37,7 +40,7 @@ pub async fn test_all_stake_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     let sm_events = stake_manager
-        .event_stream(&eth_rpc_client, 0, &root_logger)
+        .event_stream(&eth_http_rpc_client, &eth_ws_rpc_client, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))

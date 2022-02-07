@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, EthObserver, EthWsRpcClient},
+    eth::{key_manager::KeyManager, EthHttpRpcClient, EthObserver, EthWsRpcClient},
     logging::utils,
     settings::Settings,
 };
@@ -16,9 +16,12 @@ pub async fn test_all_key_manager_events() {
 
     let settings = test_settings_from_file_and_env().unwrap();
 
-    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .expect("Couldn't create EthRpcClient");
+        .expect("Couldn't create EthWsRpcClient");
+
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth).expect("Couldn't create EthHttpRpcClient");
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let key_manager = KeyManager::new(H160::default()).unwrap();
@@ -26,7 +29,7 @@ pub async fn test_all_key_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     key_manager
-        .event_stream(&eth_rpc_client, 0, &root_logger)
+        .event_stream(&eth_http_rpc_client, &eth_ws_rpc_client, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(10)))

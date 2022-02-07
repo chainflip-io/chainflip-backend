@@ -125,13 +125,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use sp_core::H256;
 
     use super::*;
 
-    fn block_header(hash: u8, block_number: u64) -> Result<BlockHeader, web3::Error> {
+    pub fn block_header(hash: u8, block_number: u64) -> Result<BlockHeader, web3::Error> {
         let block_header = BlockHeader {
             // fields that matter
             hash: Some(H256::from([hash; 32])),

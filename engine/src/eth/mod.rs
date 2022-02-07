@@ -1,5 +1,6 @@
 mod http_observer;
 pub mod key_manager;
+pub mod merged_stream;
 pub mod stake_manager;
 
 pub mod event_common;
@@ -10,6 +11,7 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
+use futures::stream::repeat;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
@@ -23,6 +25,7 @@ use web3::{
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
+use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -40,7 +43,9 @@ use web3::{
     Web3,
 };
 
-use tokio_stream::{Stream, StreamExt};
+use futures::StreamExt;
+
+use tokio_stream::Stream;
 
 use event_common::EventWithCommon;
 
@@ -112,9 +117,10 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc>(
+pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc, EthHttpRpc>(
     contract_observer: ContractObserver,
-    eth_rpc: &EthWsRpc,
+    eth_ws_rpc: &EthWsRpc,
+    eth_http_rpc: &EthHttpRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     logger: &slog::Logger,
@@ -122,6 +128,7 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     RpcClient: 'static + StateChainRpcApi + Sync + Send,
     EthWsRpc: 'static + EthWsRpcApi + Sync + Send + Clone,
+    EthHttpRpc: 'static + EthHttpRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -150,7 +157,8 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc>(
 
             // clone for capture by tokio task
             let task_end_at_block_c = task_end_at_block.clone();
-            let eth_rpc = eth_rpc.clone();
+            let eth_ws_rpc = eth_ws_rpc.clone();
+            let eth_http_rpc = eth_http_rpc.clone();
             let logger = logger.clone();
             let contract_observer = contract_observer.clone();
             let state_chain_client = state_chain_client.clone();
@@ -162,7 +170,7 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc>(
                         received_window.from
                     );
                     let mut event_stream = contract_observer
-                        .event_stream(&eth_rpc, received_window.from, &logger)
+                        .event_stream(&eth_http_rpc, &eth_ws_rpc, received_window.from, &logger)
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -230,6 +238,7 @@ pub struct EthWsRpcClient {
     web3: Web3<web3::transports::WebSocket>,
 }
 
+// TODO: Look at passing through the
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
@@ -325,6 +334,18 @@ impl EthWsRpcApi for EthWsRpcClient {
 #[derive(Clone)]
 pub struct EthHttpRpcClient {
     web3: Web3<web3::transports::Http>,
+}
+
+impl EthHttpRpcClient {
+    // TODO: Look at taking the logger here, adding it to the struct
+    pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
+        let node_endpoint = &eth_settings.node_endpoint;
+        // slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+        let http = web3::transports::Http::new(node_endpoint)?;
+        let web3 = web3::Web3::new(http);
+
+        Ok(Self { web3 })
+    }
 }
 
 #[async_trait]
@@ -479,10 +500,19 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             .await
     }
 }
+
+// Used to zip on the streams, so we know which stream is returning
+#[derive(Clone)]
+enum TranpsortProtocol {
+    Http,
+    Ws,
+}
+
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    // TODO: this needs to be split out
     async fn ws_event_stream<BlockHeaderStream, EthRpc>(
         &self,
         from_block: u64,
@@ -564,13 +594,17 @@ pub trait EthObserver {
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream<EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone>(
+    async fn event_stream<EthWsRpc, EthHttpRpc>(
         &self,
-        eth_rpc: &EthWsRpc,
+        eth_http_rpc: &EthHttpRpc,
+        eth_ws_rpc: &EthWsRpc,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
+    where
+        EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
+        EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
     {
         let deployed_address = self.get_deployed_address();
         let decode_log = self.decode_log_closure()?;
@@ -580,20 +614,27 @@ pub trait EthObserver {
             hex::encode(deployed_address)
         );
 
-        let eth_head_stream = eth_rpc.subscribe_new_heads().await?;
+        let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
 
-        let safe_head_stream = safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+        let safe_ws_head_stream =
+            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN)
+                .zip(repeat(TranpsortProtocol::Ws));
 
-        let ws_stream = self
-            .ws_event_stream(
-                from_block,
-                deployed_address,
-                safe_head_stream,
-                decode_log,
-                eth_rpc,
-                logger,
-            )
-            .await;
+        let safe_http_head_stream =
+            polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
+        
+
+        // TODO split this out
+        // let ws_stream = self
+        //     .ws_event_stream(
+        //         from_block,
+        //         deployed_address,
+        //         safe_head_stream,
+        //         decode_log,
+        //         eth_ws_rpc,
+        //         logger,
+        //     )
+        //     .await;
 
         // we get events from the ws stream
 
@@ -677,6 +718,7 @@ pub mod mocks {
     // Create a mock of the http interface of web3
     mock! {
         // MockEthHttpRpc will be the name of the mock
+        #[derive(Clone)]
         pub EthHttpRpc {}
 
         #[async_trait]

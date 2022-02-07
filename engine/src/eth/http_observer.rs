@@ -14,7 +14,7 @@ use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 use super::EthHttpRpcApi;
 
-const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
+pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
@@ -91,8 +91,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             } else if state.last_block_fetched != U64::from(0)
                 && unsafe_block_number > state.last_block_fetched + 1
             {
-                // We should never run this on the first go round
-                assert!(state.last_block_fetched != U64::from(0));
                 // we skipped a block
                 // if our *head* is now at N, and we are assuming N - 5 is safe
                 // Then (N - 1) - 5 must be safe
@@ -131,7 +129,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use mockall::{mock, predicate::eq, Sequence};
 
@@ -147,7 +145,7 @@ mod tests {
 
     use anyhow::Result;
 
-    fn dummy_block(block_number: u64) -> Result<Option<Block<H256>>> {
+    pub fn dummy_block(block_number: u64) -> Result<Option<Block<H256>>> {
         Ok(Some(Block {
             hash: Some(H256([(block_number % 256) as u8; 32])),
             number: Some(U64::from(block_number)),
@@ -285,12 +283,8 @@ mod tests {
             expected_first_returned_block_number
         );
 
-        println!("First block returned as expected");
-
-        println!("The range is: {:?}", skipped_range);
         // we should get all the skipped blocks next (that are within the safety margin)
         for n in skipped_range {
-            println!("This is n: {}", n);
             let expected_skipped_block_number = U64::from(n - ETH_BLOCK_SAFETY_MARGIN);
             assert_eq!(
                 stream.next().await.unwrap().number.unwrap(),
@@ -323,6 +317,7 @@ mod tests {
         let num_blocks_backwards = 2;
         let back_to_block_number = first_block_number - U64::from(num_blocks_backwards);
 
+        // We want to return the one after the first one we have already returned
         for n in back_to_block_number.as_u64()..=first_block_number.as_u64() + 1 {
             mock_eth_http_rpc
                 .expect_block_number()

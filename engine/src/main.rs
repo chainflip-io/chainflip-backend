@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
-        EthWsRpcClient,
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
+        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
     },
     health::HealthMonitor,
     logging,
@@ -41,12 +41,16 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let eth_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .expect("Should create EthRpcClient");
+        .expect("Should create EthWsRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
-        .expect("Failed to create ETH broadcaster");
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth).expect("Should create EthHttpRpcClient");
+
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)
+            .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
@@ -104,7 +108,7 @@ async fn main() {
         .await
         .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = eth_rpc_client
+        let chain_id_from_eth = eth_ws_rpc_client
             .chain_id()
             .await
             .expect("Should fetch chain id");
@@ -185,14 +189,16 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,
