@@ -230,8 +230,6 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
-	/// The current epoch is ending
-	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
 	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
