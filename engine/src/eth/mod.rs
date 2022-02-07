@@ -35,6 +35,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
+use std::fmt;
 use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
@@ -502,10 +503,19 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 }
 
 // Used to zip on the streams, so we know which stream is returning
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum TranpsortProtocol {
     Http,
     Ws,
+}
+
+impl fmt::Display for TranpsortProtocol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            TranpsortProtocol::Ws => write!(f, "Websocket"),
+            TranpsortProtocol::Http => write!(f, "Http"),
+        }
+    }
 }
 
 #[async_trait]
@@ -622,7 +632,6 @@ pub trait EthObserver {
 
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
-        
 
         // TODO split this out
         // let ws_stream = self
