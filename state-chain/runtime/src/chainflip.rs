@@ -4,8 +4,8 @@ mod signer_nomination;
 pub use signer_nomination::RandomSignerNomination;
 
 use super::{
-	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards,
-	Runtime, Validator, Witnesser,
+	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Runtime,
+	Validator, Witnesser,
 };
 use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
 use cf_chains::{

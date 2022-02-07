@@ -11,8 +11,8 @@ mod tests {
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
 		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
-		Flip, Governance, Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System,
-		Timestamp, Validator,
+		Flip, Governance, Online, Origin, Reputation, Runtime, Session, Staking, System, Timestamp,
+		Validator,
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -736,12 +736,6 @@ mod tests {
 				}
 
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
-
-				assert_eq!(
-					Rewards::offchain_funds(pallet_cf_rewards::VALIDATOR_REWARDS),
-					0,
-					"no rewards"
-				);
 
 				assert_eq!(
 					EthereumVault::keygen_ceremony_id_counter(),
