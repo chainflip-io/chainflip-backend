@@ -629,21 +629,21 @@ pub trait EthObserver {
         let safe_ws_head_stream =
             safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
-        let safe_ws_head_stream = safe_ws_head_stream.map(|item| {
-            let item: Box<dyn BlockHeaderable> = Box::new(item);
-            item
-        });
+        // let safe_ws_head_stream = safe_ws_head_stream.map(|item| {
+        //     let item: Box<dyn BlockHeaderable> = Box::new(item);
+        //     item
+        // });
 
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
 
-        let safe_http_head_stream = safe_http_head_stream.map(|item| {
-            let item: Box<dyn BlockHeaderable> = Box::new(item);
-            item
-        });
+        // let safe_http_head_stream = safe_http_head_stream.map(|item| {
+        //     let item: Box<dyn BlockHeaderable> = Box::new(item);
+        //     item
+        // });
 
-        let merged_stream =
-            merged_stream::merged_stream(safe_ws_head_stream, safe_http_head_stream, logger).await;
+        // let merged_stream =
+        //     merged_stream::merged_stream(safe_ws_head_stream, safe_http_head_stream, logger).await;
 
         Err(anyhow::Error::msg("NO stream, RIP"))
     }
