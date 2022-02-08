@@ -166,7 +166,7 @@ mod test_set_agg_key_with_agg_key {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			set_agg_key_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

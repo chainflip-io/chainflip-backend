@@ -88,7 +88,7 @@ impl Slashing for MockSlasher {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
-			*c = *c + 1
+			*c += 1
 		});
 		0
 	}

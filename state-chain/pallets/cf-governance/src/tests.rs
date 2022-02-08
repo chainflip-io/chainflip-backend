@@ -10,11 +10,9 @@ use crate as pallet_cf_governance;
 const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<Call> {
-	let call =
-		Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
-			EVE, PETER, MAX,
-		])));
-	call
+	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
+		EVE, PETER, MAX,
+	])))
 }
 
 fn next_block() {
@@ -243,7 +241,7 @@ fn error_during_runtime_upgrade() {
 			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
 			DUMMY_WASM_BLOB,
 		);
-		assert_eq!(result.is_err(), true);
+		assert!(result.is_err());
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
 		assert_eq!(
 			last_event(),
