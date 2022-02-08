@@ -189,13 +189,15 @@ pub mod pallet {
 					ValidatorChecked<T::QualifyConfig>,
 				>() {
 					Ok(auction_result) => {
-						// TODO Do we handle an error at starting the vault rotation as an abort or
-						// just simply log?
 						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
 						{
 							Ok(_) => Self::update_rotation_status(RotationStatus::AwaitingVaults(
 								auction_result,
 							)),
+							// We are assuming here that this is unlikely as the only reason it
+							// would fail is if we have no validators, which is already checked by
+							// the auction pallet, of if there is already a rotation in progress
+							// which isn't possible.
 							Err(e) =>
 								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e),
 						}
