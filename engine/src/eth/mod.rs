@@ -627,25 +627,23 @@ pub trait EthObserver {
         let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
 
         let safe_ws_head_stream =
-            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN)
-                .zip(repeat(TranpsortProtocol::Ws));
+            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+
+        let safe_ws_head_stream = safe_ws_head_stream.map(|item| {
+            let item: Box<dyn BlockHeaderable> = Box::new(item);
+            item
+        });
 
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
 
-        // TODO split this out
-        // let ws_stream = self
-        //     .ws_event_stream(
-        //         from_block,
-        //         deployed_address,
-        //         safe_head_stream,
-        //         decode_log,
-        //         eth_ws_rpc,
-        //         logger,
-        //     )
-        //     .await;
+        let safe_http_head_stream = safe_http_head_stream.map(|item| {
+            let item: Box<dyn BlockHeaderable> = Box::new(item);
+            item
+        });
 
-        // we get events from the ws stream
+        let merged_stream =
+            merged_stream::merged_stream(safe_ws_head_stream, safe_http_head_stream, logger).await;
 
         Err(anyhow::Error::msg("NO stream, RIP"))
     }

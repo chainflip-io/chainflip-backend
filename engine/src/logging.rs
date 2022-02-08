@@ -11,6 +11,10 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
+// ==== Logging Eth Observer constants ====
+pub const ETH_HTTP_STREAM_RETURNED: &str = "eth-observer-http";
+pub const ETH_WS_STREAM_RETURNED: &str = "eth-observer-ws";
+
 // ==== Logging Trace/Debug Tag constants ====
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 

@@ -13,7 +13,10 @@ use futures::{
 };
 use web3::types::U64;
 
-use crate::eth::TranpsortProtocol;
+use crate::{
+    eth::TranpsortProtocol,
+    logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED},
+};
 
 use super::BlockHeaderable;
 
@@ -31,7 +34,6 @@ where
     // EthBlockHeader: BlockHeaderable,
     BlockHeaderableStream: Stream<Item = DynBlockHeader> + 'static,
 {
-    // TODO: Add the zip stuff later for logging / tracking faults
     let safe_ws_head_stream = safe_ws_head_stream.zip(repeat(TranpsortProtocol::Ws));
     let safe_http_head_stream = safe_http_head_stream.zip(repeat(TranpsortProtocol::Http));
     let merged_stream = Box::pin(select(safe_ws_head_stream, safe_http_head_stream));
@@ -55,14 +57,27 @@ where
                     .number()
                     .expect("block should have block number");
 
-                if current_item_block_number > state.last_yielded_block_number {
-                    assert!(current_item_block_number + 1 == state.last_yielded_block_number);
-                    slog::info!(
-                        state.logger,
-                        "Returning block number: {} from {} stream",
-                        current_item_block_number,
-                        protocol
-                    );
+                println!("Current item block number: {}", current_item_block_number);
+                if (current_item_block_number == state.last_yielded_block_number + 1)
+                    // first iteration
+                    || state.last_yielded_block_number == U64::from(0)
+                {
+                    match protocol {
+                        TranpsortProtocol::Http => slog::info!(
+                            state.logger,
+                            #ETH_HTTP_STREAM_RETURNED,
+                            "Returning block number: {} from {} stream",
+                            current_item_block_number,
+                            protocol
+                        ),
+                        TranpsortProtocol::Ws => slog::info!(
+                            state.logger,
+                            #ETH_WS_STREAM_RETURNED,
+                            "Returning block number: {} from {} stream",
+                            current_item_block_number,
+                            protocol
+                        ),
+                    }
                     state.last_yielded_block_number = current_item_block_number;
                     break Some((current_item_block_number, state));
                 } else {
@@ -80,16 +95,18 @@ where
 #[cfg(test)]
 mod tests {
 
-    use std::{f32::consts::E, time::Duration};
+    use std::time::Duration;
 
     use futures::stream;
 
     use super::*;
     use crate::{
         eth::{http_observer::tests::dummy_block, safe_stream::tests::block_header},
-        logging::test_utils::new_test_logger,
+        logging::test_utils::{new_test_logger, new_test_logger_with_tag_cache},
     };
 
+    // Generate a stream for each protocol, that, when selected upon, will return
+    // in the order the items are passed in
     fn interleaved_streams(
         // contains the streams in the order they will return
         items: Vec<(DynBlockHeader, TranpsortProtocol)>,
@@ -99,18 +116,22 @@ mod tests {
         // ws
         Pin<Box<dyn Stream<Item = DynBlockHeader>>>,
     ) {
+        assert!(items.len() > 0, "should have at least one item");
+
+        const DELAY_DURATION_MILLIS: u64 = 10;
+
+        let (_, first_protocol) = items.first().unwrap();
+        let mut type_last_returned = first_protocol.clone();
         let mut http_items = Vec::new();
         let mut ws_items = Vec::new();
         let mut total_delay_increment = 0;
-        // todo init this properly
-        let mut type_last_returned = TranpsortProtocol::Http;
+
         for (item, protocol) in items {
-            // TODO: Include delay factor
             // if we are returning the same, we can just go the next, since we are ordered
             let delay = Duration::from_millis(if protocol == type_last_returned {
                 0
             } else {
-                total_delay_increment = total_delay_increment + 1;
+                total_delay_increment = total_delay_increment + DELAY_DURATION_MILLIS;
                 total_delay_increment
             });
 
@@ -139,24 +160,6 @@ mod tests {
     fn num_to_dyn_block_header(block_number: u64) -> DynBlockHeader {
         let block_header: DynBlockHeader = Box::new(dummy_block(block_number).unwrap().unwrap());
         block_header
-    }
-
-    #[tokio::test]
-    async fn test_interleaved() {
-        let logger = new_test_logger();
-        let mut items: Vec<(DynBlockHeader, TranpsortProtocol)> = Vec::new();
-        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Ws));
-        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Ws));
-        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Http));
-        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Http));
-
-        let (http_stream, ws_stream) = interleaved_streams(items);
-
-        let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
-
-        while let Some(item) = merged_stream.next().await {
-            println!("Here's the item: {}", item);
-        }
     }
 
     #[tokio::test]
@@ -208,10 +211,59 @@ mod tests {
         let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
         for expected_block_number in blocks_in_front {
             let block_number = merged_stream.next().await.unwrap();
+            println!("Here's the block number: {}", block_number);
             assert_eq!(block_number, U64::from(expected_block_number));
         }
         // we have exhausted both streams with no extra blocks to return
         assert!(merged_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_interleaving_protocols() {
+        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let mut items: Vec<(DynBlockHeader, TranpsortProtocol)> = Vec::new();
+        // return
+        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Ws));
+        // return
+        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Ws));
+        // ignore
+        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Http));
+        // ignore
+        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Http));
+        // return
+        items.push((num_to_dyn_block_header(12), TranpsortProtocol::Http));
+        // ignore
+        items.push((num_to_dyn_block_header(12), TranpsortProtocol::Ws));
+        // return
+        items.push((num_to_dyn_block_header(13), TranpsortProtocol::Http));
+        // ignore
+        items.push((num_to_dyn_block_header(13), TranpsortProtocol::Ws));
+        // return
+        items.push((num_to_dyn_block_header(14), TranpsortProtocol::Ws));
+
+        let (http_stream, ws_stream) = interleaved_streams(items);
+
+        let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
     }
 
     #[tokio::test]

@@ -12,14 +12,17 @@ use web3::{
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
-use super::EthHttpRpcApi;
+use super::{BlockHeaderable, EthHttpRpcApi};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
+pub async fn polling_http_head_stream<
+    EthHttpRpc: EthHttpRpcApi,
+    EthBlockHeader: BlockHeaderable,
+>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
-) -> impl Stream<Item = Block<H256>> {
+) -> impl Stream<Item = EthBlockHeader> {
     struct StreamState<EthHttpRpc> {
         last_block_fetched: U64,
         last_block_yielded: U64,
