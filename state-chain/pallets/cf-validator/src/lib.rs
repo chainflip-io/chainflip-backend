@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping, VaultRotationHandler,
+	HasPeerMapping, QualifyValidator, VaultRotationHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -81,7 +81,7 @@ impl<T> Default for RotationStatus<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{QualifyConfig, ValidatorChecked, ValidatorUnchecked, VaultRotator};
+	use cf_traits::{ValidatorUnchecked, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -121,8 +121,8 @@ pub mod pallet {
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = Self::ValidatorId>;
 
-		/// Configure what we are intested in qualifying
-		type QualifyConfig: QualifyConfig<ValidatorId = Self::ValidatorId>;
+		/// Qualify a validator
+		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -186,7 +186,7 @@ pub mod pallet {
 					}
 				},
 				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction::<
-					ValidatorChecked<T::QualifyConfig>,
+					T::ValidatorQualification,
 				>() {
 					Ok(auction_result) => {
 						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())

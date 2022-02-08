@@ -607,24 +607,19 @@ impl<ValidatorId> QualifyValidator for ValidatorUnchecked<ValidatorId> {
 	}
 }
 
-pub trait QualifyConfig {
-	type ValidatorId;
-	type Registrar: ValidatorRegistration<Self::ValidatorId>;
-	type PeerMapping: HasPeerMapping<ValidatorId = Self::ValidatorId>;
-	type Online: IsOnline<ValidatorId = Self::ValidatorId>;
-}
-
-pub struct ValidatorChecked<T>(PhantomData<T>);
-
-impl<T: QualifyConfig> QualifyValidator for ValidatorChecked<T> {
-	type ValidatorId = T::ValidatorId;
-
+impl<A, B, C> QualifyValidator for (A, B, C)
+where
+	A: IsOnline<ValidatorId = B::ValidatorId>,
+	B: HasPeerMapping,
+	C: ValidatorRegistration<B::ValidatorId>,
+{
+	type ValidatorId = A::ValidatorId;
+	// Rule #1 - They are registered
+	// Rule #2 - They have a registered peer id
+	// Rule #3 - Confirm that the validators are 'online'
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		// Rule #1 - They are registered
-		// Rule #2 - They have a registered peer id
-		// Rule #3 - Confirm that the validators are 'online'
-		T::Registrar::is_registered(validator_id) &&
-			T::PeerMapping::has_peer_mapping(validator_id) &&
-			T::Online::is_online(validator_id)
+		A::is_online(&validator_id) &&
+			B::has_peer_mapping(&validator_id) &&
+			C::is_registered(&validator_id)
 	}
 }

@@ -55,8 +55,8 @@ pub mod pallet {
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
-		/// Qualify what a validator is expected to be
-		type QualifyValidator: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		/// Qualify a validator
+		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -419,7 +419,6 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	type Amount = T::Amount;
 
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
-
 		// If we are in an auction ignore any updates on stakes
 		if T::EpochInfo::is_auction_phase() {
 			return
@@ -427,7 +426,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 
 		// We validate that the staker is qualified and can be considered to be a BV if the stake
 		// meets the requirements
-		if !T::QualifyValidator::is_qualified(validator_id) {
+		if !T::ValidatorQualification::is_qualified(validator_id) {
 			return
 		}
 

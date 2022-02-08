@@ -7,8 +7,8 @@ use frame_support::{
 
 use cf_traits::{
 	mocks::chainflip_account::MockChainflipAccount, AuctionError, AuctionResult, Bid,
-	BidderProvider, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing, QualifyConfig,
-	QualifyValidator, VaultRotator,
+	BidderProvider, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator,
+	VaultRotator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -225,6 +225,15 @@ impl VaultRotator for MockVaultRotator {
 	}
 }
 
+pub struct MockQualifyValidator;
+impl QualifyValidator for MockQualifyValidator {
+	type ValidatorId = ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		MockOnline::is_online(validator_id)
+	}
+}
+
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
@@ -232,13 +241,6 @@ parameter_types! {
 		bottom: 67,
 		top: 80,
 	};
-}
-
-impl QualifyConfig for Test {
-	type ValidatorId = ValidatorId;
-	type Registrar = Self;
-	type PeerMapping = MockPeerMapping;
-	type Online = MockOnline;
 }
 
 impl Config for Test {
@@ -250,7 +252,7 @@ impl Config for Test {
 	type Auctioneer = MockAuctioneer;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type VaultRotator = MockVaultRotator;
-	type QualifyConfig = Self;
+	type ValidatorQualification = MockQualifyValidator;
 }
 
 /// Session pallet requires a set of validators at genesis.

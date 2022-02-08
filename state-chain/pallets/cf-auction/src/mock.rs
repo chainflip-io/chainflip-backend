@@ -171,7 +171,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-	type QualifyValidator = MockQualifyValidator;
+	type ValidatorQualification = MockQualifyValidator;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
