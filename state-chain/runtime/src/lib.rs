@@ -389,17 +389,12 @@ impl pallet_cf_emissions::Config for Runtime {
 	type FlipBalance = FlipBalance;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
-}
-
-impl pallet_cf_rewards::Config for Runtime {
-	type Event = Event;
-	type WeightInfoRewards = pallet_cf_rewards::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -491,7 +486,6 @@ construct_runtime!(
 		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
-		Rewards: pallet_cf_rewards::{Pallet, Call, Event<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
@@ -697,7 +691,6 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_online, Online);
 			list_benchmark!(list, extra, pallet_cf_emissions, Emissions);
 			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
-			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
 			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
 			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
@@ -741,11 +734,9 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_vaults, EthereumVault);
 			add_benchmark!(params, batches, pallet_cf_online, Online);
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
-			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
 			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
-			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

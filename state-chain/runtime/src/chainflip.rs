@@ -1,10 +1,11 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
 mod signer_nomination;
+use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
 use super::{
-	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
+	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Runtime,
 	Validator, Witnesser,
 };
 use crate::{
@@ -21,7 +22,7 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, SigningContext, StakeHandler,
+	Heartbeat, Issuance, NetworkState, RewardsDistribution, SigningContext, StakeHandler,
 	StakeTransfer, VaultRotationHandler,
 };
 use codec::{Decode, Encode};
@@ -31,6 +32,7 @@ use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchIn
 
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
+
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
@@ -57,13 +59,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_epoch_ending() {
-		// Apportion rewards for the current validators
-		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
-		});
-	}
-
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -73,10 +68,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Rollover the rewards.
-		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
-		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
@@ -99,8 +90,6 @@ pub struct AccountStateManager<T>(PhantomData<T>);
 impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 	type ValidatorId = AccountId;
 	type Amount = T::Amount;
-
-	fn on_epoch_ending() {}
 
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
@@ -378,6 +367,17 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 	}
 }
 
+pub struct BlockAuthorRewardDistribution;
+
+impl RewardsDistribution for BlockAuthorRewardDistribution {
+	type Balance = FlipBalance;
+	type Surplus = Surplus<Runtime>;
+
+	fn distribute(rewards: Self::Surplus) {
+		let current_block_author = Authorship::author();
+		Flip::settle_imbalance(&current_block_author, rewards);
+	}
+}
 pub struct RuntimeUpgradeManager;
 
 impl RuntimeUpgrade for RuntimeUpgradeManager {

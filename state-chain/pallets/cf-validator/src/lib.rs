@@ -174,12 +174,6 @@ pub mod pallet {
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
 			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
-				// At the start of each auction we notify that we are approaching the end of the
-				// current epoch.  TODO Could this be best in another trait such as `Auctioneer`?
-				if T::Auctioneer::phase() == AuctionPhase::WaitingForBids {
-					T::EpochTransitionHandler::on_epoch_ending();
-				}
-
 				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
 					// Auction completed when we return to the state of `WaitingForBids`
 					if Force::<T>::get() {
