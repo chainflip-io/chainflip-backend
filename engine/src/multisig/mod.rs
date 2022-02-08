@@ -5,7 +5,7 @@ mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
-mod db;
+pub mod db;
 
 #[cfg(test)]
 mod tests;
