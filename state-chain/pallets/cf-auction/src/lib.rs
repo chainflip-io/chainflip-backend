@@ -424,14 +424,17 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 			return
 		}
 
+		// If we are in an auction ignore any updates on stakes
+		if T::EpochInfo::is_auction_phase() == false {
+			return
+		}
+
 		// We validate that the staker is qualified and can be considered to be a BV if the stake
 		// meets the requirements
 		if !T::QualifyValidator::is_qualified(validator_id) {
 			return
 		}
 
-		// TODO Check if this is OK as it was only available out of auction phases which don't exist
-		// anymore
 		match T::ChainflipAccount::get(&(validator_id.clone().into())).state {
 			ChainflipAccountState::Passive if amount > LowestBackupValidatorBid::<T>::get() => {
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
