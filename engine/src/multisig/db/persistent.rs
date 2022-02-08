@@ -37,7 +37,7 @@ const DEFAULT_COLUMN_NAME: &str = "default";
 const LEGACY_DATA_COLUMN_NAME: &str = "col0";
 
 /// Name of the directory that the backups will go into (only created before migrations)
-const BACKUP_DIRECTORY: &str = "backups";
+const BACKUPS_DIRECTORY: &str = "backups";
 
 /// Database for keys and persistent metadata
 pub struct PersistentKeyDB {
@@ -184,7 +184,7 @@ impl KeyDB for PersistentKeyDB {
     }
 }
 
-// Creates a backup of the database folder to BACKUP_DIRECTORY/backup_vx_xx_xx
+// Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
 fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
     // Build the name for the new backup using the schema version and a timestamp
     let backup_dir_name = format!(
@@ -199,26 +199,31 @@ fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Err
             .expect("Should get string from filename"),
     );
 
-    create_backup_with_name(path, backup_dir_name)
+    create_backup_with_directory_name(path, backup_dir_name)
 }
 
-fn create_backup_with_name(path: &Path, backup_dir_name: String) -> Result<String, anyhow::Error> {
-    // Create the BACKUP_DIRECTORY directory if it doesn't exist
-    let backup_path = path.parent().expect("Should have parent");
-    let backup_path = backup_path.join(BACKUP_DIRECTORY);
-    if !backup_path.exists() {
-        fs::create_dir_all(&backup_path)
+fn create_backup_with_directory_name(
+    path: &Path,
+    backup_dir_name: String,
+) -> Result<String, anyhow::Error> {
+    // Create the BACKUPS_DIRECTORY if it doesn't exist
+    let backups_path = path.parent().expect("Should have parent");
+    let backups_path = backups_path.join(BACKUPS_DIRECTORY);
+    if !backups_path.exists() {
+        fs::create_dir_all(&backups_path)
             .map_err(anyhow::Error::msg)
             .with_context(|| {
                 format!(
                     "Failed to create backup directory {}",
-                    &backup_path.to_str().expect("Should get backup path as str")
+                    &backups_path
+                        .to_str()
+                        .expect("Should get backup path as str")
                 )
             })?;
     }
 
-    // The db folder should not exist yet
-    let backup_dir_path = backup_path.join(backup_dir_name);
+    // This db backup folder should not exist yet
+    let backup_dir_path = backups_path.join(backup_dir_name);
     if backup_dir_path.exists() {
         return Err(anyhow::Error::msg(format!(
             "Backup directory already exists {}",
@@ -229,16 +234,9 @@ fn create_backup_with_name(path: &Path, backup_dir_name: String) -> Result<Strin
     // Copy the files
     let mut copy_options = fs_extra::dir::CopyOptions::new();
     copy_options.copy_inside = true;
-    if fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
+    fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
         .map_err(anyhow::Error::msg)
-        .context("Failed to copy db files for backup")?
-        == 0
-    {
-        return Err(anyhow::Error::msg(format!(
-            "No files were backed up at {}",
-            backup_dir_path.display()
-        )));
-    }
+        .context("Failed to copy db files for backup")?;
 
     Ok(backup_dir_path
         .into_os_string()
@@ -646,8 +644,8 @@ mod tests {
         // Try and open the backup to make sure it still works
         {
             // Find the backup db
-            let backup_path = path.join(BACKUP_DIRECTORY);
-            let backups: Vec<std::path::PathBuf> = fs::read_dir(&backup_path)
+            let backups_path = path.join(BACKUPS_DIRECTORY);
+            let backups: Vec<std::path::PathBuf> = fs::read_dir(&backups_path)
                 .unwrap()
                 .filter_map(|entry| {
                     let entry = entry.expect("File should exist");
@@ -663,7 +661,7 @@ mod tests {
             assert!(
                 backups.len() == 1,
                 "Incorrect number of backups found in {}",
-                BACKUP_DIRECTORY
+                BACKUPS_DIRECTORY
             );
 
             // Open the backup and make sure the schema version is the same as the pre-migration
@@ -681,17 +679,6 @@ mod tests {
     }
 
     #[test]
-    fn backup_should_fail_if_empty() {
-        // Create an empty folder
-        let temp_dir = TempDir::new("backup_should_fail_if_empty").unwrap();
-        let path = temp_dir.path().join("empty_db");
-        fs::create_dir(&path).expect("Should create directory");
-
-        // Backup the empty folder and it should fail
-        assert!(create_backup(path.as_path(), DB_SCHEMA_VERSION).is_err());
-    }
-
-    #[test]
     fn backup_should_fail_if_already_exists() {
         let logger = new_test_logger();
         let temp_dir = TempDir::new("backup_should_fail_if_already_exists").unwrap();
@@ -703,13 +690,13 @@ mod tests {
         // Backup up the db to a specified directory.
         // We cannot use the normal backup directory because it has a timestamp in it.
         let backup_dir_name = "test".to_string();
-        assert_ok!(create_backup_with_name(
+        assert_ok!(create_backup_with_directory_name(
             db_path.as_path(),
             backup_dir_name.clone()
         ));
 
         // Try and back it up again to the same directory and it should fail
-        assert!(create_backup_with_name(db_path.as_path(), backup_dir_name).is_err());
+        assert!(create_backup_with_directory_name(db_path.as_path(), backup_dir_name).is_err());
     }
 
     #[test]
@@ -722,7 +709,7 @@ mod tests {
         assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
 
         // Change the backups folder to readonly
-        let backups_dir = temp_dir.path().join(BACKUP_DIRECTORY);
+        let backups_dir = temp_dir.path().join(BACKUPS_DIRECTORY);
         let mut permissions = backups_dir.metadata().unwrap().permissions();
         permissions.set_readonly(true);
         assert_ok!(fs::set_permissions(&backups_dir, permissions));
