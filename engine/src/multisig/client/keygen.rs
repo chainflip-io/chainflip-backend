@@ -19,10 +19,6 @@ pub use keygen_stages::{is_contract_compatible, AwaitCommitments1};
 
 use state_chain_runtime::AccountId;
 
-dyn_clone::clone_trait_object!(CeremonyStage<Message = KeygenData, Result = KeygenResultInfo>);
-
-use super::common::{CeremonyStage, KeygenResultInfo};
-
 /// Information necessary for the multisig client to start a new keygen ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
@@ -30,7 +26,7 @@ pub struct KeygenInfo {
     pub signers: Vec<AccountId>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy)] // TODO Doesn't need to derive Copy
 pub struct KeygenOptions {
     /// This is intentionally private to ensure that the only
     /// way to unset this flag with via test-only constructor

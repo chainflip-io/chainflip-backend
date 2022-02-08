@@ -1,5 +1,8 @@
 use crate::{self as pallet_cf_witness};
-use cf_traits::mocks;
+use cf_traits::{
+	mocks::{self, epoch_info::MockEpochInfo},
+	EpochTransitionHandler,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -85,16 +88,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
+	const VALIDATORS: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
+	MockEpochInfo::set_validators(VALIDATORS.to_vec());
+
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
-
-		// Seed with three active validators and set the consensus threshold to two.
-		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, ALISSA, 0);
-		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, BOBSON, 1);
-		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, CHARLEMAGNE, 2);
-		pallet_cf_witness::NumValidators::<Test>::set(3);
-		pallet_cf_witness::ConsensusThreshold::<Test>::set(2);
+		MockEpochInfo::incr_epoch();
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &VALIDATORS, Default::default());
 	});
 
 	ext

@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl_mock_witnesser_for_account_and_call_types!(u64, Call);
+impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

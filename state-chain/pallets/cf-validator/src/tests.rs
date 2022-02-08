@@ -1,4 +1,5 @@
 mod tests {
+
 	use crate::{mock::*, Error, *};
 	use cf_traits::{ActiveValidatorRange, AuctionError, IsOutgoing};
 	use frame_support::{assert_noop, assert_ok};
@@ -30,6 +31,24 @@ mod tests {
 			"we should be in epoch {}",
 			GENESIS_EPOCH + 1
 		);
+	}
+
+	#[test]
+	fn should_store_last_expired_epoch() {
+		new_test_ext().execute_with(|| {
+			let epoch_blocks = 10;
+			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch_blocks));
+			assert_eq!(1, <ValidatorPallet as EpochInfo>::epoch_index());
+			System::set_block_number(epoch_blocks);
+			ValidatorPallet::start_new_epoch(&[], 0);
+			assert_eq!(2, <ValidatorPallet as EpochInfo>::epoch_index());
+			System::set_block_number(2 * epoch_blocks);
+			ValidatorPallet::start_new_epoch(&[], 0);
+			// Epoch 1 would now expire as it was rotated at block 10 when we moved
+			// to epoch 2 and would expire at block 10 + epoch_blocks(10)
+			ValidatorPallet::on_initialize(2 * epoch_blocks);
+			assert_eq!(1, <ValidatorPallet as EpochInfo>::last_expired_epoch());
+		});
 	}
 
 	#[test]

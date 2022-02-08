@@ -7,7 +7,9 @@ use super::{
 	AccountId, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Rewards, Runtime,
 	Validator, Witnesser,
 };
-use crate::{Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval};
+use crate::{
+	Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval, System,
+};
 use cf_chains::{
 	eth::{
 		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
@@ -24,6 +26,9 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
+
+use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::PercentageRange;
@@ -33,6 +38,8 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+
+use cf_traits::RuntimeUpgrade;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -368,5 +375,13 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::InvalidTransactionAuthored => (15, false),
 			OfflineCondition::TransactionFailedOnTransmission => (15, false),
 		}
+	}
+}
+
+pub struct RuntimeUpgradeManager;
+
+impl RuntimeUpgrade for RuntimeUpgradeManager {
+	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
+		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }

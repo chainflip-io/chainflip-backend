@@ -16,12 +16,7 @@ use crate::{
 
 use state_chain_runtime::AccountId;
 
-use self::frost::SigningData;
-
-use super::{
-    common::{CeremonyStage, KeygenResult},
-    SchnorrSignature,
-};
+use super::common::KeygenResult;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
@@ -48,7 +43,7 @@ impl SigningInfo {
 }
 
 /// A wrapper around SigningInfo that contains the timeout info for cleanup
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PendingSigningInfo {
     pub should_expire_at: Instant,
     pub signing_info: SigningInfo,
@@ -74,5 +69,3 @@ pub struct SigningStateCommonInfo {
     pub data: MessageHash,
     pub key: Arc<KeygenResult>,
 }
-
-dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);

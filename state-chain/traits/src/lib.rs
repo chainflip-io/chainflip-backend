@@ -50,6 +50,8 @@ pub trait Witnesser {
 	type AccountId;
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
+	/// The type for block numbers
+	type BlockNumber;
 
 	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
 	/// number of witnesses have been made.
@@ -59,6 +61,13 @@ pub trait Witnesser {
 	/// be enforced by adding a salt or nonce to the function arguments.
 	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
+	/// Witness an event, as above, during a specific epoch
+	fn witness_at_epoch(
+		who: Self::AccountId,
+		call: Self::Call,
+		epoch: EpochIndex,
+		block_number: Self::BlockNumber,
+	) -> DispatchResultWithPostInfo;
 }
 
 pub trait EpochInfo {
@@ -66,6 +75,9 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
+
+	/// The last expired epoch
+	fn last_expired_epoch() -> EpochIndex;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
@@ -612,4 +624,17 @@ pub trait QualifyValidator {
 	type ValidatorId;
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+}
+
+/// Handles the check of execution conditions
+pub trait ExecutionCondition {
+	/// Returns true/false if the condition is satisfied
+	fn is_satisfied() -> bool;
+}
+
+/// Performs a runtime upgrade
+pub trait RuntimeUpgrade {
+	/// Applies the wasm code of a runtime upgrade and returns the
+	/// information about the execution
+	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
 }
