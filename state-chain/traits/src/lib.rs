@@ -5,7 +5,7 @@ pub mod mocks;
 use cf_chains::{Chain, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
