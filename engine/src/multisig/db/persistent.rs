@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("backup_should_fail_if_already_exists").unwrap();
+        let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
         let db_path = temp_dir.path().join("db");
 
         // Create a normal db
@@ -725,7 +725,12 @@ mod tests {
         let backups_dir = temp_dir.path().join(BACKUP_DIRECTORY);
         let mut permissions = backups_dir.metadata().unwrap().permissions();
         permissions.set_readonly(true);
-        assert_ok!(fs::set_permissions(backups_dir, permissions));
+        assert_ok!(fs::set_permissions(&backups_dir, permissions));
+        assert_eq!(
+            true,
+            backups_dir.metadata().unwrap().permissions().readonly(),
+            "Readonly permissions were not set"
+        );
 
         // Try and backup the db, it should fail with permissions denied due to readonly
         assert!(create_backup(db_path.as_path(), DB_SCHEMA_VERSION).is_err());
