@@ -12,14 +12,14 @@ use web3::{
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
-use super::{BlockHeaderable, EthHttpRpcApi};
+use super::{BlockHeaderable, BlockType, EthHttpRpcApi};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
-) -> impl Stream<Item = Block<H256>> {
+) -> impl Stream<Item = BlockType> {
     struct StreamState<EthHttpRpc> {
         last_block_fetched: U64,
         last_block_yielded: U64,
@@ -39,7 +39,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             // we first want to empty the cache of skipped blocks before querying for new ones
             while let Some(block) = state.cached_skipped_blocks.pop_front() {
                 println!("Popping off the queue block: {}", block.number.unwrap());
-                break 'block_safety_loop Some((block, state));
+                break 'block_safety_loop Some((BlockType::Http(block), state));
             }
 
             tokio::time::sleep(poll_interval).await;
@@ -85,7 +85,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .unwrap();
                 state.last_block_fetched = unsafe_block_number;
                 state.last_block_yielded = block.number.unwrap();
-                break Some((block, state));
+                break Some((BlockType::Http(block), state));
                 // we want to skip the first block
 
                 // check last yielded too?
@@ -112,10 +112,10 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 println!("Yielding block");
                 state.last_block_fetched = unsafe_block_number;
                 break 'block_safety_loop Some((
-                    state
+                    BlockType::Http(state
                         .cached_skipped_blocks
                         .pop_front()
-                        .expect("There must be a block here, as we must have pushed at least one item to the queue"),
+                        .expect("There must be a block here, as we must have pushed at least one item to the queue")),
                     state,
                 ));
             } else {
@@ -142,7 +142,6 @@ pub mod tests {
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
     use crate::eth::mocks::MockEthHttpRpc;
-    use async_trait::async_trait;
 
     use anyhow::Result;
 
@@ -154,8 +153,6 @@ pub mod tests {
             ..Default::default()
         }))
     }
-
-    // TODO empty stream?
 
     #[tokio::test]
     async fn returns_best_safe_block_immediately() {
@@ -175,7 +172,7 @@ pub mod tests {
         let mut stream = polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL).await;
         let expected_returned_block_number = block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             expected_returned_block_number
         );
     }
@@ -226,13 +223,13 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             expected_first_returned_block_number
         );
         let expected_next_returned_block_number =
             next_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             expected_next_returned_block_number
         );
     }
@@ -280,7 +277,7 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             expected_first_returned_block_number
         );
 
@@ -288,7 +285,7 @@ pub mod tests {
         for n in skipped_range {
             let expected_skipped_block_number = U64::from(n - ETH_BLOCK_SAFETY_MARGIN);
             assert_eq!(
-                stream.next().await.unwrap().number.unwrap(),
+                stream.next().await.unwrap().number().unwrap(),
                 expected_skipped_block_number
             );
         }
@@ -342,14 +339,14 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             expected_first_returned_block_number
         );
 
         // We do not want any repeat blocks, we will just wait until we can return the next safe
         // block, after the one we've already returned
         assert_eq!(
-            stream.next().await.unwrap().number.unwrap(),
+            stream.next().await.unwrap().number().unwrap(),
             next_safe_block_number
         );
     }
@@ -380,7 +377,7 @@ pub mod tests {
         for block_number in block_range {
             if let Some(block) = stream.next().await {
                 assert_eq!(
-                    block.number.unwrap(),
+                    block.number().unwrap(),
                     U64::from(block_number - ETH_BLOCK_SAFETY_MARGIN)
                 );
             };

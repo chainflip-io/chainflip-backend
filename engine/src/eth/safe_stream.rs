@@ -10,12 +10,12 @@ use futures::StreamExt;
 
 use crate::eth::BlockHeaderable;
 
-use super::EthRpcApi;
+use super::{BlockType, EthRpcApi};
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = BlockHeader>
+) -> impl Stream<Item = BlockType>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -61,10 +61,12 @@ where
                         <= number
                     {
                         break Some((
-                            state
-                                .unsafe_blocks
-                                .pop_front()
-                                .expect("already put an item above"),
+                            BlockType::Ws(
+                                state
+                                    .unsafe_blocks
+                                    .pop_front()
+                                    .expect("already put an item above"),
+                            ),
                             state,
                         ));
                     } else {
@@ -192,7 +194,10 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block.unwrap())
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -208,8 +213,14 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
-        assert_eq!(stream.next().await, Some(second_block.unwrap()));
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block.unwrap())
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(second_block.unwrap())
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -225,8 +236,14 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await, Some(first_block.clone().unwrap()));
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block.clone().unwrap())
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block_prime.unwrap())
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -244,8 +261,14 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
-        assert_eq!(stream.next().await, Some(second_block_prime.unwrap()));
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block_prime.unwrap())
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(second_block_prime.unwrap())
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -265,7 +288,10 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 2);
 
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert_eq!(
+            stream.next().await.unwrap(),
+            BlockType::Ws(first_block_prime.unwrap())
+        );
         assert!(stream.next().await.is_none());
     }
 }

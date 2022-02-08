@@ -18,21 +18,18 @@ use crate::{
     logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED},
 };
 
-use super::BlockHeaderable;
-
-type DynBlockHeader = Box<dyn BlockHeaderable>;
+use super::{BlockHeaderable, BlockType};
 
 use futures::StreamExt;
 
-pub async fn merged_stream<BlockHeaderableStream>(
+pub async fn merged_stream<BlockHeaderableStream, BlockHeaderableStream2>(
     safe_ws_head_stream: BlockHeaderableStream,
-    safe_http_head_stream: BlockHeaderableStream,
+    safe_http_head_stream: BlockHeaderableStream2,
     logger: slog::Logger,
-    // TODO: return type
-) -> Pin<Box<dyn Stream<Item = U64>>>
+) -> impl Stream<Item = U64>
 where
-    // EthBlockHeader: BlockHeaderable,
-    BlockHeaderableStream: Stream<Item = DynBlockHeader> + 'static,
+    BlockHeaderableStream: Stream<Item = BlockType> + 'static,
+    BlockHeaderableStream2: Stream<Item = BlockType> + 'static,
 {
     let safe_ws_head_stream = safe_ws_head_stream.zip(repeat(TranpsortProtocol::Ws));
     let safe_http_head_stream = safe_http_head_stream.zip(repeat(TranpsortProtocol::Http));
@@ -109,24 +106,24 @@ mod tests {
     // in the order the items are passed in
     fn interleaved_streams(
         // contains the streams in the order they will return
-        items: Vec<(DynBlockHeader, TranpsortProtocol)>,
+        items: Vec<BlockType>,
     ) -> (
         // http
-        Pin<Box<dyn Stream<Item = DynBlockHeader>>>,
+        impl Stream<Item = BlockType>,
         // ws
-        Pin<Box<dyn Stream<Item = DynBlockHeader>>>,
+        impl Stream<Item = BlockType>,
     ) {
         assert!(items.len() > 0, "should have at least one item");
 
         const DELAY_DURATION_MILLIS: u64 = 10;
 
-        let (_, first_protocol) = items.first().unwrap();
-        let mut type_last_returned = first_protocol.clone();
+        let mut type_last_returned = items.first().unwrap().get_protocol();
         let mut http_items = Vec::new();
         let mut ws_items = Vec::new();
         let mut total_delay_increment = 0;
 
-        for (item, protocol) in items {
+        for item in items {
+            let protocol = item.get_protocol();
             // if we are returning the same, we can just go the next, since we are ordered
             let delay = Duration::from_millis(if protocol == type_last_returned {
                 0
@@ -143,7 +140,7 @@ mod tests {
             type_last_returned = protocol;
         }
 
-        let delayed_stream = |items: Vec<(DynBlockHeader, Duration)>| {
+        let delayed_stream = |items: Vec<(BlockType, Duration)>| {
             let items = items.into_iter();
             Box::pin(stream::unfold(items, |mut items| async move {
                 while let Some((i, d)) = items.next() {
@@ -157,18 +154,22 @@ mod tests {
         (delayed_stream(http_items), delayed_stream(ws_items))
     }
 
-    fn num_to_dyn_block_header(block_number: u64) -> DynBlockHeader {
-        let block_header: DynBlockHeader = Box::new(dummy_block(block_number).unwrap().unwrap());
-        block_header
+    fn num_to_block_type(block_number: u64, protocol: TranpsortProtocol) -> BlockType {
+        match protocol {
+            TranpsortProtocol::Http => BlockType::Http(dummy_block(block_number).unwrap().unwrap()),
+            TranpsortProtocol::Ws => {
+                BlockType::Ws(block_header(block_number as u8, block_number).unwrap())
+            }
+        }
     }
 
     #[tokio::test]
     async fn empty_inners_returns_none() {
         let logger = new_test_logger();
-        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = DynBlockHeader>>> =
+        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = BlockType>>> =
             Box::pin(stream::empty());
 
-        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = DynBlockHeader>>> =
+        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = BlockType>>> =
             Box::pin(stream::empty());
 
         let mut merged_stream = merged_stream(
@@ -188,11 +189,7 @@ mod tests {
         // since these streams yield instantly, they will alternate being called
         let http_blocks: Vec<_> = (10..15)
             .into_iter()
-            .map(|i| {
-                let http_block: Box<dyn BlockHeaderable> =
-                    Box::new(dummy_block(i).unwrap().unwrap());
-                http_block
-            })
+            .map(|i| num_to_block_type(i, TranpsortProtocol::Ws))
             .collect();
         let http_stream = stream::iter(http_blocks);
 
@@ -200,11 +197,7 @@ mod tests {
         let ws_blocks: Vec<_> = blocks_in_front
             .clone()
             .into_iter()
-            .map(|i| {
-                let ws_block_header: Box<dyn BlockHeaderable> =
-                    Box::new(block_header(i, i.into()).unwrap());
-                ws_block_header
-            })
+            .map(|i| num_to_block_type(i, TranpsortProtocol::Ws))
             .collect();
         let ws_stream = stream::iter(ws_blocks);
 
@@ -221,25 +214,25 @@ mod tests {
     #[tokio::test]
     async fn test_interleaving_protocols() {
         let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
-        let mut items: Vec<(DynBlockHeader, TranpsortProtocol)> = Vec::new();
+        let mut items: Vec<BlockType> = Vec::new();
         // return
-        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Ws));
+        items.push(num_to_block_type(10, TranpsortProtocol::Ws));
         // return
-        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Ws));
+        items.push(num_to_block_type(11, TranpsortProtocol::Ws));
         // ignore
-        items.push((num_to_dyn_block_header(10), TranpsortProtocol::Http));
+        items.push(num_to_block_type(10, TranpsortProtocol::Http));
         // ignore
-        items.push((num_to_dyn_block_header(11), TranpsortProtocol::Http));
+        items.push(num_to_block_type(11, TranpsortProtocol::Http));
         // return
-        items.push((num_to_dyn_block_header(12), TranpsortProtocol::Http));
+        items.push(num_to_block_type(12, TranpsortProtocol::Http));
         // ignore
-        items.push((num_to_dyn_block_header(12), TranpsortProtocol::Ws));
+        items.push(num_to_block_type(12, TranpsortProtocol::Ws));
         // return
-        items.push((num_to_dyn_block_header(13), TranpsortProtocol::Http));
+        items.push(num_to_block_type(13, TranpsortProtocol::Http));
         // ignore
-        items.push((num_to_dyn_block_header(13), TranpsortProtocol::Ws));
+        items.push(num_to_block_type(13, TranpsortProtocol::Ws));
         // return
-        items.push((num_to_dyn_block_header(14), TranpsortProtocol::Ws));
+        items.push(num_to_block_type(14, TranpsortProtocol::Ws));
 
         let (http_stream, ws_stream) = interleaved_streams(items);
 
@@ -266,21 +259,21 @@ mod tests {
         tag_cache.clear();
     }
 
-    #[tokio::test]
-    async fn test_the_mother_fucker() {
-        let logger = new_test_logger();
-        // TODO use zip instead of iter tuple ? not sure if there's a difference
-        let http_block: Box<dyn BlockHeaderable> = Box::new(dummy_block(10).unwrap().unwrap());
-        let http_stream = stream::iter([http_block]);
+    // #[tokio::test]
+    // async fn test_the_mother_fucker() {
+    //     let logger = new_test_logger();
+    //     // TODO use zip instead of iter tuple ? not sure if there's a difference
+    //     let http_block: Box<dyn BlockHeaderable> = Box::new(dummy_block(10).unwrap().unwrap());
+    //     let http_stream = stream::iter([http_block]);
 
-        let ws_block_header: Box<dyn BlockHeaderable> = Box::new(block_header(0, 10).unwrap());
-        let ws_stream = stream::iter([ws_block_header]);
+    //     let ws_block_header: Box<dyn BlockHeaderable> = Box::new(block_header(0, 10).unwrap());
+    //     let ws_stream = stream::iter([ws_block_header]);
 
-        let mut merged_stream: Pin<Box<dyn Stream<Item = U64>>> =
-            merged_stream(http_stream, ws_stream, logger).await;
+    //     let mut merged_stream: Pin<Box<dyn Stream<Item = U64>>> =
+    //         merged_stream(http_stream, ws_stream, logger).await;
 
-        while let Some(item) = merged_stream.next().await {
-            println!("Here's the item mother fucker: {:?}", item);
-        }
-    }
+    //     while let Some(item) = merged_stream.next().await {
+    //         println!("Here's the item mother fucker: {:?}", item);
+    //     }
+    // }
 }
