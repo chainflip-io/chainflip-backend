@@ -104,6 +104,7 @@ where
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
 
                 if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
+                    // Do we want to check the WS *and* the HTTP endpoints here
                     let logs = eth_rpc
                         .get_logs(
                             FilterBuilder::default()

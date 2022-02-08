@@ -680,6 +680,8 @@ pub trait EthObserver {
         )
         .await;
 
+        // now actually get the logs of that stream
+
         Err(anyhow::Error::msg("NO stream, RIP"))
     }
 

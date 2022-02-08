@@ -3,20 +3,15 @@
 //! - Return no duplicate blocks
 //! - Skip no blocks
 //! - Return the block from the fastest returning method first
-//! - If one stops working, we still continue - logging that the other is faulty
-
-use std::pin::Pin;
+//! - TODO: If one stops working, we still continue - logging that the other is faulty
 
 use futures::{
-    stream::{self, repeat, select},
+    stream::{self, select},
     Stream,
 };
 use web3::types::U64;
 
-use crate::{
-    eth::TranpsortProtocol,
-    logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED},
-};
+use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED};
 
 use super::{BlockHeaderable, BlockType};
 
@@ -31,8 +26,6 @@ where
     BlockHeaderableStream: Stream<Item = BlockType> + 'static,
     BlockHeaderableStream2: Stream<Item = BlockType> + 'static,
 {
-    let safe_ws_head_stream = safe_ws_head_stream.zip(repeat(TranpsortProtocol::Ws));
-    let safe_http_head_stream = safe_http_head_stream.zip(repeat(TranpsortProtocol::Http));
     let merged_stream = Box::pin(select(safe_ws_head_stream, safe_http_head_stream));
 
     struct StreamState<BlockHeaderableStream> {
@@ -49,7 +42,7 @@ where
 
     let merged_stream = stream::unfold(init_data, move |mut state| async move {
         loop {
-            if let Some((current_item, protocol)) = state.merged_stream.next().await {
+            if let Some(current_item) = state.merged_stream.next().await {
                 let current_item_block_number = current_item
                     .number()
                     .expect("block should have block number");
@@ -59,21 +52,23 @@ where
                     // first iteration
                     || state.last_yielded_block_number == U64::from(0)
                 {
-                    match protocol {
-                        TranpsortProtocol::Http => slog::info!(
-                            state.logger,
-                            #ETH_HTTP_STREAM_RETURNED,
-                            "Returning block number: {} from {} stream",
-                            current_item_block_number,
-                            protocol
-                        ),
-                        TranpsortProtocol::Ws => slog::info!(
-                            state.logger,
-                            #ETH_WS_STREAM_RETURNED,
-                            "Returning block number: {} from {} stream",
-                            current_item_block_number,
-                            protocol
-                        ),
+                    match current_item {
+                        BlockType::Ws(_) => {
+                            slog::info!(
+                                state.logger,
+                                #ETH_WS_STREAM_RETURNED,
+                                "Returning block number: {} from Websocket stream",
+                                current_item_block_number,
+                            )
+                        }
+                        BlockType::Http(_) => {
+                            slog::info!(
+                                state.logger,
+                                #ETH_HTTP_STREAM_RETURNED,
+                                "Returning block number: {} from HTTP stream",
+                                current_item_block_number,
+                            )
+                        }
                     }
                     state.last_yielded_block_number = current_item_block_number;
                     break Some((current_item_block_number, state));
@@ -92,13 +87,15 @@ where
 #[cfg(test)]
 mod tests {
 
-    use std::time::Duration;
+    use std::{pin::Pin, time::Duration};
 
     use futures::stream;
 
     use super::*;
     use crate::{
-        eth::{http_observer::tests::dummy_block, safe_stream::tests::block_header},
+        eth::{
+            http_observer::tests::dummy_block, safe_stream::tests::block_header, TranpsortProtocol,
+        },
         logging::test_utils::{new_test_logger, new_test_logger_with_tag_cache},
     };
 
