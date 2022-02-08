@@ -535,7 +535,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
-	// TODO refactor this name
 	fn is_auction_phase() -> bool {
 		RotationPhase::<T>::get() != RotationStatus::Idle
 	}
