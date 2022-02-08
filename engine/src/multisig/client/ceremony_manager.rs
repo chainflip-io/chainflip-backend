@@ -274,14 +274,20 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_keygen_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process a request to sign
@@ -364,14 +370,20 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             key_info.validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_signing_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process data for a signing ceremony arriving from a peer
