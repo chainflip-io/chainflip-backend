@@ -433,38 +433,36 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 		// TODO Check if this is OK as it was only available out of auction phases which don't exist
 		// anymore
 		match T::ChainflipAccount::get(&(validator_id.clone().into())).state {
-			ChainflipAccountState::Passive => {
-				if amount > LowestBackupValidatorBid::<T>::get() {
-					let remaining_bidders = &mut RemainingBidders::<T>::get();
-					// Update bid for bidder and state
-					Pallet::<T>::update_stake_for_bidder(
-						remaining_bidders,
-						(validator_id.clone(), amount),
-					);
-					Pallet::<T>::adjust_group(validator_id, true, remaining_bidders);
-				} else if amount > HighestPassiveNodeBid::<T>::get() {
-					let remaining_bidders = &mut RemainingBidders::<T>::get();
-					Pallet::<T>::update_stake_for_bidder(
-						remaining_bidders,
-						(validator_id.clone(), amount),
+			ChainflipAccountState::Passive if amount > LowestBackupValidatorBid::<T>::get() => {
+				let remaining_bidders = &mut RemainingBidders::<T>::get();
+				// Update bid for bidder and state
+				Pallet::<T>::update_stake_for_bidder(
+					remaining_bidders,
+					(validator_id.clone(), amount),
+				);
+				Pallet::<T>::adjust_group(validator_id, true, remaining_bidders);
+			},
+			ChainflipAccountState::Passive if amount > HighestPassiveNodeBid::<T>::get() => {
+				let remaining_bidders = &mut RemainingBidders::<T>::get();
+				Pallet::<T>::update_stake_for_bidder(
+					remaining_bidders,
+					(validator_id.clone(), amount),
+				);
+			},
+			ChainflipAccountState::Backup if amount != LowestBackupValidatorBid::<T>::get() => {
+				let remaining_bidders = &mut RemainingBidders::<T>::get();
+				Pallet::<T>::update_stake_for_bidder(
+					remaining_bidders,
+					(validator_id.clone(), amount),
+				);
+				if amount < LowestBackupValidatorBid::<T>::get() {
+					Pallet::<T>::adjust_group(
+						validator_id,
+						false,
+						&mut RemainingBidders::<T>::get(),
 					);
 				}
 			},
-			ChainflipAccountState::Backup =>
-				if amount != LowestBackupValidatorBid::<T>::get() {
-					let remaining_bidders = &mut RemainingBidders::<T>::get();
-					Pallet::<T>::update_stake_for_bidder(
-						remaining_bidders,
-						(validator_id.clone(), amount),
-					);
-					if amount < LowestBackupValidatorBid::<T>::get() {
-						Pallet::<T>::adjust_group(
-							validator_id,
-							false,
-							&mut RemainingBidders::<T>::get(),
-						);
-					}
-				},
 			_ => {},
 		}
 	}
