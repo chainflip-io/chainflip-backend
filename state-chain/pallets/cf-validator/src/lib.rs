@@ -60,10 +60,8 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
-type AuctionResultOf<T> =
-	AuctionResult<<T as frame_system::Config>::AccountId, <T as Config>::Amount>;
-
-type RotationStatusOf<T> = RotationStatus<AuctionResultOf<T>>;
+type RotationStatusOf<T> =
+	RotationStatus<AuctionResult<<T as frame_system::Config>::AccountId, <T as Config>::Amount>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum RotationStatus<T> {
