@@ -1,6 +1,8 @@
+use std::cell::RefCell;
+
 use crate::{self as pallet_cf_governance};
-use cf_traits::mocks::time_source;
-use frame_support::parameter_types;
+use cf_traits::{mocks::time_source, ExecutionCondition, RuntimeUpgrade};
+use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -30,6 +32,11 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+thread_local! {
+	pub static UPGRADE_CONDITIONS_SATISFIED: std::cell::RefCell<bool>  = RefCell::new(true);
+	pub static UPGRADE_SUCCEEDED: std::cell::RefCell<bool>  = RefCell::new(true);
+}
+
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -56,6 +63,38 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
+pub struct UpgradeConditionMock;
+
+impl ExecutionCondition for UpgradeConditionMock {
+	fn is_satisfied() -> bool {
+		UPGRADE_CONDITIONS_SATISFIED.with(|cell| cell.borrow().clone())
+	}
+}
+
+impl UpgradeConditionMock {
+	pub fn set(mode: bool) {
+		UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow_mut() = mode);
+	}
+}
+
+pub struct RuntimeUpgradeMock;
+
+impl RuntimeUpgrade for RuntimeUpgradeMock {
+	fn do_upgrade(_: Vec<u8>) -> DispatchResultWithPostInfo {
+		ensure!(
+			UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone()),
+			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
+		);
+		Ok(().into())
+	}
+}
+
+impl RuntimeUpgradeMock {
+	pub fn set(mode: bool) {
+		UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = mode);
+	}
+}
+
 impl pallet_cf_governance::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
@@ -63,6 +102,8 @@ impl pallet_cf_governance::Config for Test {
 	type TimeSource = time_source::Mock;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = ();
+	type UpgradeCondition = UpgradeConditionMock;
+	type RuntimeUpgrade = RuntimeUpgradeMock;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

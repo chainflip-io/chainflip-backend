@@ -8,7 +8,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
@@ -230,8 +230,6 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
-	/// The current epoch is ending
-	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
 	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
@@ -317,28 +315,11 @@ pub trait Issuance {
 pub trait RewardsDistribution {
 	type Balance;
 	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance> + Into<SignedImbalance<Self::Balance, Self::Surplus>>;
+	type Surplus: Imbalance<Self::Balance>;
 
 	/// Distribute some rewards.
 	fn distribute(rewards: Self::Surplus);
-
-	/// The execution weight of calling the distribution function.
-	fn execution_weight() -> Weight;
 }
-
-pub trait RewardRollover {
-	type AccountId;
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
-	/// are available.
-	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
-}
-
-pub trait Rewarder {
-	type AccountId;
-	// Apportion rewards due to all beneficiaries
-	fn reward_all() -> Result<(), DispatchError>;
-}
-
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
@@ -621,4 +602,17 @@ pub trait QualifyValidator {
 	type ValidatorId;
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+}
+
+/// Handles the check of execution conditions
+pub trait ExecutionCondition {
+	/// Returns true/false if the condition is satisfied
+	fn is_satisfied() -> bool;
+}
+
+/// Performs a runtime upgrade
+pub trait RuntimeUpgrade {
+	/// Applies the wasm code of a runtime upgrade and returns the
+	/// information about the execution
+	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
 }

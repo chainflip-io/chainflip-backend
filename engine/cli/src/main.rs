@@ -86,18 +86,6 @@ async fn request_claim(
 
     let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
-    // Currently you have to redeem rewards before you can claim them - this may eventually be
-    // wrapped into the claim call: https://github.com/chainflip-io/chainflip-backend/issues/769
-    let tx_hash = state_chain_client
-        .submit_signed_extrinsic(logger, pallet_cf_rewards::Call::redeem_rewards())
-        .await
-        .expect("Failed to submit redeem extrinsic");
-
-    println!(
-        "Your redeem has transaction hash: `{:#x}`. Next we will execute the the claim...",
-        tx_hash
-    );
-
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             logger,
