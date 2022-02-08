@@ -40,7 +40,7 @@ where
         logger,
     };
 
-    let merged_stream = stream::unfold(init_data, move |mut state| async move {
+    Box::pin(stream::unfold(init_data, move |mut state| async move {
         loop {
             if let Some(current_item) = state.merged_stream.next().await {
                 let current_item_block_number = current_item
@@ -79,9 +79,7 @@ where
                 break None;
             }
         }
-    });
-
-    Box::pin(merged_stream)
+    }))
 }
 
 #[cfg(test)]
@@ -255,22 +253,4 @@ mod tests {
         assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
         tag_cache.clear();
     }
-
-    // #[tokio::test]
-    // async fn test_the_mother_fucker() {
-    //     let logger = new_test_logger();
-    //     // TODO use zip instead of iter tuple ? not sure if there's a difference
-    //     let http_block: Box<dyn BlockHeaderable> = Box::new(dummy_block(10).unwrap().unwrap());
-    //     let http_stream = stream::iter([http_block]);
-
-    //     let ws_block_header: Box<dyn BlockHeaderable> = Box::new(block_header(0, 10).unwrap());
-    //     let ws_stream = stream::iter([ws_block_header]);
-
-    //     let mut merged_stream: Pin<Box<dyn Stream<Item = U64>>> =
-    //         merged_stream(http_stream, ws_stream, logger).await;
-
-    //     while let Some(item) = merged_stream.next().await {
-    //         println!("Here's the item mother fucker: {:?}", item);
-    //     }
-    // }
 }

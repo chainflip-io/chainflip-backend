@@ -3,8 +3,6 @@ pub mod key_manager;
 pub mod merged_stream;
 pub mod stake_manager;
 
-mod fuckabout;
-
 pub mod event_common;
 
 mod safe_stream;
@@ -13,7 +11,6 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
-use futures::stream::repeat;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
@@ -682,7 +679,7 @@ pub trait EthObserver {
 
         // now actually get the logs of that stream
 
-        Err(anyhow::Error::msg("NO stream, RIP"))
+        Err(anyhow::Error::msg(""))
     }
 
     fn decode_log_closure(

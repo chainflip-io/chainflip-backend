@@ -1,18 +1,13 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use futures::StreamExt;
 use futures::{stream, Stream};
 use sp_core::H256;
-use web3::{
-    transports::Http,
-    types::{Block, U64},
-    Web3,
-};
+use web3::types::{Block, U64};
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
-use super::{BlockHeaderable, BlockType, EthHttpRpcApi};
+use super::{BlockType, EthHttpRpcApi};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -132,16 +127,15 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
 #[cfg(test)]
 pub mod tests {
 
-    use mockall::{mock, predicate::eq, Sequence};
-
-    use crate::eth::{EthHttpRpcApi, EthRpcApi};
+    use futures::StreamExt;
+    use mockall::{predicate::eq, Sequence};
 
     use super::*;
 
     // in tests, this can be instant
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
-    use crate::eth::mocks::MockEthHttpRpc;
+    use crate::eth::{mocks::MockEthHttpRpc, BlockHeaderable};
 
     use anyhow::Result;
 
