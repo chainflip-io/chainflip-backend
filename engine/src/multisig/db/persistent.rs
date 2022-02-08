@@ -163,7 +163,7 @@ impl KeyDB for PersistentKeyDB {
                 // deserialize the `KeygenResultInfo`
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
                     Ok(keygen_info) => {
-                        slog::info!(
+                        slog::debug!(
                             self.logger,
                             "Loaded key_info (key_id: {}) from database",
                             key_id
@@ -375,31 +375,28 @@ fn load_keys_using_kvdb(
         .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
     // Load the keys from column 0 (aka "col0")
-    Ok(db
-        .iter(0)
-        .filter_map(|(key_id, key_info)| {
-            let key_id: KeyId = KeyId(key_id.into());
-            match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                Ok(keygen_info) => {
-                    slog::info!(
-                        logger,
-                        "Loaded key_info (key_id: {}) from kvdb database",
-                        key_id
-                    );
-                    Some((key_id, keygen_info))
-                }
-                Err(err) => {
-                    slog::error!(
-                        logger,
-                        "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
-                        key_id,
-                        err
-                    );
-                    None
-                }
+    let mut loaded_keys: HashMap<KeyId, KeygenResultInfo> = HashMap::new();
+    for (key_id, key_info) in db.iter(0) {
+        let key_id: KeyId = KeyId(key_id.into());
+        match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
+            Ok(keygen_info) => {
+                slog::debug!(
+                    logger,
+                    "Loaded key_info (key_id: {}) from kvdb database",
+                    key_id
+                );
+                loaded_keys.insert(key_id, keygen_info);
             }
-        })
-        .collect())
+            Err(err) => {
+                return Err(anyhow::Error::msg(format!(
+                    "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
+                    key_id, err,
+                )));
+            }
+        }
+    }
+
+    Ok(loaded_keys)
 }
 
 #[cfg(test)]
@@ -512,11 +509,9 @@ mod tests {
         // No metadata column, the keygen data column is named 'col0' and has no prefix.
         // The compression used by kvdb is different from rust_rocksdb, so we must use kvdb here.
         {
-            let db = kvdb_rocksdb::Database::open(
-                &kvdb_rocksdb::DatabaseConfig::default(),
-                db_path.to_str().expect("Invalid path"),
-            )
-            .unwrap();
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
 
             let mut tx = db.transaction();
             tx.put_vec(DEFAULT_DB_SCHEMA_VERSION, &key_id.0, bashful_secret_bin);
@@ -732,5 +727,31 @@ mod tests {
 
         // Try and backup the db, it should fail with permissions denied due to readonly
         assert!(create_backup(db_path.as_path(), DB_SCHEMA_VERSION).is_err());
+    }
+
+    #[test]
+    fn should_panic_if_kvdb_fails_to_load_key() {
+        let temp_dir = TempDir::new("should_panic_if_kvdb_fails_to_load_key").unwrap();
+        let db_path = temp_dir.path().join("db");
+
+        let logger = new_test_logger();
+
+        // Create a db that is schema version 0 using kvdb.
+        {
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
+
+            let mut tx = db.transaction();
+
+            // Put in some junk data instead of proper KeygenResultInfo so that it will fail to load this key
+            tx.put_vec(0, &KeyId(TEST_KEY.into()).0, vec![1, 2, 3, 4]);
+            db.write(tx).unwrap();
+        }
+
+        // Load the bad db and make sure it panics
+        {
+            assert!(PersistentKeyDB::new(db_path.as_path(), &logger).is_err());
+        }
     }
 }
