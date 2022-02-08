@@ -285,6 +285,12 @@ where
 
         let params = ThresholdParameters::from_share_count(1);
 
+        // By default this will have a 50/50 chance of generating
+        // a contract incompatible signature to match the behavior
+        // of multi-party ceremonies. Toggle this off to always
+        // generate a contract compatible signature.
+        const ALLOWING_HIGH_PUBKEY: bool = true;
+
         let (secret_key, public_key) = loop {
             let secret_key = {
                 use rand_legacy::FromEntropy;
@@ -294,7 +300,7 @@ where
 
             let public_key = Point::from_scalar(&secret_key);
 
-            if keygen::is_contract_compatible(&public_key.get_element()) {
+            if keygen::is_contract_compatible(&public_key.get_element()) || ALLOWING_HIGH_PUBKEY {
                 break (secret_key, public_key);
             }
         };
