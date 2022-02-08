@@ -419,19 +419,20 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	type Amount = T::Amount;
 
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
-		// This would only happen if we had a active set of less than 3, not likely
-		if BackupGroupSize::<T>::get() == 0 {
-			return
-		}
 
 		// If we are in an auction ignore any updates on stakes
-		if T::EpochInfo::is_auction_phase() == false {
+		if T::EpochInfo::is_auction_phase() {
 			return
 		}
 
 		// We validate that the staker is qualified and can be considered to be a BV if the stake
 		// meets the requirements
 		if !T::QualifyValidator::is_qualified(validator_id) {
+			return
+		}
+
+		// This would only happen if we had a active set of less than 3, not likely
+		if BackupGroupSize::<T>::get() == 0 {
 			return
 		}
 
