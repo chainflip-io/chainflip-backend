@@ -369,8 +369,8 @@ jobs:
       - run: |
           groupadd ci
           useradd -g ci ci
-          su - ci
       - run: |
+          su - ci
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
