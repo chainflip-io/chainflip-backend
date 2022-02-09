@@ -3045,6 +3045,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "insert-genesis-keyshare"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chainflip-engine",
+ "hex",
+ "rocksdb",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
