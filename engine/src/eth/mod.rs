@@ -285,32 +285,32 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
         eth_settings: &settings::Eth,
         eth_rpc: EthRpc,
         logger: &slog::Logger,
-    ) -> Result<Self> {
+    ) -> Result<Arc<Self>> {
         let secret_key = read_clean_and_decode_hex_str_file(
             &eth_settings.private_key_file,
             "Ethereum Private Key",
             |key| SecretKey::from_str(key).map_err(anyhow::Error::new),
         )?;
-        Ok(Self {
+        Ok(Arc::new(Self {
+            eth_rpc,
+            secret_key,
+            address: SecretKeyRef::new(&secret_key).address(),
+            logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
+        }))
+    }
+
+    #[cfg(test)]
+    pub fn new_test(eth_rpc: EthRpc, logger: &slog::Logger) -> Arc<Self> {
+        // just a fake key
+        let secret_key =
+            SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
+                .unwrap();
+        Arc::new(Self {
             eth_rpc,
             secret_key,
             address: SecretKeyRef::new(&secret_key).address(),
             logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
         })
-    }
-
-    #[cfg(test)]
-    pub fn new_test(eth_rpc: EthRpc, logger: &slog::Logger) -> Self {
-        // just a fake key
-        let secret_key =
-            SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
-                .unwrap();
-        Self {
-            eth_rpc,
-            secret_key,
-            address: SecretKeyRef::new(&secret_key).address(),
-            logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
-        }
     }
 
     /// Encode and sign a transaction.

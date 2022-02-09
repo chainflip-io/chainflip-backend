@@ -23,7 +23,7 @@ use crate::{
 pub async fn start<BlockStream, RpcClient, EthRpc>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster<EthRpc>,
+    eth_broadcaster: Arc<EthBroadcaster<EthRpc>>,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
@@ -39,8 +39,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RpcClient: StateChainRpcApi,
-    EthRpc: EthRpcApi,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+    EthRpc: EthRpcApi + Send + Sync + 'static,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
@@ -80,26 +80,32 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         (new_account_data, is_outgoing)
     }
 
-    async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
+    async fn send_windows_to_witness_processes<
+        RpcClient: StateChainRpcApi + Send + Sync + 'static,
+    >(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
         account_data: ChainflipAccountData,
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
-    ) -> anyhow::Result<()> {
-        let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-            )
-            .await?;
-        sm_window_sender
-            .send(eth_vault.active_window.clone())
-            .unwrap();
-        km_window_sender.send(eth_vault.active_window).unwrap();
-        Ok(())
+    ) {
+        let sm_window_sender = sm_window_sender.clone();
+        let km_window_sender = km_window_sender.clone();
+        tokio::spawn(async move {
+            let eth_vault = state_chain_client
+                .get_vault::<Ethereum>(
+                    block_hash,
+                    account_data
+                        .last_active_epoch
+                        .expect("we are active or outgoing"),
+                )
+                .await?;
+            sm_window_sender
+                .send(eth_vault.active_window.clone())
+                .unwrap();
+            km_window_sender.send(eth_vault.active_window).unwrap();
+            anyhow::Result::<()>::Ok(())
+        });
     }
 
     // Initialise the account state
@@ -114,8 +120,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
             &sm_window_sender,
             &km_window_sender,
         )
-        .await
-        .expect("Failed to send windows to the witness processes");
+        .await;
     }
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
@@ -228,34 +233,39 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         attempt_id,
                                                         unsigned_tx,
                                                     );
-                                                    match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
-                                                        Ok(raw_signed_tx) => {
-                                                            let _ = state_chain_client.submit_signed_extrinsic(
-                                                                &logger,
-                                                                state_chain_runtime::Call::EthereumBroadcaster(
-                                                                    pallet_cf_broadcast::Call::transaction_ready_for_transmission(
-                                                                        attempt_id,
-                                                                        raw_signed_tx.0,
-                                                                        eth_broadcaster.address,
-                                                                    ),
-                                                                )
-                                                            ).await;
+                                                    let logger = logger.clone();
+                                                    let eth_broadcaster = eth_broadcaster.clone();
+                                                    let state_chain_client = state_chain_client.clone();
+                                                    tokio::spawn(async move {
+                                                        match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
+                                                            Ok(raw_signed_tx) => {
+                                                                let _ = state_chain_client.submit_signed_extrinsic(
+                                                                    &logger,
+                                                                    state_chain_runtime::Call::EthereumBroadcaster(
+                                                                        pallet_cf_broadcast::Call::transaction_ready_for_transmission(
+                                                                            attempt_id,
+                                                                            raw_signed_tx.0,
+                                                                            eth_broadcaster.address,
+                                                                        ),
+                                                                    )
+                                                                ).await;
+                                                            }
+                                                            Err(e) => {
+                                                                // Note: this error case should only occur if there is a problem with the
+                                                                // local ethereum node, which would mean the web3 lib is unable to fill in
+                                                                // the tranaction params, mainly the gas limit.
+                                                                // In the long run all transaction parameters will be provided by the state
+                                                                // chain and the above eth_broadcaster.sign_tx method can be made
+                                                                // infallible.
+                                                                slog::error!(
+                                                                    logger,
+                                                                    "TransactionSigningRequest attempt_id {} failed: {:?}",
+                                                                    attempt_id,
+                                                                    e
+                                                                );
+                                                            }
                                                         }
-                                                        Err(e) => {
-                                                            // Note: this error case should only occur if there is a problem with the
-                                                            // local ethereum node, which would mean the web3 lib is unable to fill in
-                                                            // the tranaction params, mainly the gas limit.
-                                                            // In the long run all transaction parameters will be provided by the state
-                                                            // chain and the above eth_broadcaster.sign_tx method can be made
-                                                            // infallible.
-                                                            slog::error!(
-                                                                logger,
-                                                                "TransactionSigningRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
-                                                                e
-                                                            );
-                                                        }
-                                                    }
+                                                    });
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransmissionRequest(
@@ -263,37 +273,42 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         signed_tx,
                                                     ),
                                                 ) => {
-                                                    let response_extrinsic = match eth_broadcaster
-                                                        .send(signed_tx)
-                                                        .await
-                                                    {
-                                                        Ok(tx_hash) => {
-                                                            slog::debug!(
-                                                                logger,
-                                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
-                                                                attempt_id,
-                                                                tx_hash
-                                                            );
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                                attempt_id, tx_hash.into()
-                                                            )
-                                                        }
-                                                        Err(e) => {
-                                                            slog::error!(
-                                                                logger,
-                                                                "TransmissionRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
-                                                                e
-                                                            );
-                                                            // TODO: Fill in the transaction hash with the real one
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
-                                                            )
-                                                        }
-                                                    };
-                                                    let _ = state_chain_client
-                                                        .submit_signed_extrinsic(&logger, response_extrinsic)
-                                                        .await;
+                                                    let logger = logger.clone();
+                                                    let eth_broadcaster = eth_broadcaster.clone();
+                                                    let state_chain_client = state_chain_client.clone();
+                                                    tokio::spawn(async move {
+                                                        let response_extrinsic = match eth_broadcaster
+                                                            .send(signed_tx)
+                                                            .await
+                                                        {
+                                                            Ok(tx_hash) => {
+                                                                slog::debug!(
+                                                                    logger,
+                                                                    "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
+                                                                    attempt_id,
+                                                                    tx_hash
+                                                                );
+                                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
+                                                                    attempt_id, tx_hash.into()
+                                                                )
+                                                            }
+                                                            Err(e) => {
+                                                                slog::error!(
+                                                                    logger,
+                                                                    "TransmissionRequest attempt_id {} failed: {:?}",
+                                                                    attempt_id,
+                                                                    e
+                                                                );
+                                                                // TODO: Fill in the transaction hash with the real one
+                                                                pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
+                                                                    attempt_id, TransmissionFailure::TransactionRejected, Default::default()
+                                                                )
+                                                            }
+                                                        };
+                                                        let _ = state_chain_client
+                                                            .submit_signed_extrinsic(&logger, response_extrinsic)
+                                                            .await;
+                                                    });
                                                 }
                                                 ignored_event => {
                                                     // ignore events we don't care about
@@ -339,8 +354,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                             &sm_window_sender,
                                             &km_window_sender,
                                         )
-                                        .await
-                                        .expect("Failed to send windows to the witness processes");
+                                        .await;
                                     }
                                 } else if matches!(
                                     account_data.state,
@@ -370,9 +384,13 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                         "Sending heartbeat at block: {}",
                                         current_block_header.number
                                     );
-                                    let _ = state_chain_client
-                                        .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
-                                        .await;
+                                    let state_chain_client = state_chain_client.clone();
+                                    let logger = logger.clone();
+                                    tokio::spawn(async move {
+                                        let _ = state_chain_client
+                                            .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
+                                            .await;
+                                    });
                                 }
                             }
                             Err(error) => {
@@ -389,74 +407,78 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
             option_multisig_outcome = multisig_outcome_receiver.recv() => {
                 match option_multisig_outcome {
                     Some(multisig_outcome) => {
-                        match multisig_outcome {
-                            MultisigOutcome::Signing(SigningOutcome { id, result }) => {
-                                match result {
-                                    Ok(sig) => {
-                                        let _ = state_chain_client
-                                        .submit_unsigned_extrinsic(
-                                            &logger,
-                                            pallet_cf_threshold_signature::Call::signature_success(
-                                                id,
-                                                sig.into()
+                        let state_chain_client = state_chain_client.clone();
+                        let logger = logger.clone();
+                        tokio::spawn(async move {
+                            match multisig_outcome {
+                                MultisigOutcome::Signing(SigningOutcome { id, result }) => {
+                                    match result {
+                                        Ok(sig) => {
+                                            let _ = state_chain_client
+                                            .submit_unsigned_extrinsic(
+                                                &logger,
+                                                pallet_cf_threshold_signature::Call::signature_success(
+                                                    id,
+                                                    sig.into()
+                                                )
                                             )
-                                        )
-                                        .await;
-                                    }
-                                    Err((err, bad_account_ids)) => {
-                                        slog::error!(
-                                            logger,
-                                            "Signing ceremony failed with error: {:?}",
-                                            err;
-                                            CEREMONY_ID_KEY => id,
-                                        );
+                                            .await;
+                                        }
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Signing ceremony failed with error: {:?}",
+                                                err;
+                                                CEREMONY_ID_KEY => id,
+                                            );
 
-                                        let _ = state_chain_client
-                                        .submit_signed_extrinsic(
-                                            &logger,
-                                            pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
-                                                id,
-                                                bad_account_ids.into_iter().collect()
+                                            let _ = state_chain_client
+                                            .submit_signed_extrinsic(
+                                                &logger,
+                                                pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
+                                                    id,
+                                                    bad_account_ids.into_iter().collect()
+                                                )
                                             )
-                                        )
-                                        .await;
+                                            .await;
+                                        }
                                     }
                                 }
-                            }
-                            MultisigOutcome::Ignore => {
-                                // ignore
-                            }
-                            MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
-                                match result {
-                                    Ok(pubkey) => {
-                                        let _ = state_chain_client
-                                        .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
-                                            id,
-                                            pallet_cf_vaults::KeygenOutcome::Success(
-                                                cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
-                                            ),
-                                        ))
-                                        .await;
-                                    }
-                                    Err((err, bad_account_ids)) => {
-                                        slog::error!(
-                                            logger,
-                                            "Keygen ceremony failed with error: {:?}",
-                                            err;
-                                            CEREMONY_ID_KEY => id,
-                                        );
-                                        let _ = state_chain_client
-                                        .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
-                                            id,
-                                            pallet_cf_vaults::KeygenOutcome::Failure(
-                                                BTreeSet::from_iter(bad_account_ids),
-                                            ),
-                                        ))
-                                        .await;
+                                MultisigOutcome::Ignore => {
+                                    // ignore
+                                }
+                                MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
+                                    match result {
+                                        Ok(pubkey) => {
+                                            let _ = state_chain_client
+                                            .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
+                                                id,
+                                                pallet_cf_vaults::KeygenOutcome::Success(
+                                                    cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
+                                                ),
+                                            ))
+                                            .await;
+                                        }
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Keygen ceremony failed with error: {:?}",
+                                                err;
+                                                CEREMONY_ID_KEY => id,
+                                            );
+                                            let _ = state_chain_client
+                                            .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
+                                                id,
+                                                pallet_cf_vaults::KeygenOutcome::Failure(
+                                                    BTreeSet::from_iter(bad_account_ids),
+                                                ),
+                                            ))
+                                            .await;
+                                        }
                                     }
                                 }
-                            }
-                        };
+                            };
+                        });
                     },
                     None => {
                         slog::error!(logger, "Exiting as multisig_outcome channel ended");
