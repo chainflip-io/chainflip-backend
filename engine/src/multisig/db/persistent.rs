@@ -74,7 +74,7 @@ impl PersistentKeyDB {
                 .map_err(anyhow::Error::msg)
                 .with_context(|| {
                     format!(
-                        "Failed to read column families from database {}",
+                        "Failed to read column families from existing database {}",
                         path.display()
                     )
                 })?
@@ -283,7 +283,8 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
         None => {
             slog::warn!(
                 logger,
-                "Did not find db_schema_version in existing database. Assuming db_schema_version of 0"
+                "Did not find schema version in database. Assuming schema version of {}",
+                DEFAULT_DB_SCHEMA_VERSION
             );
             DEFAULT_DB_SCHEMA_VERSION
         }
@@ -701,21 +702,21 @@ mod tests {
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
         let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
-        let path = temp_dir.path();
-        let db_path = path.join("db");
+        let parent_path = temp_dir.path();
+        let db_path = parent_path.join("db");
 
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
 
         // Change the backups folder to readonly
-        let backups_dir = path.join(BACKUPS_DIRECTORY);
-        assert!(backups_dir.exists());
-        let mut permissions = backups_dir.metadata().unwrap().permissions();
+        let backups_path = parent_path.join(BACKUPS_DIRECTORY);
+        assert!(backups_path.exists());
+        let mut permissions = backups_path.metadata().unwrap().permissions();
         permissions.set_readonly(true);
-        assert_ok!(fs::set_permissions(&backups_dir, permissions));
+        assert_ok!(fs::set_permissions(&backups_path, permissions));
         assert_eq!(
             true,
-            backups_dir.metadata().unwrap().permissions().readonly(),
+            backups_path.metadata().unwrap().permissions().readonly(),
             "Readonly permissions were not set"
         );
 
