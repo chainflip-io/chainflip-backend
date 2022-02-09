@@ -51,7 +51,6 @@ pub enum OutgoingMultisigStageMessages {
 TODO: This code should be merged into the multisig top-level function (start_client),
 primarily to avoid the problem where multisig sends messages before the mapping
 has been updated, which is possible at the moment.
-TODO: Batch outgoing messages
 */
 
 async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
