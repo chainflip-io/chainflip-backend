@@ -266,7 +266,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				.map(|&i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},
-		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
+		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0, bond: MINIMUM_ACTIVE_BID_AT_GENESIS },
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

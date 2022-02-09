@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	NotQualifiedValidator, QualifyValidator, VaultRotationHandler,
+	QualifyValidator, VaultRotationHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -113,7 +113,13 @@ pub mod pallet {
 		type ValidatorWeightInfo: WeightInfo;
 
 		/// An amount
-		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+		type Amount: Parameter
+			+ Default
+			+ Eq
+			+ Ord
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ AtLeast32BitUnsigned;
 
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
@@ -487,12 +493,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
+		pub bond: T::Amount,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { blocks_per_epoch: Zero::zero() }
+			Self { blocks_per_epoch: Zero::zero(), bond: Default::default() }
 		}
 	}
 
@@ -500,17 +507,17 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			// Run an auction on genesis. We use `NotQualifiedValidator` to skip
-			// any valdation for the bidders which are our genesis nodes which
-			// are already staked
-			let auction_result = T::Auctioneer::resolve_auction::<
-				NotQualifiedValidator<<T as frame_system::Config>::AccountId>,
-			>()
-			.expect("an auction is run for our genesis bidders");
-			T::Auctioneer::update_validator_status(auction_result.clone());
+
+			let genesis_auction_result = AuctionResult {
+				winners: <pallet_session::Pallet<T>>::validators(),
+				minimum_active_bid: self.bond,
+			};
+
+			T::Auctioneer::update_validator_status(genesis_auction_result.clone());
+
 			Pallet::<T>::start_new_epoch(
-				&auction_result.winners,
-				auction_result.minimum_active_bid,
+				&genesis_auction_result.winners,
+				genesis_auction_result.minimum_active_bid,
 			);
 		}
 	}

@@ -604,6 +604,8 @@ mod tests {
 
 			pallet_cf_validator::GenesisConfig::<Runtime> {
 				blocks_per_epoch: self.blocks_per_epoch,
+				// TODO Fix this
+				bond: self.accounts[0].1,
 			}
 			.assimilate_storage(storage)
 			.unwrap();
