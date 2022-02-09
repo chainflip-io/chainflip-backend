@@ -5,7 +5,6 @@ use frame_support::{
 	traits::{Imbalance, UnfilteredDispatchable},
 };
 use frame_system as system;
-use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

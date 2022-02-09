@@ -5,7 +5,6 @@ use cf_chains::{
 use cf_traits::{impl_mock_waived_fees, WaivedFees};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
-use pallet_cf_flip;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
