@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping, QualifyValidator, VaultRotationHandler,
+	NotQualifiedValidator, QualifyValidator, VaultRotationHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -81,7 +81,7 @@ impl<T> Default for RotationStatus<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{ValidatorUnchecked, VaultRotator};
+	use cf_traits::VaultRotator;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -213,7 +213,7 @@ pub mod pallet {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(auction_result) => {
-					T::Auctioneer::update_validator_status(auction_result.clone());
+					T::Auctioneer::update_validator_status(auction_result);
 					Self::update_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -500,12 +500,13 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			// Run an auction on genesis. We use `ValidatorUnchecked` to skip
+			// Run an auction on genesis. We use `NotQualifiedValidator` to skip
 			// any valdation for the bidders which are our genesis nodes which
 			// are already staked
-			let auction_result =
-				T::Auctioneer::resolve_auction::<ValidatorUnchecked<T::ValidatorId>>()
-					.expect("an auction is run for our genesis bidders");
+			let auction_result = T::Auctioneer::resolve_auction::<
+				NotQualifiedValidator<<T as frame_system::Config>::AccountId>,
+			>()
+			.expect("an auction is run for our genesis bidders");
 			T::Auctioneer::update_validator_status(auction_result.clone());
 			Pallet::<T>::start_new_epoch(
 				&auction_result.winners,
@@ -679,10 +680,12 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	}
 }
 
-impl<T: Config> HasPeerMapping for Pallet<T> {
+pub struct PeerMapping<T>(PhantomData<T>);
+
+impl<T: Config> QualifyValidator for PeerMapping<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
 	}
 }

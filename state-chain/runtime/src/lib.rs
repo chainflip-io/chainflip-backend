@@ -45,8 +45,8 @@ use crate::chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
 	ChainflipVaultRotationHandler, OfflinePenalty,
 };
-use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance};
+use cf_traits::{ChainflipAccountData, SessionKeysRegistered};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
@@ -126,9 +126,12 @@ impl pallet_cf_auction::Config for Runtime {
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ValidatorQualification = (
-		pallet_cf_online::Pallet<Self>,
-		pallet_cf_validator::Pallet<Self>,
-		pallet_session::Pallet<Self>,
+		Online,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
 	);
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
@@ -152,9 +155,12 @@ impl pallet_cf_validator::Config for Runtime {
 	type Amount = FlipBalance;
 	type Auctioneer = Auction;
 	type ValidatorQualification = (
-		pallet_cf_online::Pallet<Self>,
-		pallet_cf_validator::Pallet<Self>,
-		pallet_session::Pallet<Self>,
+		Online,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
 	);
 	type VaultRotator = pallet_cf_vaults::Pallet<Self>;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;

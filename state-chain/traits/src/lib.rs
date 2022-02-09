@@ -8,7 +8,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap, ValidatorRegistration},
+	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
 	Hashable, Parameter,
 };
 use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
@@ -332,13 +332,6 @@ pub trait IsOnline {
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
-pub trait HasPeerMapping {
-	/// The validator id used
-	type ValidatorId;
-	/// The existence of this validators peer mapping
-	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool;
-}
-
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
@@ -597,29 +590,39 @@ pub trait QualifyValidator {
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// An unchecked qualification of a validator
-pub struct ValidatorUnchecked<T>(PhantomData<T>);
+/// A *not* qualified validator
+pub struct NotQualifiedValidator<T>(PhantomData<T>);
 
-impl<ValidatorId> QualifyValidator for ValidatorUnchecked<ValidatorId> {
-	type ValidatorId = ValidatorId;
-	fn is_qualified(_validator_id: &Self::ValidatorId) -> bool {
+impl<T> QualifyValidator for NotQualifiedValidator<T> {
+	type ValidatorId = T;
+	fn is_qualified(_: &Self::ValidatorId) -> bool {
 		true
+	}
+}
+
+/// Qualify if the validator has registered
+pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
+
+impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
+	for SessionKeysRegistered<T, R>
+{
+	type ValidatorId = T;
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		R::is_registered(validator_id)
 	}
 }
 
 impl<A, B, C> QualifyValidator for (A, B, C)
 where
-	A: IsOnline<ValidatorId = B::ValidatorId>,
-	B: HasPeerMapping,
-	C: ValidatorRegistration<B::ValidatorId>,
+	A: QualifyValidator<ValidatorId = B::ValidatorId>,
+	B: QualifyValidator,
+	C: QualifyValidator<ValidatorId = B::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
-	// Rule #1 - They are registered
-	// Rule #2 - They have a registered peer id
-	// Rule #3 - Confirm that the validators are 'online'
+
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		A::is_online(&validator_id) &&
-			B::has_peer_mapping(&validator_id) &&
-			C::is_registered(&validator_id)
+		A::is_qualified(validator_id) &&
+			B::is_qualified(validator_id) &&
+			C::is_qualified(validator_id)
 	}
 }

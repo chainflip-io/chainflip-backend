@@ -155,15 +155,6 @@ impl IsOnline for MockOnline {
 	}
 }
 
-pub struct MockPeerMapping;
-impl HasPeerMapping for MockPeerMapping {
-	type ValidatorId = ValidatorId;
-
-	fn has_peer_mapping(_validator_id: &Self::ValidatorId) -> bool {
-		true
-	}
-}
-
 impl ValidatorRegistration<ValidatorId> for Test {
 	fn is_registered(_id: &ValidatorId) -> bool {
 		true
