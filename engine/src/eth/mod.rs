@@ -17,6 +17,7 @@ use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use web3::ethabi::RawLog;
 use web3::types::{Block, H2048};
 use web3::{
     api::SubscriptionStream,
@@ -561,7 +562,7 @@ pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
     // TODO: this needs to be split out
-    async fn ws_event_stream<BlockHeaderStream, EthRpc>(
+    async fn log_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
         &self,
         from_block: u64,
         deployed_address: H160,
@@ -573,15 +574,16 @@ pub trait EthObserver {
         Pin<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>,
     >
     where
-        BlockHeaderStream: Stream<Item = BlockHeader> + 'static + Send,
+        BlockHeaderStream: Stream<Item = EthBlockHeader> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+        EthBlockHeader: BlockHeaderable + Send + Sync + Clone + 'static,
     {
         let from_block = U64::from(from_block);
         let mut safe_head_stream = Box::pin(safe_head_stream);
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = current_best_safe_block_header
-                .number
+                .number()
                 .expect("Should have block number");
             // we only want to start observing once we reach the from_block specified
             if best_safe_block_number < from_block {
@@ -667,15 +669,36 @@ pub trait EthObserver {
         let safe_ws_head_stream =
             safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
+        let safe_ws_event_logs = self
+            .log_stream_from_head_stream(
+                from_block,
+                deployed_address,
+                safe_ws_head_stream,
+                decode_log,
+                eth_ws_rpc,
+                logger,
+            )
+            .await;
+
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
 
-        let merged_stream = merged_stream::merged_stream(
-            safe_ws_head_stream,
-            safe_http_head_stream,
-            logger.clone(),
-        )
-        .await;
+        // let safe_ws_event_logs = self
+        //     .log_stream_from_head_stream(
+        //         from_block,
+        //         deployed_address,
+        //         safe_http_head_stream,
+        //         decode_log,
+        //         eth_http_rpc,
+        //         logger,
+        //     )
+        //     .await;
+        // let merged_stream = merged_stream::merged_stream(
+        //     safe_ws_head_stream,
+        //     safe_http_head_stream,
+        //     logger.clone(),
+        // )
+        // .await;
 
         // now actually get the logs of that stream
 

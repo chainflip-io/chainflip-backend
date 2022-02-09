@@ -15,7 +15,7 @@ use super::{BlockType, EthRpcApi};
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = BlockType>
+) -> impl Stream<Item = BlockHeader>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -61,12 +61,10 @@ where
                         <= number
                     {
                         break Some((
-                            BlockType::Ws(
-                                state
-                                    .unsafe_blocks
-                                    .pop_front()
-                                    .expect("already put an item above"),
-                            ),
+                            state
+                                .unsafe_blocks
+                                .pop_front()
+                                .expect("already put an item above"),
                             state,
                         ));
                     } else {
@@ -84,15 +82,16 @@ where
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
     safe_eth_head_stream: SafeBlockHeaderStream,
     eth_rpc: EthRpc,
     contract_address: H160,
     logger: slog::Logger,
 ) -> impl Stream<Item = Log>
 where
-    SafeBlockHeaderStream: Stream<Item = BlockHeader>,
+    SafeBlockHeaderStream: Stream<Item = EthBlockHeader>,
     EthRpc: EthRpcApi + Clone,
+    EthBlockHeader: BlockHeaderable + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
@@ -103,7 +102,12 @@ where
                 let mut contract_bloom = Bloom::default();
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
 
-                if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
+                if header
+                    .clone()
+                    .logs_bloom()
+                    .expect("Should have logs bloom")
+                    .contains_bloom(&contract_bloom)
+                {
                     // Do we want to check the WS *and* the HTTP endpoints here
                     let logs = eth_rpc
                         .get_logs(
@@ -195,10 +199,7 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block.unwrap())
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -214,14 +215,8 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block.unwrap())
-        );
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(second_block.unwrap())
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -237,14 +232,8 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block.clone().unwrap())
-        );
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block_prime.unwrap())
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.clone().unwrap());
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -262,14 +251,8 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block_prime.unwrap())
-        );
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(second_block_prime.unwrap())
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(stream.next().await.unwrap(), second_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -289,10 +272,7 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 2);
 
-        assert_eq!(
-            stream.next().await.unwrap(),
-            BlockType::Ws(first_block_prime.unwrap())
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 }

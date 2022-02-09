@@ -7,14 +7,23 @@ use web3::types::{Block, U64};
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
+pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
+
 use super::{BlockType, EthHttpRpcApi};
 
-pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
+// Get the logs via http, using the polling http_head_stream
+pub async fn http_event_log_stream<EthHttpRpc: EthHttpRpcApi>(eth_http_rpc: EthHttpRpc) {
+    let http_head_stream = polling_http_head_stream(eth_http_rpc, HTTP_POLL_INTERVAL).await;
+
+    // get logs for that block if required.
+
+    // see if we can get the logs from the http one the same as we do the ws one
+}
 
 pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
-) -> impl Stream<Item = BlockType> {
+) -> impl Stream<Item = Block<H256>> {
     struct StreamState<EthHttpRpc> {
         last_block_fetched: U64,
         last_block_yielded: U64,
@@ -34,7 +43,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             // we first want to empty the cache of skipped blocks before querying for new ones
             while let Some(block) = state.cached_skipped_blocks.pop_front() {
                 println!("Popping off the queue block: {}", block.number.unwrap());
-                break 'block_safety_loop Some((BlockType::Http(block), state));
+                break 'block_safety_loop Some((block, state));
             }
 
             tokio::time::sleep(poll_interval).await;
@@ -80,7 +89,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .unwrap();
                 state.last_block_fetched = unsafe_block_number;
                 state.last_block_yielded = block.number.unwrap();
-                break Some((BlockType::Http(block), state));
+                break Some((block, state));
                 // we want to skip the first block
 
                 // check last yielded too?
@@ -107,10 +116,10 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 println!("Yielding block");
                 state.last_block_fetched = unsafe_block_number;
                 break 'block_safety_loop Some((
-                    BlockType::Http(state
+                    state
                         .cached_skipped_blocks
                         .pop_front()
-                        .expect("There must be a block here, as we must have pushed at least one item to the queue")),
+                        .expect("There must be a block here, as we must have pushed at least one item to the queue"),
                     state,
                 ));
             } else {
