@@ -165,7 +165,7 @@ impl CeremonyManager {
                     #SIGNING_CEREMONY_FAILED,
                     "Signing ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -199,7 +199,7 @@ impl CeremonyManager {
                     #KEYGEN_CEREMONY_FAILED,
                     "Keygen ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 

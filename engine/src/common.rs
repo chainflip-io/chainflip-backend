@@ -184,10 +184,11 @@ pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
     }))
 }
 
-pub fn format_iterator<'a, I: 'static + Display, It: 'a + IntoIterator<Item = &'a I>>(
-    it: It,
-) -> String {
-    format!("{}", it.into_iter().format(", "))
+pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>
+where
+    It::Item: Display,
+{
+    it.into_iter().format(", ")
 }
 
 pub fn all_same<Item: PartialEq, It: IntoIterator<Item = Item>>(it: It) -> Option<Item> {

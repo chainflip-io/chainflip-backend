@@ -1,5 +1,5 @@
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     net::Ipv6Addr,
     sync::Arc,
@@ -63,41 +63,122 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 ) -> Result<()> {
     // TODO Don't Register Private Ips on Live chains
 
-    let (peer_id, port, ip_address) = state_chain_client
+    let listening_addresses = state_chain_client
         .get_local_listen_addresses()
         .await?
         .into_iter()
         .filter(|(_, _, ip_address)| !ip_address.is_loopback())
         .sorted()
         .dedup()
-        .sorted_by_key(|(_, _, ip_address)| !ip_address.is_global())
-        .next()
-        .ok_or_else(|| anyhow::Error::msg("Couldn't find the node's listening address"))?;
+        .collect::<Vec<_>>();
 
-    if *cfe_peer_id == peer_id {
-        if Some(&(peer_id, port, ip_address))
-            != account_to_peer.get(&state_chain_client.our_account_id)
-        {
-            state_chain_client
-                .submit_signed_extrinsic(
-                    logger,
-                    pallet_cf_validator::Call::register_peer_id(
-                        sp_core::ed25519::Public(cfe_peer_keypair.public().encode()),
-                        port,
-                        ip_address.into(),
-                        sp_core::ed25519::Signature::try_from(
-                            &cfe_peer_keypair.sign(&state_chain_client.our_account_id.encode()[..])
-                                [..],
-                        )
-                        .unwrap(),
-                    ),
+    if listening_addresses.is_empty() {
+        Err(anyhow::Error::msg(
+            "No non-loopback listening addresses reported",
+        ))
+    } else if let Some(&peer_id) =
+        common::all_same(listening_addresses.iter().map(|(peer_id, _, _)| peer_id))
+    {
+        if *cfe_peer_id == peer_id {
+            let (port, ip_address, source) = if let Some((port, ip_address)) = listening_addresses
+                .iter()
+                .find(|(_, _, ip_address)| ip_address.is_global())
+                .map(|(_, port, ip_address)| (*port, *ip_address))
+            {
+                (
+                    port,
+                    ip_address,
+                    "a public ip selected from the node's reported listening addresses",
                 )
-                .await?;
-        }
+            } else if let Some((port, ip_address)) = {
+                slog::info!(logger, "The node is not reporting a public ip address");
 
-        Ok(())
+                if let Some(public_ip) = public_ip::addr().await {
+                    // We don't know which private ip address the public ip address maps to,
+                    // so we must pick a port number that is listened to on all the private ip's to ensure it is correct
+                    if let Some(port) = listening_addresses
+                        .iter()
+                        .map(|(_, port, ip_address)| (ip_address, port))
+                        .sorted()
+                        .group_by(|(ip_address, _)| *ip_address)
+                        .into_iter()
+                        .map(|(_, group)| group.map(|(_, port)| *port).collect::<BTreeSet<_>>())
+                        .reduce(|ports_a, ports_b| {
+                            ports_a.intersection(&ports_b).cloned().collect()
+                        })
+                        .unwrap()
+                        .into_iter()
+                        .next()
+                    {
+                        Some((
+                            port,
+                            match public_ip {
+                                std::net::IpAddr::V4(ip) => ip.to_ipv6_mapped(),
+                                std::net::IpAddr::V6(ip) => ip,
+                            },
+                        ))
+                    } else {
+                        slog::warn!(logger, "We could not determine the correct port number for the resolved public ip address {}", public_ip);
+                        None
+                    }
+                } else {
+                    slog::warn!(logger, "We could not resolve the node's public ip address");
+                    None
+                }
+            } {
+                (port, ip_address, "the node's resolved public address")
+            } else {
+                let (_, port, ip_address) = listening_addresses.first().unwrap();
+                (
+                    *port,
+                    *ip_address,
+                    "a private address selected from the node's listening addresses",
+                )
+            };
+
+            if Some(&(peer_id, port, ip_address))
+                != account_to_peer.get(&state_chain_client.our_account_id)
+            {
+                slog::info!(
+                    logger,
+                    "Node's reported listening addresses: {}",
+                    common::format_iterator(
+                        listening_addresses
+                            .iter()
+                            .map(|(_, port, ip_address)| format!("[{}]:{}", ip_address, port))
+                    )
+                );
+                slog::info!(
+                    logger,
+                    "Registering node's peer_id {}, ip address, and port number [{}]:{}. This ip address is {}",
+                    peer_id,
+                    ip_address,
+                    port,
+                    source
+                );
+                state_chain_client
+                    .submit_signed_extrinsic(
+                        logger,
+                        pallet_cf_validator::Call::register_peer_id(
+                            sp_core::ed25519::Public(cfe_peer_keypair.public().encode()),
+                            port,
+                            ip_address.into(),
+                            sp_core::ed25519::Signature::try_from(
+                                &cfe_peer_keypair
+                                    .sign(&state_chain_client.our_account_id.encode()[..])[..],
+                            )
+                            .unwrap(),
+                        ),
+                    )
+                    .await?;
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file configuration option.", peer_id, cfe_peer_id)))
+        }
     } else {
-        Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file confugration option.", peer_id, cfe_peer_id)))
+        Err(anyhow::Error::msg("Cannot select which peer_id to register as the Chainflip Node is reporting multiple different peer_ids"))
     }
 }
 
