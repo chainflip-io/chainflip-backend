@@ -118,17 +118,18 @@ impl PersistentKeyDB {
     }
 }
 
-/// Write the key_id & keyshare pair to the db.
-pub fn update_key(db: &DB, key_id: &KeyId, keyshare: Vec<u8>) {
+/// Write the key_id & keys_share pair to the db.
+pub fn update_key(db: &DB, key_id: &KeyId, keys_share: Vec<u8>) -> Result<(), anyhow::Error> {
     let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
-    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &keyshare)
-        .unwrap_or_else(|_| {
-            panic!(
+    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &keys_share)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| {
+            format!(
                 "Could not write key share for key_id `{}` to database",
                 &key_id
             )
-        });
+        })
 }
 
 impl KeyDB for PersistentKeyDB {
@@ -137,7 +138,7 @@ impl KeyDB for PersistentKeyDB {
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        update_key(&self.db, key_id, keygen_result_info_encoded);
+        update_key(&self.db, key_id, keygen_result_info_encoded).expect("Should update key");
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {

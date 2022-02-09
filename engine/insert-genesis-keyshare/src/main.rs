@@ -39,6 +39,7 @@ fn main() {
     )
     .expect("Should write DB_SCHEMA_VERSION");
 
-    // Write the keyshare to the db
-    update_key(&db, &KeyId(agg_pubkey_bytes), secret_share_bytes);
+    // Write the key share to the db
+    update_key(&db, &KeyId(agg_pubkey_bytes), secret_share_bytes)
+        .expect("Should write key share to db");
 }
