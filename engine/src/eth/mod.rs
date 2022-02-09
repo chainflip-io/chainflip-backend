@@ -567,7 +567,6 @@ pub trait EthObserver {
         from_block: u64,
         deployed_address: H160,
         safe_head_stream: BlockHeaderStream,
-        decode_log: Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>,
         eth_rpc: &EthRpc,
         logger: &slog::Logger,
     ) -> Result<
@@ -580,6 +579,7 @@ pub trait EthObserver {
     {
         let from_block = U64::from(from_block);
         let mut safe_head_stream = Box::pin(safe_head_stream);
+        let decode_log = self.decode_log_closure()?;
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = current_best_safe_block_header
@@ -657,7 +657,6 @@ pub trait EthObserver {
         EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
     {
         let deployed_address = self.get_deployed_address();
-        let decode_log = self.decode_log_closure()?;
         slog::info!(
             logger,
             "Subscribing to Ethereum events from contract at address: {:?}",
@@ -674,7 +673,6 @@ pub trait EthObserver {
                 from_block,
                 deployed_address,
                 safe_ws_head_stream,
-                decode_log,
                 eth_ws_rpc,
                 logger,
             )
@@ -683,16 +681,15 @@ pub trait EthObserver {
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
 
-        // let safe_ws_event_logs = self
-        //     .log_stream_from_head_stream(
-        //         from_block,
-        //         deployed_address,
-        //         safe_http_head_stream,
-        //         decode_log,
-        //         eth_http_rpc,
-        //         logger,
-        //     )
-        //     .await;
+        let safe_ws_event_logs = self
+            .log_stream_from_head_stream(
+                from_block,
+                deployed_address,
+                safe_http_head_stream,
+                eth_http_rpc,
+                logger,
+            )
+            .await;
         // let merged_stream = merged_stream::merged_stream(
         //     safe_ws_head_stream,
         //     safe_http_head_stream,
