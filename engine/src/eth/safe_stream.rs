@@ -82,6 +82,7 @@ pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
     safe_eth_head_stream: SafeBlockHeaderStream,
     eth_rpc: EthRpc,
     contract_address: H160,
+    logger: slog::Logger,
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = BlockHeader>,
@@ -89,9 +90,10 @@ where
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
+            let block_number = header.number.unwrap();
+            slog::debug!(logger, "Observing ETH block: `{}`", block_number);
             let eth_rpc = eth_rpc.clone();
             async move {
-                let block_number = header.number.unwrap();
                 let mut contract_bloom = Bloom::default();
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
 
