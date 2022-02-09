@@ -118,11 +118,11 @@ impl PersistentKeyDB {
     }
 }
 
-/// Write the key_id & keys_share pair to the db.
-pub fn update_key(db: &DB, key_id: &KeyId, keys_share: Vec<u8>) -> Result<(), anyhow::Error> {
+/// Write the key_id & key_share pair to the db.
+pub fn update_key(db: &DB, key_id: &KeyId, key_share: Vec<u8>) -> Result<(), anyhow::Error> {
     let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
-    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &keys_share)
+    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &key_share)
         .map_err(anyhow::Error::msg)
         .with_context(|| {
             format!(
