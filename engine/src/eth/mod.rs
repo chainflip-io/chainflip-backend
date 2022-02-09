@@ -11,6 +11,7 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
+use futures::stream::{self, select, Select};
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
@@ -26,6 +27,7 @@ use web3::{
 };
 
 use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
+use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -676,12 +678,12 @@ pub trait EthObserver {
                 eth_ws_rpc,
                 logger,
             )
-            .await;
+            .await?;
 
         let safe_http_head_stream =
             polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
 
-        let safe_ws_event_logs = self
+        let safe_http_event_logs = self
             .log_stream_from_head_stream(
                 from_block,
                 deployed_address,
@@ -689,17 +691,70 @@ pub trait EthObserver {
                 eth_http_rpc,
                 logger,
             )
+            .await?;
+
+        let merged_stream = self
+            .merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
             .await;
-        // let merged_stream = merged_stream::merged_stream(
-        //     safe_ws_head_stream,
-        //     safe_http_head_stream,
-        //     logger.clone(),
-        // )
-        // .await;
 
         // now actually get the logs of that stream
 
         Err(anyhow::Error::msg(""))
+    }
+
+    async fn merged_log_stream(
+        &self,
+        safe_ws_event_logs: Pin<
+            Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>,
+        >,
+        safe_http_log_stream: Pin<
+            Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>,
+        >,
+        logger: slog::Logger,
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>> {
+        let merged_stream = select(safe_ws_event_logs, safe_http_log_stream);
+        struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
+            merged_stream: Select<
+                Pin<
+                    Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>,
+                >,
+                Pin<
+                    Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>,
+                >,
+            >,
+            last_yielded_block_number: u64,
+            logger: slog::Logger,
+        }
+
+        let init_data = StreamState::<Self::EventParameters> {
+            merged_stream,
+            last_yielded_block_number: 0,
+            logger,
+        };
+
+        let result = Box::pin(stream::unfold(init_data, move |mut state| async move {
+            loop {
+                if let Some(current_item) = state.merged_stream.next().await {
+                    let current_item = current_item.unwrap();
+                    let current_item_block_number = current_item.block_number;
+
+                    println!("Current item block number: {}", current_item_block_number);
+                    if (current_item_block_number == state.last_yielded_block_number + 1)
+                        // first iteration
+                        || state.last_yielded_block_number == 0
+                    {
+                        state.last_yielded_block_number = current_item_block_number;
+                        break Some((current_item, state));
+                    } else {
+                        continue;
+                    }
+                } else {
+                    break None;
+                }
+            }
+        }));
+
+        return Ok(result);
     }
 
     fn decode_log_closure(
