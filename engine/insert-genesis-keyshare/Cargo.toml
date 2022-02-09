@@ -1,5 +1,5 @@
 [package]
-authors = ["Jamie Ford <Jamie@chainflip.io>"]
+authors = ["Chainflip <https://chainflip.io>"]
 edition = "2018"
 name = "insert-genesis-keyshare"
 version = "0.1.0"
