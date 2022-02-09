@@ -428,6 +428,12 @@ mod tests {
         .expect("Should write DB_SCHEMA_VERSION");
     }
 
+    // Creates a TempDir unique directory that will be deleted when dropped
+    fn get_temp_db_path() -> std::path::PathBuf {
+        let temp_dir = TempDir::new("unit_test").unwrap();
+        temp_dir.path().to_owned().join("db")
+    }
+
     // Just a random key
     const TEST_KEY: [u8; 33] = [
         3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132, 93,
@@ -440,8 +446,7 @@ mod tests {
     #[test]
     fn can_create_new_database() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("can_create_new_database").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
 
         {
             assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
@@ -451,9 +456,8 @@ mod tests {
 
     #[test]
     fn new_db_is_created_with_latest_schema_version() {
-        let temp_dir = TempDir::new("new_db_is_created_with_latest_schema_version").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
         let logger = new_test_logger();
+        let db_path = get_temp_db_path();
 
         // Create a fresh db. This will also write the schema version
         assert!(!db_path.exists());
@@ -481,8 +485,7 @@ mod tests {
 
     #[test]
     fn new_db_returns_db_when_db_data_version_is_latest() {
-        let temp_dir = TempDir::new("new_db_returns_db_when_db_data_version_is_latest").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
 
         {
             open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION);
@@ -492,8 +495,7 @@ mod tests {
 
     #[test]
     fn can_migrate_to_latests() {
-        let temp_dir = TempDir::new("can_migrate_to_latests").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
 
         let bashful_secret = KEYGEN_RESULT_INFO_HEX.to_string();
         let bashful_secret_bin = hex::decode(bashful_secret).unwrap();
@@ -540,8 +542,7 @@ mod tests {
 
     #[test]
     fn should_not_migrate_backwards() {
-        let temp_dir = TempDir::new("should_not_migrate_backwards").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
 
         // Create a db with schema version + 1
         open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION + 1);
@@ -566,8 +567,7 @@ mod tests {
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
-        let temp_dir = TempDir::new("can_load_keys").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
 
         {
             let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
@@ -590,8 +590,7 @@ mod tests {
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("can_update_key").unwrap();
-        let db_path = Path::new(temp_dir.path()).join("db");
+        let db_path = get_temp_db_path();
         let key_id = KeyId(vec![0; 33]);
 
         {
@@ -681,8 +680,7 @@ mod tests {
     #[test]
     fn backup_should_fail_if_already_exists() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("backup_should_fail_if_already_exists").unwrap();
-        let db_path = temp_dir.path().join("db");
+        let db_path = get_temp_db_path();
 
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
@@ -703,13 +701,15 @@ mod tests {
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
         let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
-        let db_path = temp_dir.path().join("db");
+        let path = temp_dir.path();
+        let db_path = path.join("db");
 
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
 
         // Change the backups folder to readonly
-        let backups_dir = temp_dir.path().join(BACKUPS_DIRECTORY);
+        let backups_dir = path.join(BACKUPS_DIRECTORY);
+        assert!(backups_dir.exists());
         let mut permissions = backups_dir.metadata().unwrap().permissions();
         permissions.set_readonly(true);
         assert_ok!(fs::set_permissions(&backups_dir, permissions));
