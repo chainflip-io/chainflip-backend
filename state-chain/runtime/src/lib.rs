@@ -135,6 +135,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type Offenders = pallet_cf_reputation::KeygenFailedOffender<Self>;
 }
 
 // FIXME: These would be changed

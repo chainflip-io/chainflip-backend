@@ -19,8 +19,8 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	HasPeerMapping,
+	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, HasPeerMapping,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -66,7 +66,6 @@ pub struct PercentageRange {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AuctionResult;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;

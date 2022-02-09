@@ -232,6 +232,20 @@ mod tests {
 			);
 		});
 	}
+	#[test]
+	fn reporting_should_mark_as_offender() {
+		new_test_ext().execute_with(|| {
+			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
+			assert_ok!(ReputationPallet::report(
+				OfflineCondition::ParticipateSigningFailed,
+				&ALICE
+			));
+			assert_eq!(
+				(),
+				ReputationPallet::offences(OfflineCondition::ParticipateSigningFailed, ALICE)
+			);
+		});
+	}
 
 	#[test]
 	fn reporting_any_offline_condition_should_penalise_reputation_points() {

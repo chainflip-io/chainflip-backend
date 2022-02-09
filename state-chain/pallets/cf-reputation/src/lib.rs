@@ -95,6 +95,19 @@ pub mod pallet {
 	pub type Reputations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
+	/// Track offences of our validators... there is no escape
+	#[pallet::storage]
+	#[pallet::getter(fn offences)]
+	pub(super) type Offences<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		OfflineCondition,
+		Blake2_128Concat,
+		T::ValidatorId,
+		(),
+		ValueQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -176,6 +189,25 @@ pub mod pallet {
 		}
 	}
 
+	// Those that have been reported on failing in a key gen
+	pub struct KeygenFailedOffender<T>(PhantomData<T>);
+	impl<T: Config> cf_traits::Offender for KeygenFailedOffender<T> {
+		type ValidatorId = T::ValidatorId;
+		fn is_offender(validator_id: &Self::ValidatorId) -> bool {
+			// We want to know if this validator has failed in a key gen ceremony
+			Offences::<T>::contains_key(
+				OfflineCondition::ParticipateKeygenFailed,
+				validator_id.clone(),
+			)
+		}
+
+		fn forgive_all() {
+			// We will clear the lot but this implementation *should* really clear
+			// `ParticipateKeygenFailed` TODO
+			Offences::<T>::remove_all(None);
+		}
+	}
+
 	/// Implementation of `OfflineReporter` reporting on `OfflineCondition` with specified number
 	/// of reputation points
 	impl<T: Config> OfflineReporter for Pallet<T> {
@@ -194,6 +226,8 @@ pub mod pallet {
 			if to_ban {
 				T::Banned::ban(validator_id);
 			}
+
+			Offences::<T>::insert(condition.clone(), validator_id.clone(), ());
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),

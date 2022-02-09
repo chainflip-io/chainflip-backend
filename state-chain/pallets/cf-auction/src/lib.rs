@@ -19,8 +19,8 @@ extern crate assert_matches;
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionPhase, AuctionResult, Auctioneer,
 	BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler,
-	VaultRotator,
+	HasPeerMapping, IsOnline, Offender, QualifyValidator, RemainingBid, StakeHandler,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -31,10 +31,6 @@ use sp_std::{cmp::min, prelude::*};
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		AuctionIndex, AuctionResult, ChainflipAccount, EmergencyRotation, HasPeerMapping,
-		RemainingBid, VaultRotator,
-	};
 	use frame_support::traits::ValidatorRegistration;
 
 	#[pallet::pallet]
@@ -76,6 +72,8 @@ pub mod pallet {
 		type PeerMapping: HasPeerMapping<ValidatorId = Self::ValidatorId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
+		/// Offenders
+		type Offenders: Offender<ValidatorId = Self::ValidatorId>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -240,9 +238,11 @@ impl<T: Config> QualifyValidator for Pallet<T> {
 		// Rule #1 - They are registered
 		// Rule #2 - They have a registered peer id
 		// Rule #3 - Confirm that the validators are 'online'
+		// Rule #4 - They haven't commited an offence
 		T::Registrar::is_registered(validator_id) &&
 			T::PeerMapping::has_peer_mapping(validator_id) &&
-			T::Online::is_online(validator_id)
+			T::Online::is_online(validator_id) &&
+			T::Offenders::is_offender(validator_id) == false
 	}
 }
 
@@ -313,6 +313,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						bidders.len(),
 						ActiveValidatorSizeRange::<T>::get().0
 					);
+					// We clear the offenders to be sure we haven't banned everyone
+					T::Offenders::forgive_all();
 					return Err(AuctionError::MinValidatorSize)
 				};
 

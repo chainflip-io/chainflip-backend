@@ -83,6 +83,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			new_validators,
 			new_bond,
 		);
+
+		<pallet_cf_reputation::KeygenFailedOffender<Runtime> as cf_traits::Offender>::forgive_all();
 	}
 }
 
