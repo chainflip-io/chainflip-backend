@@ -738,6 +738,17 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
     }
+
+    //new function here: Ramiz
+    pub async fn retrieve_block(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Option<SignedBlock>> {
+        self
+        .state_chain_rpc_client
+        .get_block(block_hash)
+        .await
+    }
 }
 
 fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
@@ -953,6 +964,67 @@ pub async fn connect_to_state_chain(
                 .expect("Could not decode HeartbeatBlockInterval to u32"),
         }),
     ))
+}
+
+
+//new function: Ramiz
+#[allow(clippy::eval_order_dependence)]
+pub async fn connect_to_state_chain_without_signer(
+    state_chain_settings: &settings::StateChain,
+    logger: &slog::Logger,
+) -> Result<Arc<StateChainRpcClient>> {
+
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(rpc_error_into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
+
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
+
+    let state_chain_rpc_client = StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    };
+
+    // Ok (Arc::new(StateChainClient {
+    //     //nonce: AtomicU32::new(account_nonce),
+    //     //runtime_version: RwLock::new(
+    //     //    state_chain_rpc_client
+    //     //        .fetch_runtime_version(latest_block_hash)
+    //     //        .await?,
+    //     //),
+    //     genesis_hash: try_unwrap_value(
+    //         state_chain_rpc_client
+    //             .chain_rpc_client
+    //             .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
+    //             .await
+    //             .map_err(rpc_error_into_anyhow_error)?,
+    //         anyhow::Error::msg("Genesis block doesn't exist?"),
+    //     )?,
+    //     //signer: signer.clone(),
+    //     state_chain_rpc_client,
+    //     //our_account_id,
+    //     // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
+    //     //events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
+    //     //heartbeat_block_interval: metadata
+    //     //    .module("Reputation")
+    //     //    .expect("No module 'Reputation' in chain metadata")
+    //     //    .constant("HeartbeatBlockInterval")
+    //     //   .expect(
+    //     //        "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
+    //     //    )
+    //     //    .value::<u32>()
+    //     //    .expect("Could not decode HeartbeatBlockInterval to u32"),
+    //     })
+    // )
+    Ok (Arc::new(state_chain_rpc_client))
 }
 
 #[cfg(test)]

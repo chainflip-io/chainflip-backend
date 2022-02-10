@@ -1,7 +1,7 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{EthBroadcaster, EthRpcClient},
-    state_chain::client::connect_to_state_chain,
+    state_chain::client::{connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi},
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -13,6 +13,7 @@ use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
 use structopt::StructOpt;
 use web3::types::H160;
+
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
@@ -61,8 +62,59 @@ async fn run_cli() -> Result<()> {
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
+
+        QueryBlock {block_hash_1} => {
+            request_block(block_hash_1,
+            &cli_settings,
+            &logger)
+            .await
+        }
     }
 }
+
+
+//new func here: Ramiz
+async fn request_block(
+    block_hash_1: state_chain_runtime::Hash,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+
+
+    println!(
+        "Quering the state chain for the block with hash {}.",
+        hex::encode(block_hash_1)
+    );
+
+    if !confirm_submit() {
+        return Ok(());
+    }
+
+    let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
+
+    //let mut block_stream = Box::new(block_stream);
+    //let block_stream = block_stream.as_mut();  //why??????????????
+
+    //let block_hash_h256 = H256(block_hash_1);
+
+    let queried_block = state_chain_rpc_client.get_block(block_hash_1).await; //(Box::<H256>::new(block_hash_1));
+
+    match queried_block {
+        Ok(block) => {
+            match block {
+                Some(block) => {
+                    println!("{:#?}", block);
+                },
+                None => println!("Empty Block"),
+            }
+        },
+        Err(_) => println!("unknown error while retrieving block..."),
+    }
+    
+    Ok(())
+}
+
+
 
 async fn request_claim(
     amount: f64,
