@@ -58,9 +58,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         .expect("Should be able to submit first heartbeat");
 
     async fn get_current_account_state<RpcClient: StateChainRpcApi>(
-        logger: &slog::Logger,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
+        logger: &slog::Logger,
     ) -> (ChainflipAccountData, bool) {
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
@@ -108,7 +108,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 
     // Initialise the account state
     let (mut account_data, mut is_outgoing) =
-        get_current_account_state(&logger, state_chain_client.clone(), initial_block_hash).await;
+        get_current_account_state(state_chain_client.clone(), initial_block_hash, &logger).await;
 
     if account_data.state == ChainflipAccountState::Validator || is_outgoing {
         send_windows_to_witness_processes(
@@ -331,7 +331,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                     ChainflipAccountState::Backup | ChainflipAccountState::Passive
                                 ) {
                                     let (new_account_data, new_is_outgoing) =
-                                        get_current_account_state(&logger, state_chain_client.clone(), current_block_hash).await;
+                                        get_current_account_state(state_chain_client.clone(), current_block_hash, &logger).await;
                                     account_data = new_account_data;
                                     is_outgoing = new_is_outgoing;
 
