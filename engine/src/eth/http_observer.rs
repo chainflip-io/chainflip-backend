@@ -9,16 +9,7 @@ use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-use super::{BlockType, EthHttpRpcApi};
-
-// Get the logs via http, using the polling http_head_stream
-pub async fn http_event_log_stream<EthHttpRpc: EthHttpRpcApi>(eth_http_rpc: EthHttpRpc) {
-    let http_head_stream = polling_http_head_stream(eth_http_rpc, HTTP_POLL_INTERVAL).await;
-
-    // get logs for that block if required.
-
-    // see if we can get the logs from the http one the same as we do the ws one
-}
+use super::EthHttpRpcApi;
 
 pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,

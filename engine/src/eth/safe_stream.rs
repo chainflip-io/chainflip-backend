@@ -10,7 +10,7 @@ use futures::StreamExt;
 
 use crate::eth::BlockHeaderable;
 
-use super::{BlockType, EthRpcApi};
+use super::EthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,

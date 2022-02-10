@@ -39,8 +39,7 @@ pub async fn test_all_key_manager_events() {
         .collect::<Vec<_>>()
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Error in event stream");
+        .collect::<Vec<_>>();
 
     assert!(
         !km_events.is_empty(),

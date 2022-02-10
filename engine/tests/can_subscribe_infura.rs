@@ -28,7 +28,7 @@ pub async fn test_all_key_manager_events() {
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
-    key_manager
+    let _key_manager_events = key_manager
         .event_stream(&eth_http_rpc_client, &eth_ws_rpc_client, 0, &root_logger)
         .await
         .unwrap()
@@ -36,8 +36,7 @@ pub async fn test_all_key_manager_events() {
         .collect::<Vec<_>>()
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Error in event stream");
+        .collect::<Vec<_>>();
 }
 
 fn test_settings_from_file_and_env() -> Result<Settings> {

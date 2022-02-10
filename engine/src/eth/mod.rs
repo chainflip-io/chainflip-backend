@@ -11,14 +11,13 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
-use futures::stream::{self, select, Select};
+use futures::stream::{self, repeat, select, Repeat, Select, Zip};
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
-use web3::ethabi::RawLog;
 use web3::types::{Block, H2048};
 use web3::{
     api::SubscriptionStream,
@@ -27,7 +26,6 @@ use web3::{
 };
 
 use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
-use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_WS_STREAM_RETURNED};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -217,8 +215,8 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc, EthH
                         .expect("Failed to initialise event stream");
 
                     // TOOD: Handle None on stream, and result event being an error
-                    while let Some(result_event) = event_stream.next().await {
-                        let event = result_event.expect("should be valid event type");
+                    while let Some(event) = event_stream.next().await {
+                        slog::trace!(logger, "Observing ETH block: {}", event.block_number);
                         if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
                                 slog::info!(
@@ -559,6 +557,7 @@ impl fmt::Display for TranpsortProtocol {
     }
 }
 
+// Specify a default type for the mock
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
@@ -653,7 +652,7 @@ pub trait EthObserver {
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
     where
         EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
         EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
@@ -693,18 +692,13 @@ pub trait EthObserver {
             )
             .await?;
 
-        let merged_stream = self
-            .merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
-            .await;
-
-        // now actually get the logs of that stream
-
-        Err(anyhow::Error::msg(""))
+        self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
+            .await
     }
 
     async fn merged_log_stream(
         &self,
-        safe_ws_event_logs: Pin<
+        safe_ws_log_stream: Pin<
             Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>,
         >,
         safe_http_log_stream: Pin<
@@ -712,14 +706,32 @@ pub trait EthObserver {
         >,
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>> {
-        let merged_stream = select(safe_ws_event_logs, safe_http_log_stream);
+        let logger = logger.new(o!(COMPONENT_KEY => "MergedETHStream"));
+        let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TranpsortProtocol::Ws));
+        let safe_http_log_stream = safe_http_log_stream.zip(repeat(TranpsortProtocol::Http));
+
+        let merged_stream = select(safe_ws_log_stream, safe_http_log_stream);
         struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
             merged_stream: Select<
-                Pin<
-                    Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>,
+                Zip<
+                    Pin<
+                        Box<
+                            dyn Stream<Item = Result<EventWithCommon<EventParameters>>>
+                                + Unpin
+                                + Send,
+                        >,
+                    >,
+                    Repeat<TranpsortProtocol>,
                 >,
-                Pin<
-                    Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>,
+                Zip<
+                    Pin<
+                        Box<
+                            dyn Stream<Item = Result<EventWithCommon<EventParameters>>>
+                                + Unpin
+                                + Send,
+                        >,
+                    >,
+                    Repeat<TranpsortProtocol>,
                 >,
             >,
             last_yielded_block_number: u64,
@@ -734,7 +746,7 @@ pub trait EthObserver {
 
         let result = Box::pin(stream::unfold(init_data, move |mut state| async move {
             loop {
-                if let Some(current_item) = state.merged_stream.next().await {
+                if let Some((current_item, protocol)) = state.merged_stream.next().await {
                     let current_item = current_item.unwrap();
                     let current_item_block_number = current_item.block_number;
 
@@ -743,6 +755,15 @@ pub trait EthObserver {
                         // first iteration
                         || state.last_yielded_block_number == 0
                     {
+                        // we want to yield a block
+
+                        slog::info!(
+                            state.logger,
+                            "Processing ETH block {} from {} stream",
+                            current_item_block_number,
+                            protocol
+                        );
+
                         state.last_yielded_block_number = current_item_block_number;
                         break Some((current_item, state));
                     } else {
@@ -864,11 +885,26 @@ pub mod mocks {
 }
 
 #[cfg(test)]
-mod tests {
+mod merged_stream_tests {
     use crate::logging::test_utils::new_test_logger;
 
     use super::*;
 
+    #[tokio::test]
+    async fn empty_inners_return_none() {
+        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = BlockType>>> =
+            Box::pin(stream::empty());
+
+        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = BlockType>>> =
+            Box::pin(stream::empty());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::logging::test_utils::new_test_logger;
+
+    use super::*;
     #[test]
     fn cfg_test_create_eth_broadcaster_works() {
         let eth_rpc_api_mock = MockEthRpcApi::new();

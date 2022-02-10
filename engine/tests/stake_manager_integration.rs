@@ -47,8 +47,7 @@ pub async fn test_all_stake_manager_events() {
         .collect::<Vec<_>>()
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Error in event stream");
+        .collect::<Vec<_>>();
 
     assert!(
         !sm_events.is_empty(),
@@ -132,7 +131,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_parameters {
+        .find(|event| match event.event_parameters {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -140,11 +139,11 @@ pub async fn test_all_stake_manager_events() {
             } => {
                 assert_eq!(
                     old_min_stake,
-                    &U256::from_dec_str("40000000000000000000000").unwrap()
+                    U256::from_dec_str("40000000000000000000000").unwrap()
                 );
                 assert_eq!(
                     new_min_stake,
-                    &U256::from_dec_str("13333333333333334032384").unwrap()
+                    U256::from_dec_str("13333333333333334032384").unwrap()
                 );
                 true
             }
@@ -154,7 +153,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_parameters {
+        .find(|event| match event.event_parameters {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,
@@ -162,11 +161,11 @@ pub async fn test_all_stake_manager_events() {
             } => {
                 assert_eq!(
                     old_supply,
-                    &U256::from_dec_str("90000000000000000000000000").unwrap()
+                    U256::from_dec_str("90000000000000000000000000").unwrap()
                 );
                 assert_eq!(
                     new_supply,
-                    &U256::from_dec_str("100000000000000000000000000").unwrap()
+                    U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
                 true
             }
