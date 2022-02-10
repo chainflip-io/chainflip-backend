@@ -193,6 +193,7 @@
       "TransactionFailed"
     ]
   },
+  "IpV6Addr": "u128",
   "Uint": "U256",
   "UnsignedTransaction": {
     "chain_id": "u64",
