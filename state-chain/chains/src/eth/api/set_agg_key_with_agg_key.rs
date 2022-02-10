@@ -1,9 +1,12 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{AggKey, ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
+use crate::{
+	eth::{AggKey, SchnorrVerificationComponents, SigData, Tokenizable},
+	ChainCrypto, Ethereum,
+};
 
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Uint};
+use ethabi::{Param, ParamType, StateMutability, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
@@ -17,22 +20,6 @@ pub struct SetAggKeyWithAggKey {
 	pub new_key: AggKey,
 }
 
-impl ChainflipContractCall for SetAggKeyWithAggKey {
-	fn has_signature(&self) -> bool {
-		!self.sig_data.sig.is_zero()
-	}
-
-	fn signing_payload(&self) -> H256 {
-		self.sig_data.msg_hash
-	}
-
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
-		let mut call = self.clone();
-		call.sig_data.insert_signature(signature);
-		call.abi_encoded()
-	}
-}
-
 impl SetAggKeyWithAggKey {
 	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(nonce: Nonce, new_key: Key) -> Self {
 		let mut calldata =
@@ -42,7 +29,16 @@ impl SetAggKeyWithAggKey {
 		calldata
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
+	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	pub fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
 			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
 			.expect(
@@ -92,7 +88,7 @@ mod test_set_agg_key_with_agg_key {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
 		));
 	}
 
@@ -139,7 +135,7 @@ mod test_set_agg_key_with_agg_key {
 		const FAKE_NEW_KEY_Y: ParityBit = ParityBit::Odd;
 
 		let key_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
 		)
 		.unwrap();
 
@@ -153,11 +149,13 @@ mod test_set_agg_key_with_agg_key {
 		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;
 
 		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
-		let runtime_payload =
-			set_agg_key_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
+		let runtime_payload = set_agg_key_runtime
+			.clone()
+			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			});
+			})
+			.abi_encoded();
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
 
@@ -166,7 +164,7 @@ mod test_set_agg_key_with_agg_key {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			set_agg_key_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

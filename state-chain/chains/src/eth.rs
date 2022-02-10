@@ -1,7 +1,5 @@
 //! Types and functions that are common to ethereum.
-pub mod register_claim;
-pub mod set_agg_key_with_agg_key;
-pub mod update_flip_supply;
+pub mod api;
 
 use codec::{Decode, Encode};
 pub use ethabi::{
@@ -24,8 +22,6 @@ use sp_std::{
 	prelude::*,
 	str, vec,
 };
-
-use crate::Ethereum;
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -92,16 +88,6 @@ impl Tokenizable for SigData {
 			Token::Uint(self.nonce),
 			Token::Address(self.k_times_g_addr),
 		])
-	}
-}
-
-impl crate::SetAggKeyWithAggKey<Ethereum> for set_agg_key_with_agg_key::SetAggKeyWithAggKey {
-	fn new_unsigned(nonce: u64, key: <Ethereum as crate::ChainCrypto>::AggKey) -> Self {
-		Self::new_unsigned(nonce, key)
-	}
-
-	fn to_payload(self) -> <Ethereum as crate::ChainCrypto>::Payload {
-		self.signing_payload()
 	}
 }
 
@@ -640,18 +626,6 @@ pub fn verify_transaction(
 	}
 
 	unsigned.match_against_recovered(decoded_tx)
-}
-
-/// Represents calls to Chainflip contracts requiring a threshold signature.
-pub trait ChainflipContractCall {
-	/// Whether or not the call has been signed.
-	fn has_signature(&self) -> bool;
-
-	/// The payload data over which the threshold signature should be made.
-	fn signing_payload(&self) -> H256;
-
-	/// Abi-encode the call with a provided signature.
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]

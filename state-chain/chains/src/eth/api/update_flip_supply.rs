@@ -1,10 +1,10 @@
-use crate::eth::Tokenizable;
+use crate::{eth::Tokenizable, ChainCrypto, Ethereum};
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Param, ParamType, StateMutability, Token, Uint};
+use ethabi::{Param, ParamType, StateMutability, Token, Uint};
 use frame_support::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData};
+use crate::eth::{SchnorrVerificationComponents, SigData};
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UpdateFlipSupply {
@@ -14,22 +14,6 @@ pub struct UpdateFlipSupply {
 	pub new_total_supply: Uint,
 	/// The current state chain block number
 	pub state_chain_block_number: Uint,
-}
-
-impl ChainflipContractCall for UpdateFlipSupply {
-	fn has_signature(&self) -> bool {
-		!self.sig_data.sig.is_zero()
-	}
-
-	fn signing_payload(&self) -> H256 {
-		self.sig_data.msg_hash
-	}
-
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
-		let mut call = self.clone();
-		call.sig_data.insert_signature(signature);
-		call.abi_encoded()
-	}
 }
 
 impl UpdateFlipSupply {
@@ -48,7 +32,16 @@ impl UpdateFlipSupply {
 		calldata
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
+	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	pub fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -99,7 +92,7 @@ mod test_update_flip_supply {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 		));
 	}
 
@@ -114,7 +107,7 @@ mod test_update_flip_supply {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let stake_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 		)
 		.unwrap();
 
@@ -127,11 +120,13 @@ mod test_update_flip_supply {
 
 		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
 
-		let runtime_payload =
-			update_flip_supply_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
+		let runtime_payload = update_flip_supply_runtime
+			.clone()
+			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			});
+			})
+			.abi_encoded();
 
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
@@ -141,7 +136,7 @@ mod test_update_flip_supply {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			stake_manager_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

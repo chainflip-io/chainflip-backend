@@ -3,6 +3,7 @@
 
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::{
 	convert::{Into, TryFrom},
 	prelude::*,
@@ -30,6 +31,70 @@ pub trait ChainCrypto: Chain {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool;
+}
+
+pub trait ChainApi: ChainCrypto {
+	type UnsignedTransaction: Member + Parameter;
+	type SignedTransaction: Member + Parameter;
+	type SignerCredential: Member + Parameter;
+	type Nonce: Member + Parameter + AtLeast32BitUnsigned;
+	type ValidationError;
+
+	/// Verify the signed transaction when it is submitted to the state chain by the nominated
+	/// signer.
+	///
+	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the
+	/// validaty of the returned transaction for this `Chain` and can include verification of the
+	/// byte encoding, the transaction content, metadata, signer idenity, etc.
+	fn verify_signed_transaction(
+		unsigned_tx: &Self::UnsignedTransaction,
+		signed_tx: &Self::SignedTransaction,
+		signer_credential: &Self::SignerCredential,
+	) -> Result<(), Self::ValidationError>;
+}
+
+/// A call or collection of calls that can be made to the Chainflip api on an external chain.
+///
+/// See [eth::api::EthereumApi] for an example implementation.
+pub trait ApiCall<Api: ChainApi>: Parameter {
+	/// Get the payload over which the threshold signature should be generated.
+	fn threshold_signature_payload(&self) -> <Api as ChainCrypto>::Payload;
+
+	/// Add the threshold signature to the api call.
+	fn signed(self, threshold_signature: &<Api as ChainCrypto>::ThresholdSignature) -> Self;
+
+	///
+	fn encoded(&self) -> Vec<u8>;
+}
+
+pub trait TransactionBuilder<Api: ChainApi> {
+	type ApiCall: ApiCall<Api>;
+
+	/// Construct the unsigned outbound transaction from the *signed* api call.
+	fn build_transaction(signed_call: Self::ApiCall) -> Api::UnsignedTransaction;
+}
+
+/// Constructs the `SetAggKeyWithAggKey` api call.
+pub trait SetAggKeyWithAggKey<Api: ChainApi>: ApiCall<Api> {
+	fn new_unsigned(nonce: Api::Nonce, new_key: <Api as ChainCrypto>::AggKey) -> Self;
+}
+
+/// Constructs the `UpdateFlipSupply` api call.
+pub trait UpdateFlipSupply<Api: ChainApi>: ApiCall<Api> {
+	fn new_unsigned(nonce: Api::Nonce, new_total_supply: u128, block_number: u64) -> Self;
+}
+
+/// Constructs the `RegisterClaim` api call.
+pub trait RegisterClaim<Api: ChainApi>: ApiCall<Api> {
+	fn new_unsigned(
+		nonce: Api::Nonce,
+		node_id: &[u8; 32],
+		amount: u128,
+		address: &[u8; 20],
+		expiry: u64,
+	) -> Self;
+
+	fn amount(&self) -> u128;
 }
 
 macro_rules! impl_chains {
@@ -89,12 +154,6 @@ impl ChainCrypto for Ethereum {
 			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
-}
-
-pub trait SetAggKeyWithAggKey<C: ChainCrypto> {
-	fn new_unsigned(nonce: u64, key: C::AggKey) -> Self;
-
-	fn to_payload(self) -> C::Payload;
 }
 
 #[cfg(feature = "mocks")]
