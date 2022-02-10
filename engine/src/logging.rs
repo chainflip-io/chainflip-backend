@@ -126,7 +126,10 @@ pub mod utils {
     /// ```
     pub fn new_json_logger() -> slog::Logger {
         slog::Logger::root(
-            slog_async::Async::new(new_json_drain()).build().fuse(),
+            slog_async::Async::new(new_json_drain())
+                .chan_size(1024)
+                .build()
+                .fuse(),
             o!(),
         )
     }
@@ -143,7 +146,10 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
-        slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
+        slog::Logger::root(
+            slog_async::Async::new(drain).chan_size(1024).build().fuse(),
+            o!(),
+        )
     }
 
     /// Creates a custom json drain that includes the tag as a key
