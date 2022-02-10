@@ -90,7 +90,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                     "a public ip selected from the node's reported listening addresses",
                 )
             } else if let Some((port, ip_address)) = {
-                slog::info!(logger, "The node is not reporting a public ip address");
+                slog::warn!(logger, "The node is not reporting a public ip address");
 
                 if let Some(public_ip) = public_ip::addr().await {
                     // We don't know which private ip address the public ip address maps to,
