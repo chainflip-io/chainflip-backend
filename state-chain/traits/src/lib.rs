@@ -536,6 +536,7 @@ where
 	}
 }
 
+/// A result type for asynchronous operations.
 #[derive(Clone, Copy, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
 pub enum AsyncResult<R> {
 	/// Result is ready.
@@ -547,6 +548,8 @@ pub enum AsyncResult<R> {
 }
 
 impl<R> AsyncResult<R> {
+	/// Returns `Ok(result: R)` if the `R` is ready, otherwise executes the supplied closure and
+	/// returns the Err(closure_result: E).
 	pub fn ready_or_else<E>(self, e: impl FnOnce(Self) -> E) -> Result<R, E> {
 		match self {
 			AsyncResult::Ready(s) => Ok(s),
