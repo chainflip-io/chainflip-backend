@@ -789,6 +789,12 @@ pub trait EthObserver {
 
                         // if the key already existed, we have already emitted it
                         if !key_already_existed {
+                            slog::info!(
+                                state.logger,
+                                "Processing ETH log {} from {} stream",
+                                current_item,
+                                protocol
+                            );
                             break Some((current_item, state));
                         }
                     } else {
@@ -969,10 +975,10 @@ mod merged_stream_tests {
         KeyManager::new(H160::default()).unwrap()
     }
 
-    fn key_change(block_number: u64) -> Result<EventWithCommon<KeyManagerEvent>> {
+    fn key_change(block_number: u64, log_index: u8) -> Result<EventWithCommon<KeyManagerEvent>> {
         Ok(EventWithCommon::<KeyManagerEvent> {
             tx_hash: Default::default(),
-            log_index: U256::from(0),
+            log_index: U256::from(log_index),
             block_number,
             event_parameters: KeyManagerEvent::KeyChange {
                 signed: true,
@@ -1008,12 +1014,12 @@ mod merged_stream_tests {
         let key_change_2 = 15;
 
         let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(key_change_1),
-            key_change(key_change_2),
+            key_change(key_change_1, 0),
+            key_change(key_change_2, 0),
         ]));
         let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(key_change_1),
-            key_change(key_change_2),
+            key_change(key_change_1, 0),
+            key_change(key_change_2, 0),
         ]));
 
         let mut stream = key_manager
@@ -1023,11 +1029,11 @@ mod merged_stream_tests {
 
         assert_eq!(
             stream.next().await.unwrap(),
-            key_change(key_change_1).unwrap()
+            key_change(key_change_1, 0).unwrap()
         );
         assert_eq!(
             stream.next().await.unwrap(),
-            key_change(key_change_2).unwrap()
+            key_change(key_change_2, 0).unwrap()
         );
         assert!(stream.next().await.is_none());
     }
@@ -1041,9 +1047,9 @@ mod merged_stream_tests {
         let safe_ws_log_stream = Box::pin(stream::empty());
         // http is working
         let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(8),
-            key_change(10),
-            key_change(12),
+            key_change(8, 0),
+            key_change(10, 0),
+            key_change(12, 0),
         ]));
 
         let mut stream = key_manager
@@ -1051,9 +1057,9 @@ mod merged_stream_tests {
             .await
             .unwrap();
 
-        assert_eq!(stream.next().await.unwrap(), key_change(8).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(10).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(12).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(8, 0).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -1063,15 +1069,15 @@ mod merged_stream_tests {
         let logger = new_test_logger();
 
         let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(10),
-            key_change(12),
-            key_change(14),
+            key_change(10, 0),
+            key_change(12, 0),
+            key_change(14, 0),
         ]));
         // is 2 blocks behind the ws stream
         let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(8),
-            key_change(10),
-            key_change(12),
+            key_change(8, 0),
+            key_change(10, 0),
+            key_change(12, 0),
         ]));
 
         let mut stream = key_manager
@@ -1079,11 +1085,68 @@ mod merged_stream_tests {
             .await
             .unwrap();
 
-        assert_eq!(stream.next().await.unwrap(), key_change(10).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(12).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(14).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
         assert!(stream.next().await.is_none());
     }
+
+    #[tokio::test]
+    async fn merged_stream_handles_logs_in_same_tx() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let safe_ws_log_stream = Box::pin(stream::iter([
+            key_change(10, 0),
+            key_change(10, 1),
+            key_change(14, 0),
+        ]));
+
+        let safe_http_log_stream = Box::pin(stream::iter([
+            key_change(10, 0),
+            key_change(10, 1),
+            key_change(14, 0),
+        ]));
+
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 1).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
+        assert!(stream.next().await.is_none());
+    }
+
+    // TODO:
+    // #[tokio::test]
+    // async fn merged_stream_panics_on_bad_input_streams() {
+    //     let key_manager = test_km_contract();
+    //     let logger = new_test_logger();
+
+    //     let safe_ws_log_stream = Box::pin(stream::iter([
+    //         key_change(10, 0),
+    //         key_change(10, 02),
+    //         key_change(14, 0),
+    //     ]));
+    //     // is 2 blocks behind the ws stream
+    //     let safe_http_log_stream = Box::pin(stream::iter([
+    //         key_change(8, 0),
+    //         key_change(10, 0),
+    //         key_change(12, 0),
+    //     ]));
+
+    //     let mut stream = key_manager
+    //         .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+    //         .await
+    //         .unwrap();
+
+    //     assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
+    //     assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
+    //     assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
+    //     assert!(stream.next().await.is_none());
+    // }
 }
 
 #[cfg(test)]
