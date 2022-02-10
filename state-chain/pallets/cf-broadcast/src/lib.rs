@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Parameter, Twox64Concat};
@@ -87,6 +87,9 @@ pub mod pallet {
 	/// Type alias for the instance's configured SignerId.
 	pub type SignerIdFor<T, I> = <<T as Config<I>>::BroadcastConfig as BroadcastConfig>::SignerId;
 
+	/// Type alias for the payload hash
+	pub type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
+
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
@@ -154,7 +157,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain;
+		type TargetChain: Chain + ChainCrypto;
 
 		/// The broadcast configuration for this instance.
 		type BroadcastConfig: BroadcastConfig<Chain = Self::TargetChain>;
@@ -205,6 +208,16 @@ pub mod pallet {
 		TransactionSigningAttempt<T, I>,
 		OptionQuery,
 	>;
+
+	/// Broadcast lookup
+	#[pallet::storage]
+	pub type BroadcastIdHashLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, PayloadFor<T, I>, BroadcastId, OptionQuery>;
+
+	/// Broadcast lookup
+	#[pallet::storage]
+	pub type BroadcastIdAttemptIdLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, BroadcastAttemptId, OptionQuery>;
 
 	/// Live transaction transmission requests.
 	#[pallet::storage]
@@ -318,6 +331,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::start_broadcast())]
 		pub fn start_broadcast(
 			origin: OriginFor<T>,
+			msg_hash: PayloadFor<T, I>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -326,6 +340,8 @@ pub mod pallet {
 				*id += 1;
 				*id
 			});
+
+			BroadcastIdHashLookup::<T, I>::insert(msg_hash, broadcast_id);
 
 			Self::start_broadcast_attempt(broadcast_id, 0, unsigned_tx);
 
@@ -470,6 +486,24 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Nodes have witnessed that a signature was accepted on the target chain
+		#[pallet::weight(10_000)]
+		pub fn signature_accepted(
+			origin: OriginFor<T>,
+			msg_hash: PayloadFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			if let Some(broadcast_id) = BroadcastIdHashLookup::<T, I>::take(msg_hash) {
+				if let Some(attempt_id) = BroadcastIdAttemptIdLookup::<T, I>::take(broadcast_id) {
+					let TransmissionAttempt::<T, I> { broadcast_id, .. } =
+						AwaitingTransmission::<T, I>::take(attempt_id)
+							.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+					Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
+				}
+			}
+			Ok(().into())
+		}
 	}
 }
 
@@ -484,6 +518,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
+		// Update the lookup table
+		BroadcastIdAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
 
 		// Seed based on the input data of the extrinsic
 		let seed = (attempt_id, unsigned_tx.clone()).encode();
