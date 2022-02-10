@@ -355,8 +355,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 
 
 
-                                // If we are Backup, Validator or outgoing, we need to send a heartbeat
-                                // we send it in the middle of the online interval (so any node sync issues don't
+                                // All nodes must send a heartbeat regardless of their validator status (at least for now).
+                                // We send it in the middle of the online interval (so any node sync issues don't
                                 // cause issues (if we tried to send on one of the interval boundaries)
                                 if (current_block_header.number + (state_chain_client.heartbeat_block_interval / 2))
                                     % blocks_per_heartbeat
