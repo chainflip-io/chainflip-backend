@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use cf_chains::{ApiCall, Chain, ChainApi, ChainCrypto};
+use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
@@ -566,7 +566,7 @@ impl<R> Default for AsyncResult<R> {
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
-pub trait Broadcaster<Api: ChainApi> {
+pub trait Broadcaster<Api: ChainAbi> {
 	/// Supported api calls for this chain.
 	type ApiCall: ApiCall<Api>;
 

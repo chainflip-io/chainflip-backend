@@ -12,7 +12,7 @@ use crate::{
 };
 use cf_chains::{
 	eth::{self, api::EthereumApi},
-	ApiCall, ChainApi, Ethereum, TransactionBuilder,
+	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
@@ -268,7 +268,7 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
-	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainApi>::UnsignedTransaction {
+	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::UnsignedTransaction {
 		let data = signed_call.encoded();
 		match signed_call {
 			EthereumApi::SetAggKeyWithAggKey(_) => eth::UnsignedTransaction {

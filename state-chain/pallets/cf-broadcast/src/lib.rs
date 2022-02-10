@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{ApiCall, ChainApi, ChainCrypto, TransactionBuilder};
+use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{offline_conditions::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Twox64Concat};
@@ -48,18 +48,18 @@ pub mod pallet {
 
 	/// Type alias for the instance's configured SignedTransaction.
 	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainApi>::SignedTransaction;
+		<<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
 
 	/// Type alias for the instance's configured UnsignedTransaction.
 	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainApi>::UnsignedTransaction;
+		<<T as Config<I>>::TargetChain as ChainAbi>::UnsignedTransaction;
 
 	/// Type alias for the instance's configured TransactionHash.
 	pub type TransactionHashFor<T, I> =
 		<<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 
 	/// Type alias for the instance's configured SignerId.
-	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainApi>::SignerCredential;
+	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
 
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -131,7 +131,7 @@ pub mod pallet {
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
 
 		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: ChainApi;
+		type TargetChain: ChainAbi;
 
 		/// TODO: doc
 		type ApiCall: ApiCall<Self::TargetChain>;

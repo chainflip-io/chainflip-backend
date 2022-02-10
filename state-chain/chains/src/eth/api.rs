@@ -13,7 +13,7 @@ pub enum EthereumApi {
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 }
 
-impl ChainApi for Ethereum {
+impl ChainAbi for Ethereum {
 	type UnsignedTransaction = super::UnsignedTransaction;
 	type SignedTransaction = super::RawSignedTransaction;
 	type SignerCredential = super::Address;
@@ -39,7 +39,7 @@ impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 
 impl RegisterClaim<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: <Ethereum as ChainApi>::Nonce,
+		nonce: <Ethereum as ChainAbi>::Nonce,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
@@ -61,7 +61,7 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: <Ethereum as ChainApi>::Nonce,
+		nonce: <Ethereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
 	) -> Self {
@@ -108,7 +108,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 		}
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainApi>::SignedTransaction {
+	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.abi_encoded(),
 			EthereumApi::RegisterClaim(call) => call.abi_encoded(),
@@ -129,7 +129,7 @@ macro_rules! impl_api_calls {
                     self.signed(signature)
                 }
 
-                fn encoded(&self) -> <Ethereum as ChainApi>::SignedTransaction {
+                fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
                     self.abi_encoded()
                 }
             }

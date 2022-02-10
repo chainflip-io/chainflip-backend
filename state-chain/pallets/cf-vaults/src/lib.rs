@@ -4,7 +4,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainApi, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainAbi, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider,
@@ -257,7 +257,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The chain that managed by this vault must implement the api types.
-		type Chain: ChainApi<Nonce = cf_traits::Nonce>;
+		type Chain: ChainAbi<Nonce = cf_traits::Nonce>;
 
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
