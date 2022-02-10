@@ -6,9 +6,12 @@ use frame_support::{
 };
 
 use cf_traits::{
-	mocks::chainflip_account::MockChainflipAccount, AuctionError, AuctionResult, Bid,
-	BidderProvider, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator,
-	VaultRotator,
+	mocks::{
+		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo,
+	},
+	AuctionError, AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount,
+	ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -22,14 +25,14 @@ use std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-pub type Amount = u64;
+pub type Amount = u128;
 pub type ValidatorId = u64;
 
 thread_local! {
 	pub static OLD_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
-	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
+	pub static MIN_BID: RefCell<Amount> = RefCell::new(0);
+	pub static BIDDERS: RefCell<Vec<(u64, Amount)>> = RefCell::new(vec![]);
 }
 
 construct_runtime!(
@@ -234,16 +237,25 @@ parameter_types! {
 	};
 }
 
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+	type Call = Call;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
+}
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
-	type Amount = Amount;
 	type Auctioneer = MockAuctioneer;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type VaultRotator = MockVaultRotator;
 	type ValidatorQualification = MockQualifyValidator;
+	type ChainflipAccount = MockChainflipAccount;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -266,7 +278,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				.map(|&i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},
-		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0, bond: MINIMUM_ACTIVE_BID_AT_GENESIS },
+		validator_pallet: ValidatorPalletConfig {
+			blocks_per_epoch: 0,
+			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
@@ -294,7 +309,7 @@ pub fn outgoing_validators() -> Vec<u64> {
 		.collect()
 }
 
-pub fn min_bid() -> u64 {
+pub fn min_bid() -> Amount {
 	MIN_BID.with(|l| *l.borrow())
 }
 

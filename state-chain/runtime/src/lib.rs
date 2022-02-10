@@ -152,7 +152,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type Amount = FlipBalance;
 	type Auctioneer = Auction;
 	type ValidatorQualification = (
 		Online,
@@ -164,6 +163,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type VaultRotator = pallet_cf_vaults::Pallet<Self>;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 }
 
 impl pallet_cf_environment::Config for Runtime {

@@ -25,9 +25,7 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::traits::{
-	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
-};
+use sp_runtime::traits::{BlockNumberProvider, Convert, One, Saturating, Zero};
 use sp_std::prelude::*;
 
 pub mod releases {
@@ -60,8 +58,9 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
-type RotationStatusOf<T> =
-	RotationStatus<AuctionResult<<T as frame_system::Config>::AccountId, <T as Config>::Amount>>;
+type RotationStatusOf<T> = RotationStatus<
+	AuctionResult<<T as frame_system::Config>::AccountId, <T as cf_traits::Chainflip>::Amount>,
+>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum RotationStatus<T> {
@@ -78,10 +77,12 @@ impl<T> Default for RotationStatus<T> {
 	}
 }
 
+type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::VaultRotator;
+	use cf_traits::{ChainflipAccount, ChainflipAccountState, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -94,14 +95,15 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
-		+ pallet_session::Config<ValidatorId = <Self as frame_system::Config>::AccountId>
+		+ cf_traits::Chainflip
+		+ pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<
-			ValidatorId = Self::ValidatorId,
+			ValidatorId = ValidatorIdOf<Self>,
 			Amount = Self::Amount,
 		>;
 
@@ -112,23 +114,17 @@ pub mod pallet {
 		/// Benchmark stuff
 		type ValidatorWeightInfo: WeightInfo;
 
-		/// An amount
-		type Amount: Parameter
-			+ Default
-			+ Eq
-			+ Ord
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ AtLeast32BitUnsigned;
-
 		/// An auction type
-		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auctioneer: Auctioneer<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
 
 		/// The lifecycle of a vault rotation
-		type VaultRotator: VaultRotator<ValidatorId = Self::ValidatorId>;
+		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Qualify a validator
-		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		type ValidatorQualification: QualifyValidator<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// For looking up Chainflip Account data.
+		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -149,7 +145,7 @@ pub mod pallet {
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
-		CFEVersionUpdated(T::ValidatorId, Version, Version),
+		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
 		/// A validator has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
@@ -414,7 +410,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id: T::ValidatorId = account_id;
+			let validator_id: ValidatorIdOf<T> = account_id;
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
@@ -452,7 +448,7 @@ pub mod pallet {
 	/// Active validator lookup
 	#[pallet::storage]
 	#[pallet::getter(fn validator_lookup)]
-	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
+	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, ()>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -462,7 +458,7 @@ pub mod pallet {
 	/// A list of the current validators
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+	pub type Validators<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// The current bond
 	#[pallet::storage]
@@ -488,7 +484,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validator_cfe_version)]
 	pub type ValidatorCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -507,24 +503,22 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 
-			let genesis_auction_result = AuctionResult {
-				winners: <pallet_session::Pallet<T>>::validators(),
-				minimum_active_bid: self.bond,
-			};
+			for validator_id in &genesis_validators {
+				T::ChainflipAccount::update_state(
+					&(validator_id.clone()).into(),
+					ChainflipAccountState::Validator,
+				)
+			}
 
-			T::Auctioneer::update_validator_status(genesis_auction_result.clone());
-
-			Pallet::<T>::start_new_epoch(
-				&genesis_auction_result.winners,
-				genesis_auction_result.minimum_active_bid,
-			);
+			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
 	}
 }
 
 impl<T: Config> EpochInfo for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
@@ -565,7 +559,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(new_validators: &[T::ValidatorId], new_bond: T::Amount) {
+	fn start_new_epoch(new_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
 		let old_validators = Validators::<T>::get();
 		// Update state of current validators
 		Validators::<T>::set(new_validators.to_vec());
@@ -595,9 +589,9 @@ impl<T: Config> Pallet<T> {
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
-impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
+impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// If we have a set of confirmed validators we roll them in over two blocks
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match RotationPhase::<T>::get() {
 			RotationStatus::VaultsRotated(auction_result) => Some(auction_result.winners),
 			_ => None,
@@ -606,7 +600,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 
 	/// We provide an implementation for this as we already have a set of validators with keys at
 	/// genesis
-	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		None
 	}
 
@@ -690,7 +684,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 pub struct PeerMapping<T>(PhantomData<T>);
 
 impl<T: Config> QualifyValidator for PeerMapping<T> {
-	type ValidatorId = T::ValidatorId;
+	type ValidatorId = ValidatorIdOf<T>;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
@@ -698,7 +692,7 @@ impl<T: Config> QualifyValidator for PeerMapping<T> {
 }
 
 impl<T: Config> VaultRotationHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+	type ValidatorId = ValidatorIdOf<T>;
 	// The vault rotation has aborted, we reset the ongoing rotation
 	fn vault_rotation_aborted() {
 		// Quietly check state and reset

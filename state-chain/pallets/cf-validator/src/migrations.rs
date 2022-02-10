@@ -18,7 +18,7 @@ pub(crate) mod v1 {
 
 	// Retrieve from storage AuctionResult as defined in v0 of the auction pallet
 	fn get_v0_auction_result<T: Config>(
-	) -> Option<v0_types::AuctionResult<T::ValidatorId, T::Amount>> {
+	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
 		get_storage_value(b"Auction", b"LastAuctionResult", b"")
 	}
 
