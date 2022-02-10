@@ -4,10 +4,10 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainApi, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider, ThresholdSigner,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider,
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{
@@ -241,6 +241,7 @@ pub mod releases {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::Saturating;
 
@@ -255,22 +256,20 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The chain that managed by this vault.
-		/// TODO: Remove the constraint on AggKey, currently required for compatibility with the
-		/// `ThresholdSigner`.
-		type Chain: Chain + ChainCrypto;
+		/// The chain that managed by this vault must implement the api types.
+		type Chain: ChainApi<Nonce = cf_traits::Nonce>;
+
+		/// The supported api calls for the chain.
+		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
+
+		/// A broadcaster for the target chain.
+		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
 		/// Rotation handler.
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
-
-		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self::Chain>;
-
-		/// The SetAggKeyWithAggKey transaction for this chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -645,13 +644,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 		KeygenResolutionPendingSince::<T, I>::kill();
 
-		T::ThresholdSigner::request_signature_with_callback(
-			T::SetAggKeyWithAggKey::new_unsigned(
+		T::Broadcaster::threshold_sign_and_broadcast(
+			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 				<Self as NonceProvider<Ethereum>>::next_nonce(),
 				new_public_key,
-			)
-			.to_payload(),
-			|_id| todo!("broadcast the transaction."),
+			),
 		);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,

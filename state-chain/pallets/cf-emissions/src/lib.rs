@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::eth::{update_flip_supply::UpdateFlipSupply, ChainflipContractCall};
+use cf_chains::{ApiCall, UpdateFlipSupply};
 use cf_traits::{NonceProvider, ThresholdSigner};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -31,7 +31,7 @@ use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, UniqueSaturatedInto, Zero},
 	SaturatedConversion,
 };
 
@@ -62,8 +62,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>
-			+ Into<cf_chains::eth::Uint>;
+			+ UniqueSaturatedFrom<Self::BlockNumber>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -80,6 +79,8 @@ pub mod pallet {
 			Balance = Self::FlipBalance,
 			Surplus = Self::Surplus,
 		>;
+
+		type UpdateFlipSupply: UpdateFlipSupply<Ethereum>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -310,13 +311,14 @@ impl<T: Config> Pallet<T> {
 		let block_number: u32 = block_number.saturated_into();
 
 		// Emit a threshold signature request.
+		// TODO: See if we can replace an old request if there is one.
 		T::ThresholdSigner::request_signature_with_callback(
-			UpdateFlipSupply::new_unsigned(
-				T::NonceProvider::next_nonce(),
-				total_supply,
-				block_number,
+			T::UpdateFlipSupply::new_unsigned(
+				T::NonceProvider::next_nonce().unique_saturated_into(),
+				total_supply.unique_saturated_into(),
+				block_number.into(),
 			)
-			.signing_payload(),
+			.threshold_signature_payload(),
 			|_id| todo!("broadcast the transaction"),
 		);
 	}

@@ -14,7 +14,7 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::eth::{register_claim::RegisterClaim, ChainflipContractCall, Uint};
+use cf_chains::{ApiCall, RegisterClaim};
 use cf_traits::{Bid, BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
 use core::time::Duration;
 use frame_support::{
@@ -28,7 +28,7 @@ pub use pallet::*;
 use sp_std::prelude::*;
 
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
 	DispatchError,
 };
 
@@ -38,7 +38,7 @@ const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::Ethereum;
+	use cf_chains::{ApiCall, Ethereum};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -61,7 +61,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The type containing all calls that are dispatchable from the threshold source.
-		type ThresholdCallable: From<Call<Self>>; // + Member + Parameter;
+		type ThresholdCallable: From<Call<Self>>;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
@@ -74,8 +74,8 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
-			+ From<u128>
-			+ Into<Uint>;
+			+ Into<u128>
+			+ From<u128>;
 
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
@@ -91,6 +91,9 @@ pub mod pallet {
 
 		/// Ensure that only threshold signature consensus can post a signature.
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+
+		/// The implementation of the register claim transaction.
+		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -113,7 +116,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type PendingClaims<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, RegisterClaim, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
 
 	#[pallet::storage]
 	pub(super) type WithdrawalAddresses<T: Config> =
@@ -332,7 +335,7 @@ pub mod pallet {
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
 			ensure!(
-				claimed_amount == claim_details.amount.low_u128().unique_saturated_into(),
+				claimed_amount == claim_details.amount().into(),
 				Error::<T>::InvalidClaimDetails
 			);
 
@@ -395,18 +398,18 @@ pub mod pallet {
 					Error::<T>::SignatureNotReady
 				})?;
 
-			let mut claim_details =
-				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+			let claim_details_signed = PendingClaims::<T>::get(&account_id)
+				.ok_or(Error::<T>::NoPendingClaim)?
+				.signed(&signature);
 
 			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id.clone(),
-				claim_details.abi_encode_with_signature(&signature),
+				claim_details_signed.encoded(),
 			));
 
 			// Store the signature.
-			claim_details.sig_data.insert_signature(&signature);
-			PendingClaims::<T>::insert(&account_id, &claim_details);
+			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 
 			Ok(().into())
 		}
@@ -609,21 +612,22 @@ impl<T: Config> Pallet<T> {
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
-		let transaction = RegisterClaim::new_unsigned(
+		let call = T::RegisterClaim::new_unsigned(
 			T::NonceProvider::next_nonce(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
-			amount,
+			amount.into(),
 			&address,
 			expiry.as_secs(),
 		);
 
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_signature_with_callback(transaction.signing_payload(), |id| {
-			Call::<T>::post_claim_signature(account_id.clone(), id).into()
-		});
+		T::ThresholdSigner::request_signature_with_callback(
+			call.threshold_signature_payload(),
+			|id| Call::<T>::post_claim_signature(account_id.clone(), id).into(),
+		);
 
 		// Store the claim params for later.
-		PendingClaims::<T>::insert(account_id, transaction);
+		PendingClaims::<T>::insert(account_id, call);
 
 		Ok(())
 	}
@@ -711,7 +715,7 @@ impl<T: Config> Pallet<T> {
 
 		for (_, account_id) in to_expire {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
-				let claim_amount = pending_claim.amount.low_u128().into();
+				let claim_amount = pending_claim.amount().into();
 				// Notify that the claim has expired.
 				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
 

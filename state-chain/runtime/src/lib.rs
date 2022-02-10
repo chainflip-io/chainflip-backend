@@ -170,12 +170,12 @@ parameter_types! {
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Chain = Ethereum;
+	type ApiCall = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
 	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
-	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
-	type SetAggKeyWithAggKey = eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -359,18 +359,19 @@ parameter_types! {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Balance = FlipBalance;
+	type ThresholdCallable = Call;
 	type StakerId = AccountId;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type Balance = FlipBalance;
 	type Flip = Flip;
 	type NonceProvider = EthereumVault;
 	type ThresholdSigner = EthereumThresholdSigner;
-	type ThresholdCallable = Call;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
+	type RegisterClaim = eth::api::EthereumApi;
 	type TimeSource = Timestamp;
 	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -388,6 +389,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type UpdateFlipSupply = eth::api::EthereumApi;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
 	type ThresholdSigner = EthereumThresholdSigner;
@@ -465,8 +467,11 @@ parameter_types! {
 
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Call = Call;
 	type TargetChain = cf_chains::Ethereum;
-	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type ApiCall = eth::api::EthereumApi;
+	type ThresholdSigner = EthereumThresholdSigner;
+	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =
