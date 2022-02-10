@@ -215,7 +215,8 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders, those stakers that are not retired
+	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
+	/// greater than zero
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
