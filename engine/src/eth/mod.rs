@@ -1032,32 +1032,58 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // do we need to test event_stream
-    // #[tokio::test]
-    // async fn empty_inners_return_none() {
-    //     let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = BlockType>>> =
-    //         Box::pin(stream::empty());
+    #[tokio::test]
+    async fn merged_stream_handles_broken_stream() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
 
-    //     let empty_block_headerable_http: Pin<Box<dyn Stream<Item = BlockType>>> =
-    //         Box::pin(stream::empty());
+        // websockets is down :(
+        let safe_ws_log_stream = Box::pin(stream::empty());
+        // http is working
+        let safe_http_log_stream = Box::pin(stream::iter([
+            key_change(8),
+            key_change(10),
+            key_change(12),
+        ]));
 
-    //     let deployed_address = H160::default();
-    //     // use concrete type for tests
-    //     let key_manager = KeyManager::new(deployed_address).unwrap();
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
 
-    //     let mock_eth_http_rpc = MockEthHttpRpc::new();
+        assert_eq!(stream.next().await.unwrap(), key_change(8).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(10).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(12).unwrap());
+        assert!(stream.next().await.is_none());
+    }
 
-    //     let mock_eth_ws_rpc = MockEthWsRpc::new();
+    #[tokio::test]
+    async fn merged_stream_handles_behind_stream() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
 
-    //     let from_block = 20;
+        let safe_ws_log_stream = Box::pin(stream::iter([
+            key_change(10),
+            key_change(12),
+            key_change(14),
+        ]));
+        // is 2 blocks behind the ws stream
+        let safe_http_log_stream = Box::pin(stream::iter([
+            key_change(8),
+            key_change(10),
+            key_change(12),
+        ]));
 
-    //     let logger = new_test_logger();
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
 
-    //     let stream = key_manager
-    //         .event_stream(&mock_eth_http_rpc, &mock_eth_ws_rpc, from_block, &logger)
-    //         .await
-    //         .unwrap();
-    // }
+        assert_eq!(stream.next().await.unwrap(), key_change(10).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(12).unwrap());
+        assert_eq!(stream.next().await.unwrap(), key_change(14).unwrap());
+        assert!(stream.next().await.is_none());
+    }
 }
 
 #[cfg(test)]
