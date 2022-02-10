@@ -35,6 +35,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
+use std::collections::HashMap;
 use std::fmt;
 use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc};
 use web3::{
@@ -736,12 +737,14 @@ pub trait EthObserver {
                 >,
             >,
             last_yielded_block_number: u64,
+            txs_in_current_block: HashMap<(H256, U256), ()>,
             logger: slog::Logger,
         }
 
         let init_data = StreamState::<Self::EventParameters> {
             merged_stream,
             last_yielded_block_number: 0,
+            txs_in_current_block: HashMap::new(),
             logger,
         };
 
@@ -754,30 +757,49 @@ pub trait EthObserver {
                 if let Some((current_item, protocol)) = state.merged_stream.next().await {
                     let current_item = current_item.unwrap();
                     let current_item_block_number = current_item.block_number;
-
-                    // we can go backwards in time, because the ws can be in front of the http
-                    // so we can peal off like:
-                    // ws11, http9, ws12, http10, and from the view of this method
-                    // we seem to go 11 -> 9.
+                    let current_item_tx_hash = current_item.tx_hash;
+                    let current_item_log_index = current_item.log_index;
 
                     println!("Current item block number: {}", current_item_block_number);
                     if (current_item_block_number > state.last_yielded_block_number)
-
                         // first iteration
                         || state.last_yielded_block_number == 0
                     {
-                        // we want to yield a block
+                        // we've progressed, so we can clear our log cache for the previous block
+                        state.txs_in_current_block = HashMap::new();
 
                         slog::info!(
                             state.logger,
-                            "Processing ETH block {} from {} stream",
-                            current_item_block_number,
+                            "Processing ETH log {} from {} stream",
+                            current_item,
                             protocol
                         );
 
                         state.last_yielded_block_number = current_item_block_number;
+                        state
+                            .txs_in_current_block
+                            .insert((current_item_tx_hash, current_item_log_index), ());
                         break Some((current_item, state));
+                    } else if current_item_block_number == state.last_yielded_block_number {
+                        // we want to check if we've already returned this log
+                        let key_already_existed = state
+                            .txs_in_current_block
+                            .insert((current_item_tx_hash, current_item_log_index), ())
+                            .is_some();
+
+                        // if the key already existed, we have already emitted it
+                        if !key_already_existed {
+                            break Some((current_item, state));
+                        }
                     } else {
+                        // discard anything that's less than the last yielded block number
+                        // since we've already returned anything we need to from those logs
+                        slog::debug!(
+                            state.logger,
+                            "Already returned logs from this block number. Discarding ETH log {} from {} stream",
+                            current_item,
+                            protocol
+                        );
                         continue;
                     }
                 } else {
