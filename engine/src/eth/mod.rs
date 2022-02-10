@@ -657,6 +657,7 @@ pub trait EthObserver {
         EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
         EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
     {
+        println!("Running event stream");
         let deployed_address = self.get_deployed_address();
         slog::info!(
             logger,
@@ -745,13 +746,23 @@ pub trait EthObserver {
         };
 
         let result = Box::pin(stream::unfold(init_data, move |mut state| async move {
+            // we can get multiple events for the same block number. So we cannot use block number here
+            // to determine if we have returned or not.
+            // Instead we have to do something a little more sophisticated, tracking hashes for events
+            // and clearing the hash cache as we progress for each block
             loop {
                 if let Some((current_item, protocol)) = state.merged_stream.next().await {
                     let current_item = current_item.unwrap();
                     let current_item_block_number = current_item.block_number;
 
+                    // we can go backwards in time, because the ws can be in front of the http
+                    // so we can peal off like:
+                    // ws11, http9, ws12, http10, and from the view of this method
+                    // we seem to go 11 -> 9.
+
                     println!("Current item block number: {}", current_item_block_number);
-                    if (current_item_block_number == state.last_yielded_block_number + 1)
+                    if (current_item_block_number > state.last_yielded_block_number)
+
                         // first iteration
                         || state.last_yielded_block_number == 0
                     {
@@ -927,8 +938,6 @@ mod merged_stream_tests {
 
     use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
-    use super::mocks::MockEthHttpRpc;
-    use super::mocks::MockEthWsRpc;
 
     use super::key_manager::KeyManager;
 
@@ -941,6 +950,7 @@ mod merged_stream_tests {
     fn key_change(block_number: u64) -> Result<EventWithCommon<KeyManagerEvent>> {
         Ok(EventWithCommon::<KeyManagerEvent> {
             tx_hash: Default::default(),
+            log_index: U256::from(0),
             block_number,
             event_parameters: KeyManagerEvent::KeyChange {
                 signed: true,
@@ -1000,14 +1010,32 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
-    async fn empty_inners_return_none() {
-        let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = BlockType>>> =
-            Box::pin(stream::empty());
+    // do we need to test event_stream
+    // #[tokio::test]
+    // async fn empty_inners_return_none() {
+    //     let empty_block_headerable_ws: Pin<Box<dyn Stream<Item = BlockType>>> =
+    //         Box::pin(stream::empty());
 
-        let empty_block_headerable_http: Pin<Box<dyn Stream<Item = BlockType>>> =
-            Box::pin(stream::empty());
-    }
+    //     let empty_block_headerable_http: Pin<Box<dyn Stream<Item = BlockType>>> =
+    //         Box::pin(stream::empty());
+
+    //     let deployed_address = H160::default();
+    //     // use concrete type for tests
+    //     let key_manager = KeyManager::new(deployed_address).unwrap();
+
+    //     let mock_eth_http_rpc = MockEthHttpRpc::new();
+
+    //     let mock_eth_ws_rpc = MockEthWsRpc::new();
+
+    //     let from_block = 20;
+
+    //     let logger = new_test_logger();
+
+    //     let stream = key_manager
+    //         .event_stream(&mock_eth_http_rpc, &mock_eth_ws_rpc, from_block, &logger)
+    //         .await
+    //         .unwrap();
+    // }
 }
 
 #[cfg(test)]
