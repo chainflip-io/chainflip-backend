@@ -27,6 +27,7 @@ benchmarks_instance_pallet! {
 	transaction_ready_for_transmission {} : {}
 	transmission_success {} : {}
 	transmission_failure {} : {}
+	on_signature_ready {} : {}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

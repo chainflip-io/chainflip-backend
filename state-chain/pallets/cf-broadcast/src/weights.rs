@@ -33,6 +33,7 @@ pub trait WeightInfo {
 	fn transaction_ready_for_transmission() -> Weight;
 	fn transmission_success() -> Weight;
 	fn transmission_failure() -> Weight;
+	fn on_signature_ready() -> Weight;
 }
 
 /// Weights for pallet_cf_broadcast using the Substrate node and recommended hardware.
@@ -53,6 +54,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn transmission_failure() -> Weight {
 		(1_000_000 as Weight)
 	}
+	fn on_signature_ready() -> Weight {
+		(1_000_000 as Weight)
+	}
 }
 
 // For backwards compatibility and tests
@@ -70,6 +74,9 @@ impl WeightInfo for () {
 		(1_000_000 as Weight)
 	}
 	fn transmission_failure() -> Weight {
+		(1_000_000 as Weight)
+	}
+	fn on_signature_ready() -> Weight {
 		(1_000_000 as Weight)
 	}
 }

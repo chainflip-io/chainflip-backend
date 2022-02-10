@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::{ApiCall, Chain, ChainApi, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
@@ -337,6 +337,7 @@ pub trait EmissionsTrigger {
 pub type Nonce = u64;
 
 /// Provides a unqiue nonce for some [Chain].
+/// TODO: Implement for a generic nonce type via ChainApi.
 pub trait NonceProvider<C: Chain> {
 	/// Get the next nonce.
 	fn next_nonce() -> Nonce;
@@ -517,9 +518,12 @@ where
 	/// Request a signature and register a callback for when the signature is available.
 	///
 	/// Since the callback is registered immediately, it should never fail.
+	///
+	/// Note that the `callback_generator` closure is *not* the callback. It is what *generates*
+	/// the callback based on the request id.
 	fn request_signature_with_callback(
 		payload: C::Payload,
-		callback_generator: impl Fn(Self::RequestId) -> Self::Callback,
+		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
 	) -> Self::RequestId {
 		let id = Self::request_signature(payload);
 		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
@@ -555,6 +559,16 @@ impl<R> Default for AsyncResult<R> {
 	fn default() -> Self {
 		Self::Void
 	}
+}
+
+/// Something that is capable of encoding and broadcasting native blockchain api calls to external
+/// chains.
+pub trait Broadcaster<Api: ChainApi> {
+	/// Supported api calls for this chain.
+	type ApiCall: ApiCall<Api>;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call.
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
 }
 
 pub mod offline_conditions {

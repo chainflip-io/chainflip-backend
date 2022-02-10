@@ -12,10 +12,10 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::Chain;
-use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
+use cf_chains::{ApiCall, ChainApi, ChainCrypto, TransactionBuilder};
+use cf_traits::{offline_conditions::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Parameter, Twox64Concat};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Twox64Concat};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{marker::PhantomData, prelude::*};
@@ -27,34 +27,6 @@ pub enum TransmissionFailure {
 	TransactionRejected,
 	/// The transaction failed for some unknown reason and we don't know how to recover.
 	TransactionFailed,
-}
-
-/// The [BroadcastConfig] should contain all the state required to construct and process
-/// transactions for a given chain.
-pub trait BroadcastConfig {
-	/// A chain identifier.
-	type Chain: Chain;
-	/// An unsigned version of the transaction that needs to signed before it can be broadcast.
-	type UnsignedTransaction: Parameter;
-	/// A transaction that has been signed by some account and is ready to be broadcast.
-	type SignedTransaction: Parameter;
-	/// The transaction hash type used to uniquely identify signed transactions.
-	type TransactionHash: Parameter;
-	/// The signer id or credential used to verify a signed message. Usually a public key or
-	/// address.
-	type SignerId: Parameter;
-
-	/// Verify the signed transaction when it is submitted to the state chain by the nominated
-	/// signer.
-	///
-	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the
-	/// validaty of the returned transaction for this `Chain` and can include verification of the
-	/// byte encoding, the transaction content, metadata, signer idenity, etc.
-	fn verify_transaction(
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
-		signer: &Self::SignerId,
-	) -> Option<()>;
 }
 
 /// A unique id for each broadcast attempt.
@@ -69,23 +41,25 @@ pub type AttemptCount = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
+	use frame_support::{
+		dispatch::UnfilteredDispatchable, ensure, pallet_prelude::*, traits::EnsureOrigin,
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured SignedTransaction.
 	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::SignedTransaction;
+		<<T as Config<I>>::TargetChain as ChainApi>::SignedTransaction;
 
 	/// Type alias for the instance's configured UnsignedTransaction.
 	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::UnsignedTransaction;
+		<<T as Config<I>>::TargetChain as ChainApi>::UnsignedTransaction;
 
 	/// Type alias for the instance's configured TransactionHash.
 	pub type TransactionHashFor<T, I> =
-		<<T as Config<I>>::BroadcastConfig as BroadcastConfig>::TransactionHash;
+		<<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 
 	/// Type alias for the instance's configured SignerId.
-	pub type SignerIdFor<T, I> = <<T as Config<I>>::BroadcastConfig as BroadcastConfig>::SignerId;
+	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainApi>::SignerCredential;
 
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -153,11 +127,23 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain;
+		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
+		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
 
-		/// The broadcast configuration for this instance.
-		type BroadcastConfig: BroadcastConfig<Chain = Self::TargetChain>;
+		/// A marker trait identifying the chain that we are broadcasting to.
+		type TargetChain: ChainApi;
+
+		/// TODO: doc
+		type ApiCall: ApiCall<Self::TargetChain>;
+
+		/// Builds the transaction according to the chain's environment settings.
+		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
+
+		/// TODO: doc
+		type ThresholdSigner: ThresholdSigner<
+			Self::TargetChain,
+			Callback = <Self as Config<I>>::Call,
+		>;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -255,6 +241,8 @@ pub mod pallet {
 		InvalidBroadcastAttemptId,
 		/// The transaction signer is not signer who was nominated.
 		InvalidSigner,
+		/// A threshold signature was expected but not available.
+		ThresholdSignatureUnavailable,
 	}
 
 	#[pallet::hooks]
@@ -362,12 +350,12 @@ pub mod pallet {
 
 			AwaitingTransactionSignature::<T, I>::remove(attempt_id);
 
-			if T::BroadcastConfig::verify_transaction(
+			if T::TargetChain::verify_signed_transaction(
 				&signing_attempt.unsigned_tx,
 				&signed_tx,
 				&signer_id,
 			)
-			.is_some()
+			.is_ok()
 			{
 				Self::deposit_event(Event::<T, I>::TransmissionRequest(
 					attempt_id,
@@ -391,6 +379,7 @@ pub mod pallet {
 					entries.push((BroadcastStage::Transmission, attempt_id))
 				});
 			} else {
+				log::warn!("Unable to verify tranaction signature for attempt {}", attempt_id);
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.into(),
@@ -470,10 +459,53 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// TODO - doc
+		///
+		/// ## Events
+		///
+		/// - TODO
+		///
+		/// ## Errors
+		///
+		/// - TODO
+		#[pallet::weight(T::WeightInfo::on_signature_ready())]
+		pub fn on_signature_ready(
+			origin: OriginFor<T>,
+			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
+			api_call: <T as Config<I>>::ApiCall,
+		) -> DispatchResultWithPostInfo {
+			let _ = T::EnsureThresholdSigned::ensure_origin(origin.clone())?;
+
+			let sig =
+				T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
+					log::error!(
+						"Signature not found for threshold request {:?}. Request status: {:?}",
+						threshold_request_id,
+						r
+					);
+					Error::<T, I>::ThresholdSignatureUnavailable
+				})?;
+
+			Call::<T, I>::start_broadcast(T::TransactionBuilder::build_transaction(
+				&api_call.signed(&sig),
+			))
+			.dispatch_bypass_filter(origin)?;
+
+			Ok(().into())
+		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
+	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
+		T::ThresholdSigner::request_signature_with_callback(
+			api_call.threshold_signature_payload(),
+			|id| Call::on_signature_ready(id, api_call).into(),
+		);
+	}
+
 	fn start_broadcast_attempt(
 		broadcast_id: BroadcastId,
 		attempt_count: AttemptCount,
@@ -559,5 +591,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			failed.attempt_count.wrapping_add(1),
 			failed.unsigned_tx,
 		);
+	}
+}
+
+impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
+	type ApiCall = T::ApiCall;
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+		Self::threshold_sign_and_broadcast(api_call)
 	}
 }

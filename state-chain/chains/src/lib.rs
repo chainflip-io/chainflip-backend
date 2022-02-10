@@ -67,11 +67,14 @@ pub trait ApiCall<Api: ChainApi>: Parameter {
 	fn encoded(&self) -> Vec<u8>;
 }
 
-pub trait TransactionBuilder<Api: ChainApi> {
-	type ApiCall: ApiCall<Api>;
-
+/// Responsible for converting an api call into a raw unsigned transaction.
+pub trait TransactionBuilder<Api, Call>
+where
+	Api: ChainApi,
+	Call: ApiCall<Api>,
+{
 	/// Construct the unsigned outbound transaction from the *signed* api call.
-	fn build_transaction(signed_call: Self::ApiCall) -> Api::UnsignedTransaction;
+	fn build_transaction(signed_call: &Call) -> Api::UnsignedTransaction;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
