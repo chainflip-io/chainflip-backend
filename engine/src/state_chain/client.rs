@@ -339,8 +339,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -472,8 +472,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Submit an unsigned extrinsic.
     pub async fn submit_unsigned_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -1078,7 +1078,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1111,7 +1111,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1147,7 +1147,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1211,7 +1211,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1246,7 +1246,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+            .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
             .await
             .unwrap_err();
 
@@ -1297,7 +1297,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+                .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
                 .await
         );
 
