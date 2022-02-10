@@ -123,10 +123,7 @@ impl Auctioneer for MockAuctioneer {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
-	where
-		Q: QualifyValidator<ValidatorId = Self::ValidatorId>,
-	{
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError> {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| match (*cell.borrow()).as_ref() {
 			Ok(a) => Ok((*a).clone()),
 			Err(e) => Err(*e),
@@ -254,7 +251,6 @@ impl Config for Test {
 	type Auctioneer = MockAuctioneer;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type VaultRotator = MockVaultRotator;
-	type ValidatorQualification = MockQualifyValidator;
 	type ChainflipAccount = MockChainflipAccount;
 }
 

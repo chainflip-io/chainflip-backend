@@ -210,21 +210,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
-	// Run some basic rules on what we consider as valid bidders
-	// At the moment this includes checking that their bid is more than 0, which
-	// shouldn't be possible and whether they have registered their session keys
-	// to be able to actual join the validating set.  If we manage to pass these tests
-	// we kill the last set of winners stored, set the bond to 0, store this set of
-	// bidders and change our state ready for an 'Auction' to be ran
-	fn resolve_auction<Q>() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>
-	where
-		Q: QualifyValidator<ValidatorId = T::ValidatorId>,
-	{
+	// Resolve an auction.  Bids are taken and are qualified. In doing so a `AuctionResult` is
+	// returned with the winners of the auction and the MAB.  Unsuccessful bids are grouped for
+	// potential backup validator candidates.  If we are in an emergency rotation then the strategy of grouping
+	// is modified to avoid a superminority of low collateralised nodes.
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Number one rule - If we have a bid at 0 then please leave
 		bids.retain(|(_, amount)| !amount.is_zero());
 		// Determine if this validator is qualified for bidding
-		bids.retain(|(validator_id, _)| Q::is_qualified(validator_id));
+		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
 		let number_of_bidders = bids.len() as u32;
 		let (min_number_of_validators, max_number_of_validators) =
 			ActiveValidatorSizeRange::<T>::get();

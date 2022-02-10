@@ -58,8 +58,8 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 }
 
 pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
-	let auction_result = <AuctionPallet as Auctioneer>::resolve_auction::<MockQualifyValidator>()
-		.expect("the auction should run");
+	let auction_result =
+		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
 
 	<AuctionPallet as Auctioneer>::update_validator_status(auction_result.clone());
 

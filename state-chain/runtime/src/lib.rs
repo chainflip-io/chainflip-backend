@@ -153,14 +153,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
-	type ValidatorQualification = (
-		Online,
-		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<
-			<Self as frame_system::Config>::AccountId,
-			pallet_session::Pallet<Self>,
-		>,
-	);
 	type VaultRotator = pallet_cf_vaults::Pallet<Self>;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;

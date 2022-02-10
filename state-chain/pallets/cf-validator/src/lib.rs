@@ -120,9 +120,6 @@ pub mod pallet {
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
-		/// Qualify a validator
-		type ValidatorQualification: QualifyValidator<ValidatorId = ValidatorIdOf<Self>>;
-
 		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 
@@ -187,9 +184,7 @@ pub mod pallet {
 						}
 					}
 				},
-				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction::<
-					T::ValidatorQualification,
-				>() {
+				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction() {
 					Ok(auction_result) => {
 						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
 						{
