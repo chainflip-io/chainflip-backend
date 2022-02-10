@@ -25,7 +25,9 @@ use web3::{
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
+use crate::constants::ETH_FALLING_BEHIND_MARGIN_BLOCKS;
 use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
+use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -217,8 +219,10 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc, EthH
 
                     // TOOD: Handle None on stream, and result event being an error
                     while let Some(event) = event_stream.next().await {
-                        slog::trace!(logger, "Observing ETH block: {}", event.block_number);
                         if let Some(window_to) = *task_end_at_block.lock().await {
+                            // TODO: Have the stream end when the safe head gets to the block number,
+                            // not just when we receive an event (which could be arbitrarily far in the future)
+                            // past our window_to
                             if event.block_number > window_to {
                                 slog::info!(
                                     logger,
@@ -737,6 +741,8 @@ pub trait EthObserver {
                 >,
             >,
             last_yielded_block_number: u64,
+            last_http_block_pulled: u64,
+            last_ws_block_pulled: u64,
             txs_in_current_block: HashMap<(H256, U256), ()>,
             logger: slog::Logger,
         }
@@ -744,77 +750,123 @@ pub trait EthObserver {
         let init_data = StreamState::<Self::EventParameters> {
             merged_stream,
             last_yielded_block_number: 0,
+            last_http_block_pulled: 0,
+            last_ws_block_pulled: 0,
             txs_in_current_block: HashMap::new(),
             logger,
         };
 
-        let result = Box::pin(stream::unfold(init_data, move |mut state| async move {
-            // we can get multiple events for the same block number. So we cannot use block number here
-            // to determine if we have returned or not.
-            // Instead we have to do something a little more sophisticated, tracking hashes for events
-            // and clearing the hash cache as we progress for each block
-            loop {
-                if let Some((current_item, protocol)) = state.merged_stream.next().await {
-                    let current_item = current_item.unwrap();
-                    let current_item_block_number = current_item.block_number;
-                    let current_item_tx_hash = current_item.tx_hash;
-                    let current_item_log_index = current_item.log_index;
+        Ok(Box::pin(stream::unfold(
+            init_data,
+            move |mut state| async move {
+                // we can get multiple events for the same block number. So we cannot use block number here
+                // to determine if we have returned or not.
+                // Instead we have to do something a little more sophisticated, tracking hashes for events
+                // and clearing the hash cache as we progress for each block
+                if let Some((yield_item, protocol, state)) = loop {
+                    if let Some((current_item, protocol)) = state.merged_stream.next().await {
+                        let current_item = current_item.unwrap();
+                        let current_item_block_number = current_item.block_number;
+                        let current_item_tx_hash = current_item.tx_hash;
+                        let current_item_log_index = current_item.log_index;
 
-                    println!("Current item block number: {}", current_item_block_number);
-                    if (current_item_block_number > state.last_yielded_block_number)
+                        // Log if one of the streams is behind
+                        match protocol {
+                            TranpsortProtocol::Http => {
+                                if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                                    < current_item_block_number
+                                {
+                                    slog::warn!(
+                                        state.logger,
+                                        #ETH_STREAM_BEHIND,
+                                        "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
+                                        current_item_block_number,
+                                        state.last_ws_block_pulled,
+                                    );
+                                }
+                                state.last_http_block_pulled = current_item_block_number
+                            }
+                            TranpsortProtocol::Ws => {
+                                if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                                    < current_item_block_number
+                                {
+                                    slog::warn!(
+                                        state.logger,
+                                        #ETH_STREAM_BEHIND,
+                                        "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
+                                        current_item_block_number,
+                                        state.last_http_block_pulled,
+                                    );
+                                }
+                                state.last_ws_block_pulled = current_item_block_number
+                            }
+                        };
+
+                        println!("Current item block number: {}", current_item_block_number);
+                        if (current_item_block_number > state.last_yielded_block_number)
                         // first iteration
                         || state.last_yielded_block_number == 0
-                    {
-                        // we've progressed, so we can clear our log cache for the previous block
-                        state.txs_in_current_block = HashMap::new();
+                        {
+                            // we've progressed, so we can clear our log cache for the previous block
+                            state.txs_in_current_block = HashMap::new();
 
-                        slog::info!(
-                            state.logger,
-                            "Processing ETH log {} from {} stream",
-                            current_item,
-                            protocol
-                        );
+                            state.last_yielded_block_number = current_item_block_number;
+                            state
+                                .txs_in_current_block
+                                .insert((current_item_tx_hash, current_item_log_index), ());
+                            break Some((current_item, protocol, state));
+                        } else if current_item_block_number == state.last_yielded_block_number {
+                            let log_already_yielded = state
+                                .txs_in_current_block
+                                .insert((current_item_tx_hash, current_item_log_index), ())
+                                .is_some();
 
-                        state.last_yielded_block_number = current_item_block_number;
-                        state
-                            .txs_in_current_block
-                            .insert((current_item_tx_hash, current_item_log_index), ());
-                        break Some((current_item, state));
-                    } else if current_item_block_number == state.last_yielded_block_number {
-                        // we want to check if we've already returned this log
-                        let key_already_existed = state
-                            .txs_in_current_block
-                            .insert((current_item_tx_hash, current_item_log_index), ())
-                            .is_some();
-
-                        // if the key already existed, we have already emitted it
-                        if !key_already_existed {
-                            slog::info!(
-                                state.logger,
-                                "Processing ETH log {} from {} stream",
-                                current_item,
-                                protocol
-                            );
-                            break Some((current_item, state));
-                        }
-                    } else {
-                        // discard anything that's less than the last yielded block number
-                        // since we've already returned anything we need to from those logs
-                        slog::debug!(
+                            // if the key already existed, we have already emitted it
+                            if !log_already_yielded {
+                                break Some((current_item, protocol, state));
+                            }
+                        } else {
+                            // discard anything that's less than the last yielded block number
+                            // since we've already returned anything we need to from those logs
+                            slog::debug!(
                             state.logger,
                             "Already returned logs from this block number. Discarding ETH log {} from {} stream",
                             current_item,
                             protocol
                         );
-                        continue;
+                            continue;
+                        }
+                    } else {
+                        break None;
                     }
+                } {
+                    // log with the right tag
+                    match protocol {
+                        TranpsortProtocol::Http => {
+                            slog::info!(
+                                state.logger,
+                                #ETH_HTTP_STREAM_RETURNED,
+                                "Processing ETH log {} from {} stream",
+                                yield_item,
+                                protocol
+                            );
+                        }
+                        TranpsortProtocol::Ws => {
+                            slog::info!(
+                                state.logger,
+                                #ETH_WS_STREAM_RETURNED,
+                                "Processing ETH log {} from {} stream",
+                                yield_item,
+                                protocol
+                            );
+                        }
+                    }
+                    Some((yield_item, state))
                 } else {
-                    break None;
+                    None
                 }
-            }
-        }));
-
-        return Ok(result);
+            },
+        )))
     }
 
     fn decode_log_closure(
@@ -962,7 +1014,11 @@ pub mod mocks {
 
 #[cfg(test)]
 mod merged_stream_tests {
+    use std::time::Duration;
+
     use crate::logging::test_utils::new_test_logger;
+    use crate::logging::test_utils::new_test_logger_with_tag_cache;
+    use crate::logging::ETH_WS_STREAM_RETURNED;
 
     use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
@@ -986,6 +1042,60 @@ mod merged_stream_tests {
                 new_key: ChainflipKey::default(),
             },
         })
+    }
+
+    // Generate a stream for each protocol, that, when selected upon, will return
+    // in the order the items are passed in
+    // This is useful to test more "real world" scenarios, as stream::iter will always
+    // immediately yield, therefore items will always be pealed off the streams
+    // alternatingly
+    fn interleaved_streams(
+        // contains the streams in the order they will return
+        items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, TranpsortProtocol)>,
+    ) -> (
+        // ws
+        impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
+        // http
+        impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
+    ) {
+        assert!(items.len() > 0, "should have at least one item");
+
+        const DELAY_DURATION_MILLIS: u64 = 10;
+
+        let mut protocol_last_returned = items.first().unwrap().1.clone();
+        let mut http_items = Vec::new();
+        let mut ws_items = Vec::new();
+        let mut total_delay_increment = 0;
+
+        for (item, protocol) in items {
+            // if we are returning the same, we can just go the next, since we are ordered
+            let delay = Duration::from_millis(if protocol == protocol_last_returned {
+                0
+            } else {
+                total_delay_increment = total_delay_increment + DELAY_DURATION_MILLIS;
+                total_delay_increment
+            });
+
+            match protocol {
+                TranpsortProtocol::Http => http_items.push((item, delay)),
+                TranpsortProtocol::Ws => ws_items.push((item, delay)),
+            };
+
+            protocol_last_returned = protocol;
+        }
+
+        let delayed_stream = |items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, Duration)>| {
+            let items = items.into_iter();
+            Box::pin(stream::unfold(items, |mut items| async move {
+                while let Some((i, d)) = items.next() {
+                    tokio::time::sleep(d).await;
+                    return Some((i, items));
+                }
+                None
+            }))
+        };
+
+        (delayed_stream(ws_items), delayed_stream(http_items))
     }
 
     #[tokio::test]
@@ -1117,6 +1227,58 @@ mod merged_stream_tests {
         assert_eq!(stream.next().await.unwrap(), key_change(10, 1).unwrap());
         assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
         assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn interleaved_streams_works_as_expected() {
+        let mut items = Vec::new();
+        // return
+        items.push((key_change(10, 0), TranpsortProtocol::Ws));
+        // return
+        items.push((key_change(11, 0), TranpsortProtocol::Ws));
+        // ignore
+        items.push((key_change(10, 0), TranpsortProtocol::Http));
+        // ignore
+        items.push((key_change(11, 0), TranpsortProtocol::Http));
+        // return
+        items.push((key_change(12, 0), TranpsortProtocol::Http));
+        // ignore
+        items.push((key_change(12, 0), TranpsortProtocol::Ws));
+        // return
+        items.push((key_change(13, 0), TranpsortProtocol::Http));
+        // ignore
+        items.push((key_change(13, 0), TranpsortProtocol::Ws));
+        // return
+        items.push((key_change(14, 0), TranpsortProtocol::Ws));
+
+        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let (ws_stream, http_stream) = interleaved_streams(items);
+
+        let key_manager = test_km_contract();
+        let mut merged_stream = key_manager
+            .merged_log_stream(Box::pin(ws_stream), Box::pin(http_stream), logger)
+            .await
+            .unwrap();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        tag_cache.clear();
+
+        merged_stream.next().await;
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
     }
 
     // TODO:
