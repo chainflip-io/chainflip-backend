@@ -95,7 +95,7 @@ where
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
-            let block_number = header.number.unwrap();
+            let block_number = header.number().unwrap();
             slog::debug!(logger, "Observing ETH block: `{}`", block_number);
             let eth_rpc = eth_rpc.clone();
             async move {

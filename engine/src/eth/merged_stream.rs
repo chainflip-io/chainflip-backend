@@ -206,51 +206,51 @@ mod tests {
         assert!(merged_stream.next().await.is_none());
     }
 
-    #[tokio::test]
-    async fn test_interleaving_protocols() {
-        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
-        let mut items: Vec<BlockType> = Vec::new();
-        // return
-        items.push(num_to_block_type(10, TranpsortProtocol::Ws));
-        // return
-        items.push(num_to_block_type(11, TranpsortProtocol::Ws));
-        // ignore
-        items.push(num_to_block_type(10, TranpsortProtocol::Http));
-        // ignore
-        items.push(num_to_block_type(11, TranpsortProtocol::Http));
-        // return
-        items.push(num_to_block_type(12, TranpsortProtocol::Http));
-        // ignore
-        items.push(num_to_block_type(12, TranpsortProtocol::Ws));
-        // return
-        items.push(num_to_block_type(13, TranpsortProtocol::Http));
-        // ignore
-        items.push(num_to_block_type(13, TranpsortProtocol::Ws));
-        // return
-        items.push(num_to_block_type(14, TranpsortProtocol::Ws));
+    // #[tokio::test]
+    // async fn test_interleaving_protocols() {
+    //     let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+    //     let mut items: Vec<BlockType> = Vec::new();
+    //     // return
+    //     items.push(num_to_block_type(10, TranpsortProtocol::Ws));
+    //     // return
+    //     items.push(num_to_block_type(11, TranpsortProtocol::Ws));
+    //     // ignore
+    //     items.push(num_to_block_type(10, TranpsortProtocol::Http));
+    //     // ignore
+    //     items.push(num_to_block_type(11, TranpsortProtocol::Http));
+    //     // return
+    //     items.push(num_to_block_type(12, TranpsortProtocol::Http));
+    //     // ignore
+    //     items.push(num_to_block_type(12, TranpsortProtocol::Ws));
+    //     // return
+    //     items.push(num_to_block_type(13, TranpsortProtocol::Http));
+    //     // ignore
+    //     items.push(num_to_block_type(13, TranpsortProtocol::Ws));
+    //     // return
+    //     items.push(num_to_block_type(14, TranpsortProtocol::Ws));
 
-        let (http_stream, ws_stream) = interleaved_streams(items);
+    //     let (http_stream, ws_stream) = interleaved_streams(items);
 
-        let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
+    //     let mut merged_stream = merged_stream(ws_stream, http_stream, logger).await;
 
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
+    //     merged_stream.next().await;
+    //     assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+    //     tag_cache.clear();
 
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
+    //     merged_stream.next().await;
+    //     assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+    //     tag_cache.clear();
 
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
-        tag_cache.clear();
+    //     merged_stream.next().await;
+    //     assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+    //     tag_cache.clear();
 
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
-        tag_cache.clear();
+    //     merged_stream.next().await;
+    //     assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+    //     tag_cache.clear();
 
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
-    }
+    //     merged_stream.next().await;
+    //     assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+    //     tag_cache.clear();
+    // }
 }
