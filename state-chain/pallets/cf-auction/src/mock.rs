@@ -153,6 +153,16 @@ impl HasPeerMapping for MockPeerMapping {
 	}
 }
 
+pub struct MockOffender;
+
+impl Offender for MockOffender {
+	type ValidatorId = ValidatorId;
+	fn is_offender(_validator_id: &Self::ValidatorId) -> bool {
+		false
+	}
+	fn forgive_all() {}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -168,6 +178,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type Offenders = MockOffender;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

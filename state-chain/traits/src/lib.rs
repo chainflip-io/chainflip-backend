@@ -619,3 +619,12 @@ pub trait QualifyValidator {
 	/// Is the validator qualified to be a validator and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
+
+/// Offenders are reported on `OfflineCondtions`
+pub trait Offender {
+	type ValidatorId;
+	/// Has the validator commited an offence?
+	fn is_offender(validator_id: &Self::ValidatorId) -> bool;
+	/// Everyone is forgiven
+	fn forgive_all();
+}

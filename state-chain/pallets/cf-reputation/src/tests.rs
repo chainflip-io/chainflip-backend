@@ -2,6 +2,7 @@ mod tests {
 	use crate::{mock::*, *};
 	use cf_traits::{
 		mocks::epoch_info::Mock, offline_conditions::*, EpochInfo, Heartbeat, NetworkState,
+		Offender,
 	};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::{BuildStorage, DispatchError::BadOrigin};
@@ -230,6 +231,21 @@ mod tests {
 				ReputationPallet::report(OfflineCondition::InvalidTransactionAuthored, &ALICE),
 				ReportError::UnknownValidator
 			);
+		});
+	}
+	#[test]
+	fn reporting_should_mark_as_offender() {
+		new_test_ext().execute_with(|| {
+			<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
+			assert_ok!(ReputationPallet::report(OfflineCondition::ParticipateKeygenFailed, &ALICE));
+			assert_eq!(
+				(),
+				ReputationPallet::offences(OfflineCondition::ParticipateKeygenFailed, ALICE)
+			);
+
+			assert!(KeygenFailedOffender::<Test>::is_offender(&ALICE));
+			KeygenFailedOffender::<Test>::forgive_all();
+			assert_eq!(false, KeygenFailedOffender::<Test>::is_offender(&ALICE));
 		});
 	}
 
