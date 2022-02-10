@@ -9,6 +9,7 @@ use std::{
 use anyhow::{Context, Result};
 use futures::TryStreamExt;
 use itertools::Itertools;
+use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
@@ -135,9 +136,10 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 )
             };
 
-            if Some(&(peer_id_from_node, port, ip_address))
-                != account_to_peer_mapping_on_chain.get(&state_chain_client.our_account_id)
-            {
+            let option_previous_address_on_chain =
+                account_to_peer_mapping_on_chain.get(&state_chain_client.our_account_id);
+
+            if Some(&(peer_id_from_node, port, ip_address)) != option_previous_address_on_chain {
                 slog::info!(
                     logger,
                     "Node's reported listening addresses: {}",
@@ -149,11 +151,20 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 );
                 slog::info!(
                     logger,
-                    "Registering node's peer_id {}, ip address, and port number [{}]:{}. This ip address is {}",
+                    "Registering node's peer_id {}, ip address, and port number [{}]:{}. This ip address is {}. {}.",
                     peer_id_from_node,
                     ip_address,
                     port,
-                    source
+                    source,
+                    lazy_format!(match (option_previous_address_on_chain) {
+                        Some(&(previous_peer_id, previous_port, previous_ip_address)) => (
+                            "Node was previously registered with peer_id {}, ip address, and port number [{}]:{}",
+                            previous_peer_id,
+                            previous_ip_address,
+                            previous_port
+                        ),
+                        None => ("Node previously did not have a registered address")
+                    })
                 );
                 state_chain_client
                     .submit_signed_extrinsic(
