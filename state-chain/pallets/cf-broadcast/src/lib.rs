@@ -488,18 +488,18 @@ pub mod pallet {
 		}
 
 		/// Nodes have witnessed that a signature was accepted on the target chain
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			msg_hash: PayloadFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 			if let Some(broadcast_id) = BroadcastIdHashLookup::<T, I>::take(msg_hash) {
-				if let Some(attempt_id) = BroadcastIdAttemptIdLookup::<T, I>::take(broadcast_id) {
-					let TransmissionAttempt::<T, I> { broadcast_id, .. } =
-						AwaitingTransmission::<T, I>::take(attempt_id)
-							.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
-					Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
+				match BroadcastIdAttemptIdLookup::<T, I>::take(broadcast_id) {
+					Some(attempt_id)
+						if AwaitingTransmission::<T, I>::take(attempt_id).is_some() =>
+						Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id)),
+					_ => (),
 				}
 			}
 			Ok(().into())
