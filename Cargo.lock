@@ -825,7 +825,6 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-online",
  "pallet-cf-reputation",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -918,7 +917,6 @@ dependencies = [
  "futures 0.3.17",
  "hex",
  "pallet-cf-environment",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -3054,6 +3052,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "insert-genesis-keyshare"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chainflip-engine",
+ "hex",
+ "rocksdb",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5044,24 +5052,6 @@ dependencies = [
  "frame-system",
  "log 0.4.14",
  "pallet-cf-online",
- "pallet-cf-validator",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-cf-rewards"
-version = "0.1.0"
-dependencies = [
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-cf-flip",
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
@@ -8601,7 +8591,6 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-online",
  "pallet-cf-reputation",
- "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",

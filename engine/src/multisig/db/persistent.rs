@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-const DB_SCHEMA_VERSION: u32 = 1;
+pub const DB_SCHEMA_VERSION: u32 = 1;
 
 /// The default schema version used if a database exists but no schema version is found
 const DEFAULT_DB_SCHEMA_VERSION: u32 = 0;
@@ -28,9 +28,9 @@ const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
-const DATA_COLUMN: &str = "data";
+pub const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
-const METADATA_COLUMN: &str = "metadata";
+pub const METADATA_COLUMN: &str = "metadata";
 // The default column that rust_rocksdb uses (we ignore)
 const DEFAULT_COLUMN_NAME: &str = "default";
 // KVDB_rocksdb (legacy) naming for the data column. Used for migration
@@ -130,26 +130,27 @@ impl PersistentKeyDB {
     }
 }
 
+/// Write the key_id & key_share pair to the db.
+pub fn update_key(db: &DB, key_id: &KeyId, key_share: Vec<u8>) -> Result<(), anyhow::Error> {
+    let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
+
+    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &key_share)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| {
+            format!(
+                "Could not write key share for key_id `{}` to database",
+                &key_id
+            )
+        })
+}
+
 impl KeyDB for PersistentKeyDB {
     fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo) {
         // TODO: this error should be handled better
         let keygen_result_info_encoded =
             bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
 
-        let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
-
-        self.db
-            .put_cf(
-                get_data_column_handle(&self.db),
-                key_id_with_prefix,
-                &keygen_result_info_encoded,
-            )
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Could not write key share for key_id `{}` to database",
-                    &key_id
-                )
-            });
+        update_key(&self.db, key_id, keygen_result_info_encoded).expect("Should update key");
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {

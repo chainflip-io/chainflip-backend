@@ -43,8 +43,8 @@ impl ChainflipKey {
         Ok(ChainflipKey {
             pub_key_x,
             pub_key_y_parity: match parity {
-                true => web3::types::U256::from_dec_str("1").unwrap(),
-                false => web3::types::U256::from_dec_str("0").unwrap(),
+                true => web3::types::U256::from(1),
+                false => web3::types::U256::from(0),
             },
         })
     }

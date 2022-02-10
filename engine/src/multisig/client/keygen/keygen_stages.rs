@@ -109,7 +109,7 @@ derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
 
 /// Check if the public key's x coordinate is smaller than "half secp256k1's order",
 /// which is a requirement imposed by the Key Manager contract
-fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
+pub fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
     let pubkey = cf_chains::eth::AggKey::from(pk);
 
     let x = BigInt::from_bytes(&pubkey.pub_key_x);

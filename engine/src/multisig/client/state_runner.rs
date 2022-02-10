@@ -55,7 +55,7 @@ where
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
-    ) -> Result<()> {
+    ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
         assert_eq!(
             self.ceremony_id, ceremony_id,
             "ceremony id set previously is incorrect"
@@ -79,9 +79,7 @@ where
         // control when our stages time out)
         self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
-        self.process_delayed();
-
-        Ok(())
+        Ok(self.process_delayed())
     }
 
     fn finalize_current_stage(
@@ -117,8 +115,7 @@ where
                 // attacks possible.
                 self.should_expire_at += MAX_STAGE_DURATION;
 
-                self.process_delayed();
-                None
+                self.process_delayed()
             }
             StageResult::Error(bad_validators, reason) => Some(Err((
                 authorised_state.idx_mapping.get_ids(bad_validators),
@@ -184,7 +181,9 @@ where
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(&mut self) {
+    pub fn process_delayed(
+        &mut self,
+    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -194,9 +193,13 @@ where
                 m,
                 id,
             );
-            // TODO: The bug I talked about is here. This is problematic as what if this process_message call results in the completion of ceremony. It will not ever call on_key_generated().
-            self.process_message(id, m);
+
+            if let Some(result) = self.process_message(id, m) {
+                return Some(result);
+            }
         }
+
+        None
     }
 
     /// Delay message to be processed in the next stage

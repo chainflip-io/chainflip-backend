@@ -223,7 +223,7 @@ pub fn generate_local_sig(
 }
 
 /// Schnorr signature as defined by the Key Manager contract
-fn generate_contract_schnorr_sig(
+pub fn generate_contract_schnorr_sig(
     private_key: Scalar,
     pubkey: Point,
     nonce_commitment: Point,
