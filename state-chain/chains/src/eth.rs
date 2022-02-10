@@ -41,19 +41,19 @@ pub trait Tokenizable {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
 	/// The message hash aka. payload to be signed over.
-	msg_hash: H256,
+	pub msg_hash: H256,
 	/// The Schnorr signature.
-	sig: Uint,
+	pub sig: Uint,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
 	/// prevent replay attacks.
-	nonce: Uint,
+	pub nonce: Uint,
 	/// The address value derived from the random nonce value `k`. Also known as
 	/// `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
 	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
-	k_times_g_addr: Address,
+	pub k_times_g_addr: Address,
 }
 
 impl SigData {

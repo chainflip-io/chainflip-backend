@@ -7,12 +7,15 @@ use crate::{
     eth::{utils, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
+use cf_chains::eth::SigData;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
     types::{H160, H256},
 };
+
+use crate::eth::Address;
 
 use anyhow::Result;
 
@@ -107,6 +110,14 @@ pub enum KeyManagerEvent {
         new_key: ChainflipKey,
     },
 
+    /// `SignatureAccepted(msgHash)` event
+    SignatureAccepted {
+        /// The message hash aka. payload to be signed over.
+        sig_data: SigData,
+        /// The origin address
+        broadcaster: Address,
+    },
+
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
     Shared(SharedEvent),
 }
@@ -134,6 +145,17 @@ impl EthObserver for KeyManager {
                             event.block_number,
                             event.tx_hash,
                         ),
+                    )
+                    .await;
+            }
+            KeyManagerEvent::SignatureAccepted {
+                sig_data,
+                broadcaster: _,
+            } => {
+                let _ = state_chain_client
+                    .submit_signed_extrinsic(
+                        logger,
+                        pallet_cf_broadcast::Call::signature_accepted(sig_data.msg_hash),
                     )
                     .await;
             }
