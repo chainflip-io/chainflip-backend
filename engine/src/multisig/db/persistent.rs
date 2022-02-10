@@ -375,28 +375,25 @@ fn load_keys_using_kvdb(
         .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
     // Load the keys from column 0 (aka "col0")
-    let mut loaded_keys: HashMap<KeyId, KeygenResultInfo> = HashMap::new();
-    for (key_id, key_info) in db.iter(0) {
-        let key_id: KeyId = KeyId(key_id.into());
-        match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-            Ok(keygen_info) => {
-                slog::debug!(
-                    logger,
-                    "Loaded key_info (key_id: {}) from kvdb database",
-                    key_id
-                );
-                loaded_keys.insert(key_id, keygen_info);
-            }
-            Err(err) => {
-                return Err(anyhow::Error::msg(format!(
+    db.iter(0)
+        .map(|(key_id, key_info)| {
+            let key_id: KeyId = KeyId(key_id.into());
+            match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
+                Ok(keygen_info) => {
+                    slog::debug!(
+                        logger,
+                        "Loaded key_info (key_id: {}) from kvdb database",
+                        key_id
+                    );
+                    Ok((key_id, keygen_info))
+                }
+                Err(err) => Err(anyhow::Error::msg(format!(
                     "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
                     key_id, err,
-                )));
+                ))),
             }
-        }
-    }
-
-    Ok(loaded_keys)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -628,7 +625,7 @@ mod tests {
             let mut opts = Options::default();
             opts.create_missing_column_families(true);
             opts.create_if_missing(true);
-            let _ = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
+            let _db = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
         }
 
         // Load the db and trigger the migration and therefore the backup
@@ -730,11 +727,9 @@ mod tests {
     }
 
     #[test]
-    fn should_panic_if_kvdb_fails_to_load_key() {
-        let temp_dir = TempDir::new("should_panic_if_kvdb_fails_to_load_key").unwrap();
-        let db_path = temp_dir.path().join("db");
-
+    fn should_error_if_kvdb_fails_to_load_key() {
         let logger = new_test_logger();
+        let db_path = get_temp_db_path();
 
         // Create a db that is schema version 0 using kvdb.
         {
@@ -749,9 +744,16 @@ mod tests {
             db.write(tx).unwrap();
         }
 
-        // Load the bad db and make sure it panics
+        // Load the bad db and make sure it errors
         {
             assert!(PersistentKeyDB::new(db_path.as_path(), &logger).is_err());
+        }
+
+        // Confirm that the db was not migrated, by checking that the metadata column doesn't exist.
+        {
+            assert!(!DB::list_cf(&Options::default(), db_path.as_path())
+                .expect("Should get column families")
+                .contains(&METADATA_COLUMN.to_string()))
         }
     }
 }
