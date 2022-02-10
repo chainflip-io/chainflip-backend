@@ -370,7 +370,7 @@ jobs:
           groupadd ci
           useradd -g ci ci
       - run: |
-          su - ci
+          su ci -p
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
