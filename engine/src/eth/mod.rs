@@ -1,6 +1,5 @@
 mod http_observer;
 pub mod key_manager;
-pub mod merged_stream;
 pub mod stake_manager;
 
 pub mod event_common;
