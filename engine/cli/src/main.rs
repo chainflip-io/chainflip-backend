@@ -1,7 +1,7 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{EthBroadcaster, EthRpcClient},
-    state_chain::client::{connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi},
+    state_chain::client::{connect_to_state_chain, StateChainRpcClient, StateChainRpcApi},
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -65,8 +65,7 @@ async fn run_cli() -> Result<()> {
 
         QueryBlock {block_hash_1} => {
             request_block(block_hash_1,
-            &cli_settings,
-            &logger)
+            &cli_settings)
             .await
         }
     }
@@ -76,8 +75,7 @@ async fn run_cli() -> Result<()> {
 //new func here: Ramiz
 async fn request_block(
     block_hash_1: state_chain_runtime::Hash,
-    settings: &CLISettings,
-    logger: &slog::Logger,
+    settings: &CLISettings
 ) -> Result<()> {
 
 
@@ -90,7 +88,8 @@ async fn request_block(
         return Ok(());
     }
 
-    let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain, logger).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
+    let state_chain_rpc_client = 
+    StateChainRpcClient::connect_to_state_chain_without_signer(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
 
     //let mut block_stream = Box::new(block_stream);
     //let block_stream = block_stream.as_mut();  //why??????????????
