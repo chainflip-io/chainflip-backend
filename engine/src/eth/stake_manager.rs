@@ -110,7 +110,7 @@ impl EthObserver for StakeManager {
                 staker: _,
                 return_addr,
             } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_staked(
@@ -123,7 +123,7 @@ impl EthObserver for StakeManager {
                     .await;
             }
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
                         logger,
                         pallet_cf_witnesser_api::Call::witness_claimed(

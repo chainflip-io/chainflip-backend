@@ -237,7 +237,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     );
                                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                                         Ok(raw_signed_tx) => {
-                                                            let _ = state_chain_client.submit_signed_extrinsic(
+                                                            let _result = state_chain_client.submit_signed_extrinsic(
                                                                 &logger,
                                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission(
@@ -298,7 +298,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                             )
                                                         }
                                                     };
-                                                    let _ = state_chain_client
+                                                    let _result = state_chain_client
                                                         .submit_signed_extrinsic(&logger, response_extrinsic)
                                                         .await;
                                                 }
@@ -367,7 +367,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                         "Sending heartbeat at block: {}",
                                         current_block_header.number
                                     );
-                                    let _ = state_chain_client
+                                    let _result = state_chain_client
                                         .submit_signed_extrinsic(&logger, pallet_cf_online::Call::heartbeat())
                                         .await;
                                 }
@@ -390,7 +390,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                             MultisigOutcome::Signing(SigningOutcome { id, result }) => {
                                 match result {
                                     Ok(sig) => {
-                                        let _ = state_chain_client
+                                        let _result = state_chain_client
                                         .submit_unsigned_extrinsic(
                                             &logger,
                                             pallet_cf_threshold_signature::Call::signature_success(
@@ -408,7 +408,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                             CEREMONY_ID_KEY => id,
                                         );
 
-                                        let _ = state_chain_client
+                                        let _result = state_chain_client
                                         .submit_signed_extrinsic(
                                             &logger,
                                             pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
@@ -426,7 +426,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                             MultisigOutcome::Keygen(KeygenOutcome { id, result }) => {
                                 match result {
                                     Ok(pubkey) => {
-                                        let _ = state_chain_client
+                                        let _result = state_chain_client
                                         .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                             id,
                                             pallet_cf_vaults::KeygenOutcome::Success(
@@ -442,7 +442,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                             err;
                                             CEREMONY_ID_KEY => id,
                                         );
-                                        let _ = state_chain_client
+                                        let _result = state_chain_client
                                         .submit_signed_extrinsic(&logger, pallet_cf_vaults::Call::report_keygen_outcome(
                                             id,
                                             pallet_cf_vaults::KeygenOutcome::Failure(
