@@ -88,8 +88,8 @@ async fn request_claim(
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
-            logger,
             pallet_cf_staking::Call::claim(atomic_amount, eth_address),
+            logger,
         )
         .await
         .expect("Failed to submit claim extrinsic");
@@ -163,8 +163,8 @@ async fn request_claim(
                                     settings,
                                     chain_id,
                                     stake_manager_address,
-                                    logger,
                                     claim_cert,
+                                    logger,
                                 )
                                 .await
                                 .expect("Failed to register claim on ETH");
@@ -191,8 +191,8 @@ async fn register_claim(
     settings: &CLISettings,
     chain_id: u64,
     stake_manager_address: H160,
-    logger: &slog::Logger,
     claim_cert: Vec<u8>,
+    logger: &slog::Logger,
 ) -> Result<H256> {
     println!(
         "Registering your claim on the Ethereum network, to StakeManager address: {:?}",
@@ -237,8 +237,8 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
-            logger,
             pallet_cf_validator::Call::set_keys(new_session_key, [0; 1].to_vec()),
+            logger,
         )
         .await
         .expect("Failed to submit set_keys extrinsic");
@@ -250,7 +250,7 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
     let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
     let tx_hash = state_chain_client
-        .submit_signed_extrinsic(logger, pallet_cf_staking::Call::retire_account())
+        .submit_signed_extrinsic(pallet_cf_staking::Call::retire_account(), logger)
         .await
         .expect("Could not retire account");
     println!("Account retired at tx {:#x}.", tx_hash);

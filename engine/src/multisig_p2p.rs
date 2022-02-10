@@ -169,7 +169,6 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 );
                 state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_validator::Call::register_peer_id(
                             sp_core::ed25519::Public(
                                 peer_keypair_from_cfe_config.public().encode(),
@@ -182,6 +181,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                             )
                             .unwrap(),
                         ),
+                        logger,
                     )
                     .await?;
             }
