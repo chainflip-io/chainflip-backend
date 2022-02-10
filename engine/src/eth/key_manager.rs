@@ -30,7 +30,7 @@ pub struct KeyManager {
     pub contract: ethabi::Contract,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct ChainflipKey {
     pub_key_x: ethabi::Uint,
     pub_key_y_parity: ethabi::Uint,
@@ -95,7 +95,7 @@ impl Tokenizable for ChainflipKey {
 }
 
 /// Represents the events that are expected from the KeyManager contract.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum KeyManagerEvent {
     /// `Staked(nodeId, amount)`
     KeyChange {

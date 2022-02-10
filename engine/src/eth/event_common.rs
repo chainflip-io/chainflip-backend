@@ -7,7 +7,7 @@ use web3::{
 };
 
 /// Type for storing common (i.e. tx_hash) and specific event information
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,

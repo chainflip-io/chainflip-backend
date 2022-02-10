@@ -794,7 +794,7 @@ pub trait EthObserver {
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SharedEvent {
     /// `Refunded(amount)`
     Refunded {
@@ -855,8 +855,11 @@ pub mod mocks {
     // Create a mock of the http interface of web3
     mock! {
         // MockEthHttpRpc will be the name of the mock
-        #[derive(Clone)]
         pub EthHttpRpc {}
+
+        impl Clone for EthHttpRpc {
+            fn clone(&self) -> Self;
+        }
 
         #[async_trait]
         impl EthRpcApi for EthHttpRpc {
@@ -882,13 +885,120 @@ pub mod mocks {
             async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
         }
     }
+
+    // Create a mock of the Websockets interface of web3
+    mock! {
+        // MockEthWsRpc will be the name of the mock
+        pub EthWsRpc {}
+
+        impl Clone for EthWsRpc {
+            fn clone(&self) -> Self;
+        }
+
+        #[async_trait]
+        impl EthRpcApi for EthWsRpc {
+            async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+
+            async fn sign_transaction(
+                &self,
+                tx: TransactionParameters,
+                key: &SecretKey,
+            ) -> Result<SignedTransaction>;
+
+            async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
+
+            async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
+
+            async fn chain_id(&self) -> Result<U256>;
+        }
+
+        #[async_trait]
+        impl EthWsRpcApi for EthWsRpc {
+            async fn subscribe_new_heads(
+                &self,
+            ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
+        }
+    }
 }
 
 #[cfg(test)]
 mod merged_stream_tests {
     use crate::logging::test_utils::new_test_logger;
 
+    use super::key_manager::ChainflipKey;
+    use super::key_manager::KeyManagerEvent;
+    use super::mocks::MockEthHttpRpc;
+    use super::mocks::MockEthWsRpc;
+
+    use super::key_manager::KeyManager;
+
     use super::*;
+
+    fn test_km_contract() -> KeyManager {
+        KeyManager::new(H160::default()).unwrap()
+    }
+
+    fn key_change(block_number: u64) -> Result<EventWithCommon<KeyManagerEvent>> {
+        Ok(EventWithCommon::<KeyManagerEvent> {
+            tx_hash: Default::default(),
+            block_number,
+            event_parameters: KeyManagerEvent::KeyChange {
+                signed: true,
+                old_key: ChainflipKey::default(),
+                new_key: ChainflipKey::default(),
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn empty_inners_return_none() {
+        // use concrete type for tests
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let safe_ws_log_stream = Box::pin(stream::empty());
+        let safe_http_log_stream = Box::pin(stream::empty());
+
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn merged_does_not_return_duplicate_events() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let key_change_1 = 10;
+        let key_change_2 = 15;
+
+        let safe_ws_log_stream = Box::pin(stream::iter([
+            key_change(key_change_1),
+            key_change(key_change_2),
+        ]));
+        let safe_http_log_stream = Box::pin(stream::iter([
+            key_change(key_change_1),
+            key_change(key_change_2),
+        ]));
+
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_1).unwrap()
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_2).unwrap()
+        );
+        assert!(stream.next().await.is_none());
+    }
 
     #[tokio::test]
     async fn empty_inners_return_none() {
