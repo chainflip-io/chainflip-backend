@@ -185,7 +185,23 @@ pub struct EthRpcClient {
 impl EthRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
-        slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+        let node_endpoint_snippet = node_endpoint
+            .split_at(
+                node_endpoint[0..node_endpoint.len()
+                    - url::Url::parse(node_endpoint)
+                        .expect("Should parse node endpoint")
+                        .host_str()
+                        .expect("should have host in node endpoint")
+                        .len()
+                        .saturating_sub(2)]
+                    .len(),
+            )
+            .0;
+        slog::trace!(
+            logger,
+            "Connecting new web3 client to {}****",
+            node_endpoint_snippet
+        );
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(node_endpoint)
