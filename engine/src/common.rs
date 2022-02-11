@@ -177,7 +177,7 @@ mod tests_read_clean_and_decode_hex_str_file {
     }
 }
 
-/// Makes a tick that outputs every duration and if N ticks are "missed" (as tick() wasn't called for some time)
+/// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
 /// it will immediately output a single tick on the next call to tick() and resume ticking every duration
 pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
     let mut interval = tokio::time::interval_at(Instant::now() + duration, duration);
