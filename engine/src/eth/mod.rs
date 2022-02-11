@@ -24,7 +24,7 @@ use web3::{
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
-use crate::constants::ETH_FALLING_BEHIND_MARGIN_BLOCKS;
+use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND};
 use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
 use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED};
 use crate::{
@@ -769,33 +769,49 @@ pub trait EthObserver {
                         let current_item_tx_hash = current_item.tx_hash;
                         let current_item_log_index = current_item.log_index;
 
+                        // TODO Look at deduplicating this
                         // Log if one of the streams is behind
+                        // doesn't count if we haven't started yet
                         match protocol {
                             TranpsortProtocol::Http => {
                                 if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                    < current_item_block_number
+                                    <= current_item_block_number
                                 {
-                                    slog::warn!(
-                                        state.logger,
-                                        #ETH_STREAM_BEHIND,
-                                        "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
-                                        current_item_block_number,
-                                        state.last_ws_block_pulled,
-                                    );
+                                    let blocks_behind =
+                                        current_item_block_number - state.last_ws_block_pulled;
+                                    if !(state.last_ws_block_pulled == 0)
+                                        && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND
+                                            == 0)
+                                    {
+                                        slog::warn!(
+                                            state.logger,
+                                            #ETH_STREAM_BEHIND,
+                                            "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
+                                            current_item_block_number,
+                                            state.last_ws_block_pulled,
+                                        );
+                                    }
                                 }
                                 state.last_http_block_pulled = current_item_block_number
                             }
                             TranpsortProtocol::Ws => {
                                 if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                    < current_item_block_number
+                                    <= current_item_block_number
                                 {
-                                    slog::warn!(
-                                        state.logger,
-                                        #ETH_STREAM_BEHIND,
-                                        "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
-                                        current_item_block_number,
-                                        state.last_http_block_pulled,
-                                    );
+                                    let blocks_behind =
+                                        current_item_block_number - state.last_http_block_pulled;
+                                    if !(state.last_http_block_pulled == 0)
+                                        && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND
+                                            == 0)
+                                    {
+                                        slog::warn!(
+                                            state.logger,
+                                            #ETH_STREAM_BEHIND,
+                                            "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
+                                            current_item_block_number,
+                                            state.last_http_block_pulled,
+                                        );
+                                    }
                                 }
                                 state.last_ws_block_pulled = current_item_block_number
                             }
@@ -1278,6 +1294,35 @@ mod merged_stream_tests {
         merged_stream.next().await;
         assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
         tag_cache.clear();
+    }
+
+    #[tokio::test]
+    async fn merged_stream_notifies_once_every_x_blocks_when_one_falls_behind() {
+        let key_manager = test_km_contract();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
+
+        let ws_range = 10..54;
+        let events = ws_range.clone().map(|i| key_change(i, 0));
+        let safe_ws_log_stream = Box::pin(stream::iter(events));
+
+        let safe_http_log_stream = Box::pin(stream::iter([key_change(10, 0)]));
+
+        let mut merged_stream = key_manager
+            .merged_log_stream(
+                Box::pin(safe_ws_log_stream),
+                Box::pin(safe_http_log_stream),
+                logger,
+            )
+            .await
+            .unwrap();
+
+        for i in ws_range {
+            let event = merged_stream.next().await.unwrap();
+            assert_eq!(event, key_change(i, 0).unwrap());
+        }
+
+        assert_eq!(tag_cache.get_tag_count(ETH_STREAM_BEHIND), 4);
+        assert!(merged_stream.next().await.is_none());
     }
 
     // TODO:

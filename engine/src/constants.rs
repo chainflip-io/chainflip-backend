@@ -26,3 +26,6 @@ pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Number of blocks one of the protocols needs to fall behind before we sound the alarms
 pub const ETH_FALLING_BEHIND_MARGIN_BLOCKS: u64 = 10;
+
+/// Number of blocks before logging that a stream is behind again
+pub const ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND: u64 = 10;
