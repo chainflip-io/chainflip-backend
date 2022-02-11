@@ -34,14 +34,11 @@ pub enum CFCommand {
     Rotate {},
     #[structopt(about = "Retire from Auction participation")]
     Retire {},
-    
-    ///code modification here
     #[structopt(about = "submit a hash to query the block")]
     QueryBlock {
         #[structopt(help = "block hash to be queried")]
-        block_hash_1: state_chain_runtime::Hash,
-    },
-    
+        block_hash: state_chain_runtime::Hash,
+    }, 
 }
 
 #[derive(Deserialize, Debug, Default)]

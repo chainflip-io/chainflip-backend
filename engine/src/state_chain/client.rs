@@ -164,7 +164,7 @@ pub struct StateChainRpcClient {
 /// Wraps the substrate client library methods
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait StateChainRpcApi : Sized {
+pub trait StateChainRpcApi {
     /// Submit an extrinsic to the state chain. If `Some(nonce)` is provided, uses that nonce and
     /// sends a signed transaction. If the nonce is `None`, send an unsigned transaction.
     async fn submit_extrinsic_rpc(
@@ -197,11 +197,6 @@ pub trait StateChainRpcApi : Sized {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<RuntimeVersion>;
-
-    #[allow(clippy::eval_order_dependence)]
-    async fn connect_to_state_chain_without_signer(
-        state_chain_settings: &settings::StateChain
-    ) -> Result<Self>;
 }
 
 #[async_trait]
@@ -286,27 +281,6 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("fetch_runtime_version RPC API failed")
-    }
-
-    #[allow(clippy::eval_order_dependence)]
-    async fn connect_to_state_chain_without_signer(
-        state_chain_settings: &settings::StateChain
-    ) -> Result<StateChainRpcClient> {
-
-        let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-            state_chain_settings.ws_endpoint.as_str(),
-        )?)
-        .await
-        .map_err(rpc_error_into_anyhow_error)
-        .context("Failed to establish rpc connection to substrate node")?;
-
-
-        Ok(Self {
-            system_rpc_client : rpc_client.clone().into(),
-            author_rpc_client : rpc_client.clone().into(),
-            state_rpc_client : rpc_client.clone().into(),
-            chain_rpc_client : rpc_client.clone().into(),
-        })
     }
 }
 
@@ -764,17 +738,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
     }
-
-
-    pub async fn retrieve_block(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Option<SignedBlock>> {
-        self
-        .state_chain_rpc_client
-        .get_block(block_hash)
-        .await
-    }
 }
 
 fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
@@ -816,19 +779,9 @@ pub async fn connect_to_state_chain(
         frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
     );
 
-    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-        state_chain_settings.ws_endpoint.as_str(),
-    )?)
-    .await
-    .map_err(rpc_error_into_anyhow_error)
-    .context("Failed to establish rpc connection to substrate node")?;
+    let state_chain_rpc_client = connect_to_state_chain_without_signer(&state_chain_settings).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
 
-    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
-    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
-    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-
-    let mut block_header_stream = chain_rpc_client
+    let mut block_header_stream = state_chain_rpc_client.chain_rpc_client
         .subscribe_finalized_heads()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
@@ -845,11 +798,11 @@ pub async fn connect_to_state_chain(
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = chain_rpc_client
+        let finalised_head_hash = state_chain_rpc_client.chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_head_number = chain_rpc_client
+        let finalised_head_number = state_chain_rpc_client.chain_rpc_client
             .header(Some(finalised_head_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?
@@ -892,7 +845,7 @@ pub async fn connect_to_state_chain(
         }
 
         let account_nonce = match get_account_nonce(
-            &state_rpc_client,
+            &state_chain_rpc_client.state_rpc_client,
             &account_storage_key,
             latest_block_hash,
         )
@@ -903,7 +856,7 @@ pub async fn connect_to_state_chain(
                 if wait_for_staking {
                     loop {
                         if let Some(nonce) = get_account_nonce(
-                            &state_rpc_client,
+                            &state_chain_rpc_client.state_rpc_client,
                             &account_storage_key,
                             latest_block_hash,
                         )
@@ -941,20 +894,13 @@ pub async fn connect_to_state_chain(
     );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
+        &mut &state_chain_rpc_client.state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?;
-
-    let state_chain_rpc_client = StateChainRpcClient {
-        system_rpc_client,
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client,
-    };
 
     Ok((
         latest_block_hash,
@@ -992,9 +938,32 @@ pub async fn connect_to_state_chain(
     ))
 }
 
+#[allow(clippy::eval_order_dependence)]
+pub async fn connect_to_state_chain_without_signer(
+    state_chain_settings: &settings::StateChain
+) -> Result<StateChainRpcClient> {
 
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(rpc_error_into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
 
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
 
+    Ok (
+        StateChainRpcClient {
+            system_rpc_client,
+            author_rpc_client,
+            state_rpc_client,
+            chain_rpc_client,
+        }
+    )
+}
 
 #[cfg(test)]
 pub mod test_utils {
