@@ -184,6 +184,48 @@ pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
     interval
 }
 
+#[cfg(test)]
+mod tests_make_periodic_tick {
+    use crate::testing::assert_ok;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn skips_ticks_test() {
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(0.5));
+
+        // Skip two ticks
+        tokio::time::sleep(Duration::from_secs_f32(1.25)).await;
+
+        // Next tick outputs immediately
+        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.01), tick.tick()).await);
+
+        // We skip ticks instead of bursting ticks
+        assert!(
+            tokio::time::timeout(Duration::from_secs_f32(0.2), tick.tick())
+                .await
+                .is_err()
+        );
+
+        // Ticks continue to be insync with duration
+        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.1), tick.tick()).await);
+    }
+
+    #[tokio::test]
+    async fn period_test() {
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(0.5));
+
+        for _i in 0..5 {
+            assert!(
+                tokio::time::timeout(Duration::from_secs_f32(0.45), tick.tick())
+                    .await
+                    .is_err()
+            );
+            tick.tick().await;
+        }
+    }
+}
+
 pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>
 where
     It::Item: Display,
