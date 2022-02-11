@@ -23,7 +23,7 @@ mod tests {
 				)),
 			);
 
-			<AuctionPallet as Auctioneer>::update_validator_status(auction_result.clone());
+			<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners.clone());
 
 			generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 			let AuctionResult { winners, minimum_active_bid, .. } = run_complete_auction();

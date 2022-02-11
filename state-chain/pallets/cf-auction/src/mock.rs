@@ -61,7 +61,7 @@ pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	let auction_result =
 		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
 
-	<AuctionPallet as Auctioneer>::update_validator_status(auction_result.clone());
+	<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners);
 
 	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
 	MockEpochInfo::set_validators(auction_result.winners.clone());
