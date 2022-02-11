@@ -166,13 +166,18 @@ pub trait BackupValidators {
 	fn backup_validators() -> Vec<Self::ValidatorId>;
 }
 
-/// Feedback on a vault rotation
-pub trait VaultRotationHandler {
-	type ValidatorId;
-	/// The vault rotation has been aborted
-	fn vault_rotation_aborted();
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+pub enum KeygenStatus {
+	Busy,
+	Completed,
+	Failed,
 }
 
+impl Default for KeygenStatus {
+	fn default() -> Self {
+		KeygenStatus::Completed
+	}
+}
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
@@ -181,9 +186,8 @@ pub trait VaultRotator {
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
-	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
-	/// have been rotated.
-	fn finalize_rotation() -> bool;
+	/// Get the status of the current key generation
+	fn get_keygen_status() -> KeygenStatus;
 }
 
 /// An error has occurred during an auction

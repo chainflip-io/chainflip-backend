@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	QualifyValidator, VaultRotationHandler,
+	QualifyValidator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -82,7 +82,7 @@ type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{ChainflipAccount, ChainflipAccountState, VaultRotator};
+	use cf_traits::{ChainflipAccount, ChainflipAccountState, KeygenStatus, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -203,8 +203,15 @@ pub mod pallet {
 						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
-					if T::VaultRotator::finalize_rotation() {
-						Self::update_rotation_status(RotationStatus::VaultsRotated(auction_result));
+					match T::VaultRotator::get_keygen_status() {
+						KeygenStatus::Completed => Self::update_rotation_status(
+							RotationStatus::VaultsRotated(auction_result),
+						),
+						KeygenStatus::Failed => {
+							Self::deposit_event(Event::RotationAborted);
+							Self::update_rotation_status(RotationStatus::Idle);
+						},
+						_ => {},
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
@@ -683,17 +690,5 @@ impl<T: Config> QualifyValidator for PeerMapping<T> {
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
-	}
-}
-
-impl<T: Config> VaultRotationHandler for Pallet<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-	// The vault rotation has aborted, we reset the ongoing rotation
-	fn vault_rotation_aborted() {
-		// Quietly check state and reset
-		if RotationPhase::<T>::get() != RotationStatus::Idle {
-			Self::deposit_event(Event::RotationAborted);
-			Self::update_rotation_status(RotationStatus::Idle);
-		}
 	}
 }

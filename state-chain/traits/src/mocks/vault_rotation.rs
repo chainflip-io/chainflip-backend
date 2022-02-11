@@ -1,8 +1,8 @@
-use crate::VaultRotator;
+use crate::{KeygenStatus, VaultRotator};
 use std::cell::RefCell;
 
 thread_local! {
-	pub static TO_CONFIRM: RefCell<bool> = RefCell::new(true);
+	pub static KEYGEN_STATUS: RefCell<KeygenStatus> = RefCell::new(KeygenStatus::Completed);
 	pub static ERROR_ON_START: RefCell<bool> = RefCell::new(false);
 }
 
@@ -14,7 +14,7 @@ pub struct MockError;
 
 // Helper function to clear the confirmation result
 pub fn clear_confirmation() {
-	TO_CONFIRM.with(|l| *l.borrow_mut() = false);
+	KEYGEN_STATUS.with(|l| *l.borrow_mut() = KeygenStatus::Completed);
 }
 
 impl Mock {
@@ -41,11 +41,11 @@ impl VaultRotator for Mock {
 			return Err(MockError)
 		}
 
-		TO_CONFIRM.with(|l| *l.borrow_mut() = true);
+		KEYGEN_STATUS.with(|l| *l.borrow_mut() = KeygenStatus::Busy);
 		Ok(())
 	}
 
-	fn finalize_rotation() -> bool {
-		!TO_CONFIRM.with(|l| *l.borrow())
+	fn get_keygen_status() -> KeygenStatus {
+		KEYGEN_STATUS.with(|l| (*l.borrow()).clone())
 	}
 }

@@ -42,8 +42,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use crate::chainflip::{
-	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	ChainflipVaultRotationHandler, OfflinePenalty,
+	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler, OfflinePenalty,
 };
 pub use cf_traits::{BlockNumber, FlipBalance};
 use cf_traits::{ChainflipAccountData, SessionKeysRegistered};
@@ -170,7 +169,6 @@ parameter_types! {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;

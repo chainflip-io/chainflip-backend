@@ -16,7 +16,7 @@ use cf_traits::{
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
 	Heartbeat, Issuance, KeyProvider, NetworkState, RewardRollover, Rewarder, SigningContext,
-	StakeHandler, StakeTransfer, VaultRotationHandler,
+	StakeHandler, StakeTransfer,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -114,15 +114,6 @@ impl StakeHandler for ChainflipStakeHandler {
 
 	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
 		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
-	}
-}
-
-pub struct ChainflipVaultRotationHandler;
-impl VaultRotationHandler for ChainflipVaultRotationHandler {
-	type ValidatorId = AccountId;
-
-	fn vault_rotation_aborted() {
-		<Validator as VaultRotationHandler>::vault_rotation_aborted();
 	}
 }
 

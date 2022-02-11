@@ -8,8 +8,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, EpochIndex, EpochInfo, Nonce, NonceProvider, SigningContext, ThresholdSigner,
-	VaultRotationHandler, VaultRotator,
+	Chainflip, EpochIndex, EpochInfo, KeygenStatus, Nonce, NonceProvider, SigningContext,
+	ThresholdSigner, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -240,9 +240,6 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Rotation handler.
-		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
-
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 
@@ -347,6 +344,11 @@ pub mod pallet {
 	#[pallet::getter(fn responses_incoming)]
 	pub(super) type KeygenResolutionPending<T: Config> =
 		StorageValue<_, Vec<(ChainId, BlockNumberFor<T>)>, ValueQuery>;
+
+	/// Status of the key generation.
+	#[pallet::storage]
+	#[pallet::getter(fn keygen_status)]
+	pub(super) type StatusOfKeygen<T: Config> = StorageValue<_, KeygenStatus, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -678,8 +680,8 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::KeygenFailure(ceremony_id, chain_id));
 		PendingVaultRotations::<T>::remove(chain_id);
-		// TODO: Failure of one keygen should cause failure of all keygens.
-		T::RotationHandler::vault_rotation_aborted();
+
+		StatusOfKeygen::<T>::set(KeygenStatus::Failed);
 	}
 }
 
@@ -689,18 +691,22 @@ impl<T: Config> VaultRotator for Pallet<T> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		// We only support Ethereum for now.
-		Self::start_vault_rotation_for_chain(candidates, ChainId::Ethereum)
+		Self::start_vault_rotation_for_chain(candidates, ChainId::Ethereum)?;
+		StatusOfKeygen::<T>::set(KeygenStatus::Busy);
+
+		Ok(())
 	}
 
-	fn finalize_rotation() -> bool {
+	fn get_keygen_status() -> KeygenStatus {
 		if Pallet::<T>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
 			PendingVaultRotations::<T>::remove_all(None);
+			StatusOfKeygen::<T>::set(KeygenStatus::Completed);
+
 			Self::deposit_event(Event::VaultsRotated);
-			return true
 		}
 
-		false
+		StatusOfKeygen::<T>::get()
 	}
 }
 

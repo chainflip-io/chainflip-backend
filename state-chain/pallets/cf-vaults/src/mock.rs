@@ -77,13 +77,6 @@ impl Chainflip for MockRuntime {
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 }
 
-pub struct MockRotationHandler;
-
-impl VaultRotationHandler for MockRotationHandler {
-	type ValidatorId = ValidatorId;
-	fn vault_rotation_aborted() {}
-}
-
 pub struct MockCallback;
 
 impl UnfilteredDispatchable for MockCallback {
@@ -138,7 +131,6 @@ parameter_types! {
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type RotationHandler = MockRotationHandler;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;

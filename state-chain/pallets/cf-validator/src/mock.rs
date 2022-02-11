@@ -11,7 +11,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo,
 	},
 	AuctionError, AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount,
-	ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
+	ChainflipAccountData, IsOnline, IsOutgoing, KeygenStatus, QualifyValidator, VaultRotator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -209,10 +209,8 @@ impl VaultRotator for MockVaultRotator {
 		Ok(())
 	}
 
-	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
-	/// have been rotated.
-	fn finalize_rotation() -> bool {
-		true
+	fn get_keygen_status() -> cf_traits::KeygenStatus {
+		KeygenStatus::Completed
 	}
 }
 
