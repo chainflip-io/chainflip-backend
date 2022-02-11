@@ -15,6 +15,8 @@ pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 
 pub mod utils {
+    /// Async slog channel size
+    const ASYNC_SLOG_CHANNEL_SIZE: usize = 1024;
 
     use super::COMPONENT_KEY;
     const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
@@ -125,13 +127,7 @@ pub mod utils {
     /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn new_json_logger() -> slog::Logger {
-        slog::Logger::root(
-            slog_async::Async::new(new_json_drain())
-                .chan_size(1024)
-                .build()
-                .fuse(),
-            o!(),
-        )
+        new_async_logger(new_json_drain())
     }
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
@@ -146,8 +142,19 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
+        new_async_logger(drain)
+    }
+
+    /// Create a new async logger with custom channel size
+    fn new_async_logger<D>(drain: D) -> slog::Logger
+    where
+        D: slog::Drain<Err = slog::Never, Ok = ()> + Send + 'static,
+    {
         slog::Logger::root(
-            slog_async::Async::new(drain).chan_size(1024).build().fuse(),
+            slog_async::Async::new(drain)
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
             o!(),
         )
     }
