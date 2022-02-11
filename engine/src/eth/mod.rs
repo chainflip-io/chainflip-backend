@@ -345,7 +345,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             .saturating_mul(uint256_2)
             .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
 
-        slog::trace!(
+        slog::debug!(
             self.logger,
             "Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
             unsigned_tx,

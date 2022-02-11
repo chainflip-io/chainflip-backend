@@ -384,7 +384,7 @@ where
             MultisigInstruction::Keygen(keygen_info) => {
                 use rand_legacy::{Rng as _, SeedableRng};
 
-                slog::debug!(
+                slog::info!(
                     self.logger,
                     "Received a keygen request, participants: {}",
                     format_iterator(&keygen_info.signers);
@@ -456,7 +456,7 @@ where
                 let signing_info = pending.signing_info;
                 slog::debug!(
                     self.logger,
-                    "Processing a pending requests to sign";
+                    "Processing a pending request to sign";
                     CEREMONY_ID_KEY => signing_info.ceremony_id
                 );
 

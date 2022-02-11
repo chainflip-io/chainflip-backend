@@ -367,7 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 .await
             {
                 Ok(tx_hash) => {
-                    slog::trace!(
+                    slog::info!(
                         logger,
                         "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
@@ -490,7 +490,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
-                slog::trace!(
+                slog::info!(
                     logger,
                     "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
