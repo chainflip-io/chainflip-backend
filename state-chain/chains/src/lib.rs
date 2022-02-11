@@ -58,41 +58,41 @@ pub trait ChainAbi: ChainCrypto {
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<Api: ChainAbi>: Parameter {
+pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Get the payload over which the threshold signature should be generated.
-	fn threshold_signature_payload(&self) -> <Api as ChainCrypto>::Payload;
+	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
-	fn signed(self, threshold_signature: &<Api as ChainCrypto>::ThresholdSignature) -> Self;
+	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
 	///
 	fn encoded(&self) -> Vec<u8>;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
-pub trait TransactionBuilder<Api, Call>
+pub trait TransactionBuilder<Abi, Call>
 where
-	Api: ChainAbi,
-	Call: ApiCall<Api>,
+	Abi: ChainAbi,
+	Call: ApiCall<Abi>,
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
-	fn build_transaction(signed_call: &Call) -> Api::UnsignedTransaction;
+	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
-pub trait SetAggKeyWithAggKey<Api: ChainAbi>: ApiCall<Api> {
-	fn new_unsigned(nonce: Api::Nonce, new_key: <Api as ChainCrypto>::AggKey) -> Self;
+pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(nonce: Abi::Nonce, new_key: <Abi as ChainCrypto>::AggKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
-pub trait UpdateFlipSupply<Api: ChainAbi>: ApiCall<Api> {
-	fn new_unsigned(nonce: Api::Nonce, new_total_supply: u128, block_number: u64) -> Self;
+pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(nonce: Abi::Nonce, new_total_supply: u128, block_number: u64) -> Self;
 }
 
 /// Constructs the `RegisterClaim` api call.
-pub trait RegisterClaim<Api: ChainAbi>: ApiCall<Api> {
+pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		nonce: Api::Nonce,
+		nonce: Abi::Nonce,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
