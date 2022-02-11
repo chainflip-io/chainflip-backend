@@ -7,9 +7,9 @@ use std::{
 };
 
 use anyhow::Context;
-use futures::Stream;
 use itertools::Itertools;
 use jsonrpc_core_client::RpcError;
+use tokio::time::Instant;
 
 struct MutexStateAndPoisonFlag<T> {
     poisoned: bool,
@@ -177,11 +177,11 @@ mod tests_read_clean_and_decode_hex_str_file {
     }
 }
 
-/// Makes a stream that outputs () approximately every duration
-pub fn make_periodic_stream(duration: Duration) -> impl Stream<Item = ()> {
-    Box::pin(futures::stream::unfold((), move |_| async move {
-        Some((tokio::time::sleep(duration).await, ()))
-    }))
+/// Makes a tick that outputs every duration and if N ticks are "missed" (as tick() wasn't called for some time) it will immediately output a single tick on the next call to tick() and resume ticking every duration
+pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
+    let mut interval = tokio::time::interval_at(Instant::now() + duration, duration);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    interval
 }
 
 pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>
