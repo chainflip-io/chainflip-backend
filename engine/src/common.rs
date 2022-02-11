@@ -193,32 +193,36 @@ mod tests_make_periodic_tick {
 
     #[tokio::test]
     async fn skips_ticks_test() {
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(0.5));
+        const PERIOD: f32 = 0.25;
+
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD));
 
         // Skip two ticks
-        tokio::time::sleep(Duration::from_secs_f32(1.25)).await;
+        tokio::time::sleep(Duration::from_secs_f32(PERIOD * 2.5)).await;
 
         // Next tick outputs immediately
         assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.01), tick.tick()).await);
 
-        // We skip ticks instead of bursting ticks
+        // We skip ticks instead of bursting ticks (Next tick should occur in PERIOD * 0.5)
         assert!(
-            tokio::time::timeout(Duration::from_secs_f32(0.2), tick.tick())
+            tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.25), tick.tick())
                 .await
                 .is_err()
         );
 
-        // Ticks continue to be insync with duration
-        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.1), tick.tick()).await);
+        // Ticks continue to be insync with duration (Next tick should occur in PERIOD * 0.25)
+        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.35), tick.tick()).await);
     }
 
     #[tokio::test]
     async fn period_test() {
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(0.5));
+        const PERIOD: f32 = 0.25;
 
-        for _i in 0..5 {
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD));
+
+        for _i in 0..4 {
             assert!(
-                tokio::time::timeout(Duration::from_secs_f32(0.45), tick.tick())
+                tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.8), tick.tick())
                     .await
                     .is_err()
             );
