@@ -13,10 +13,7 @@ pub mod eth;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain {
-	/// The chain's `ChainId` - useful for serialization.
-	const CHAIN_ID: ChainId;
-}
+pub trait Chain: Member + Parameter {}
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
@@ -107,40 +104,17 @@ macro_rules! impl_chains {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
-		#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-		pub enum ChainId {
-			$(
-				$chain,
-			)+
-		}
 		$(
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
 			pub struct $chain;
 
-			impl Chain for $chain {
-				const CHAIN_ID: ChainId = ChainId::$chain;
-			}
+			impl Chain for $chain {}
 		)+
 	};
 }
 
-#[cfg(not(feature = "mocks"))]
 impl_chains! {
 	Ethereum,
-}
-
-// Chain implementations used for testing.
-#[cfg(feature = "mocks")]
-impl_chains! {
-	Ethereum,
-	AlwaysVerifiesCoin,
-	UnverifiableCoin,
-}
-
-impl<C: Chain> From<C> for ChainId {
-	fn from(_: C) -> Self {
-		C::CHAIN_ID
-	}
 }
 
 impl ChainCrypto for Ethereum {
