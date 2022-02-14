@@ -68,4 +68,3 @@ std = [
     'sp-std/std',
     'secp256k1'
 ]
-mocks = []

@@ -6,6 +6,7 @@ use frame_support::{pallet_prelude::Member, Parameter};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::{
 	convert::{Into, TryFrom},
+	fmt::Debug,
 	prelude::*,
 };
 
@@ -33,7 +34,7 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member + Parameter;
+	type UnsignedTransaction: Member + Parameter + Default;
 	type SignedTransaction: Member + Parameter;
 	type SignerCredential: Member + Parameter;
 	type Nonce: Member + Parameter + AtLeast32BitUnsigned;
@@ -135,48 +136,99 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
-#[cfg(feature = "mocks")]
-pub mod mock {
-	use super::*;
+pub mod mocks {
+	use std::marker::PhantomData;
 
-	impl ChainCrypto for AlwaysVerifiesCoin {
-		type AggKey = [u8; 32];
-		type Payload = Vec<u8>;
-		type ThresholdSignature = Vec<u8>;
-		type TransactionHash = Vec<u8>;
+	use crate::*;
+
+	// Chain implementation used for testing.
+	impl_chains! {
+		MockEthereum,
+	}
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default)]
+	pub struct MockUnsignedTransaction {
+		call_data: Vec<u8>,
+	}
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct MockSignedTransation {
+		transaction: MockUnsignedTransaction,
+		signature: MockSignature,
+	}
+
+	impl MockSignature {
+		pub fn is_valid(&self) -> bool {
+			*self == Self::Valid
+		}
+	}
+
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub enum MockSignature {
+		Valid,
+		Invalid,
+	}
+
+	impl ChainCrypto for MockEthereum {
+		type AggKey = [u8; 33];
+		type Payload = [u8; 32];
+		type ThresholdSignature = MockSignature;
+		type TransactionHash = [u8; 32];
 
 		fn verify_threshold_signature(
 			_agg_key: &Self::AggKey,
 			_payload: &Self::Payload,
-			_signature: &Self::ThresholdSignature,
+			signature: &Self::ThresholdSignature,
 		) -> bool {
-			true
+			signature.is_valid()
 		}
 	}
 
-	impl ChainCrypto for UnverifiableCoin {
-		type AggKey = [u8; 32];
-		type Payload = Vec<u8>;
-		type ThresholdSignature = Vec<u8>;
-		type TransactionHash = Vec<u8>;
+	impl ChainAbi for MockEthereum {
+		type UnsignedTransaction = MockUnsignedTransaction;
+		type SignedTransaction = MockSignedTransation;
+		// u64 is used as the account_id in all the mocks.
+		type SignerCredential = u64;
+		type Nonce = u32;
+		type ValidationError = &'static str;
 
-		fn verify_threshold_signature(
-			_agg_key: &Self::AggKey,
-			_payload: &Self::Payload,
-			_signature: &Self::ThresholdSignature,
-		) -> bool {
-			false
+		fn verify_signed_transaction(
+			unsigned_tx: &Self::UnsignedTransaction,
+			signed_tx: &Self::SignedTransaction,
+			_signer_credential: &Self::SignerCredential,
+		) -> Result<(), Self::ValidationError> {
+			if *unsigned_tx == signed_tx.transaction && signed_tx.signature.is_valid() {
+				Ok(())
+			} else {
+				Err("MockEthereum::ValidationError")
+			}
 		}
 	}
-}
 
-#[cfg(test)]
-mod test_chains {
-	use super::*;
+	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
 
-	#[test]
-	fn test_conversion() {
-		assert_eq!(ChainId::from(Ethereum), ChainId::Ethereum);
-		assert_eq!(Ethereum::CHAIN_ID, ChainId::Ethereum);
+	impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
+		fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload {
+			self.0.clone()
+		}
+
+		fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self {
+			Self(self.0, Some(threshold_signature.clone()))
+		}
+
+		fn encoded(&self) -> Vec<u8> {
+			self.encode()
+		}
+	}
+
+	pub struct MockTransactionBuilder<Abi, Call>(PhantomData<(Abi, Call)>);
+
+	impl<Abi: ChainAbi, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
+		for MockTransactionBuilder<Abi, Call>
+	{
+		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::UnsignedTransaction {
+			Default::default()
+		}
 	}
 }
