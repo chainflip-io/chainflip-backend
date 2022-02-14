@@ -133,13 +133,14 @@ pub mod pallet {
 		/// A marker trait identifying the chain that we are broadcasting to.
 		type TargetChain: ChainAbi;
 
-		/// TODO: doc
+		/// The api calls supported by this broadcaster.
 		type ApiCall: ApiCall<Self::TargetChain>;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
 
-		/// TODO: doc
+		/// A threshold signer that can sign calls for this chain, and dispatch callbacks into this
+		/// pallet.
 		type ThresholdSigner: ThresholdSigner<
 			Self::TargetChain,
 			Callback = <Self as Config<I>>::Call,
@@ -460,15 +461,17 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// TODO - doc
+		/// A callback to be used when a threshold signature request completes. Retrieves the
+		/// requested signature, uses the configured [TransactionBuilder] to build the transaction
+		/// and then initiates the broadcast sequence.
 		///
 		/// ## Events
 		///
-		/// - TODO
+		/// - See [Call::start_broadcast].
 		///
 		/// ## Errors
 		///
-		/// - TODO
+		/// - [Error::ThresholdSignatureUnavailable]
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,

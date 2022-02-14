@@ -6,6 +6,7 @@ pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
 pub mod update_flip_supply;
 
+/// Chainflip api calls available on Ethereum.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum EthereumApi {
 	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
