@@ -147,57 +147,76 @@ pub mod mocks {
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default)]
-	pub struct MockUnsignedTransaction {
-		call_data: Vec<u8>,
+	pub struct MockUnsignedTransaction;
+
+	impl MockUnsignedTransaction {
+		/// Simulate a transaction signature.
+		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
+			MockSignedTransation::<Self> { transaction: self, signature }
+		}
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub struct MockSignedTransation {
-		transaction: MockUnsignedTransaction,
-		signature: MockSignature,
+	pub struct MockSignedTransation<Unsigned> {
+		transaction: Unsigned,
+		signature: Validity,
 	}
 
-	impl MockSignature {
+	impl Default for Validity {
+		fn default() -> Self {
+			Self::Invalid
+		}
+	}
+
+	impl Validity {
 		pub fn is_valid(&self) -> bool {
 			*self == Self::Valid
 		}
 	}
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub enum MockSignature {
+	pub enum Validity {
 		Valid,
 		Invalid,
 	}
 
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub struct MockThresholdSignature<K, P> {
+		signing_key: K,
+		signed_payload: P,
+	}
+
 	impl ChainCrypto for MockEthereum {
-		type AggKey = [u8; 33];
-		type Payload = [u8; 32];
-		type ThresholdSignature = MockSignature;
-		type TransactionHash = [u8; 32];
+		type AggKey = [u8; 4];
+		type Payload = [u8; 4];
+		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
+		type TransactionHash = [u8; 4];
 
 		fn verify_threshold_signature(
-			_agg_key: &Self::AggKey,
-			_payload: &Self::Payload,
+			agg_key: &Self::AggKey,
+			payload: &Self::Payload,
 			signature: &Self::ThresholdSignature,
 		) -> bool {
-			signature.is_valid()
+			signature.signing_key == *agg_key && signature.signed_payload == *payload
 		}
 	}
 
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
-		type SignedTransaction = MockSignedTransation;
-		// u64 is used as the account_id in all the mocks.
-		type SignerCredential = u64;
+		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
+		type SignerCredential = Validity;
 		type Nonce = u32;
 		type ValidationError = &'static str;
 
 		fn verify_signed_transaction(
 			unsigned_tx: &Self::UnsignedTransaction,
 			signed_tx: &Self::SignedTransaction,
-			_signer_credential: &Self::SignerCredential,
+			signer_credential: &Self::SignerCredential,
 		) -> Result<(), Self::ValidationError> {
-			if *unsigned_tx == signed_tx.transaction && signed_tx.signature.is_valid() {
+			if *unsigned_tx == signed_tx.transaction &&
+				signed_tx.signature.is_valid() &&
+				signer_credential.is_valid()
+			{
 				Ok(())
 			} else {
 				Err("MockEthereum::ValidationError")
