@@ -21,8 +21,8 @@ extern crate assert_matches;
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionPhase, AuctionResult, Auctioneer,
 	BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler,
-	VaultRotator,
+	HasPeerMapping, IsOnline, KeygenExclusionSet, QualifyValidator, RemainingBid, StakeHandler,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -87,6 +87,8 @@ pub mod pallet {
 		type PeerMapping: HasPeerMapping<ValidatorId = Self::ValidatorId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -354,6 +356,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						number_of_bidders,
 						min_number_of_validators
 					);
+					// We clear the exclusion set to be sure we haven't excluded everyone
+					T::KeygenExclusionSet::forgive_all();
 					return Err(AuctionError::MinValidatorSize)
 				};
 

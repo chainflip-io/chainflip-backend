@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::{
-	impl_mock_online,
+	impl_mock_keygen_exclusion, impl_mock_online,
 	mocks::{
 		chainflip_account::MockChainflipAccount,
 		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
@@ -142,6 +142,7 @@ impl EmergencyRotation for MockEmergencyRotation {
 }
 
 impl_mock_online!(ValidatorId);
+impl_mock_keygen_exclusion!(ValidatorId);
 
 pub struct MockPeerMapping;
 
@@ -165,6 +166,7 @@ impl Config for Test {
 	type Online = MockOnline;
 	type PeerMapping = MockPeerMapping;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type KeygenExclusionSet = MockKeygenExclusion;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
