@@ -514,11 +514,11 @@ impl<T: Config> Pallet<T> {
 			*epoch
 		});
 
-		// Emit that a new epoch will be starting
-		Self::deposit_event(Event::NewEpoch(new_epoch));
-
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+
+		// Emit that a new epoch will be starting
+		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
 	/// Check whether we should based on either a force rotation or we have reach the epoch
