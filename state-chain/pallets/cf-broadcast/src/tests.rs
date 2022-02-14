@@ -3,6 +3,10 @@ use crate::{
 	BroadcastRetryQueue, BroadcastStage, Error, Event as BroadcastEvent, Instance1,
 	TransmissionFailure,
 };
+use cf_chains::{
+	mocks::{MockEthereum, MockUnsignedTransaction, Validity},
+	ChainAbi,
+};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 
@@ -78,7 +82,7 @@ impl MockCfe {
 	fn handle_transaction_signature_request(
 		attempt_id: BroadcastAttemptId,
 		nominee: u64,
-		_unsigned_tx: MockUnsignedTx,
+		unsigned_tx: MockUnsignedTransaction,
 		scenario: Scenario,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
@@ -87,8 +91,8 @@ impl MockCfe {
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
-				MockSignedTx::Valid,
-				()
+				unsigned_tx.clone().signed(Validity::Valid),
+				Validity::Valid
 			),
 			Error::<Test, Instance1>::InvalidSigner
 		);
@@ -96,11 +100,11 @@ impl MockCfe {
 		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(nominee).into(),
 			attempt_id,
+			unsigned_tx.signed(Validity::Valid),
 			match scenario {
-				Scenario::BadSigner => MockSignedTx::Invalid,
-				_ => MockSignedTx::Valid,
-			},
-			()
+				Scenario::BadSigner => Validity::Invalid,
+				_ => Validity::Valid,
+			}
 		));
 	}
 
@@ -124,7 +128,7 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some()
 		);
@@ -155,7 +159,7 @@ fn test_broadcast_rejected() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -195,7 +199,7 @@ fn test_broadcast_rejected() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
 		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
@@ -223,7 +227,7 @@ fn test_broadcast_failed() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -258,7 +262,7 @@ fn test_bad_signature() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -287,8 +291,9 @@ fn test_invalid_id_is_noop() {
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
 				0,
-				MockSignedTx::Valid,
-				()
+				<<MockEthereum as ChainAbi>::UnsignedTransaction>::default()
+					.signed(Validity::Valid),
+				Validity::Valid
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
@@ -315,7 +320,7 @@ fn test_signature_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -374,7 +379,7 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast and pass the signing stage;
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
@@ -425,7 +430,7 @@ fn no_validators_available() {
 	new_test_ext().execute_with(|| {
 		// Simulate that no validator is currently online
 		NOMINATION.with(|cell| *cell.borrow_mut() = None);
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
 		// Check the retry queue
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 	});
