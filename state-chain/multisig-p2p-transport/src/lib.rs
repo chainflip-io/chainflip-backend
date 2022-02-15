@@ -470,7 +470,6 @@ mod tests {
 	use jsonrpc_core::MetaIoHandler;
 	use jsonrpc_core_client::transports::local;
 	use mockall::{predicate::eq, Sequence};
-	use tokio;
 
 	struct LockedMockPeerNetwork(RwLock<MockPeerNetwork>);
 	impl LockedMockPeerNetwork {

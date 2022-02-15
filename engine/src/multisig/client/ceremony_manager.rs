@@ -37,8 +37,8 @@ pub struct CeremonyManager {
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
-    logger: slog::Logger,
     ceremony_id_tracker: CeremonyIdTracker,
+    logger: slog::Logger,
 }
 
 impl CeremonyManager {
@@ -165,7 +165,7 @@ impl CeremonyManager {
                     #SIGNING_CEREMONY_FAILED,
                     "Signing ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -199,7 +199,7 @@ impl CeremonyManager {
                     #KEYGEN_CEREMONY_FAILED,
                     "Keygen ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -254,7 +254,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, signers);
@@ -274,14 +274,20 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_keygen_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process a request to sign
@@ -338,7 +344,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -364,14 +370,20 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             key_info.validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_signing_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process data for a signing ceremony arriving from a peer
@@ -402,7 +414,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -432,7 +444,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
         state
             .process_message(sender_id, data)

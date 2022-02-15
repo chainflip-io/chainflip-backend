@@ -282,7 +282,7 @@ mod tests {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
 						// Online pallet
-						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
 					}

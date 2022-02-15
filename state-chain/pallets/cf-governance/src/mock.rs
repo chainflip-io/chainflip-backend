@@ -67,7 +67,7 @@ pub struct UpgradeConditionMock;
 
 impl ExecutionCondition for UpgradeConditionMock {
 	fn is_satisfied() -> bool {
-		UPGRADE_CONDITIONS_SATISFIED.with(|cell| cell.borrow().clone())
+		UPGRADE_CONDITIONS_SATISFIED.with(|cell| *cell.borrow())
 	}
 }
 
@@ -82,7 +82,7 @@ pub struct RuntimeUpgradeMock;
 impl RuntimeUpgrade for RuntimeUpgradeMock {
 	fn do_upgrade(_: Vec<u8>) -> DispatchResultWithPostInfo {
 		ensure!(
-			UPGRADE_SUCCEEDED.with(|cell| cell.borrow().clone()),
+			UPGRADE_SUCCEEDED.with(|cell| *cell.borrow()),
 			frame_system::Error::<Test>::FailedToExtractRuntimeVersion
 		);
 		Ok(().into())

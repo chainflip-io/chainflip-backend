@@ -52,7 +52,7 @@ fn call_on_threshold() {
 		// Check the deposited event to get the vote count.
 		let call_hash = frame_support::Hashable::blake2_256(&*call);
 		let stored_vec =
-			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or(vec![]);
+			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or_default();
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
@@ -79,7 +79,7 @@ fn cannot_double_witness() {
 
 		// Vote again with the same account, should error.
 		assert_noop!(
-			Witnesser::witness(Origin::signed(ALISSA), call.clone()),
+			Witnesser::witness(Origin::signed(ALISSA), call),
 			Error::<Test>::DuplicateWitness
 		);
 	});
@@ -98,7 +98,7 @@ fn only_validators_can_witness() {
 
 		// Other accounts can't witness
 		assert_noop!(
-			Witnesser::witness(Origin::signed(DEIRDRE), call.clone()),
+			Witnesser::witness(Origin::signed(DEIRDRE), call),
 			Error::<Test>::UnauthorisedWitness
 		);
 	});
@@ -182,7 +182,7 @@ fn can_continue_to_witness_for_old_epochs() {
 		assert_noop!(
 			Witnesser::witness_at_epoch(
 				Origin::signed(ALISSA),
-				call.clone(),
+				call,
 				current_epoch + 1,
 				Default::default()
 			),

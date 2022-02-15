@@ -5,7 +5,6 @@ use frame_support::{
 	traits::{Imbalance, UnfilteredDispatchable},
 };
 use frame_system as system;
-use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -178,7 +177,7 @@ impl RewardsDistribution for MockRewardsDistribution {
 	fn distribute(rewards: Self::Surplus) {
 		let reward_amount = rewards.peek();
 		let deposit = Flip::deposit_reserves(*b"RSVR", reward_amount);
-		let _ = rewards.offset(deposit);
+		let _result = rewards.offset(deposit);
 	}
 }
 

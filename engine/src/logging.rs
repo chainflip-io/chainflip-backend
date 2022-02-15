@@ -221,17 +221,12 @@ pub mod test_utils {
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
-    #[derive(Clone)]
+    #[derive(Default, Clone)]
     pub struct TagCache {
         log: Arc<Mutex<Vec<String>>>,
     }
 
     impl TagCache {
-        pub fn new() -> Self {
-            let log = Arc::new(Mutex::new(vec![]));
-            Self { log }
-        }
-
         /// returns true if the given tag was found in the log
         pub fn contains_tag(&self, tag: &str) -> bool {
             self.get_tag_count(tag) > 0
@@ -264,7 +259,7 @@ pub mod test_utils {
     /// Prints an easy to read log and the list of key/values.
     /// Also creates a tag cache that collects all tags so you can later confirm a log was triggered.
     pub fn new_test_logger_with_tag_cache() -> (slog::Logger, TagCache) {
-        let d1 = TagCache::new();
+        let d1 = TagCache::default();
         let d2 = Fuse(PrintlnDrainVerbose);
         (
             slog::Logger::root(slog::Duplicate::new(d1.clone(), d2).fuse(), o!()),
@@ -279,7 +274,7 @@ pub mod test_utils {
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
-        let tc = TagCache::new();
+        let tc = TagCache::default();
         let tag_whitelist = Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>());
         let tag_blacklist = Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>());
 

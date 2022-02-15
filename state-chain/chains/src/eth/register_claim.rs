@@ -160,7 +160,7 @@ mod test_register_claim {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			register_claim_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

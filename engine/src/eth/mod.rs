@@ -131,7 +131,6 @@ pub async fn start_contract_observer<ContractObserver, RpcClient, EthRpc>(
                     // TOOD: Handle None on stream, and result event being an error
                     while let Some(result_event) = event_stream.next().await {
                         let event = result_event.expect("should be valid event type");
-                        slog::trace!(logger, "Observing ETH block: {}", event.block_number);
                         if let Some(window_to) = *task_end_at_block.lock().await {
                             if event.block_number > window_to {
                                 slog::info!(
@@ -402,7 +401,7 @@ pub trait EthObserver {
             let best_safe_block_number = current_best_safe_block_header
                 .number
                 .expect("Should have block number");
-            // we only want to start observering once we reach the from_block specified
+            // we only want to start observing once we reach the from_block specified
             if best_safe_block_number < from_block {
                 slog::trace!(
                     logger,
@@ -430,12 +429,11 @@ pub trait EthObserver {
                     safe_head_stream,
                     eth_rpc.clone(),
                     deployed_address,
+                    logger.clone(),
                 )
                 .await;
 
-                slog::info!(logger, "Future logs fetched");
                 let logger = logger.clone();
-
                 return Ok(
                     Box::new(
                         tokio_stream::iter(past_logs).chain(future_logs).map(
@@ -448,7 +446,7 @@ pub trait EthObserver {
                                     unparsed_log,
                                 );
                                 if let Ok(ok_result) = &result_event {
-                                    slog::debug!(logger, "Received ETH log {}", ok_result);
+                                    slog::debug!(logger, "Received ETH event log {}", ok_result);
                                 }
                                 result_event
                             },
