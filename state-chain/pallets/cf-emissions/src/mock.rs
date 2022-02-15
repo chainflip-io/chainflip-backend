@@ -1,13 +1,14 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto, Ethereum};
+use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply};
+use codec::{Decode, Encode};
 use frame_support::{
-	parameter_types,
+	parameter_types, storage,
 	traits::{Imbalance, UnfilteredDispatchable},
+	StorageHasher, Twox64Concat,
 };
 use frame_system as system;
-use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -15,7 +16,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{AsyncResult, WaivedFees};
+use cf_traits::{mocks::threshold_signer::MockThresholdSigner, WaivedFees};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -23,7 +24,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, NonceProvider, RewardsDistribution, ThresholdSigner,
+	Chainflip, NonceProvider, RewardsDistribution,
 };
 
 pub type AccountId = u64;
@@ -98,28 +99,6 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-pub struct MockThresholdSigner;
-
-impl ThresholdSigner<Ethereum> for MockThresholdSigner {
-	type RequestId = u32;
-	type Error = &'static str;
-	type Callback = MockCallback;
-
-	fn request_signature(_: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
-		Default::default()
-	}
-
-	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
-		Ok(())
-	}
-
-	fn signature_result(
-		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
-		AsyncResult::Ready(SchnorrVerificationComponents::default())
-	}
-}
-
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
@@ -144,7 +123,7 @@ impl pallet_cf_flip::Config for Test {
 
 pub const NONCE: u64 = 42;
 
-impl NonceProvider<Ethereum> for Test {
+impl NonceProvider<MockEthereum> for Test {
 	fn next_nonce() -> cf_traits::Nonce {
 		NONCE
 	}
@@ -176,15 +155,76 @@ impl RewardsDistribution for MockRewardsDistribution<Test> {
 	}
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockUpdateFlipSupply {
+	nonce: <MockEthereum as ChainAbi>::Nonce,
+	new_total_supply: u128,
+	block_number: u64,
+}
+
+impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
+	fn new_unsigned(
+		nonce: <MockEthereum as ChainAbi>::Nonce,
+		new_total_supply: u128,
+		block_number: u64,
+	) -> Self {
+		Self { nonce, new_total_supply, block_number }
+	}
+}
+
+impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
+	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+		[0xcf; 4]
+	}
+
+	fn signed(
+		self,
+		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		unimplemented!()
+	}
+
+	fn encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockBroadcast;
+
+impl MockBroadcast {
+	pub fn call() {
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &true)
+	}
+
+	pub fn was_called() -> bool {
+		storage::hashed::get_or(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", false)
+	}
+}
+
+impl UnfilteredDispatchable for MockBroadcast {
+	type Origin = Origin;
+
+	fn dispatch_bypass_filter(
+		self,
+		_origin: Self::Origin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		Self::call();
+		Ok(().into())
+	}
+}
+
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
+	type HostChain = MockEthereum;
 	type FlipBalance = u128;
+	type UpdateFlipSupply = MockUpdateFlipSupply;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
-	type ThresholdSigner = MockThresholdSigner;
+	type ThresholdSigner = MockThresholdSigner<MockEthereum, MockBroadcast>;
 	type WeightInfo = ();
 }
 

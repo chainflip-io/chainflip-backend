@@ -44,7 +44,7 @@ type BasisPoints = u32;
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::Ethereum;
+	use cf_chains::ChainAbi;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -54,6 +54,12 @@ pub mod pallet {
 	pub trait Config: cf_traits::Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The host chain to which we broadcast supply updates.
+		///
+		/// In practice this is always [Ethereum] but making this configurable simplifies
+		/// testing.
+		type HostChain: ChainAbi;
 
 		/// The Flip token denomination.
 		type FlipBalance: Member
@@ -80,17 +86,18 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
-		type UpdateFlipSupply: UpdateFlipSupply<Ethereum>;
+		/// Something that allows us to build the UpdateFlipSupply api call.
+		type UpdateFlipSupply: UpdateFlipSupply<Self::HostChain>;
 
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
+		type NonceProvider: NonceProvider<Self::HostChain>;
 
 		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Ethereum>;
+		type ThresholdSigner: ThresholdSigner<Self::HostChain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
