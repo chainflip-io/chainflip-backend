@@ -36,11 +36,11 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-infrastructure/chainflip-master:latest
         auth: *dockerconfig
-        user: ci
   rust-base:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
