@@ -75,20 +75,20 @@ async fn request_block(
     settings: &CLISettings
 ) -> Result<()> {
     println!(
-        "Quering the state chain for the block with hash {}.",
+        "Querying the state chain for the block with hash {}.",
         hex::encode(block_hash)
     );
 
-    if !confirm_submit() {
-        return Ok(());
-    }
+    //if !confirm_submit() {
+    //    return Ok(());
+    //}
 
     let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
     
     match state_chain_rpc_client
         .get_block(block_hash)
         .await
-        .expect("Failed to quert for block") 
+        .expect("Failed to query for block") 
     {
         Some(block) => {
             println!("{:#?}", block);
