@@ -5,7 +5,6 @@ use cf_chains::{
 use cf_traits::{impl_mock_waived_fees, WaivedFees};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
-use pallet_cf_flip;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -134,7 +133,7 @@ impl pallet_cf_flip::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 

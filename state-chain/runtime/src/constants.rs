@@ -50,4 +50,7 @@ pub mod common {
 
 	/// The minimum stake, 40_000 x 10^18
 	pub const MIN_STAKE: FlipBalance = 40_000 * 10u128.pow(18);
+
+	/// Percent of the epoch we are allowed to claim
+	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 }

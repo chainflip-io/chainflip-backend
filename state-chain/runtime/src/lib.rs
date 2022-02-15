@@ -5,6 +5,7 @@ mod chainflip;
 pub mod constants;
 #[cfg(test)]
 mod tests;
+use cf_chains::Ethereum;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -41,11 +42,12 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use crate::chainflip::{
+use cf_traits::ChainflipAccountData;
+pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
+pub use chainflip::chain_instances::*;
+use chainflip::{
 	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler, OfflinePenalty,
 };
-pub use cf_traits::{BlockNumber, FlipBalance};
-use cf_traits::{ChainflipAccountData, SessionKeysRegistered};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::FlipSlasher;
@@ -100,10 +102,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 106,
+	spec_version: 107,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 1,
+	transaction_version: 2,
 };
 
 /// The version information used to identify this runtime when compiled natively.
@@ -152,23 +154,24 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
-	type VaultRotator = pallet_cf_vaults::Pallet<Self>;
+	type VaultRotator = EthereumVault;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
 	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
 }
 
-impl pallet_cf_vaults::Config for Runtime {
+impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Chain = Ethereum;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
@@ -360,7 +363,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type StakerId = AccountId;
 	type Flip = Flip;
-	type NonceProvider = Vaults;
+	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
@@ -378,6 +381,8 @@ impl pallet_cf_governance::Config for Runtime {
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
+	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
+	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
@@ -385,17 +390,12 @@ impl pallet_cf_emissions::Config for Runtime {
 	type FlipBalance = FlipBalance;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
-	type NonceProvider = Vaults;
+	type NonceProvider = EthereumVault;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
-}
-
-impl pallet_cf_rewards::Config for Runtime {
-	type Event = Event;
-	type WeightInfoRewards = pallet_cf_rewards::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -444,12 +444,12 @@ parameter_types! {
 	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
-impl pallet_cf_threshold_signature::Config<Instance1> for Runtime {
+impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type KeyProvider = chainflip::EthereumKeyProvider;
+	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -461,7 +461,7 @@ parameter_types! {
 	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
-impl pallet_cf_broadcast::Config<Instance1> for Runtime {
+impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = cf_chains::Ethereum;
 	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
@@ -487,7 +487,6 @@ construct_runtime!(
 		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
-		Rewards: pallet_cf_rewards::{Pallet, Call, Event<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
@@ -500,7 +499,7 @@ construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
+		EthereumVault: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},
@@ -693,10 +692,9 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_online, Online);
 			list_benchmark!(list, extra, pallet_cf_emissions, Emissions);
 			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
-			list_benchmark!(list, extra, pallet_cf_rewards, Rewards);
-			list_benchmark!(list, extra, pallet_cf_vaults, Vaults);
+			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
-			list_benchmark!(list, extra, pallet_cf_environment, Environment);
+			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -734,15 +732,12 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_staking, Staking);
 			add_benchmark!(params, batches, pallet_cf_flip, Flip);
 			add_benchmark!(params, batches, pallet_cf_governance, Governance);
-			add_benchmark!(params, batches, pallet_cf_vaults, Vaults);
+			add_benchmark!(params, batches, pallet_cf_vaults, EthereumVault);
 			add_benchmark!(params, batches, pallet_cf_online, Online);
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
-			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
-			add_benchmark!(params, batches, pallet_cf_environment, Environment);
-			// add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
-			// add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
+			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

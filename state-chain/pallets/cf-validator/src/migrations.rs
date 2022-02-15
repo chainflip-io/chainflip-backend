@@ -21,6 +21,7 @@ pub(crate) mod v1 {
 	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
 		get_storage_value(b"Auction", b"LastAuctionResult", b"")
 	}
+	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
@@ -56,7 +57,12 @@ pub(crate) mod v1 {
 			Validators::<T>::put(validators);
 			// Kill the Force
 			Force::kill();
-			T::DbWeight::get().reads_writes(2, 3)
+			// Set last expired epoch to the previous one
+			let current_epoch_index = CurrentEpoch::<T>::get();
+			LastExpiredEpoch::<T>::put(current_epoch_index.saturating_sub(1));
+			// Set the claim percentage
+			ClaimPeriodAsPercentage::<T>::put(PERCENTAGE_CLAIM_PERIOD);
+			T::DbWeight::get().reads_writes(3, 4)
 		} else {
 			log::error!(
 				target: "runtime::cf_validator",
@@ -82,6 +88,11 @@ pub(crate) mod v1 {
 
 		// We should expect no values for the Force item
 		assert_err!(Force::try_get(), ());
+
+		let current_epoch_index = CurrentEpoch::<T>::get();
+
+		assert_eq!(LastExpiredEpoch::<T>::get(), current_epoch_index.saturating_sub(1));
+		assert_eq!(ClaimPeriodAsPercentage::<T>::get(), PERCENTAGE_CLAIM_PERIOD);
 
 		log::info!(
 			target: "runtime::cf_validator",

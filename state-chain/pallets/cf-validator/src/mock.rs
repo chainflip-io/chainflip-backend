@@ -189,7 +189,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
-				&validator,
+				validator,
 				ValidatorPallet::epoch_index(),
 			);
 		}
@@ -250,10 +250,12 @@ impl Config for Test {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 /// Session pallet requires a set of validators at genesis.
 pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const MINIMUM_ACTIVE_BID_AT_GENESIS: Amount = 1;
 pub const BLOCKS_TO_SESSION_ROTATION: u64 = 4;
 
@@ -275,6 +277,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		validator_pallet: ValidatorPalletConfig {
 			blocks_per_epoch: 0,
 			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
+			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 		},
 	};
 

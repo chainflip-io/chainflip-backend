@@ -16,7 +16,7 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
     client::common::BroadcastVerificationMessage,
-    crypto::{KeyShare, Point, Scalar},
+    crypto::{KeyShare, Point, Rng, Scalar},
     SchnorrSignature,
 };
 
@@ -38,9 +38,9 @@ pub struct SecretNoncePair {
 impl SecretNoncePair {
     /// Generate a random pair of nonces (in a Box,
     /// to avoid them being copied on move)
-    pub fn sample_random() -> Box<Self> {
-        let d = Scalar::random();
-        let e = Scalar::random();
+    pub fn sample_random(mut rng: &mut Rng) -> Box<Self> {
+        let d = Scalar::random(&mut rng);
+        let e = Scalar::random(&mut rng);
 
         let d_pub = Point::from_scalar(&d);
         let e_pub = Point::from_scalar(&e);
@@ -223,7 +223,7 @@ pub fn generate_local_sig(
 }
 
 /// Schnorr signature as defined by the Key Manager contract
-fn generate_contract_schnorr_sig(
+pub fn generate_contract_schnorr_sig(
     private_key: Scalar,
     pubkey: Point,
     nonce_commitment: Point,

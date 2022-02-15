@@ -8,7 +8,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, SignedImbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
 use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
@@ -57,6 +57,8 @@ pub trait Witnesser {
 	type AccountId;
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
+	/// The type for block numbers
+	type BlockNumber;
 
 	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
 	/// number of witnesses have been made.
@@ -66,6 +68,13 @@ pub trait Witnesser {
 	/// be enforced by adding a salt or nonce to the function arguments.
 	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
+	/// Witness an event, as above, during a specific epoch
+	fn witness_at_epoch(
+		who: Self::AccountId,
+		call: Self::Call,
+		epoch: EpochIndex,
+		block_number: Self::BlockNumber,
+	) -> DispatchResultWithPostInfo;
 }
 
 pub trait EpochInfo {
@@ -73,6 +82,9 @@ pub trait EpochInfo {
 	type ValidatorId;
 	/// An amount
 	type Amount;
+
+	/// The last expired epoch
+	fn last_expired_epoch() -> EpochIndex;
 
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
@@ -87,7 +99,7 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> EpochIndex;
 
-	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
+	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
 	/// The number of validators in the current active set.
@@ -107,6 +119,14 @@ pub struct CurrentThreshold<T>(PhantomData<T>);
 impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
 	fn get() -> u32 {
 		T::EpochInfo::consensus_threshold()
+	}
+}
+
+pub struct CurrentEpochIndex<T>(PhantomData<T>);
+
+impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
+	fn get() -> u32 {
+		T::EpochInfo::epoch_index()
 	}
 }
 
@@ -202,8 +222,6 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 	type Amount: Copy;
-	/// The current epoch is ending
-	fn on_epoch_ending() {}
 	/// A new epoch has started
 	///
 	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
@@ -290,28 +308,11 @@ pub trait Issuance {
 pub trait RewardsDistribution {
 	type Balance;
 	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance> + Into<SignedImbalance<Self::Balance, Self::Surplus>>;
+	type Surplus: Imbalance<Self::Balance>;
 
 	/// Distribute some rewards.
 	fn distribute(rewards: Self::Surplus);
-
-	/// The execution weight of calling the distribution function.
-	fn execution_weight() -> Weight;
 }
-
-pub trait RewardRollover {
-	type AccountId;
-	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds
-	/// are available.
-	fn rollover(new_beneficiaries: &[Self::AccountId]) -> Result<(), DispatchError>;
-}
-
-pub trait Rewarder {
-	type AccountId;
-	// Apportion rewards due to all beneficiaries
-	fn reward_all() -> Result<(), DispatchError>;
-}
-
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
@@ -627,4 +628,16 @@ where
 			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id)
 	}
+}
+/// Handles the check of execution conditions
+pub trait ExecutionCondition {
+	/// Returns true/false if the condition is satisfied
+	fn is_satisfied() -> bool;
+}
+
+/// Performs a runtime upgrade
+pub trait RuntimeUpgrade {
+	/// Applies the wasm code of a runtime upgrade and returns the
+	/// information about the execution
+	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
 }

@@ -221,17 +221,12 @@ pub mod test_utils {
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
-    #[derive(Clone)]
+    #[derive(Default, Clone)]
     pub struct TagCache {
         log: Arc<Mutex<Vec<String>>>,
     }
 
     impl TagCache {
-        pub fn new() -> Self {
-            let log = Arc::new(Mutex::new(vec![]));
-            Self { log }
-        }
-
         /// returns true if the given tag was found in the log
         pub fn contains_tag(&self, tag: &str) -> bool {
             self.get_tag_count(tag) > 0
@@ -245,11 +240,6 @@ pub mod test_utils {
                 .iter()
                 .filter(|log_tag| *log_tag == tag)
                 .count()
-        }
-
-        /// clear the tag cache
-        pub fn clear(&mut self) {
-            self.log.lock().expect("Should be able to get lock").clear();
         }
     }
 
@@ -269,7 +259,7 @@ pub mod test_utils {
     /// Prints an easy to read log and the list of key/values.
     /// Also creates a tag cache that collects all tags so you can later confirm a log was triggered.
     pub fn new_test_logger_with_tag_cache() -> (slog::Logger, TagCache) {
-        let d1 = TagCache::new();
+        let d1 = TagCache::default();
         let d2 = Fuse(PrintlnDrainVerbose);
         (
             slog::Logger::root(slog::Duplicate::new(d1.clone(), d2).fuse(), o!()),
@@ -284,7 +274,7 @@ pub mod test_utils {
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
-        let tc = TagCache::new();
+        let tc = TagCache::default();
         let tag_whitelist = Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>());
         let tag_blacklist = Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>());
 
@@ -320,7 +310,7 @@ mod tests {
     #[test]
     fn test_logging_tags() {
         // Create a logger and tag cache
-        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
         let logger2 = logger.clone();
 
         // Print a bunch of stuff with tags
@@ -333,10 +323,6 @@ mod tests {
         assert_eq!(tag_cache.get_tag_count("E1234"), 2);
         assert!(tag_cache.contains_tag("2222"));
         assert!(!tag_cache.contains_tag("not_tagged"));
-
-        // Check that clearing the cache works
-        tag_cache.clear();
-        assert!(!tag_cache.contains_tag("E1234"));
     }
 
     #[test]

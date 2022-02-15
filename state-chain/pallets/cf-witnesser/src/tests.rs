@@ -2,6 +2,7 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	Error, VoteMask, Votes,
 };
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -50,7 +51,8 @@ fn call_on_threshold() {
 
 		// Check the deposited event to get the vote count.
 		let call_hash = frame_support::Hashable::blake2_256(&*call);
-		let stored_vec = Votes::<Test>::get(0, call_hash).unwrap_or(vec![]);
+		let stored_vec =
+			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or_default();
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
@@ -77,7 +79,7 @@ fn cannot_double_witness() {
 
 		// Vote again with the same account, should error.
 		assert_noop!(
-			Witnesser::witness(Origin::signed(ALISSA), call.clone()),
+			Witnesser::witness(Origin::signed(ALISSA), call),
 			Error::<Test>::DuplicateWitness
 		);
 	});
@@ -96,7 +98,7 @@ fn only_validators_can_witness() {
 
 		// Other accounts can't witness
 		assert_noop!(
-			Witnesser::witness(Origin::signed(DEIRDRE), call.clone()),
+			Witnesser::witness(Origin::signed(DEIRDRE), call),
 			Error::<Test>::UnauthorisedWitness
 		);
 	});
@@ -117,5 +119,74 @@ fn delegated_call_should_emit_but_not_return_error() {
 			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
 		)
 		.into()]);
+	});
+}
+
+#[test]
+fn can_continue_to_witness_for_old_epochs() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
+		// Run through a few epochs; 1, 2 and 3
+		MockEpochInfo::incr_epoch(); // 1 - Alice
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		MockEpochInfo::incr_epoch(); // 2 - Alice
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		MockEpochInfo::incr_epoch(); // 3 - Bob
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON], Default::default());
+
+		let current_epoch = MockEpochInfo::epoch_index();
+
+		// The last expired epoch
+		let expired_epoch = 1;
+		MockEpochInfo::set_last_expired_epoch(expired_epoch);
+
+		// Witness a call for one before the current epoch which has yet to expire
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			current_epoch - 1,
+			Default::default()
+		));
+
+		// Try to witness in an epoch that has expired
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(ALISSA),
+				call.clone(),
+				expired_epoch,
+				Default::default()
+			),
+			Error::<Test>::EpochExpired
+		);
+
+		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(BOBSON),
+				call.clone(),
+				current_epoch - 1,
+				Default::default()
+			),
+			Error::<Test>::UnauthorisedWitness
+		);
+
+		// But can witness in an epoch we are in
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			current_epoch,
+			Default::default()
+		));
+
+		// And an epoch that doesn't yet exist
+		assert_noop!(
+			Witnesser::witness_at_epoch(
+				Origin::signed(ALISSA),
+				call,
+				current_epoch + 1,
+				Default::default()
+			),
+			Error::<Test>::UnauthorisedWitness
+		);
 	});
 }

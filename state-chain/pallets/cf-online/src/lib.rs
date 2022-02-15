@@ -163,7 +163,7 @@ pub mod pallet {
 		pub fn online_validators() -> Vec<T::ValidatorId> {
 			T::EpochInfo::current_validators()
 				.into_iter()
-				.filter(|validator_id| Self::is_online(&validator_id))
+				.filter(|validator_id| Self::is_online(validator_id))
 				.collect()
 		}
 	}

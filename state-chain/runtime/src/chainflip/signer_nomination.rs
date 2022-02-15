@@ -24,7 +24,7 @@ fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Optio
 ///
 /// Returns `None` if the list is empty.
 fn select_one<T>(seed: u64, things: Vec<T>) -> Option<T> {
-	if things.len() == 0 {
+	if things.is_empty() {
 		None
 	} else {
 		let index = WyRand::new_seed(seed).generate_range(0..things.len());

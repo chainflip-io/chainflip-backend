@@ -129,7 +129,7 @@ mod tests {
 			.iter()
 			.skip(AuctionPallet::backup_group_size() as usize)
 			.take(usize::MAX)
-			.map(|bid| *bid)
+			.copied()
 			.collect()
 	}
 

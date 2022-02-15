@@ -5,9 +5,9 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
-	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, VaultsConfig, WASM_BINARY,
+	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -70,23 +70,25 @@ pub struct StateChainEnvironment {
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
 	let stake_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let key_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
+		.unwrap_or_else(|_| ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
-	let eth_init_agg_key =
-		hex::decode(env::var("ETH_INIT_AGG_KEY").unwrap_or(String::from(ETH_INIT_AGG_KEY_DEFAULT)))
-			.unwrap()
-			.try_into()
-			.expect("ETH_INIT_AGG_KEY Cast to agg pub key failed");
-
+	let eth_init_agg_key = hex::decode(
+		env::var("ETH_INIT_AGG_KEY").unwrap_or_else(|_| String::from(ETH_INIT_AGG_KEY_DEFAULT)),
+	)
+	.unwrap()
+	.try_into()
+	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
 	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
 		.unwrap_or(format!("{}", ETH_DEPLOYMENT_BLOCK_DEFAULT))
 		.parse::<u64>()
@@ -526,6 +528,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 
 /// Configure initial storage state for FRAME modules.
 /// 150 validator limit
+#[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -543,7 +546,11 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		validator: ValidatorConfig { blocks_per_epoch: 8 * HOURS, bond: genesis_stake_amount },
+		validator: ValidatorConfig {
+			blocks_per_epoch: 8 * HOURS,
+			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+			bond: genesis_stake_amount,
+		},
 		session: SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -564,9 +571,9 @@ fn testnet_genesis(
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
 		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
-		vaults: VaultsConfig {
-			ethereum_vault_key: eth_init_agg_key.to_vec(),
-			ethereum_deployment_block,
+		ethereum_vault: EthereumVaultConfig {
+			vault_key: eth_init_agg_key.to_vec(),
+			deployment_block: ethereum_deployment_block,
 		},
 		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,

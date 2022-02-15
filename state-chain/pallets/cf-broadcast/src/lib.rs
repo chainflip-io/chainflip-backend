@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -320,7 +320,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
+			let _success = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 				*id += 1;
@@ -416,7 +416,7 @@ pub mod pallet {
 			attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Remove the transmission details now the broadcast is completed.
 			let TransmissionAttempt::<T, I> { broadcast_id, .. } =
@@ -446,7 +446,7 @@ pub mod pallet {
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let failed_attempt = AwaitingTransmission::<T, I>::take(attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;

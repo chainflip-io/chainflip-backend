@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for Point {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Point::deserialize(&bytes)
-            .map(|x| Point(x))
+            .map(Point)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for Scalar {
         let bytes = Vec::deserialize(deserializer)?;
 
         Secp256k1Scalar::deserialize(&bytes)
-            .map(|x| Scalar(x))
+            .map(Scalar)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -93,10 +93,15 @@ pub struct KeyShare {
     pub x_i: Scalar,
 }
 
+// Ideally, we want to use a concrete implementation (like ChaCha20) instead of StdRng
+// to prevent it from potentially changing from under us (but it needs to be compatible
+// with rand_legacy)
+pub type Rng = rand_legacy::rngs::StdRng;
+
 #[cfg(test)]
 impl Point {
-    pub fn random() -> Self {
-        Point::from_scalar(&Scalar::random())
+    pub fn random(mut rng: &mut Rng) -> Self {
+        Point::from_scalar(&Scalar::random(&mut rng))
     }
 }
 
@@ -120,8 +125,13 @@ impl Point {
 }
 
 impl Scalar {
-    pub fn random() -> Self {
-        Scalar(Secp256k1Scalar::random())
+    pub fn random(mut rng: &mut Rng) -> Self {
+        use curv::elliptic::curves::secp256_k1::SK;
+
+        let scalar = secp256k1::SecretKey::new(&mut rng);
+
+        let scalar = Secp256k1Scalar::from_underlying(Some(SK(scalar)));
+        Scalar(scalar)
     }
 
     pub fn zero() -> Self {
@@ -144,7 +154,7 @@ impl Scalar {
     }
 
     pub fn invert(&self) -> Option<Self> {
-        self.0.invert().map(|x| Scalar(x))
+        self.0.invert().map(Scalar)
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -156,6 +166,7 @@ impl Scalar {
     }
 }
 
+// TODO: Look at how to dedup these adds
 impl std::ops::Add for &Scalar {
     type Output = Scalar;
 
@@ -168,7 +179,7 @@ impl std::ops::Add for Scalar {
     type Output = Scalar;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Scalar>::add(&self, &rhs)
     }
 }
 
@@ -236,6 +247,8 @@ impl std::ops::Mul<&Scalar> for &Point {
     }
 }
 
+// TODO: Look at how to dedup these adds
+// (See above impl Add for Scalar too)
 impl std::ops::Add for &Point {
     type Output = Point;
 
@@ -248,7 +261,7 @@ impl std::ops::Add for Point {
     type Output = Point;
 
     fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+        <&Point>::add(&self, &rhs)
     }
 }
 

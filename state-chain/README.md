@@ -26,6 +26,16 @@ The `cargo run` command will perform an initial build. Use the following command
 cargo build --release
 ```
 
+### Benchmark
+
+To benchmark the node for a production release you can run:
+
+```sh
+./state-chain/scripts/benchmark-all.sh
+```
+
+This script is building the node, executing the benchmarks, updating the weight files and guide you through adding the diff of any benchmark.
+
 ### Embedded Docs
 
 Once the project has been built, the following command can be used to explore all parameters and subcommands:
