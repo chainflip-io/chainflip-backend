@@ -182,8 +182,8 @@ pub mod mocks {
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	pub struct MockThresholdSignature<K, P> {
-		signing_key: K,
-		signed_payload: P,
+		pub signing_key: K,
+		pub signed_payload: P,
 	}
 
 	impl ChainCrypto for MockEthereum {
