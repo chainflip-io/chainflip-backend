@@ -124,10 +124,16 @@ pub mod utils {
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// ```sh
-    /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
+    /// {"msg":"...","level":"trace","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn new_json_logger() -> slog::Logger {
-        new_async_logger(new_json_drain())
+        slog::Logger::root(
+            slog_async::Async::new(new_json_drain())
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
+            o!(),
+        )
     }
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
@@ -142,14 +148,6 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
-        new_async_logger(drain)
-    }
-
-    /// Create a new async logger with custom channel size
-    fn new_async_logger<D>(drain: D) -> slog::Logger
-    where
-        D: slog::Drain<Err = slog::Never, Ok = ()> + Send + 'static,
-    {
         slog::Logger::root(
             slog_async::Async::new(drain)
                 .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
