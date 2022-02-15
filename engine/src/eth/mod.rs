@@ -537,7 +537,7 @@ fn get_web_address_as_partial_hidden(web_address: &str) -> Result<String> {
     let url = url::Url::parse(web_address).map_err(anyhow::Error::msg)?;
     let host = url
         .host_str()
-        .ok_or_else(|| anyhow::Error::msg(format!("No host in url {}", web_address)))?;
+        .ok_or_else(|| anyhow::Error::msg(format!("No host in url")))?;
     Ok(web_address
         .to_string()
         .replace(host, &format!("{}****", host.split_at(host.len().min(3)).0)))
