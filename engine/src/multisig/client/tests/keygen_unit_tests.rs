@@ -360,7 +360,7 @@ async fn should_ignore_duplicate_keygen_request() {
     );
 
     let messages = ceremony.request().await;
-    let _ = ceremony
+    let _messages = ceremony
         .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
 

@@ -20,7 +20,6 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult> {
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult> {
-    logger: slog::Logger,
     ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
@@ -28,6 +27,7 @@ pub struct StateRunner<CeremonyData, CeremonyResult> {
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
     /// Time point at which the current ceremony is considered expired and gets aborted
     should_expire_at: std::time::Instant,
+    logger: slog::Logger,
 }
 
 impl<CeremonyData, CeremonyResult> StateRunner<CeremonyData, CeremonyResult>
@@ -37,7 +37,7 @@ where
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(logger: &slog::Logger, ceremony_id: CeremonyId) -> Self {
+    pub fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
         StateRunner {
             inner: None,
             ceremony_id,

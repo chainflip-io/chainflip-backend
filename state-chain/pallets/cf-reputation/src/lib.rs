@@ -171,7 +171,7 @@ pub mod pallet {
 			online_credits: OnlineCreditsFor<T>,
 		) -> DispatchResultWithPostInfo {
 			// Ensure we are root when setting this
-			let _ = ensure_root(origin)?;
+			ensure_root(origin)?;
 			// Some very basic validation here.  Should be improved in subsequent PR based on
 			// further definition of limits
 			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
@@ -199,7 +199,7 @@ pub mod pallet {
 			value: ReputationPenalty<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
 			// Ensure we are root when setting this
-			let _ = ensure_root(origin)?;
+			ensure_root(origin)?;
 			ReputationPointPenalty::<T>::put(value.clone());
 			Self::deposit_event(Event::ReputationPointPenaltyUpdated(value));
 			Ok(().into())

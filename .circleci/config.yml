@@ -368,6 +368,10 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
+          groupadd ci
+          useradd -g ci ci
+          su - ci
+      - run: |
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
@@ -376,6 +380,7 @@ jobs:
             - target/release/chainflip-node
             - target/release/chainflip-engine
             - target/release/chainflip-cli
+            - target/release/insert-genesis-keyshare
             - target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - send_notification:
           only_for_branches: "develop"
@@ -413,7 +418,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
+          cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
           sccache --show-stats
 
   cargo-doc:

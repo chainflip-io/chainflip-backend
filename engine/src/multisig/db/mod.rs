@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod mock;
-mod persistent;
+pub mod persistent;
 
 use std::collections::HashMap;
 

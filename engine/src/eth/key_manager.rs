@@ -126,14 +126,14 @@ impl EthObserver for KeyManager {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
             KeyManagerEvent::KeyChange { new_key, .. } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
                             cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
                             event.block_number,
                             event.tx_hash,
                         ),
+                        logger,
                     )
                     .await;
             }
