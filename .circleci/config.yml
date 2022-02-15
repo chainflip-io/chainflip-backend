@@ -40,6 +40,7 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -366,10 +367,6 @@ jobs:
       - run: |
           cargo build --locked --release
           sccache --show-stats
-      - run: |
-          groupadd ci
-          useradd -g ci ci
-          su - ci
       - run: |
           cargo test --lib --locked --release --all-features
           sccache --show-stats
