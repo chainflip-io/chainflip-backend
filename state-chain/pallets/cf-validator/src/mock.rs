@@ -254,7 +254,7 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+pub const DUMMY_GENESIS_VALIDATORS: &[u64] = &[u64::MAX];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const MINIMUM_ACTIVE_BID_AT_GENESIS: Amount = 1;
 pub const BLOCKS_TO_SESSION_ROTATION: u64 = 4;
