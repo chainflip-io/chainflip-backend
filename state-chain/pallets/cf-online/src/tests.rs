@@ -21,9 +21,9 @@ fn should_exclude_keygen_failures() {
 	new_test_ext().execute_with(|| {
 		<OnlinePallet as KeygenExclusionSet>::add_to_set(ALICE);
 		assert!(<OnlinePallet as KeygenExclusionSet>::is_excluded(&ALICE));
-		assert_eq!(false, <OnlinePallet as KeygenExclusionSet>::is_excluded(&BOB));
+		assert!(!<OnlinePallet as KeygenExclusionSet>::is_excluded(&BOB));
 		<OnlinePallet as KeygenExclusionSet>::forgive_all();
-		assert_eq!(false, <OnlinePallet as KeygenExclusionSet>::is_excluded(&ALICE));
+		assert!(!<OnlinePallet as KeygenExclusionSet>::is_excluded(&ALICE));
 	});
 }
 

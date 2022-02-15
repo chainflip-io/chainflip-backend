@@ -115,7 +115,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn excluded_from_keygen)]
 	pub(super) type ExcludedFromKeygen<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
