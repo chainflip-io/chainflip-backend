@@ -130,7 +130,7 @@ impl Auctioneer for MockAuctioneer {
 		})
 	}
 
-	fn update_validator_status(_auction: AuctionResult<Self::ValidatorId, Self::Amount>) {}
+	fn update_validator_status(_winners: &[Self::ValidatorId]) {}
 }
 
 pub struct MockIsOutgoing;

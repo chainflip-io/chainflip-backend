@@ -175,8 +175,8 @@ pub trait Auctioneer {
 
 	/// Run an auction by qualifying a validator
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>;
-	/// Update validator status based on the auction result
-	fn update_validator_status(auction: AuctionResult<Self::ValidatorId, Self::Amount>);
+	/// Update validator status for the winners
+	fn update_validator_status(winners: &[Self::ValidatorId]);
 }
 
 pub trait BackupValidators {

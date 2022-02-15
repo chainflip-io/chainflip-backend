@@ -231,7 +231,7 @@ pub mod pallet {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(auction_result) => {
-					T::Auctioneer::update_validator_status(auction_result);
+					T::Auctioneer::update_validator_status(&auction_result.winners);
 					Self::update_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -568,7 +568,7 @@ pub mod pallet {
 
 			for validator_id in &genesis_validators {
 				T::ChainflipAccount::update_state(
-					&(validator_id.clone()).into(),
+					&(validator_id.clone()),
 					ChainflipAccountState::Validator,
 				)
 			}
