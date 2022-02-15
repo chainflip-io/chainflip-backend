@@ -211,16 +211,13 @@ impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(
-		validator_id: &Self::ValidatorId,
-		block_number: Self::BlockNumber,
-	) -> Weight {
-		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number)
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) {
+		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number);
 	}
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		// Reputation depends on heartbeats
-		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
+		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
 		let backup_validators = <Auction as BackupValidators>::backup_validators();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
@@ -230,10 +227,8 @@ impl Heartbeat for ChainflipHeartbeat {
 		let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
 		let percent_online = network_state.percentage_online() as u8;
 		if percent_online >= bottom && percent_online <= top {
-			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
+			<Validator as EmergencyRotation>::request_emergency_rotation();
 		}
-
-		weight
 	}
 }
 
