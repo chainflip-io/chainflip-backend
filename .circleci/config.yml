@@ -36,6 +36,7 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-infrastructure/chainflip-master:latest
         auth: *dockerconfig
+        user: ci
   rust-base:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -367,10 +368,6 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
-          groupadd ci
-          useradd -g ci ci
-      - run: |
-          su ci -p
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
