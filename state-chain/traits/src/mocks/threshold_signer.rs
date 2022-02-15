@@ -3,7 +3,7 @@ use crate::AsyncResult;
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
 use codec::{Decode, Encode};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
 use std::marker::PhantomData;
 
 pub struct MockThresholdSigner<C, Call>(PhantomData<(C, Call)>);
@@ -15,20 +15,20 @@ impl<C, Call> MockPallet for MockThresholdSigner<C, Call> {
 impl<C, O, Call> MockThresholdSigner<C, Call>
 where
 	C: ChainCrypto,
-	O: Default,
+	O: OriginTrait,
 	Call: UnfilteredDispatchable<Origin = O> + Encode + Decode,
 {
 	pub fn threshold_signature_ready(request_id: u32, sig: <C as ChainCrypto>::ThresholdSignature) {
 		Self::put_storage(b"SIG", request_id, AsyncResult::Ready(sig));
 		Self::get_storage::<_, Call>(b"CALLBACK", request_id)
-			.map(|c| c.dispatch_bypass_filter(O::default()));
+			.map(|c| c.dispatch_bypass_filter(O::none()));
 	}
 }
 
 impl<C, O, Call> crate::ThresholdSigner<C> for MockThresholdSigner<C, Call>
 where
 	C: ChainCrypto,
-	O: Default,
+	O: OriginTrait,
 	Call: UnfilteredDispatchable<Origin = O> + Encode + Decode,
 {
 	type RequestId = u32;
