@@ -185,22 +185,11 @@ pub struct EthRpcClient {
 impl EthRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
-        let node_endpoint_snippet = node_endpoint
-            .split_at(
-                node_endpoint[0..node_endpoint.len()
-                    - url::Url::parse(node_endpoint)
-                        .expect("Should parse node endpoint")
-                        .host_str()
-                        .expect("should have host in node endpoint")
-                        .len()
-                        .saturating_sub(2)]
-                    .len(),
-            )
-            .0;
         slog::trace!(
             logger,
-            "Connecting new web3 client to {}****",
-            node_endpoint_snippet
+            "Connecting new web3 client to {}",
+            get_web_address_as_partial_hidden(node_endpoint)
+                .expect("Should get node endpoint as secret string")
         );
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
@@ -542,6 +531,18 @@ fn decode_shared_event_closure(
     )
 }
 
+/// Gives a web address as a secret string by partially replacing the host with ****.
+///  eg: "wss://secret.host/dashboard" -> "wss://sec****/dashboard"
+fn get_web_address_as_partial_hidden(web_address: &str) -> Result<String> {
+    let url = url::Url::parse(web_address).map_err(anyhow::Error::msg)?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| anyhow::Error::msg(format!("No host in url {}", web_address)))?;
+    Ok(web_address
+        .to_string()
+        .replace(host, &format!("{}****", host.split_at(host.len().min(3)).0)))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::logging::test_utils::new_test_logger;
@@ -553,5 +554,23 @@ mod tests {
         let eth_rpc_api_mock = MockEthRpcApi::new();
         let logger = new_test_logger();
         EthBroadcaster::new_test(eth_rpc_api_mock, &logger);
+    }
+
+    #[test]
+    fn test_secret_web_addresses() {
+        assert_eq!(
+            get_web_address_as_partial_hidden("wss://123456789.rinkeby.ws.rivet.cloud/").unwrap(),
+            "wss://123****/"
+        );
+        assert_eq!(
+            get_web_address_as_partial_hidden("wss://a").unwrap(),
+            "wss://a****"
+        );
+        assert_eq!(
+            get_web_address_as_partial_hidden("https://123456.secret/public").unwrap(),
+            "https://123****/public"
+        );
+        assert!(get_web_address_as_partial_hidden("wss://").is_err());
+        assert!(get_web_address_as_partial_hidden("no.schema.com").is_err());
     }
 }
