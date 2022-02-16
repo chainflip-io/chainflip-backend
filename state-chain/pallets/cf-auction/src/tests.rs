@@ -26,7 +26,7 @@ fn we_have_a_set_of_winners_at_genesis() {
 }
 
 #[test]
-fn ruxxn_through_phases() {
+fn run_through_phases() {
 	new_test_ext().execute_with(|| {
 		// We would have the genesis state with group 1 of the bidders
 		let (old_winners, old_minimum_active_bid) = expected_validating_set();

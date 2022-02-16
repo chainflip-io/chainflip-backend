@@ -339,13 +339,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// A new auction has started, store and emit the event
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
-				let mut bids = T::BidderProvider::get_bidders();
-				// Number one rule - If we have a bid at 0 then please leave
-				bids.retain(|(_, amount)| !amount.is_zero());
-				// Determine if this validator is qualified for bidding
-				bids.retain(|(validator_id, _)| {
-					<Pallet<T> as QualifyValidator>::is_qualified(validator_id)
-				});
+				let bids = T::BidderProvider::get_bidders();
+				let mut bids: Vec<_> = bids
+					.iter()
+					.filter(|(validator_id, amount)| {
+						*amount > Zero::zero() &&
+							<Pallet<T> as QualifyValidator>::is_qualified(validator_id) &&
+							!T::KeygenExclusionSet::is_excluded(validator_id)
+					})
+					.collect();
+
 				let number_of_bidders = bids.len() as u32;
 				let (min_number_of_validators, max_number_of_validators) =
 					ActiveValidatorSizeRange::<T>::get();
