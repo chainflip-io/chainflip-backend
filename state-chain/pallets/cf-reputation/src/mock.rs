@@ -72,12 +72,13 @@ pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> =
 pub const ACCRUAL_BLOCKS: u64 = 2500;
 // Number of accrual points
 pub const ACCRUAL_POINTS: i32 = 1;
+pub const MAX_REPUTATION_POINT_ACCRUED: ReputationPoints = 15;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const MaximumReputationPointAccrued: ReputationPoints = 15;
+	pub const MaximumReputationPointAccrued: ReputationPoints = MAX_REPUTATION_POINT_ACCRUED;
 }
 
 // Mocking the `Slasher` trait

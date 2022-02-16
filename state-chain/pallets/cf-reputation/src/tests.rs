@@ -114,12 +114,16 @@ fn missing_heartbeats_should_see_slashing_when_we_hit_negative() {
 fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), 16, 0),
+			ReputationPallet::update_accrual_ratio(
+				Origin::root(),
+				MAX_REPUTATION_POINT_ACCRUED + 1,
+				0
+			),
 			Error::<Test>::InvalidAccrualReputationPoints
 		);
 
 		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), 15, 0),
+			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_REPUTATION_POINT_ACCRUED, 0),
 			Error::<Test>::InvalidAccrualOnlineCredits
 		);
 
