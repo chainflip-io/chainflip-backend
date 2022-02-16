@@ -212,6 +212,16 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
+      - docker-build:
+          name: docker-build-insert-genesis-keyshare
+          image: insert-genesis-keyshare
+          cache_from: ghcr.io/insert-genesis-keyshare:latest
+          dockerfile: insert-genesis-keyshare.Dockerfile
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
 
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
