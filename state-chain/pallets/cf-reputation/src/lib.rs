@@ -69,6 +69,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
+		/// The maximum number of reputation points that can be accrued
+		#[pallet::constant]
+		type MaximumReputationPointAccrued: Get<ReputationPoints>;
+
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			AccountId = Self::ValidatorId,
@@ -83,6 +87,9 @@ pub mod pallet {
 
 		/// Ban validators
 		type Banned: Banned<ValidatorId = Self::ValidatorId>;
+
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 	}
 
 	#[pallet::hooks]
@@ -154,7 +161,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// The accrual ratio can be updated and would come into play in the current heartbeat
-		/// interval This is only available to sudo
+		/// interval. This is gated with governance.
 		///
 		/// ## Events
 		///
@@ -170,18 +177,18 @@ pub mod pallet {
 			points: ReputationPoints,
 			online_credits: OnlineCreditsFor<T>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure we are root when setting this
-			ensure_root(origin)?;
-			// Some very basic validation here.  Should be improved in subsequent PR based on
-			// further definition of limits
-			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
-			ensure!(online_credits > Zero::zero(), Error::<T>::InvalidAccrualOnlineCredits);
-			// Online credits are equivalent to block time and hence should be less than our
-			// heartbeat interval
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				online_credits > T::HeartbeatBlockInterval::get(),
-				Error::<T>::InvalidAccrualOnlineCredits
+				points <= T::MaximumReputationPointAccrued::get(),
+				Error::<T>::InvalidAccrualReputationPoints
 			);
+			// If we have points to accrue then ensure the online credits provided
+			if points > Zero::zero() {
+				ensure!(
+					online_credits > T::HeartbeatBlockInterval::get(),
+					Error::<T>::InvalidAccrualOnlineCredits
+				);
+			}
 
 			AccrualRatio::<T>::set((points, online_credits));
 			Self::deposit_event(Event::AccrualRateUpdated(points, online_credits));

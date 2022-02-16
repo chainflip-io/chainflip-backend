@@ -42,7 +42,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::ChainflipAccountData;
+use cf_traits::{offline_conditions::ReputationPoints, ChainflipAccountData};
 pub use cf_traits::{BlockNumber, FlipBalance};
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -417,6 +417,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = 150;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const MaximumReputationPointAccrued: ReputationPoints = 15;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
@@ -427,6 +428,8 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Penalty = OfflinePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
 }
 
 impl pallet_cf_online::Config for Runtime {

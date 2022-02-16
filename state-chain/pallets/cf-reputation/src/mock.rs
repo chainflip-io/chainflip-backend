@@ -14,6 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
+	offline_conditions::ReputationPoints,
 	Chainflip, Slashing,
 };
 
@@ -76,6 +77,7 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const MaximumReputationPointAccrued: ReputationPoints = 15;
 }
 
 // Mocking the `Slasher` trait
@@ -115,6 +117,8 @@ impl Config for Test {
 	type Penalty = MockOfflinePenalty;
 	type WeightInfo = ();
 	type Banned = MockBanned;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
