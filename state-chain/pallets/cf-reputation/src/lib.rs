@@ -316,7 +316,6 @@ pub mod pallet {
 					|Reputation { online_credits, reputation_points }| {
 						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 							// Update reputation points
-							// TODO: refactor to make it not panic!
 							let ReputationPenalty { points, blocks } =
 								ReputationPointPenalty::<T>::get();
 							let interval: u32 =
@@ -325,7 +324,14 @@ pub mod pallet {
 
 							let penalty =
 								(points.saturating_mul(interval as i32).checked_div(blocks as i32))
-									.expect("calculating offline penalty shouldn't fail");
+									.unwrap_or_else(|| {
+										log::error!(
+											"Unexpected penalty calculation error {:?}: {:?}.",
+											interval,
+											blocks
+										);
+										0
+									});
 
 							*reputation_points = Pallet::<T>::clamp_reputation_points(
 								(*reputation_points).saturating_sub(penalty),
