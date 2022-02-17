@@ -540,10 +540,12 @@ impl fmt::Display for TransportProtocol {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    /// Takes a stream of BlockHeaderable items, and turns this into a stream of logs/events
+    /// for all logs/events from a particular contract
     async fn log_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
         &self,
         from_block: u64,
-        deployed_address: H160,
+        contract_address: H160,
         safe_head_stream: BlockHeaderStream,
         eth_rpc: &EthRpc,
         logger: &slog::Logger,
@@ -581,7 +583,7 @@ pub trait EthObserver {
                             // from_block and to_block are *inclusive*
                             .from_block(BlockNumber::Number(from_block))
                             .to_block(BlockNumber::Number(best_safe_block_number))
-                            .address(vec![deployed_address])
+                            .address(vec![contract_address])
                             .build(),
                     )
                     .await
@@ -590,7 +592,7 @@ pub trait EthObserver {
                 let future_logs = filtered_log_stream_by_contract(
                     safe_head_stream,
                     eth_rpc.clone(),
-                    deployed_address,
+                    contract_address,
                     logger.clone(),
                 )
                 .await;
