@@ -78,12 +78,14 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .eth_http_rpc
                     .block(safe_block_number.into())
                     .await
-                    .unwrap()
+                    .expect(&format!(
+                        "Failed to fetch ETH block `{}` via HTTP",
+                        safe_block_number
+                    ))
                     .unwrap();
                 state.last_block_fetched = unsafe_block_number;
                 state.last_block_yielded = block.number.unwrap();
                 break Some((block, state));
-                // we want to skip the first block
 
                 // check last yielded too?
             } else if state.last_block_fetched != U64::from(0)
@@ -97,9 +99,12 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     println!("Adding block number: {} to the cache", return_block_number);
                     let block = state
                         .eth_http_rpc
-                        .block(U64::from(return_block_number).into())
+                        .block(return_block_number.into())
                         .await
-                        .unwrap()
+                        .expect(&format!(
+                            "Failed to fetch ETH block `{}` via HTTP",
+                            return_block_number
+                        ))
                         .unwrap();
 
                     state.last_block_yielded = block.number.unwrap();
