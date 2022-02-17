@@ -243,7 +243,6 @@ pub struct EthWsRpcClient {
     web3: Web3<web3::transports::WebSocket>,
 }
 
-// TODO: Look at passing through the
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
