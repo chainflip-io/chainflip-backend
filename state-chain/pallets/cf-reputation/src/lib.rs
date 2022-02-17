@@ -29,7 +29,9 @@ mod migrations;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
+	use cf_traits::{
+		offline_conditions::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -83,6 +85,9 @@ pub mod pallet {
 
 		/// Ban validators
 		type Banned: Banned<ValidatorId = Self::ValidatorId>;
+
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -253,6 +258,10 @@ pub mod pallet {
 
 			if to_ban {
 				T::Banned::ban(validator_id);
+			}
+
+			if condition == OfflineCondition::ParticipateKeygenFailed {
+				T::KeygenExclusionSet::add_to_set(validator_id.clone());
 			}
 
 			Self::deposit_event(Event::OfflineConditionPenalty(
