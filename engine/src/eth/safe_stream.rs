@@ -19,7 +19,6 @@ pub fn safe_eth_log_header_stream<BlockHeaderStream>(
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
-    // Unfold state struct
     struct StreamAndBlocks<BlockHeaderStream>
     where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
@@ -107,7 +106,6 @@ where
                     .expect("Should have logs bloom")
                     .contains_bloom(&contract_bloom)
                 {
-                    // Do we want to check the WS *and* the HTTP endpoints here
                     let logs = eth_rpc
                         .get_logs(
                             FilterBuilder::default()
