@@ -576,7 +576,6 @@ impl fmt::Display for TranpsortProtocol {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    // TODO: this needs to be split out
     async fn log_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
         &self,
         from_block: u64,
