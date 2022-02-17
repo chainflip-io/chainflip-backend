@@ -210,24 +210,6 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::GovKeySetByGovKey { new_key, .. } => {
-                let _ = state_chain_client
-                    .submit_signed_extrinsic(
-                        logger,
-                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                            ChainId::Ethereum,
-                            new_key.as_bytes().to_vec(),
-                            event.block_number,
-                            event.tx_hash.to_vec(),
-                        ),
-                    )
-                    .await;
-            }
-            KeyManagerEvent::SignatureAccepted { .. } => {}
-            KeyManagerEvent::Shared(shared_event) => match shared_event {
-                SharedEvent::Refunded { .. } => {}
-                SharedEvent::RefundFailed { .. } => {}
-            },
             _ => {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
