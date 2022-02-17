@@ -710,14 +710,12 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
+			Pallet::<T>::force_validator_rotation();
 		}
-
-		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {

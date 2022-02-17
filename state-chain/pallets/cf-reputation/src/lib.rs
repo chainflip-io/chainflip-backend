@@ -29,7 +29,9 @@ mod migrations;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
+	use cf_traits::{
+		offline_conditions::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -83,6 +85,9 @@ pub mod pallet {
 
 		/// Ban validators
 		type Banned: Banned<ValidatorId = Self::ValidatorId>;
+
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -255,6 +260,10 @@ pub mod pallet {
 				T::Banned::ban(validator_id);
 			}
 
+			if condition == OfflineCondition::ParticipateKeygenFailed {
+				T::KeygenExclusionSet::add_to_set(validator_id.clone());
+			}
+
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
 				condition,
@@ -272,10 +281,7 @@ pub mod pallet {
 		/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
 		/// heartbeat interval.  These block credits are transformed to reputation points based on
 		/// the accrual ratio.
-		fn heartbeat_submitted(
-			validator_id: &Self::ValidatorId,
-			_block_number: Self::BlockNumber,
-		) -> Weight {
+		fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation
@@ -287,8 +293,6 @@ pub mod pallet {
 						reputation_points: 0,
 					},
 				);
-
-				T::DbWeight::get().reads_writes(1, 1)
 			} else {
 				// Update reputation points for this validator
 				Reputations::<T>::mutate(
@@ -305,8 +309,6 @@ pub mod pallet {
 						}
 					},
 				);
-
-				T::DbWeight::get().reads_writes(2, 1)
 			}
 		}
 
@@ -315,9 +317,8 @@ pub mod pallet {
 		/// before we earn points.
 		/// Once the reputation points fall below zero slashing comes into play and is delegated to
 		/// the `Slashing` trait.
-		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 			// Penalise those that are missing this heartbeat
-			let mut weight = 0;
 			for validator_id in network_state.offline {
 				let reputation_points = Reputations::<T>::mutate(
 					&validator_id,
@@ -341,7 +342,6 @@ pub mod pallet {
 							// Reset the credits earned as being online consecutively
 							*online_credits = Zero::zero();
 						}
-						weight += T::DbWeight::get().reads_writes(1, 1);
 
 						*reputation_points
 					},
@@ -351,11 +351,9 @@ pub mod pallet {
 					Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
-					weight += T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
+					T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 				}
-				weight += T::DbWeight::get().reads(1);
 			}
-			weight
 		}
 	}
 
