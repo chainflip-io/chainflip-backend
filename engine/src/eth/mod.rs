@@ -552,6 +552,16 @@ pub enum TranpsortProtocol {
     Ws,
 }
 
+// Returns the other protocol
+impl TranpsortProtocol {
+    pub fn other(&self) -> Self {
+        match self {
+            TranpsortProtocol::Http => TranpsortProtocol::Ws,
+            TranpsortProtocol::Ws => TranpsortProtocol::Http,
+        }
+    }
+}
+
 impl fmt::Display for TranpsortProtocol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -774,45 +784,9 @@ pub trait EthObserver {
                         // doesn't count if we haven't started yet
                         match protocol {
                             TranpsortProtocol::Http => {
-                                if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                    <= current_item_block_number
-                                {
-                                    let blocks_behind =
-                                        current_item_block_number - state.last_ws_block_pulled;
-                                    if !(state.last_ws_block_pulled == 0)
-                                        && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND
-                                            == 0)
-                                    {
-                                        slog::warn!(
-                                            state.logger,
-                                            #ETH_STREAM_BEHIND,
-                                            "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
-                                            current_item_block_number,
-                                            state.last_ws_block_pulled,
-                                        );
-                                    }
-                                }
                                 state.last_http_block_pulled = current_item_block_number
                             }
                             TranpsortProtocol::Ws => {
-                                if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                    <= current_item_block_number
-                                {
-                                    let blocks_behind =
-                                        current_item_block_number - state.last_http_block_pulled;
-                                    if !(state.last_http_block_pulled == 0)
-                                        && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND
-                                            == 0)
-                                    {
-                                        slog::warn!(
-                                            state.logger,
-                                            #ETH_STREAM_BEHIND,
-                                            "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
-                                            current_item_block_number,
-                                            state.last_http_block_pulled,
-                                        );
-                                    }
-                                }
                                 state.last_ws_block_pulled = current_item_block_number
                             }
                         };
@@ -855,7 +829,7 @@ pub trait EthObserver {
                         break None;
                     }
                 } {
-                    // log with the right tag
+                    // Do the necessary logging
                     match protocol {
                         TranpsortProtocol::Http => {
                             slog::info!(
@@ -865,6 +839,23 @@ pub trait EthObserver {
                                 yield_item,
                                 protocol
                             );
+                            if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                                <= yield_item.block_number
+                            {
+                                let blocks_behind =
+                                    yield_item.block_number - state.last_ws_block_pulled;
+                                if !(state.last_ws_block_pulled == 0)
+                                    && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+                                {
+                                    slog::warn!(
+                                        state.logger,
+                                        #STUFF,
+                                        "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
+                                        yield_item.block_number,
+                                        state.last_ws_block_pulled,
+                                    );
+                                }
+                            }
                         }
                         TranpsortProtocol::Ws => {
                             slog::info!(
@@ -874,6 +865,23 @@ pub trait EthObserver {
                                 yield_item,
                                 protocol
                             );
+                            if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                                <= yield_item.block_number
+                            {
+                                let blocks_behind =
+                                    yield_item.block_number - state.last_http_block_pulled;
+                                if !(state.last_http_block_pulled == 0)
+                                    && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+                                {
+                                    slog::warn!(
+                                        state.logger,
+                                        #ETH_STREAM_BEHIND,
+                                        "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
+                                        yield_item.block_number,
+                                        state.last_http_block_pulled,
+                                    );
+                                }
+                            }
                         }
                     }
                     Some((yield_item, state))

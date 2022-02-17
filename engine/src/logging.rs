@@ -79,6 +79,7 @@ pub mod utils {
             Ok(())
         }
     }
+
     pub struct PrintlnDrainVerbose;
 
     impl Drain for PrintlnDrainVerbose {
@@ -222,13 +223,15 @@ pub mod utils {
 #[cfg(test)]
 pub mod test_utils {
     use super::utils::*;
-    use slog::{o, Drain, Fuse, OwnedKVList, Record};
+    use core::fmt;
+    use slog::{o, Drain, Fuse, Key, OwnedKVList, Record, Serializer, KV};
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
     #[derive(Default, Clone)]
     pub struct TagCache {
         log: Arc<Mutex<Vec<String>>>,
+        // kvs: Arc<Mutex<HashMap<String, String>>>,
     }
 
     impl TagCache {
@@ -253,15 +256,37 @@ pub mod test_utils {
         }
     }
 
+    struct TagCacheSerializer;
+
+    impl Serializer for TagCacheSerializer {
+        fn emit_arguments(
+            &mut self,
+            key: Key,
+            val: &fmt::Arguments,
+        ) -> Result<(String, String), slog::Error> {
+            Ok(key.to_string(), val.to_string())
+        }
+    }
+
     impl Drain for TagCache {
         type Ok = ();
         type Err = ();
 
-        fn log(&self, record: &Record, _: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
+        fn log(&self, record: &Record, owned_kv_list: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
             if !record.tag().is_empty() {
                 let mut log = self.log.lock().expect("Should be able to get lock");
                 log.push(record.tag().to_owned());
             }
+
+            // let mut tag_cache_serializer = TagCacheSerializer;
+            owned_kv_list.to_owned().serialize();
+
+            println!("Here's the owned kv list: {:?}", stuff);
+
+            for i in owned_kv_list {
+                println!("{:?}", i);
+            }
+
             Ok(())
         }
     }
