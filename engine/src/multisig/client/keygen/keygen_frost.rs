@@ -1,10 +1,11 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::multisig::{
     client::ThresholdParameters,
-    crypto::{BigInt, BigIntConverter, ECPoint, ECScalar, Point, Scalar, ScalarExt},
+    crypto::{Point, Rng, Scalar},
 };
 
 /// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
@@ -16,14 +17,12 @@ fn evaluate_polynomial<'a, T>(
 where
     T: 'a + Clone,
     T: std::ops::Mul<Scalar, Output = T>,
-    T: std::ops::Add<Output = T>,
+    T: std::ops::Add<T, Output = T>,
 {
-    let index = Scalar::from_usize(index);
-
     coefficients
         .rev()
         .cloned()
-        .reduce(|acc, coefficient| acc * index + coefficient)
+        .reduce(|acc, coefficient| acc * Scalar::from_usize(index) + coefficient)
         .unwrap()
 }
 
@@ -38,8 +37,6 @@ fn test_simple_polynomial() {
     assert_eq!(value, Scalar::from_usize(37));
 }
 
-use zeroize::Zeroize;
-
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
 #[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
@@ -51,9 +48,9 @@ pub struct ShamirShare {
 
 #[cfg(test)]
 impl ShamirShare {
-    pub fn create_random() -> Self {
+    pub fn create_random(mut rng: &mut Rng) -> Self {
         ShamirShare {
-            value: Scalar::new_random(),
+            value: Scalar::random(&mut rng),
         }
     }
 }
@@ -87,8 +84,9 @@ fn generate_dkg_challenge(
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
-    hasher.update(public.get_element().to_string());
-    hasher.update(commitment.get_element().to_string());
+
+    hasher.update(public.as_bytes());
+    hasher.update(commitment.as_bytes());
 
     hasher.update(index.to_be_bytes());
     hasher.update(context.0);
@@ -97,15 +95,20 @@ fn generate_dkg_challenge(
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    ECScalar::from(&BigInt::from_bytes(&x))
+    Scalar::from_bytes(&x)
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
-fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -> ZKPSignature {
-    let nonce = Scalar::new_random();
-    let nonce_commitment = Point::generator() * nonce;
+fn generate_zkp_of_secret(
+    mut rng: &mut Rng,
+    secret: Scalar,
+    context: &HashContext,
+    index: usize,
+) -> ZKPSignature {
+    let nonce = Scalar::random(&mut rng);
+    let nonce_commitment = Point::from_scalar(&nonce);
 
-    let secret_commitment = Point::generator() * secret;
+    let secret_commitment = Point::from_scalar(&secret);
 
     let challenge = generate_dkg_challenge(index, context, secret_commitment, nonce_commitment);
 
@@ -117,27 +120,27 @@ fn generate_zkp_of_secret(secret: Scalar, context: &HashContext, index: usize) -
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
 
-#[derive(Clone)]
 pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
 
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
 pub fn generate_shares_and_commitment(
+    mut rng: &mut Rng,
     context: &HashContext,
     index: usize,
     params: ThresholdParameters,
 ) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
-        generate_secret_and_shares(params.share_count, params.threshold);
+        generate_secret_and_shares(&mut rng, params.share_count, params.threshold);
 
     // Zero-knowledge proof of `secret`
-    let zkp = generate_zkp_of_secret(secret, context, index);
+    let zkp = generate_zkp_of_secret(&mut rng, secret, context, index);
 
-    // TODO: zeroize secret here
+    // Secret will be zeroized on drop here
 
     (
         OutgoingShares(shares),
@@ -147,21 +150,25 @@ pub fn generate_shares_and_commitment(
 
 // NOTE: shares should be sent after participants have exchanged commitments
 fn generate_secret_and_shares(
+    mut rng: &mut Rng,
     n: usize,
     t: usize,
 ) -> (Scalar, CoefficientCommitments, HashMap<usize, ShamirShare>) {
     // Our secret contribution to the aggregate key
-    let secret = Scalar::new_random();
+    let secret = Scalar::random(&mut rng);
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::new_random()).collect();
+    let coefficients: Vec<_> = (0..t)
+        .into_iter()
+        .map(|_| Scalar::random(&mut rng))
+        .collect();
 
     // (Figure 1: Round 1, Step 3)
-    let commitments: Vec<_> = [secret]
+    let commitments: Vec<_> = [secret.clone()]
         .iter()
         .chain(&coefficients)
-        .map(|scalar| Point::generator() * scalar)
+        .map(|scalar| Point::from_scalar(scalar))
         .collect();
 
     // Generate shares
@@ -171,23 +178,27 @@ fn generate_secret_and_shares(
             (
                 index,
                 ShamirShare {
-                    value: evaluate_polynomial([secret].iter().chain(coefficients.iter()), index),
+                    // TODO: Make this work on references
+                    value: evaluate_polynomial(
+                        [secret.clone()].iter().chain(coefficients.iter()),
+                        index,
+                    ),
                 },
             )
         })
         .collect();
 
-    // TODO: we should probably zeroize coefficients here, and remove the secret?
+    // Coefficients are zeroized on drop here
     (secret, CoefficientCommitments(commitments), shares)
 }
 
 fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitments) -> bool {
-    zkp.r + comm.0[0] * challenge == Point::generator() * zkp.z
+    zkp.r + comm.0[0] * challenge == Point::from_scalar(&zkp.z)
 }
 
 // (Figure 1: Round 2, Step 2)
 pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: usize) -> bool {
-    Point::generator() * share.value == evaluate_polynomial(com.commitments.0.iter(), index)
+    Point::from_scalar(&share.value) == evaluate_polynomial(com.commitments.0.iter(), index)
 }
 
 /// Commitments to the sharing polynomial coefficient
@@ -212,7 +223,7 @@ pub struct DKGUnverifiedCommitment {
 }
 
 /// Commitments that have already been checked against the ZKP
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DKGCommitment {
     commitments: CoefficientCommitments,
 }
@@ -254,11 +265,7 @@ pub fn validate_commitments(
 
 /// Derive aggregate pubkey from party commitments
 pub fn derive_aggregate_pubkey(commitments: &HashMap<usize, DKGCommitment>) -> Point {
-    commitments
-        .iter()
-        .map(|(_idx, c)| c.commitments.0[0])
-        .reduce(|acc, x| acc + x)
-        .unwrap()
+    commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
 }
 
 /// Derive each party's "local" pubkey
@@ -284,8 +291,7 @@ pub fn derive_local_pubkeys_for_parties(
                 .map(|j| {
                     evaluate_polynomial((0..=t).map(|k| &commitments[&j].commitments.0[k]), idx)
                 })
-                .reduce(|acc, x| acc + x)
-                .unwrap()
+                .sum()
         })
         .collect()
 }
@@ -302,7 +308,10 @@ mod tests {
         let n = 7;
         let threshold = 5;
 
-        let (secret, _commitments, shares) = generate_secret_and_shares(n, threshold);
+        use rand_legacy::SeedableRng;
+        let mut rng = Rng::from_seed([0; 32]);
+
+        let (secret, _commitments, shares) = generate_secret_and_shares(&mut rng, n, threshold);
 
         assert_eq!(secret, reconstruct_secret(&shares));
     }
@@ -314,11 +323,15 @@ mod tests {
 
         let context = HashContext([0; 32]);
 
+        use rand_legacy::SeedableRng;
+        let mut rng = Rng::from_seed([0; 32]);
+
         let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
             .map(|idx| {
-                let (secret, shares_commitments, shares) = generate_secret_and_shares(n, t);
+                let (secret, shares_commitments, shares) =
+                    generate_secret_and_shares(&mut rng, n, t);
                 // Zero-knowledge proof of `secret`
-                let zkp = generate_zkp_of_secret(secret, &context, idx);
+                let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
                 let dkg_commitment = DKGUnverifiedCommitment {
                     commitments: shares_commitments,
@@ -333,11 +346,10 @@ mod tests {
 
         // Now it is okay to distribute the shares
 
-        let _agg_pubkey = coeff_commitments
+        let _agg_pubkey: Point = coeff_commitments
             .iter()
             .map(|(_idx, c)| c.commitments.0[0])
-            .reduce(|acc, x| acc + x)
-            .unwrap();
+            .sum();
 
         let mut secret_shares = vec![];
 
@@ -352,13 +364,10 @@ mod tests {
                 .collect();
 
             // (Round 2, Step 3)
-            let secret_share = received_shares
+            let secret_share: Scalar = received_shares
                 .iter()
-                .map(|share| share.value)
-                .reduce(|acc, share| acc + share)
-                .unwrap();
-
-            // TODO: delete all received_shares
+                .map(|share| share.value.clone())
+                .sum();
 
             secret_shares.push(secret_share);
         }

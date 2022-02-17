@@ -9,6 +9,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 use cf_chains::Chain;
 use cf_traits::{offline_conditions::*, Chainflip, SignerNomination};
 use codec::{Decode, Encode};
@@ -172,6 +175,13 @@ pub mod pallet {
 		/// The timeout duration for the transmission stage, measured in number of blocks.
 		#[pallet::constant]
 		type TransmissionTimeout: Get<BlockNumberFor<Self>>;
+
+		/// Maximum number of attempts
+		#[pallet::constant]
+		type MaximumAttempts: Get<AttemptCount>;
+
+		/// The weights for the pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -235,6 +245,8 @@ pub mod pallet {
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
+		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
+		BroadcastAborted(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -303,12 +315,12 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::start_broadcast())]
 		pub fn start_broadcast(
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
+			let _success = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 				*id += 1;
@@ -334,7 +346,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		/// - [InvalidSigner](Error::InvalidSigner)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::transaction_ready_for_transmission())]
 		pub fn transaction_ready_for_transmission(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
@@ -382,6 +394,7 @@ pub mod pallet {
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.into(),
+					OfflineCondition::InvalidTransactionAuthored,
 				)
 			}
 
@@ -397,13 +410,13 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::transmission_success())]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Remove the transmission details now the broadcast is completed.
 			let TransmissionAttempt::<T, I> { broadcast_id, .. } =
@@ -425,15 +438,15 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
-		#[pallet::weight(10_000)]
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
 			attempt_id: BroadcastAttemptId,
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let failed_attempt = AwaitingTransmission::<T, I>::take(attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
@@ -443,6 +456,7 @@ pub mod pallet {
 					Self::report_and_schedule_retry(
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
+						OfflineCondition::TransactionFailedOnTransmission,
 					);
 				},
 				TransmissionFailure::TransactionFailed => {
@@ -471,50 +485,67 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
+		// Seed based on the input data of the extrinsic
+		let seed = (attempt_id, unsigned_tx.clone()).encode();
+
 		// Select a signer for this broadcast.
-		let nominated_signer = T::SignerNomination::nomination_with_seed(attempt_id);
+		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
 
-		AwaitingTransactionSignature::<T, I>::insert(
-			attempt_id,
-			TransactionSigningAttempt::<T, I> {
-				broadcast_id,
-				attempt_count,
-				unsigned_tx: unsigned_tx.clone(),
-				nominee: nominated_signer.clone(),
-			},
-		);
+		// Check if there is an nominated signer
+		if let Some(nominated_signer) = nominated_signer {
+			AwaitingTransactionSignature::<T, I>::insert(
+				attempt_id,
+				TransactionSigningAttempt::<T, I> {
+					broadcast_id,
+					attempt_count,
+					unsigned_tx: unsigned_tx.clone(),
+					nominee: nominated_signer.clone(),
+				},
+			);
 
-		// Schedule expiry.
-		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
-		Expiries::<T, I>::mutate(expiry_block, |entries| {
-			entries.push((BroadcastStage::TransactionSigning, attempt_id))
-		});
+			// Schedule expiry.
+			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
+			Expiries::<T, I>::mutate(expiry_block, |entries| {
+				entries.push((BroadcastStage::TransactionSigning, attempt_id))
+			});
 
-		// Emit the transaction signing request.
-		Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
-			attempt_id,
-			nominated_signer,
-			unsigned_tx,
-		));
+			// Emit the transaction signing request.
+			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
+				attempt_id,
+				nominated_signer,
+				unsigned_tx,
+			));
+		} else {
+			// In this case all validators are currently offline. We just do
+			// nothing in this case and wait until someone comes up again.
+			log::warn!("No online validators at the moment.");
+			let failed =
+				FailedBroadcastAttempt::<T, I> { broadcast_id, attempt_count, unsigned_tx };
+			Self::schedule_retry(failed);
+		}
 	}
 
-	fn report_and_schedule_retry(signer: &T::ValidatorId, failed: FailedBroadcastAttempt<T, I>) {
-		T::OfflineReporter::report(OfflineCondition::ParticipateSigningFailed, signer)
-			.unwrap_or_else(|_| {
-				// Should never fail unless the validator doesn't exist.
-				log::error!("Unable to report unknown validator {:?}", signer);
-				0
-			});
+	fn report_and_schedule_retry(
+		signer: &T::ValidatorId,
+		failed: FailedBroadcastAttempt<T, I>,
+		offline_condition: OfflineCondition,
+	) {
+		T::OfflineReporter::report(offline_condition, signer);
 		Self::schedule_retry(failed);
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
+	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
 	fn schedule_retry(failed: FailedBroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append(&failed);
-		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-			failed.broadcast_id,
-			failed.attempt_count,
-		));
+		if failed.attempt_count < T::MaximumAttempts::get() {
+			BroadcastRetryQueue::<T, I>::append(&failed);
+			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
+				failed.broadcast_id,
+				failed.attempt_count,
+			));
+		} else {
+			Self::deposit_event(Event::<T, I>::BroadcastAborted(failed.broadcast_id));
+		}
 	}
 
 	/// Retry a failed attempt by starting anew with incremented attempt_count.

@@ -5,7 +5,6 @@ use cf_chains::{
 use cf_traits::{impl_mock_waived_fees, WaivedFees};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
-use pallet_cf_flip;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -40,7 +39,6 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const MinClaimTTL: Duration = Duration::from_secs(4);
 	pub const ClaimTTL: Duration = Duration::from_secs(10);
 }
 
@@ -96,6 +94,11 @@ impl cf_traits::KeyProvider<AlwaysVerifiesCoin> for MockKeyProvider {
 	}
 }
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = AlwaysVerifiesCoin;
@@ -103,6 +106,8 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {
@@ -128,7 +133,7 @@ impl pallet_cf_flip::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
@@ -174,7 +179,6 @@ impl SigningContext<Test> for ClaimSigningContext {
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
-	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
@@ -184,17 +188,18 @@ impl pallet_cf_staking::Config for Test {
 	type SigningContext = ClaimSigningContext;
 	type ThresholdSigner = Signer;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
-
+pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
-		staking: StakingConfig { genesis_stakers: vec![] },
+		staking: StakingConfig { genesis_stakers: vec![], minimum_stake: MIN_STAKE },
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

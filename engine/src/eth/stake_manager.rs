@@ -102,14 +102,15 @@ pub enum StakeManagerEvent {
 impl EthObserver for StakeManager {
     type EventParameters = StakeManagerEvent;
 
-    async fn handle_event<RPCClient>(
+    async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
     ) where
-        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+        RpcClient: 'static + StateChainRpcApi + Sync + Send,
     {
+        slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
             StakeManagerEvent::Staked {
                 account_id,
@@ -117,36 +118,32 @@ impl EthObserver for StakeManager {
                 staker: _,
                 return_addr,
             } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_staked(
                             account_id,
                             amount,
                             return_addr.0,
-                            event.tx_hash,
+                            event.tx_hash.into(),
                         ),
+                        logger,
                     )
                     .await;
             }
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_claimed(
                             account_id,
                             amount,
-                            event.tx_hash,
+                            event.tx_hash.to_fixed_bytes(),
                         ),
+                        logger,
                     )
                     .await;
             }
-            ignored_event => {
-                slog::warn!(
-                    logger,
-                    "{:?} is not to be submitted to the State Chain",
-                    ignored_event
-                );
+            _ => {
+                slog::trace!(logger, "Ignoring unused event: {}", event);
             }
         }
     }

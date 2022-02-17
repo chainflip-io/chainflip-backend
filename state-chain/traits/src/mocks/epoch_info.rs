@@ -14,7 +14,8 @@ macro_rules! impl_mock_epoch_info {
 			pub static NEXT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
-			pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
+			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
+			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(true);
 		}
 
 		impl MockEpochInfo {
@@ -61,14 +62,22 @@ macro_rules! impl_mock_epoch_info {
 				EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
 			}
 
-			pub fn set_is_auction_phase(is_auction: bool) {
-				IS_AUCTION.with(|cell| *(cell.borrow_mut()) = is_auction);
+			pub fn set_claiming_allowed(is_auction: bool) {
+				AUCTION_PHASE.with(|cell| *(cell.borrow_mut()) = is_auction);
+			}
+
+			pub fn set_last_expired_epoch(epoch_index: $epoch_index) {
+				LAST_EXPIRED_EPOCH.with(|cell| *(cell.borrow_mut()) = epoch_index);
 			}
 		}
 
 		impl EpochInfo for MockEpochInfo {
 			type ValidatorId = $account_id;
 			type Amount = $balance;
+
+			fn last_expired_epoch() -> $epoch_index {
+				LAST_EXPIRED_EPOCH.with(|cell| *cell.borrow())
+			}
 
 			fn current_validators() -> Vec<Self::ValidatorId> {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
@@ -82,16 +91,12 @@ macro_rules! impl_mock_epoch_info {
 				BOND.with(|cell| *cell.borrow())
 			}
 
-			fn next_validators() -> Vec<Self::ValidatorId> {
-				NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
-			}
-
 			fn epoch_index() -> $epoch_index {
 				EPOCH.with(|cell| *cell.borrow())
 			}
 
 			fn is_auction_phase() -> bool {
-				IS_AUCTION.with(|cell| *cell.borrow())
+				AUCTION_PHASE.with(|cell| *cell.borrow())
 			}
 
 			fn active_validator_count() -> u32 {

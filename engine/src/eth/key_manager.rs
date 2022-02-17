@@ -7,7 +7,6 @@ use crate::{
     eth::{utils, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
-use cf_chains::ChainId;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -44,8 +43,8 @@ impl ChainflipKey {
         Ok(ChainflipKey {
             pub_key_x,
             pub_key_y_parity: match parity {
-                true => web3::types::U256::from_dec_str("1").unwrap(),
-                false => web3::types::U256::from_dec_str("0").unwrap(),
+                true => web3::types::U256::from(1),
+                false => web3::types::U256::from(0),
             },
         })
     }
@@ -188,26 +187,26 @@ pub enum KeyManagerEvent {
 impl EthObserver for KeyManager {
     type EventParameters = KeyManagerEvent;
 
-    async fn handle_event<RPCClient>(
+    async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RPCClient>>,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
     ) where
-        RPCClient: 'static + StateChainRpcApi + Sync + Send,
+        RpcClient: 'static + StateChainRpcApi + Sync + Send,
     {
+        slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
             KeyManagerEvent::AggKeySetByAggKey { new_key, .. }
             | KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
-                        pallet_cf_witnesser_api::Call::witness_vault_key_rotated(
-                            ChainId::Ethereum,
-                            new_key.serialize().to_vec(),
+                        pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
+                            cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
                             event.block_number,
-                            event.tx_hash.to_vec(),
+                            event.tx_hash,
                         ),
+                        logger,
                     )
                     .await;
             }
@@ -229,6 +228,9 @@ impl EthObserver for KeyManager {
                 SharedEvent::Refunded { .. } => {}
                 SharedEvent::RefundFailed { .. } => {}
             },
+            _ => {
+                slog::trace!(logger, "Ignoring unused event: {}", event);
+            }
         }
     }
 
@@ -505,7 +507,7 @@ mod tests {
             }
         ).unwrap();
 
-        assert_eq!(event.tx_hash, transaction_hash.to_fixed_bytes());
+        assert_eq!(event.tx_hash, transaction_hash);
     }
 
     #[test]

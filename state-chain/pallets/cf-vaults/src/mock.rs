@@ -132,13 +132,19 @@ impl ThresholdSigner<MockRuntime> for MockThresholdSigner {
 	}
 }
 
+parameter_types! {
+	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
+}
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
+	type Chain = Ethereum;
 	type RotationHandler = MockRotationHandler;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
 	type WeightInfo = ();
+	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
@@ -150,7 +156,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			ethereum_vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
+			vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
+			deployment_block: 0,
 		},
 	};
 

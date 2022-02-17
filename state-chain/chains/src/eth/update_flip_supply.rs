@@ -104,7 +104,7 @@ mod test_update_flip_supply {
 	}
 
 	#[test]
-	fn test_claim_payload() {
+	fn test_update_flip_supply_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const NONCE: u64 = 6;
@@ -141,7 +141,7 @@ mod test_update_flip_supply {
 			runtime_payload,
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			stake_manager_reference
-				.encode_input(&vec![
+				.encode_input(&[
 					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(expected_msg_hash.0.into()),

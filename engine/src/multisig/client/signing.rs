@@ -3,26 +3,20 @@
 pub mod frost;
 pub mod frost_stages;
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Instant};
 
 use pallet_cf_vaults::CeremonyId;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    constants::PENDING_SIGN_DURATION,
     multisig::{KeyId, MessageHash},
-    p2p::AccountId,
 };
 
-use self::frost::SigningData;
+use state_chain_runtime::AccountId;
 
-use super::{
-    common::{CeremonyStage, KeygenResult},
-    SchnorrSignature,
-};
+use super::common::KeygenResult;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
@@ -48,10 +42,8 @@ impl SigningInfo {
     }
 }
 
-const PENDING_SIGN_DURATION: Duration = Duration::from_secs(120);
-
 /// A wrapper around SigningInfo that contains the timeout info for cleanup
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PendingSigningInfo {
     pub should_expire_at: Instant,
     pub signing_info: SigningInfo,
@@ -77,5 +69,3 @@ pub struct SigningStateCommonInfo {
     pub data: MessageHash,
     pub key: Arc<KeygenResult>,
 }
-
-dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);

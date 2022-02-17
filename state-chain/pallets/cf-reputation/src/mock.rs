@@ -14,7 +14,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
-	offline_conditions::{OfflineCondition, OfflinePenalty, ReputationPoints},
 	Chainflip, Slashing,
 };
 
@@ -85,30 +84,20 @@ impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
-			*c = *c + 1
+			*c += 1
 		});
-		0
 	}
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-pub struct MockOfflinePenalty;
-
-impl OfflinePenalty for MockOfflinePenalty {
-	fn penalty(condition: &OfflineCondition) -> ReputationPoints {
-		match condition {
-			OfflineCondition::BroadcastOutputFailed => 10,
-			OfflineCondition::ParticipateSigningFailed => 100,
-			OfflineCondition::NotEnoughPerformanceCredits => 1000,
-		}
-	}
-}
+cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_keygen_exclusion!(u64);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
@@ -122,12 +111,12 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type Penalty = MockOfflinePenalty;
 	type WeightInfo = ();
-	type EpochInfo = MockEpochInfo;
+	type Banned = MockBanned;
+	type KeygenExclusionSet = MockKeygenExclusion;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

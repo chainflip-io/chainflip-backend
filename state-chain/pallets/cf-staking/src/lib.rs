@@ -32,12 +32,11 @@ pub use pallet::*;
 use sp_std::prelude::*;
 
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedSub, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
 
 use frame_support::pallet_prelude::Weight;
-
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
@@ -65,6 +64,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
+
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		type Balance: Parameter
 			+ Member
@@ -95,12 +97,6 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
-
-		/// The minimum period before a claim should expire. The main purpose is to make sure
-		/// we have some margin for error between the signature being issued and the extrinsic
-		/// actually being processed.
-		#[pallet::constant]
-		type MinClaimTTL: Get<Duration>;
 
 		/// TTL for a claim from the moment of issue.
 		#[pallet::constant]
@@ -134,6 +130,9 @@ pub mod pallet {
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
@@ -166,6 +165,9 @@ pub mod pallet {
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
+
+		/// The minimum stake required has been updated. \[new_amount\]
+		MinimumStakeUpdated(T::Balance),
 	}
 
 	#[pallet::error]
@@ -192,11 +194,8 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Signature posted too close to expiry time or for an already-expired claim.
-		SignatureTooLate,
-
-		/// Cannot make a claim request while an auction is being resolved.
-		NoClaimsDuringAuctionPhase,
+		/// We are in the auction phase
+		AuctionPhase,
 
 		/// Failed to encode the signed claim payload.
 		ClaimEncodingFailed,
@@ -204,6 +203,12 @@ pub mod pallet {
 		/// A withdrawal address is provided, but the account has a different withdrawal address
 		/// already associated.
 		WithdrawalAddressRestricted,
+
+		/// An invalid claim has been made
+		InvalidClaim,
+
+		/// Below the minimum stake
+		BelowMinimumStake,
 	}
 
 	#[pallet::call]
@@ -255,7 +260,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim)
-		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase)
+		/// - [AuctionPhase](Error::AuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		///
 		/// ## Dependencies
@@ -332,6 +337,12 @@ pub mod pallet {
 			);
 
 			PendingClaims::<T>::remove(&account_id);
+			// Remove claim expiry for this account.  We assume one claim per account here.
+			// `retain` those elements in their positions and removing the account that has claimed
+			let mut expiries = ClaimExpiries::<T>::get();
+			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
+			ClaimExpiries::<T>::set(expiries);
+
 			T::Flip::settle_claim(claimed_amount);
 
 			if T::Flip::stakeable_balance(&account_id).is_zero() {
@@ -379,15 +390,6 @@ pub mod pallet {
 
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
-
-			// Make sure the expiry time is still sane.
-			let min_ttl = T::MinClaimTTL::get();
-			let _ = claim_details
-				.expiry
-				.low_u64()
-				.checked_sub(T::TimeSource::now().as_secs())
-				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
-				.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
@@ -437,23 +439,46 @@ pub mod pallet {
 			Self::activate(&who)?;
 			Ok(().into())
 		}
+
+		/// Updates the minimum stake required for an account, the extrinsic is gated with
+		/// governance
+		///
+		/// ## Events
+		///
+		/// - [MinimumStakeUpdated](Event::MinimumStakeUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(10_000)]
+		pub fn update_minimum_stake(
+			origin: OriginFor<T>,
+			minimum_stake: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			MinimumStake::<T>::put(minimum_stake);
+			Self::deposit_event(Event::MinimumStakeUpdated(minimum_stake));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
+		pub minimum_stake: T::Balance,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![] }
+			Self { genesis_stakers: vec![], minimum_stake: Zero::zero() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			MinimumStake::<T>::set(self.minimum_stake);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 			}
@@ -484,7 +509,7 @@ impl<T: Config> Pallet<T> {
 			withdrawal_address,
 			amount,
 		));
-		Err(Error::<T>::WithdrawalAddressRestricted)?
+		Err(Error::<T>::WithdrawalAddressRestricted)
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
@@ -526,10 +551,10 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		let new_total = T::Flip::credit_stake(&account_id, amount);
+		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+		AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -539,8 +564,11 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		address: EthereumAddress,
 	) -> Result<(), DispatchError> {
+		// Ensure we are claiming something
+		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
+
 		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::NoClaimsDuringAuctionPhase);
+		ensure!(T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
 		// If a claim already exists, return an error. The validator must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.
@@ -553,6 +581,18 @@ impl<T: Config> Pallet<T> {
 				return Err(Error::<T>::WithdrawalAddressRestricted.into())
 			}
 		}
+
+		// Calculate the maximum that would remain after this claim and ensure it won't be less than
+		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
+		// this will need to be handled in a refactor of that trait(?)
+		let remaining = T::Flip::stakeable_balance(account_id)
+			.checked_sub(&amount)
+			.ok_or(Error::<T>::InvalidClaim)?;
+
+		ensure!(
+			remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
+			DispatchError::from(Error::<T>::BelowMinimumStake)
+		);
 
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by
 		// the amount claimed.
@@ -589,13 +629,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if *retired {
-						Err(Error::AlreadyRetired)?;
+						return Err(Error::AlreadyRetired)
 					}
 					*retired = true;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				},
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -609,13 +649,13 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(retired) => {
 					if !*retired {
-						Err(Error::AlreadyActive)?;
+						return Err(Error::AlreadyActive)
 					}
 					*retired = false;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				},
-				None => Err(Error::UnknownAccount)?,
+				None => Err(Error::UnknownAccount),
 			}
 		})
 	}
@@ -667,11 +707,11 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
 
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, claim_amount);
+				T::Flip::revert_claim(account_id, claim_amount);
 			}
 		}
 
-		return T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
+		T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
 	}
 }
 

@@ -8,6 +8,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -16,21 +17,35 @@ extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 use cf_traits::{
-	AuctionPhase, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HasPeerMapping,
 };
-use frame_support::{pallet_prelude::*, traits::EstimateNextSessionRotation};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{EstimateNextSessionRotation, OnKilledAccount},
+};
 pub use pallet::*;
+use sp_core::ed25519;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
+	AtLeast32BitUnsigned, BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
+
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode)]
 pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,
@@ -38,6 +53,9 @@ pub struct SemVer {
 }
 
 type Version = SemVer;
+type Ed25519PublicKey = ed25519::Public;
+type Ed25519Signature = ed25519::Signature;
+pub type Ipv6Addr = u128;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -46,18 +64,37 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum RotationStatus {
+	Idle,
+	AwaitingCompletion,
+	Ready,
+}
+
+impl Default for RotationStatus {
+	fn default() -> Self {
+		RotationStatus::Idle
+	}
+}
+
+pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
+	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_session::Config {
+	pub trait Config:
+		frame_system::Config
+		+ pallet_session::Config<ValidatorId = <Self as frame_system::Config>::AccountId>
+	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -80,6 +117,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
@@ -96,8 +136,15 @@ pub mod pallet {
 		ForceRotationRequested(),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
-		/// An validator has send his current CFE version
-		ValidatorCFEVersionRecorded(T::AccountId, Version),
+		/// The CFE version has been updated \[Validator, Old Version, New Version]
+		CFEVersionUpdated(T::ValidatorId, Version, Version),
+		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// ip_address\]
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		/// A validator has unregistered her current PeerId \[account_id, public_key\]
+		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
+		/// Ratio of claim period updated \[percentage\]
+		ClaimPeriodUpdated(Percentage),
 	}
 
 	#[pallet::error]
@@ -107,14 +154,90 @@ pub mod pallet {
 		InvalidEpoch,
 		/// During an auction we can't update certain state
 		AuctionInProgress,
+		/// Validator Peer mapping overlaps with an existing mapping
+		AccountPeerMappingOverlap,
+		/// Invalid signature
+		InvalidAccountPeerMappingSignature,
+		/// Invalid claim period
+		InvalidClaimPeriod,
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// Check expiry of epoch and store last expired
+			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
+				LastExpiredEpoch::<T>::set(epoch_index);
+			}
+
+			// We expect this to return true when a rotation has been forced, it is now scheduled
+			// or we are currently in a rotation
+			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
+				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
+					// Auction completed when we return to the state of `WaitingForBids`
+					if Force::<T>::get() {
+						Force::<T>::set(false);
+					}
+					Rotation::<T>::put(RotationStatus::AwaitingCompletion);
+				}
+			}
+			0
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Update the percentage of the epoch period that claims are permitted
+		///
+		/// The dispatch origin of this function must be governance
+		///
+		/// ## Events
+		///
+		/// - [ClaimPeriodUpdated](Event::ClaimPeriodUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidClaimPeriod](Error::InvalidClaimPeriod)
+		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
+		pub fn update_period_for_claims(
+			origin: OriginFor<T>,
+			percentage: Percentage,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(percentage <= 100, Error::<T>::InvalidClaimPeriod);
+			ClaimPeriodAsPercentage::<T>::set(percentage);
+			Self::deposit_event(Event::ClaimPeriodUpdated(percentage));
+
+			Ok(().into())
+		}
 		/// Sets the number of blocks an epoch should run for
 		///
 		/// The dispatch origin of this function must be root.
@@ -188,29 +311,102 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to send their current cfe version.
+		/// Allow a validator to link their validator id to a peer id
 		///
 		/// The dispatch origin of this function must be signed.
 		///
 		/// ## Events
 		///
-		/// - [ValidatorCFEVersionRecorded](Event::ValidatorCFEVersionRecorded)
+		/// - [PeerIdRegistered](Event::PeerIdRegistered)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [InvalidAccountPeerMappingSignature](Error::InvalidAccountPeerMappingSignature)
+		/// - [AccountPeerMappingOverlap](Error::AccountPeerMappingOverlap)
 		///
 		/// ## Dependencies
 		///
 		/// - None
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(origin: OriginFor<T>, semver: Version) -> DispatchResultWithPostInfo {
+		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
+		pub fn register_peer_id(
+			origin: OriginFor<T>,
+			peer_id: Ed25519PublicKey,
+			port: u16,
+			ip_address: Ipv6Addr,
+			signature: Ed25519Signature,
+		) -> DispatchResultWithPostInfo {
+			// TODO Consider ensuring is non-private IP / valid IP
+
 			let account_id = ensure_signed(origin)?;
-			ValidatorCFEVersion::<T>::insert(account_id.clone(), semver.clone());
-			Self::deposit_event(Event::ValidatorCFEVersionRecorded(account_id, semver));
+			ensure!(
+				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
+				Error::<T>::InvalidAccountPeerMappingSignature
+			);
+
+			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+				if existing_peer_id != peer_id {
+					ensure!(
+						!MappedPeers::<T>::contains_key(&peer_id),
+						Error::<T>::AccountPeerMappingOverlap
+					);
+					MappedPeers::<T>::remove(&existing_peer_id);
+					MappedPeers::<T>::insert(&peer_id, ());
+				}
+			} else {
+				ensure!(
+					!MappedPeers::<T>::contains_key(&peer_id),
+					Error::<T>::AccountPeerMappingOverlap
+				);
+				MappedPeers::<T>::insert(&peer_id, ());
+			}
+
+			AccountPeerMapping::<T>::insert(
+				&account_id,
+				(account_id.clone(), peer_id, port, ip_address),
+			);
+
+			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
+
+		/// Allow a validator to send their current cfe version.  We validate that the version is a
+		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [CFEVersionUpdated](Event::CFEVersionUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			let validator_id: T::ValidatorId = account_id;
+			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
+				if *current_version != version {
+					Self::deposit_event(Event::CFEVersionUpdated(
+						validator_id,
+						current_version.clone(),
+						version.clone(),
+					));
+					*current_version = version;
+				}
+				Ok(().into())
+			})
+		}
 	}
+
+	/// Percentage of epoch we allow claims
+	#[pallet::storage]
+	#[pallet::getter(fn claim_period_as_percentage)]
+	pub(super) type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// Force auction on next block
 	#[pallet::storage]
@@ -235,28 +431,68 @@ pub mod pallet {
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// Validator lookup
+	/// Active validator lookup
 	#[pallet::storage]
 	#[pallet::getter(fn validator_lookup)]
 	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
+
+	/// State of the current rotation
+	#[pallet::storage]
+	#[pallet::getter(fn rotation)]
+	pub type Rotation<T: Config> = StorageValue<_, RotationStatus, ValueQuery>;
+
+	/// A list of the current validators
+	#[pallet::storage]
+	#[pallet::getter(fn validators)]
+	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
+	/// The current bond
+	#[pallet::storage]
+	#[pallet::getter(fn bond)]
+	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
+	/// Account to Peer Mapping
+	#[pallet::storage]
+	#[pallet::getter(fn validator_peer_id)]
+	pub type AccountPeerMapping<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+	>;
+
+	/// Peers that are associated with account ids
+	#[pallet::storage]
+	#[pallet::getter(fn mapped_peer)]
+	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
 
 	/// Validator CFE version
 	#[pallet::storage]
 	#[pallet::getter(fn validator_cfe_version)]
 	pub type ValidatorCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, Version>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
+
+	/// The last expired epoch index
+	#[pallet::storage]
+	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// A map storing the expiry block numbers for old epochs
+	#[pallet::storage]
+	pub type EpochExpiries<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
+		pub claim_period_as_percentage: Percentage,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { blocks_per_epoch: Zero::zero() }
+			Self { blocks_per_epoch: Zero::zero(), claim_period_as_percentage: Zero::zero() }
 		}
 	}
 
@@ -264,15 +500,18 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			if let Some(auction_result) = T::Auctioneer::auction_result() {
-				T::EpochTransitionHandler::on_new_epoch(
-					&[],
-					&auction_result.winners,
-					auction_result.minimum_active_bid,
+			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
+
+			if let Some(AuctionResult { minimum_active_bid, winners }) =
+				T::Auctioneer::auction_result()
+			{
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			} else {
+				log::warn!(
+					"Unavailable genesis auction so we have no current validating set! \
+							Forcing a rotation will resolve this if we have stakers available"
 				);
 			}
-			CurrentEpoch::<T>::set(0);
-			Pallet::<T>::generate_lookup();
 		}
 	}
 }
@@ -281,23 +520,20 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
+	fn last_expired_epoch() -> EpochIndex {
+		LastExpiredEpoch::<T>::get()
+	}
+
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::validators()
+		Validators::<T>::get()
 	}
 
 	fn is_validator(account: &Self::ValidatorId) -> bool {
 		ValidatorLookup::<T>::contains_key(account)
 	}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Pallet<T>>::queued_keys().into_iter().map(|(k, _)| k).collect()
-	}
-
 	fn bond() -> Self::Amount {
-		match T::Auctioneer::phase() {
-			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
-			_ => Zero::zero(),
-		}
+		Bond::<T>::get()
 	}
 
 	fn epoch_index() -> EpochIndex {
@@ -305,44 +541,68 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn is_auction_phase() -> bool {
-		!T::Auctioneer::waiting_on_bids()
+		// start + ((epoch * percentage) / 100)
+		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
+			BlocksPerEpoch::<T>::get()
+				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
+				.checked_div(&100u32.into())
+				.unwrap_or_default(),
+		);
+
+		last_block_for_claims >= frame_system::Pallet::<T>::current_block_number()
+	}
+
+	fn active_validator_count() -> u32 {
+		Validators::<T>::decode_len().unwrap_or_default() as u32
 	}
 }
 
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(now: T::BlockNumber) -> bool {
-		// If we are waiting on bids let's see if we want to start a new rotation
-		match T::Auctioneer::phase() {
-			AuctionPhase::WaitingForBids => {
-				// If the session should end, start an auction.  We evaluate the first two steps
-				// of the auction, validate and select winners, as one.  If this fails we force a
-				// new rotation attempt.
-				if Self::should_rotate(now) {
-					let processed =
-						T::Auctioneer::process().is_ok() && T::Auctioneer::process().is_ok();
-					if !processed {
-						Force::<T>::set(true);
-					}
-					return processed
-				}
-
-				false
-			},
-			AuctionPhase::ValidatorsSelected(..) => {
-				// Confirmation of winners, we need to finally process them
-				// This checks whether this is confirmable via the `AuctionConfirmation` trait
-				T::Auctioneer::process().is_ok()
-			},
-			_ => {
-				// Do nothing more
-				false
-			},
-		}
+	fn should_end_session(_now: T::BlockNumber) -> bool {
+		Rotation::<T>::get() != RotationStatus::Idle
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	/// Starting a new epoch we update the storage, emit the event and call
+	/// `EpochTransitionHandler::on_new_epoch`
+	fn start_new_epoch(new_validators: &[T::ValidatorId], new_bond: T::Amount) {
+		let old_validators = Validators::<T>::get();
+		// Update state of current validators
+		Validators::<T>::set(new_validators.to_vec());
+		ValidatorLookup::<T>::remove_all(None);
+		for validator in new_validators {
+			ValidatorLookup::<T>::insert(validator, ());
+		}
+
+		// Calculate the new epoch index
+		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
+			*epoch = epoch.saturating_add(One::one());
+			(*epoch - 1, *epoch)
+		});
+
+		// The new bond set
+		Bond::<T>::set(new_bond);
+		// Set the expiry block number for the outgoing set
+		EpochExpiries::<T>::insert(
+			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
+			old_epoch,
+		);
+
+		// Set the block this epoch starts at
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+
+		// If we were in an emergency, mark as completed
+		Self::emergency_rotation_completed();
+
+		// Emit that a new epoch will be starting
+		Self::deposit_event(Event::NewEpoch(new_epoch));
+
+		// Handler for a new epoch
+		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+	}
+
 	/// Check whether we should based on either a force rotation or we have reach the epoch
 	/// block number
 	fn should_rotate(now: T::BlockNumber) -> bool {
@@ -360,15 +620,6 @@ impl<T: Config> Pallet<T> {
 		diff >= blocks_per_epoch
 	}
 
-	/// Generate our validator lookup list
-	fn generate_lookup() {
-		// Update our internal list of validators
-		ValidatorLookup::<T>::remove_all(None);
-		for validator in <pallet_session::Pallet<T>>::validators() {
-			ValidatorLookup::<T>::insert(validator, ());
-		}
-	}
-
 	fn force_validator_rotation() -> Weight {
 		Force::<T>::set(true);
 		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
@@ -379,59 +630,49 @@ impl<T: Config> Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	/// Prepare candidates for a new session
+	/// If we have a set of confirmed validators we roll them in over two blocks
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		match T::Auctioneer::phase() {
-			// Successfully completed the process, these are the next set of validators to be used
-			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
-			// A rotation has occurred, we emit an event of the new epoch and compile a list of
-			// validators for validator lookup
-			AuctionPhase::ConfirmedValidators(winners, minimum_active_bid) => {
-				// If we have a set of winners
-				if !winners.is_empty() {
-					// Reset forced rotation flag
-					if Force::<T>::get() {
-						Force::<T>::set(false);
-					}
-					// If we were in an emergency, mark as completed
-					Self::emergency_rotation_completed();
-					// Calculate our new epoch index
-					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
-						*epoch = epoch.saturating_add(One::one());
-						*epoch
-					});
-					// Set the block this epoch starts at
-					CurrentEpochStartedAt::<T>::set(
-						frame_system::Pallet::<T>::current_block_number(),
-					);
-					// Emit an event
-					Self::deposit_event(Event::NewEpoch(new_epoch));
-					// Generate our lookup list of validators
-					Self::generate_lookup();
-					let old_validators = T::Auctioneer::auction_result()
-						.expect("from genesis we would expect a previous auction")
-						.winners;
-
-					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(
-						&old_validators,
-						&winners,
-						minimum_active_bid,
-					);
-				}
-
-				let _ = T::Auctioneer::process();
+		// We have a confirmed set of validators from our last auction
+		// We first return the new winners and then to finalise we start a new epoch
+		match Rotation::<T>::get() {
+			RotationStatus::Idle => {
+				log::warn!(target: "cf-validator", "we shouldn't reach here and we will see the same \
+													validators in the next epoch");
 				None
 			},
-			// Return
-			_ => None,
+			RotationStatus::AwaitingCompletion => {
+				Rotation::<T>::put(RotationStatus::Ready);
+				Some(
+					T::Auctioneer::auction_result()
+						.expect("everything starts with an auction")
+						.winners,
+				)
+			},
+			RotationStatus::Ready => {
+				Rotation::<T>::set(RotationStatus::Idle);
+				None
+			},
 		}
+	}
+
+	/// We provide an implementation for this as we already have a set of validators with keys at
+	/// genesis
+	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		None
 	}
 
 	/// The current session is ending
 	fn end_session(_end_index: SessionIndex) {}
+
 	/// The session is starting
-	fn start_session(_start_index: SessionIndex) {}
+	fn start_session(_start_index: SessionIndex) {
+		if Rotation::<T>::get() == RotationStatus::Ready {
+			let AuctionResult { winners, minimum_active_bid } =
+				T::Auctioneer::auction_result().expect("everything starts with an auction");
+			// Start the new epoch
+			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+		}
+	}
 }
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
@@ -440,15 +681,22 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	}
 
 	fn estimate_current_session_progress(
-		_now: T::BlockNumber,
+		now: T::BlockNumber,
 	) -> (Option<sp_runtime::Permill>, Weight) {
-		// TODO
-		(None, 0)
+		(
+			Some(sp_runtime::Permill::from_rational(
+				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
+				BlocksPerEpoch::<T>::get(),
+			)),
+			T::DbWeight::get().reads(2),
+		)
 	}
 
 	fn estimate_next_session_rotation(_now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-		// TODO
-		(None, 0)
+		(
+			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
+			T::DbWeight::get().reads(2),
+		)
 	}
 }
 
@@ -462,14 +710,12 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
+			Pallet::<T>::force_validator_rotation();
 		}
-
-		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
@@ -480,5 +726,34 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if Self::emergency_rotation_in_progress() {
 			EmergencyRotationRequested::<T>::set(false);
 		}
+	}
+}
+
+pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
+
+/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the
+/// account by burning it.
+impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
+			MappedPeers::<T>::remove(&peer_id);
+			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
+		}
+	}
+}
+
+impl<T: Config> HasPeerMapping for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
+		AccountPeerMapping::<T>::contains_key(validator_id)
+	}
+}
+
+pub struct NotDuringRotation<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
+	fn is_satisfied() -> bool {
+		matches!(Rotation::<T>::get(), RotationStatus::Idle)
 	}
 }

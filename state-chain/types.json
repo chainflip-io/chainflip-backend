@@ -69,6 +69,8 @@
     ]
   },
   "Duration": "(u64,u32)",
+  "Ed25519PublicKey": "[u8;32]",
+  "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
@@ -96,27 +98,47 @@
       "Emissions": ""
     }
   },
+  "Ipv6Addr": "u128",
+  "KeygenOutcome": {
+    "_enum": {
+      "Success": "Vec<u8>",
+      "Failure": "BTreeSet<ValidatorId>"
+    }
+  },
+  "KeygenOutcomeFor": "KeygenOutcome",
+  "KeygenResponseStatus": {
+    "CandidateCount": "u32",
+    "RemainingCandidates": "BTreeSet<ValidatorId>",
+    "SuccessVotes": "BTreeMap<Vec<u8>, u32>",
+    "BlameVotes": "BTreeMap<ValidatorId, u32>"
+  },
   "KeyId": "Vec<u8>",
+  "Keys": {
+    "aura": "[u8; 32]",
+    "grandpa": "[u8; 32]"
+  },
+  "Liveness": {
+    "last_heartbeat": "BlockNumber",
+    "banned_until": "BlockNumber"
+  },
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
   },
-  "Node": {
-    "last_heartbeat": "BlockNumber",
-    "ban": "BlockNumber"
-  },
   "Nonce": "u64",
   "OfflineCondition": {
     "_enum": [
-      "BroadcastOutputFailed",
       "ParticipateSigningFailed",
-      "NotEnoughPerformanceCredits"
+      "ParticipateKeygenFailed",
+      "InvalidTransactionAuthored",
+      "TransactionFailedOnTransmission"
     ]
   },
   "OnlineCredits": "BlockNumber",
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "[u8; 32]",
+  "Percentage": "u8",
   "PercentageRange": {
     "top": "u8",
     "bottom": "u8"
@@ -172,7 +194,7 @@
       "TransactionFailed"
     ]
   },
-  "Uint": "[u8; 32]",
+  "Uint": "U256",
   "UnsignedTransaction": {
     "chain_id": "u64",
     "max_priority_fee_per_gas": "Option<U256>",
@@ -191,7 +213,7 @@
   "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
-    "candidates": "Vec<ValidatorId>"
+    "response_status": "KeygenResponseStatus"
   },
   "AwaitingRotation": {
     "new_public_key": "Vec<u8>"

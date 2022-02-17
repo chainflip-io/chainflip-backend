@@ -18,6 +18,7 @@ thread_local! {
 	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<(BroadcastAttemptId, BroadcastStage)>> = Default::default();
+	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
 
 struct MockCfe;
@@ -64,6 +65,9 @@ impl MockCfe {
 				},
 				BroadcastEvent::BroadcastAttemptExpired(broadcast_id, stage) =>
 					EXPIRED_ATTEMPTS.with(|cell| cell.borrow_mut().push((broadcast_id, stage))),
+				BroadcastEvent::BroadcastAborted(_) => {
+					// Informational only. No action required by the CFE.
+				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 			},
 			_ => panic!("Unexpected event"),
@@ -184,6 +188,31 @@ fn test_broadcast_rejected() {
 
 		// The nominee was not reported.
 		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
+	})
+}
+
+#[test]
+fn test_abort_after_max_attempt_reached() {
+	new_test_ext().execute_with(|| {
+		// Initiate broadcast
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
+		// retrying until the request to retry is aborted with an event emitted
+		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
+			// CFE responds with a signed transaction. This moves us to the broadcast stage.
+			MockCfe::respond(Scenario::HappyPath);
+			// CFE responds that the transaction was rejected.
+			MockCfe::respond(Scenario::TransmissionFailure(
+				TransmissionFailure::TransactionRejected,
+			));
+			// The `on_initialize` hook is called and triggers a new broadcast attempt.
+			MockBroadcast::on_initialize(0);
+		}
+
+		assert_eq!(
+			System::events().pop().expect("an event").event,
+			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
+		);
 	})
 }
 
@@ -315,7 +344,7 @@ fn test_signature_request_expiry() {
 			assert!(AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.is_none());
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::TransactionSigning),
 			);
 
@@ -369,7 +398,7 @@ fn test_transmission_request_expiry() {
 			// Old attempt has expired.
 			assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::Transmission),
 			);
 			// New attempt is live with same broadcast_id and incremented attempt_count.
@@ -389,4 +418,15 @@ fn test_transmission_request_expiry() {
 
 		check_end_state();
 	})
+}
+
+#[test]
+fn no_validators_available() {
+	new_test_ext().execute_with(|| {
+		// Simulate that no validator is currently online
+		NOMINATION.with(|cell| *cell.borrow_mut() = None);
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTx));
+		// Check the retry queue
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
+	});
 }

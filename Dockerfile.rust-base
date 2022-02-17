@@ -12,7 +12,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         libclang-dev \
         lld \
         python3-dev \
-        jq
+        jq \
+        gcc-multilib
 
 # Set environment
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -32,3 +33,6 @@ RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
     && rustup component add rustfmt \
     && rustup component add clippy
+
+RUN groupadd ci \
+    && useradd -g ci ci \

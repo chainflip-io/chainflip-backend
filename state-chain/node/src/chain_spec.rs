@@ -5,21 +5,32 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
-	EmissionsConfig, EnvironmentConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, VaultsConfig, WASM_BINARY,
+	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
+
+mod network_env;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
-const ETHEREUM_CHAIN_ID_DEFAULT: u64 = 4;
+const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
+// 50k FLIP in Fliperinos
+const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
+const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
+
+// CFE config default values
+const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
+const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 10;
+const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
+const PENDING_SIGN_DURATION_DEFAULT: u32 = 500;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -48,32 +59,77 @@ pub struct StateChainEnvironment {
 	key_manager_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
+	ethereum_deployment_block: u64,
+	genesis_stake_amount: u128,
+	// CFE config values starts here
+	eth_block_safety_margin: u32,
+	pending_sign_duration: u32,
+	max_ceremony_stage_duration: u32,
+	max_extrinsic_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
 	let stake_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let key_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
+		.unwrap_or_else(|_| ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
-		.expect("chain id is no unsigned int");
-	let eth_init_agg_key =
-		hex::decode(env::var("ETH_INIT_AGG_KEY").unwrap_or(String::from(ETH_INIT_AGG_KEY_DEFAULT)))
-			.unwrap()
-			.try_into()
-			.expect("Cast to agg pub key failed");
+		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
+	let eth_init_agg_key = hex::decode(
+		env::var("ETH_INIT_AGG_KEY").unwrap_or_else(|_| String::from(ETH_INIT_AGG_KEY_DEFAULT)),
+	)
+	.unwrap()
+	.try_into()
+	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
+	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
+		.unwrap_or(format!("{}", ETH_DEPLOYMENT_BLOCK_DEFAULT))
+		.parse::<u64>()
+		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
+
+	let genesis_stake_amount = env::var("GENESIS_STAKE")
+		.unwrap_or(format!("{}", GENESIS_STAKE_AMOUNT_DEFAULT))
+		.parse::<u128>()
+		.expect("GENESIS_STAKE env var could not be parsed to u128");
+
+	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
+		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN_DEFAULT))
+		.parse::<u32>()
+		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
+
+	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
+		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS_DEFAULT))
+		.parse::<u32>()
+		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
+
+	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
+		.unwrap_or(format!("{}", MAX_STAGE_DURATION_DEFAULT))
+		.parse::<u32>()
+		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
+
+	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
+		.unwrap_or(format!("{}", PENDING_SIGN_DURATION_DEFAULT))
+		.parse::<u32>()
+		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
 
 	StateChainEnvironment {
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		pending_sign_duration,
+		max_ceremony_stage_duration,
+		max_extrinsic_retry_attempts,
 	}
 }
 
@@ -95,6 +151,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		pending_sign_duration,
+		max_ceremony_stage_duration,
+		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -115,8 +177,18 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
+				EnvironmentConfig {
+					stake_manager_address,
+					key_manager_address,
+					ethereum_chain_id,
+					eth_block_safety_margin,
+					pending_sign_duration,
+					max_ceremony_stage_duration,
+					max_extrinsic_retry_attempts,
+				},
 				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -146,6 +218,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		pending_sign_duration,
+		max_ceremony_stage_duration,
+		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -172,8 +250,18 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
-				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
+				EnvironmentConfig {
+					stake_manager_address,
+					key_manager_address,
+					ethereum_chain_id,
+					eth_block_safety_margin,
+					pending_sign_duration,
+					max_ceremony_stage_duration,
+					max_extrinsic_retry_attempts,
+				},
 				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -189,10 +277,33 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-/// Initialise a Chainflip testnet
+/// Initialise a Chainflip three-node testnet from the environment.
 pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
-	let wasm_binary =
-		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	chainflip_three_node_testnet_config_from_env(
+		"Three node testnet",
+		"three-node-testnet",
+		ChainType::Local,
+		get_environment(),
+	)
+}
+
+/// Build the chainspec for Soundcheck public testnet.
+pub fn chainflip_soundcheck_config() -> Result<ChainSpec, String> {
+	chainflip_three_node_testnet_config_from_env(
+		"Chainflip Soundcheck",
+		"soundcheck",
+		ChainType::Live,
+		network_env::SOUNDCHECK,
+	)
+}
+
+fn chainflip_three_node_testnet_config_from_env(
+	name: &str,
+	id: &str,
+	chain_type: ChainType,
+	environment: StateChainEnvironment,
+) -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let doc_sr25519 =
@@ -206,11 +317,17 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
-	} = get_environment();
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		pending_sign_duration,
+		max_ceremony_stage_duration,
+		max_extrinsic_retry_attempts,
+	} = environment;
 	Ok(ChainSpec::from_genesis(
-		"Three node testnet",
-		"three-node-test",
-		ChainType::Local,
+		name,
+		id,
+		chain_type,
 		move || {
 			testnet_genesis(
 				wasm_binary,
@@ -256,8 +373,18 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					dopey_sr25519.into(),
 				],
 				2,
-				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
+				EnvironmentConfig {
+					stake_manager_address,
+					key_manager_address,
+					ethereum_chain_id,
+					eth_block_safety_margin,
+					pending_sign_duration,
+					max_ceremony_stage_duration,
+					max_extrinsic_retry_attempts,
+				},
 				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -294,6 +421,12 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		key_manager_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		pending_sign_duration,
+		max_ceremony_stage_duration,
+		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -366,8 +499,18 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				EnvironmentConfig { stake_manager_address, key_manager_address, ethereum_chain_id },
+				EnvironmentConfig {
+					stake_manager_address,
+					key_manager_address,
+					ethereum_chain_id,
+					eth_block_safety_margin,
+					pending_sign_duration,
+					max_ceremony_stage_duration,
+					max_extrinsic_retry_attempts,
+				},
 				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
 			)
 		},
 		// Bootnodes
@@ -385,6 +528,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 
 /// Configure initial storage state for FRAME modules.
 /// 150 validator limit
+#[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -393,6 +537,8 @@ fn testnet_genesis(
 	min_validators: u32,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
+	ethereum_deployment_block: u64,
+	genesis_stake_amount: u128,
 ) -> GenesisConfig {
 	GenesisConfig {
 		system: SystemConfig {
@@ -400,7 +546,10 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		validator: ValidatorConfig { blocks_per_epoch: 7 * DAYS },
+		validator: ValidatorConfig {
+			blocks_per_epoch: 8 * HOURS,
+			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+		},
 		session: SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -411,8 +560,9 @@ fn testnet_genesis(
 		staking: StakingConfig {
 			genesis_stakers: genesis_stakers
 				.iter()
-				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
+				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
+			minimum_stake: MIN_STAKE,
 		},
 		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),
@@ -420,14 +570,17 @@ fn testnet_genesis(
 				.iter()
 				.map(|(validator_id, ..)| validator_id.clone())
 				.collect::<Vec<AccountId>>(),
-			minimum_active_bid: TOTAL_ISSUANCE / 100,
+			minimum_active_bid: genesis_stake_amount,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
 		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
 		environment: config_set,
-		vaults: VaultsConfig { ethereum_vault_key: eth_init_agg_key.to_vec() },
+		ethereum_vault: EthereumVaultConfig {
+			vault_key: eth_init_agg_key.to_vec(),
+			deployment_block: ethereum_deployment_block,
+		},
 		emissions: EmissionsConfig {
 			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
 			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
@@ -437,8 +590,8 @@ fn testnet_genesis(
 
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
-
-	properties.insert("ss58Format".into(), 28.into());
+	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
+	properties.insert("ss58Format".into(), 42.into());
 	properties.insert("tokenDecimals".into(), 18.into());
 	properties.insert("tokenSymbol".into(), "FLIP".into());
 	properties.insert("color".into(), "#61CFAA".into());

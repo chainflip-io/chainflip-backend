@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! impl_mock_witnesser_for_account_and_call_types {
-	($account_id:ty, $call:ty) => {
+	($account_id:ty, $call:ty, $block_number:ty) => {
 		pub struct MockWitnesser;
 
 		impl MockWitnesser {
@@ -25,6 +25,16 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 		impl $crate::Witnesser for MockWitnesser {
 			type AccountId = $account_id;
 			type Call = $call;
+			type BlockNumber = $block_number;
+
+			fn witness_at_epoch(
+				who: Self::AccountId,
+				call: Self::Call,
+				_epoch: cf_traits::EpochIndex,
+				_block_number: Self::BlockNumber,
+			) -> frame_support::dispatch::DispatchResultWithPostInfo {
+				unimplemented!("")
+			}
 
 			fn witness(
 				_who: Self::AccountId,

@@ -1,4 +1,4 @@
-use chainflip_engine::settings::{StateChain, StateChainOptions};
+use chainflip_engine::settings::{Eth, EthSharedOptions, StateChain, StateChainOptions};
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
 use structopt::StructOpt;
@@ -11,23 +11,36 @@ pub struct CLICommandLineOptions {
     #[structopt(flatten)]
     state_chain_opts: StateChainOptions,
 
+    #[structopt(flatten)]
+    eth_opts: EthSharedOptions,
+
     #[structopt(subcommand)]
     pub cmd: CFCommand,
 }
 
 #[derive(StructOpt, Clone)]
 pub enum CFCommand {
+    #[structopt(about = "Submit an extrinsic to request generation of a claim certificate")]
     Claim {
         #[structopt(help = "Amount to claim in FLIP")]
         amount: f64,
         #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
         eth_address: String,
+
+        #[structopt(long = "register", hidden = true)]
+        should_register_claim: bool,
     },
+    #[structopt(about = "Rotate your session keys")]
+    Rotate {},
+    #[structopt(about = "Retire from Auction participation")]
+    Retire {},
 }
 
 #[derive(Deserialize, Debug, Default)]
 pub struct CLISettings {
     pub state_chain: StateChain,
+
+    pub eth: Eth,
 }
 
 impl CLISettings {
@@ -36,21 +49,33 @@ impl CLISettings {
 
         // check we have all the cli args. If we do, don't bother with the config file
         let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
-            && opts.state_chain_opts.state_chain_signing_key_file.is_some();
+            && opts.state_chain_opts.state_chain_signing_key_file.is_some()
+            // eth options present
+            && opts.eth_opts.eth_node_endpoint.is_some()
+            && opts.eth_opts.eth_private_key_file.is_some();
 
         if !all_cl_args_set {
             cli_config = match opts.config_path {
                 Some(path) => Self::from_file(&path)?,
-                None => Self::from_file("./engine/config/Default")?,
+                None => Self::from_file("./engine/config/Default.toml")?,
             }
         }
 
-        // Override the settings with the cmd line options
+        // Override State Chain settings with the cmd line options
         if let Some(ws_endpoint) = opts.state_chain_opts.state_chain_ws_endpoint {
             cli_config.state_chain.ws_endpoint = ws_endpoint
         };
         if let Some(signing_key_file) = opts.state_chain_opts.state_chain_signing_key_file {
             cli_config.state_chain.signing_key_file = signing_key_file
+        };
+
+        // Override Eth settings
+        if let Some(private_key_file) = opts.eth_opts.eth_private_key_file {
+            cli_config.eth.private_key_file = private_key_file
+        };
+
+        if let Some(node_endpoint) = opts.eth_opts.eth_node_endpoint {
+            cli_config.eth.node_endpoint = node_endpoint
         };
 
         Ok(cli_config)

@@ -81,17 +81,12 @@ impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn heartbeat_submitted(
-		validator_id: &Self::ValidatorId,
-		_block_number: Self::BlockNumber,
-	) -> Weight {
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
 		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
-		0
 	}
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		NETWORK_STATE.with(|cell| *cell.borrow_mut() = network_state);
-		0
 	}
 }
 

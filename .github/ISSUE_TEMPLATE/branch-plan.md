@@ -7,11 +7,11 @@ assignees: ''
 
 ---
 
-## English description of the proposed features to be introduced by this branch
+## Description
 
 A clear and concise description of what this branch will introduce. Ideally in plain English.
 
-## Describe the solution you'd like to implement
+## Solution
 
 A more thorough technical description of the code to be introduced. Including but not limited to:
 
@@ -48,11 +48,7 @@ A more thorough technical description of the code to be introduced. Including bu
 
 ---
 
-### Shortcut Story Link
-
-[SC-XXXX].
-
-### Describe alternatives you've considered
+### Alternatives Considered
 
 A clear and concise description of any alternative solutions you've considered.
 
@@ -60,6 +56,6 @@ A clear and concise description of any alternative solutions you've considered.
 
 Add any other context or screenshots about the request here. E.g. Swimlanes.
 
-### Tag specific people for comment
+### Relevant people
 
 Tag folks here

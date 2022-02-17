@@ -31,16 +31,19 @@ hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
+chrono = "0.4.19"
+# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
+rand_legacy = { package = "rand", version = "0.6" }
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
 jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
-websocket = "0.24"
 
+websocket = "0.24"
+ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
-# kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.14.0"
 lazy_static = "1.4"
 num = "0.4.0"
@@ -61,16 +64,20 @@ tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 zeroize = "1.4.3"
-
+libp2p = "0.39.1"
+generic-array= "0.14"
+public-ip = "0.2.2"
+lazy_format = "1.10.0"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
-cf-p2p = {path = "../state-chain/client/cf-p2p"}
+multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
+pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
@@ -80,9 +87,18 @@ pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
 
+[dependencies.rocksdb]
+version = "0.17.0"
+# Disabling of default features, and using lz4 compression is primarily to avoid linker issues
+# resulting from the default compression using libs that conflict with the system libs
+# https://github.com/rust-rocksdb/rust-rocksdb/pull/555
+default-features = false
+features = ["lz4"]
+
+
 # substrate deps
 [dependencies.substrate-subxt]
-branch = 'compat/substrate-monthly-2021-09'
+branch = 'chore/merge-config-option'
 git = 'https://github.com/chainflip-io/substrate-subxt.git'
 
 [dependencies.codec]
@@ -91,41 +107,39 @@ package = 'parity-scale-codec'
 version = '2.3.1'
 
 [dependencies.frame-support]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.frame-system]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sc-rpc-api]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-core]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-keyring]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-rpc]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-runtime]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
 [dependencies.sp-version]
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'monthly-2021-09+1'
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
 
-[dependencies.curv]
-features = ["rust-gmp-kzen"]
-git = "https://github.com/KZen-networks/curv"
-tag = "v0.7.0"
+[dependencies.curv-kzen]
+version = "0.9"
 
 [dev-dependencies]
 env_logger = "0.9.0"
@@ -135,3 +149,5 @@ mockall = "0.10.2"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
+csv = "1.1.6"
+tempdir = "0.3.7"

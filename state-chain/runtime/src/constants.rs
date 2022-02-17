@@ -1,5 +1,6 @@
 pub mod common {
 	use cf_traits::{BlockNumber, FlipBalance};
+	use pallet_cf_broadcast::AttemptCount;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
@@ -40,4 +41,16 @@ pub mod common {
 
 	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
+
+	/// The maximum number of blocks to wait for a keygen to complete.
+	pub const KEYGEN_RESPONSE_GRACE_PERIOD: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
+
+	/// The maximum number of broadcast attempts
+	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
+
+	/// The minimum stake, 40_000 x 10^18
+	pub const MIN_STAKE: FlipBalance = 40_000 * 10u128.pow(18);
+
+	/// Percent of the epoch we are allowed to claim
+	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 }

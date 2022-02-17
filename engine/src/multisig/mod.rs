@@ -5,7 +5,7 @@ mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
-mod db;
+pub mod db;
 
 #[cfg(test)]
 mod tests;
@@ -16,14 +16,13 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-use crate::{logging::COMPONENT_KEY, p2p::AccountId};
-use futures::StreamExt;
+use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use slog::o;
-
-use crate::p2p::P2PMessage;
+use state_chain_runtime::AccountId;
 
 pub use client::{
-    KeygenOptions, KeygenOutcome, MultisigClient, MultisigOutcome, SchnorrSignature, SigningOutcome,
+    KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,
+    SchnorrSignature, SigningOutcome,
 };
 
 pub use db::{KeyDB, PersistentKeyDB};
@@ -52,7 +51,7 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     Keygen(KeygenInfo),
     Sign(SigningInfo),
@@ -64,8 +63,8 @@ pub fn start_client<S>(
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
-    mut incoming_p2p_message_receiver: UnboundedReceiver<P2PMessage>,
-    outgoing_p2p_message_sender: UnboundedSender<P2PMessage>,
+    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
+    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
@@ -88,20 +87,20 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
-            Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))
-        }));
+        let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
+
+        use rand_legacy::FromEntropy;
+        let mut rng = crypto::Rng::from_entropy();
 
         loop {
             tokio::select! {
-                Some(p2p_message) = incoming_p2p_message_receiver.recv() => {
-                    client.process_p2p_message(p2p_message);
+                Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
+                    client.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg);
+                    client.process_multisig_instruction(msg, &mut rng);
                 }
-                Some(()) = cleanup_stream.next() => {
-                    slog::trace!(logger, "Cleaning up multisig states");
+                _ = cleanup_tick.tick() => {
                     client.cleanup();
                 }
                 Ok(()) = &mut shutdown_rx => {

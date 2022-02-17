@@ -55,7 +55,7 @@ impl MockCfe {
 				),
 			) => {
 				assert_eq!(key_id, MOCK_KEY_ID);
-				assert_eq!(signers, MockNominator::get_nominees());
+				assert_eq!(signers, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
 					CfeBehaviour::Success => {
@@ -132,7 +132,7 @@ fn happy_path() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -155,7 +155,7 @@ fn fail_path_with_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -196,7 +196,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
 			assert_eq!(
 				pending.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 		});
 }
@@ -211,7 +211,7 @@ fn fail_path_no_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -259,13 +259,31 @@ fn fail_path_no_timeout() {
 			assert_eq!(pending.chain_signing_context, request_context.chain_signing_context);
 			assert_eq!(
 				pending.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 
 			// Processing the redundant retry request has no effect.
 			<DogeThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				retry_block_redundant,
 			);
+		});
+}
+
+#[test]
+fn test_not_enough_signers_for_threshold() {
+	const NOMINEES: [u64; 0] = [];
+	const VALIDATORS: [u64; 5] = [1, 2, 3, 4, 5];
+	ExtBuilder::new()
+		.with_validators(VALIDATORS)
+		.with_nominees(NOMINEES)
+		.with_pending_request("Woof!")
+		.build()
+		.execute_with(|| {
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
+			assert!(request_context.retry_scheduled);
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
+			assert_eq!(DogeThresholdSigner::retry_queues(retry_block).len(), 1);
 		});
 }
 

@@ -76,17 +76,17 @@ impl Chainflip for Test {
 // Mock SignerNomination
 
 thread_local! {
-	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Vec<u64>> = Default::default();
+	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
 }
 
 pub struct MockNominator;
 
 impl MockNominator {
-	pub fn set_nominees(nominees: Vec<u64>) {
+	pub fn set_nominees(nominees: Option<Vec<u64>>) {
 		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees)
 	}
 
-	pub fn get_nominees() -> Vec<u64> {
+	pub fn get_nominees() -> Option<Vec<u64>> {
 		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
 	}
 }
@@ -94,11 +94,11 @@ impl MockNominator {
 impl cf_traits::SignerNomination for MockNominator {
 	type SignerId = u64;
 
-	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
+	fn nomination_with_seed<H>(_seed: H) -> Option<Self::SignerId> {
 		unimplemented!("Single signer nomination not needed for these tests.")
 	}
 
-	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
+	fn threshold_nomination_with_seed<H>(_seed: H) -> Option<Vec<Self::SignerId>> {
 		Self::get_nominees()
 	}
 }
@@ -139,7 +139,7 @@ impl UnfilteredDispatchable for MockCallback<Doge> {
 }
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
+pub const MOCK_KEY_ID: &[u8] = b"d06e";
 
 pub struct MockKeyProvider;
 
@@ -178,6 +178,7 @@ impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
 	type Payload = String;
 	type ThresholdSignature = DogeSig;
+	type TransactionHash = Vec<u8>;
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,
@@ -213,6 +214,11 @@ impl SigningContext<Test> for DogeThresholdSignerContext {
 	}
 }
 
+parameter_types! {
+	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+}
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Doge;
@@ -220,6 +226,8 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
+	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 pub struct ExtBuilder {
@@ -227,6 +235,7 @@ pub struct ExtBuilder {
 }
 
 impl ExtBuilder {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		let ext = new_test_ext();
 		Self { ext }
@@ -234,7 +243,8 @@ impl ExtBuilder {
 
 	pub fn with_nominees(mut self, nominees: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockNominator::set_nominees(Vec::from_iter(nominees));
+			let nominees = Vec::from_iter(nominees);
+			MockNominator::set_nominees(if nominees.is_empty() { None } else { Some(nominees) });
 		});
 		self
 	}
@@ -256,7 +266,7 @@ impl ExtBuilder {
 			assert_eq!(pending.attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
 		});
 		self
