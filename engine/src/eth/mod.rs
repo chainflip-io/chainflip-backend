@@ -637,7 +637,7 @@ pub trait EthObserver {
         EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
     {
         println!("Running event stream");
-        let deployed_address = self.get_deployed_address();
+        let deployed_address = self.get_contract_address();
         slog::info!(
             logger,
             "Subscribing to Ethereum events from contract at address: {:?}",
@@ -876,7 +876,7 @@ pub trait EthObserver {
     ) where
         RpcClient: 'static + StateChainRpcApi + Sync + Send;
 
-    fn get_deployed_address(&self) -> H160;
+    fn get_contract_address(&self) -> H160;
 }
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
