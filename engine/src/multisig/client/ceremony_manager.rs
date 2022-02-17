@@ -408,7 +408,7 @@ impl CeremonyManager {
             return;
         }
 
-        slog::debug!(self.logger, "Processing signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
         let state = self

@@ -151,8 +151,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
     fn init(&mut self) -> DataToSend<Self::Message> {
-        slog::debug!(self.common.logger, "Generating local signature response");
-
+        
         let data = DataToSend::Broadcast(frost::generate_local_sig(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
