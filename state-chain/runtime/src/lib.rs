@@ -6,7 +6,6 @@ pub mod constants;
 #[cfg(test)]
 mod tests;
 use cf_chains::Ethereum;
-use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
@@ -353,11 +352,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
-parameter_types! {
-	/// 6 days.
-	pub const ClaimTTL: Duration = Duration::from_secs(3 * CLAIM_DELAY);
-}
-
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
@@ -369,7 +363,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
-	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
