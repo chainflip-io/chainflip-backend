@@ -86,11 +86,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 state.last_block_fetched = unsafe_block_number;
                 state.last_block_yielded = block.number.unwrap();
                 break Some((block, state));
-
-                // check last yielded too?
-            } else if state.last_block_fetched != U64::from(0)
-                && unsafe_block_number > state.last_block_fetched + 1
-            {
+            } else if unsafe_block_number > state.last_block_fetched + 1 {
                 // we skipped a block
                 // if our *head* is now at N, and we are assuming N - 5 is safe
                 // Then (N - 1) - 5 must be safe
