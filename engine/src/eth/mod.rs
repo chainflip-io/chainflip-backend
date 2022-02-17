@@ -321,7 +321,11 @@ impl EthRpcApi for EthWsRpcClient {
     }
 
     async fn chain_id(&self) -> Result<U256> {
-        Ok(self.web3.eth().chain_id().await?)
+        self.web3
+            .eth()
+            .chain_id()
+            .await
+            .context("Failed to fetch ETH ChainId")
     }
 }
 
