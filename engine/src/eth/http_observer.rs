@@ -44,14 +44,16 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             let safe_block_number = unsafe_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
             println!("Got eth block number {}", unsafe_block_number);
 
+            let is_first_iteration = state.last_block_yielded == U64::from(0)
+                && state.last_block_fetched == U64::from(0);
+
             if unsafe_block_number <= state.last_block_fetched {
                 // wait until we get back to where we were
                 println!(
                     "Our unsafe block number is less than or the same as the last fetched block"
                 );
                 continue;
-            } else if (state.last_block_yielded == U64::from(0)
-                && state.last_block_fetched == U64::from(0))
+            } else if is_first_iteration
                 || unsafe_block_number == state.last_block_fetched + U64::from(1)
             {
                 assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN);
