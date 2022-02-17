@@ -263,7 +263,6 @@ pub mod test_utils {
                 let mut log = self.log.lock().expect("Should be able to get lock");
                 log.push(record.tag().to_owned());
             }
-
             Ok(())
         }
     }
