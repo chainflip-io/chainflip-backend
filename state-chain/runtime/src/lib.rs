@@ -136,6 +136,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
 }
 
 // FIXME: These would be changed
@@ -430,6 +431,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Banned = pallet_cf_online::Pallet<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
 }
 
 impl pallet_cf_online::Config for Runtime {
