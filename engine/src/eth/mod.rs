@@ -338,17 +338,14 @@ impl EthWsRpcApi for EthWsRpcClient {
     }
 }
 
-/// Wraps the web3 library, so can use a trait to make testing easier
 #[derive(Clone)]
 pub struct EthHttpRpcClient {
     web3: Web3<web3::transports::Http>,
 }
 
 impl EthHttpRpcClient {
-    // TODO: Look at taking the logger here, adding it to the struct
     pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
-        // slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
         let http = web3::transports::Http::new(node_endpoint)?;
         let web3 = web3::Web3::new(http);
 
