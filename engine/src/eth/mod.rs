@@ -526,16 +526,6 @@ pub enum TransportProtocol {
     Ws,
 }
 
-// Returns the other protocol
-impl TransportProtocol {
-    pub fn other(&self) -> Self {
-        match self {
-            TransportProtocol::Http => TransportProtocol::Ws,
-            TransportProtocol::Ws => TransportProtocol::Http,
-        }
-    }
-}
-
 impl fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
