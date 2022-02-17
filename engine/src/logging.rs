@@ -230,7 +230,6 @@ pub mod test_utils {
     #[derive(Default, Clone)]
     pub struct TagCache {
         log: Arc<Mutex<Vec<String>>>,
-        // kvs: Arc<Mutex<HashMap<String, String>>>,
     }
 
     impl TagCache {

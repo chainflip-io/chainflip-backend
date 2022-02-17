@@ -765,6 +765,67 @@ pub trait EthObserver {
             logger,
         };
 
+        // Pulls the logging logic out of the unfold, for easier reading
+        fn log_stream_returned_and_behind<EventParameters: std::fmt::Debug + Send + Sync>(
+            state: &StreamState<EventParameters>,
+            protocol: TranpsortProtocol,
+            yield_item: &EventWithCommon<EventParameters>,
+        ) {
+            // Do the necessary logging
+            match protocol {
+                TranpsortProtocol::Http => {
+                    slog::info!(
+                        state.logger,
+                        #ETH_HTTP_STREAM_RETURNED,
+                        "Processing ETH log {} from {} stream",
+                        yield_item,
+                        protocol
+                    );
+                    if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                        <= yield_item.block_number
+                    {
+                        let blocks_behind = yield_item.block_number - state.last_ws_block_pulled;
+                        if !(state.last_ws_block_pulled == 0)
+                            && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+                        {
+                            slog::warn!(
+                                state.logger,
+                                #ETH_STREAM_BEHIND,
+                                "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
+                                yield_item.block_number,
+                                state.last_ws_block_pulled,
+                            );
+                        }
+                    }
+                }
+                TranpsortProtocol::Ws => {
+                    slog::info!(
+                        state.logger,
+                        #ETH_WS_STREAM_RETURNED,
+                        "Processing ETH log {} from {} stream",
+                        yield_item,
+                        protocol
+                    );
+                    if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
+                        <= yield_item.block_number
+                    {
+                        let blocks_behind = yield_item.block_number - state.last_http_block_pulled;
+                        if !(state.last_http_block_pulled == 0)
+                            && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+                        {
+                            slog::warn!(
+                                state.logger,
+                                #ETH_STREAM_BEHIND,
+                                "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
+                                yield_item.block_number,
+                                state.last_http_block_pulled,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(Box::pin(stream::unfold(
             init_data,
             move |mut state| async move {
@@ -829,61 +890,7 @@ pub trait EthObserver {
                         break None;
                     }
                 } {
-                    // Do the necessary logging
-                    match protocol {
-                        TranpsortProtocol::Http => {
-                            slog::info!(
-                                state.logger,
-                                #ETH_HTTP_STREAM_RETURNED,
-                                "Processing ETH log {} from {} stream",
-                                yield_item,
-                                protocol
-                            );
-                            if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                <= yield_item.block_number
-                            {
-                                let blocks_behind =
-                                    yield_item.block_number - state.last_ws_block_pulled;
-                                if !(state.last_ws_block_pulled == 0)
-                                    && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
-                                {
-                                    slog::warn!(
-                                        state.logger,
-                                        #STUFF,
-                                        "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
-                                        yield_item.block_number,
-                                        state.last_ws_block_pulled,
-                                    );
-                                }
-                            }
-                        }
-                        TranpsortProtocol::Ws => {
-                            slog::info!(
-                                state.logger,
-                                #ETH_WS_STREAM_RETURNED,
-                                "Processing ETH log {} from {} stream",
-                                yield_item,
-                                protocol
-                            );
-                            if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                                <= yield_item.block_number
-                            {
-                                let blocks_behind =
-                                    yield_item.block_number - state.last_http_block_pulled;
-                                if !(state.last_http_block_pulled == 0)
-                                    && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
-                                {
-                                    slog::warn!(
-                                        state.logger,
-                                        #ETH_STREAM_BEHIND,
-                                        "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
-                                        yield_item.block_number,
-                                        state.last_http_block_pulled,
-                                    );
-                                }
-                            }
-                        }
-                    }
+                    log_stream_returned_and_behind(&state, protocol, &yield_item);
                     Some((yield_item, state))
                 } else {
                     None
