@@ -182,7 +182,8 @@ pub mod pallet {
 				points <= T::MaximumReputationPointAccrued::get(),
 				Error::<T>::InvalidAccrualReputationPoints
 			);
-			// If we have points to accrue then ensure the online credits provided
+			// If we have points to accrue then ensure that the online credits, which are equivalent
+			// to block time, are less than our heartbeat interval
 			if points > Zero::zero() {
 				ensure!(
 					online_credits > T::HeartbeatBlockInterval::get(),
