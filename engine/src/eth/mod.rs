@@ -90,45 +90,6 @@ impl<TX> BlockHeaderable for web3::types::Block<TX> {
     }
 }
 
-// might need to be generic
-#[derive(PartialEq, Debug)]
-pub enum BlockType {
-    Ws(web3::types::BlockHeader),
-    Http(web3::types::Block<H256>),
-}
-
-impl BlockType {
-    pub fn get_protocol(&self) -> TranpsortProtocol {
-        match self {
-            BlockType::Ws(_) => TranpsortProtocol::Ws,
-            BlockType::Http(_) => TranpsortProtocol::Http,
-        }
-    }
-}
-
-impl BlockHeaderable for BlockType {
-    fn hash(&self) -> Option<H256> {
-        match self {
-            BlockType::Ws(ws) => ws.hash(),
-            BlockType::Http(http) => http.hash(),
-        }
-    }
-
-    fn logs_bloom(&self) -> Option<H2048> {
-        match self {
-            BlockType::Ws(ws) => ws.logs_bloom(),
-            BlockType::Http(http) => http.logs_bloom(),
-        }
-    }
-
-    fn number(&self) -> Option<U64> {
-        match self {
-            BlockType::Ws(ws) => ws.number(),
-            BlockType::Http(http) => http.number(),
-        }
-    }
-}
-
 #[cfg(test)]
 use mockall::automock;
 
