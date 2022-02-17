@@ -289,7 +289,7 @@ impl EthRpcApi for EthWsRpcClient {
             .eth()
             .estimate_gas(req, block)
             .await
-            .context("Failed to estimate gas")
+            .context("Failed to estimate gas with WS Client")
     }
 
     async fn sign_transaction(
@@ -301,7 +301,7 @@ impl EthRpcApi for EthWsRpcClient {
             .accounts()
             .sign_transaction(tx, SecretKeyRef::from(key))
             .await
-            .context("Failed to sign transaction")
+            .context("Failed to sign transaction with WS Client")
     }
 
     async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
@@ -309,7 +309,7 @@ impl EthRpcApi for EthWsRpcClient {
             .eth()
             .send_raw_transaction(rlp)
             .await
-            .context("Failed to send raw transaction")
+            .context("Failed to send raw transaction with WS Client")
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
@@ -317,7 +317,7 @@ impl EthRpcApi for EthWsRpcClient {
             .eth()
             .logs(filter)
             .await
-            .context("Failed to fetch ETH logs")
+            .context("Failed to fetch ETH logs with WS Client")
     }
 
     async fn chain_id(&self) -> Result<U256> {
@@ -325,7 +325,7 @@ impl EthRpcApi for EthWsRpcClient {
             .eth()
             .chain_id()
             .await
-            .context("Failed to fetch ETH ChainId")
+            .context("Failed to fetch ETH ChainId with WS Client")
     }
 }
 
@@ -334,7 +334,11 @@ impl EthWsRpcApi for EthWsRpcClient {
     async fn subscribe_new_heads(
         &self,
     ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
-        Ok(self.web3.eth_subscribe().subscribe_new_heads().await?)
+        self.web3
+            .eth_subscribe()
+            .subscribe_new_heads()
+            .await
+            .context("Failed to subscribe to new heads with WS Client")
     }
 }
 
@@ -346,7 +350,8 @@ pub struct EthHttpRpcClient {
 impl EthHttpRpcClient {
     pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
-        let http = web3::transports::Http::new(node_endpoint)?;
+        let http = web3::transports::Http::new(node_endpoint)
+            .context("Failed to create HTTP tranpsort for web3 client")?;
         let web3 = web3::Web3::new(http);
 
         Ok(Self { web3 })
@@ -360,7 +365,7 @@ impl EthRpcApi for EthHttpRpcClient {
             .eth()
             .estimate_gas(req, block)
             .await
-            .context("Failed to estimate gas")
+            .context("Failed to estimate gas with HTTP client")
     }
 
     async fn sign_transaction(
@@ -372,7 +377,7 @@ impl EthRpcApi for EthHttpRpcClient {
             .accounts()
             .sign_transaction(tx, SecretKeyRef::from(key))
             .await
-            .context("Failed to sign transaction")
+            .context("Failed to sign transaction with HTTP client")
     }
 
     async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
@@ -380,7 +385,7 @@ impl EthRpcApi for EthHttpRpcClient {
             .eth()
             .send_raw_transaction(rlp)
             .await
-            .context("Failed to send raw transaction")
+            .context("Failed to send raw transaction with HTTP client")
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
@@ -388,7 +393,7 @@ impl EthRpcApi for EthHttpRpcClient {
             .eth()
             .logs(filter)
             .await
-            .context("Failed to fetch ETH logs")
+            .context("Failed to fetch ETH logs with HTTP client")
     }
 
     async fn chain_id(&self) -> Result<U256> {
@@ -399,11 +404,19 @@ impl EthRpcApi for EthHttpRpcClient {
 #[async_trait]
 impl EthHttpRpcApi for EthHttpRpcClient {
     async fn block_number(&self) -> Result<U64> {
-        Ok(self.web3.eth().block_number().await?)
+        self.web3
+            .eth()
+            .block_number()
+            .await
+            .context("Failed to fetch block number with HTTP client")
     }
 
     async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>> {
-        Ok(self.web3.eth().block(block_number.into()).await?)
+        self.web3
+            .eth()
+            .block(block_number.into())
+            .await
+            .context("Failed to fetch block with HTTP client")
     }
 }
 
