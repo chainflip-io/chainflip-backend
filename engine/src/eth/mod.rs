@@ -351,7 +351,7 @@ impl EthHttpRpcClient {
     pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
         let http = web3::transports::Http::new(node_endpoint)
-            .context("Failed to create HTTP tranpsort for web3 client")?;
+            .context("Failed to create HTTP Transport for web3 client")?;
         let web3 = web3::Web3::new(http);
 
         Ok(Self { web3 })
@@ -521,26 +521,26 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
 
 // Used to zip on the streams, so we know which stream is returning
 #[derive(Clone, PartialEq)]
-pub enum TranpsortProtocol {
+pub enum TransportProtocol {
     Http,
     Ws,
 }
 
 // Returns the other protocol
-impl TranpsortProtocol {
+impl TransportProtocol {
     pub fn other(&self) -> Self {
         match self {
-            TranpsortProtocol::Http => TranpsortProtocol::Ws,
-            TranpsortProtocol::Ws => TranpsortProtocol::Http,
+            TransportProtocol::Http => TransportProtocol::Ws,
+            TransportProtocol::Ws => TransportProtocol::Http,
         }
     }
 }
 
-impl fmt::Display for TranpsortProtocol {
+impl fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            TranpsortProtocol::Ws => write!(f, "Websocket"),
-            TranpsortProtocol::Http => write!(f, "Http"),
+            TransportProtocol::Ws => write!(f, "Websocket"),
+            TransportProtocol::Http => write!(f, "Http"),
         }
     }
 }
@@ -695,8 +695,8 @@ pub trait EthObserver {
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>> {
         let logger = logger.new(o!(COMPONENT_KEY => "MergedETHStream"));
-        let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TranpsortProtocol::Ws));
-        let safe_http_log_stream = safe_http_log_stream.zip(repeat(TranpsortProtocol::Http));
+        let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TransportProtocol::Ws));
+        let safe_http_log_stream = safe_http_log_stream.zip(repeat(TransportProtocol::Http));
 
         let merged_stream = select(safe_ws_log_stream, safe_http_log_stream);
         struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
@@ -709,7 +709,7 @@ pub trait EthObserver {
                                 + Send,
                         >,
                     >,
-                    Repeat<TranpsortProtocol>,
+                    Repeat<TransportProtocol>,
                 >,
                 Zip<
                     Pin<
@@ -719,7 +719,7 @@ pub trait EthObserver {
                                 + Send,
                         >,
                     >,
-                    Repeat<TranpsortProtocol>,
+                    Repeat<TransportProtocol>,
                 >,
             >,
             last_yielded_block_number: u64,
@@ -741,12 +741,12 @@ pub trait EthObserver {
         // Pulls the logging logic out of the unfold, for easier reading
         fn log_stream_returned_and_behind<EventParameters: std::fmt::Debug + Send + Sync>(
             state: &StreamState<EventParameters>,
-            protocol: TranpsortProtocol,
+            protocol: TransportProtocol,
             yield_item: &EventWithCommon<EventParameters>,
         ) {
             // Do the necessary logging
             match protocol {
-                TranpsortProtocol::Http => {
+                TransportProtocol::Http => {
                     slog::info!(
                         state.logger,
                         #ETH_HTTP_STREAM_RETURNED,
@@ -771,7 +771,7 @@ pub trait EthObserver {
                         }
                     }
                 }
-                TranpsortProtocol::Ws => {
+                TransportProtocol::Ws => {
                     slog::info!(
                         state.logger,
                         #ETH_WS_STREAM_RETURNED,
@@ -817,10 +817,10 @@ pub trait EthObserver {
                         // Log if one of the streams is behind
                         // doesn't count if we haven't started yet
                         match protocol {
-                            TranpsortProtocol::Http => {
+                            TransportProtocol::Http => {
                                 state.last_http_block_pulled = current_item_block_number
                             }
-                            TranpsortProtocol::Ws => {
+                            TransportProtocol::Ws => {
                                 state.last_ws_block_pulled = current_item_block_number
                             }
                         };
@@ -1054,7 +1054,7 @@ mod merged_stream_tests {
     // alternatingly
     fn interleaved_streams(
         // contains the streams in the order they will return
-        items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, TranpsortProtocol)>,
+        items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, TransportProtocol)>,
     ) -> (
         // ws
         impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
@@ -1080,8 +1080,8 @@ mod merged_stream_tests {
             });
 
             match protocol {
-                TranpsortProtocol::Http => http_items.push((item, delay)),
-                TranpsortProtocol::Ws => ws_items.push((item, delay)),
+                TransportProtocol::Http => http_items.push((item, delay)),
+                TransportProtocol::Ws => ws_items.push((item, delay)),
             };
 
             protocol_last_returned = protocol;
@@ -1236,23 +1236,23 @@ mod merged_stream_tests {
     async fn interleaved_streams_works_as_expected() {
         let mut items = Vec::new();
         // return
-        items.push((key_change(10, 0), TranpsortProtocol::Ws));
+        items.push((key_change(10, 0), TransportProtocol::Ws));
         // return
-        items.push((key_change(11, 0), TranpsortProtocol::Ws));
+        items.push((key_change(11, 0), TransportProtocol::Ws));
         // ignore
-        items.push((key_change(10, 0), TranpsortProtocol::Http));
+        items.push((key_change(10, 0), TransportProtocol::Http));
         // ignore
-        items.push((key_change(11, 0), TranpsortProtocol::Http));
+        items.push((key_change(11, 0), TransportProtocol::Http));
         // return
-        items.push((key_change(12, 0), TranpsortProtocol::Http));
+        items.push((key_change(12, 0), TransportProtocol::Http));
         // ignore
-        items.push((key_change(12, 0), TranpsortProtocol::Ws));
+        items.push((key_change(12, 0), TransportProtocol::Ws));
         // return
-        items.push((key_change(13, 0), TranpsortProtocol::Http));
+        items.push((key_change(13, 0), TransportProtocol::Http));
         // ignore
-        items.push((key_change(13, 0), TranpsortProtocol::Ws));
+        items.push((key_change(13, 0), TransportProtocol::Ws));
         // return
-        items.push((key_change(14, 0), TranpsortProtocol::Ws));
+        items.push((key_change(14, 0), TransportProtocol::Ws));
 
         let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
         let (ws_stream, http_stream) = interleaved_streams(items);
