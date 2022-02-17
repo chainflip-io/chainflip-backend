@@ -33,7 +33,7 @@ where
     };
 
     Box::pin(stream::unfold(init_data, move |mut state| async move {
-        let loop_state = loop {
+        loop {
             if let Some(header) = state.stream.next().await {
                 let header = header.unwrap();
                 let number = header.number.unwrap();
@@ -77,8 +77,7 @@ where
                 // when the inner stream is consumed, we want to end the wrapping/safe stream
                 break None;
             }
-        };
-        loop_state
+        }
     }))
 }
 
