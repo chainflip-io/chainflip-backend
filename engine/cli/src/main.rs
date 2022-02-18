@@ -76,12 +76,10 @@ async fn request_block(
         block_hash
     );
 
-    let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain).await?;
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(&settings.state_chain).await?;
 
-    match state_chain_rpc_client
-        .get_block(block_hash)
-        .await?
-    {
+    match state_chain_rpc_client.get_block(block_hash).await? {
         Some(block) => {
             println!("{:#?}", block);
         }
