@@ -262,6 +262,9 @@ impl EthRpcApi for EthRpcClient {
 
         let request_fut = self.web3.eth().logs(filter);
 
+        // NOTE: if this does time out we will most likely have a
+        // "memory leak" associated with rust-web3's state for this
+        // request not getting properly cleaned up
         tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
             .await
             .context("Request timeout")?
