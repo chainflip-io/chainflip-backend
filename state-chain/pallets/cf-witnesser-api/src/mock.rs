@@ -37,13 +37,11 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl_mock_witnesser_for_account_and_call_types!(u64, Call);
+impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const MinClaimTTL: Duration = Duration::from_millis(100);
-	pub const ClaimTTL: Duration = Duration::from_millis(1000);
 }
 
 impl system::Config for Test {
@@ -124,7 +122,6 @@ impl pallet_cf_staking::Config for Test {
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
-	type ClaimTTL = ClaimTTL;
 	type StakerId = AccountIdU64;
 	type NonceProvider = Self;
 	type ThresholdSigner = EthereumThresholdSigner;

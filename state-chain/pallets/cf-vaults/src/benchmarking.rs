@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 
 		for i in 0..b {
 			let validator_id = account("doogle", i, 0);
-			let _ = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
+			let _result = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
 		}
 
 		PendingVaultRotation::<T, I>::put(
@@ -70,7 +70,7 @@ benchmarks_instance_pallet! {
 
 		for i in 0..120 {
 			let validator_id = account("doogle", i, 0);
-			let _ = keygen_response_status.add_success_vote(&validator_id, aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..]));
+			let _result = keygen_response_status.add_success_vote(&validator_id, aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..]));
 		}
 
 		PendingVaultRotation::<T, I>::put(

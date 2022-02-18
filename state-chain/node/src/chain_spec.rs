@@ -28,9 +28,9 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 
 // CFE config default values
 const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
-const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 500;
+const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 10;
 const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
-const PENDING_SIGN_DURATION_DEFAULT: u32 = 10;
+const PENDING_SIGN_DURATION_DEFAULT: u32 = 500;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -70,23 +70,25 @@ pub struct StateChainEnvironment {
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
 	let stake_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("STAKE_MANAGER_ADDRESS").unwrap_or(String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("STAKE_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let key_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("KEY_MANAGER_ADDRESS").unwrap_or(String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
+		&env::var("KEY_MANAGER_ADDRESS")
+			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or(ETHEREUM_CHAIN_ID_DEFAULT.to_string())
+		.unwrap_or_else(|_| ETHEREUM_CHAIN_ID_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
-	let eth_init_agg_key =
-		hex::decode(env::var("ETH_INIT_AGG_KEY").unwrap_or(String::from(ETH_INIT_AGG_KEY_DEFAULT)))
-			.unwrap()
-			.try_into()
-			.expect("ETH_INIT_AGG_KEY Cast to agg pub key failed");
-
+	let eth_init_agg_key = hex::decode(
+		env::var("ETH_INIT_AGG_KEY").unwrap_or_else(|_| String::from(ETH_INIT_AGG_KEY_DEFAULT)),
+	)
+	.unwrap()
+	.try_into()
+	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
 	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
 		.unwrap_or(format!("{}", ETH_DEPLOYMENT_BLOCK_DEFAULT))
 		.parse::<u64>()
@@ -526,6 +528,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 
 /// Configure initial storage state for FRAME modules.
 /// 150 validator limit
+#[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -543,7 +546,10 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		validator: ValidatorConfig { blocks_per_epoch: 8 * HOURS },
+		validator: ValidatorConfig {
+			blocks_per_epoch: 8 * HOURS,
+			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+		},
 		session: SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -557,6 +563,7 @@ fn testnet_genesis(
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake: MIN_STAKE,
+			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
 		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),

@@ -178,7 +178,7 @@ pub mod pallet {
 		/// - None
 		#[pallet::weight(
 			T::WeightInfoWitnesser::witness().saturating_add(
-				VaultsCall::<T, Instance1>::vault_key_rotated(new_public_key.clone(), *block_number, tx_hash.clone())
+				VaultsCall::<T, Instance1>::vault_key_rotated(*new_public_key, *block_number, *tx_hash)
 					.get_dispatch_info()
 					.weight
 		))]

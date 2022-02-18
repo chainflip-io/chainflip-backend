@@ -41,12 +41,6 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'merge-config-option'
 
-[dependencies.frame-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'merge-config-option'
-
 [features]
 default = ['std']
 std = [
@@ -55,9 +49,4 @@ std = [
 	'frame-support/std',
 	'frame-system/std',
 	'sp-std/std',
-]
-runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
 ]

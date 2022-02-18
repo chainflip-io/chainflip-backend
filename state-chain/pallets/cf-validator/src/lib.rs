@@ -21,7 +21,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionPhase, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, HasPeerMapping,
+	EpochTransitionHandler, ExecutionCondition, HasPeerMapping,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -30,7 +30,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{
-	AtLeast32BitUnsigned, BlockNumberProvider, Convert, One, Saturating, Zero,
+	AtLeast32BitUnsigned, BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero,
 };
 use sp_std::prelude::*;
 
@@ -38,7 +38,7 @@ pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
 	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds Bond and Validator storage items
+	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items
 	pub const V1: StorageVersion = StorageVersion::new(1);
 }
 
@@ -77,6 +77,7 @@ impl Default for RotationStatus {
 	}
 }
 
+pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -116,6 +117,9 @@ pub mod pallet {
 		/// An auction type
 		type Auctioneer: Auctioneer<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
@@ -139,6 +143,8 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
 		/// A validator has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
+		/// Ratio of claim period updated \[percentage\]
+		ClaimPeriodUpdated(Percentage),
 	}
 
 	#[pallet::error]
@@ -152,21 +158,22 @@ pub mod pallet {
 		AccountPeerMappingOverlap,
 		/// Invalid signature
 		InvalidAccountPeerMappingSignature,
+		/// Invalid claim period
+		InvalidClaimPeriod,
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// Check expiry of epoch and store last expired
+			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
+				LastExpiredEpoch::<T>::set(epoch_index);
+			}
+
 			// We expect this to return true when a rotation has been forced, it is now scheduled
 			// or we are currently in a rotation
 			if Rotation::<T>::get() == RotationStatus::Idle && Self::should_rotate(block_number) {
-				// At the start of each auction we notify that we are approaching the end of the
-				// current epoch.  TODO Could this be best in another trait such as `Auctioneer`?
-				if T::Auctioneer::phase() == AuctionPhase::WaitingForBids {
-					T::EpochTransitionHandler::on_epoch_ending();
-				}
-
 				if let Ok(AuctionPhase::WaitingForBids) = T::Auctioneer::process() {
 					// Auction completed when we return to the state of `WaitingForBids`
 					if Force::<T>::get() {
@@ -208,6 +215,29 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Update the percentage of the epoch period that claims are permitted
+		///
+		/// The dispatch origin of this function must be governance
+		///
+		/// ## Events
+		///
+		/// - [ClaimPeriodUpdated](Event::ClaimPeriodUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidClaimPeriod](Error::InvalidClaimPeriod)
+		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
+		pub fn update_period_for_claims(
+			origin: OriginFor<T>,
+			percentage: Percentage,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(percentage <= 100, Error::<T>::InvalidClaimPeriod);
+			ClaimPeriodAsPercentage::<T>::set(percentage);
+			Self::deposit_event(Event::ClaimPeriodUpdated(percentage));
+
+			Ok(().into())
+		}
 		/// Sets the number of blocks an epoch should run for
 		///
 		/// The dispatch origin of this function must be root.
@@ -306,6 +336,8 @@ pub mod pallet {
 			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
+			// TODO Consider ensuring is non-private IP / valid IP
+
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
@@ -370,6 +402,11 @@ pub mod pallet {
 			})
 		}
 	}
+
+	/// Percentage of epoch we allow claims
+	#[pallet::storage]
+	#[pallet::getter(fn claim_period_as_percentage)]
+	pub(super) type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// Force auction on next block
 	#[pallet::storage]
@@ -437,15 +474,25 @@ pub mod pallet {
 	pub type ValidatorCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Version, ValueQuery>;
 
+	/// The last expired epoch index
+	#[pallet::storage]
+	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// A map storing the expiry block numbers for old epochs
+	#[pallet::storage]
+	pub type EpochExpiries<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
+		pub claim_period_as_percentage: Percentage,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { blocks_per_epoch: Zero::zero() }
+			Self { blocks_per_epoch: Zero::zero(), claim_period_as_percentage: Zero::zero() }
 		}
 	}
 
@@ -453,6 +500,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 
 			if let Some(AuctionResult { minimum_active_bid, winners }) =
 				T::Auctioneer::auction_result()
@@ -472,6 +520,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
+	fn last_expired_epoch() -> EpochIndex {
+		LastExpiredEpoch::<T>::get()
+	}
+
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()
 	}
@@ -489,7 +541,15 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn is_auction_phase() -> bool {
-		!T::Auctioneer::waiting_on_bids()
+		// start + ((epoch * percentage) / 100)
+		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
+			BlocksPerEpoch::<T>::get()
+				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
+				.checked_div(&100u32.into())
+				.unwrap_or_default(),
+		);
+
+		last_block_for_claims >= frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn active_validator_count() -> u32 {
@@ -515,18 +575,26 @@ impl<T: Config> Pallet<T> {
 		for validator in new_validators {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
-		// The new bond set
-		Bond::<T>::set(new_bond);
-		// Set the block this epoch starts at
-		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-		// If we were in an emergency, mark as completed
-		Self::emergency_rotation_completed();
 
 		// Calculate the new epoch index
-		let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
+		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
-			*epoch
+			(*epoch - 1, *epoch)
 		});
+
+		// The new bond set
+		Bond::<T>::set(new_bond);
+		// Set the expiry block number for the outgoing set
+		EpochExpiries::<T>::insert(
+			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
+			old_epoch,
+		);
+
+		// Set the block this epoch starts at
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+
+		// If we were in an emergency, mark as completed
+		Self::emergency_rotation_completed();
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
@@ -574,11 +642,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			},
 			RotationStatus::AwaitingCompletion => {
 				Rotation::<T>::put(RotationStatus::Ready);
-				Some(
-					T::Auctioneer::auction_result()
-						.expect("everything starts with an auction")
-						.winners,
-				)
+				Some(T::Auctioneer::auction_result()?.winners)
 			},
 			RotationStatus::Ready => {
 				Rotation::<T>::set(RotationStatus::Idle);
@@ -599,10 +663,12 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
 		if Rotation::<T>::get() == RotationStatus::Ready {
-			let AuctionResult { winners, minimum_active_bid } =
-				T::Auctioneer::auction_result().expect("everything starts with an auction");
-			// Start the new epoch
-			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			if let Some(AuctionResult { winners, minimum_active_bid }) =
+				T::Auctioneer::auction_result()
+			{
+				// Start the new epoch
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			}
 		}
 	}
 }
@@ -613,15 +679,22 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	}
 
 	fn estimate_current_session_progress(
-		_now: T::BlockNumber,
+		now: T::BlockNumber,
 	) -> (Option<sp_runtime::Permill>, Weight) {
-		// TODO
-		(None, 0)
+		(
+			Some(sp_runtime::Permill::from_rational(
+				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
+				BlocksPerEpoch::<T>::get(),
+			)),
+			T::DbWeight::get().reads(2),
+		)
 	}
 
 	fn estimate_next_session_rotation(_now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
-		// TODO
-		(None, 0)
+		(
+			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
+			T::DbWeight::get().reads(2),
+		)
 	}
 }
 
@@ -635,14 +708,12 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
+			Pallet::<T>::force_validator_rotation();
 		}
-
-		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
@@ -674,5 +745,13 @@ impl<T: Config> HasPeerMapping for Pallet<T> {
 
 	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id)
+	}
+}
+
+pub struct NotDuringRotation<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
+	fn is_satisfied() -> bool {
+		matches!(Rotation::<T>::get(), RotationStatus::Idle)
 	}
 }

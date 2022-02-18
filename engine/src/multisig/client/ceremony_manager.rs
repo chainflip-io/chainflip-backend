@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client::{self, MultisigOutcome};
+use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use state_chain_runtime::AccountId;
 
@@ -30,15 +31,14 @@ type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-#[derive(Clone)]
 pub struct CeremonyManager {
     my_account_id: AccountId,
     outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
-    logger: slog::Logger,
     ceremony_id_tracker: CeremonyIdTracker,
+    logger: slog::Logger,
 }
 
 impl CeremonyManager {
@@ -83,7 +83,7 @@ impl CeremonyManager {
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
 
-                    self.signing_states.remove(&ceremony_id);
+                    self.signing_states.remove(ceremony_id);
                 }
             }
         }
@@ -104,7 +104,7 @@ impl CeremonyManager {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
-                    self.keygen_states.remove(&ceremony_id);
+                    self.keygen_states.remove(ceremony_id);
                 }
             }
         }
@@ -164,8 +164,8 @@ impl CeremonyManager {
                     self.logger,
                     #SIGNING_CEREMONY_FAILED,
                     "Signing ceremony failed: {}",
-                    reason; "blamed parties" =>
-                    format_iterator(&blamed_parties),
+                    reason; "reported parties" =>
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -198,8 +198,8 @@ impl CeremonyManager {
                     self.logger,
                     #KEYGEN_CEREMONY_FAILED,
                     "Keygen ceremony failed: {}",
-                    reason; "blamed parties" =>
-                    format_iterator(&blamed_parties),
+                    reason; "reported parties" =>
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -215,8 +215,13 @@ impl CeremonyManager {
     }
 
     /// Process a keygen request
-    pub fn on_keygen_request(&mut self, keygen_info: KeygenInfo, keygen_options: KeygenOptions) {
-        // TODO: Consider similiarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
+    pub fn on_keygen_request(
+        &mut self,
+        rng: Rng,
+        keygen_info: KeygenInfo,
+        keygen_options: KeygenOptions,
+    ) {
+        // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
         let KeygenInfo {
             ceremony_id,
@@ -249,7 +254,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, signers);
@@ -261,6 +266,7 @@ impl CeremonyManager {
                 own_idx: our_idx,
                 all_idxs: signer_idxs,
                 logger: logger.clone(),
+                rng,
             };
 
             let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
@@ -268,19 +274,26 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_keygen_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process a request to sign
     pub fn on_request_to_sign(
         &mut self,
+        rng: Rng,
         data: MessageHash,
         key_info: KeygenResultInfo,
         signers: Vec<AccountId>,
@@ -331,7 +344,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -343,6 +356,7 @@ impl CeremonyManager {
                 own_idx,
                 all_idxs: signer_idxs,
                 logger: self.logger.clone(),
+                rng,
             };
 
             let processor = AwaitCommitments1::new(
@@ -356,14 +370,20 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Err(reason) = state.on_ceremony_request(
+        match state.on_ceremony_request(
             ceremony_id,
             initial_stage,
             key_info.validator_map,
             self.outcome_sender.clone(),
         ) {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-        }
+            Ok(Some(result)) => {
+                self.process_signing_ceremony_outcome(ceremony_id, result);
+            }
+            Err(reason) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+            }
+            _ => { /* nothing to do */ }
+        };
     }
 
     /// Process data for a signing ceremony arriving from a peer
@@ -375,8 +395,6 @@ impl CeremonyManager {
     ) {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
-
-        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         if self
             .ceremony_id_tracker
@@ -390,11 +408,13 @@ impl CeremonyManager {
             return;
         }
 
+        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+
         let logger = &self.logger;
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -424,7 +444,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
         state
             .process_message(sender_id, data)
@@ -435,11 +455,11 @@ impl CeremonyManager {
 #[cfg(test)]
 impl CeremonyManager {
     pub fn expire_all(&mut self) {
-        for (_, state) in &mut self.signing_states {
+        for state in self.signing_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());
         }
 
-        for (_, state) in &mut self.keygen_states {
+        for state in self.keygen_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());
         }
     }

@@ -21,7 +21,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	error::BadOrigin,
-	traits::{EnsureOrigin, Get, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -98,10 +98,6 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
-		/// TTL for a claim from the moment of issue.
-		#[pallet::constant]
-		type ClaimTTL: Get<Duration>;
-
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}
@@ -132,6 +128,10 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// TTL for a claim from the moment of issue.
+	#[pallet::storage]
+	pub type ClaimTTL<T: Config> = StorageValue<_, Duration, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -194,8 +194,8 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Cannot make a claim request while an auction is being resolved.
-		NoClaimsDuringAuctionPhase,
+		/// We are in the auction phase
+		AuctionPhase,
 
 		/// Failed to encode the signed claim payload.
 		ClaimEncodingFailed,
@@ -263,7 +263,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [PendingClaim](Error::PendingClaim)
-		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase)
+		/// - [AuctionPhase](Error::AuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		///
 		/// ## Dependencies
@@ -476,12 +476,13 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
 		pub minimum_stake: T::Balance,
+		pub claim_ttl: Duration,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![], minimum_stake: Zero::zero() }
+			Self { genesis_stakers: vec![], ..Default::default() }
 		}
 	}
 
@@ -489,6 +490,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
+			ClaimTTL::<T>::set(self.claim_ttl);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 			}
@@ -564,7 +566,7 @@ impl<T: Config> Pallet<T> {
 		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+		AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -578,7 +580,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
 		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::NoClaimsDuringAuctionPhase);
+		ensure!(T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
 		// If a claim already exists, return an error. The validator must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.
@@ -595,7 +597,7 @@ impl<T: Config> Pallet<T> {
 		// Calculate the maximum that would remain after this claim and ensure it won't be less than
 		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
 		// this will need to be handled in a refactor of that trait(?)
-		let remaining = T::Flip::stakeable_balance(&account_id)
+		let remaining = T::Flip::stakeable_balance(account_id)
 			.checked_sub(&amount)
 			.ok_or(Error::<T>::InvalidClaim)?;
 
@@ -609,7 +611,7 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
+		let expiry = T::TimeSource::now() + ClaimTTL::<T>::get();
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(

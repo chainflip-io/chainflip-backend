@@ -131,7 +131,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	fn success_result(&self) -> Option<AggKeyFor<T, I>> {
 		self.success_votes.iter().find_map(|(key, votes)| {
 			if *votes >= self.success_threshold() {
-				Some(key.clone())
+				Some(*key)
 			} else {
 				None
 			}
@@ -526,9 +526,7 @@ pub mod pallet {
 					expected_new_key,
 					new_public_key,
 				);
-				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(
-					new_public_key.clone(),
-				));
+				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
 			}
 
 			// We update the current epoch with an active window for the outgoers
@@ -660,15 +658,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
 		for offender in offenders {
-			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender)
-				.unwrap_or_else(|e| {
-					log::error!(
-						"Unable to report ParticipateKeygenFailed for signer {:?}: {:?}",
-						offender,
-						e
-					);
-					0
-				});
+			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender);
 		}
 
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));

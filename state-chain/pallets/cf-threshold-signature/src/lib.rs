@@ -280,15 +280,7 @@ pub mod pallet {
 						T::OfflineReporter::report(
 							OfflineCondition::ParticipateSigningFailed,
 							&offender,
-						)
-						.unwrap_or_else(|e| {
-							log::error!(
-								"Unable to report ParticipateSigningFailed for participant {:?}: {:?}",
-								offender,
-								e
-							);
-							0
-						});
+						);
 					}
 
 					// Clean up old ceremony and start a new one.
@@ -367,7 +359,7 @@ pub mod pallet {
 			ceremony_id: CeremonyId,
 			signature: SignatureFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = ensure_none(origin)?;
+			ensure_none(origin)?;
 
 			// The request succeeded, remove it.
 			let (request_id, attempts, _) =
@@ -433,7 +425,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = ensure_signed(origin)?.into();
 
-			let _ = PendingCeremonies::<T, I>::try_mutate(id, |maybe_context| {
+			PendingCeremonies::<T, I>::try_mutate(id, |maybe_context| {
 				maybe_context
 					.as_mut()
 					.ok_or(Error::<T, I>::InvalidCeremonyId)

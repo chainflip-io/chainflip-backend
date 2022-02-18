@@ -75,13 +75,13 @@ impl Chainflip for Test {
 }
 
 pub struct MockNominator;
-pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
+pub const RANDOM_NOMINEE: u64 = 0xc001d00d_u64;
 
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed<S>(_seed: S) -> Option<Self::SignerId> {
-		NOMINATION.with(|cell| cell.borrow().clone())
+		NOMINATION.with(|cell| *cell.borrow())
 	}
 
 	fn threshold_nomination_with_seed<S>(_seed: S) -> Option<Vec<Self::SignerId>> {

@@ -228,7 +228,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("latest_block_hash RPC API failed")?
-            .ok_or(anyhow::Error::msg("Latest block hash could not be fetched"))?
+            .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
             .hash())
     }
 
@@ -339,8 +339,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -367,7 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 .await
             {
                 Ok(tx_hash) => {
-                    slog::trace!(
+                    slog::info!(
                         logger,
                         "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
@@ -472,8 +472,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Submit an unsigned extrinsic.
     pub async fn submit_unsigned_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -490,17 +490,17 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
-                slog::trace!(
+                slog::info!(
                     logger,
                     "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
-                return Ok(tx_hash);
+                Ok(tx_hash)
             }
             Err(err) => {
                 slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
-                return Err(err);
+                Err(err)
             }
         }
     }
@@ -779,19 +779,11 @@ pub async fn connect_to_state_chain(
         frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
     );
 
-    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-        state_chain_settings.ws_endpoint.as_str(),
-    )?)
-    .await
-    .map_err(rpc_error_into_anyhow_error)
-    .context("Failed to establish rpc connection to substrate node")?;
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(&state_chain_settings).await?;
 
-    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
-    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
-    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-
-    let mut block_header_stream = chain_rpc_client
+    let mut block_header_stream = state_chain_rpc_client
+        .chain_rpc_client
         .subscribe_finalized_heads()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
@@ -808,11 +800,12 @@ pub async fn connect_to_state_chain(
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = chain_rpc_client
+        let finalised_head_hash = state_chain_rpc_client
+            .chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_head_number = chain_rpc_client
+        let finalised_head_number = state_chain_rpc_client.chain_rpc_client
             .header(Some(finalised_head_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?
@@ -855,7 +848,7 @@ pub async fn connect_to_state_chain(
         }
 
         let account_nonce = match get_account_nonce(
-            &state_rpc_client,
+            &state_chain_rpc_client.state_rpc_client,
             &account_storage_key,
             latest_block_hash,
         )
@@ -866,7 +859,7 @@ pub async fn connect_to_state_chain(
                 if wait_for_staking {
                     loop {
                         if let Some(nonce) = get_account_nonce(
-                            &state_rpc_client,
+                            &state_chain_rpc_client.state_rpc_client,
                             &account_storage_key,
                             latest_block_hash,
                         )
@@ -904,20 +897,14 @@ pub async fn connect_to_state_chain(
     );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
+        &mut &state_chain_rpc_client
+            .state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?;
-
-    let state_chain_rpc_client = StateChainRpcClient {
-        system_rpc_client,
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client,
-    };
 
     Ok((
         latest_block_hash,
@@ -953,6 +940,30 @@ pub async fn connect_to_state_chain(
                 .expect("Could not decode HeartbeatBlockInterval to u32"),
         }),
     ))
+}
+
+#[allow(clippy::eval_order_dependence)]
+pub async fn connect_to_state_chain_without_signer(
+    state_chain_settings: &settings::StateChain,
+) -> Result<StateChainRpcClient> {
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(rpc_error_into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
+
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
+
+    Ok(StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    })
 }
 
 #[cfg(test)]
@@ -1065,7 +1076,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
@@ -1078,7 +1089,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1111,7 +1122,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1147,7 +1158,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1211,7 +1222,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1246,7 +1257,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+            .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
             .await
             .unwrap_err();
 
@@ -1284,7 +1295,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
@@ -1297,7 +1308,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+                .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
                 .await
         );
 

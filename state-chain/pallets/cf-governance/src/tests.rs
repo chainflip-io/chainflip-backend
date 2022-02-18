@@ -2,17 +2,17 @@ use crate::{
 	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
 };
 use cf_traits::mocks::time_source;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_err, assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
 
 use crate as pallet_cf_governance;
 
+const DUMMY_WASM_BLOB: Vec<u8> = vec![];
+
 fn mock_extrinsic() -> Box<Call> {
-	let call =
-		Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
-			EVE, PETER, MAX,
-		])));
-	call
+	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
+		EVE, PETER, MAX,
+	])))
 }
 
 fn next_block() {
@@ -199,5 +199,53 @@ fn sudo_extrinsic() {
 		next_block();
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
+	});
+}
+
+#[test]
+fn upgrade_runtime_successfully() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			DUMMY_WASM_BLOB
+		));
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
+		);
+	});
+}
+
+#[test]
+fn wrong_upgrade_conditions() {
+	UpgradeConditionMock::set(false);
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+				DUMMY_WASM_BLOB
+			),
+			<Error<Test>>::UpgradeConditionsNotMet
+		);
+	});
+}
+
+#[test]
+fn error_during_runtime_upgrade() {
+	RuntimeUpgradeMock::set(false);
+	UpgradeConditionMock::set(true);
+	new_test_ext().execute_with(|| {
+		// assert_noop! is not working when we emit an event and
+		// the result is an error
+		let result = Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			DUMMY_WASM_BLOB,
+		);
+		assert!(result.is_err());
+		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
+		);
 	});
 }

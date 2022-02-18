@@ -205,6 +205,7 @@ pub struct ExtBuilder {
 }
 
 impl ExtBuilder {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		let ext = new_test_ext();
 		Self { ext }

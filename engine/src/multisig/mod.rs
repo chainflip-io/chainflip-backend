@@ -5,7 +5,7 @@ mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
-mod db;
+pub mod db;
 
 #[cfg(test)]
 mod tests;
@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
-use futures::StreamExt;
 use slog::o;
 use state_chain_runtime::AccountId;
 
@@ -52,7 +51,7 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     Keygen(KeygenInfo),
     Sign(SigningInfo),
@@ -88,7 +87,10 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = common::make_periodic_stream(Duration::from_secs(10));
+        let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
+
+        use rand_legacy::FromEntropy;
+        let mut rng = crypto::Rng::from_entropy();
 
         loop {
             tokio::select! {
@@ -96,9 +98,9 @@ where
                     client.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg);
+                    client.process_multisig_instruction(msg, &mut rng);
                 }
-                Some(()) = cleanup_stream.next() => {
+                _ = cleanup_tick.tick() => {
                     client.cleanup();
                 }
                 Ok(()) = &mut shutdown_rx => {

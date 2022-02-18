@@ -7,9 +7,9 @@ use frame_support::{storage::migration::*, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::convert::{TryFrom, TryInto};
 
-const PALLET_NAME_V0: &[u8] = b"Vaults";
+const PALLET_NAME_V0: &[u8; 6] = b"Vaults";
 
-const PALLET_NAME_V1: &'static [u8] = b"EthereumVault";
+const PALLET_NAME_V1: &[u8; 13] = b"EthereumVault";
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 enum ChainId {

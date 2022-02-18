@@ -138,6 +138,7 @@
   "OnlineCredits": "BlockNumber",
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "[u8; 32]",
+  "Percentage": "u8",
   "PercentageRange": {
     "top": "u8",
     "bottom": "u8"

@@ -2,12 +2,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
-pub mod weights;
-pub use weights::WeightInfo;
-
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
@@ -46,8 +40,6 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
-		/// Benchmark stuff
-		type WeightInfo: WeightInfo;
 	}
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -73,85 +65,13 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub (super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		UpdatedCFESettings(cfe::CfeSettings),
-	}
+	pub enum Event<T: Config> {}
 
 	#[pallet::error]
 	pub enum Error<T> {}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		/// Sets the value for the CFE setting EthBlockSafetyMargin
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_eth_block_safety_margin())]
-		pub fn update_eth_block_safety_margin(
-			origin: OriginFor<T>,
-			eth_block_safety_margin: u32,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.eth_block_safety_margin = eth_block_safety_margin;
-				*settings
-			});
-			Ok(().into())
-		}
-		/// Sets the value for the CFE setting PendingSignDuration
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_max_retry_attempts())]
-		pub fn update_max_retry_attempts(
-			origin: OriginFor<T>,
-			max_extrinsic_retry_attempts: u32,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.max_extrinsic_retry_attempts = max_extrinsic_retry_attempts;
-				*settings
-			});
-			Ok(().into())
-		}
-		/// Sets the value for the CFE setting MaxStageDuration
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_max_stage_duration())]
-		pub fn update_max_stage_duration(
-			origin: OriginFor<T>,
-			max_ceremony_stage_duration: u32,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.max_ceremony_stage_duration = max_ceremony_stage_duration;
-				*settings
-			});
-			Ok(().into())
-		}
-		/// Sets the value for the CFE setting MaxRetryAttempts
-		///
-		/// ## Events
-		///
-		/// - [UpdatedCFESettings](Event::UpdatedCFESettings)
-		#[pallet::weight(T::WeightInfo::update_pending_sign_duration())]
-		pub fn update_pending_sign_duration(
-			origin: OriginFor<T>,
-			pending_sign_duration: u32,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::do_cfe_config_update(&|settings: &mut cfe::CfeSettings| {
-				settings.pending_sign_duration = pending_sign_duration;
-				*settings
-			});
-			Ok(().into())
-		}
-	}
+	impl<T: Config> Pallet<T> {}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -193,16 +113,5 @@ pub mod pallet {
 				max_extrinsic_retry_attempts: self.max_extrinsic_retry_attempts,
 			});
 		}
-	}
-}
-
-impl<T: Config> Pallet<T> {
-	/// Updates the cfe settings and emits an event with the updated values
-	fn do_cfe_config_update(update_settings: impl Fn(&mut cfe::CfeSettings) -> cfe::CfeSettings) {
-		let new_settings = CfeSettings::<T>::mutate(|settings| {
-			update_settings(settings);
-			*settings
-		});
-		Self::deposit_event(Event::UpdatedCFESettings(new_settings));
 	}
 }

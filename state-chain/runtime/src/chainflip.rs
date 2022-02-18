@@ -1,14 +1,13 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
 mod signer_nomination;
+use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
-use super::{
-	AccountId, Call, Emissions, Flip, FlipBalance, Reputation, Rewards, Runtime, Validator,
-	Witnesser,
-};
 use crate::{
-	Auction, BlockNumber, EmergencyRotationPercentageRange, Environment, HeartbeatBlockInterval,
+	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
+	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
+	Witnesser,
 };
 use cf_chains::{
 	eth::{self, api::EthereumApi},
@@ -18,17 +17,24 @@ use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardRollover, Rewarder, StakeHandler, StakeTransfer,
+	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
 	VaultRotationHandler,
 };
-use frame_support::weights::Weight;
+use codec::{Decode, Encode};
+use frame_support::{instances::*, weights::Weight};
+
+use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+
 use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
+
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 };
 use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+
+use cf_traits::RuntimeUpgrade;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -46,13 +52,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_epoch_ending() {
-		// Apportion rewards for the current validators
-		<Rewards as Rewarder>::reward_all().unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on the epoch ending: {:?}!", err);
-		});
-	}
-
 	fn on_new_epoch(
 		old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
@@ -62,10 +61,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Rollover the rewards.
-		<Rewards as RewardRollover>::rollover(new_validators).unwrap_or_else(|err| {
-			log::error!("Unable to process rewards rollover on a new epoch: {:?}!", err);
-		});
 		// Update the the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
@@ -80,6 +75,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			new_validators,
 			new_bond,
 		);
+
+		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
 	}
 }
 
@@ -88,8 +85,6 @@ pub struct AccountStateManager<T>(PhantomData<T>);
 impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 	type ValidatorId = AccountId;
 	type Amount = T::Amount;
-
-	fn on_epoch_ending() {}
 
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
@@ -211,16 +206,13 @@ impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(
-		validator_id: &Self::ValidatorId,
-		block_number: Self::BlockNumber,
-	) -> Weight {
-		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number)
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) {
+		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number);
 	}
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) -> Weight {
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		// Reputation depends on heartbeats
-		let mut weight = <Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
+		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
 		let backup_validators = <Auction as BackupValidators>::backup_validators();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
@@ -230,10 +222,8 @@ impl Heartbeat for ChainflipHeartbeat {
 		let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
 		let percent_online = network_state.percentage_online() as u8;
 		if percent_online >= bottom && percent_online <= top {
-			weight += <Validator as EmergencyRotation>::request_emergency_rotation();
+			<Validator as EmergencyRotation>::request_emergency_rotation();
 		}
-
-		weight
 	}
 }
 
@@ -290,5 +280,24 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				..Default::default()
 			},
 		}
+	}
+}
+
+pub struct BlockAuthorRewardDistribution;
+
+impl RewardsDistribution for BlockAuthorRewardDistribution {
+	type Balance = FlipBalance;
+	type Surplus = Surplus<Runtime>;
+
+	fn distribute(rewards: Self::Surplus) {
+		let current_block_author = Authorship::author();
+		Flip::settle_imbalance(&current_block_author, rewards);
+	}
+}
+pub struct RuntimeUpgradeManager;
+
+impl RuntimeUpgrade for RuntimeUpgradeManager {
+	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
+		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }

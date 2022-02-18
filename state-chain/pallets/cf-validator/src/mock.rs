@@ -6,9 +6,9 @@ use frame_support::{
 };
 
 use cf_traits::{
-	mocks::chainflip_account::MockChainflipAccount, ActiveValidatorRange, AuctionError,
-	AuctionIndex, AuctionResult, Bid, BidderProvider, ChainflipAccount, ChainflipAccountData,
-	IsOnline, IsOutgoing,
+	mocks::{chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck},
+	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionResult, Bid, BidderProvider,
+	ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -156,7 +156,7 @@ impl MockAuctioneer {
 	) -> AuctionBehaviour {
 		AuctionBehaviour {
 			confirmation_in_blocks,
-			winners: bids.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
+			winners: bids.iter().map(|(validator_id, _)| *validator_id).collect(),
 			minimum_active_bid,
 		}
 	}
@@ -178,7 +178,7 @@ impl MockAuctioneer {
 	pub fn next_auction() {
 		AUCTION_INDEX.with(|cell| {
 			let mut current_auction = cell.borrow_mut();
-			*current_auction = *current_auction + 1;
+			*current_auction += 1;
 		});
 	}
 }
@@ -317,7 +317,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
-				&validator,
+				validator,
 				ValidatorPallet::epoch_index(),
 			);
 		}
@@ -341,10 +341,12 @@ impl Config for Test {
 	type Amount = Amount;
 	type Auctioneer = MockAuctioneer;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const DUMMY_GENESIS_VALIDATORS: &'static [u64] = &[u64::MAX];
+pub const DUMMY_GENESIS_VALIDATORS: &[u64] = &[u64::MAX];
+pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	// Initialise the auctioneer with an auction result
@@ -361,7 +363,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				.map(|&i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},
-		validator_pallet: ValidatorPalletConfig { blocks_per_epoch: 0 },
+		validator_pallet: ValidatorPalletConfig {
+			blocks_per_epoch: 0,
+			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
