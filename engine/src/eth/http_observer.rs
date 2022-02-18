@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::time::Duration;
 
 use futures::{stream, Stream};
@@ -16,86 +15,66 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     poll_interval: Duration,
 ) -> impl Stream<Item = Block<H256>> {
     struct StreamState<EthHttpRpc> {
-        last_block_fetched: U64,
         last_block_yielded: U64,
-        cached_skipped_blocks: VecDeque<Block<H256>>,
+        last_head_fetched: U64,
         eth_http_rpc: EthHttpRpc,
     }
 
     let init_data = StreamState {
-        last_block_fetched: U64::from(0),
         last_block_yielded: U64::from(0),
-        cached_skipped_blocks: VecDeque::default(),
+        last_head_fetched: U64::from(0),
         eth_http_rpc,
     };
 
     Box::pin(stream::unfold(init_data, move |mut state| async move {
-        'block_safety_loop: loop {
-            // we first want to empty the cache of skipped blocks before querying for new ones
-            while let Some(block) = state.cached_skipped_blocks.pop_front() {
-                break 'block_safety_loop Some((block, state));
+        loop {
+            let is_first_iteration =
+                state.last_block_yielded == U64::from(0) && state.last_head_fetched == U64::from(0);
+
+            let should_fetch_block_number = if is_first_iteration {
+                // fetch, with no delay
+                true
+            } else if !is_first_iteration
+                && state.last_head_fetched
+                    <= state.last_block_yielded + U64::from(ETH_BLOCK_SAFETY_MARGIN)
+            {
+                // fetch, but with delay
+                tokio::time::sleep(poll_interval).await;
+                true
+            } else {
+                false
+            };
+
+            if should_fetch_block_number {
+                let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
+                assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
+                state.last_head_fetched = unsafe_block_number;
             }
 
-            tokio::time::sleep(poll_interval).await;
-
-            let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
-            assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
-            let safe_block_number = unsafe_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
-
-            let is_first_iteration = state.last_block_yielded == U64::from(0)
-                && state.last_block_fetched == U64::from(0);
-
-            if unsafe_block_number <= state.last_block_fetched {
-                // wait until we get back to where we were
-                continue;
-            } else if is_first_iteration
-                || unsafe_block_number == state.last_block_fetched + U64::from(1)
-            {
-                // We enter this when we have progressed, or if this is the first iteration
-                // we should progress to the next block
-
+            let next_block_to_yield = if is_first_iteration {
+                state
+                    .last_head_fetched
+                    .checked_sub(U64::from(ETH_BLOCK_SAFETY_MARGIN))
+                    .unwrap()
+            } else {
+                // the last block yielded was safe, so the next is +1
+                state.last_block_yielded + U64::from(1)
+            };
+            if next_block_to_yield + U64::from(ETH_BLOCK_SAFETY_MARGIN) <= state.last_head_fetched {
                 let block = state
                     .eth_http_rpc
-                    .block(safe_block_number.into())
+                    .block(next_block_to_yield.into())
                     .await
                     .expect(&format!(
                         "Failed to fetch ETH block `{}` via HTTP",
-                        safe_block_number
+                        next_block_to_yield
                     ))
                     .unwrap();
-                state.last_block_fetched = unsafe_block_number;
-                state.last_block_yielded = block.number.unwrap();
+                state.last_block_yielded = next_block_to_yield;
                 break Some((block, state));
-            } else if unsafe_block_number > state.last_block_fetched + 1 {
-                // we skipped a block
-                // if our *head* is now at N, and we are assuming N - 5 is safe
-                // Then (N - 1) - 5 must be safe
-                let last_block_yielded_u64 = state.last_block_yielded.as_u64();
-                for return_block_number in last_block_yielded_u64 + 1..safe_block_number.as_u64() {
-                    let block = state
-                        .eth_http_rpc
-                        .block(return_block_number.into())
-                        .await
-                        .expect(&format!(
-                            "Failed to fetch ETH block `{}` via HTTP",
-                            return_block_number
-                        ))
-                        .unwrap();
-
-                    state.last_block_yielded = block.number.unwrap();
-                    state.cached_skipped_blocks.push_back(block);
-                }
-
-                state.last_block_fetched = unsafe_block_number;
-                break 'block_safety_loop Some((
-                    state
-                        .cached_skipped_blocks
-                        .pop_front()
-                        .expect("There must be a block here, as we must have pushed at least one item to the queue"),
-                    state,
-                ));
             } else {
-                state.last_block_fetched = unsafe_block_number;
+                // wait until we get back to where we where
+                continue;
             }
         }
     }))
