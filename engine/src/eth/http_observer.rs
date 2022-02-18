@@ -31,23 +31,15 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             let is_first_iteration =
                 state.last_block_yielded == U64::from(0) && state.last_head_fetched == U64::from(0);
 
-            let should_fetch_block_number = if is_first_iteration {
-                // fetch, with no delay
-                true
-            } else if !is_first_iteration
-                && state.last_head_fetched
-                    <= state.last_block_yielded + U64::from(ETH_BLOCK_SAFETY_MARGIN)
+            if state.last_head_fetched
+                <= state.last_block_yielded + U64::from(ETH_BLOCK_SAFETY_MARGIN)
             {
-                // fetch, but with delay
-                tokio::time::sleep(poll_interval).await;
-                true
-            } else {
-                false
-            };
-
-            if should_fetch_block_number {
+                if !is_first_iteration {
+                    // fetch, but with delay
+                    tokio::time::sleep(poll_interval).await;
+                }
                 let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
-                assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
+                assert!(unsafe_block_number.as_u64() >= ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
                 state.last_head_fetched = unsafe_block_number;
             }
 
@@ -72,9 +64,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .unwrap();
                 state.last_block_yielded = next_block_to_yield;
                 break Some((block, state));
-            } else {
-                // wait until we get back to where we where
-                continue;
             }
         }
     }))
