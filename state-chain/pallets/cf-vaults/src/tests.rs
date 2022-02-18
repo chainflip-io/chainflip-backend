@@ -2,7 +2,6 @@ use crate::{
 	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome,
 	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
-use cf_chains::eth::AggKey;
 use cf_traits::{Chainflip, EpochInfo};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
@@ -59,17 +58,14 @@ fn only_one_concurrent_request_per_chain() {
 #[test]
 fn keygen_success() {
 	new_test_ext().execute_with(|| {
-		let new_agg_key =
-			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
-
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
-		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
+		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
 
 		assert_matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
+			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		);
 	});
 }
@@ -77,7 +73,7 @@ fn keygen_success() {
 #[test]
 fn keygen_failure() {
 	new_test_ext().execute_with(|| {
-		const BAD_CANDIDATES: &'static [<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
+		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 
@@ -104,7 +100,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				1,
-				KeygenOutcome::Success(AggKey::from_pubkey_compressed([0xcf; 33]))
+				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -123,9 +119,6 @@ fn no_active_rotation() {
 #[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
-		let new_agg_key =
-			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
-
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
@@ -134,7 +127,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			KeygenOutcome::Success(new_agg_key)
+			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 		));
 
 		// Can't report twice.
@@ -142,7 +135,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Success(new_agg_key)
+				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -162,7 +155,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(u64::MAX),
 				ceremony_id,
-				KeygenOutcome::Success(new_agg_key)
+				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -172,7 +165,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				KeygenOutcome::Success(new_agg_key)
+				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -186,7 +179,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			KeygenOutcome::Success(new_agg_key)
+			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 		));
 
 		// This time we should have enough votes for consensus.
@@ -196,7 +189,7 @@ fn keygen_report_success() {
 
 		assert_matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
+			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		);
 	})
 }
@@ -204,9 +197,6 @@ fn keygen_report_success() {
 #[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
-		let new_agg_key =
-			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
-
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
@@ -233,7 +223,7 @@ fn keygen_report_failure() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Success(new_agg_key)
+				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -311,38 +301,36 @@ fn test_grace_period() {
 fn vault_key_rotated() {
 	new_test_ext().execute_with(|| {
 		const ROTATION_BLOCK_NUMBER: u64 = 42;
-		const TX_HASH: [u8; 32] = [0xab; 32];
-		let new_agg_key =
-			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
+		const TX_HASH: [u8; 4] = [0xab; 4];
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
 				Origin::root(),
-				new_agg_key,
+				NEW_AGG_PUB_KEY,
 				ROTATION_BLOCK_NUMBER,
-				TX_HASH.into(),
+				TX_HASH,
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
-		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
+		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
-			new_agg_key,
+			NEW_AGG_PUB_KEY,
 			ROTATION_BLOCK_NUMBER,
-			TX_HASH.into(),
+			TX_HASH,
 		));
 
 		// Can't repeat.
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
 				Origin::root(),
-				new_agg_key,
+				NEW_AGG_PUB_KEY,
 				ROTATION_BLOCK_NUMBER,
-				TX_HASH.into(),
+				TX_HASH,
 			),
 			Error::<MockRuntime, _>::InvalidRotationStatus
 		);
@@ -354,8 +342,7 @@ fn vault_key_rotated() {
 			Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
 
 		assert_eq!(
-			public_key,
-			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY),
+			public_key, GENESIS_AGG_PUB_KEY,
 			"we should have the old agg key in the genesis vault"
 		);
 
@@ -372,7 +359,7 @@ fn vault_key_rotated() {
 			.expect("Ethereum Vault should exist in the next epoch");
 
 		assert_eq!(
-			public_key, new_agg_key,
+			public_key, NEW_AGG_PUB_KEY,
 			"we should have the new public key in the new vault for the next epoch"
 		);
 
@@ -393,11 +380,9 @@ fn vault_key_rotated() {
 
 mod keygen_reporting {
 	use super::*;
-	use crate::{KeygenOutcome, KeygenResponseStatus};
+	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
 	use frame_support::assert_err;
 	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
-
-	const TEST_KEY: &[u8; 33] = &[0xcf; 33];
 
 	macro_rules! assert_ok_no_repeat {
 		($ex:expr) => {
@@ -408,7 +393,7 @@ mod keygen_reporting {
 
 	macro_rules! assert_success_outcome {
 		($ex:expr) => {
-			let outcome: Option<KeygenOutcome<AggKey, u64>> = $ex;
+			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
 			assert!(
 				matches!(outcome, Some(KeygenOutcome::Success(_))),
 				"Expected success, got: {:?}",
@@ -419,7 +404,7 @@ mod keygen_reporting {
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
-			let outcome: Option<KeygenOutcome<AggKey, u64>> = $ex;
+			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
 			assert!(
 				matches!(outcome, Some(KeygenOutcome::Failure(_))),
 				"Expected failure, got: {:?}",
@@ -430,7 +415,7 @@ mod keygen_reporting {
 
 	macro_rules! assert_no_outcome {
 		($ex:expr) => {
-			let outcome: Option<KeygenOutcome<AggKey, u64>> = $ex;
+			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
 			assert!(matches!(outcome, None), "Expected `None`, got: {:?}", outcome);
 		};
 	}
@@ -483,14 +468,14 @@ mod keygen_reporting {
 	fn simple_success(
 		num_candidates: u32,
 		num_successes: u32,
-	) -> Option<KeygenOutcome<AggKey, u64>> {
+	) -> Option<KeygenOutcomeFor<MockRuntime>> {
 		get_outcome_simple(num_candidates, num_successes, 0, 0)
 	}
 
 	fn simple_failure(
 		num_candidates: u32,
 		num_failures: u32,
-	) -> Option<KeygenOutcome<AggKey, u64>> {
+	) -> Option<KeygenOutcomeFor<MockRuntime>> {
 		get_outcome_simple(num_candidates, 0, num_failures, 0)
 	}
 
@@ -499,7 +484,7 @@ mod keygen_reporting {
 		num_successes: u32,
 		num_failures: u32,
 		num_bad_keys: u32,
-	) -> Option<KeygenOutcome<AggKey, u64>> {
+	) -> Option<KeygenOutcomeFor<MockRuntime>> {
 		get_outcome(num_candidates, num_successes, num_failures, num_bad_keys, |_| [1])
 	}
 
@@ -516,7 +501,7 @@ mod keygen_reporting {
 		mut num_failures: u32,
 		mut num_bad_keys: u32,
 		report_gen: F,
-	) -> Option<KeygenOutcome<AggKey, u64>> {
+	) -> Option<KeygenOutcome<AggKeyFor<MockRuntime>, u64>> {
 		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
 			1..=(num_candidates as u64),
 		));
@@ -533,14 +518,10 @@ mod keygen_reporting {
 
 		for id in 1..=(num_responses as u64) {
 			if num_successes > 0 {
-				assert_ok_no_repeat!(
-					status.add_success_vote(&id, AggKey::from_pubkey_compressed(*TEST_KEY))
-				);
+				assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY));
 				num_successes -= 1;
 			} else if num_bad_keys > 0 {
-				assert_ok_no_repeat!(
-					status.add_success_vote(&id, AggKey::from_pubkey_compressed([0xb0; 33]))
-				);
+				assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!"));
 				num_bad_keys -= 1;
 			} else if num_failures > 0 {
 				assert_ok_no_repeat!(

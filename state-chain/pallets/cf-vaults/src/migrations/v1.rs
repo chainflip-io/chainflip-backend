@@ -1,16 +1,20 @@
 use crate::migrations::v1::v0_types::{VaultRotationStatusV0, VaultV0};
 
 use super::*;
-use cf_chains::ChainId;
 #[cfg(feature = "try-runtime")]
 use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 use frame_support::{storage::migration::*, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::convert::{TryFrom, TryInto};
 
-const PALLET_NAME_V0: &'static [u8] = b"Vaults";
+const PALLET_NAME_V0: &[u8] = b"Vaults";
 
 const PALLET_NAME_V1: &'static [u8] = b"EthereumVault";
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+enum ChainId {
+	Ethereum,
+}
 
 /// V1 Storage migration.
 ///
@@ -42,13 +46,15 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 	}
 
 	// The Nonce value needs to be moved from a double map to simple map.
-	take_storage_item::<_, _, Blake2_128Concat>(PALLET_NAME_V1, b"ChainNonces", ChainId::Ethereum)
-		.map(|nonce: Nonce| {
-			ChainNonce::<T, I>::put(nonce);
-		})
-		.unwrap_or_else(|| {
-			log::info!("🏯 No nonce value to migrate.");
-		});
+	take_storage_item::<_, <T::Chain as ChainAbi>::Nonce, Blake2_128Concat>(
+		PALLET_NAME_V1,
+		b"ChainNonces",
+		ChainId::Ethereum,
+	)
+	.map(ChainNonce::<T, I>::put)
+	.unwrap_or_else(|| {
+		log::info!("🏯 No nonce value to migrate.");
+	});
 
 	// If possible we should avoid upgrading during a rotation, but just in case...
 	if let Some(status_v0) = take_storage_item::<_, VaultRotationStatusV0<T, I>, Blake2_128Concat>(
@@ -70,7 +76,7 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		Identity,
 	>(PALLET_NAME_V1, b"KeygenResolutionPending", ())
 	{
-		if let Some((Ethereum::CHAIN_ID, block_number)) = resolution_pending.first() {
+		if let Some((ChainId::Ethereum, block_number)) = resolution_pending.first() {
 			KeygenResolutionPendingSince::<T, I>::put(block_number);
 		}
 	} else {
@@ -244,6 +250,8 @@ mod v0_types {
 
 	#[cfg(test)]
 	mod test_super {
+		use cf_chains::Ethereum;
+
 		use super::*;
 
 		#[test]

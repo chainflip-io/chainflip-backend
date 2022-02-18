@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
-use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{
+	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -11,11 +13,8 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{
-	eth::{self, SchnorrVerificationComponents},
-	ChainCrypto,
-};
-use cf_traits::{AsyncResult, Chainflip};
+use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
+use cf_traits::Chainflip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -100,53 +99,84 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-pub struct MockThresholdSigner;
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockSetAggKeyWithAggKey {
+	nonce: <MockEthereum as ChainAbi>::Nonce,
+	new_key: <MockEthereum as ChainCrypto>::AggKey,
+}
 
-impl ThresholdSigner<Ethereum> for MockThresholdSigner {
-	type RequestId = u32;
-	type Error = &'static str;
-	type Callback = MockCallback;
+impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
+	fn new_unsigned(
+		nonce: <MockEthereum as ChainAbi>::Nonce,
+		new_key: <MockEthereum as ChainCrypto>::AggKey,
+	) -> Self {
+		Self { nonce, new_key }
+	}
+}
 
-	fn request_signature(_: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
-		Default::default()
+impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
+	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+		unimplemented!()
 	}
 
-	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
-		Ok(())
+	fn signed(
+		self,
+		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		unimplemented!()
 	}
 
-	fn signature_result(
-		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
-		AsyncResult::Ready(SchnorrVerificationComponents::default())
+	fn encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+}
+
+pub struct MockBroadcaster;
+
+impl MockBroadcaster {
+	pub fn send_broadcast() {
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcaster", &());
+	}
+
+	pub fn broadcast_sent() -> bool {
+		storage::hashed::exists(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcaster")
+	}
+}
+
+impl Broadcaster<MockEthereum> for MockBroadcaster {
+	type ApiCall = MockSetAggKeyWithAggKey;
+
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
+		Self::send_broadcast()
 	}
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
+	pub const KeygenResponseGracePeriod: u64 = 25;
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type Chain = Ethereum;
+	type Chain = MockEthereum;
 	type RotationHandler = MockRotationHandler;
 	type OfflineReporter = MockOfflineReporter;
-	type ThresholdSigner = MockThresholdSigner;
-	type SetAggKeyWithAggKey = eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey;
+	type ApiCall = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
+	type Broadcaster = MockBroadcaster;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
-pub const GENESIS_ETHEREUM_AGG_PUB_KEY: [u8; 33] = [0x02; 33];
+pub const GENESIS_AGG_PUB_KEY: [u8; 4] = *b"genk";
+pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: GENESIS_ETHEREUM_AGG_PUB_KEY.to_vec(),
+			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
 			deployment_block: 0,
 		},
 	};
