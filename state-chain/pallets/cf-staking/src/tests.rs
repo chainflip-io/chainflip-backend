@@ -2,7 +2,7 @@ use crate::{
 	mock::*, pallet, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts, Pallet,
 	PendingClaims, WithdrawalAddresses,
 };
-use cf_chains::eth::ChainflipContractCall;
+use cf_chains::RegisterClaim;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
@@ -77,8 +77,8 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A.into());
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B.into());
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount(), CLAIM_A.into());
+		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount(), CLAIM_B.into());
 
 		// Two threshold signature requests should have been made.
 		assert_eq!(MockThresholdSigner::received_requests().len(), 2);
@@ -316,7 +316,15 @@ fn signature_is_inserted() {
 		);
 
 		// Check storage for the signature.
-		assert!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature());
+		assert_eq!(
+			frame_support::storage::unhashed::get::<
+				cf_chains::eth::api::set_agg_key_with_agg_key::SetAggKeyWithAggKey,
+			>(PendingClaims::<Test>::hashed_key_for(ALICE).as_slice())
+			.expect("there should be a pending claim at this point")
+			.sig_data
+			.get_signature(),
+			ETH_DUMMY_SIG
+		);
 	});
 }
 

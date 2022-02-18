@@ -1,8 +1,7 @@
 use crate as pallet_cf_staking;
-use cf_chains::{eth, ChainCrypto, Ethereum};
+use cf_chains::{eth, ChainAbi, ChainCrypto, Ethereum};
 use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
-use pallet_cf_flip;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -109,7 +108,7 @@ cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 pub const NONCE: u64 = 42;
 
 impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> cf_traits::Nonce {
+	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
 		NONCE
 	}
 }
@@ -168,6 +167,7 @@ impl pallet_cf_staking::Config for Test {
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type RegisterClaim = eth::api::EthereumApi;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
