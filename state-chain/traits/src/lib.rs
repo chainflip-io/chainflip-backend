@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto};
+use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
@@ -333,14 +333,10 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions() -> Weight;
 }
 
-/// A nonce.
-pub type Nonce = u64;
-
 /// Provides a unqiue nonce for some [Chain].
-/// TODO: Implement for a generic nonce type via ChainApi.
-pub trait NonceProvider<C: Chain> {
+pub trait NonceProvider<Abi: ChainAbi> {
 	/// Get the next nonce.
-	fn next_nonce() -> Nonce;
+	fn next_nonce() -> Abi::Nonce;
 }
 
 pub trait IsOnline {
