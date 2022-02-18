@@ -429,7 +429,10 @@ pub trait EthObserver {
                             .build(),
                     )
                     .await
-                    .context("Failed to fetch past ETH logs")?;
+                    .unwrap_or_else(|err| {
+                        slog::error!(logger, "Failed to fetch past ETH logs: {}", err);
+                        vec![]
+                    });
 
                 let future_logs = filtered_log_stream_by_contract(
                     safe_head_stream,
