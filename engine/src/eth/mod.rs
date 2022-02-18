@@ -573,7 +573,6 @@ pub trait EthObserver {
                     from_block,
                     best_safe_block_number
                 );
-                continue;
             } else {
                 // our chain_head is above the from_block number
                 // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
@@ -723,8 +722,7 @@ pub trait EthObserver {
             protocol: TransportProtocol,
             yield_item: &EventWithCommon<EventParameters>,
         ) {
-            // Do the necessary logging
-            match protocol {
+            let (last_pulled_other, other_protocol) = match protocol {
                 TransportProtocol::Http => {
                     slog::info!(
                         state.logger,
@@ -733,22 +731,7 @@ pub trait EthObserver {
                         yield_item,
                         protocol
                     );
-                    if state.last_ws_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                        <= yield_item.block_number
-                    {
-                        let blocks_behind = yield_item.block_number - state.last_ws_block_pulled;
-                        if !(state.last_ws_block_pulled == 0)
-                            && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
-                        {
-                            slog::warn!(
-                                state.logger,
-                                #ETH_STREAM_BEHIND,
-                                "HTTP stream at ETH block {} but Websocket stream at ETH block {}",
-                                yield_item.block_number,
-                                state.last_ws_block_pulled,
-                            );
-                        }
-                    }
+                    (&state.last_ws_block_pulled, TransportProtocol::Ws)
                 }
                 TransportProtocol::Ws => {
                     slog::info!(
@@ -758,23 +741,27 @@ pub trait EthObserver {
                         yield_item,
                         protocol
                     );
-                    if state.last_http_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS
-                        <= yield_item.block_number
-                    {
-                        let blocks_behind = yield_item.block_number - state.last_http_block_pulled;
-                        if !(state.last_http_block_pulled == 0)
-                            && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
-                        {
-                            slog::warn!(
-                                state.logger,
-                                #ETH_STREAM_BEHIND,
-                                "Websocket stream at ETH block {} but HTTP stream at ETH block {}",
-                                yield_item.block_number,
-                                state.last_http_block_pulled,
-                            );
-                        }
-                    }
+                    (&state.last_http_block_pulled, TransportProtocol::Http)
                 }
+            };
+
+            let blocks_behind = yield_item.block_number - last_pulled_other;
+
+            if *last_pulled_other != 0 // first iteration
+                && ((last_pulled_other + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
+                    <= yield_item.block_number) // if true the other stream has fallen behind
+                // only log every ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND number of blocks
+                && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+            {
+                slog::warn!(
+                    state.logger,
+                    #ETH_STREAM_BEHIND,
+                    "{} stream at ETH block {} but {} stream at ETH block {}",
+                    protocol,
+                    yield_item.block_number,
+                    other_protocol,
+                    state.last_http_block_pulled,
+                );
             }
         }
 
@@ -792,25 +779,18 @@ pub trait EthObserver {
                         let current_item_tx_hash = current_item.tx_hash;
                         let current_item_log_index = current_item.log_index;
 
-                        match protocol {
+                        let protocol_block_number = match protocol {
                             // this function takes safe streams, so we should only progress
                             // forward by one block at a time
-                            TransportProtocol::Http => {
-                                assert!(
-                                    state.last_http_block_pulled == 0
-                                        || state.last_http_block_pulled
-                                            <= current_item_block_number
-                                );
-                                state.last_http_block_pulled = current_item_block_number
-                            }
-                            TransportProtocol::Ws => {
-                                assert!(
-                                    state.last_ws_block_pulled == 0
-                                        || state.last_ws_block_pulled <= current_item_block_number
-                                );
-                                state.last_ws_block_pulled = current_item_block_number
-                            }
+                            TransportProtocol::Http => &mut state.last_http_block_pulled,
+                            TransportProtocol::Ws => &mut state.last_ws_block_pulled,
                         };
+
+                        assert!(
+                            *protocol_block_number == 0
+                                || *protocol_block_number <= current_item_block_number
+                        );
+                        *protocol_block_number = current_item_block_number;
 
                         if (current_item_block_number > state.last_yielded_block_number)
                         // first iteration
