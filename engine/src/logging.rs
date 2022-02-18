@@ -20,6 +20,8 @@ pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 
 pub mod utils {
+    /// Async slog channel size
+    const ASYNC_SLOG_CHANNEL_SIZE: usize = 1024;
 
     use super::COMPONENT_KEY;
     const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
@@ -128,11 +130,14 @@ pub mod utils {
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// ```sh
-    /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
+    /// {"msg":"...","level":"trace","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn new_json_logger() -> slog::Logger {
         slog::Logger::root(
-            slog_async::Async::new(new_json_drain()).build().fuse(),
+            slog_async::Async::new(new_json_drain())
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
             o!(),
         )
     }
@@ -149,7 +154,13 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
-        slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
+        slog::Logger::root(
+            slog_async::Async::new(drain)
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
+            o!(),
+        )
     }
 
     /// Creates a custom json drain that includes the tag as a key

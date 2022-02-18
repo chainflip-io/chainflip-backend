@@ -59,12 +59,12 @@ async fn main() {
 
     state_chain_client
         .submit_signed_extrinsic(
-            &root_logger,
             pallet_cf_validator::Call::cfe_version(SemVer {
                 major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
                 minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
                 patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
             }),
+            &root_logger,
         )
         .await
         .expect("Should submit version to state chain");
