@@ -24,11 +24,11 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        unsafe_blocks: VecDeque<BlockHeader>,
+        unsafe_block_headers: VecDeque<BlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
-        unsafe_blocks: Default::default(),
+        unsafe_block_headers: Default::default(),
     };
 
     Box::pin(stream::unfold(init_data, move |mut state| async move {
@@ -37,7 +37,7 @@ where
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                if let Some(last_unsafe_block_header) = state.unsafe_blocks.back() {
+                if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
                     let last_unsafe_block_number = last_unsafe_block_header.number().unwrap();
                     assert!(number <= last_unsafe_block_number + 1);
                     if number <= last_unsafe_block_number {
@@ -45,14 +45,14 @@ where
                         let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
 
                         (0..reorg_depth.as_u64()).for_each(|_| {
-                            state.unsafe_blocks.pop_back();
+                            state.unsafe_block_headers.pop_back();
                         });
                     }
                 }
 
-                state.unsafe_blocks.push_back(header);
+                state.unsafe_block_headers.push_back(header);
 
-                if let Some(header) = state.unsafe_blocks.front() {
+                if let Some(header) = state.unsafe_block_headers.front() {
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
@@ -61,7 +61,7 @@ where
                     {
                         break Some((
                             state
-                                .unsafe_blocks
+                                .unsafe_block_headers
                                 .pop_front()
                                 .expect("already put an item above"),
                             state,
