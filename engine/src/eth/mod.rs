@@ -660,7 +660,8 @@ pub trait EthObserver {
             .await?;
 
         let safe_http_head_stream =
-            polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL).await;
+            polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL, logger.clone())
+                .await;
 
         let safe_http_event_logs = self
             .log_stream_from_head_stream(
