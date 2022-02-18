@@ -385,6 +385,7 @@ impl pallet_cf_governance::Config for Runtime {
 
 impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
+	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
