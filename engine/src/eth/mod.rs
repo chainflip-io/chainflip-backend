@@ -10,6 +10,7 @@ pub mod utils;
 use anyhow::{Context, Result};
 
 use pallet_cf_vaults::BlockHeightWindow;
+use regex::Regex;
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
@@ -188,7 +189,7 @@ impl EthRpcClient {
         slog::trace!(
             logger,
             "Connecting new web3 client to {}",
-            get_web_address_as_partial_hidden(node_endpoint)
+            redact_secret_eth_node_endpoint(node_endpoint)
                 .expect("Should get node endpoint as secret string")
         );
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
@@ -531,16 +532,30 @@ fn decode_shared_event_closure(
     )
 }
 
-/// Gives a web address as a secret string by partially replacing the host with ****.
-///  eg: "wss://secret.host/dashboard" -> "wss://sec****/dashboard"
-fn get_web_address_as_partial_hidden(web_address: &str) -> Result<String> {
-    let url = url::Url::parse(web_address).map_err(anyhow::Error::msg)?;
-    let host = url
-        .host_str()
-        .ok_or_else(|| anyhow::Error::msg("No host in url"))?;
-    Ok(web_address
-        .to_string()
-        .replace(host, &format!("{}****", host.split_at(host.len().min(3)).0)))
+/// Partially redacts the secret in the url of the node endpoint.
+///  eg: `wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/` -> `wss://cdc****.rinkeby.ws.rivet.cloud/`
+fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
+    let re = Regex::new(r"[0-9a-fA-F]{32}").unwrap();
+    if re.is_match(endpoint) {
+        // A 32 character hex string was found, redact it
+        let mut endpoint_redacted = endpoint.to_string();
+        for capture in re.captures_iter(endpoint) {
+            endpoint_redacted = endpoint_redacted.replace(
+                &capture[0],
+                &format!("{}****", &capture[0].split_at(capture[0].len().min(3)).0),
+            );
+        }
+        Ok(endpoint_redacted)
+    } else {
+        // No secret was found, so just redact almost all of the url
+        let url = url::Url::parse(endpoint).map_err(anyhow::Error::msg)?;
+        Ok(format!(
+            "{}****",
+            endpoint
+                .split_at(usize::min(url.scheme().len() + 6, endpoint.len()))
+                .0
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -559,18 +574,28 @@ mod tests {
     #[test]
     fn test_secret_web_addresses() {
         assert_eq!(
-            get_web_address_as_partial_hidden("wss://123456789.rinkeby.ws.rivet.cloud/").unwrap(),
-            "wss://123****/"
+            redact_secret_eth_node_endpoint(
+                "wss://mainnet.infura.io/ws/v3/d52c362116b640b98a166d08d3170a42"
+            )
+            .unwrap(),
+            "wss://mainnet.infura.io/ws/v3/d52****"
         );
         assert_eq!(
-            get_web_address_as_partial_hidden("wss://a").unwrap(),
+            redact_secret_eth_node_endpoint(
+                "wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/"
+            )
+            .unwrap(),
+            "wss://cdc****.rinkeby.ws.rivet.cloud/"
+        );
+        assert_eq!(
+            redact_secret_eth_node_endpoint("wss://non_32hex_secret.rinkeby.ws.rivet.cloud/")
+                .unwrap(),
+            "wss://non****"
+        );
+        assert_eq!(
+            redact_secret_eth_node_endpoint("wss://a").unwrap(),
             "wss://a****"
         );
-        assert_eq!(
-            get_web_address_as_partial_hidden("https://123456.secret/public").unwrap(),
-            "https://123****/public"
-        );
-        assert!(get_web_address_as_partial_hidden("wss://").is_err());
-        assert!(get_web_address_as_partial_hidden("no.schema.com").is_err());
+        assert!(redact_secret_eth_node_endpoint("no.schema.com").is_err());
     }
 }
