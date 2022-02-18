@@ -63,7 +63,7 @@ async fn run_cli() -> Result<()> {
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
-        QueryBlock { block_hash } => request_block(block_hash, &cli_settings).await,
+        Query { block_hash } => request_block(block_hash, &cli_settings).await,
     }
 }
 
@@ -72,21 +72,20 @@ async fn request_block(
     settings: &CLISettings,
 ) -> Result<()> {
     println!(
-        "Querying the state chain for the block with hash {}.",
-        hex::encode(block_hash)
+        "Querying the state chain for the block with hash {:x?}.",
+        block_hash
     );
 
-    let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
+    let state_chain_rpc_client = connect_to_state_chain_without_signer(&settings.state_chain).await?;
 
     match state_chain_rpc_client
         .get_block(block_hash)
-        .await
-        .expect("Failed to query for block")
+        .await?
     {
         Some(block) => {
             println!("{:#?}", block);
         }
-        None => println!("Could not find block with block hash {}", block_hash),
+        None => println!("Could not find block with block hash {:x?}", block_hash),
     }
     Ok(())
 }

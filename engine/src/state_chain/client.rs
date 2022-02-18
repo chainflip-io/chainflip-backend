@@ -779,7 +779,8 @@ pub async fn connect_to_state_chain(
         frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
     );
 
-    let state_chain_rpc_client = connect_to_state_chain_without_signer(&state_chain_settings).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(&state_chain_settings).await?;
 
     let mut block_header_stream = state_chain_rpc_client
         .chain_rpc_client
