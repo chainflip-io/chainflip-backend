@@ -40,6 +40,7 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  #        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -211,6 +212,16 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
+      - docker-build:
+          name: docker-build-insert-genesis-keyshare
+          image: chainflip-io/insert-genesis-keyshare
+          cache_from: ghcr.io/chainflip-io/insert-genesis-keyshare:latest
+          dockerfile: insert-genesis-keyshare.Dockerfile
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
 
   chainflip-testnet:
     when: <<pipeline.parameters.build_testnet>>
@@ -375,6 +386,7 @@ jobs:
             - target/release/chainflip-node
             - target/release/chainflip-engine
             - target/release/chainflip-cli
+            - target/release/insert-genesis-keyshare
             - target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - send_notification:
           only_for_branches: "develop"
@@ -412,7 +424,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
+          cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
           sccache --show-stats
 
   cargo-doc:

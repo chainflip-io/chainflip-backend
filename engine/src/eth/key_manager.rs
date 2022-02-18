@@ -45,8 +45,8 @@ impl ChainflipKey {
         Ok(ChainflipKey {
             pub_key_x,
             pub_key_y_parity: match parity {
-                true => web3::types::U256::from_dec_str("1").unwrap(),
-                false => web3::types::U256::from_dec_str("0").unwrap(),
+                true => web3::types::U256::from(1),
+                false => web3::types::U256::from(0),
             },
         })
     }
@@ -183,14 +183,14 @@ impl EthObserver for KeyManager {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
             KeyManagerEvent::KeyChange { new_key, .. } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
                             cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
                             event.block_number,
                             event.tx_hash,
                         ),
+                        logger,
                     )
                     .await;
             }

@@ -77,7 +77,7 @@ fn keygen_success() {
 #[test]
 fn keygen_failure() {
 	new_test_ext().execute_with(|| {
-		const BAD_CANDIDATES: &'static [<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
+		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 

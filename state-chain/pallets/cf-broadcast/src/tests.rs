@@ -349,7 +349,7 @@ fn test_signature_request_expiry() {
 			assert!(AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.is_none());
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::TransactionSigning),
 			);
 
@@ -403,7 +403,7 @@ fn test_transmission_request_expiry() {
 			// Old attempt has expired.
 			assert!(AwaitingTransmission::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_none());
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| cell.borrow().first().unwrap().clone()),
+				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				(BROADCAST_ATTEMPT_ID, BroadcastStage::Transmission),
 			);
 			// New attempt is live with same broadcast_id and incremented attempt_count.

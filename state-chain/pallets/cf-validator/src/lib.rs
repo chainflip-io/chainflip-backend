@@ -336,6 +336,8 @@ pub mod pallet {
 			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
+			// TODO Consider ensuring is non-private IP / valid IP
+
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
@@ -640,11 +642,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			},
 			RotationStatus::AwaitingCompletion => {
 				Rotation::<T>::put(RotationStatus::Ready);
-				Some(
-					T::Auctioneer::auction_result()
-						.expect("everything starts with an auction")
-						.winners,
-				)
+				Some(T::Auctioneer::auction_result()?.winners)
 			},
 			RotationStatus::Ready => {
 				Rotation::<T>::set(RotationStatus::Idle);
@@ -665,10 +663,12 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
 		if Rotation::<T>::get() == RotationStatus::Ready {
-			let AuctionResult { winners, minimum_active_bid } =
-				T::Auctioneer::auction_result().expect("everything starts with an auction");
-			// Start the new epoch
-			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			if let Some(AuctionResult { winners, minimum_active_bid }) =
+				T::Auctioneer::auction_result()
+			{
+				// Start the new epoch
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			}
 		}
 	}
 }
@@ -708,14 +708,12 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			return T::DbWeight::get().reads_writes(1, 0) + Pallet::<T>::force_validator_rotation()
+			Pallet::<T>::force_validator_rotation();
 		}
-
-		T::DbWeight::get().reads_writes(1, 0)
 	}
 
 	fn emergency_rotation_in_progress() -> bool {

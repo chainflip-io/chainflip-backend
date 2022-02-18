@@ -235,7 +235,7 @@ impl AggKey {
 			let mut s = Scalar::default();
 			let mut bytes = [0u8; 32];
 			bytes.copy_from_slice(&challenge);
-			let _ = s.set_b32(&bytes);
+			let _overflowed = s.set_b32(&bytes);
 			s
 		};
 
@@ -292,7 +292,7 @@ impl AggKey {
 				let mut bytes = [0u8; 32];
 				bytes.copy_from_slice(msg_challenge.as_ref());
 				// Question: Is it ok that this prevents overflow?
-				let _ = e.set_b32(&bytes);
+				let _overflowed = e.set_b32(&bytes);
 				e
 			};
 

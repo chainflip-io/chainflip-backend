@@ -22,7 +22,6 @@ pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
-	dispatch::Weight,
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
@@ -479,12 +478,12 @@ where
 	type AccountId = T::AccountId;
 	type BlockNumber = B;
 
-	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
 		// Check that the slashing rate is not zero, no need to slash if this is set to zero, right
 		if slashing_rate == Zero::zero() {
-			return T::DbWeight::get().reads(1)
+			return
 		}
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
@@ -498,8 +497,5 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		// TODO: remove weight calculation and delegate it to benchmarking of the calling pallets
-		// also remove the return type and change the function to void
-		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
 	}
 }

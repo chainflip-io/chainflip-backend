@@ -6,7 +6,6 @@ pub mod constants;
 #[cfg(test)]
 mod tests;
 use cf_chains::Ethereum;
-use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
@@ -42,7 +41,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::ChainflipAccountData;
+use cf_traits::{offline_conditions::ReputationPoints, ChainflipAccountData};
 pub use cf_traits::{BlockNumber, FlipBalance};
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -136,6 +135,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
 }
 
 // FIXME: These would be changed
@@ -352,11 +352,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
-parameter_types! {
-	/// 6 days.
-	pub const ClaimTTL: Duration = Duration::from_secs(3 * CLAIM_DELAY);
-}
-
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
@@ -368,7 +363,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type TimeSource = Timestamp;
-	type ClaimTTL = ClaimTTL;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
@@ -417,6 +411,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = 150;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const MaximumReputationPointAccrued: ReputationPoints = 15;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
@@ -427,6 +422,9 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Penalty = OfflinePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
 }
 
 impl pallet_cf_online::Config for Runtime {
