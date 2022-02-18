@@ -36,9 +36,9 @@ pub enum CFCommand {
     Retire {},
     #[structopt(about = "submit a hash to query the block")]
     QueryBlock {
-        #[structopt(help = "block hash to be queried")]
+        #[structopt(help = "Block hash to be queried")]
         block_hash: state_chain_runtime::Hash,
-    }, 
+    },
 }
 
 #[derive(Deserialize, Debug, Default)]

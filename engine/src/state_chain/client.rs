@@ -781,7 +781,8 @@ pub async fn connect_to_state_chain(
 
     let state_chain_rpc_client = connect_to_state_chain_without_signer(&state_chain_settings).await.map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node: {:?}", e)))?;
 
-    let mut block_header_stream = state_chain_rpc_client.chain_rpc_client
+    let mut block_header_stream = state_chain_rpc_client
+        .chain_rpc_client
         .subscribe_finalized_heads()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
@@ -798,7 +799,8 @@ pub async fn connect_to_state_chain(
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = state_chain_rpc_client.chain_rpc_client
+        let finalised_head_hash = state_chain_rpc_client
+            .chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
@@ -894,7 +896,8 @@ pub async fn connect_to_state_chain(
     );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_chain_rpc_client.state_rpc_client
+        &mut &state_chain_rpc_client
+            .state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
@@ -940,9 +943,8 @@ pub async fn connect_to_state_chain(
 
 #[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain_without_signer(
-    state_chain_settings: &settings::StateChain
+    state_chain_settings: &settings::StateChain,
 ) -> Result<StateChainRpcClient> {
-
     let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
         state_chain_settings.ws_endpoint.as_str(),
     )?)
@@ -955,14 +957,12 @@ pub async fn connect_to_state_chain_without_signer(
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
     let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
 
-    Ok (
-        StateChainRpcClient {
-            system_rpc_client,
-            author_rpc_client,
-            state_rpc_client,
-            chain_rpc_client,
-        }
-    )
+    Ok(StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    })
 }
 
 #[cfg(test)]
