@@ -258,10 +258,13 @@ impl EthRpcApi for EthRpcClient {
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        self.web3
-            .eth()
-            .logs(filter)
+        const WEB3_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+        let request_fut = self.web3.eth().logs(filter);
+
+        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
             .await
+            .context("Request timeout")?
             .context("Failed to fetch ETH logs")
     }
 
