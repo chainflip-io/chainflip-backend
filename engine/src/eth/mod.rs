@@ -23,7 +23,10 @@ use web3::{
 
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
-    constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
+    constants::{
+        ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
+        WEB3_REQUEST_TIMEOUT,
+    },
     eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
@@ -258,8 +261,6 @@ impl EthRpcApi for EthRpcClient {
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        const WEB3_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
-
         let request_fut = self.web3.eth().logs(filter);
 
         // NOTE: if this does time out we will most likely have a
