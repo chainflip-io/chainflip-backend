@@ -676,6 +676,9 @@ pub trait EthObserver {
             .await
     }
 
+    /// Takes two *safe* streams, i.e. ones that progress at a maximum of a block at a time
+    /// therefore it does not need to handle reorgs itself. It will panic if a reorg or fast-forward
+    /// (likely due to a sync issue) is detected in either of the streams
     async fn merged_log_stream(
         &self,
         safe_ws_log_stream: Pin<
@@ -691,29 +694,14 @@ pub trait EthObserver {
         let safe_http_log_stream = safe_http_log_stream.zip(repeat(TransportProtocol::Http));
 
         let merged_stream = select(safe_ws_log_stream, safe_http_log_stream);
+
+        type SingleStreamLogs<EventParameters> = Zip<
+            Pin<Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>>,
+            Repeat<TransportProtocol>,
+        >;
         struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
-            merged_stream: Select<
-                Zip<
-                    Pin<
-                        Box<
-                            dyn Stream<Item = Result<EventWithCommon<EventParameters>>>
-                                + Unpin
-                                + Send,
-                        >,
-                    >,
-                    Repeat<TransportProtocol>,
-                >,
-                Zip<
-                    Pin<
-                        Box<
-                            dyn Stream<Item = Result<EventWithCommon<EventParameters>>>
-                                + Unpin
-                                + Send,
-                        >,
-                    >,
-                    Repeat<TransportProtocol>,
-                >,
-            >,
+            merged_stream:
+                Select<SingleStreamLogs<EventParameters>, SingleStreamLogs<EventParameters>>,
             last_yielded_block_number: u64,
             last_http_block_pulled: u64,
             last_ws_block_pulled: u64,
@@ -730,7 +718,6 @@ pub trait EthObserver {
             logger,
         };
 
-        // Pulls the logging logic out of the unfold, for easier reading
         fn log_stream_returned_and_behind<EventParameters: std::fmt::Debug + Send + Sync>(
             state: &StreamState<EventParameters>,
             protocol: TransportProtocol,
@@ -805,19 +792,25 @@ pub trait EthObserver {
                         let current_item_tx_hash = current_item.tx_hash;
                         let current_item_log_index = current_item.log_index;
 
-                        // TODO Look at deduplicating this
-                        // Log if one of the streams is behind
-                        // doesn't count if we haven't started yet
                         match protocol {
+                            // this function takes safe streams, so we should only progress
+                            // forward by one block at a time
                             TransportProtocol::Http => {
+                                assert_eq!(
+                                    state.last_http_block_pulled + 1,
+                                    current_item_block_number
+                                );
                                 state.last_http_block_pulled = current_item_block_number
                             }
                             TransportProtocol::Ws => {
+                                assert_eq!(
+                                    state.last_ws_block_pulled + 1,
+                                    current_item_block_number
+                                );
                                 state.last_ws_block_pulled = current_item_block_number
                             }
                         };
 
-                        println!("Current item block number: {}", current_item_block_number);
                         if (current_item_block_number > state.last_yielded_block_number)
                         // first iteration
                         || state.last_yielded_block_number == 0
