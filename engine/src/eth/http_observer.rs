@@ -41,6 +41,7 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
 
             println!("About to query for block number");
             let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
+            assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
             let safe_block_number = unsafe_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
             println!("Got eth block number {}", unsafe_block_number);
 
@@ -56,7 +57,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             } else if is_first_iteration
                 || unsafe_block_number == state.last_block_fetched + U64::from(1)
             {
-                assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN);
                 // We enter this when we have progressed, or if this is the first iteration
                 // we should progress to the next block
                 println!(
@@ -64,16 +64,11 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     unsafe_block_number, state.last_block_fetched
                 );
 
-                // TODO: Protect against overflows + check this is in aligment with the other observer
-                // We should do this in a test
-                // NB: The other observer will wait 5 blocks before going ahead, this one doesn't have to. Might as well kick off.
-
                 println!(
                     "the unsafe block number of: {} means safe number is: {}",
                     unsafe_block_number, safe_block_number
                 );
 
-                // we can emit the block 5 less than this
                 let block = state
                     .eth_http_rpc
                     .block(safe_block_number.into())
@@ -250,7 +245,8 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move |n| dummy_block(n.as_u64()));
 
-        // if we skip blocks, we should catch up
+        // if we skip blocks, we should catch up by fetching the logs from the blocks
+        // we skipped
         let num_skipped_blocks = 4;
         let next_block_number = first_block_number + U64::from(num_skipped_blocks);
         mock_eth_http_rpc
