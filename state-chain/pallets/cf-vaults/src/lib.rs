@@ -4,10 +4,10 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainAbi, ChainCrypto, Ethereum, SetAggKeyWithAggKey};
+use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, Nonce, NonceProvider,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, NonceProvider,
 	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{
@@ -15,7 +15,7 @@ use frame_support::{
 	pallet_prelude::*,
 };
 pub use pallet::*;
-use sp_runtime::traits::BlockNumberProvider;
+use sp_runtime::traits::{BlockNumberProvider, One};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	convert::TryFrom,
@@ -257,7 +257,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The chain that managed by this vault must implement the api types.
-		type Chain: ChainAbi<Nonce = cf_traits::Nonce>;
+		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
@@ -362,7 +362,8 @@ pub mod pallet {
 	/// Threshold key nonces for this chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainNonce<T, I = ()> = StorageValue<_, Nonce, ValueQuery>;
+	pub(super) type ChainNonce<T, I = ()> =
+		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::Nonce, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
@@ -597,12 +598,11 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> NonceProvider<Ethereum> for Pallet<T, I> {
-	fn next_nonce() -> Nonce {
+impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
+	fn next_nonce() -> <T::Chain as ChainAbi>::Nonce {
 		ChainNonce::<T, I>::mutate(|nonce| {
-			let new_nonce = nonce.saturating_add(1);
-			*nonce = new_nonce;
-			new_nonce
+			*nonce += One::one();
+			*nonce
 		})
 	}
 }
@@ -646,7 +646,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<Self as NonceProvider<Ethereum>>::next_nonce(),
+				<Self as NonceProvider<_>>::next_nonce(),
 				new_public_key,
 			),
 		);
