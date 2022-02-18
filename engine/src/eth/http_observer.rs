@@ -33,41 +33,26 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
         'block_safety_loop: loop {
             // we first want to empty the cache of skipped blocks before querying for new ones
             while let Some(block) = state.cached_skipped_blocks.pop_front() {
-                println!("Popping off the queue block: {}", block.number.unwrap());
                 break 'block_safety_loop Some((block, state));
             }
 
             tokio::time::sleep(poll_interval).await;
 
-            println!("About to query for block number");
             let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
             assert!(unsafe_block_number.as_u64() > ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
             let safe_block_number = unsafe_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
-            println!("Got eth block number {}", unsafe_block_number);
 
             let is_first_iteration = state.last_block_yielded == U64::from(0)
                 && state.last_block_fetched == U64::from(0);
 
             if unsafe_block_number <= state.last_block_fetched {
                 // wait until we get back to where we were
-                println!(
-                    "Our unsafe block number is less than or the same as the last fetched block"
-                );
                 continue;
             } else if is_first_iteration
                 || unsafe_block_number == state.last_block_fetched + U64::from(1)
             {
                 // We enter this when we have progressed, or if this is the first iteration
                 // we should progress to the next block
-                println!(
-                    "The unsafe block number is {} and last fetched is: {}",
-                    unsafe_block_number, state.last_block_fetched
-                );
-
-                println!(
-                    "the unsafe block number of: {} means safe number is: {}",
-                    unsafe_block_number, safe_block_number
-                );
 
                 let block = state
                     .eth_http_rpc
@@ -87,7 +72,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 // Then (N - 1) - 5 must be safe
                 let last_block_yielded_u64 = state.last_block_yielded.as_u64();
                 for return_block_number in last_block_yielded_u64 + 1..safe_block_number.as_u64() {
-                    println!("Adding block number: {} to the cache", return_block_number);
                     let block = state
                         .eth_http_rpc
                         .block(return_block_number.into())
@@ -102,7 +86,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     state.cached_skipped_blocks.push_back(block);
                 }
 
-                println!("Yielding block");
                 state.last_block_fetched = unsafe_block_number;
                 break 'block_safety_loop Some((
                     state
@@ -112,10 +95,6 @@ pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     state,
                 ));
             } else {
-                println!(
-                    "Entered else. Unsafe block: {}. last fetched: {}",
-                    unsafe_block_number, state.last_block_fetched
-                );
                 state.last_block_fetched = unsafe_block_number;
             }
         }
