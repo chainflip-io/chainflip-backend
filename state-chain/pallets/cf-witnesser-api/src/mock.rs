@@ -1,7 +1,7 @@
 use crate as pallet_cf_witness_api;
 use std::time::Duration;
 
-use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Ethereum};
+use cf_chains::{eth::api::EthereumApi, mocks::MockTransactionBuilder, ChainAbi, Ethereum};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{
@@ -75,7 +75,7 @@ impl system::Config for Test {
 impl_mock_stake_transfer!(u64, u128);
 
 impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> cf_traits::Nonce {
+	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
 		42
 	}
 }
@@ -131,6 +131,7 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type RegisterClaim = EthereumApi;
 }
 
 type Amount = u128;
@@ -165,24 +166,6 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
-pub struct MockBroadcastConfig;
-
-impl pallet_cf_broadcast::BroadcastConfig for MockBroadcastConfig {
-	type Chain = Ethereum;
-	type UnsignedTransaction = ();
-	type SignedTransaction = ();
-	type TransactionHash = ();
-	type SignerId = ();
-
-	fn verify_transaction(
-		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
-		_signer: &Self::SignerId,
-	) -> Option<()> {
-		Some(())
-	}
-}
-
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = 10;
@@ -191,8 +174,11 @@ parameter_types! {
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
+	type Call = Call;
 	type TargetChain = Ethereum;
-	type BroadcastConfig = MockBroadcastConfig;
+	type ApiCall = EthereumApi;
+	type TransactionBuilder = MockTransactionBuilder<Ethereum, EthereumApi>;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type SignerNomination = MockSignerNomination;
 	type OfflineReporter = MockOfflineReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
@@ -217,10 +203,10 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Chain = Ethereum;
 	type RotationHandler = Self;
 	type OfflineReporter = MockOfflineReporter;
-	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
-	type SetAggKeyWithAggKey = SetAggKeyWithAggKey;
+	type ApiCall = EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
 }
 
 impl pallet_cf_witness_api::Config for Test {
