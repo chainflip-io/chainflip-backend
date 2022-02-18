@@ -14,8 +14,6 @@ use web3::{
     types::{H160, H256},
 };
 
-use crate::eth::Address;
-
 use anyhow::Result;
 
 use std::fmt::Debug;
@@ -64,53 +62,6 @@ impl ChainflipKey {
     }
 }
 
-#[derive(Debug)]
-pub struct SigData {
-    /// The message hash aka. payload to be signed over.
-    pub msg_hash: H256,
-    /// The Schnorr signature.
-    pub sig: ethabi::Uint,
-    /// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
-    /// prevent replay attacks.
-    pub nonce: ethabi::Uint,
-    /// The ethabi::Uint value derived from the random nonce value `k`. Also known as
-    /// `nonceTimesGeneratorAddress`.
-    ///
-    /// Note this is unrelated to the `nonce` above. The nonce in the context of
-    /// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
-    /// the Schnorr signature) to prevent certain classes of cryptographic attacks.
-    pub k_times_g_addr: Address,
-}
-
-impl Tokenizable for SigData {
-    fn from_token(token: ethabi::Token) -> Result<Self, web3::contract::Error>
-    where
-        Self: Sized,
-    {
-        if let Token::Tuple(members) = token {
-            Ok(SigData {
-                msg_hash: ethabi::Hash::from_token(members[0].clone())?,
-                sig: ethabi::Uint::from_token(members[1].clone())?,
-                nonce: ethabi::Uint::from_token(members[2].clone())?,
-                k_times_g_addr: ethabi::Address::from_token(members[3].clone())?,
-            })
-        } else {
-            Err(web3::contract::Error::InvalidOutputType(
-                stringify!(ChainflipKey).to_owned(),
-            ))
-        }
-    }
-
-    fn into_token(self) -> Token {
-        Token::Tuple(vec![
-            Token::Uint(self.msg_hash.0.into()),
-            Token::Uint(self.sig),
-            Token::Uint(self.nonce),
-            Token::Address(self.k_times_g_addr),
-        ])
-    }
-}
-
 impl Tokenizable for ChainflipKey {
     fn from_token(token: ethabi::Token) -> Result<Self, web3::contract::Error>
     where
@@ -156,14 +107,6 @@ pub enum KeyManagerEvent {
         new_key: ChainflipKey,
     },
 
-    /// `SignatureAccepted(msgHash)` event
-    SignatureAccepted {
-        /// The message hash aka. payload to be signed over.
-        sig_data: SigData,
-        /// The origin address
-        broadcaster: Address,
-    },
-
     /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
     Shared(SharedEvent),
 }
@@ -194,17 +137,6 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::SignatureAccepted {
-                sig_data,
-                broadcaster: _,
-            } => {
-                let _ = state_chain_client
-                    .submit_signed_extrinsic(
-                        logger,
-                        pallet_cf_broadcast::Call::signature_accepted(sig_data.msg_hash),
-                    )
-                    .await;
-            }
             _ => {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
@@ -215,7 +147,6 @@ impl EthObserver for KeyManager {
         &self,
     ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
-        let signature_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
@@ -227,12 +158,6 @@ impl EthObserver for KeyManager {
                         signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    }
-                } else if signature == signature_accepted.signature {
-                    let log = signature_accepted.event.parse_log(raw_log)?;
-                    KeyManagerEvent::SignatureAccepted {
-                        sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
-                        broadcaster: utils::decode_log_param::<Address>(&log, "broadcaster")?,
                     }
                 } else {
                     KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)

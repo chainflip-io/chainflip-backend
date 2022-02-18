@@ -91,9 +91,5 @@ pub async fn test_all_key_manager_events() {
             KeyManagerEvent::Shared(_) => {
                 true
             },
-            KeyManagerEvent::SignatureAccepted { sig_data:_, broadcaster:_}  => {
-                // TODO: add some proper assertions here 
-                true
-            }
         }).unwrap();
 }
