@@ -37,7 +37,7 @@ pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
 	type SignedTransaction: Member + Parameter;
 	type SignerCredential: Member + Parameter;
-	type Nonce: Member + Parameter + AtLeast32BitUnsigned;
+	type Nonce: Member + Parameter + AtLeast32BitUnsigned + Copy + Default;
 	type ValidationError;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
@@ -137,7 +137,7 @@ impl ChainCrypto for Ethereum {
 }
 
 pub mod mocks {
-	use std::marker::PhantomData;
+	use sp_std::marker::PhantomData;
 
 	use crate::*;
 
