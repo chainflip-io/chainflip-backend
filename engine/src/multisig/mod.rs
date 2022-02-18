@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
-use futures::StreamExt;
 use slog::o;
 use state_chain_runtime::AccountId;
 
@@ -88,7 +87,7 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_stream = common::make_periodic_stream(Duration::from_secs(10));
+        let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
 
         use rand_legacy::FromEntropy;
         let mut rng = crypto::Rng::from_entropy();
@@ -101,7 +100,7 @@ where
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     client.process_multisig_instruction(msg, &mut rng);
                 }
-                Some(()) = cleanup_stream.next() => {
+                _ = cleanup_tick.tick() => {
                     client.cleanup();
                 }
                 Ok(()) = &mut shutdown_rx => {

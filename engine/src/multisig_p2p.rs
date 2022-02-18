@@ -314,7 +314,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    let mut check_listener_address_stream = common::make_periodic_stream(Duration::from_secs(60));
+    let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
     loop {
         tokio::select! {
@@ -412,7 +412,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
                 }
             },
-            Some(()) = check_listener_address_stream.next() => {
+            _ = check_listener_address_tick.tick() => {
                 update_registered_peer_id(&peer_id_from_cfe_config, &peer_keypair_from_cfe_config, &state_chain_client, &account_to_peer_mapping_on_chain, &logger).await?;
             }
         }
