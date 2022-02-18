@@ -796,16 +796,17 @@ pub trait EthObserver {
                             // this function takes safe streams, so we should only progress
                             // forward by one block at a time
                             TransportProtocol::Http => {
-                                assert_eq!(
-                                    state.last_http_block_pulled + 1,
-                                    current_item_block_number
+                                assert!(
+                                    state.last_http_block_pulled == 0
+                                        || state.last_http_block_pulled
+                                            <= current_item_block_number
                                 );
                                 state.last_http_block_pulled = current_item_block_number
                             }
                             TransportProtocol::Ws => {
-                                assert_eq!(
-                                    state.last_ws_block_pulled + 1,
-                                    current_item_block_number
+                                assert!(
+                                    state.last_ws_block_pulled == 0
+                                        || state.last_ws_block_pulled <= current_item_block_number
                                 );
                                 state.last_ws_block_pulled = current_item_block_number
                             }
