@@ -121,10 +121,10 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const NONCE: u64 = 42;
+pub const NONCE: u32 = 42;
 
 impl NonceProvider<MockEthereum> for Test {
-	fn next_nonce() -> cf_traits::Nonce {
+	fn next_nonce() -> <MockEthereum as ChainAbi>::Nonce {
 		NONCE
 	}
 }
