@@ -10,7 +10,7 @@ pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 use super::EthHttpRpcApi;
 
-pub async fn polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
+pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
     logger: slog::Logger,
@@ -129,7 +129,7 @@ pub mod tests {
             .returning(move |n| dummy_block(n.as_u64()));
 
         let mut stream =
-            polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         let expected_returned_block_number = block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
             stream.next().await.unwrap().number().unwrap(),
@@ -182,7 +182,7 @@ pub mod tests {
             .returning(move |n| dummy_block(n.as_u64()));
 
         let mut stream =
-            polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -240,7 +240,7 @@ pub mod tests {
 
         // first block should come in as expected
         let mut stream =
-            polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -305,7 +305,7 @@ pub mod tests {
 
         // first block should come in as expected
         let mut stream =
-            polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -346,7 +346,7 @@ pub mod tests {
         }
 
         let mut stream =
-            polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         for block_number in block_range {
             if let Some(block) = stream.next().await {
                 assert_eq!(

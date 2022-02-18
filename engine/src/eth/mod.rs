@@ -25,7 +25,7 @@ use web3::{
 };
 
 use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND};
-use crate::eth::http_observer::{polling_http_head_stream, HTTP_POLL_INTERVAL};
+use crate::eth::http_observer::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
 use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
@@ -636,7 +636,6 @@ pub trait EthObserver {
         EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
         EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
     {
-        println!("Running event stream");
         let deployed_address = self.get_contract_address();
         slog::info!(
             logger,
@@ -660,7 +659,7 @@ pub trait EthObserver {
             .await?;
 
         let safe_http_head_stream =
-            polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL, logger.clone())
+            safe_polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL, logger.clone())
                 .await;
 
         let safe_http_event_logs = self
