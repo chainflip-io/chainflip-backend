@@ -20,8 +20,7 @@ use cf_traits::{
 	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
 	VaultRotationHandler,
 };
-use codec::{Decode, Encode};
-use frame_support::{instances::*, weights::Weight};
+use frame_support::weights::Weight;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
