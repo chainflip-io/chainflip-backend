@@ -692,14 +692,14 @@ pub trait EthObserver {
         let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TransportProtocol::Ws));
         let safe_http_log_stream = safe_http_log_stream.zip(repeat(TransportProtocol::Http));
 
-        let merged_stream = select(safe_ws_log_stream, safe_http_log_stream);
+        let selected_stream = select(safe_ws_log_stream, safe_http_log_stream);
 
         type SingleStreamLogs<EventParameters> = Zip<
             Pin<Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>>,
             Repeat<TransportProtocol>,
         >;
         struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
-            merged_stream:
+            selected_stream:
                 Select<SingleStreamLogs<EventParameters>, SingleStreamLogs<EventParameters>>,
             last_yielded_block_number: u64,
             last_http_block_pulled: u64,
@@ -709,7 +709,7 @@ pub trait EthObserver {
         }
 
         let init_data = StreamState::<Self::EventParameters> {
-            merged_stream,
+            selected_stream,
             last_yielded_block_number: 0,
             last_http_block_pulled: 0,
             last_ws_block_pulled: 0,
@@ -773,7 +773,7 @@ pub trait EthObserver {
                 // Instead we have to do something a little more sophisticated, tracking hashes for events
                 // and clearing the hash cache as we progress for each block
                 if let Some((yield_item, protocol, state)) = loop {
-                    if let Some((current_item, protocol)) = state.merged_stream.next().await {
+                    if let Some((current_item, protocol)) = state.selected_stream.next().await {
                         let current_item = current_item.unwrap();
                         let current_item_block_number = current_item.block_number;
                         let current_item_tx_hash = current_item.tx_hash;
@@ -1200,25 +1200,26 @@ mod merged_stream_tests {
 
     #[tokio::test]
     async fn interleaved_streams_works_as_expected() {
-        let mut items = Vec::new();
-        // return
-        items.push((key_change(10, 0), TransportProtocol::Ws));
-        // return
-        items.push((key_change(11, 0), TransportProtocol::Ws));
-        // ignore
-        items.push((key_change(10, 0), TransportProtocol::Http));
-        // ignore
-        items.push((key_change(11, 0), TransportProtocol::Http));
-        // return
-        items.push((key_change(12, 0), TransportProtocol::Http));
-        // ignore
-        items.push((key_change(12, 0), TransportProtocol::Ws));
-        // return
-        items.push((key_change(13, 0), TransportProtocol::Http));
-        // ignore
-        items.push((key_change(13, 0), TransportProtocol::Ws));
-        // return
-        items.push((key_change(14, 0), TransportProtocol::Ws));
+        let items = vec![
+            // return
+            (key_change(10, 0), TransportProtocol::Ws),
+            // return
+            (key_change(11, 0), TransportProtocol::Ws),
+            // ignore
+            (key_change(10, 0), TransportProtocol::Http),
+            // ignore
+            (key_change(11, 0), TransportProtocol::Http),
+            // return
+            (key_change(12, 0), TransportProtocol::Http),
+            // ignore
+            (key_change(12, 0), TransportProtocol::Ws),
+            // return
+            (key_change(13, 0), TransportProtocol::Http),
+            // ignore
+            (key_change(13, 0), TransportProtocol::Ws),
+            // return
+            (key_change(14, 0), TransportProtocol::Ws),
+        ];
 
         let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
         let (ws_stream, http_stream) = interleaved_streams(items);
