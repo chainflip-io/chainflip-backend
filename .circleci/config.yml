@@ -373,7 +373,7 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
 
   cargo-build-and-test:
-    executor: rust-base
+    executor: rust-base-ci
     resource_class: xlarge
     steps:
       - checkout
@@ -383,9 +383,7 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
-          mkdir -p /home/ci
-          su - ci
-          USER=ci cargo test --lib --locked --release --all-features
+          cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
           root: ./
