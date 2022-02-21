@@ -293,8 +293,8 @@ pub mod tests {
                 .returning(move || Ok(U64::from(n)));
         }
 
-        // This is the next block that should be yielded. It shouldn't matter if the chain
-        // head has decreased due to sync / reorgs
+        // This is the next block that should be yielded. It shouldn't matter to the caller of .next()
+        // if the chain head has decreased due to sync / reorgs
         let next_safe_block_number = first_safe_block_number + U64::from(1);
         mock_eth_http_rpc
             .expect_block()
