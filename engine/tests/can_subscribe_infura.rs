@@ -69,7 +69,7 @@ mod test {
         let settings_with_env = test_settings_from_file_and_env().unwrap();
 
         // ensure the file and env settings *does* read environment vars
-        assert_eq!(settings_with_env.eth.node_endpoint, fake_endpoint);
+        assert_eq!(settings_with_env.eth.ws_node_endpoint, fake_endpoint);
 
         // clean up
         std::env::remove_var(eth_node_key);

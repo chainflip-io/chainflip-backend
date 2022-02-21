@@ -251,11 +251,11 @@ pub struct EthWsRpcClient {
 
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-        let node_endpoint = &eth_settings.node_endpoint;
-        slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+        let ws_node_endpoint = &eth_settings.ws_node_endpoint;
+        slog::debug!(logger, "Connecting new web3 client to {}", ws_node_endpoint);
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
-                web3::transports::WebSocket::new(node_endpoint)
+                web3::transports::WebSocket::new(ws_node_endpoint)
                     .await
                     .context(here!())?,
             ))
@@ -359,10 +359,10 @@ pub struct EthHttpRpcClient {
 
 impl EthHttpRpcClient {
     pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
-        let node_endpoint = &eth_settings.node_endpoint;
-        let http = web3::transports::Http::new(node_endpoint)
-            .context("Failed to create HTTP Transport for web3 client")?;
-        let web3 = web3::Web3::new(http);
+        let web3 = web3::Web3::new(
+            web3::transports::Http::new(&eth_settings.http_node_endpoint)
+                .context("Failed to create HTTP Transport for web3 client")?,
+        );
 
         Ok(Self { web3 })
     }
