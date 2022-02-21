@@ -385,7 +385,7 @@ jobs:
       - run: |
           mkdir -p /home/ci
           su - ci
-          cargo test --lib --locked --release --all-features
+          USER=ci cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
           root: ./
