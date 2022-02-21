@@ -1,10 +1,10 @@
-mod http_observer;
+mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
 
 pub mod event_common;
 
-mod safe_stream;
+mod ws_safe_stream;
 
 pub mod utils;
 
@@ -25,7 +25,7 @@ use web3::{
 };
 
 use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL};
-use crate::eth::http_observer::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
+use crate::eth::http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
 use crate::logging::{
     ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED,
     SAFE_PROTOCOL_STREAM_JUMP_BACK,
@@ -36,7 +36,7 @@ use crate::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
         WEB3_REQUEST_TIMEOUT,
     },
-    eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
+    eth::ws_safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
