@@ -21,7 +21,8 @@ use sp_std::vec::Vec;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState,
+		offline_conditions::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, KeygenExclusionSet,
+		NetworkState,
 	};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
@@ -111,6 +112,11 @@ pub mod pallet {
 	pub(super) type Nodes<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness<T>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn excluded_from_keygen)]
+	pub(super) type ExcludedFromKeygen<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), OptionQuery>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
@@ -177,6 +183,22 @@ pub mod pallet {
 			Nodes::<T>::mutate(validator_id, |node| {
 				(*node).banned_until = ban;
 			});
+		}
+	}
+
+	impl<T: Config> KeygenExclusionSet for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn add_to_set(validator_id: T::ValidatorId) {
+			ExcludedFromKeygen::<T>::insert(validator_id, ());
+		}
+
+		fn is_excluded(validator_id: &T::ValidatorId) -> bool {
+			ExcludedFromKeygen::<T>::contains_key(validator_id)
+		}
+
+		fn forgive_all() {
+			ExcludedFromKeygen::<T>::remove_all(None);
 		}
 	}
 }

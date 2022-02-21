@@ -64,8 +64,8 @@ pub struct CeremonyCommon {
     pub all_idxs: BTreeSet<usize>,
     pub outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     pub validator_mapping: Arc<PartyIdxMapping>,
-    pub logger: slog::Logger,
     pub rng: Rng,
+    pub logger: slog::Logger,
 }
 
 impl CeremonyCommon {

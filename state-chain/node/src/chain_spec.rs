@@ -563,6 +563,7 @@ fn testnet_genesis(
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake: MIN_STAKE,
+			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
 		auction: AuctionConfig {
 			validator_size_range: (min_validators, MAX_VALIDATORS),

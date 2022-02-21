@@ -233,13 +233,13 @@ mod test_issuance {
 	fn burn_from_reserve(reserve_id: ReserveId, amount: FlipBalance) {
 		let burn = FlipIssuance::<Test>::burn(amount);
 		let withdrawal = Flip::withdraw_reserves(reserve_id, amount);
-		let _ = burn.offset(withdrawal);
+		let _result = burn.offset(withdrawal);
 	}
 
 	fn mint_to_reserve(reserve_id: ReserveId, amount: FlipBalance) {
 		let mint = FlipIssuance::<Test>::mint(amount);
 		let deposit = Flip::deposit_reserves(reserve_id, amount);
-		let _ = mint.offset(deposit);
+		let _result = mint.offset(deposit);
 	}
 
 	#[test]
@@ -512,7 +512,7 @@ mod test_slashing {
 			Flip::set_validator_bond(&ALICE, BOND);
 			// Set the slashing rate to 5%
 			SlashingRate::<Test>::set(SLASHING_RATE);
-			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE), 0);
+			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);
 			let balance_after = Flip::total_balance_of(&ALICE);
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);

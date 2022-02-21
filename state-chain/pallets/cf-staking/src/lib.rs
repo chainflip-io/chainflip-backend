@@ -25,7 +25,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	error::BadOrigin,
-	traits::{EnsureOrigin, Get, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -98,10 +98,6 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
-		/// TTL for a claim from the moment of issue.
-		#[pallet::constant]
-		type ClaimTTL: Get<Duration>;
-
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}
@@ -132,6 +128,10 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// TTL for a claim from the moment of issue.
+	#[pallet::storage]
+	pub type ClaimTTL<T: Config> = StorageValue<_, Duration, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -466,12 +466,13 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
 		pub minimum_stake: T::Balance,
+		pub claim_ttl: Duration,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![], minimum_stake: Zero::zero() }
+			Self { genesis_stakers: vec![], ..Default::default() }
 		}
 	}
 
@@ -479,6 +480,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
+			ClaimTTL::<T>::set(self.claim_ttl);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 			}
@@ -554,7 +556,7 @@ impl<T: Config> Pallet<T> {
 		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+		AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
@@ -599,7 +601,7 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
+		let expiry = T::TimeSource::now() + ClaimTTL::<T>::get();
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let transaction = RegisterClaim::new_unsigned(

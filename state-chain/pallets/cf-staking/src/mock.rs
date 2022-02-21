@@ -39,7 +39,6 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const ClaimTTL: Duration = Duration::from_secs(10);
 }
 
 impl frame_system::Config for Test {
@@ -179,7 +178,6 @@ impl SigningContext<Test> for ClaimSigningContext {
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
-	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
@@ -199,7 +197,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
-		staking: StakingConfig { genesis_stakers: vec![], minimum_stake: MIN_STAKE },
+		staking: StakingConfig {
+			genesis_stakers: vec![],
+			minimum_stake: MIN_STAKE,
+			claim_ttl: Duration::from_secs(10),
+		},
 	};
 	MockSignerNomination::set_candidates(vec![ALICE]);
 

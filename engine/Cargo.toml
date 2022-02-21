@@ -68,6 +68,8 @@ web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 zeroize = "1.4.3"
 libp2p = "0.39.1"
 generic-array= "0.14"
+public-ip = "0.2.2"
+lazy_format = "1.10.0"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}

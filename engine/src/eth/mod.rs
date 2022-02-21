@@ -23,7 +23,10 @@ use web3::{
 
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
-    constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
+    constants::{
+        ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
+        WEB3_REQUEST_TIMEOUT,
+    },
     eth::safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
     logging::COMPONENT_KEY,
     settings,
@@ -258,10 +261,14 @@ impl EthRpcApi for EthRpcClient {
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        self.web3
-            .eth()
-            .logs(filter)
+        let request_fut = self.web3.eth().logs(filter);
+
+        // NOTE: if this does time out we will most likely have a
+        // "memory leak" associated with rust-web3's state for this
+        // request not getting properly cleaned up
+        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
             .await
+            .context("Request timeout")?
             .context("Failed to fetch ETH logs")
     }
 
@@ -345,7 +352,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
             .saturating_mul(uint256_2)
             .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
 
-        slog::trace!(
+        slog::debug!(
             self.logger,
             "Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
             unsigned_tx,
@@ -423,7 +430,10 @@ pub trait EthObserver {
                             .build(),
                     )
                     .await
-                    .context("Failed to fetch past ETH logs")?;
+                    .unwrap_or_else(|err| {
+                        slog::error!(logger, "Failed to fetch past ETH logs: {}", err);
+                        vec![]
+                    });
 
                 let future_logs = filtered_log_stream_by_contract(
                     safe_head_stream,

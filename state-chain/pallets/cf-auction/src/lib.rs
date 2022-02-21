@@ -21,8 +21,8 @@ extern crate assert_matches;
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionIndex, AuctionPhase, AuctionResult, Auctioneer,
 	BackupValidators, BidderProvider, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	HasPeerMapping, IsOnline, QualifyValidator, RemainingBid, StakeHandler, VaultRotationHandler,
-	VaultRotator,
+	HasPeerMapping, IsOnline, KeygenExclusionSet, QualifyValidator, RemainingBid, StakeHandler,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::{pallet_prelude::*, sp_std::mem, traits::ValidatorRegistration};
 use frame_system::pallet_prelude::*;
@@ -87,6 +87,8 @@ pub mod pallet {
 		type PeerMapping: HasPeerMapping<ValidatorId = Self::ValidatorId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -337,13 +339,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				// A new auction has started, store and emit the event
 				CurrentAuctionIndex::<T>::mutate(|idx| *idx += 1);
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
-				let mut bids = T::BidderProvider::get_bidders();
-				// Number one rule - If we have a bid at 0 then please leave
-				bids.retain(|(_, amount)| !amount.is_zero());
-				// Determine if this validator is qualified for bidding
-				bids.retain(|(validator_id, _)| {
-					<Pallet<T> as QualifyValidator>::is_qualified(validator_id)
-				});
+				let bids = T::BidderProvider::get_bidders();
+				let mut bids: Vec<_> = bids
+					.iter()
+					.filter(|(validator_id, amount)| {
+						*amount > Zero::zero() &&
+							<Pallet<T> as QualifyValidator>::is_qualified(validator_id) &&
+							!T::KeygenExclusionSet::is_excluded(validator_id)
+					})
+					.collect();
+
 				let number_of_bidders = bids.len() as u32;
 				let (min_number_of_validators, max_number_of_validators) =
 					ActiveValidatorSizeRange::<T>::get();
@@ -354,6 +359,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 						number_of_bidders,
 						min_number_of_validators
 					);
+					// We clear the exclusion set to be sure we haven't excluded everyone
+					T::KeygenExclusionSet::forgive_all();
 					return Err(AuctionError::MinValidatorSize)
 				};
 

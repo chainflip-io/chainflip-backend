@@ -14,6 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
+	offline_conditions::ReputationPoints,
 	Chainflip, Slashing,
 };
 
@@ -71,11 +72,13 @@ pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> =
 pub const ACCRUAL_BLOCKS: u64 = 2500;
 // Number of accrual points
 pub const ACCRUAL_POINTS: i32 = 1;
+pub const MAX_REPUTATION_POINT_ACCRUED: ReputationPoints = 15;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const MaximumReputationPointAccrued: ReputationPoints = MAX_REPUTATION_POINT_ACCRUED;
 }
 
 // Mocking the `Slasher` trait
@@ -84,13 +87,12 @@ impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
 			*c += 1
 		});
-		0
 	}
 }
 
@@ -98,6 +100,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_keygen_exclusion!(u64);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
@@ -116,6 +119,9 @@ impl Config for Test {
 	type Penalty = MockOfflinePenalty;
 	type WeightInfo = ();
 	type Banned = MockBanned;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type KeygenExclusionSet = MockKeygenExclusion;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
