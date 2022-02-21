@@ -375,6 +375,7 @@ jobs:
   cargo-build-and-test:
     executor: rust-base-ci
     resource_class: xlarge
+    parallelism: 4
     steps:
       - checkout
       - merge_target
