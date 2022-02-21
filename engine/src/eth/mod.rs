@@ -319,11 +319,15 @@ impl EthRpcApi for EthWsRpcClient {
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        self.web3
-            .eth()
-            .logs(filter)
+        let request_fut = self.web3.eth().logs(filter);
+
+        // NOTE: if this does time out we will most likely have a
+        // "memory leak" associated with rust-web3's state for this
+        // request not getting properly cleaned up
+        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
             .await
-            .context("Failed to fetch ETH logs with WS Client")
+            .context("Web3 WS get_logs request timeout")?
+            .context("Failed to fetch ETH logs with WS client")
     }
 
     async fn chain_id(&self) -> Result<U256> {
@@ -402,7 +406,7 @@ impl EthRpcApi for EthHttpRpcClient {
         // request not getting properly cleaned up
         tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
             .await
-            .context("Request timeout")?
+            .context("Web3 HTTP get_logs request timeout")?
             .context("Failed to fetch ETH logs with HTTP client")
     }
 
