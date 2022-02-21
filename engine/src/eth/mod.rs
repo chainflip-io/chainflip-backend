@@ -1059,7 +1059,7 @@ mod merged_stream_tests {
         // http
         impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
     ) {
-        assert!(items.len() > 0, "should have at least one item");
+        assert!(!items.is_empty(), "should have at least one item");
 
         const DELAY_DURATION_MILLIS: u64 = 10;
 
@@ -1088,11 +1088,12 @@ mod merged_stream_tests {
         let delayed_stream = |items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, Duration)>| {
             let items = items.into_iter();
             Box::pin(stream::unfold(items, |mut items| async move {
-                while let Some((i, d)) = items.next() {
+                if let Some((i, d)) = items.next() {
                     tokio::time::sleep(d).await;
-                    return Some((i, items));
+                    Some((i, items))
+                } else {
+                    None
                 }
-                None
             }))
         };
 
