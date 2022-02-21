@@ -26,7 +26,10 @@ use web3::{
 
 use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND};
 use crate::eth::http_observer::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
-use crate::logging::{ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED};
+use crate::logging::{
+    ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED,
+    SAFE_PROTOCOL_STREAM_JUMP_BACK,
+};
 use crate::{
     common::{read_clean_and_decode_hex_str_file, Mutex},
     constants::{ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -790,10 +793,18 @@ pub trait EthObserver {
                             TransportProtocol::Ws => &mut state.last_ws_block_pulled,
                         };
 
-                        assert!(
-                            *protocol_block_number == 0
-                                || *protocol_block_number <= current_item_block_number
-                        );
+                        if *protocol_block_number != 0
+                            && *protocol_block_number >= current_item_block_number
+                        {
+                            slog::warn!(
+                                &state.logger,
+                                #SAFE_PROTOCOL_STREAM_JUMP_BACK,
+                                "The {} stream moved back from ETH block {} to ETH block",
+                                protocol_block_number,
+                                current_item_block_number
+                            );
+                        }
+
                         *protocol_block_number = current_item_block_number;
 
                         if (current_item_block_number > state.last_yielded_block_number)
@@ -1284,34 +1295,40 @@ mod merged_stream_tests {
         assert!(merged_stream.next().await.is_none());
     }
 
-    // TODO:
-    // #[tokio::test]
-    // async fn merged_stream_panics_on_bad_input_streams() {
-    //     let key_manager = test_km_contract();
-    //     let logger = new_test_logger();
+    // We assume the input streams are "safe streams" i.e. that they progress only forward, since we
+    // won't reorg backwards. However, we should be able to continue the merged stream if one of them
+    // goes backwards
+    #[tokio::test]
+    async fn merged_stream_continues_when_one_stream_moves_back_in_blocks() {
+        let key_manager = test_km_contract();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
 
-    //     let safe_ws_log_stream = Box::pin(stream::iter([
-    //         key_change(10, 0),
-    //         key_change(10, 02),
-    //         key_change(14, 0),
-    //     ]));
-    //     // is 2 blocks behind the ws stream
-    //     let safe_http_log_stream = Box::pin(stream::iter([
-    //         key_change(8, 0),
-    //         key_change(10, 0),
-    //         key_change(12, 0),
-    //     ]));
+        let safe_ws_log_stream = Box::pin(stream::iter([
+            key_change(10, 0),
+            key_change(10, 2),
+            key_change(14, 0),
+        ]));
 
-    //     let mut stream = key_manager
-    //         .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-    //         .await
-    //         .unwrap();
+        let safe_http_log_stream = Box::pin(stream::iter([
+            key_change(8, 0),
+            key_change(7, 0),
+            key_change(12, 0),
+        ]));
 
-    //     assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
-    //     assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
-    //     assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
-    //     assert!(stream.next().await.is_none());
-    // }
+        let mut stream = key_manager
+            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
+        assert!(!tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 2).unwrap());
+        assert!(tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
+        assert!(stream.next().await.is_none());
+    }
 }
 
 #[cfg(test)]
