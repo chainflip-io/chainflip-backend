@@ -24,7 +24,7 @@ use web3::{
     types::{BlockHeader, CallRequest, Filter, Log, SignedTransaction, U64},
 };
 
-use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND};
+use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL};
 use crate::eth::http_observer::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
 use crate::logging::{
     ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED,
@@ -758,7 +758,7 @@ pub trait EthObserver {
                 && ((last_pulled_other + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
                     <= yield_item.block_number) // if true the other stream has fallen behind
                 // only log every ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND number of blocks
-                && (blocks_behind % ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND == 0)
+                && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
             {
                 slog::warn!(
                     state.logger,
