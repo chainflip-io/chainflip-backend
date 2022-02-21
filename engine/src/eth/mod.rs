@@ -678,9 +678,10 @@ pub trait EthObserver {
             .await
     }
 
-    /// Takes two *safe* streams, i.e. ones that progress at a maximum of a block at a time
-    /// therefore it does not need to handle reorgs itself. It will panic if a reorg or fast-forward
-    /// (likely due to a sync issue) is detected in either of the streams
+    /// Takes two *safe* log streams one from each protocol. We shouldn't see reorgs occur in either of the streams
+    /// This will deduplicate the logs (since for two correctly functioning individual streams we should get 2 of each log)
+    /// It will continue when one of the streams stops returning, or one of the streams progresses backwards
+    /// It logs when one of the streams is behind the other, on an interval.
     async fn merged_log_stream<EventCommonStream, EventCommonStream2>(
         &self,
         safe_ws_log_stream: EventCommonStream,
@@ -720,6 +721,8 @@ pub trait EthObserver {
             logger,
         };
 
+        // Log when we one of the streams is at least ETH_FALLING_BEHIND_MARGIN_BLOCKS
+        // and log it every time the ahead stream progresses ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL blocks
         fn log_stream_returned_and_behind<
             EventParameters: std::fmt::Debug + Send + Sync,
             EventCommonStream: Stream,

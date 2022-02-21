@@ -34,6 +34,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             let is_first_iteration =
                 state.last_block_yielded == U64::from(0) && state.last_head_fetched == U64::from(0);
 
+            // Only request the latest block number if we are out of blocks to yield
             if state.last_head_fetched
                 <= state.last_block_yielded + U64::from(ETH_BLOCK_SAFETY_MARGIN)
             {
@@ -47,7 +48,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 {
                     slog::error!(
                         &state.logger,
-                        "Fetched ETH block number ({}) is more than the ETH_BLOCK_SAFETY_MARGIN behind the last fetched ETH block number ({})", unsafe_block_number, state.last_head_fetched
+                        "Fetched ETH block number ({}) is more than {} blocks behind the last fetched ETH block number ({})", unsafe_block_number, ETH_BLOCK_SAFETY_MARGIN, state.last_head_fetched
                     );
                 } else if unsafe_block_number < state.last_head_fetched {
                     slog::warn!(
