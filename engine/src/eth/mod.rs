@@ -126,16 +126,16 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, RpcClient, EthWsRpc, EthHttpRpc>(
+pub async fn start_contract_observer<ContractObserver, StateChainRpc, EthWsRpc, EthHttpRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpc,
     eth_http_rpc: &EthHttpRpc,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
-    RpcClient: 'static + StateChainRpcApi + Sync + Send,
+    StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
     EthWsRpc: 'static + EthWsRpcApi + Sync + Send + Clone,
     EthHttpRpc: 'static + EthHttpRpcApi + Sync + Send + Clone,
 {
