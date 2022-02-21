@@ -1073,7 +1073,7 @@ mod merged_stream_tests {
             let delay = Duration::from_millis(if protocol == protocol_last_returned {
                 0
             } else {
-                total_delay_increment = total_delay_increment + DELAY_DURATION_MILLIS;
+                total_delay_increment += DELAY_DURATION_MILLIS;
                 total_delay_increment
             });
 

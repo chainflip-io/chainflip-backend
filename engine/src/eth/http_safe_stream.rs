@@ -71,12 +71,14 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             if next_block_to_yield + U64::from(ETH_BLOCK_SAFETY_MARGIN) <= state.last_head_fetched {
                 let block = state
                     .eth_http_rpc
-                    .block(next_block_to_yield.into())
+                    .block(next_block_to_yield)
                     .await
-                    .expect(&format!(
-                        "Failed to fetch ETH block `{}` via HTTP",
-                        next_block_to_yield
-                    ))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to fetch ETH block `{}` via HTTP: {}",
+                            next_block_to_yield, e
+                        )
+                    })
                     .unwrap();
                 state.last_block_yielded = next_block_to_yield;
                 break Some((block, state));
