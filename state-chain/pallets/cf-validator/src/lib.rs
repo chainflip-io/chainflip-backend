@@ -642,11 +642,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			},
 			RotationStatus::AwaitingCompletion => {
 				Rotation::<T>::put(RotationStatus::Ready);
-				Some(
-					T::Auctioneer::auction_result()
-						.expect("everything starts with an auction")
-						.winners,
-				)
+				Some(T::Auctioneer::auction_result()?.winners)
 			},
 			RotationStatus::Ready => {
 				Rotation::<T>::set(RotationStatus::Idle);
@@ -667,10 +663,12 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
 		if Rotation::<T>::get() == RotationStatus::Ready {
-			let AuctionResult { winners, minimum_active_bid } =
-				T::Auctioneer::auction_result().expect("everything starts with an auction");
-			// Start the new epoch
-			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			if let Some(AuctionResult { winners, minimum_active_bid }) =
+				T::Auctioneer::auction_result()
+			{
+				// Start the new epoch
+				Pallet::<T>::start_new_epoch(&winners, minimum_active_bid);
+			}
 		}
 	}
 }

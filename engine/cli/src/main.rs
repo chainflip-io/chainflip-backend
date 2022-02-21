@@ -1,7 +1,9 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
     eth::{EthBroadcaster, EthWsRpcClient},
-    state_chain::client::connect_to_state_chain,
+    state_chain::client::{
+        connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
+    },
 };
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -61,7 +63,29 @@ async fn run_cli() -> Result<()> {
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
+        Query { block_hash } => request_block(block_hash, &cli_settings).await,
     }
+}
+
+async fn request_block(
+    block_hash: state_chain_runtime::Hash,
+    settings: &CLISettings,
+) -> Result<()> {
+    println!(
+        "Querying the state chain for the block with hash {:x?}.",
+        block_hash
+    );
+
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(&settings.state_chain).await?;
+
+    match state_chain_rpc_client.get_block(block_hash).await? {
+        Some(block) => {
+            println!("{:#?}", block);
+        }
+        None => println!("Could not find block with block hash {:x?}", block_hash),
+    }
+    Ok(())
 }
 
 async fn request_claim(

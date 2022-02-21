@@ -438,14 +438,14 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
 		})
-		.expect("mutating account state")
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).last_active_epoch = Some(index);
 		})
-		.expect("mutating account state")
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 }
 
