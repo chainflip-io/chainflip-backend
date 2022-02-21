@@ -678,29 +678,29 @@ pub trait EthObserver {
     /// Takes two *safe* streams, i.e. ones that progress at a maximum of a block at a time
     /// therefore it does not need to handle reorgs itself. It will panic if a reorg or fast-forward
     /// (likely due to a sync issue) is detected in either of the streams
-    async fn merged_log_stream(
+    async fn merged_log_stream<EventCommonStream, EventCommonStream2>(
         &self,
-        safe_ws_log_stream: Pin<
-            Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>,
-        >,
-        safe_http_log_stream: Pin<
-            Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>,
-        >,
+        safe_ws_log_stream: EventCommonStream,
+        safe_http_log_stream: EventCommonStream2,
         logger: slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>> {
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
+    where
+        EventCommonStream:
+            Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send + 'static,
+        EventCommonStream2:
+            Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send + 'static,
+    {
         let logger = logger.new(o!(COMPONENT_KEY => "MergedETHStream"));
         let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TransportProtocol::Ws));
         let safe_http_log_stream = safe_http_log_stream.zip(repeat(TransportProtocol::Http));
 
         let selected_stream = select(safe_ws_log_stream, safe_http_log_stream);
 
-        type SingleStreamLogs<EventParameters> = Zip<
-            Pin<Box<dyn Stream<Item = Result<EventWithCommon<EventParameters>>> + Unpin + Send>>,
-            Repeat<TransportProtocol>,
-        >;
-        struct StreamState<EventParameters: Debug + Send + Sync + 'static> {
-            selected_stream:
-                Select<SingleStreamLogs<EventParameters>, SingleStreamLogs<EventParameters>>,
+        struct StreamState<EventCommonStream: Stream, EventCommonStream2: Stream> {
+            selected_stream: Select<
+                Zip<EventCommonStream, Repeat<TransportProtocol>>,
+                Zip<EventCommonStream2, Repeat<TransportProtocol>>,
+            >,
             last_yielded_block_number: u64,
             last_http_block_pulled: u64,
             last_ws_block_pulled: u64,
@@ -708,7 +708,7 @@ pub trait EthObserver {
             logger: slog::Logger,
         }
 
-        let init_data = StreamState::<Self::EventParameters> {
+        let init_data = StreamState::<EventCommonStream, EventCommonStream2> {
             selected_stream,
             last_yielded_block_number: 0,
             last_http_block_pulled: 0,
@@ -717,8 +717,12 @@ pub trait EthObserver {
             logger,
         };
 
-        fn log_stream_returned_and_behind<EventParameters: std::fmt::Debug + Send + Sync>(
-            state: &StreamState<EventParameters>,
+        fn log_stream_returned_and_behind<
+            EventParameters: std::fmt::Debug + Send + Sync,
+            EventCommonStream: Stream,
+            EventCommonStream2: Stream,
+        >(
+            state: &StreamState<EventCommonStream, EventCommonStream2>,
             protocol: TransportProtocol,
             yield_item: &EventWithCommon<EventParameters>,
         ) {
