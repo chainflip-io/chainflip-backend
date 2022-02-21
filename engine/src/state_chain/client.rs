@@ -780,7 +780,7 @@ pub async fn connect_to_state_chain(
     );
 
     let state_chain_rpc_client =
-        connect_to_state_chain_without_signer(&state_chain_settings).await?;
+        connect_to_state_chain_without_signer(state_chain_settings).await?;
 
     let mut block_header_stream = state_chain_rpc_client
         .chain_rpc_client
@@ -956,7 +956,7 @@ pub async fn connect_to_state_chain_without_signer(
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.into();
 
     Ok(StateChainRpcClient {
         system_rpc_client,
