@@ -21,6 +21,9 @@ pub const MAX_RETRY_ATTEMPTS: usize = 10;
 /// Duration before the attempt to connect to the ethereum node times out
 pub const ETH_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Duration before we give up waiting on a response for a web3 request
+pub const WEB3_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// Duration between each poll of the web3 client, to check if we are synced to the head of the chain
 pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 

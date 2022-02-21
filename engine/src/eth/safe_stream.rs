@@ -96,6 +96,7 @@ where
             let block_number = header.number().unwrap();
             slog::debug!(logger, "Observing ETH block: `{}`", block_number);
             let eth_rpc = eth_rpc.clone();
+            let logger = logger.clone();
             async move {
                 let mut contract_bloom = Bloom::default();
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
@@ -103,10 +104,10 @@ where
                 if header
                     .clone()
                     .logs_bloom()
-                    .expect("Should have logs bloom")
+                    .unwrap()
                     .contains_bloom(&contract_bloom)
                 {
-                    let logs = eth_rpc
+                    match eth_rpc
                         .get_logs(
                             FilterBuilder::default()
                                 .from_block(BlockNumber::Number(block_number))
@@ -115,8 +116,18 @@ where
                                 .build(),
                         )
                         .await
-                        .unwrap();
-                    Some(stream::iter(logs))
+                    {
+                        Ok(logs) => Some(stream::iter(logs)),
+                        Err(err) => {
+                            slog::error!(
+                                logger,
+                                "Failed to request ETH logs for block `{}`: {}",
+                                block_number,
+                                err,
+                            );
+                            None
+                        }
+                    }
                 } else {
                     None
                 }
