@@ -40,6 +40,11 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  rust-base-ci:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -154,28 +159,28 @@ workflows:
     when:
       not: <<pipeline.parameters.build_testnet>>
     jobs:
-      - cargo-clippy:
-          requires:
-            - cargo-fmt
-          context:
-            - ghcr-credentials
-            - github-credentials
-          <<: *ignore_main_branches
-
-      # The follow jobs always run, regardless of PR or merge.
-      - cargo-check:
-          requires:
-            - cargo-fmt
-          context:
-            - ghcr-credentials
-            - github-credentials
-      - cargo-fmt:
-          context:
-            - ghcr-credentials
-            - github-credentials
+#      - cargo-clippy:
+#          requires:
+#            - cargo-fmt
+#          context:
+#            - ghcr-credentials
+#            - github-credentials
+#          <<: *ignore_main_branches
+#
+#      # The follow jobs always run, regardless of PR or merge.
+#      - cargo-check:
+#          requires:
+#            - cargo-fmt
+#          context:
+#            - ghcr-credentials
+#            - github-credentials
+#      - cargo-fmt:
+#          context:
+#            - ghcr-credentials
+#            - github-credentials
       - cargo-build-and-test:
-          requires:
-            - cargo-fmt
+#          requires:
+#            - cargo-fmt
           context:
             - ghcr-credentials
             - github-credentials
@@ -358,7 +363,8 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
 
   cargo-build-and-test:
-    <<: *cargo-base-job
+    executor: rust-base-ci
+    resource_class: xlarge
     steps:
       - checkout
       - merge_target
