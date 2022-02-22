@@ -14,7 +14,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{mocks::threshold_signer::MockThresholdSigner, WaivedFees};
+use cf_traits::{Broadcaster, WaivedFees};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -150,9 +150,9 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockUpdateFlipSupply {
-	nonce: <MockEthereum as ChainAbi>::Nonce,
-	new_total_supply: u128,
-	block_number: u64,
+	pub nonce: <MockEthereum as ChainAbi>::Nonce,
+	pub new_total_supply: u128,
+	pub block_number: u64,
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
@@ -186,24 +186,20 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 pub struct MockBroadcast;
 
 impl MockBroadcast {
-	pub fn call() {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &true)
+	pub fn call(outgoing: MockUpdateFlipSupply) {
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing)
 	}
 
-	pub fn was_called() -> bool {
-		storage::hashed::get_or(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", false)
+	pub fn get_called() -> Option<MockUpdateFlipSupply> {
+		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast")
 	}
 }
 
-impl UnfilteredDispatchable for MockBroadcast {
-	type Origin = Origin;
+impl Broadcaster<MockEthereum> for MockBroadcast {
+	type ApiCall = MockUpdateFlipSupply;
 
-	fn dispatch_bypass_filter(
-		self,
-		_origin: Self::Origin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		Self::call();
-		Ok(().into())
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+		Self::call(api_call)
 	}
 }
 
@@ -211,13 +207,13 @@ impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
 	type HostChain = MockEthereum;
 	type FlipBalance = u128;
-	type UpdateFlipSupply = MockUpdateFlipSupply;
+	type ApiCall = MockUpdateFlipSupply;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
-	type ThresholdSigner = MockThresholdSigner<MockEthereum, MockBroadcast>;
+	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 }
 

@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{ApiCall, UpdateFlipSupply};
-use cf_traits::{NonceProvider, ThresholdSigner};
+use cf_chains::UpdateFlipSupply;
+use cf_traits::{Broadcaster, NonceProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -86,8 +86,11 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
-		/// Something that allows us to build the UpdateFlipSupply api call.
-		type UpdateFlipSupply: UpdateFlipSupply<Self::HostChain>;
+		/// An outgoing api call that supports UpdateFlipSupply.
+		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+
+		/// Transaction broadcaster for the host chain.
+		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -95,9 +98,6 @@ pub mod pallet {
 
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<Self::HostChain>;
-
-		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self::HostChain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -292,6 +292,7 @@ pub mod pallet {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
 			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
+			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
 }
@@ -314,20 +315,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
-		// TODO: extend the BlockNumber type in a nice to avoid this parse here
-		let block_number: u32 = block_number.saturated_into();
-
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
-		T::ThresholdSigner::request_signature_with_callback(
-			T::UpdateFlipSupply::new_unsigned(
-				T::NonceProvider::next_nonce().unique_saturated_into(),
-				total_supply.unique_saturated_into(),
-				block_number.into(),
-			)
-			.threshold_signature_payload(),
-			|_id| todo!("broadcast the transaction"),
-		);
+		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
+			T::NonceProvider::next_nonce(),
+			total_supply.unique_saturated_into(),
+			block_number.saturated_into(),
+		));
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
