@@ -26,6 +26,7 @@ use web3::{
 
 use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL};
 use crate::eth::http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};
+use crate::eth::ws_safe_stream::safe_ws_head_stream;
 use crate::logging::{
     ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED,
     SAFE_PROTOCOL_STREAM_JUMP_BACK,
@@ -36,7 +37,6 @@ use crate::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
         WEB3_REQUEST_TIMEOUT,
     },
-    eth::ws_safe_stream::filtered_log_stream_by_contract,
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -88,6 +88,8 @@ impl<TX> BlockHeaderable for web3::types::Block<TX> {
 
 #[cfg(test)]
 use mockall::automock;
+
+use self::ws_safe_stream::{block_log_stream_by_contract, get_logs_for_block, BlockLogs};
 
 // TODO: Not possible to fix the clippy warning here. At the moment we
 // need to ignore it on a global level.
@@ -169,7 +171,12 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc, EthWsRpc, 
                         received_window.from
                     );
                     let mut event_stream = contract_observer
-                        .event_stream(&eth_http_rpc, &eth_ws_rpc, received_window.from, &logger)
+                        .event_stream(
+                            eth_http_rpc,
+                            eth_ws_rpc,
+                            received_window.from,
+                            logger.clone(),
+                        )
                         .await
                         .expect("Failed to initialise event stream");
 
@@ -217,6 +224,8 @@ pub trait EthRpcApi {
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
     async fn chain_id(&self) -> Result<U256>;
+
+    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
 }
 
 #[async_trait]
@@ -229,8 +238,6 @@ pub trait EthWsRpcApi: EthRpcApi {
 #[async_trait]
 pub trait EthHttpRpcApi: EthRpcApi {
     async fn block_number(&self) -> Result<U64>;
-
-    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
 }
 
 /// Wraps the web3 library, so can use a trait to make testing easier
@@ -327,6 +334,14 @@ impl EthRpcApi for EthWsRpcClient {
             .await
             .context("Failed to fetch ETH ChainId with WS Client")
     }
+
+    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>> {
+        self.web3
+            .eth()
+            .block(block_number.into())
+            .await
+            .context("Failed to fetch block with HTTP client")
+    }
 }
 
 #[async_trait]
@@ -403,6 +418,14 @@ impl EthRpcApi for EthHttpRpcClient {
     async fn chain_id(&self) -> Result<U256> {
         Ok(self.web3.eth().chain_id().await?)
     }
+
+    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>> {
+        self.web3
+            .eth()
+            .block(block_number.into())
+            .await
+            .context("Failed to fetch block with HTTP client")
+    }
 }
 
 #[async_trait]
@@ -413,14 +436,6 @@ impl EthHttpRpcApi for EthHttpRpcClient {
             .block_number()
             .await
             .context("Failed to fetch block number with HTTP client")
-    }
-
-    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>> {
-        self.web3
-            .eth()
-            .block(block_number.into())
-            .await
-            .context("Failed to fetch block with HTTP client")
     }
 }
 
@@ -544,18 +559,15 @@ impl fmt::Display for TransportProtocol {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    /// Takes a stream of BlockHeaderable items, and turns this into a stream of logs/events
-    /// for all logs/events from a particular contract
-    async fn log_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
+    /// Takes a head stream and turns it into a stream of BlockLogs for consumption by the merged stream
+    async fn block_logs_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
         &self,
         from_block: u64,
         contract_address: H160,
         safe_head_stream: BlockHeaderStream,
-        eth_rpc: &EthRpc,
-        logger: &slog::Logger,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>,
-    >
+        eth_rpc: EthRpc,
+        logger: slog::Logger,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockLogs>> + Send>>>
     where
         BlockHeaderStream: Stream<Item = Result<EthBlockHeader>> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
@@ -566,8 +578,9 @@ pub trait EthObserver {
         let decode_log = self.decode_log_closure()?;
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
-            let best_safe_block_number = current_best_safe_block_header
-                .context("Could not get first safe ETH block header")?
+            let best_safe_block_header = current_best_safe_block_header
+                .context("Could not get first safe ETH block header")?;
+            let best_safe_block_number = best_safe_block_header
                 .number()
                 .expect("Should have block number");
             // we only want to start observing once we reach the from_block specified
@@ -581,22 +594,27 @@ pub trait EthObserver {
             } else {
                 // our chain_head is above the from_block number
                 // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
-                let past_logs = eth_rpc
-                    .get_logs(
-                        FilterBuilder::default()
-                            // from_block and to_block are *inclusive*
-                            .from_block(BlockNumber::Number(from_block))
-                            .to_block(BlockNumber::Number(best_safe_block_number))
-                            .address(vec![contract_address])
-                            .build(),
-                    )
-                    .await
-                    .unwrap_or_else(|err| {
-                        slog::error!(logger, "Failed to fetch past ETH logs: {}", err);
-                        vec![]
+
+                let eth_rpc_c = eth_rpc.clone();
+                let logger_c = logger.clone();
+                let past_logs = stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64())
+                    .then(move |block_number| {
+                        let eth_rpc = eth_rpc_c.clone();
+                        let logger = logger_c.clone();
+                        async move {
+                            let block_header = eth_rpc
+                                .block(U64::from(block_number))
+                                .await
+                                .unwrap()
+                                .unwrap();
+                            Ok(
+                                get_logs_for_block(block_header, eth_rpc, contract_address, logger)
+                                    .await,
+                            )
+                        }
                     });
 
-                let future_logs = filtered_log_stream_by_contract(
+                let future_logs = block_log_stream_by_contract(
                     safe_head_stream,
                     eth_rpc.clone(),
                     contract_address,
@@ -604,26 +622,7 @@ pub trait EthObserver {
                 )
                 .await;
 
-                let logger = logger.clone();
-                return Ok(
-                    Box::pin(
-                        tokio_stream::iter(past_logs).chain(future_logs).map(
-                            move |unparsed_log| -> Result<
-                                EventWithCommon<Self::EventParameters>,
-                                anyhow::Error,
-                            > {
-                                let result_event = EventWithCommon::<Self::EventParameters>::decode(
-                                    &decode_log,
-                                    unparsed_log,
-                                );
-                                if let Ok(ok_result) = &result_event {
-                                    slog::debug!(logger, "Received ETH event log {}", ok_result);
-                                }
-                                result_event
-                            },
-                        ),
-                    ),
-                );
+                return Ok(Box::pin(past_logs.chain(future_logs)));
             }
         }
         Err(anyhow::Error::msg("No events in safe head stream"))
@@ -633,11 +632,12 @@ pub trait EthObserver {
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
     async fn event_stream<EthWsRpc, EthHttpRpc>(
         &self,
-        eth_http_rpc: &EthHttpRpc,
-        eth_ws_rpc: &EthWsRpc,
+        eth_http_rpc: EthHttpRpc,
+        eth_ws_rpc: EthWsRpc,
         // usually the start of the validator's active window
         from_block: u64,
-        logger: &slog::Logger,
+        // Look at borrowing here
+        logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
     where
         EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
@@ -652,16 +652,15 @@ pub trait EthObserver {
 
         let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
 
-        let safe_ws_head_stream =
-            safe_eth_log_header_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+        let safe_ws_head_stream = safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
         let safe_ws_event_logs = self
-            .log_stream_from_head_stream(
+            .block_logs_stream_from_head_stream(
                 from_block,
                 deployed_address,
                 safe_ws_head_stream,
                 eth_ws_rpc,
-                logger,
+                logger.clone(),
             )
             .await?;
 
@@ -670,7 +669,7 @@ pub trait EthObserver {
                 .await;
 
         let safe_http_event_logs = self
-            .log_stream_from_head_stream(
+            .block_logs_stream_from_head_stream(
                 from_block,
                 deployed_address,
                 safe_http_head_stream,
@@ -679,8 +678,10 @@ pub trait EthObserver {
             )
             .await?;
 
-        self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
-            .await
+        // self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
+        //     .await
+
+        Err(anyhow::Error::msg("ho"))
     }
 
     /// Takes two *safe* log streams one from each protocol. We shouldn't see reorgs occur in either of the streams
@@ -959,13 +960,13 @@ pub mod mocks {
             async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
             async fn chain_id(&self) -> Result<U256>;
+
+            async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
         }
 
         #[async_trait]
         impl EthHttpRpcApi for EthHttpRpc {
             async fn block_number(&self) -> Result<U64>;
-
-            async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
         }
     }
 
@@ -993,6 +994,8 @@ pub mod mocks {
             async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
             async fn chain_id(&self) -> Result<U256>;
+
+            async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
         }
 
         #[async_trait]
