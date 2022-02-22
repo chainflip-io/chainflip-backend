@@ -140,7 +140,7 @@ impl EthObserver for StakeManager {
         }
     }
 
-    fn get_deployed_address(&self) -> H160 {
+    fn get_contract_address(&self) -> H160 {
         self.deployed_address
     }
 
