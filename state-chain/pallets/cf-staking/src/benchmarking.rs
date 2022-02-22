@@ -122,6 +122,8 @@ benchmarks! {
 		let claimable = T::Flip::claimable_balance(&caller);
 		Pallet::<T>::do_claim(&caller, claimable, eth_addr)?;
 
+		// TODO: insert a valid signature...
+
 		let call = Call::<T>::post_claim_signature(caller.clone(), transmogrify(1u32));
 	}: { call.dispatch_bypass_filter(threshold_origin)? }
 	verify {
