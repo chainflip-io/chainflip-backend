@@ -124,10 +124,7 @@ impl Auctioneer for MockAuctioneer {
 	type Amount = Amount;
 
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError> {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| match (*cell.borrow()).as_ref() {
-			Ok(a) => Ok((*a).clone()),
-			Err(e) => Err(*e),
-		})
+		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
 	}
 
 	fn update_validator_status(_winners: &[Self::ValidatorId]) {}
