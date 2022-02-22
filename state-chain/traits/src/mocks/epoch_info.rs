@@ -15,7 +15,7 @@ macro_rules! impl_mock_epoch_info {
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
-			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(true);
+			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(false);
 		}
 
 		impl MockEpochInfo {
@@ -62,7 +62,7 @@ macro_rules! impl_mock_epoch_info {
 				EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
 			}
 
-			pub fn set_claiming_allowed(is_auction: bool) {
+			pub fn set_is_auction_phase(is_auction: bool) {
 				AUCTION_PHASE.with(|cell| *(cell.borrow_mut()) = is_auction);
 			}
 

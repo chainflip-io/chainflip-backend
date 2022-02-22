@@ -615,7 +615,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 				.unwrap_or_default(),
 		);
 
-		last_block_for_claims >= frame_system::Pallet::<T>::current_block_number()
+		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		last_block_for_claims <= current_block_number
 	}
 
 	fn active_validator_count() -> u32 {
