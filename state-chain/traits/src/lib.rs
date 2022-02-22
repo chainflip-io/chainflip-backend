@@ -189,15 +189,9 @@ pub trait BackupValidators {
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub enum KeygenStatus {
 	Busy,
-	Completed,
 	Failed,
 }
 
-impl Default for KeygenStatus {
-	fn default() -> Self {
-		KeygenStatus::Completed
-	}
-}
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
@@ -207,7 +201,7 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// Get the status of the current key generation
-	fn get_keygen_status() -> KeygenStatus;
+	fn get_keygen_status() -> Option<KeygenStatus>;
 }
 
 /// An error has occurred during an auction

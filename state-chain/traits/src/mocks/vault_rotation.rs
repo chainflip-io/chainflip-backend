@@ -4,7 +4,7 @@ use crate::{KeygenStatus, VaultRotator};
 use std::cell::RefCell;
 
 thread_local! {
-	pub static KEYGEN_STATUS: RefCell<KeygenStatus> = RefCell::new(KeygenStatus::Completed);
+	pub static KEYGEN_STATUS: RefCell<Option<KeygenStatus>> = RefCell::new(None);
 	pub static ERROR_ON_START: RefCell<bool> = RefCell::new(false);
 }
 
@@ -14,14 +14,14 @@ pub struct Mock;
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct MockError;
 impl Into<DispatchError> for MockError {
-    fn into(self) -> DispatchError {
-        DispatchError::Other("mock error")
-    }
+	fn into(self) -> DispatchError {
+		DispatchError::Other("mock error")
+	}
 }
 
 // Helper function to clear the confirmation result
 pub fn clear_confirmation() {
-	KEYGEN_STATUS.with(|l| *l.borrow_mut() = KeygenStatus::Completed);
+	KEYGEN_STATUS.with(|l| *l.borrow_mut() = None);
 }
 
 impl Mock {
@@ -48,11 +48,11 @@ impl VaultRotator for Mock {
 			return Err(MockError)
 		}
 
-		KEYGEN_STATUS.with(|l| *l.borrow_mut() = KeygenStatus::Busy);
+		KEYGEN_STATUS.with(|l| *l.borrow_mut() = Some(KeygenStatus::Busy));
 		Ok(())
 	}
 
-	fn get_keygen_status() -> KeygenStatus {
+	fn get_keygen_status() -> Option<KeygenStatus> {
 		KEYGEN_STATUS.with(|l| (*l.borrow()).clone())
 	}
 }

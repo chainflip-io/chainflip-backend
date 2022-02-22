@@ -1,7 +1,7 @@
 use crate::{mock::*, Error, *};
 use cf_traits::{AuctionError, IsOutgoing};
 use frame_support::{assert_noop, assert_ok};
-use sp_runtime::traits::{BadOrigin, Zero};
+use sp_runtime::traits::Zero;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -28,18 +28,6 @@ fn assert_next_epoch() {
 		"we should be in epoch {}",
 		GENESIS_EPOCH + 1
 	);
-}
-
-#[test]
-fn you_have_to_be_priviledged() {
-	new_test_ext().execute_with(|| {
-		// Run through the sudo extrinsics to be sure they are what they are
-		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()),
-			BadOrigin
-		);
-		assert_noop!(ValidatorPallet::force_rotation(Origin::signed(ALICE)), BadOrigin);
-	});
 }
 
 #[test]

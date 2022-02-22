@@ -372,7 +372,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_status)]
 	pub(super) type StatusOfKeygen<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, KeygenStatus, ValueQuery>;
+		StorageValue<_, KeygenStatus, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -669,7 +669,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// state.
 		PendingVaultRotation::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
-		StatusOfKeygen::<T, I>::set(KeygenStatus::Failed);
+		StatusOfKeygen::<T, I>::put(KeygenStatus::Failed);
 	}
 }
 
@@ -680,16 +680,16 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		Self::start_vault_rotation(candidates)?;
-		StatusOfKeygen::<T, I>::set(KeygenStatus::Busy);
+		StatusOfKeygen::<T, I>::put(KeygenStatus::Busy);
 		Ok(())
 	}
 
 	/// Get the status of the current key generation
-	fn get_keygen_status() -> KeygenStatus {
+	fn get_keygen_status() -> Option<KeygenStatus> {
 		if Pallet::<T, I>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
 			PendingVaultRotation::<T, I>::kill();
-			StatusOfKeygen::<T, I>::set(KeygenStatus::Completed);
+			StatusOfKeygen::<T, I>::set(None);
 
 			Self::deposit_event(Event::<T, I>::VaultsRotated);
 		}

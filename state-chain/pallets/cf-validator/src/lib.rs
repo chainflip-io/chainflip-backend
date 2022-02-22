@@ -219,14 +219,15 @@ pub mod pallet {
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_keygen_status() {
-						KeygenStatus::Completed => Self::update_rotation_status(
-							RotationStatus::VaultsRotated(auction_result),
-						),
-						KeygenStatus::Failed => {
+						None => Self::update_rotation_status(RotationStatus::VaultsRotated(
+							auction_result,
+						)),
+						Some(KeygenStatus::Failed) => {
 							Self::deposit_event(Event::RotationAborted);
 							Self::update_rotation_status(RotationStatus::Idle);
 						},
-						_ => log::debug!(target: "cf-validator", "awaiting vault rotation"),
+						Some(KeygenStatus::Busy) =>
+							log::debug!(target: "cf-validator", "awaiting vault rotation"),
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
@@ -309,8 +310,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
-			// TODO Governance
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				RotationPhase::<T>::get() == RotationStatus::Idle,
 				Error::<T>::RotationInProgress
@@ -339,8 +339,7 @@ pub mod pallet {
 		/// - [RotationInProgress](Error::RotationInProgress)
 		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			// TODO Governance
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				RotationPhase::<T>::get() == RotationStatus::Idle,
 				Error::<T>::RotationInProgress
