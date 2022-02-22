@@ -353,7 +353,7 @@ pub mod tests {
         for block_number in block_range {
             if let Some(block) = stream.next().await {
                 assert_eq!(
-                    block.number().unwrap(),
+                    block.unwrap().number().unwrap(),
                     U64::from(block_number - ETH_BLOCK_SAFETY_MARGIN)
                 );
             };
