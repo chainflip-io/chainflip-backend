@@ -383,13 +383,13 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
+	type ApiCall = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
-	type UpdateFlipSupply = eth::api::EthereumApi;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
-	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
