@@ -1,5 +1,4 @@
 use crate as pallet_cf_witness_api;
-use std::time::Duration;
 
 use cf_chains::{eth::api::EthereumApi, mocks::MockTransactionBuilder, ChainAbi, Ethereum};
 use cf_traits::{
