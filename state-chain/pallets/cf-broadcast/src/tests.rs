@@ -446,7 +446,7 @@ fn missing_transaction_transmission() {
 		// Initiate broadcast
 		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
 		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_some());
-		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 1 as u64);
+		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 1_u64);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
