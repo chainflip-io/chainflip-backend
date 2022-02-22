@@ -316,15 +316,18 @@ fn signature_is_inserted() {
 		);
 
 		// Check storage for the signature.
-		assert_eq!(
-			frame_support::storage::unhashed::get::<
-				cf_chains::eth::api::set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-			>(PendingClaims::<Test>::hashed_key_for(ALICE).as_slice())
-			.expect("there should be a pending claim at this point")
-			.sig_data
-			.get_signature(),
-			ETH_DUMMY_SIG
-		);
+		assert!(PendingClaims::<Test>::contains_key(ALICE));
+		let api_call = frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi>(
+			PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
+		)
+		.expect("there should be a pending claim at this point");
+
+		let claim = match api_call {
+			cf_chains::eth::api::EthereumApi::RegisterClaim(inner) => inner,
+			_ => panic!("Wrong api call."),
+		};
+
+		assert_eq!(claim.sig_data.get_signature(), ETH_DUMMY_SIG);
 	});
 }
 
