@@ -85,60 +85,96 @@ where
     }))
 }
 
+// return the block number, with an Option<Vec<Logs>>. None when there are no interesting logs
+
+struct BlockLogs {
+    pub block_number: U64,
+    pub logs: Option<Result<Vec<Log>>>,
+}
+
+async fn get_logs_for_block<EthBlockHeader, EthRpc>(
+    header: EthBlockHeader,
+    eth_rpc: EthRpc,
+    contract_address: H160,
+    logger: slog::Logger,
+) -> BlockLogs
+where
+    EthRpc: EthRpcApi + Clone + 'static,
+    EthBlockHeader: BlockHeaderable + Clone,
+{
+    let block_number = header.number().unwrap();
+    let mut contract_bloom = Bloom::default();
+    contract_bloom.accrue(Input::Raw(&contract_address.0));
+
+    // if we have logs for this block, fetch them.
+    if header
+        .clone()
+        .logs_bloom()
+        .unwrap()
+        .contains_bloom(&contract_bloom)
+    {
+        match eth_rpc
+            .get_logs(
+                FilterBuilder::default()
+                    .from_block(BlockNumber::Number(block_number))
+                    .to_block(BlockNumber::Number(block_number))
+                    .address(vec![contract_address])
+                    .build(),
+            )
+            .await
+        {
+            Ok(logs) => BlockLogs {
+                block_number,
+                logs: Some(Ok(logs)),
+            },
+            Err(err) => {
+                slog::error!(
+                    logger,
+                    "Failed to request ETH logs for block `{}`: {}",
+                    block_number,
+                    err,
+                );
+                // we expected there to be logs, but failed to fetch them
+                BlockLogs {
+                    block_number,
+                    logs: Some(Err(err)),
+                }
+            }
+        }
+    } else {
+        // we didn't expect there to be logs, so didn't fetch
+        BlockLogs {
+            block_number,
+            logs: None,
+        }
+    }
+}
+
+// This will return a stream of BlockLogs, it will return for every block
+// containing None if there are no logs for that block
 pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
     safe_eth_head_stream: SafeBlockHeaderStream,
     eth_rpc: EthRpc,
     contract_address: H160,
     logger: slog::Logger,
-) -> impl Stream<Item = Log>
+) -> impl Stream<Item = Result<BlockLogs>>
 where
-    SafeBlockHeaderStream: Stream<Item = EthBlockHeader>,
-    EthRpc: EthRpcApi + Clone,
+    SafeBlockHeaderStream: Stream<Item = Result<EthBlockHeader>>,
+    EthRpc: EthRpcApi + Clone + 'static,
     EthBlockHeader: BlockHeaderable + Clone,
 {
-    let my_stream = safe_eth_head_stream
-        .filter_map(move |header| {
-            let block_number = header.number().unwrap();
-            slog::debug!(logger, "Observing ETH block: `{}`", block_number);
-            let eth_rpc = eth_rpc.clone();
-            let logger = logger.clone();
-            async move {
-                let mut contract_bloom = Bloom::default();
-                contract_bloom.accrue(Input::Raw(&contract_address.0));
-
-                if header
-                    .clone()
-                    .logs_bloom()
-                    .unwrap()
-                    .contains_bloom(&contract_bloom)
-                {
-                    match eth_rpc
-                        .get_logs(
-                            FilterBuilder::default()
-                                .from_block(BlockNumber::Number(block_number))
-                                .to_block(BlockNumber::Number(block_number))
-                                .address(vec![contract_address])
-                                .build(),
-                        )
-                        .await
-                    {
-                        Ok(logs) => Some(stream::iter(logs)),
-                        Err(err) => {
-                            slog::error!(
-                                logger,
-                                "Failed to request ETH logs for block `{}`: {}",
-                                block_number,
-                                err,
-                            );
-                            None
-                        }
-                    }
-                } else {
-                    None
+    let my_stream = safe_eth_head_stream.then(move |header| {
+        let eth_rpc = eth_rpc.clone();
+        let logger = logger.clone();
+        async move {
+            match header {
+                Ok(header) => {
+                    Ok(get_logs_for_block(header, eth_rpc, contract_address, logger).await)
                 }
+                Err(e) => Err(e.into()),
             }
-        })
-        .flatten();
+        }
+    });
 
     Box::pin(my_stream)
 }
