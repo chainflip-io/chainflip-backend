@@ -152,6 +152,10 @@ fn test_broadcast_happy_path() {
 		// CFE logs the completed broadcast.
 		MockCfe::respond(Scenario::HappyPath);
 		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), BROADCAST_ID);
+
+		// Check if the storage was cleaned up successfully
+		assert!(PayloadToBroadcastIdLookup::<Test, Instance1>::get(H256::default()).is_none());
+		assert!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(BROADCAST_ID).is_none());
 	})
 }
 
