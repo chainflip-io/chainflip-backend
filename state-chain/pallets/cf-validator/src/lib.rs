@@ -226,7 +226,7 @@ pub mod pallet {
 							Self::deposit_event(Event::RotationAborted);
 							Self::update_rotation_status(RotationStatus::Idle);
 						},
-						_ => {},
+						_ => log::debug!(target: "cf-validator", "awaiting vault rotation"),
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
