@@ -8,6 +8,8 @@ use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
 
+use crate::eth::BlockHeaderable;
+
 use super::EthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
@@ -22,34 +24,35 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        unsafe_blocks: VecDeque<BlockHeader>,
+        unsafe_block_headers: VecDeque<BlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
-        unsafe_blocks: Default::default(),
+        unsafe_block_headers: Default::default(),
     };
+
     Box::pin(stream::unfold(init_data, move |mut state| async move {
-        let loop_state = loop {
+        loop {
             if let Some(header) = state.stream.next().await {
                 let header = header.unwrap();
                 let number = header.number.unwrap();
 
-                if let Some(last_unsafe_block_header) = state.unsafe_blocks.back() {
-                    let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
+                if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
+                    let last_unsafe_block_number = last_unsafe_block_header.number().unwrap();
                     assert!(number <= last_unsafe_block_number + 1);
                     if number <= last_unsafe_block_number {
                         // if we receive two of the same block number then we still need to drop the first
                         let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
 
                         (0..reorg_depth.as_u64()).for_each(|_| {
-                            state.unsafe_blocks.pop_back();
+                            state.unsafe_block_headers.pop_back();
                         });
                     }
                 }
 
-                state.unsafe_blocks.push_back(header);
+                state.unsafe_block_headers.push_back(header);
 
-                if let Some(header) = state.unsafe_blocks.front() {
+                if let Some(header) = state.unsafe_block_headers.front() {
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
@@ -58,7 +61,7 @@ where
                     {
                         break Some((
                             state
-                                .unsafe_blocks
+                                .unsafe_block_headers
                                 .pop_front()
                                 .expect("already put an item above"),
                             state,
@@ -73,24 +76,24 @@ where
                 // when the inner stream is consumed, we want to end the wrapping/safe stream
                 break None;
             }
-        };
-        loop_state
+        }
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
     safe_eth_head_stream: SafeBlockHeaderStream,
     eth_rpc: EthRpc,
     contract_address: H160,
     logger: slog::Logger,
 ) -> impl Stream<Item = Log>
 where
-    SafeBlockHeaderStream: Stream<Item = BlockHeader>,
+    SafeBlockHeaderStream: Stream<Item = EthBlockHeader>,
     EthRpc: EthRpcApi + Clone,
+    EthBlockHeader: BlockHeaderable + Clone,
 {
     let my_stream = safe_eth_head_stream
         .filter_map(move |header| {
-            let block_number = header.number.unwrap();
+            let block_number = header.number().unwrap();
             slog::debug!(logger, "Observing ETH block: `{}`", block_number);
             let eth_rpc = eth_rpc.clone();
             let logger = logger.clone();
@@ -98,7 +101,12 @@ where
                 let mut contract_bloom = Bloom::default();
                 contract_bloom.accrue(Input::Raw(&contract_address.0));
 
-                if header.clone().logs_bloom.contains_bloom(&contract_bloom) {
+                if header
+                    .clone()
+                    .logs_bloom()
+                    .unwrap()
+                    .contains_bloom(&contract_bloom)
+                {
                     match eth_rpc
                         .get_logs(
                             FilterBuilder::default()
@@ -131,13 +139,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use sp_core::H256;
 
     use super::*;
 
-    fn block_header(hash: u8, block_number: u64) -> Result<BlockHeader, web3::Error> {
+    pub fn block_header(hash: u8, block_number: u64) -> Result<BlockHeader, web3::Error> {
         let block_header = BlockHeader {
             // fields that matter
             hash: Some(H256::from([hash; 32])),
@@ -199,7 +207,7 @@ mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -215,8 +223,8 @@ mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await, Some(first_block.unwrap()));
-        assert_eq!(stream.next().await, Some(second_block.unwrap()));
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -232,8 +240,8 @@ mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await, Some(first_block.clone().unwrap()));
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert_eq!(stream.next().await.unwrap(), first_block.clone().unwrap());
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -251,8 +259,8 @@ mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
-        assert_eq!(stream.next().await, Some(second_block_prime.unwrap()));
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(stream.next().await.unwrap(), second_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -272,7 +280,7 @@ mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 2);
 
-        assert_eq!(stream.next().await, Some(first_block_prime.unwrap()));
+        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
         assert!(stream.next().await.is_none());
     }
 }
