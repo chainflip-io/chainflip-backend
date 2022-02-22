@@ -87,12 +87,13 @@ where
 
 // return the block number, with an Option<Vec<Logs>>. None when there are no interesting logs
 
-struct BlockLogs {
+pub struct BlockLogs {
     pub block_number: U64,
     pub logs: Option<Result<Vec<Log>>>,
 }
 
-async fn get_logs_for_block<EthBlockHeader, EthRpc>(
+// probably move this function to a different file
+pub async fn get_logs_for_block<EthBlockHeader, EthRpc>(
     header: EthBlockHeader,
     eth_rpc: EthRpc,
     contract_address: H160,
@@ -151,8 +152,11 @@ where
 }
 
 // This will return a stream of BlockLogs, it will return for every block
-// containing None if there are no logs for that block
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
+// If the header is error, then it returns an error
+// If the bloom says nothing interesting is in the block, logs = None
+// If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
+// If the bloom is interesting and we fetch the logs. logs = Some(Ok)
+pub async fn block_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
     safe_eth_head_stream: SafeBlockHeaderStream,
     eth_rpc: EthRpc,
     contract_address: H160,
