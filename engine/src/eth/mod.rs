@@ -62,18 +62,12 @@ use event_common::EventWithCommon;
 use async_trait::async_trait;
 
 pub trait BlockHeaderable {
-    fn hash(&self) -> Option<H256>;
-
     fn logs_bloom(&self) -> Option<H2048>;
 
     fn number(&self) -> Option<U64>;
 }
 
 impl BlockHeaderable for web3::types::BlockHeader {
-    fn hash(&self) -> Option<H256> {
-        self.hash
-    }
-
     fn logs_bloom(&self) -> Option<H2048> {
         Some(self.logs_bloom)
     }
@@ -84,10 +78,6 @@ impl BlockHeaderable for web3::types::BlockHeader {
 }
 
 impl<TX> BlockHeaderable for web3::types::Block<TX> {
-    fn hash(&self) -> Option<H256> {
-        self.hash
-    }
-
     fn logs_bloom(&self) -> Option<H2048> {
         self.logs_bloom
     }
