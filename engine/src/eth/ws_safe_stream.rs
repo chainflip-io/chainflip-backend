@@ -12,10 +12,12 @@ use crate::eth::BlockHeaderable;
 
 use super::EthRpcApi;
 
+use anyhow::Result;
+
 pub fn safe_ws_head_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = BlockHeader>
+) -> impl Stream<Item = Result<BlockHeader>>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -34,7 +36,10 @@ where
     Box::pin(stream::unfold(init_data, move |mut state| async move {
         loop {
             if let Some(header) = state.stream.next().await {
-                let header = header.unwrap();
+                let header = match header {
+                    Ok(header) => header,
+                    Err(e) => break Some((Err(e.into()), state)),
+                };
                 let number = header.number.unwrap();
 
                 if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
@@ -60,10 +65,10 @@ where
                         <= number
                     {
                         break Some((
-                            state
+                            Ok(state
                                 .unsafe_block_headers
                                 .pop_front()
-                                .expect("already put an item above"),
+                                .expect("already put an item above")),
                             state,
                         ));
                     } else {
@@ -207,7 +212,7 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
+        assert_eq!(stream.next().await.unwrap().unwrap(), first_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -223,8 +228,8 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
-        assert_eq!(stream.next().await.unwrap(), second_block.unwrap());
+        assert_eq!(stream.next().await.unwrap().unwrap(), first_block.unwrap());
+        assert_eq!(stream.next().await.unwrap().unwrap(), second_block.unwrap());
         assert!(stream.next().await.is_none());
     }
 
@@ -240,8 +245,14 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.clone().unwrap());
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block.clone().unwrap()
+        );
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block_prime.unwrap()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -259,8 +270,14 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
-        assert_eq!(stream.next().await.unwrap(), second_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block_prime.unwrap()
+        );
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            second_block_prime.unwrap()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -280,7 +297,10 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 2);
 
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block_prime.unwrap()
+        );
         assert!(stream.next().await.is_none());
     }
 }
