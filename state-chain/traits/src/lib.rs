@@ -201,7 +201,7 @@ impl Default for KeygenStatus {
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
-	type RotationError: core::fmt::Debug;
+	type RotationError: Into<DispatchError>;
 
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
@@ -214,9 +214,16 @@ pub trait VaultRotator {
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
 	/// Insufficient number of bidders
-	MinValidatorSize,
+	NotEnoughBidders,
 }
 
+impl Into<DispatchError> for AuctionError {
+	fn into(self) -> DispatchError {
+		match self {
+			AuctionError::NotEnoughBidders => DispatchError::Other("NotEnoughBidders"),
+		}
+	}
+}
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.

@@ -1,3 +1,5 @@
+use sp_runtime::DispatchError;
+
 use crate::{KeygenStatus, VaultRotator};
 use std::cell::RefCell;
 
@@ -11,6 +13,11 @@ pub struct Mock;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct MockError;
+impl Into<DispatchError> for MockError {
+    fn into(self) -> DispatchError {
+        DispatchError::Other("mock error")
+    }
+}
 
 // Helper function to clear the confirmation result
 pub fn clear_confirmation() {

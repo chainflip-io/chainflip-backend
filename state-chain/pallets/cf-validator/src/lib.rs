@@ -209,8 +209,9 @@ pub mod pallet {
 							// would fail is if we have no validators, which is already checked by
 							// the auction pallet, of if there is already a rotation in progress
 							// which isn't possible.
-							Err(e) =>
-								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e),
+							Err(e) => {
+								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+							},
 						}
 					},
 					Err(e) =>

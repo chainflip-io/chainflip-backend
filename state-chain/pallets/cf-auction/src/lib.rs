@@ -228,7 +228,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 				number_of_bidders,
 				min_number_of_validators
 			);
-			return Err(AuctionError::MinValidatorSize)
+			return Err(AuctionError::NotEnoughBidders)
 		};
 
 		// We sort by bid and cut the size of the set based on auction size range

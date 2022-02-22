@@ -102,7 +102,7 @@ fn should_retry_rotation_until_success() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
-		MockAuctioneer::set_run_behaviour(Err(AuctionError::MinValidatorSize));
+		MockAuctioneer::set_run_behaviour(Err(AuctionError::NotEnoughBidders));
 		run_to_block(epoch);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
