@@ -436,57 +436,53 @@ fn no_validators_available() {
 	});
 }
 
-mod signature_accepted {
-	use super::*;
-	// In this scenario the transmission of the transaction is not able to get through. We try
-	// several times but without success. The system remains in this state until CFE witness the
-	// successful emit of the SignatureAccepted event on the target chain. The broadcast of the
-	// transaction gest finalized with this.
-	#[test]
-	fn missing_transaction_transmission() {
-		new_test_ext().execute_with(|| {
-			// Initiate broadcast
-			assert_ok!(MockBroadcast::start_broadcast(
-				Origin::root(),
-				H256::default(),
-				MockUnsignedTx
-			));
-			assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_some());
-			assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 1 as u64);
+// In this scenario the transmission of the transaction is not able to get through. We try
+// several times but without success. The system remains in this state until CFE witness the
+// successful emit of the SignatureAccepted event on the target chain. The broadcast of the
+// transaction gest finalized with this.
+#[test]
+fn missing_transaction_transmission() {
+	new_test_ext().execute_with(|| {
+		// Initiate broadcast
+		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_some());
+		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 1 as u64);
 
-			// CFE responds with a signed transaction. This moves us to the broadcast stage.
-			MockCfe::respond(Scenario::HappyPath);
-			assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_none());
-			assert!(AwaitingTransmission::<Test, Instance1>::get(1).is_some());
-			assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 1);
+		// CFE responds with a signed transaction. This moves us to the broadcast stage.
+		MockCfe::respond(Scenario::HappyPath);
+		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(1).is_some());
+		assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 1);
 
-			// First retry
-			MockCfe::respond(Scenario::TransmissionFailure(
-				TransmissionFailure::TransactionRejected,
-			));
-			MockBroadcast::on_initialize(0_u64);
+		// First retry
+		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionRejected));
+		MockBroadcast::on_initialize(0_u64);
 
-			assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 2_u64);
-			assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 2);
-			MockBroadcast::on_initialize(1_u64);
+		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 2_u64);
+		assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 2);
+		MockBroadcast::on_initialize(1_u64);
 
-			// Resign the transaction and move it again to the transmission stage
-			MockCfe::respond(Scenario::HappyPath);
-			MockBroadcast::on_initialize(2_u64);
+		// Resign the transaction and move it again to the transmission stage
+		MockCfe::respond(Scenario::HappyPath);
+		MockBroadcast::on_initialize(2_u64);
 
-			let current_attempt_id = BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap();
-			// Expect the transaction back on the transmission state
-			assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_some());
+		let current_attempt_id = BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap();
+		// Expect the transaction back on the transmission state
+		assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_some());
 
-			// Finalize the broadcast by witnessing the external SignatureAccepted event from the
-			// target chain
-			MockCfe::respond(Scenario::SignatureAccepted);
-			MockBroadcast::on_initialize(3_u64);
-			MockCfe::respond(Scenario::HappyPath);
+		// Finalize the broadcast by witnessing the external SignatureAccepted event from the
+		// target chain
+		MockCfe::respond(Scenario::SignatureAccepted);
+		// Check if the event was emitted
+		assert_eq!(
+			System::events().pop().expect("an event").event,
+			Event::MockBroadcast(crate::Event::BroadcastComplete(1))
+		);
+		MockBroadcast::on_initialize(3_u64);
+		MockCfe::respond(Scenario::HappyPath);
 
-			// Proof that the broadcast was successfully finalized
-			assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_none());
-			assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), 1);
-		});
-	}
+		// Proof that the broadcast was successfully finalized
+		assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_none());
+		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), 1);
+	});
 }
