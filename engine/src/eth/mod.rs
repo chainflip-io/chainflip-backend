@@ -36,7 +36,7 @@ use crate::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
         WEB3_REQUEST_TIMEOUT,
     },
-    eth::ws_safe_stream::{filtered_log_stream_by_contract, safe_eth_log_header_stream},
+    eth::ws_safe_stream::filtered_log_stream_by_contract,
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -557,7 +557,7 @@ pub trait EthObserver {
         Pin<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>,
     >
     where
-        BlockHeaderStream: Stream<Item = EthBlockHeader> + 'static + Send,
+        BlockHeaderStream: Stream<Item = Result<EthBlockHeader>> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
         EthBlockHeader: BlockHeaderable + Send + Sync + Clone + 'static,
     {
@@ -567,6 +567,7 @@ pub trait EthObserver {
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = current_best_safe_block_header
+                .context("Could not get first safe ETH block header")?
                 .number()
                 .expect("Should have block number");
             // we only want to start observing once we reach the from_block specified
