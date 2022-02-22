@@ -231,10 +231,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			return Err(AuctionError::NotEnoughBidders)
 		};
 
-		// We sort by bid and cut the size of the set based on auction size range
-		// If we have a valid set, within the size range, we store this set as the
-		// 'winners' of this auction, change the state to 'Completed' and store the
-		// minimum bid needed to be included in the set.
 		bids.sort_unstable_by_key(|k| k.1);
 		bids.reverse();
 
