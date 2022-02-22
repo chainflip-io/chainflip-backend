@@ -89,8 +89,9 @@ std = [
   'sp-std/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
+  'frame-benchmarking',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime'] 
