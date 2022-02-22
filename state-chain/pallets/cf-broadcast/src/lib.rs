@@ -209,14 +209,14 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Lookup table between BroadcastId -> Hash
+	/// Lookup table between Payload -> Broadcast
 	#[pallet::storage]
-	pub type BroadcastIdHashLookup<T: Config<I>, I: 'static = ()> =
+	pub type PayloadToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, PayloadFor<T, I>, BroadcastId, OptionQuery>;
 
 	/// Lookup table between BroadcastId -> AttemptId
 	#[pallet::storage]
-	pub type BroadcastIdAttemptIdLookup<T: Config<I>, I: 'static = ()> =
+	pub type BroadcastIdToAttemptIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, BroadcastAttemptId, OptionQuery>;
 
 	/// Live transaction transmission requests.
@@ -331,7 +331,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::start_broadcast())]
 		pub fn start_broadcast(
 			origin: OriginFor<T>,
-			msg_hash: PayloadFor<T, I>,
+			payload: PayloadFor<T, I>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -341,7 +341,7 @@ pub mod pallet {
 				*id
 			});
 
-			BroadcastIdHashLookup::<T, I>::insert(msg_hash, broadcast_id);
+			PayloadToBroadcastIdLookup::<T, I>::insert(payload, broadcast_id);
 
 			Self::start_broadcast_attempt(broadcast_id, 0, unsigned_tx);
 
@@ -439,6 +439,9 @@ pub mod pallet {
 				AwaitingTransmission::<T, I>::take(attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
+			// Cleanup lookup storage
+			Self::remove_lookup_storage(broadcast_id);
+
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
 
 			Ok(().into())
@@ -495,11 +498,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
-			msg_hash: PayloadFor<T, I>,
+			payload: PayloadFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
-			if let Some(broadcast_id) = BroadcastIdHashLookup::<T, I>::take(msg_hash) {
-				match BroadcastIdAttemptIdLookup::<T, I>::take(broadcast_id) {
+			if let Some(broadcast_id) = PayloadToBroadcastIdLookup::<T, I>::take(payload) {
+				match BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id) {
 					Some(attempt_id)
 						if AwaitingTransmission::<T, I>::take(attempt_id).is_some() =>
 						Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id)),
@@ -512,6 +515,22 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	// TODO: remove this function when we remove the transmission_success extrinsic
+	fn remove_lookup_storage(broadcast_id: BroadcastId) {
+		// Remove the BroadcastId lookup
+		BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id);
+		// Try to figure out the payload by the broadcast_id
+		if let Some(payload) = PayloadToBroadcastIdLookup::<T, I>::iter()
+			.filter(|payload_to_broadcast| payload_to_broadcast.1 == broadcast_id)
+			.map(|payload_to_broadcast| payload_to_broadcast.0)
+			.collect::<Vec<PayloadFor<T, I>>>()
+			.pop()
+		{
+			// Remove the payload lookup
+			PayloadToBroadcastIdLookup::<T, I>::take(payload);
+		}
+	}
+
 	fn start_broadcast_attempt(
 		broadcast_id: BroadcastId,
 		attempt_count: AttemptCount,
@@ -524,7 +543,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Update the lookup table
-		BroadcastIdAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
+		BroadcastIdToAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
 
 		// Seed based on the input data of the extrinsic
 		let seed = (attempt_id, unsigned_tx.clone()).encode();

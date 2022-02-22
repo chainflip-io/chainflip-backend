@@ -1,7 +1,8 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId,
-	BroadcastAttemptIdCounter, BroadcastId, BroadcastIdAttemptIdLookup, BroadcastRetryQueue,
-	BroadcastStage, Error, Event as BroadcastEvent, Instance1, TransmissionFailure,
+	BroadcastAttemptIdCounter, BroadcastId, BroadcastIdToAttemptIdLookup, BroadcastRetryQueue,
+	BroadcastStage, Error, Event as BroadcastEvent, Instance1, PayloadToBroadcastIdLookup,
+	TransmissionFailure,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
@@ -452,21 +453,21 @@ fn missing_transaction_transmission() {
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_none());
 		assert!(AwaitingTransmission::<Test, Instance1>::get(1).is_some());
-		assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 1);
+		assert_eq!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 1);
 
 		// First retry
 		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionRejected));
 		MockBroadcast::on_initialize(0_u64);
 
 		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 2_u64);
-		assert_eq!(BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 2);
+		assert_eq!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(1).unwrap(), 2);
 		MockBroadcast::on_initialize(1_u64);
 
 		// Resign the transaction and move it again to the transmission stage
 		MockCfe::respond(Scenario::HappyPath);
 		MockBroadcast::on_initialize(2_u64);
 
-		let current_attempt_id = BroadcastIdAttemptIdLookup::<Test, Instance1>::get(1).unwrap();
+		let current_attempt_id = BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(1).unwrap();
 		// Expect the transaction back on the transmission state
 		assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_some());
 
@@ -484,5 +485,9 @@ fn missing_transaction_transmission() {
 		// Proof that the broadcast was successfully finalized
 		assert!(AwaitingTransmission::<Test, Instance1>::get(current_attempt_id).is_none());
 		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), 1);
+
+		// Check if the storage was cleaned up successfully
+		assert!(PayloadToBroadcastIdLookup::<Test, Instance1>::get(H256::default()).is_none());
+		assert!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(1).is_none());
 	});
 }
