@@ -209,12 +209,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Broadcast lookup
+	/// Lookup table between BroadcastId -> Hash
 	#[pallet::storage]
 	pub type BroadcastIdHashLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, PayloadFor<T, I>, BroadcastId, OptionQuery>;
 
-	/// Broadcast lookup
+	/// Lookup table between BroadcastId -> AttemptId
 	#[pallet::storage]
 	pub type BroadcastIdAttemptIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, BroadcastAttemptId, OptionQuery>;
@@ -487,7 +487,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that a signature was accepted on the target chain
+		/// Nodes have witnessed that a signature was accepted on the target chain.
+		///
+		/// ## Events
+		///
+		/// - [BroadcastComplete](Event::BroadcastComplete)
 		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
