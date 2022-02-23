@@ -26,3 +26,9 @@ pub const WEB3_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Duration between each poll of the web3 client, to check if we are synced to the head of the chain
 pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
+
+/// Number of blocks one of the protocols needs to fall behind before we sound the alarms
+pub const ETH_FALLING_BEHIND_MARGIN_BLOCKS: u64 = 10;
+
+/// Number of blocks before logging that a stream is behind again
+pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;

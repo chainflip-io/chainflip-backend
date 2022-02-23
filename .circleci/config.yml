@@ -384,6 +384,10 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
+          groupadd ci
+          useradd -g ci ci
+      - run: |
+          su - ci
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
