@@ -317,7 +317,7 @@ pub mod pallet {
 							));
 							Self::on_keygen_failure(
 								keygen_ceremony_id,
-								response_status.remaining_candidates.clone(),
+								response_status.remaining_candidates,
 							);
 						}
 					},

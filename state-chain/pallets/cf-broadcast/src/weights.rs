@@ -60,6 +60,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		(1_000_000 as Weight)
 	}
 	fn on_signature_ready() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
 }
@@ -87,6 +88,7 @@ impl WeightInfo for () {
 		(1_000_000 as Weight)
 	}
 	fn on_signature_ready() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
 }

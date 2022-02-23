@@ -447,7 +447,7 @@ pub mod pallet {
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
 			api_call: <T as Config<I>>::ApiCall,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureThresholdSigned::ensure_origin(origin.clone())?;
+			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let sig =
 				T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
