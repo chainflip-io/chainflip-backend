@@ -1,6 +1,5 @@
 use crate as pallet_cf_witness_api;
 use codec::{Decode, Encode};
-use std::time::Duration;
 
 use cf_chains::{
 	eth::{register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey},
@@ -34,20 +33,18 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Pallet, Call, Event<T>, Config},
+		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage, Origin<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Event<T>, Storage},
 	}
 );
 
-impl_mock_witnesser_for_account_and_call_types!(u64, Call);
+impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const MinClaimTTL: Duration = Duration::from_millis(100);
-	pub const ClaimTTL: Duration = Duration::from_millis(1000);
 }
 
 impl system::Config for Test {
@@ -159,7 +156,6 @@ impl pallet_cf_staking::Config for Test {
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
-	type ClaimTTL = ClaimTTL;
 	type StakerId = AccountIdU64;
 	type NonceProvider = Self;
 	type SigningContext = MockSigningContext;
@@ -247,8 +243,9 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
 
-impl pallet_cf_vaults::Config for Test {
+impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
+	type Chain = Ethereum;
 	type RotationHandler = Self;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;

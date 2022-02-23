@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use cf_chains::ChainId;
+use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -24,7 +24,7 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Index, SignedBlock};
+use state_chain_runtime::{AccountId, Index, PalletInstanceAlias, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
@@ -148,6 +148,7 @@ type SystemRpcClient =
 pub type EventInfo = (
     Phase,
     state_chain_runtime::Event,
+    // These are the event topics
     Vec<state_chain_runtime::Hash>,
 );
 
@@ -227,7 +228,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("latest_block_hash RPC API failed")?
-            .ok_or(anyhow::Error::msg("Latest block hash could not be fetched"))?
+            .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
             .hash())
     }
 
@@ -284,7 +285,6 @@ impl StateChainRpcApi for StateChainRpcClient {
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    account_storage_key: StorageKey,
     events_storage_key: StorageKey,
     pub heartbeat_block_interval: u32,
     nonce: AtomicU32,
@@ -299,21 +299,34 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     state_chain_rpc_client: RpcClient,
 }
 
+// use this events key, to save creating chain metadata in the tests
+#[cfg(test)]
+pub fn mock_events_key() -> StorageKey {
+    StorageKey(vec![2; 32])
+}
+
+#[cfg(test)]
+pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
+
+#[cfg(test)]
+pub fn mock_account_storage_key() -> StorageKey {
+    StorageKey(
+        frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&AccountId32::new(
+            OUR_ACCOUNT_ID_BYTES,
+        )),
+    )
+}
+
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    pub fn create_test_sc_client(rpc_client: RpcClient, our_account_id: AccountId32) -> Self {
+    pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
         use substrate_subxt::PairSigner;
 
         Self {
             heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(
-                frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-                    &our_account_id,
-                ),
-            ),
-            events_storage_key: StorageKey(Vec::default()),
+            events_storage_key: mock_events_key(),
             nonce: AtomicU32::new(0),
-            our_account_id,
+            our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
             state_chain_rpc_client: rpc_client,
             runtime_version: RwLock::new(RuntimeVersion::default()),
             genesis_hash: Default::default(),
@@ -326,8 +339,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -354,7 +367,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 .await
             {
                 Ok(tx_hash) => {
-                    slog::trace!(
+                    slog::info!(
                         logger,
                         "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
@@ -459,8 +472,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     /// Submit an unsigned extrinsic.
     pub async fn submit_unsigned_extrinsic<Extrinsic>(
         &self,
-        logger: &slog::Logger,
         extrinsic: Extrinsic,
+        logger: &slog::Logger,
     ) -> Result<H256>
     where
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
@@ -477,17 +490,17 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
-                slog::trace!(
+                slog::info!(
                     logger,
                     "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
                     tx_hash
                 );
-                return Ok(tx_hash);
+                Ok(tx_hash)
             }
             Err(err) => {
                 slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
-                return Err(err);
+                Err(err)
             }
         }
     }
@@ -624,21 +637,23 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     // TODO: work out how to get all vaults with a single query... not sure if possible
-    pub async fn get_vault(
+    pub async fn get_vault<C>(
         &self,
         block_hash: state_chain_runtime::Hash,
         epoch_index: EpochIndex,
-        chain_id: ChainId,
-    ) -> Result<Vault> {
+    ) -> Result<Vault<C>>
+    where
+        C: Chain + ChainCrypto + Debug + Clone + 'static + PalletInstanceAlias,
+        state_chain_runtime::Runtime:
+            pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
+    {
         let vaults = self
-            .get_from_storage_with_key::<Vault>(
+            .get_from_storage_with_key::<Vault<C>>(
                 block_hash,
-                StorageKey(
-                    pallet_cf_vaults::Vaults::<state_chain_runtime::Runtime>::hashed_key_for(
-                        &epoch_index,
-                        &chain_id,
-                    ),
-                ),
+                StorageKey(pallet_cf_vaults::Vaults::<
+                    state_chain_runtime::Runtime,
+                    <C as PalletInstanceAlias>::Instance,
+                >::hashed_key_for(&epoch_index)),
             )
             .await?;
 
@@ -686,7 +701,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let account_info = self
             .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
-                self.account_storage_key.clone(),
+                StorageKey(
+                    frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
+                        &self.our_account_id,
+                    ),
+                ),
             )
             .await?;
 
@@ -760,19 +779,11 @@ pub async fn connect_to_state_chain(
         frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
     );
 
-    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-        state_chain_settings.ws_endpoint.as_str(),
-    )?)
-    .await
-    .map_err(rpc_error_into_anyhow_error)
-    .context("Failed to establish rpc connection to substrate node")?;
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(state_chain_settings).await?;
 
-    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
-    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
-    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-
-    let mut block_header_stream = chain_rpc_client
+    let mut block_header_stream = state_chain_rpc_client
+        .chain_rpc_client
         .subscribe_finalized_heads()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
@@ -789,11 +800,12 @@ pub async fn connect_to_state_chain(
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = chain_rpc_client
+        let finalised_head_hash = state_chain_rpc_client
+            .chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_head_number = chain_rpc_client
+        let finalised_head_number = state_chain_rpc_client.chain_rpc_client
             .header(Some(finalised_head_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?
@@ -836,7 +848,7 @@ pub async fn connect_to_state_chain(
         }
 
         let account_nonce = match get_account_nonce(
-            &state_rpc_client,
+            &state_chain_rpc_client.state_rpc_client,
             &account_storage_key,
             latest_block_hash,
         )
@@ -847,7 +859,7 @@ pub async fn connect_to_state_chain(
                 if wait_for_staking {
                     loop {
                         if let Some(nonce) = get_account_nonce(
-                            &state_rpc_client,
+                            &state_chain_rpc_client.state_rpc_client,
                             &account_storage_key,
                             latest_block_hash,
                         )
@@ -885,20 +897,14 @@ pub async fn connect_to_state_chain(
     );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
+        &mut &state_chain_rpc_client
+            .state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?;
-
-    let state_chain_rpc_client = StateChainRpcClient {
-        system_rpc_client,
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client,
-    };
 
     Ok((
         latest_block_hash,
@@ -921,7 +927,6 @@ pub async fn connect_to_state_chain(
             signer: signer.clone(),
             state_chain_rpc_client,
             our_account_id,
-            account_storage_key,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
             heartbeat_block_interval: metadata
@@ -935,6 +940,30 @@ pub async fn connect_to_state_chain(
                 .expect("Could not decode HeartbeatBlockInterval to u32"),
         }),
     ))
+}
+
+#[allow(clippy::eval_order_dependence)]
+pub async fn connect_to_state_chain_without_signer(
+    state_chain_settings: &settings::StateChain,
+) -> Result<StateChainRpcClient> {
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(rpc_error_into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
+
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.into();
+
+    Ok(StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    })
 }
 
 #[cfg(test)]
@@ -989,7 +1018,6 @@ mod tests {
 
     use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;
-    use substrate_subxt::PairSigner;
 
     use crate::{
         logging::{self, test_utils::new_test_logger},
@@ -1048,19 +1076,10 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1070,7 +1089,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1093,17 +1112,8 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1112,7 +1122,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1138,17 +1148,8 @@ mod tests {
                 }))
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1157,7 +1158,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call)
+            .submit_signed_extrinsic(force_rotation_call, &logger)
             .await
             .unwrap_err();
 
@@ -1210,17 +1211,8 @@ mod tests {
                 })
             });
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1230,7 +1222,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call)
+                .submit_signed_extrinsic(force_rotation_call, &logger)
                 .await
         );
 
@@ -1255,17 +1247,8 @@ mod tests {
             .times(1)
             .returning(move |_| Err(RpcError::Timeout));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1274,7 +1257,7 @@ mod tests {
             .into();
 
         state_chain_client
-            .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+            .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
             .await
             .unwrap_err();
 
@@ -1312,19 +1295,10 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Ok(tx_hash.clone()));
+            .returning(move |_| Ok(tx_hash));
 
-        let state_chain_client = StateChainClient {
-            heartbeat_block_interval: 20,
-            account_storage_key: StorageKey(Vec::default()),
-            events_storage_key: StorageKey(Vec::default()),
-            nonce: AtomicU32::new(0),
-            our_account_id: AccountId32::new([0; 32]),
-            state_chain_rpc_client: mock_state_chain_rpc_client,
-            runtime_version: RwLock::new(RuntimeVersion::default()),
-            genesis_hash: Default::default(),
-            signer: PairSigner::new(Pair::generate().0),
-        };
+        let state_chain_client =
+            StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
             pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
@@ -1334,7 +1308,7 @@ mod tests {
 
         assert_ok!(
             state_chain_client
-                .submit_signed_extrinsic(&logger, force_rotation_call.clone())
+                .submit_signed_extrinsic(force_rotation_call.clone(), &logger)
                 .await
         );
 

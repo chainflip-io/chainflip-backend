@@ -110,27 +110,27 @@ impl EthObserver for StakeManager {
                 staker: _,
                 return_addr,
             } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_staked(
                             account_id,
                             amount,
                             return_addr.0,
                             event.tx_hash.into(),
                         ),
+                        logger,
                     )
                     .await;
             }
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let _ = state_chain_client
+                let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        logger,
                         pallet_cf_witnesser_api::Call::witness_claimed(
                             account_id,
                             amount,
                             event.tx_hash.to_fixed_bytes(),
                         ),
+                        logger,
                     )
                     .await;
             }
@@ -140,7 +140,7 @@ impl EthObserver for StakeManager {
         }
     }
 
-    fn get_deployed_address(&self) -> H160 {
+    fn get_contract_address(&self) -> H160 {
         self.deployed_address
     }
 

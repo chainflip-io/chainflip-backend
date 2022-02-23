@@ -32,6 +32,8 @@ httparse = "1.4.1"
 itertools = "0.10"
 structopt = "0.3.23"
 chrono = "0.4.19"
+# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
+rand_legacy = { package = "rand", version = "0.6" }
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
@@ -42,7 +44,6 @@ jsonrpc-ws-server = "18.0.0"
 websocket = "0.24"
 ethbloom = "0.11.1"
 dyn-clone = "1.0.4"
-# kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.14.0"
 lazy_static = "1.4"
 num = "0.4.0"
@@ -65,6 +66,8 @@ web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 zeroize = "1.4.3"
 libp2p = "0.39.1"
 generic-array= "0.14"
+public-ip = "0.2.2"
+lazy_format = "1.10.0"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -83,6 +86,15 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
+
+[dependencies.rocksdb]
+version = "0.17.0"
+# Disabling of default features, and using lz4 compression is primarily to avoid linker issues
+# resulting from the default compression using libs that conflict with the system libs
+# https://github.com/rust-rocksdb/rust-rocksdb/pull/555
+default-features = false
+features = ["lz4"]
+
 
 # substrate deps
 [dependencies.substrate-subxt]
@@ -133,7 +145,7 @@ version = "0.9"
 env_logger = "0.9.0"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
-mockall = "0.10.2"
+mockall = "0.11.0"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"

@@ -16,6 +16,8 @@ cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
 pallet-cf-online = { path = '../cf-online', default-features = false }
 
+log = { version = '0.4.14', default-features = false }
+
 # Parity deps
 [dependencies.codec]
 default-features = false

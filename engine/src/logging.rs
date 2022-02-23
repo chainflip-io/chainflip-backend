@@ -11,10 +11,18 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
+// ==== Logging Eth Observer constants ====
+pub const ETH_HTTP_STREAM_RETURNED: &str = "eth-observer-http";
+pub const ETH_WS_STREAM_RETURNED: &str = "eth-observer-ws";
+pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
+pub const SAFE_PROTOCOL_STREAM_JUMP_BACK: &str = "eth-protocol-stream-jump-back";
+
 // ==== Logging Trace/Debug Tag constants ====
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 
 pub mod utils {
+    /// Async slog channel size
+    const ASYNC_SLOG_CHANNEL_SIZE: usize = 1024;
 
     use super::COMPONENT_KEY;
     const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
@@ -74,6 +82,7 @@ pub mod utils {
             Ok(())
         }
     }
+
     pub struct PrintlnDrainVerbose;
 
     impl Drain for PrintlnDrainVerbose {
@@ -122,11 +131,14 @@ pub mod utils {
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// ```sh
-    /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
+    /// {"msg":"...","level":"trace","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn new_json_logger() -> slog::Logger {
         slog::Logger::root(
-            slog_async::Async::new(new_json_drain()).build().fuse(),
+            slog_async::Async::new(new_json_drain())
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
             o!(),
         )
     }
@@ -143,7 +155,13 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
-        slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
+        slog::Logger::root(
+            slog_async::Async::new(drain)
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
+            o!(),
+        )
     }
 
     /// Creates a custom json drain that includes the tag as a key
@@ -221,17 +239,12 @@ pub mod test_utils {
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
-    #[derive(Clone)]
+    #[derive(Default, Clone)]
     pub struct TagCache {
         log: Arc<Mutex<Vec<String>>>,
     }
 
     impl TagCache {
-        pub fn new() -> Self {
-            let log = Arc::new(Mutex::new(vec![]));
-            Self { log }
-        }
-
         /// returns true if the given tag was found in the log
         pub fn contains_tag(&self, tag: &str) -> bool {
             self.get_tag_count(tag) > 0
@@ -247,9 +260,9 @@ pub mod test_utils {
                 .count()
         }
 
-        /// clear the tag cache
+        /// Just start again
         pub fn clear(&mut self) {
-            self.log.lock().expect("Should be able to get lock").clear();
+            *self.log.lock().unwrap() = Vec::new();
         }
     }
 
@@ -269,7 +282,7 @@ pub mod test_utils {
     /// Prints an easy to read log and the list of key/values.
     /// Also creates a tag cache that collects all tags so you can later confirm a log was triggered.
     pub fn new_test_logger_with_tag_cache() -> (slog::Logger, TagCache) {
-        let d1 = TagCache::new();
+        let d1 = TagCache::default();
         let d2 = Fuse(PrintlnDrainVerbose);
         (
             slog::Logger::root(slog::Duplicate::new(d1.clone(), d2).fuse(), o!()),
@@ -284,7 +297,7 @@ pub mod test_utils {
         tag_whitelist: Vec<String>,
         tag_blacklist: Vec<String>,
     ) -> (slog::Logger, TagCache) {
-        let tc = TagCache::new();
+        let tc = TagCache::default();
         let tag_whitelist = Arc::new(tag_whitelist.into_iter().collect::<HashSet<_>>());
         let tag_blacklist = Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>());
 
@@ -320,7 +333,7 @@ mod tests {
     #[test]
     fn test_logging_tags() {
         // Create a logger and tag cache
-        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
         let logger2 = logger.clone();
 
         // Print a bunch of stuff with tags
@@ -333,10 +346,6 @@ mod tests {
         assert_eq!(tag_cache.get_tag_count("E1234"), 2);
         assert!(tag_cache.contains_tag("2222"));
         assert!(!tag_cache.contains_tag("not_tagged"));
-
-        // Check that clearing the cache works
-        tag_cache.clear();
-        assert!(!tag_cache.contains_tag("E1234"));
     }
 
     #[test]

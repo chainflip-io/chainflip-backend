@@ -13,22 +13,13 @@ use state_chain_runtime::AccountId;
 
 use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
 
-#[derive(Clone)]
-pub struct StateAuthorised<CeremonyData, CeremonyResult>
-where
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
-{
+pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
     pub result_sender: MultisigOutcomeSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
-#[derive(Clone)]
-pub struct StateRunner<CeremonyData, CeremonyResult>
-where
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
-{
-    logger: slog::Logger,
+pub struct StateRunner<CeremonyData, CeremonyResult> {
     ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
@@ -36,17 +27,17 @@ where
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
     /// Time point at which the current ceremony is considered expired and gets aborted
     should_expire_at: std::time::Instant,
+    logger: slog::Logger,
 }
 
 impl<CeremonyData, CeremonyResult> StateRunner<CeremonyData, CeremonyResult>
 where
     CeremonyData: Display,
-    Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>: Clone,
 {
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(logger: &slog::Logger, ceremony_id: CeremonyId) -> Self {
+    pub fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
         StateRunner {
             inner: None,
             ceremony_id,
@@ -64,7 +55,7 @@ where
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: MultisigOutcomeSender,
-    ) -> Result<()> {
+    ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
         assert_eq!(
             self.ceremony_id, ceremony_id,
             "ceremony id set previously is incorrect"
@@ -88,9 +79,7 @@ where
         // control when our stages time out)
         self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
-        self.process_delayed();
-
-        Ok(())
+        Ok(self.process_delayed())
     }
 
     fn finalize_current_stage(
@@ -126,19 +115,16 @@ where
                 // attacks possible.
                 self.should_expire_at += MAX_STAGE_DURATION;
 
-                self.process_delayed();
-                return None;
+                self.process_delayed()
             }
-            StageResult::Error(bad_validators, reason) => {
-                return Some(Err((
-                    authorised_state.idx_mapping.get_ids(bad_validators),
-                    reason,
-                )));
-            }
+            StageResult::Error(bad_validators, reason) => Some(Err((
+                authorised_state.idx_mapping.get_ids(bad_validators),
+                reason,
+            ))),
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
 
-                return Some(Ok(result));
+                Some(Ok(result))
             }
         }
     }
@@ -195,7 +181,9 @@ where
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(&mut self) {
+    pub fn process_delayed(
+        &mut self,
+    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -205,9 +193,13 @@ where
                 m,
                 id,
             );
-            // TODO: The bug I talked about is here. This is problematic as what if this process_message call results in the completion of ceremony. It will not ever call on_key_generated().
-            self.process_message(id, m);
+
+            if let Some(result) = self.process_message(id, m) {
+                return Some(result);
+            }
         }
+
+        None
     }
 
     /// Delay message to be processed in the next stage

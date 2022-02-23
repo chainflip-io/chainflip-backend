@@ -10,6 +10,7 @@ pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 #[cfg(test)]
 mod mock;
@@ -17,9 +18,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - adds MintInterval storage items
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
-use core::convert::TryInto;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -36,6 +44,7 @@ type BasisPoints = u32;
 pub mod pallet {
 
 	use super::*;
+	use cf_chains::Ethereum;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -72,10 +81,6 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
-		/// How frequently to mint.
-		#[pallet::constant]
-		type MintInterval: Get<Self::BlockNumber>;
-
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
@@ -84,8 +89,7 @@ pub mod pallet {
 		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
 
 		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
-		type SigningContext: From<UpdateFlipSupply>
-			+ SigningContext<Self, Chain = cf_chains::Ethereum>;
+		type SigningContext: From<UpdateFlipSupply> + SigningContext<Self, Chain = Ethereum>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
@@ -96,6 +100,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -128,6 +133,11 @@ pub mod pallet {
 	pub(super) type BackupValidatorEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn mint_interval)]
+	/// Mint interval in blocks
+	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -138,6 +148,8 @@ pub mod pallet {
 		ValidatorInflationEmissionsUpdated(BasisPoints),
 		/// Backup Validator inflation emission has been updated \[new\]
 		BackupValidatorInflationEmissionsUpdated(BasisPoints),
+		/// MintInterval has been updated [block_number]
+		MintIntervalUpdated(BlockNumberFor<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -151,13 +163,38 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V1.put::<Pallet<T>>();
+				migrations::v1::migrate::<T>();
+				return T::WeightInfo::on_runtime_upgrade_v1()
+			}
+			T::WeightInfo::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::pre_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v1::post_migrate::<T, Self>()
+			} else {
+				Ok(())
+			}
+		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
 
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
 				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
-				T::WeightInfo::rewards_minted(current_block.try_into().unwrap_or_default())
+				T::WeightInfo::rewards_minted()
 			} else {
 				T::WeightInfo::no_rewards_minted()
 			}
@@ -177,7 +214,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation(1))]
+		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation())]
 		pub fn update_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -198,7 +235,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation(1))]
+		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation())]
 		pub fn update_backup_validator_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
@@ -206,6 +243,26 @@ pub mod pallet {
 			ensure_root(origin)?;
 			BackupValidatorEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(inflation));
+			Ok(().into())
+		}
+
+		/// Updates the mint interval.
+		///
+		/// ## Events
+		///
+		/// - [MintIntervalUpdated](Event:: MintIntervalUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::update_mint_interval())]
+		pub fn update_mint_interval(
+			origin: OriginFor<T>,
+			value: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			MintInterval::<T>::put(value);
+			Self::deposit_event(Event::<T>::MintIntervalUpdated(value));
 			Ok(().into())
 		}
 	}
@@ -229,6 +286,7 @@ pub mod pallet {
 		fn build(&self) {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
+			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
 		}
 	}
 }
@@ -236,7 +294,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Determines if we should mint at block number `block_number`.
 	fn should_mint_at(block_number: T::BlockNumber) -> bool {
-		let mint_interval = T::MintInterval::get();
+		let mint_interval = MintInterval::<T>::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		Self::should_mint(blocks_elapsed, mint_interval)
 	}
@@ -275,13 +333,10 @@ impl<T: Config> Pallet<T> {
 
 		let reward_amount = ValidatorEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
 
-		// Check if an overflow occurred during the multiplication
-		if reward_amount.is_none() {
+		let reward_amount = reward_amount.unwrap_or_else(|| {
 			log::error!("Overflow while trying to mint rewards at block {:?}.", block_number);
-			return
-		}
-
-		let reward_amount = reward_amount.expect("Checked for overflow already.");
+			Zero::zero()
+		});
 
 		if !reward_amount.is_zero() {
 			// Mint the rewards
@@ -301,24 +356,25 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> BlockEmissions for Pallet<T> {
 	type Balance = T::FlipBalance;
 
-	fn update_validator_block_emission(emission: Self::Balance) -> Weight {
+	fn update_validator_block_emission(emission: Self::Balance) {
 		ValidatorEmissionPerBlock::<T>::put(emission);
-		T::DbWeight::get().writes(1)
 	}
 
-	fn update_backup_validator_block_emission(emission: Self::Balance) -> Weight {
+	fn update_backup_validator_block_emission(emission: Self::Balance) {
 		BackupValidatorEmissionPerBlock::<T>::put(emission);
-		T::DbWeight::get().writes(1)
 	}
 
-	fn calculate_block_emissions() -> Weight {
+	fn calculate_block_emissions() {
 		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
 			const DAYS_IN_YEAR: u32 = 365;
 
 			((T::Issuance::total_issuance() * inflation.into()) /
 				10_000u32.into() / DAYS_IN_YEAR.into())
 			.checked_div(&T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()))
-			.expect("blocks per day should be greater than zero")
+			.unwrap_or_else(|| {
+				log::error!("blocks per day should be greater than zero");
+				Zero::zero()
+			})
 		}
 
 		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
@@ -328,16 +384,12 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
 			BackupValidatorEmissionInflation::<T>::get(),
 		));
-
-		0
 	}
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
-	// TODO: remove weight and delegate benchmarking to the calling components
-	fn trigger_emissions() -> Weight {
+	fn trigger_emissions() {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
 		Self::mint_rewards_for_block(current_block_number);
-		0
 	}
 }

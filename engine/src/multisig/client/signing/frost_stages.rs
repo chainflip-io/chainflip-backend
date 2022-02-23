@@ -27,7 +27,6 @@ macro_rules! should_delay {
 
 /// Stage 1: Generate an broadcast our secret nonce pair
 /// and collect those from all other parties
-#[derive(Clone)]
 pub struct AwaitCommitments1 {
     common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
@@ -35,11 +34,13 @@ pub struct AwaitCommitments1 {
 }
 
 impl AwaitCommitments1 {
-    pub fn new(common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+    pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+        let nonces = SecretNoncePair::sample_random(&mut common.rng);
+
         AwaitCommitments1 {
             common,
             signing_common,
-            nonces: SecretNoncePair::sample_random(),
+            nonces,
         }
     }
 }
@@ -78,7 +79,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 // ************
 
 /// Stage 2: Verifying data broadcast during stage 1
-#[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
@@ -134,7 +134,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 }
 
 /// Stage 3: Generating and broadcasting signature response shares
-#[derive(Clone)]
 struct LocalSigStage3 {
     common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,
@@ -152,8 +151,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
     fn init(&mut self) -> DataToSend<Self::Message> {
-        slog::trace!(self.common.logger, "Generating local signature response");
-
         let data = DataToSend::Broadcast(frost::generate_local_sig(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
@@ -191,7 +188,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 }
 
 /// Stage 4: Verifying the broadcasting of signature shares
-#[derive(Clone)]
 struct VerifyLocalSigsBroadcastStage4 {
     common: CeremonyCommon,
     signing_common: SigningStateCommonInfo,

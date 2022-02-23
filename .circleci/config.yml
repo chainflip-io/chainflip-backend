@@ -40,6 +40,7 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  #        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -114,7 +115,6 @@ commands:
 ######################## Workflows ########################
 workflows:
   create-rust-base:
-    when: <<pipeline.parameters.rust-base>>
     jobs:
       - docker-build:
           name: build-rust-base
@@ -125,6 +125,7 @@ workflows:
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
+          <<: *only_main_branches
       - docker-build:
           name: build-rust-poetry
           image: chainflip-io/chainflip-backend/rust-poetry
@@ -133,6 +134,7 @@ workflows:
           dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
+          <<: *only_main_branches
 
   # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-non-blocking:
@@ -205,6 +207,16 @@ workflows:
           image: chainflip-io/chainflip-backend/chainflip-node
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
           extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - docker-build:
+          name: docker-build-insert-genesis-keyshare
+          image: chainflip-io/insert-genesis-keyshare
+          cache_from: ghcr.io/chainflip-io/insert-genesis-keyshare:latest
+          dockerfile: insert-genesis-keyshare.Dockerfile
           requires:
             - test-single-node
           context:
@@ -366,7 +378,7 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
-          cargo test --lib --locked --release
+          cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
           root: ./
@@ -374,6 +386,8 @@ jobs:
             - target/release/chainflip-node
             - target/release/chainflip-engine
             - target/release/chainflip-cli
+            - target/release/insert-genesis-keyshare
+            - target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - send_notification:
           only_for_branches: "develop"
 
@@ -408,8 +422,9 @@ jobs:
       - checkout
       - merge_target
       - run: sccache --show-stats
+      # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy
+          cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
           sccache --show-stats
 
   cargo-doc:

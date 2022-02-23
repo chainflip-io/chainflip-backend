@@ -1,12 +1,12 @@
-use futures::StreamExt;
-use tokio_stream::wrappers::UnboundedReceiverStream;
-
 use crate::{
-    logging,
+    logging::{self},
     multisig::client::{keygen::KeygenOptions, MultisigClient},
 };
 
-use super::helpers;
+use super::{
+    helpers::{new_signing_ceremony_with_keygen, Node},
+    standard_signing,
+};
 
 #[tokio::test]
 async fn check_signing_db() {
@@ -15,39 +15,40 @@ async fn check_signing_db() {
     // better mock or use the actual DB here. (kvdb-memorydb doesn't quite
     // work as the tests need the database to by `Copy` and wrapping in
     // Rc/Arc is not an option)
-    let mut ctx = helpers::KeygenContext::new();
 
-    // 1. Generate a key. It should automatically be written to a database
-    let _ = ctx.generate().await;
+    // 1. Generate a key. It should automatically be written to a database.
+    let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let account_id = ctx.get_account_id(0);
+    // 2. Extract the client's database
+    let [account_id] = signing_ceremony.select_account_ids();
+    let node = signing_ceremony.get_mut_node(&account_id);
+    let db = node.client.get_db().clone();
 
-    // 2. Extract the clients' database
-    let client1 = ctx.get_client(&account_id);
-    let db = client1.get_db().clone();
-
-    // 3. Create a new multisig client using the extracted database
-    let id = client1.get_my_account_id();
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (p2p_tx, p2p_rx) = tokio::sync::mpsc::unbounded_channel();
+    // 3. Create a new node (with new client) using the extracted database
+    let (multisig_outcome_sender, multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
     let logger = logging::test_utils::new_test_logger();
     let restarted_client = MultisigClient::new(
-        id,
+        account_id.clone(),
         db,
-        tx,
-        p2p_tx,
+        multisig_outcome_sender,
+        outgoing_p2p_message_sender,
         KeygenOptions::allowing_high_pubkey(),
         &logger,
     );
 
-    // 4. Replace the client
-    ctx.substitute_client_at(
-        &account_id,
-        restarted_client,
-        Box::pin(UnboundedReceiverStream::new(rx).peekable()),
-        Box::pin(UnboundedReceiverStream::new(p2p_rx).peekable()),
-    );
+    let substituted_node = Node {
+        client: restarted_client,
+        multisig_outcome_receiver,
+        outgoing_p2p_message_receiver,
+        tag_cache: node.tag_cache.clone(),
+    };
+
+    // 4. Replace the node
+    *node = substituted_node;
 
     // 5. Signing should not crash
-    ctx.sign().await;
+    standard_signing(&mut signing_ceremony).await;
 }

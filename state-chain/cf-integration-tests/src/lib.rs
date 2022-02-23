@@ -10,12 +10,11 @@ mod tests {
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, Flip, Governance,
-		Online, Origin, Reputation, Rewards, Runtime, Session, Staking, System, Timestamp,
-		Validator, Vaults,
+		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
+		Flip, Governance, Online, Origin, Reputation, Runtime, Session, Staking, System, Timestamp,
+		Validator,
 	};
 
-	use cf_chains::ChainId;
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
@@ -130,14 +129,14 @@ mod tests {
 			}
 
 			// The public key proposed
-			pub fn proposed_public_key(&mut self) -> Vec<u8> {
+			pub fn proposed_public_key(&mut self) -> AggKey {
 				let (_, public) =
 					Self::generate_keypair(self.proposed_seed.expect("No key has been proposed"));
-				public.serialize_compressed().to_vec()
+				AggKey::from_pubkey_compressed(public.serialize_compressed())
 			}
 
 			// Propose a new public key
-			pub fn propose_new_public_key(&mut self) -> Vec<u8> {
+			pub fn propose_new_public_key(&mut self) -> AggKey {
 				self.proposed_seed = Some(self.key_seed + 1);
 				self.proposed_public_key()
 			}
@@ -232,29 +231,25 @@ mod tests {
 							Event::EthereumThresholdSigner(
 								// A threshold has been met for this signature
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
-									match self.engine_state {
+									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										EngineState::Rotation => {
-											let ethereum_block_number: u64 = 100;
-											let tx_hash = vec![1u8; 32];
+										let ethereum_block_number: u64 = 100;
+										let tx_hash = [1u8; 32];
 
-											let public_key = (&*self.signer).borrow_mut().proposed_public_key();
+										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
 
-											state_chain_runtime::WitnesserApi::witness_vault_key_rotated(
-												Origin::signed(self.node_id.clone()),
-												ChainId::Ethereum,
-												public_key,
-												ethereum_block_number,
-												tx_hash,
-											).expect("should be able to vault key rotation for node");
-										},
-										_ => {}
+										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
+											Origin::signed(self.node_id.clone()),
+											public_key,
+											ethereum_block_number,
+											tx_hash.into(),
+										).expect("should be able to vault key rotation for node");
 									}
 							},
-							Event::Vaults(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
+							Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
 								self.engine_state = EngineState::Rotation;
 							},
-							Event::Vaults(pallet_cf_vaults::Event::VaultRotationCompleted(..)) => {
+							Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted) => {
 								self.engine_state = EngineState::None;
 							},
 						);
@@ -263,22 +258,18 @@ mod tests {
 					// Being staked we would be required to respond to keygen requests
 					on_events!(
 						events,
-						Event::Vaults(
+						Event::EthereumVault(
 							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, _, validators)) => {
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
 								if validators.contains(&self.node_id) {
 									// Propose a new key
 									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
 
-									state_chain_runtime::Vaults::report_keygen_outcome(
+									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
-										ChainId::Ethereum,
 										KeygenOutcome::Success(public_key),
-									).expect(&format!(
-										"should be able to report keygen outcome from node: {}",
-										self.node_id)
-									);
+									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
 					);
@@ -291,7 +282,7 @@ mod tests {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
 						// Online pallet
-						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
 					}
@@ -300,8 +291,8 @@ mod tests {
 		}
 
 		// Create an account, generate and register the session keys
-		pub(crate) fn setup_account(node_id: &NodeId, seed: &String) {
-			assert_ok!(frame_system::Provider::<Runtime>::created(&node_id));
+		pub(crate) fn setup_account(node_id: &NodeId, seed: &str) {
+			assert_ok!(frame_system::Provider::<Runtime>::created(node_id));
 
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
@@ -315,7 +306,7 @@ mod tests {
 			));
 		}
 
-		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &String) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &str) {
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 			use sp_core::Encode;
@@ -395,7 +386,7 @@ mod tests {
 			}
 
 			pub fn create_node(&mut self) -> NodeId {
-				let node_id = self.next_node_id().into();
+				let node_id = self.next_node_id();
 				self.add_node(&node_id);
 				node_id
 			}
@@ -442,12 +433,12 @@ mod tests {
 					Emissions::on_initialize(System::block_number());
 					Governance::on_initialize(System::block_number());
 					Reputation::on_initialize(System::block_number());
-					Vaults::on_initialize(System::block_number());
+					EthereumVault::on_initialize(System::block_number());
 					Validator::on_initialize(System::block_number());
 
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
-						for (_, engine) in &self.engines {
+						for engine in self.engines.values() {
 							engine.on_contract_event(&event);
 						}
 					}
@@ -465,12 +456,12 @@ mod tests {
 					self.last_event += events.len();
 
 					// State chain events
-					for (_, engine) in self.engines.iter_mut() {
+					for engine in self.engines.values_mut() {
 						engine.handle_state_chain_events(&events);
 					}
 
 					// A completed block notification
-					for (_, engine) in &self.engines {
+					for engine in self.engines.values() {
 						engine.on_block(System::block_number());
 					}
 					System::set_block_number(System::block_number() + 1);
@@ -556,6 +547,7 @@ mod tests {
 			pallet_cf_staking::GenesisConfig::<Runtime> {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: MIN_STAKE,
+				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -611,6 +603,7 @@ mod tests {
 
 			pallet_cf_validator::GenesisConfig::<Runtime> {
 				blocks_per_epoch: self.blocks_per_epoch,
+				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -618,10 +611,10 @@ mod tests {
 			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
-			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_vaults::GenesisConfig {
-					ethereum_vault_key,
-					ethereum_deployment_block: 0,
+			GenesisBuild::<Runtime, _>::assimilate_storage(
+				&state_chain_runtime::EthereumVaultConfig {
+					vault_key: ethereum_vault_key,
+					deployment_block: 0,
 				},
 				storage,
 			)
@@ -741,20 +734,18 @@ mod tests {
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
 
 				assert_eq!(
-					Rewards::offchain_funds(pallet_cf_rewards::VALIDATOR_REWARDS),
+					EthereumVault::keygen_ceremony_id_counter(),
 					0,
-					"no rewards"
+					"no key generation requests"
 				);
 
-				assert_eq!(Vaults::keygen_ceremony_id_counter(), 0, "no key generation requests");
-
-				assert_eq!(Vaults::chain_nonces(ChainId::Ethereum), 0, "nonce not incremented");
+				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"
 				);
-				assert_eq!(Governance::number_of_proposals(), 0, "no proposal for governance");
+				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
 					Emissions::validator_emission_inflation(),
@@ -1033,7 +1024,7 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(2);
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(
 						GENESIS_EPOCH + 2,
 						Validator::epoch_index(),
@@ -1048,10 +1039,10 @@ mod tests {
 		use cf_traits::EpochInfo;
 		use pallet_cf_staking::pallet::Error;
 		#[test]
-		// Stakers cannot unstake during the conclusion of the auction
-		// We have a set of nodes that are staked and that are included in the auction
-		// Moving block by block of an auction we shouldn't be able to claim stake
-		fn cannot_claim_stake_during_auction() {
+		// Stakers cannot claim when we are out of the claiming period (50% of the epoch)
+		// We have a set of nodes that are staked and can claim in the claiming period and
+		// not claim when out of the period
+		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
 			const MAX_VALIDATORS: u32 = 3;
 			super::genesis::default()
@@ -1088,16 +1079,10 @@ mod tests {
 						));
 					}
 
-					// Move to new epoch
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-					// Start auction
-					testnet.move_forward_blocks(1);
-
-					assert_eq!(
-						Auction::current_auction_index(),
-						1,
-						"this should be the first auction"
-					);
+					let end_of_claim_period =
+						EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_CLAIMABLE as u32 / 100;
+					// Move to end of the claim period
+					System::set_block_number(end_of_claim_period + 1);
 
 					// We will try to claim some stake
 					for node in &nodes {
@@ -1107,7 +1092,7 @@ mod tests {
 								stake_amount,
 								ETH_ZERO_ADDRESS
 							),
-							Error::<Runtime>::NoClaimsDuringAuctionPhase
+							Error::<Runtime>::AuctionPhase
 						);
 					}
 
@@ -1117,6 +1102,14 @@ mod tests {
 						"We should still be in the first epoch"
 					);
 
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					// Start auction
+					testnet.move_forward_blocks(1);
+					assert_eq!(
+						Auction::current_auction_index(),
+						1,
+						"this should be the first auction"
+					);
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1214,7 +1207,7 @@ mod tests {
 					let mut genesis_validators = Validator::current_validators();
 					let (mut testnet, _) = network::Network::create(
 						(MAX_VALIDATORS + BACKUP_VALDATORS) as u8,
-						&genesis_validators.clone(),
+						&genesis_validators,
 					);
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
@@ -1280,7 +1273,7 @@ mod tests {
 						current_backup_validators
 							.iter()
 							.map(|validator_id| {
-								(validator_id.clone(), Flip::stakeable_balance(&validator_id))
+								(validator_id.clone(), Flip::stakeable_balance(validator_id))
 							})
 							.collect::<Vec<(NodeId, FlipBalance)>>()
 							.into_iter()
@@ -1334,7 +1327,7 @@ mod tests {
 					);
 
 					// Start an auction and wait for rotation
-					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(
 						GENESIS_EPOCH + 1,
@@ -1359,7 +1352,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &offline_nodes {
-						assert_eq!(false, Online::is_online(node), "the node should be offline");
+						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
 					// The network state should now be in an emergency and that the validator
@@ -1406,7 +1399,7 @@ mod tests {
 
 					// We should have a set of nodes offline
 					for node in &nodes {
-						assert_eq!(false, Online::is_online(node), "the node should be offline");
+						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
 					assert!(

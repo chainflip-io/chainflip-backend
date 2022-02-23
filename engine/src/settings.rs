@@ -34,11 +34,12 @@ impl StateChain {
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Eth {
-    pub node_endpoint: String,
+    pub ws_node_endpoint: String,
+    pub http_node_endpoint: String,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 pub struct HealthCheck {
     pub hostname: String,
     pub port: u16,
@@ -61,7 +62,7 @@ pub struct Settings {
     pub node_p2p: P2P,
     pub state_chain: StateChain,
     pub eth: Eth,
-    pub health_check: HealthCheck,
+    pub health_check: Option<HealthCheck>,
     pub signing: Signing,
     #[serde(default)]
     pub log: Log,
@@ -77,8 +78,10 @@ pub struct StateChainOptions {
 
 #[derive(StructOpt, Debug, Clone, Default)]
 pub struct EthSharedOptions {
-    #[structopt(long = "eth.node_endpoint")]
-    pub eth_node_endpoint: Option<String>,
+    #[structopt(long = "eth.ws_node_endpoint")]
+    pub eth_ws_node_endpoint: Option<String>,
+    #[structopt(long = "eth.http_node_endpoint")]
+    pub eth_http_node_endpoint: Option<String>,
     #[structopt(long = "eth.private_key_file")]
     pub eth_private_key_file: Option<PathBuf>,
 }
@@ -168,7 +171,7 @@ impl Settings {
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
         let settings = Self::from_default_file(
-            &match &opts.config_path.clone() {
+            match &opts.config_path.clone() {
                 Some(path) => path,
                 None => "config/Default.toml",
             },
@@ -180,7 +183,7 @@ impl Settings {
 
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.eth.node_endpoint)
+        parse_websocket_url(&self.eth.ws_node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         self.state_chain.validate_settings()?;
@@ -211,20 +214,30 @@ impl Settings {
         };
 
         // Eth
-        if let Some(opt) = opts.eth_opts.eth_node_endpoint {
-            settings.eth.node_endpoint = opt
+        if let Some(opt) = opts.eth_opts.eth_ws_node_endpoint {
+            settings.eth.ws_node_endpoint = opt
         };
+
+        if let Some(opt) = opts.eth_opts.eth_http_node_endpoint {
+            settings.eth.http_node_endpoint = opt
+        };
+
         if let Some(opt) = opts.eth_opts.eth_private_key_file {
             settings.eth.private_key_file = opt
         };
 
-        // Health Check
+        // Health Check - this is optional
+        let mut health_check = HealthCheck::default();
         if let Some(opt) = opts.health_check_hostname {
-            settings.health_check.hostname = opt
+            health_check.hostname = opt;
         };
         if let Some(opt) = opts.health_check_port {
-            settings.health_check.port = opt
+            health_check.port = opt;
         };
+        // Don't override the healthcheck settings unless something has changed
+        if health_check != HealthCheck::default() {
+            settings.health_check = Some(health_check);
+        }
 
         // Signing
         if let Some(opt) = opts.signing_db_file {
@@ -372,7 +385,8 @@ mod tests {
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
             },
             eth_opts: EthSharedOptions {
-                eth_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+                eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+                eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
                 eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
             },
             health_check_hostname: Some("health_check_hostname".to_owned()),
@@ -396,8 +410,12 @@ mod tests {
         );
 
         assert_eq!(
-            opts.eth_opts.eth_node_endpoint.unwrap(),
-            settings.eth.node_endpoint
+            opts.eth_opts.eth_ws_node_endpoint.unwrap(),
+            settings.eth.ws_node_endpoint
+        );
+        assert_eq!(
+            opts.eth_opts.eth_http_node_endpoint.unwrap(),
+            settings.eth.http_node_endpoint
         );
         assert_eq!(
             opts.eth_opts.eth_private_key_file.unwrap(),
@@ -406,9 +424,12 @@ mod tests {
 
         assert_eq!(
             opts.health_check_hostname.unwrap(),
-            settings.health_check.hostname
+            settings.health_check.as_ref().unwrap().hostname
         );
-        assert_eq!(opts.health_check_port.unwrap(), settings.health_check.port);
+        assert_eq!(
+            opts.health_check_port.unwrap(),
+            settings.health_check.as_ref().unwrap().port
+        );
 
         assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 
