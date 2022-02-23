@@ -282,7 +282,7 @@ mod tests {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
 						// Online pallet
-						let _ = Online::heartbeat(state_chain_runtime::Origin::signed(
+						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
 					}
@@ -547,6 +547,7 @@ mod tests {
 			pallet_cf_staking::GenesisConfig::<Runtime> {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: MIN_STAKE,
+				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 			}
 			.assimilate_storage(storage)
 			.unwrap();

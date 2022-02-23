@@ -40,6 +40,7 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
+  #        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -206,6 +207,16 @@ workflows:
           image: chainflip-io/chainflip-backend/chainflip-node
           cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-node:latest
           extra_build_args: "--build-arg SERVICE=chainflip-node --build-arg REV=<<pipeline.git.revision>>"
+          requires:
+            - test-single-node
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - docker-build:
+          name: docker-build-insert-genesis-keyshare
+          image: chainflip-io/insert-genesis-keyshare
+          cache_from: ghcr.io/chainflip-io/insert-genesis-keyshare:latest
+          dockerfile: insert-genesis-keyshare.Dockerfile
           requires:
             - test-single-node
           context:

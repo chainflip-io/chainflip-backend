@@ -37,8 +37,8 @@ pub struct CeremonyManager {
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
-    logger: slog::Logger,
     ceremony_id_tracker: CeremonyIdTracker,
+    logger: slog::Logger,
 }
 
 impl CeremonyManager {
@@ -165,7 +165,7 @@ impl CeremonyManager {
                     #SIGNING_CEREMONY_FAILED,
                     "Signing ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -199,7 +199,7 @@ impl CeremonyManager {
                     #KEYGEN_CEREMONY_FAILED,
                     "Keygen ceremony failed: {}",
                     reason; "reported parties" =>
-                    format_iterator(&blamed_parties),
+                    format_iterator(&blamed_parties).to_string(),
                     CEREMONY_ID_KEY => ceremony_id,
                 );
 
@@ -254,7 +254,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(&logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, signers);
@@ -344,7 +344,7 @@ impl CeremonyManager {
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -396,8 +396,6 @@ impl CeremonyManager {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
-
         if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
@@ -410,11 +408,13 @@ impl CeremonyManager {
             return;
         }
 
+        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+
         let logger = &self.logger;
         let state = self
             .signing_states
             .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -444,7 +444,7 @@ impl CeremonyManager {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(logger, ceremony_id));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
         state
             .process_message(sender_id, data)

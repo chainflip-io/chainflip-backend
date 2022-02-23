@@ -3,7 +3,7 @@ use cf_traits::{
 	mocks::epoch_info::Mock, offline_conditions::*, EpochInfo, Heartbeat, NetworkState,
 };
 use frame_support::{assert_noop, assert_ok, assert_storage_noop};
-use sp_runtime::{BuildStorage, DispatchError::BadOrigin};
+use sp_runtime::BuildStorage;
 use sp_std::{cmp::max, ops::Neg};
 
 fn last_event() -> mock::Event {
@@ -115,41 +115,37 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
-				Origin::signed(ALICE),
-				2,
-				HEARTBEAT_BLOCK_INTERVAL
+				Origin::root(),
+				MAX_REPUTATION_POINT_ACCRUED + 1,
+				0
 			),
-			BadOrigin
-		);
-		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), 2, 0),
-			Error::<Test>::InvalidAccrualOnlineCredits
-		);
-		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), 2, HEARTBEAT_BLOCK_INTERVAL - 1),
-			Error::<Test>::InvalidAccrualOnlineCredits
-		);
-		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), 0, 2),
 			Error::<Test>::InvalidAccrualReputationPoints
 		);
-		let accrual_points = 2;
+
+		assert_noop!(
+			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_REPUTATION_POINT_ACCRUED, 0),
+			Error::<Test>::InvalidAccrualOnlineCredits
+		);
+
 		assert_ok!(ReputationPallet::update_accrual_ratio(
 			Origin::root(),
-			accrual_points,
+			ACCRUAL_POINTS,
 			ACCRUAL_BLOCKS
 		));
+
+		assert_eq!(ReputationPallet::accrual_ratio(), (ACCRUAL_POINTS, ACCRUAL_BLOCKS));
 
 		assert_eq!(
 			last_event(),
 			mock::Event::ReputationPallet(crate::Event::AccrualRateUpdated(
-				accrual_points,
+				ACCRUAL_POINTS,
 				ACCRUAL_BLOCKS
 			))
 		);
+
 		let number_of_accruals = 2;
 		submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
-		assert_eq!(reputation_points(ALICE), accrual_points * number_of_accruals as i32);
+		assert_eq!(reputation_points(ALICE), ACCRUAL_POINTS * number_of_accruals as i32);
 	});
 }
 

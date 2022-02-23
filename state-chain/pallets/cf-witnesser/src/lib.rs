@@ -236,8 +236,9 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// The number of validators for the epoch
-		let num_validators = EpochValidatorCount::<T>::get(epoch_index)
-			.expect("This value is updated alongside ValidatorIndex, so if we have a validator, we have a validator count.");
+		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
+		// validator count.
+		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);

@@ -33,3 +33,6 @@ RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
     && rustup component add rustfmt \
     && rustup component add clippy
+
+RUN groupadd ci \
+    && useradd -m -g ci ci \
