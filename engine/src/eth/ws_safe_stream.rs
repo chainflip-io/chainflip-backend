@@ -88,7 +88,7 @@ where
 // return the block number, with an Option<Vec<Logs>>. None when there are no interesting logs
 
 pub struct BlockLogs {
-    pub block_number: U64,
+    pub block_number: u64,
     pub logs: Option<Result<Vec<Log>>>,
 }
 
