@@ -10,7 +10,7 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 
-use futures::stream::{self, repeat, select, Repeat, Select, Zip};
+use futures::stream::{self, repeat, select, select_all, Repeat, Select, Zip};
 use pallet_cf_vaults::BlockHeightWindow;
 use regex::Regex;
 use secp256k1::SecretKey;
@@ -43,13 +43,13 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use futures::TryFutureExt;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc};
 use web3::{
     ethabi::{self, Contract, Event},
     signing::{Key, SecretKeyRef},
-    types::{BlockNumber, Bytes, FilterBuilder, SyncState, TransactionParameters, H256},
+    types::{BlockNumber, Bytes, SyncState, TransactionParameters, H256},
     Web3,
 };
 
@@ -681,10 +681,8 @@ pub trait EthObserver {
             )
             .await?;
 
-        // self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
-        //     .await
-
-        Err(anyhow::Error::msg("ho"))
+        self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
+            .await
     }
 
     /// Takes two *safe* log streams one from each protocol. We shouldn't see reorgs occur in either of the streams
@@ -698,10 +696,8 @@ pub trait EthObserver {
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
     where
-        EventCommonStream:
-            Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send + 'static,
-        EventCommonStream2:
-            Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send + 'static,
+        EventCommonStream: Stream<Item = Result<BlockLogs>> + Unpin + Send + 'static,
+        EventCommonStream2: Stream<Item = Result<BlockLogs>> + Unpin + Send + 'static,
     {
         let logger = logger.new(o!(COMPONENT_KEY => "MergedETHStream"));
         let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TransportProtocol::Ws));
@@ -709,7 +705,7 @@ pub trait EthObserver {
 
         let selected_stream = select(safe_ws_log_stream, safe_http_log_stream);
 
-        struct StreamState<EventCommonStream: Stream, EventCommonStream2: Stream> {
+        struct StreamState<EventCommonStream: Stream, EventCommonStream2: Stream, EventParameters> {
             selected_stream: Select<
                 Zip<EventCommonStream, Repeat<TransportProtocol>>,
                 Zip<EventCommonStream2, Repeat<TransportProtocol>>,
@@ -718,6 +714,7 @@ pub trait EthObserver {
             last_http_block_pulled: u64,
             last_ws_block_pulled: u64,
             txs_in_current_block: HashMap<(H256, U256), ()>,
+            logs_to_yield_this_block: VecDeque<EventWithCommon<EventParameters>>,
             logger: slog::Logger,
         }
 
@@ -727,6 +724,7 @@ pub trait EthObserver {
             last_http_block_pulled: 0,
             last_ws_block_pulled: 0,
             txs_in_current_block: HashMap::new(),
+            logs_to_yield_this_block: VecDeque::new(),
             logger,
         };
 
@@ -784,19 +782,23 @@ pub trait EthObserver {
             }
         }
 
+        let decode_log = self.decode_log_closure()?;
         Ok(Box::pin(stream::unfold(
             init_data,
             move |mut state| async move {
+                if let Some(next_yielded_log) = state.logs_to_yield_this_block.pop_front() {
+                    Some((next_yielded_log, state))
+                }
+
                 // we can get multiple events for the same block number. So we cannot use block number here
                 // to determine if we have returned or not.
                 // Instead we have to do something a little more sophisticated, tracking hashes for events
                 // and clearing the hash cache as we progress for each block
                 if let Some((yield_item, protocol, state)) = loop {
-                    if let Some((current_item, protocol)) = state.selected_stream.next().await {
-                        let current_item = current_item.unwrap();
-                        let current_item_block_number = current_item.block_number;
-                        let current_item_tx_hash = current_item.tx_hash;
-                        let current_item_log_index = current_item.log_index;
+                    if let Some((current_block_logs, protocol)) = state.selected_stream.next().await
+                    {
+                        let current_block_logs = current_block_logs.unwrap();
+                        let current_item_block_number = current_block_logs.block_number;
 
                         let protocol_block_number = match protocol {
                             // this function takes safe streams, so we should only progress
@@ -819,39 +821,84 @@ pub trait EthObserver {
 
                         *protocol_block_number = current_item_block_number;
 
-                        if (current_item_block_number > state.last_yielded_block_number)
-                        // first iteration
-                        || state.last_yielded_block_number == 0
-                        {
-                            // we've progressed, so we can clear our log cache for the previous block
-                            state.txs_in_current_block = HashMap::new();
+                        // We have progressed - time to do some stuff
+                        if current_block_logs.block_number > state.last_yielded_block_number {
+                            slog::info!(
+                                state.logger,
+                                "Got block number: {} from {} stream",
+                                current_block_logs.block_number,
+                                protocol
+                            );
 
-                            state.last_yielded_block_number = current_item_block_number;
-                            state
-                                .txs_in_current_block
-                                .insert((current_item_tx_hash, current_item_log_index), ());
-                            break Some((current_item, protocol, state));
-                        } else if current_item_block_number == state.last_yielded_block_number {
-                            let log_already_yielded = state
-                                .txs_in_current_block
-                                .insert((current_item_tx_hash, current_item_log_index), ())
-                                .is_some();
+                            // We only want to do this when we have progressed.
+                            // the bloom has said we have something, so let's fkn do something
+                            if let Some(logs) = current_block_logs.logs {
+                                if let Ok(logs) = logs {
+                                    let decoded_logs: Result<
+                                        Vec<EventWithCommon<Self::EventParameters>>,
+                                    > = logs
+                                        .into_iter()
+                                        .map(
+                                            move |unparsed_log| -> Result<
+                                                EventWithCommon<Self::EventParameters>,
+                                                anyhow::Error,
+                                            > {
+                                                EventWithCommon::<Self::EventParameters>::decode(
+                                                    &decode_log,
+                                                    unparsed_log,
+                                                )
+                                            },
+                                        )
+                                        .collect()
+                                        // TODO: Handle this error
+                                        // if there was an error decoding, we will try the other stream???
+                                        .unwrap();
 
-                            // if the key already existed, we have already emitted it
-                            if !log_already_yielded {
-                                break Some((current_item, protocol, state));
+                                    state.logs_to_yield_this_block = decoded_logs;
+                                    break Some((
+                                        state.logs_to_yield_this_block.pop_front(),
+                                        state,
+                                    ));
+                                } else {
+                                    println!("The logs fetched errored. What do we do here?")
+                                }
                             }
-                        } else {
-                            // discard anything that's less than the last yielded block number
-                            // since we've already returned anything we need to from those logs
-                            slog::debug!(
-                            state.logger,
-                            "Already returned logs from this block number. Discarding ETH log {} from {} stream",
-                            current_item,
-                            protocol
-                        );
-                            continue;
                         }
+                        _
+
+                        // if (current_item_block_number > state.last_yielded_block_number)
+                        // // first iteration
+                        // || state.last_yielded_block_number == 0
+                        // {
+                        //     // we've progressed, so we can clear our log cache for the previous block
+                        //     state.txs_in_current_block = HashMap::new();
+
+                        //     state.last_yielded_block_number = current_item_block_number;
+                        //     state
+                        //         .txs_in_current_block
+                        //         .insert((current_item_tx_hash, current_item_log_index), ());
+                        //     break Some((current_item, protocol, state));
+                        // } else if current_item_block_number == state.last_yielded_block_number {
+                        //     let log_already_yielded = state
+                        //         .txs_in_current_block
+                        //         .insert((current_item_tx_hash, current_item_log_index), ())
+                        //         .is_some();
+
+                        //     // if the key already existed, we have already emitted it
+                        //     if !log_already_yielded {
+                        //         break Some((current_item, protocol, state));
+                        //     }
+                        // } else {
+                        //     // discard anything that's less than the last yielded block number
+                        //     // since we've already returned anything we need to from those logs
+                        //     slog::debug!(
+                        //     state.logger,
+                        //     "Already returned logs from this block number. Discarding ETH log {} from {} stream",
+                        //     current_item,
+                        //     protocol
+                        // );
+                        //     continue;
+                        // }
                     } else {
                         break None;
                     }
