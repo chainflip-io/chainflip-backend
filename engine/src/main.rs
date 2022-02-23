@@ -100,29 +100,35 @@ async fn main() {
     {
         // ensure configured eth node is pointing to the correct chain id
         let chain_id_from_sc = U256::from(state_chain_client
-        .get_environment_value::<u64>(
-            latest_block_hash,
-            StorageKey(
-                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
-                )
-                .into(),
-            ),
-        )
-        .await
-        .expect("Should get EthereumChainId from SC"));
+            .get_environment_value::<u64>(
+                latest_block_hash,
+                StorageKey(
+                    pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
+                    )
+                    .into(),
+                ),
+            )
+            .await
+            .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = eth_ws_rpc_client
+        let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
             .await
             .expect("Should fetch chain id");
 
-        if chain_id_from_sc != chain_id_from_eth {
+        let chain_id_from_eth_http = eth_http_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
+
+        if chain_id_from_sc != chain_id_from_eth_ws || chain_id_from_sc != chain_id_from_eth_http {
             slog::error!(
-            &root_logger,
-            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
-            chain_id_from_eth,
-            chain_id_from_sc
-        );
+                &root_logger,
+                "Ethereum nodes pointing to chain ids: WS: {}, HTTP: {}, which is incorrect. Please ensure both Ethereum nodes are pointing to the network with ChainId: {}",
+                chain_id_from_eth_ws,
+                chain_id_from_eth_http,
+                chain_id_from_sc
+            );
             return;
         }
     }
