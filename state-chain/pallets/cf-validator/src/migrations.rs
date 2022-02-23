@@ -17,9 +17,9 @@ pub(crate) mod v1 {
 	generate_storage_alias!(Validator, Force => Value<()>);
 
 	// Retrieve from storage AuctionResult as defined in v0 of the auction pallet
-	fn get_v0_auction_result<T: Config>(
+	fn take_v0_auction_result<T: Config>(
 	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
-		get_storage_value(b"Auction", b"LastAuctionResult", b"")
+		take_storage_value(b"Auction", b"LastAuctionResult", b"")
 	}
 	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
@@ -28,7 +28,7 @@ pub(crate) mod v1 {
 		assert!(P::on_chain_storage_version() == releases::V0, "Storage version too high.");
 
 		assert!(
-			get_v0_auction_result::<T>().is_some(),
+			take_v0_auction_result::<T>().is_some(),
 			"if we don't have a previous auction then we shouldn't be upgrading"
 		);
 
@@ -48,7 +48,7 @@ pub(crate) mod v1 {
 		// and hence the active validating set from the same storage item as the bond we want to
 		// maintain continuity with the genesis version(0) by reading this from the session pallet.
 		if let Some(v0_types::AuctionResult { minimum_active_bid, .. }) =
-			get_v0_auction_result::<T>()
+			take_v0_auction_result::<T>()
 		{
 			// Set the bond to that of the last auction result
 			Bond::<T>::put(minimum_active_bid);
