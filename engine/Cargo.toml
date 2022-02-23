@@ -87,6 +87,12 @@ pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
 
+[dependencies.state-chain-runtime-previous-release]
+git = 'https://github.com/chainflip-io/chainflip-backend.git'
+package = 'state-chain-runtime'
+branch = 'release/soundcheck'
+optional = true
+
 [dependencies.rocksdb]
 version = "0.17.0"
 # Disabling of default features, and using lz4 compression is primarily to avoid linker issues
@@ -151,3 +157,8 @@ pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
 csv = "1.1.6"
 tempdir = "0.3.7"
+
+[features]
+link-previous-release = [
+    "state-chain-runtime-previous-release"
+]

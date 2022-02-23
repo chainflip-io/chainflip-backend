@@ -15,6 +15,9 @@ use pallet_cf_vaults::BlockHeightWindow;
 use sp_core::{storage::StorageKey, U256};
 use structopt::StructOpt;
 
+#[cfg(feature = "link-previous-release")]
+use state_chain_runtime_previous_release::Event as SoundcheckEvent;
+
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {

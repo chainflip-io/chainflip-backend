@@ -801,12 +801,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "libsecp256k1 0.7.0",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "rlp",
+ "secp256k1",
+ "serde 1.0.130",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -817,20 +837,20 @@ dependencies = [
  "libsecp256k1 0.7.0",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-auction",
- "pallet-cf-broadcast",
- "pallet-cf-emissions",
- "pallet-cf-environment",
- "pallet-cf-flip",
- "pallet-cf-governance",
- "pallet-cf-online",
- "pallet-cf-reputation",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-validator",
- "pallet-cf-vaults",
- "pallet-cf-witnesser",
- "pallet-cf-witnesser-api",
+ "pallet-cf-auction 0.1.0",
+ "pallet-cf-broadcast 0.1.0",
+ "pallet-cf-emissions 0.1.0",
+ "pallet-cf-environment 0.1.0",
+ "pallet-cf-flip 0.1.0",
+ "pallet-cf-governance 0.1.0",
+ "pallet-cf-online 0.1.0",
+ "pallet-cf-reputation 0.1.0",
+ "pallet-cf-staking 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-validator 0.1.0",
+ "pallet-cf-vaults 0.1.0",
+ "pallet-cf-witnesser 0.1.0",
+ "pallet-cf-witnesser-api 0.1.0",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-session",
@@ -850,14 +870,14 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "state-chain-runtime",
+ "state-chain-runtime 0.1.0",
 ]
 
 [[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
+ "cf-chains 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -866,7 +886,22 @@ dependencies = [
  "scale-info",
  "sp-runtime",
  "sp-std",
- "utilities",
+ "utilities 0.1.0",
+]
+
+[[package]]
+name = "cf-traits"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+ "utilities 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
 ]
 
 [[package]]
@@ -911,25 +946,25 @@ name = "chainflip-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cf-chains",
+ "cf-chains 0.1.0",
  "chainflip-engine",
  "chainflip-node",
  "config",
  "futures 0.3.17",
  "hex",
- "pallet-cf-environment",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-validator",
+ "pallet-cf-environment 0.1.0",
+ "pallet-cf-staking 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-validator 0.1.0",
  "serde 1.0.130",
  "slog",
  "sp-consensus-aura",
  "sp-core",
  "sp-finality-grandpa",
- "state-chain-runtime",
+ "state-chain-runtime 0.1.0",
  "structopt",
  "tokio 1.13.0",
- "utilities",
+ "utilities 0.1.0",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
 ]
 
@@ -942,8 +977,8 @@ dependencies = [
  "async-trait",
  "bincode",
  "bs58",
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "chrono",
  "config",
  "crossbeam-channel",
@@ -975,18 +1010,18 @@ dependencies = [
  "mockall 0.11.0",
  "multisig-p2p-transport",
  "num",
- "pallet-cf-auction",
- "pallet-cf-broadcast",
- "pallet-cf-environment",
- "pallet-cf-flip",
- "pallet-cf-governance",
- "pallet-cf-online",
- "pallet-cf-reputation",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-validator",
- "pallet-cf-vaults",
- "pallet-cf-witnesser-api",
+ "pallet-cf-auction 0.1.0",
+ "pallet-cf-broadcast 0.1.0",
+ "pallet-cf-environment 0.1.0",
+ "pallet-cf-flip 0.1.0",
+ "pallet-cf-governance 0.1.0",
+ "pallet-cf-online 0.1.0",
+ "pallet-cf-reputation 0.1.0",
+ "pallet-cf-staking 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-validator 0.1.0",
+ "pallet-cf-vaults 0.1.0",
+ "pallet-cf-witnesser-api 0.1.0",
  "parity-scale-codec",
  "parking_lot 0.11.2",
  "public-ip",
@@ -1008,7 +1043,8 @@ dependencies = [
  "sp-rpc",
  "sp-runtime",
  "sp-version",
- "state-chain-runtime",
+ "state-chain-runtime 0.1.0",
+ "state-chain-runtime 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
  "structopt",
  "substrate-subxt",
  "tempdir",
@@ -1017,7 +1053,7 @@ dependencies = [
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
- "utilities",
+ "utilities 0.1.0",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
  "websocket",
  "zeroize",
@@ -1027,7 +1063,7 @@ dependencies = [
 name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
+ "cf-chains 0.1.0",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-try-runtime",
@@ -1061,12 +1097,12 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-runtime",
  "sp-timestamp",
- "state-chain-runtime",
+ "state-chain-runtime 0.1.0",
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
  "try-runtime-cli",
- "utilities",
+ "utilities 0.1.0",
 ]
 
 [[package]]
@@ -5095,11 +5131,45 @@ name = "pallet-cf-auction"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
- "cf-traits",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-auction"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-cf-threshold-signature 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5111,16 +5181,35 @@ dependencies = [
 [[package]]
 name = "pallet-cf-broadcast"
 version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-cf-threshold-signature 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-emissions"
+version = "0.1.0"
+dependencies = [
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
- "pallet-cf-threshold-signature",
+ "pallet-cf-flip 0.1.0",
  "parity-scale-codec",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5130,19 +5219,16 @@ dependencies = [
 [[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
- "cf-chains",
- "cf-traits",
- "frame-benchmarking",
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
  "frame-support",
  "frame-system",
  "log 0.4.14",
- "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic",
- "sp-core",
- "sp-io",
  "sp-runtime",
  "sp-std",
 ]
@@ -5159,10 +5245,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-environment"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
- "cf-traits",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5176,13 +5274,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-flip"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
- "cf-traits",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-governance"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-online"
+version = "0.1.0"
+dependencies = [
+ "cf-traits 0.1.0",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-validator 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5194,12 +5339,29 @@ dependencies = [
 [[package]]
 name = "pallet-cf-online"
 version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
- "cf-traits",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-reputation"
+version = "0.1.0"
+dependencies = [
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-validator",
+ "log 0.4.14",
+ "pallet-cf-online 0.1.0",
+ "pallet-cf-validator 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5211,14 +5373,48 @@ dependencies = [
 [[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
- "cf-traits",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-online 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-rewards"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-staking"
+version = "0.1.0"
+dependencies = [
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
- "pallet-cf-online",
- "pallet-cf-validator",
+ "pallet-cf-flip 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-validator 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5230,20 +5426,18 @@ dependencies = [
 [[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
- "cf-chains",
- "cf-traits",
- "frame-benchmarking",
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
  "frame-support",
  "frame-system",
  "log 0.4.14",
- "pallet-cf-flip",
- "pallet-cf-threshold-signature",
- "pallet-cf-validator",
+ "pallet-cf-threshold-signature 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
- "sp-io",
  "sp-runtime",
  "sp-std",
 ]
@@ -5252,8 +5446,8 @@ dependencies = [
 name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5268,11 +5462,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-threshold-signature"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
- "cf-traits",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5287,11 +5497,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-validator"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-cf-auction 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-session",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5303,7 +5531,24 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "utilities",
+ "utilities 0.1.0",
+]
+
+[[package]]
+name = "pallet-cf-vaults"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+ "utilities 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
 ]
 
 [[package]]
@@ -5311,39 +5556,77 @@ name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
- "cf-traits",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-validator",
+ "pallet-cf-validator 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "utilities",
+ "utilities 0.1.0",
+]
+
+[[package]]
+name = "pallet-cf-witnesser"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "bitvec 0.20.4",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+ "utilities 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
 ]
 
 [[package]]
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-broadcast",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-vaults",
- "pallet-cf-witnesser",
+ "pallet-cf-broadcast 0.1.0",
+ "pallet-cf-staking 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-vaults 0.1.0",
+ "pallet-cf-witnesser 0.1.0",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
  "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-witnesser-api"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-broadcast 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-staking 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-threshold-signature 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-vaults 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-witnesser 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "parity-scale-codec",
+ "scale-info",
  "sp-runtime",
  "sp-std",
 ]
@@ -8779,8 +9062,8 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
- "cf-traits",
+ "cf-chains 0.1.0",
+ "cf-traits 0.1.0",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -8794,20 +9077,73 @@ dependencies = [
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-auction",
- "pallet-cf-broadcast",
- "pallet-cf-emissions",
- "pallet-cf-environment",
- "pallet-cf-flip",
- "pallet-cf-governance",
- "pallet-cf-online",
- "pallet-cf-reputation",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-validator",
- "pallet-cf-vaults",
- "pallet-cf-witnesser",
- "pallet-cf-witnesser-api",
+ "pallet-cf-auction 0.1.0",
+ "pallet-cf-broadcast 0.1.0",
+ "pallet-cf-emissions 0.1.0",
+ "pallet-cf-environment 0.1.0",
+ "pallet-cf-flip 0.1.0",
+ "pallet-cf-governance 0.1.0",
+ "pallet-cf-online 0.1.0",
+ "pallet-cf-reputation 0.1.0",
+ "pallet-cf-staking 0.1.0",
+ "pallet-cf-threshold-signature 0.1.0",
+ "pallet-cf-validator 0.1.0",
+ "pallet-cf-vaults 0.1.0",
+ "pallet-cf-witnesser 0.1.0",
+ "pallet-cf-witnesser-api 0.1.0",
+ "pallet-grandpa",
+ "pallet-randomness-collective-flip",
+ "pallet-session",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-core",
+ "sp-inherents",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "substrate-wasm-builder",
+]
+
+[[package]]
+name = "state-chain-runtime"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
+dependencies = [
+ "cf-chains 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "cf-traits 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
+ "getrandom 0.2.3",
+ "log 0.4.14",
+ "nanorand",
+ "pallet-aura",
+ "pallet-authorship",
+ "pallet-cf-auction 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-broadcast 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-emissions 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-environment 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-flip 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-governance 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-online 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-reputation 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-rewards",
+ "pallet-cf-staking 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-threshold-signature 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-validator 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-vaults 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-witnesser 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
+ "pallet-cf-witnesser-api 0.1.0 (git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck)",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-session",
@@ -9817,6 +10153,14 @@ dependencies = [
 [[package]]
 name = "utilities"
 version = "0.1.0"
+dependencies = [
+ "hex",
+]
+
+[[package]]
+name = "utilities"
+version = "0.1.0"
+source = "git+https://github.com/chainflip-io/chainflip-backend.git?branch=release/soundcheck#785bfe9e634853a0932392e5716eaac5d0b28f67"
 dependencies = [
  "hex",
 ]
