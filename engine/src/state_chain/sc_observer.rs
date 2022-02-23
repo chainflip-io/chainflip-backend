@@ -78,7 +78,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
             false
         };
 
-        slog::trace!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
+        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
         "is_outgoing" => is_outgoing, "last_active_epoch" => new_account_data.last_active_epoch);
 
         (new_account_data, is_outgoing)
@@ -229,7 +229,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         unsigned_tx,
                                                     ),
                                                 ) if validator_id == state_chain_client.our_account_id => {
-                                                    slog::trace!(
+                                                    slog::debug!(
                                                         logger,
                                                         "Received signing request with attempt_id {} for transaction: {:?}",
                                                         attempt_id,

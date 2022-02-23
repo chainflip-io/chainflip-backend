@@ -15,7 +15,7 @@ use state_chain_runtime::{EthereumInstance, Header, Runtime};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcClient, MockEthRpcApi},
+    eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
     multisig::{MultisigInstruction, MultisigOutcome},
     settings::test_utils::new_test_settings,
@@ -1211,9 +1211,9 @@ async fn run_the_sc_observer() {
     let (_multisig_outcome_sender, multisig_outcome_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &logger).await.unwrap();
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
     let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &logger).unwrap();
+        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 
     let (sm_window_sender, _sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
