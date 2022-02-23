@@ -211,13 +211,14 @@ pub enum AuctionError {
 	NotEnoughBidders,
 }
 
-impl Into<DispatchError> for AuctionError {
-	fn into(self) -> DispatchError {
-		match self {
+impl From<AuctionError> for DispatchError {
+	fn from(error: AuctionError) -> Self {
+		match error {
 			AuctionError::NotEnoughBidders => DispatchError::Other("NotEnoughBidders"),
 		}
 	}
 }
+
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
