@@ -186,12 +186,15 @@ pub struct EthRpcClient {
 impl EthRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let node_endpoint = &eth_settings.node_endpoint;
-        slog::trace!(
-            logger,
-            "Connecting new web3 client to {}",
-            redact_secret_eth_node_endpoint(node_endpoint)
-                .expect("Should get node endpoint as secret string")
-        );
+        match redact_secret_eth_node_endpoint(node_endpoint) {
+            Ok(redacted) => {
+                slog::trace!(logger, "Connecting new web3 client to {}", redacted);
+            }
+            Err(e) => {
+                slog::error!(logger, "Could not redact secret from node endpoint: {}", e);
+                slog::trace!(logger, "Connecting new web3 client");
+            }
+        }
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(node_endpoint)
@@ -532,6 +535,9 @@ fn decode_shared_event_closure(
     )
 }
 
+const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
+const SCHEMA_PADDING_LEN: usize = 3;
+
 /// Partially redacts the secret in the url of the node endpoint.
 ///  eg: `wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/` -> `wss://cdc****.rinkeby.ws.rivet.cloud/`
 fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
@@ -542,17 +548,27 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
         for capture in re.captures_iter(endpoint) {
             endpoint_redacted = endpoint_redacted.replace(
                 &capture[0],
-                &format!("{}****", &capture[0].split_at(capture[0].len().min(3)).0),
+                &format!(
+                    "{}****",
+                    &capture[0]
+                        .split_at(capture[0].len().min(MAX_SECRET_CHARACTERS_REVEALED))
+                        .0
+                ),
             );
         }
         Ok(endpoint_redacted)
     } else {
         // No secret was found, so just redact almost all of the url
-        let url = url::Url::parse(endpoint).map_err(anyhow::Error::msg)?;
+        let url = url::Url::parse(endpoint)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| "Failed to parse node endpoint into a URL")?;
         Ok(format!(
             "{}****",
             endpoint
-                .split_at(usize::min(url.scheme().len() + 6, endpoint.len()))
+                .split_at(usize::min(
+                    url.scheme().len() + SCHEMA_PADDING_LEN + MAX_SECRET_CHARACTERS_REVEALED,
+                    endpoint.len()
+                ))
                 .0
         ))
     }
