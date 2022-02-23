@@ -86,7 +86,7 @@ fn should_request_emergency_rotation() {
 }
 
 #[test]
-fn should_retry_rotation_until_success() {
+fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
@@ -102,6 +102,26 @@ fn should_retry_rotation_until_success() {
 		// The auction now runs
 		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
 
+		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
+		assert_next_epoch();
+	});
+}
+
+#[test]
+fn should_retry_rotation_until_success_with_failing_vault_rotations() {
+	new_test_ext().execute_with(|| {
+		let epoch = 10;
+		initialise_validator(epoch);
+		MockVaultRotator::set_start_vault_rotation(DispatchError::Other("failure").into());
+		run_to_block(epoch);
+		// Move forward a few blocks, vault rotations would be failing with "failure"
+		move_forward_blocks(100);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should still be in the first epoch"
+		);
+		MockVaultRotator::set_start_vault_rotation(Ok(()));
 		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
 		assert_next_epoch();
 	});
