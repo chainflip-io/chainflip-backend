@@ -100,16 +100,16 @@ async fn main() {
     {
         // ensure configured eth node is pointing to the correct chain id
         let chain_id_from_sc = U256::from(state_chain_client
-            .get_environment_value::<u64>(
-                latest_block_hash,
-                StorageKey(
-                    pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
-                    )
-                    .into(),
-                ),
-            )
-            .await
-            .expect("Should get EthereumChainId from SC"));
+        .get_environment_value::<u64>(
+            latest_block_hash,
+            StorageKey(
+                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
+                )
+                .into(),
+            ),
+        )
+        .await
+        .expect("Should get EthereumChainId from SC"));
 
         let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
@@ -121,13 +121,35 @@ async fn main() {
             .await
             .expect("Should fetch chain id");
 
-        if chain_id_from_sc != chain_id_from_eth_ws || chain_id_from_sc != chain_id_from_eth_http {
+        let both_nodes_string = format!(
+            "Please ensure both nodes are pointing to the network with ChainId: {}",
+            chain_id_from_sc
+        );
+        if chain_id_from_sc != chain_id_from_eth_ws && chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+            &root_logger,
+            "Both WS (ChainId: {}) and HTTP (ChainId: {}) ETH nodes are pointing to the wrong chain id. {}",
+            chain_id_from_eth_ws,
+            chain_id_from_eth_http,
+            both_nodes_string
+        );
+            return;
+        } else if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
                 &root_logger,
-                "Ethereum nodes pointing to chain ids: WS: {}, HTTP: {}, which is incorrect. Please ensure both Ethereum nodes are pointing to the network with ChainId: {}",
+                "The WS (ChainId: {}) ETH node is pointing to the wrong chain id (HTTP node is correct (ChainId: {}). {}",
                 chain_id_from_eth_ws,
                 chain_id_from_eth_http,
-                chain_id_from_sc
+                both_nodes_string
+            );
+            return;
+        } else if chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+                &root_logger,
+                "The HTTP (ChainId: {}) ETH node is pointing to the wrong chain id (WS node is correct (ChainId: {}). {}",
+                chain_id_from_eth_http,
+                chain_id_from_eth_ws,
+                both_nodes_string
             );
             return;
         }
