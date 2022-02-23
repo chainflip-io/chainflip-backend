@@ -11,6 +11,12 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
+// ==== Logging Eth Observer constants ====
+pub const ETH_HTTP_STREAM_RETURNED: &str = "eth-observer-http";
+pub const ETH_WS_STREAM_RETURNED: &str = "eth-observer-ws";
+pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
+pub const SAFE_PROTOCOL_STREAM_JUMP_BACK: &str = "eth-protocol-stream-jump-back";
+
 // ==== Logging Trace/Debug Tag constants ====
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 
@@ -74,6 +80,7 @@ pub mod utils {
             Ok(())
         }
     }
+
     pub struct PrintlnDrainVerbose;
 
     impl Drain for PrintlnDrainVerbose {
@@ -245,6 +252,11 @@ pub mod test_utils {
                 .iter()
                 .filter(|log_tag| *log_tag == tag)
                 .count()
+        }
+
+        /// Just start again
+        pub fn clear(&mut self) {
+            *self.log.lock().unwrap() = Vec::new();
         }
     }
 
