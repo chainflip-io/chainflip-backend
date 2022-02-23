@@ -540,6 +540,7 @@ mod tests {
 			pallet_cf_staking::GenesisConfig::<Runtime> {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: MIN_STAKE,
+				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 			}
 			.assimilate_storage(storage)
 			.unwrap();

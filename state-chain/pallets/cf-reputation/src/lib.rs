@@ -29,7 +29,9 @@ mod migrations;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{offline_conditions::*, Chainflip, Heartbeat, NetworkState, Slashing};
+	use cf_traits::{
+		offline_conditions::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -69,6 +71,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
+		/// The maximum number of reputation points that can be accrued
+		#[pallet::constant]
+		type MaximumReputationPointAccrued: Get<ReputationPoints>;
+
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			AccountId = Self::ValidatorId,
@@ -83,6 +89,12 @@ pub mod pallet {
 
 		/// Ban validators
 		type Banned: Banned<ValidatorId = Self::ValidatorId>;
+
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -154,7 +166,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// The accrual ratio can be updated and would come into play in the current heartbeat
-		/// interval This is only available to sudo
+		/// interval. This is gated with governance.
 		///
 		/// ## Events
 		///
@@ -170,18 +182,19 @@ pub mod pallet {
 			points: ReputationPoints,
 			online_credits: OnlineCreditsFor<T>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure we are root when setting this
-			ensure_root(origin)?;
-			// Some very basic validation here.  Should be improved in subsequent PR based on
-			// further definition of limits
-			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
-			ensure!(online_credits > Zero::zero(), Error::<T>::InvalidAccrualOnlineCredits);
-			// Online credits are equivalent to block time and hence should be less than our
-			// heartbeat interval
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				online_credits > T::HeartbeatBlockInterval::get(),
-				Error::<T>::InvalidAccrualOnlineCredits
+				points <= T::MaximumReputationPointAccrued::get(),
+				Error::<T>::InvalidAccrualReputationPoints
 			);
+			// If we have points to accrue then ensure that the online credits, which are equivalent
+			// to block time, are less than our heartbeat interval
+			if points > Zero::zero() {
+				ensure!(
+					online_credits > T::HeartbeatBlockInterval::get(),
+					Error::<T>::InvalidAccrualOnlineCredits
+				);
+			}
 
 			AccrualRatio::<T>::set((points, online_credits));
 			Self::deposit_event(Event::AccrualRateUpdated(points, online_credits));
@@ -255,6 +268,10 @@ pub mod pallet {
 				T::Banned::ban(validator_id);
 			}
 
+			if condition == OfflineCondition::ParticipateKeygenFailed {
+				T::KeygenExclusionSet::add_to_set(validator_id.clone());
+			}
+
 			Self::deposit_event(Event::OfflineConditionPenalty(
 				(*validator_id).clone(),
 				condition,
@@ -316,7 +333,6 @@ pub mod pallet {
 					|Reputation { online_credits, reputation_points }| {
 						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 							// Update reputation points
-							// TODO: refactor to make it not panic!
 							let ReputationPenalty { points, blocks } =
 								ReputationPointPenalty::<T>::get();
 							let interval: u32 =
@@ -325,7 +341,14 @@ pub mod pallet {
 
 							let penalty =
 								(points.saturating_mul(interval as i32).checked_div(blocks as i32))
-									.expect("calculating offline penalty shouldn't fail");
+									.unwrap_or_else(|| {
+										log::error!(
+											"Unexpected penalty calculation error {:?}: {:?}.",
+											interval,
+											blocks
+										);
+										0
+									});
 
 							*reputation_points = Pallet::<T>::clamp_reputation_points(
 								(*reputation_points).saturating_sub(penalty),

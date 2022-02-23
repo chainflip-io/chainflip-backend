@@ -34,6 +34,11 @@ pub enum CFCommand {
     Rotate {},
     #[structopt(about = "Retire from Auction participation")]
     Retire {},
+    #[structopt(about = "Submit a query to the State Chain")]
+    Query {
+        #[structopt(help = "Block hash to be queried")]
+        block_hash: state_chain_runtime::Hash,
+    },
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -51,7 +56,8 @@ impl CLISettings {
         let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
             && opts.state_chain_opts.state_chain_signing_key_file.is_some()
             // eth options present
-            && opts.eth_opts.eth_node_endpoint.is_some()
+            && opts.eth_opts.eth_ws_node_endpoint.is_some()
+            && opts.eth_opts.eth_http_node_endpoint.is_some()
             && opts.eth_opts.eth_private_key_file.is_some();
 
         if !all_cl_args_set {
@@ -74,8 +80,12 @@ impl CLISettings {
             cli_config.eth.private_key_file = private_key_file
         };
 
-        if let Some(node_endpoint) = opts.eth_opts.eth_node_endpoint {
-            cli_config.eth.node_endpoint = node_endpoint
+        if let Some(ws_node_endpoint) = opts.eth_opts.eth_ws_node_endpoint {
+            cli_config.eth.ws_node_endpoint = ws_node_endpoint
+        };
+
+        if let Some(http_node_endpoint) = opts.eth_opts.eth_http_node_endpoint {
+            cli_config.eth.http_node_endpoint = http_node_endpoint
         };
 
         Ok(cli_config)

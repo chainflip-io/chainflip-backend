@@ -396,8 +396,6 @@ impl CeremonyManager {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
-
         if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
@@ -409,6 +407,8 @@ impl CeremonyManager {
             );
             return;
         }
+
+        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
         let state = self

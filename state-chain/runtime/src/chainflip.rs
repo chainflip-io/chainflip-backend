@@ -82,6 +82,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			new_validators,
 			new_bond,
 		);
+
+		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
 	}
 }
 

@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 use cf_traits::{
 	ActiveValidatorRange, AuctionError, AuctionResult, Auctioneer, BackupValidators,
 	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	EpochInfo, QualifyValidator, RemainingBid, StakeHandler,
+	EpochInfo, KeygenExclusionSet, QualifyValidator, RemainingBid, StakeHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -57,6 +57,8 @@ pub mod pallet {
 		type EmergencyRotation: EmergencyRotation;
 		/// Qualify a validator
 		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		/// Key generation exclusion set
+		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;

@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::{
-	impl_mock_online,
+	impl_mock_keygen_exclusion, impl_mock_online,
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo,
@@ -142,6 +142,7 @@ impl EmergencyRotation for MockEmergencyRotation {
 }
 
 impl_mock_online!(ValidatorId);
+impl_mock_keygen_exclusion!(ValidatorId);
 
 pub struct MockQualifyValidator;
 impl QualifyValidator for MockQualifyValidator {
@@ -167,6 +168,7 @@ impl Config for Test {
 	type MinValidators = MinValidators;
 	type ChainflipAccount = MockChainflipAccount;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type KeygenExclusionSet = MockKeygenExclusion;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;

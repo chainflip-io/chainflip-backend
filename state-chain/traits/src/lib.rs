@@ -425,14 +425,14 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
 		})
-		.expect("mutating account state")
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).last_active_epoch = Some(index);
 		})
-		.expect("mutating account state")
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 }
 
@@ -638,4 +638,15 @@ pub trait RuntimeUpgrade {
 	/// Applies the wasm code of a runtime upgrade and returns the
 	/// information about the execution
 	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
+}
+
+pub trait KeygenExclusionSet {
+	type ValidatorId;
+
+	/// Add this validator to the key generation exclusion set
+	fn add_to_set(validator_id: Self::ValidatorId);
+	/// Is this validator excluded?
+	fn is_excluded(validator_id: &Self::ValidatorId) -> bool;
+	/// Clear the exclusion set
+	fn forgive_all();
 }
