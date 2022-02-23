@@ -41,9 +41,7 @@ pub type AttemptCount = u32;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::UnfilteredDispatchable, ensure, pallet_prelude::*, traits::EnsureOrigin,
-	};
+	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured SignedTransaction.
@@ -292,35 +290,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Begin the process of broadcasting a transaction.
-		///
-		/// This triggers the first step - requesting a transaction signature from a nominated
-		/// validator.
-		///
-		/// ## Events
-		///
-		/// - [TransactionSigningRequest](Event::TransactionSigningRequest)
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfo::start_broadcast())]
-		pub fn start_broadcast(
-			origin: OriginFor<T>,
-			unsigned_tx: UnsignedTransactionFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureThresholdSigned::ensure_origin(origin)?;
-
-			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
-				*id += 1;
-				*id
-			});
-
-			Self::start_broadcast_attempt(broadcast_id, 0, unsigned_tx);
-
-			Ok(().into())
-		}
-
 		/// Called by the nominated signer when they have completed and signed the transaction, and
 		/// it is therefore ready to be transmitted. The signed transaction is stored on-chain so
 		/// that any node can potentially transmit it to the target chain. Emits an event that will
@@ -490,10 +459,7 @@ pub mod pallet {
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?;
 
-			Call::<T, I>::start_broadcast(T::TransactionBuilder::build_transaction(
-				&api_call.signed(&sig),
-			))
-			.dispatch_bypass_filter(origin)?;
+			Self::start_broadcast(T::TransactionBuilder::build_transaction(&api_call.signed(&sig)));
 
 			Ok(().into())
 		}
@@ -507,6 +473,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			api_call.threshold_signature_payload(),
 			|id| Call::on_signature_ready(id, api_call).into(),
 		);
+	}
+
+	/// Begin the process of broadcasting a transaction.
+	///
+	/// This triggers the first step - requesting a transaction signature from a nominated
+	/// validator.
+	///
+	/// ## Events
+	///
+	/// - [TransactionSigningRequest](Event::TransactionSigningRequest)
+	fn start_broadcast(unsigned_tx: UnsignedTransactionFor<T, I>) {
+		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+
+		Self::start_broadcast_attempt(broadcast_id, 0, unsigned_tx);
 	}
 
 	fn start_broadcast_attempt(

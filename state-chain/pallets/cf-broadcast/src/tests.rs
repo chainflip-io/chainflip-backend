@@ -128,7 +128,7 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some()
 		);
@@ -159,7 +159,7 @@ fn test_broadcast_rejected() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -199,7 +199,7 @@ fn test_broadcast_rejected() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
 		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
@@ -227,7 +227,7 @@ fn test_broadcast_failed() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -262,7 +262,7 @@ fn test_bad_signature() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -320,7 +320,7 @@ fn test_signature_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -379,7 +379,7 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast and pass the signing stage;
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
@@ -430,7 +430,7 @@ fn no_validators_available() {
 	new_test_ext().execute_with(|| {
 		// Simulate that no validator is currently online
 		NOMINATION.with(|cell| *cell.borrow_mut() = None);
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), MockUnsignedTransaction));
+		MockBroadcast::start_broadcast(MockUnsignedTransaction);
 		// Check the retry queue
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 	});
