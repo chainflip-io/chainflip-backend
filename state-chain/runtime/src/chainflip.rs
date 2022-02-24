@@ -275,15 +275,18 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 					signature,
 				)
 				.into(),
-			Self::SetAggKeyWithAggKeyBroadcast(call) => Call::EthereumBroadcaster(
-				pallet_cf_broadcast::Call::<_, _>::start_broadcast(contract_call_to_unsigned_tx(
-					call.clone(),
-					&signature,
-					Environment::key_manager_address().into(),
+			Self::SetAggKeyWithAggKeyBroadcast(call) =>
+				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					self.get_payload(),
+					contract_call_to_unsigned_tx(
+						call.clone(),
+						&signature,
+						Environment::key_manager_address().into(),
+					),
 				)),
-			),
 			Self::UpdateFlipSupply(call) =>
 				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
+					self.get_payload(),
 					contract_call_to_unsigned_tx(
 						call.clone(),
 						&signature,
