@@ -41,7 +41,8 @@ where
                 let number = header.number.unwrap();
 
                 if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
-                    let last_unsafe_block_number = last_unsafe_block_header.number().unwrap();
+                    // TODO: REturn error here
+                    let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
                     assert!(number <= last_unsafe_block_number + 1);
                     if number <= last_unsafe_block_number {
                         // if we receive two of the same block number then we still need to drop the first
@@ -133,6 +134,15 @@ pub mod tests {
         Ok(block_header)
     }
 
+    impl From<BlockHeader> for CFEthBlockHeader {
+        fn from(block_header: BlockHeader) -> Self {
+            CFEthBlockHeader {
+                block_number: block_header.number.unwrap(),
+                logs_bloom: block_header.logs_bloom,
+            }
+        }
+    }
+
     #[tokio::test]
     async fn returns_none_when_none_in_inner_no_safety() {
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![]);
@@ -169,7 +179,10 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 0);
 
-        assert_eq!(stream.next().await.unwrap().unwrap(), first_block.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block.unwrap().into()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -185,8 +198,14 @@ pub mod tests {
 
         let mut stream = safe_eth_log_header_stream(header_stream, 1);
 
-        assert_eq!(stream.next().await.unwrap().unwrap(), first_block.unwrap());
-        assert_eq!(stream.next().await.unwrap().unwrap(), second_block.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block.unwrap().into()
+        );
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            second_block.unwrap().into()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -204,11 +223,11 @@ pub mod tests {
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
-            first_block.clone().unwrap()
+            first_block.clone().unwrap().into()
         );
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
-            first_block_prime.unwrap()
+            first_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
     }
