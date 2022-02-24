@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use futures::StreamExt;
 use futures::{stream, Stream};
 use sp_core::H256;
 use web3::types::{Block, U64};
@@ -8,7 +9,7 @@ use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-use super::EthHttpRpcApi;
+use super::{CFEthBlockHeader, EthHttpRpcApi};
 
 use anyhow::Result;
 
@@ -16,7 +17,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
     logger: slog::Logger,
-) -> impl Stream<Item = Result<Block<H256>>> {
+) -> impl Stream<Item = Result<CFEthBlockHeader>> {
     struct StreamState<EthHttpRpc> {
         last_block_yielded: U64,
         last_head_fetched: U64,
@@ -31,7 +32,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
         logger,
     };
 
-    Box::pin(stream::unfold(init_data, move |mut state| async move {
+    let stream = stream::unfold(init_data, move |mut state| async move {
         loop {
             let is_first_iteration =
                 state.last_block_yielded == U64::from(0) && state.last_head_fetched == U64::from(0);
@@ -71,6 +72,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 state.last_block_yielded + U64::from(1)
             };
             if next_block_to_yield + U64::from(ETH_BLOCK_SAFETY_MARGIN) <= state.last_head_fetched {
+                // TODO: Look at deduping with inside block_logs_stream
                 let block = state
                     .eth_http_rpc
                     .block(next_block_to_yield)
@@ -84,7 +86,23 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 break Some((block, state));
             }
         }
-    }))
+    });
+    let stream = stream.then(|block| async {
+        block.and_then(|block| {
+            if block.number.is_none() || block.logs_bloom.is_none() {
+                Err(anyhow::Error::msg(
+                    "Block did not contain necessary block number and/or logs bloom",
+                ))
+            } else {
+                Ok(CFEthBlockHeader {
+                    block_number: block.number.unwrap(),
+                    logs_bloom: block.logs_bloom.unwrap(),
+                })
+            }
+        })
+    });
+
+    Box::pin(stream)
 }
 
 #[cfg(test)]
@@ -135,7 +153,7 @@ pub mod tests {
             safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
         let expected_returned_block_number = block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             expected_returned_block_number
         );
     }
@@ -189,13 +207,13 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             expected_first_returned_block_number
         );
         let expected_next_returned_block_number =
             next_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             expected_next_returned_block_number
         );
     }
@@ -247,7 +265,7 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             expected_first_returned_block_number
         );
 
@@ -255,7 +273,7 @@ pub mod tests {
         for n in skipped_range {
             let expected_skipped_block_number = U64::from(n - ETH_BLOCK_SAFETY_MARGIN);
             assert_eq!(
-                stream.next().await.unwrap().unwrap().number().unwrap(),
+                stream.next().await.unwrap().unwrap().block_number,
                 expected_skipped_block_number
             );
         }
@@ -312,14 +330,14 @@ pub mod tests {
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             expected_first_returned_block_number
         );
 
         // We do not want any repeat blocks, we will just wait until we can return the next safe
         // block, after the one we've already returned
         assert_eq!(
-            stream.next().await.unwrap().unwrap().number().unwrap(),
+            stream.next().await.unwrap().unwrap().block_number,
             next_safe_block_number
         );
     }
@@ -353,7 +371,7 @@ pub mod tests {
         for block_number in block_range {
             if let Some(block) = stream.next().await {
                 assert_eq!(
-                    block.unwrap().number().unwrap(),
+                    block.unwrap().block_number,
                     U64::from(block_number - ETH_BLOCK_SAFETY_MARGIN)
                 );
             };
