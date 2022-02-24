@@ -8,8 +8,6 @@ use ethbloom::{Bloom, Input};
 
 use futures::StreamExt;
 
-use crate::eth::BlockHeaderable;
-
 use super::{CFEthBlockHeader, EthRpcApi};
 
 use anyhow::Result;

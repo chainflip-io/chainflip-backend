@@ -115,10 +115,7 @@ pub mod tests {
     // in tests, this can be instant
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
-    use crate::{
-        eth::{mocks::MockEthHttpRpc, BlockHeaderable},
-        logging::test_utils::new_test_logger,
-    };
+    use crate::{eth::mocks::MockEthHttpRpc, logging::test_utils::new_test_logger};
 
     use anyhow::Result;
 

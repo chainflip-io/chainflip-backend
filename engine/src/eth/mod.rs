@@ -66,32 +66,6 @@ pub struct CFEthBlockHeader {
     pub logs_bloom: H2048,
 }
 
-pub trait BlockHeaderable {
-    fn logs_bloom(&self) -> Option<H2048>;
-
-    fn number(&self) -> Option<U64>;
-}
-
-impl BlockHeaderable for web3::types::BlockHeader {
-    fn logs_bloom(&self) -> Option<H2048> {
-        Some(self.logs_bloom)
-    }
-
-    fn number(&self) -> Option<U64> {
-        self.number
-    }
-}
-
-impl<TX> BlockHeaderable for web3::types::Block<TX> {
-    fn logs_bloom(&self) -> Option<H2048> {
-        self.logs_bloom
-    }
-
-    fn number(&self) -> Option<U64> {
-        self.number
-    }
-}
-
 #[cfg(test)]
 use mockall::automock;
 
