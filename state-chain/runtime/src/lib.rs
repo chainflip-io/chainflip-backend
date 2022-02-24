@@ -42,11 +42,10 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use cf_traits::{offline_conditions::ReputationPoints, ChainflipAccountData};
-pub use cf_traits::{BlockNumber, FlipBalance};
+pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	ChainflipVaultRotationHandler, OfflinePenalty,
+	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler, OfflinePenalty,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
@@ -122,16 +121,18 @@ parameter_types! {
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
-	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type Registrar = Session;
-	type ValidatorId = AccountId;
 	type MinValidators = MinValidators;
-	type Handler = EthereumVault;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type Online = Online;
-	type PeerMapping = pallet_cf_validator::Pallet<Self>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	type ValidatorQualification = (
+		Online,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
+	);
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
@@ -152,9 +153,10 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type Amount = FlipBalance;
 	type Auctioneer = Auction;
+	type VaultRotator = EthereumVault;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -170,7 +172,6 @@ parameter_types! {
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Chain = Ethereum;
-	type RotationHandler = ChainflipVaultRotationHandler;
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
@@ -490,7 +491,7 @@ construct_runtime!(
 		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
-		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Pallet, Config<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},

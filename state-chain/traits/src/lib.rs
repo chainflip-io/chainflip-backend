@@ -11,20 +11,26 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
-use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
-
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
 /// The type used as an epoch index.
 pub type EpochIndex = u32;
-pub type AuctionIndex = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
-	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	type Amount: Member
+		+ Parameter
+		+ Default
+		+ Eq
+		+ Ord
+		+ Copy
+		+ AtLeast32BitUnsigned
+		+ MaybeSerializeDeserialize;
+
 	/// An identity for a validator
 	type ValidatorId: Member
 		+ Default
@@ -32,7 +38,8 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ core::fmt::Debug
 		+ From<<Self as frame_system::Config>::AccountId>
-		+ Into<<Self as frame_system::Config>::AccountId>;
+		+ Into<<Self as frame_system::Config>::AccountId>
+		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>>;
@@ -146,7 +153,7 @@ pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
 
 /// A successful auction result
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct AuctionResult<ValidatorId, Amount> {
 	pub winners: Vec<ValidatorId>,
 	pub minimum_active_bid: Amount,
@@ -155,38 +162,21 @@ pub struct AuctionResult<ValidatorId, Amount> {
 /// A range of min, max for active validator set
 pub type ActiveValidatorRange = (u32, u32);
 
-/// An Auction
+/// Auctioneer
 ///
-/// An auction is broken down into three phases described by `AuctionPhase`
-/// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
-/// This results in a set of winners and a minimum bid after the auction.  After each successful
-/// call of `process()` the phase will transition else resulting in an error and preventing to move
-/// on.  A confirmation is looked to before completing the auction with the `AuctionConfirmation`
-/// trait.
+/// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
+/// returned as an `AuctionResult` calling `run_aucion()`. The result would then be provided to
+/// `update_validator_status()` when have rotated the active set.  A new auction is ran on each call
+/// of `resolve_auction()` which discards the previous auction run.
+
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
-	type BidderProvider;
 
-	/// The last auction ran
-	fn auction_index() -> AuctionIndex;
-	/// Range describing auction set size
-	fn active_range() -> ActiveValidatorRange;
-	/// Set new auction range, returning on success the old value
-	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
-	/// Our last successful auction result
-	fn auction_result() -> Option<AuctionResult<Self::ValidatorId, Self::Amount>>;
-	/// The current phase we find ourselves in
-	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
-	/// Are we in an auction?
-	fn waiting_on_bids() -> bool;
-	/// Move our auction process to the next phase returning success with phase completed
-	///
-	/// At each phase we assess the bidders based on a fixed set of criteria which results
-	/// in us arriving at a winning list and a bond set for this auction
-	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
-	/// Abort the process and back the preliminary phase
-	fn abort();
+	/// Run an auction by qualifying a validator
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>;
+	/// Update validator status for the winners
+	fn update_validator_status(winners: &[Self::ValidatorId]);
 }
 
 pub trait BackupValidators {
@@ -196,35 +186,30 @@ pub trait BackupValidators {
 	fn backup_validators() -> Vec<Self::ValidatorId>;
 }
 
-/// Feedback on a vault rotation
-pub trait VaultRotationHandler {
-	type ValidatorId;
-	/// The vault rotation has been aborted
-	fn vault_rotation_aborted();
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+pub enum KeygenStatus {
+	Busy,
+	Failed,
 }
 
 /// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
-	type RotationError;
+	type RotationError: Into<DispatchError>;
 
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
-	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
-	/// have been rotated.
-	fn finalize_rotation() -> Result<(), Self::RotationError>;
+	/// Get the status of the current key generation
+	fn get_keygen_status() -> Option<KeygenStatus>;
 }
 
 /// An error has occurred during an auction
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
-	MinValidatorSize,
-	InvalidRange,
-	Abort,
-	NotConfirmed,
+	/// Insufficient number of bidders
+	NotEnoughBidders,
 }
-
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
@@ -245,7 +230,8 @@ pub trait EpochTransitionHandler {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders, those stakers that are not retired
+	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
+	/// greater than zero
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
@@ -340,13 +326,6 @@ pub trait IsOnline {
 	type ValidatorId;
 	/// The online status of the validator
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
-}
-
-pub trait HasPeerMapping {
-	/// The validator id used
-	type ValidatorId;
-	/// The existence of this validators peer mapping
-	fn has_peer_mapping(validator_id: &Self::ValidatorId) -> bool;
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -604,6 +583,42 @@ pub trait QualifyValidator {
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
+/// A *not* qualified validator
+pub struct NotQualifiedValidator<T>(PhantomData<T>);
+
+impl<T> QualifyValidator for NotQualifiedValidator<T> {
+	type ValidatorId = T;
+	fn is_qualified(_: &Self::ValidatorId) -> bool {
+		true
+	}
+}
+
+/// Qualify if the validator has registered
+pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
+
+impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
+	for SessionKeysRegistered<T, R>
+{
+	type ValidatorId = T;
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		R::is_registered(validator_id)
+	}
+}
+
+impl<A, B, C> QualifyValidator for (A, B, C)
+where
+	A: QualifyValidator<ValidatorId = B::ValidatorId>,
+	B: QualifyValidator,
+	C: QualifyValidator<ValidatorId = B::ValidatorId>,
+{
+	type ValidatorId = A::ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		A::is_qualified(validator_id) &&
+			B::is_qualified(validator_id) &&
+			C::is_qualified(validator_id)
+	}
+}
 /// Handles the check of execution conditions
 pub trait ExecutionCondition {
 	/// Returns true/false if the condition is satisfied
