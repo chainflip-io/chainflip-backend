@@ -18,7 +18,6 @@ benchmarks_instance_pallet! {
 		where
 			T: frame_system::Config
 			+ pallet_cf_validator::Config
-			+ pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	}
 
 	signature_success {
