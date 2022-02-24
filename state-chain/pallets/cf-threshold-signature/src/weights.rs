@@ -48,7 +48,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:0 w:1)
 	fn signature_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(842_000_000 as Weight)
+		(868_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(157 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -56,9 +56,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner PendingRequests (r:1 w:1)
 	fn report_signature_failed(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(43_117_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((285_000 as Weight).saturating_mul(a as Weight))
+		(43_369_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((301_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -68,9 +68,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	fn determine_offenders(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(73_000 as Weight)
+		(157_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((49_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add((48_000 as Weight).saturating_mul(a as Weight))
 	}
 }
 
@@ -87,7 +87,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:0 w:1)
 	fn signature_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(842_000_000 as Weight)
+		(868_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(157 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -95,9 +95,9 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner PendingRequests (r:1 w:1)
 	fn report_signature_failed(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(43_117_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((285_000 as Weight).saturating_mul(a as Weight))
+		(43_369_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((301_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -107,8 +107,8 @@ impl WeightInfo for () {
 	}
 	fn determine_offenders(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(73_000 as Weight)
+		(157_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((49_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add((48_000 as Weight).saturating_mul(a as Weight))
 	}
 }

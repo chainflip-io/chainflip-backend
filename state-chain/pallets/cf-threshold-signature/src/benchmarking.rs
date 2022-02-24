@@ -5,7 +5,7 @@ use super::*;
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
 use pallet_cf_online::Call as OnlineCall;
 use pallet_cf_validator::{ValidatorLookup, Validators};
@@ -46,6 +46,11 @@ benchmarks_instance_pallet! {
 		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
 		let signature = <SignatureFor<T, I> as BenchmarkDefault>::benchmark_default();
 	} : _(RawOrigin::None, ceremony_id, signature)
+	verify {
+		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
+		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdDispatchComplete(ceremony_id, Ok(())).into();
+		assert_eq!(last_event, *expected.into_ref());
+	}
 	report_signature_failed {
 		let a in 1 .. 100;
 		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
