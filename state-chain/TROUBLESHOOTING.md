@@ -39,7 +39,7 @@ $ cargo build --features runtime-benchmarks
 To generate or update a single weight file for pallet run:
 
 ```bash
-$ source source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
+$ source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
 ```
 
 ### Chainflip-Node is not compiling with benchmark features enabled
