@@ -10,14 +10,14 @@ use futures::StreamExt;
 
 use crate::eth::BlockHeaderable;
 
-use super::EthRpcApi;
+use super::{CFEthBlockHeader, EthRpcApi};
 
 use anyhow::Result;
 
 pub fn safe_ws_head_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = Result<BlockHeader>>
+) -> impl Stream<Item = Result<CFEthBlockHeader>>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -33,7 +33,7 @@ where
         unsafe_block_headers: Default::default(),
     };
 
-    Box::pin(stream::unfold(init_data, move |mut state| async move {
+    let stream = stream::unfold(init_data, move |mut state| async move {
         loop {
             if let Some(header) = state.stream.next().await {
                 let header = match header {
@@ -82,7 +82,24 @@ where
                 break None;
             }
         }
-    }))
+    });
+
+    let stream = stream.then(|block| async {
+        block.and_then(|block| {
+            if block.number.is_none() {
+                Err(anyhow::Error::msg(
+                    "WS block header did not contain necessary block number",
+                ))
+            } else {
+                Ok(CFEthBlockHeader {
+                    block_number: block.number.unwrap(),
+                    logs_bloom: block.logs_bloom,
+                })
+            }
+        })
+    });
+
+    Box::pin(stream)
 }
 
 #[cfg(test)]
