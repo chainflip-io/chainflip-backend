@@ -26,7 +26,7 @@ pub mod cfe {
 	impl Default for CfeSettings {
 		fn default() -> Self {
 			Self {
-				eth_block_safety_margin: 4,
+				eth_block_safety_margin: 6,
 				pending_sign_duration: 500,
 				max_ceremony_stage_duration: 300,
 				max_extrinsic_retry_attempts: 10,
