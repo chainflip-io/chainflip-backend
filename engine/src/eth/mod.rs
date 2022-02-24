@@ -559,8 +559,8 @@ pub struct BlockEvents<EventParameters: Debug> {
 
 // return the block number, with an Option<Vec<Logs>>. None when there are no interesting logs
 // TODO: Handle header bs in here and then can have one less function.
-async fn get_logs_for_block<EthBlockHeader, EthRpc, EventParameters>(
-    header: EthBlockHeader,
+async fn get_logs_for_block<EthRpc, EventParameters>(
+    header: Box<dyn BlockHeaderable>,
     eth_rpc: EthRpc,
     contract_address: H160,
     decode_log_fn: Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send>,
@@ -568,7 +568,6 @@ async fn get_logs_for_block<EthBlockHeader, EthRpc, EventParameters>(
 ) -> BlockEvents<EventParameters>
 where
     EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
-    EthBlockHeader: BlockHeaderable + Clone + Send,
     EventParameters: Debug,
 {
     let block_number = header.number().unwrap();
@@ -576,12 +575,7 @@ where
     contract_bloom.accrue(Input::Raw(&contract_address.0));
 
     // if we have logs for this block, fetch them.
-    if header
-        .clone()
-        .logs_bloom()
-        .unwrap()
-        .contains_bloom(&contract_bloom)
-    {
+    if header.logs_bloom().unwrap().contains_bloom(&contract_bloom) {
         match eth_rpc
             .get_logs(
                 FilterBuilder::default()
@@ -593,9 +587,6 @@ where
             .await
         {
             Ok(logs) => {
-                // treat decoding logs as an error of the block
-                // TODO: Pass this in? instead of having this return result?
-                // let decode_log = self.decode_log_closure().unwrap();
                 match logs
                         .into_iter()
                         .map(
@@ -663,17 +654,16 @@ pub trait EthObserver {
     // If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
     // If the bloom is interesting and we fetch the logs. logs = Some(Ok)
     // Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
-    async fn block_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
+    async fn block_log_stream_by_contract<SafeBlockHeaderStream, EthRpc>(
         &self,
         safe_eth_head_stream: SafeBlockHeaderStream,
         eth_rpc: EthRpc,
         contract_address: H160,
         logger: slog::Logger,
-    ) -> Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send>>
+    ) -> Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>>>>
     where
-        SafeBlockHeaderStream: Stream<Item = Result<EthBlockHeader>> + Send + 'static,
+        SafeBlockHeaderStream: Stream<Item = Result<Box<dyn BlockHeaderable>>> + 'static + Send,
         EthRpc: EthRpcApi + Clone + Send + Sync + 'static,
-        EthBlockHeader: BlockHeaderable + Clone + Send + 'static,
     {
         let decode_log_fn = self.decode_log_closure().unwrap();
         Box::pin(safe_eth_head_stream.then(move |header| {
@@ -698,77 +688,89 @@ pub trait EthObserver {
     }
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
-    // async fn block_logs_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
-    //     &self,
-    //     from_block: u64,
-    //     contract_address: H160,
-    //     safe_head_stream: BlockHeaderStream,
-    //     eth_rpc: EthRpc,
-    //     logger: slog::Logger,
-    // ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send>>>
-    // where
-    //     BlockHeaderStream: Stream<Item = Result<EthBlockHeader>> + 'static + Send,
-    //     EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
-    //     EthBlockHeader: BlockHeaderable + Send + Sync + Clone + 'static,
-    // {
-    //     let from_block = U64::from(from_block);
-    //     let mut safe_head_stream = Box::pin(safe_head_stream);
+    async fn block_logs_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
+        &self,
+        from_block: u64,
+        contract_address: H160,
+        safe_head_stream: BlockHeaderStream,
+        eth_rpc: EthRpc,
+        logger: slog::Logger,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>>>>>
+    where
+        BlockHeaderStream: Stream<Item = Result<EthBlockHeader>> + 'static + Send,
+        EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+        EthBlockHeader: BlockHeaderable + Send + Sync + Clone + 'static,
+    {
+        let from_block = U64::from(from_block);
+        let mut safe_head_stream = Box::pin(safe_head_stream);
 
-    //     // only allow pulling from the stream once we are actually at our from_block number
-    //     while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
-    //         let best_safe_block_header = current_best_safe_block_header
-    //             .context("Could not get first safe ETH block header")?;
-    //         let best_safe_block_number = best_safe_block_header
-    //             .number()
-    //             .expect("Should have block number");
-    //         // we only want to start observing once we reach the from_block specified
-    //         if best_safe_block_number < from_block {
-    //             slog::trace!(
-    //                 logger,
-    //                 "Not witnessing until ETH block `{}` Received block `{}` from stream.",
-    //                 from_block,
-    //                 best_safe_block_number
-    //             );
-    //         } else {
-    //             // our chain_head is above the from_block number
-    //             // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
+        // only allow pulling from the stream once we are actually at our from_block number
+        while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
+            let best_safe_block_header = current_best_safe_block_header
+                .context("Could not get first safe ETH block header")?;
+            let best_safe_block_number = best_safe_block_header
+                .number()
+                .expect("Should have block number");
+            // we only want to start observing once we reach the from_block specified
+            if best_safe_block_number < from_block {
+                slog::trace!(
+                    logger,
+                    "Not witnessing until ETH block `{}` Received block `{}` from stream.",
+                    from_block,
+                    best_safe_block_number
+                );
+            } else {
+                // our chain_head is above the from_block number
+                // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
 
-    //             let eth_rpc_c = eth_rpc.clone();
-    //             let logger_c = logger.clone();
+                let eth_rpc_c = eth_rpc.clone();
+                let logger_c = logger.clone();
 
-    //             // TODO: Look at using block_log_stream_by_contract
-    //             // TODO: Wait to get all past logs before continuing
+                // TODO: Look at using block_log_stream_by_contract
+                // TODO: Wait to get all past logs before continuing
 
-    //             // block log stream for contract instead of this.
-    //             let past_logs = stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64())
-    //                 .then(move |block_number| {
-    //                     let eth_rpc = eth_rpc_c.clone();
-    //                     let logger = logger_c.clone();
-    //                     // TODO: Can this async block be removed, by using .then()?
-    //                     async move {
-    //                         eth_rpc
-    //                             .block(next_block_to_yield)
-    //                             .await
-    //                             .and_then(|opt_block| {
-    //                                 opt_block.ok_or(anyhow::Error::msg(
-    //                                     "Could not find ETH block in HTTP safe stream",
-    //                                 ))
-    //                             })
-    //                     }
-    //                 });
+                // block log stream for contract instead of this.
+                let past_logs = stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64())
+                    .then(move |block_number| {
+                        let eth_rpc = eth_rpc_c.clone();
+                        let logger = logger_c.clone();
+                        // TODO: Can this async block be removed, by using .then()?
+                        async move {
+                            eth_rpc
+                                .block(U64::from(block_number))
+                                .await
+                                .and_then(|opt_block| {
+                                    let block = opt_block.ok_or(anyhow::Error::msg(
+                                        "Could not find ETH block in HTTP safe stream",
+                                    ));
+                                    block.and_then(|block| {
+                                        let block_h: Box<dyn BlockHeaderable> = Box::new(block);
+                                        Ok(block_h)
+                                    })
+                                })
+                        }
+                    });
 
-    //             let block_log_stream = block_log_stream_by_contract(
-    //                 past_logs.chain(safe_head_stream),
-    //                 eth_rpc.clone(),
-    //                 contract_address,
-    //                 logger.clone(),
-    //             );
+                let safe_head_stream = safe_head_stream.then(|head| async {
+                    head.and_then(|head| {
+                        let head: Box<dyn BlockHeaderable> = Box::new(head);
+                        Ok(head)
+                    })
+                });
 
-    //             return Ok(Box::pin(past_logs.chain(future_logs)));
-    //         }
-    //     }
-    //     Err(anyhow::Error::msg("No events in safe head stream"))
-    // }
+                // now we pass the headers in here, to get the logs.
+                return Ok(self
+                    .block_log_stream_by_contract(
+                        past_logs.chain(safe_head_stream),
+                        eth_rpc.clone(),
+                        contract_address,
+                        logger.clone(),
+                    )
+                    .await);
+            }
+        }
+        Err(anyhow::Error::msg("No events in safe head stream"))
+    }
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
