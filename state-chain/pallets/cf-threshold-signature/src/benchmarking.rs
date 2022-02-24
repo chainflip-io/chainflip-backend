@@ -4,9 +4,7 @@
 use super::*;
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
-use frame_benchmarking::{
-	account, benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 use pallet_cf_validator::{ValidatorLookup, Validators};
 use sp_std::convert::TryInto;
@@ -36,17 +34,17 @@ benchmarks_instance_pallet! {
 	} : _(RawOrigin::None, ceremony_id, signature)
 	report_signature_failed {
 		let a in 1 .. 100;
-		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
+		let mut all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
 
 		Validators::<T>::put(all_accounts.clone().collect::<Vec<_>>());
 		for account in all_accounts.clone() {
 			ValidatorLookup::<T>::insert(account, ());
 		}
-		let all_validator_ids = all_accounts.clone().map(|account_id| <T as Chainflip>::ValidatorId::from(account_id));
+		let all_validator_ids = all_accounts.clone().map(<T as Chainflip>::ValidatorId::from);
 		let offenders = BTreeSet::from_iter(all_validator_ids.take(a as usize))
 			.try_into()
 			.expect("Benchmark threshold should not exceed BTreeSet bounds");
-		let signer = all_accounts.skip(a as usize).next().unwrap();
+		let signer = all_accounts.nth(a as usize).unwrap();
 
 		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
 	} : _(RawOrigin::Signed(signer), ceremony_id, offenders)
