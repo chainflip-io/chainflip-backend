@@ -521,13 +521,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id);
 		// Try to figure out the payload by the broadcast_id
 		if let Some(payload) = PayloadToBroadcastIdLookup::<T, I>::iter()
-			.filter(|payload_to_broadcast| payload_to_broadcast.1 == broadcast_id)
-			.map(|payload_to_broadcast| payload_to_broadcast.0)
-			.collect::<Vec<PayloadFor<T, I>>>()
-			.pop()
+			.filter_map(|(payload, id)| if id == broadcast_id { Some(payload) } else { None })
+			.next()
 		{
 			// Remove the payload lookup
-			PayloadToBroadcastIdLookup::<T, I>::take(payload);
+			PayloadToBroadcastIdLookup::<T, I>::remove(payload);
 		}
 	}
 
