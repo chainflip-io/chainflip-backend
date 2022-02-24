@@ -452,6 +452,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
 parameter_types! {
