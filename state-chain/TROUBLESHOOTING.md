@@ -31,7 +31,7 @@ Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise 
 ### Compile the node with benchmark features enabled
 
 ```bash
-$ cargo build --features runtime-benchmarks
+$ cargo build --release --features runtime-benchmarks
 ```
 
 ### Generating weight files
