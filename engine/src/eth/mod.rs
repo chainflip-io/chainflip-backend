@@ -777,7 +777,7 @@ pub trait EthObserver {
 
         let safe_ws_head_stream = safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
 
-        let safe_ws_event_logs = self
+        let safe_ws_block_events = self
             .block_logs_stream_from_head_stream(
                 from_block,
                 deployed_address,
@@ -791,21 +791,47 @@ pub trait EthObserver {
             safe_polling_http_head_stream(eth_http_rpc.clone(), HTTP_POLL_INTERVAL, logger.clone())
                 .await;
 
-        let safe_http_event_logs = self
+        let safe_http_block_events = self
             .block_logs_stream_from_head_stream(
                 from_block,
                 deployed_address,
                 safe_http_head_stream,
                 eth_http_rpc,
-                logger,
+                logger.clone(),
             )
             .await?;
 
-        todo!("merged stream");
+        // todo!("merged stream");
         // self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
         //     .await
+        self.merged_log_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
+            .await
     }
 
+    async fn merged_log_stream<'a, EventCommonStream>(
+        &'a self,
+        safe_ws_log_stream: EventCommonStream,
+        safe_http_log_stream: EventCommonStream,
+        logger: slog::Logger,
+    ) -> Result<Pin<Box<dyn 'a + Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
+    where
+        EventCommonStream: Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
+    {
+        todo!("Implementation");
+    }
+
+    //     async fn merged_log_stream<EventCommonStream, EventCommonStream2>(
+    //     &self,
+    //     safe_ws_log_stream: EventCommonStream,
+    //     safe_http_log_stream: EventCommonStream2,
+    //     logger: slog::Logger,
+    // ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
+    // where
+    //     EventCommonStream: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
+    //     EventCommonStream2: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
+    // {
+    //     Err(anyhow::Error::msg("Hello"))
+    // }
     /// Takes two *safe* log streams one from each protocol. We shouldn't see reorgs occur in either of the streams
     /// This will deduplicate the logs (since for two correctly functioning individual streams we should get 2 of each log)
     /// It will continue when one of the streams stops returning, or one of the streams progresses backwards
