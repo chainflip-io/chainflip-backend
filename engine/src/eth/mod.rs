@@ -252,13 +252,17 @@ pub struct EthWsRpcClient {
 
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-        let node_endpoint = &eth_settings.node_endpoint;
-        match redact_secret_eth_node_endpoint(node_endpoint) {
+        let ws_node_endpoint = &eth_settings.ws_node_endpoint;
+        match redact_secret_eth_node_endpoint(ws_node_endpoint) {
             Ok(redacted) => {
                 slog::debug!(logger, "Connecting new web3 client to {}", redacted);
             }
             Err(e) => {
-                slog::error!(logger, "Could not redact secret from node endpoint: {}", e);
+                slog::error!(
+                    logger,
+                    "Could not redact secret from ws node endpoint: {}",
+                    e
+                );
                 slog::debug!(logger, "Connecting new web3 client");
             }
         }
