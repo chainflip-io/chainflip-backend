@@ -1,5 +1,5 @@
+use crate::eth::{to_ethereum_address, SchnorrVerificationComponents};
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
-use crate::eth::{SchnorrVerificationComponents, to_ethereum_address};
 use libsecp256k1::{PublicKey, SecretKey};
 
 /// Returns a valid signature for use in benchmarks.
