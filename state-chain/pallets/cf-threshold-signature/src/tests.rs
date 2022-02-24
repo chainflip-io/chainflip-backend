@@ -132,7 +132,7 @@ fn happy_path() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -155,7 +155,7 @@ fn fail_path_with_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -211,7 +211,7 @@ fn fail_path_no_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -279,7 +279,7 @@ fn test_not_enough_signers_for_threshold() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::ceremony_id_counter();
+			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
 			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
 			assert!(request_context.retry_scheduled);
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;

@@ -5,9 +5,8 @@ use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{
-        new_synced_web3_client,
         stake_manager::{StakeManager, StakeManagerEvent},
-        EthObserver,
+        EthHttpRpcClient, EthObserver, EthWsRpcClient,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},
@@ -28,9 +27,12 @@ pub async fn test_all_stake_manager_events() {
     let settings =
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let web3 = new_synced_web3_client(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .unwrap();
+        .expect("Couldn't create EthRpcClient");
+
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth).expect("Couldn't create EthHttpRpcClient");
 
     // TODO: Get the address from environment variables, so we don't need to start the SC
     let stake_manager = StakeManager::new(H160::default()).unwrap();
@@ -38,15 +40,14 @@ pub async fn test_all_stake_manager_events() {
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     let sm_events = stake_manager
-        .event_stream(&web3, 0, &root_logger)
+        .event_stream(&eth_http_rpc_client, &eth_ws_rpc_client, 0, &root_logger)
         .await
         .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
         .collect::<Vec<_>>()
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Error in event stream");
+        .collect::<Vec<_>>();
 
     assert!(
         !sm_events.is_empty(),
@@ -130,7 +131,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_parameters {
+        .find(|event| match event.event_parameters {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -138,11 +139,11 @@ pub async fn test_all_stake_manager_events() {
             } => {
                 assert_eq!(
                     old_min_stake,
-                    &U256::from_dec_str("40000000000000000000000").unwrap()
+                    U256::from_dec_str("40000000000000000000000").unwrap()
                 );
                 assert_eq!(
                     new_min_stake,
-                    &U256::from_dec_str("13333333333333334032384").unwrap()
+                    U256::from_dec_str("13333333333333334032384").unwrap()
                 );
                 true
             }
@@ -152,7 +153,7 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match &event.event_parameters {
+        .find(|event| match event.event_parameters {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,
@@ -160,11 +161,11 @@ pub async fn test_all_stake_manager_events() {
             } => {
                 assert_eq!(
                     old_supply,
-                    &U256::from_dec_str("90000000000000000000000000").unwrap()
+                    U256::from_dec_str("90000000000000000000000000").unwrap()
                 );
                 assert_eq!(
                     new_supply,
-                    &U256::from_dec_str("100000000000000000000000000").unwrap()
+                    U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
                 true
             }

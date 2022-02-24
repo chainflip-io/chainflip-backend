@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::{
-	impl_mock_online,
+	impl_mock_keygen_exclusion, impl_mock_online,
 	mocks::{
 		chainflip_account::MockChainflipAccount,
 		vault_rotation::{clear_confirmation, Mock as MockVaultRotator},
@@ -59,10 +59,10 @@ pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
 
 pub fn run_auction() {
 	AuctionPallet::process()
-		.and(AuctionPallet::process().and_then(|_| {
+		.and_then(|_| {
 			clear_confirmation();
-			AuctionPallet::process().and(AuctionPallet::process())
-		}))
+			AuctionPallet::process()
+		})
 		.unwrap();
 
 	assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
@@ -129,9 +129,8 @@ parameter_types! {
 pub struct MockEmergencyRotation;
 
 impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() -> Weight {
+	fn request_emergency_rotation() {
 		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
-		0
 	}
 
 	fn emergency_rotation_in_progress() -> bool {
@@ -142,6 +141,7 @@ impl EmergencyRotation for MockEmergencyRotation {
 }
 
 impl_mock_online!(ValidatorId);
+impl_mock_keygen_exclusion!(ValidatorId);
 
 pub struct MockPeerMapping;
 
@@ -165,6 +165,7 @@ impl Config for Test {
 	type Online = MockOnline;
 	type PeerMapping = MockPeerMapping;
 	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type KeygenExclusionSet = MockKeygenExclusion;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;

@@ -172,8 +172,8 @@ pub mod pallet {
 
 	/// A counter to generate fresh ceremony ids.
 	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
+	#[pallet::getter(fn signing_ceremony_id_counter)]
+	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Stores the context required for processing live requests.
 	#[pallet::storage]
@@ -235,15 +235,7 @@ pub mod pallet {
 						T::OfflineReporter::report(
 							OfflineCondition::ParticipateSigningFailed,
 							&offender,
-						)
-						.unwrap_or_else(|e| {
-							log::error!(
-								"Unable to report ParticipateSigningFailed for participant {:?}: {:?}",
-								offender,
-								e
-							);
-							0
-						});
+						);
 					}
 
 					// Initiate a new attempt.
@@ -279,7 +271,7 @@ pub mod pallet {
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&T::KeyProvider::current_key(),
 					&context.chain_signing_context.get_payload(),
-					&signature,
+					signature,
 				) {
 					ValidTransaction::with_tag_prefix("ThresholdSignature")
 						// We only expect one success per ceremony.
@@ -317,7 +309,7 @@ pub mod pallet {
 			id: CeremonyId,
 			signature: SignatureFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = ensure_none(origin)?;
+			ensure_none(origin)?;
 
 			// The request succeeded, remove it.
 			let context = PendingRequests::<T, I>::take(id).ok_or_else(|| {
@@ -369,7 +361,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = ensure_signed(origin)?.into();
 
-			let _ = PendingRequests::<T, I>::try_mutate(id, |maybe_context| {
+			PendingRequests::<T, I>::try_mutate(id, |maybe_context| {
 				maybe_context
 					.as_mut()
 					.ok_or(Error::<T, I>::InvalidCeremonyId)
@@ -439,7 +431,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores its context, and returns its id.
 	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
-		let id = CeremonyIdCounter::<T, I>::mutate(|id| {
+		let id = SigningCeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
@@ -494,8 +486,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn schedule_retry(id: CeremonyId, retry_delay: BlockNumberFor<T>) {
 		RetryQueues::<T, I>::append(
-			frame_system::Pallet::<T>::current_block_number()
-				.saturating_add(BlockNumberFor::<T>::from(retry_delay)),
+			frame_system::Pallet::<T>::current_block_number().saturating_add(retry_delay),
 			id,
 		);
 	}

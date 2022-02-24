@@ -139,7 +139,7 @@ impl UnfilteredDispatchable for MockCallback<Doge> {
 }
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &'static [u8] = b"d06e";
+pub const MOCK_KEY_ID: &[u8] = b"d06e";
 
 pub struct MockKeyProvider;
 
@@ -184,6 +184,7 @@ impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
 	type Payload = String;
 	type ThresholdSignature = DogeSig;
+	type TransactionHash = Vec<u8>;
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,
@@ -240,6 +241,7 @@ pub struct ExtBuilder {
 }
 
 impl ExtBuilder {
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		let ext = new_test_ext();
 		Self { ext }
@@ -270,7 +272,7 @@ impl ExtBuilder {
 			assert_eq!(pending.attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or(Default::default()))
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
 		});
 		self

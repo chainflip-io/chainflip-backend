@@ -53,9 +53,8 @@ macro_rules! impl_mock_offline_conditions {
 			fn report(
 				_condition: $crate::offline_conditions::OfflineCondition,
 				validator_id: &Self::ValidatorId,
-			) -> Result<frame_support::dispatch::Weight, $crate::offline_conditions::ReportError> {
+			) {
 				REPORTED.with(|cell| cell.borrow_mut().push(validator_id.clone()));
-				Ok(0)
 			}
 		}
 	};

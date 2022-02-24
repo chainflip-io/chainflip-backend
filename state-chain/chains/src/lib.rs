@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(array_map)] // stable as of rust 1.55
 
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
-use sp_std::{convert::TryFrom, prelude::*};
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use sp_std::{
+	convert::{Into, TryFrom},
+	prelude::*,
+};
 
 pub mod eth;
 
@@ -20,9 +23,11 @@ pub trait Chain {
 
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
-	type AggKey: TryFrom<Vec<u8>> + Member + Parameter;
+	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
+	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Ord;
 	type Payload: Member + Parameter;
 	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
+	type TransactionHash: Member + Parameter;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -76,6 +81,7 @@ impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
+	type TransactionHash = eth::H256;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -97,6 +103,7 @@ pub mod mock {
 		type AggKey = Vec<u8>;
 		type Payload = Vec<u8>;
 		type ThresholdSignature = Vec<u8>;
+		type TransactionHash = Vec<u8>;
 
 		fn verify_threshold_signature(
 			_agg_key: &Self::AggKey,
@@ -111,6 +118,7 @@ pub mod mock {
 		type AggKey = Vec<u8>;
 		type Payload = Vec<u8>;
 		type ThresholdSignature = Vec<u8>;
+		type TransactionHash = Vec<u8>;
 
 		fn verify_threshold_signature(
 			_agg_key: &Self::AggKey,

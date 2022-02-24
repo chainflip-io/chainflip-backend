@@ -1,11 +1,12 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, Instance1, SignerNomination};
+use crate::{
+	self as pallet_cf_broadcast, AttemptCount, BroadcastConfig, Instance1, SignerNomination,
+};
 use cf_chains::Ethereum;
 use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
-use frame_system;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -74,13 +75,13 @@ impl Chainflip for Test {
 }
 
 pub struct MockNominator;
-pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
+pub const RANDOM_NOMINEE: u64 = 0xc001d00d_u64;
 
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed<S>(_seed: S) -> Option<Self::SignerId> {
-		NOMINATION.with(|cell| cell.borrow().clone())
+		NOMINATION.with(|cell| *cell.borrow())
 	}
 
 	fn threshold_nomination_with_seed<S>(_seed: S) -> Option<Vec<Self::SignerId>> {
@@ -121,10 +122,12 @@ impl BroadcastConfig for MockBroadcastConfig {
 
 pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
 pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
+pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 3;
 
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
+	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -137,6 +140,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
+	type MaximumAttempts = MaximumAttempts;
 }
 
 // Build genesis storage according to the mock runtime.

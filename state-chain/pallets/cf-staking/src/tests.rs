@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts, Pallet, PendingClaims,
-	WithdrawalAddresses,
+	mock::*, pallet, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts, Pallet,
+	PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::eth::ChainflipContractCall;
 use cf_traits::mocks::time_source;
@@ -116,7 +116,7 @@ fn claiming_unclaimable_is_err() {
 		// Claim FLIP before it is staked.
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::InvalidClaim
 		);
 
 		// Make sure account balance hasn't been touched.
@@ -125,10 +125,17 @@ fn claiming_unclaimable_is_err() {
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
+		// Try to, and fail, claim an amount that would leave the balance below the minimum stake
+		let excessive_claim = STAKE - MIN_STAKE + 1;
+		assert_noop!(
+			Staking::claim(Origin::signed(ALICE), excessive_claim, ETH_DUMMY_ADDR),
+			Error::<Test>::BelowMinimumStake
+		);
+
 		// Claim FLIP from another account.
 		assert_noop!(
 			Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR),
-			FlipError::InsufficientLiquidity
+			Error::<Test>::InvalidClaim
 		);
 
 		// Make sure storage hasn't been touched.
@@ -162,13 +169,33 @@ fn cannot_double_claim() {
 		);
 
 		// Redeem the first claim.
+		assert_eq!(
+			ClaimExpiries::<Test>::get()[0].1,
+			ALICE,
+			"Alice's claim should have an expiry set"
+		);
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a1, TX_HASH));
+		assert_eq!(
+			ClaimExpiries::<Test>::get().len(),
+			0,
+			"As Alice's claim is claimed it should have no expiry"
+		);
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2, ETH_DUMMY_ADDR));
 
 		// Redeem the rest.
+		assert_eq!(
+			ClaimExpiries::<Test>::get()[0].1,
+			ALICE,
+			"Alice's claim should have an expiry set"
+		);
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a2, TX_HASH));
+		assert_eq!(
+			ClaimExpiries::<Test>::get().len(),
+			0,
+			"As Alice's claim is claimed it should have no expiry"
+		);
 
 		// Remaining stake should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
@@ -436,18 +463,18 @@ fn claim_expiry() {
 }
 
 #[test]
-fn no_claims_during_auction() {
+fn no_claims_allowed_out_of_claim_period() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
-		MockEpochInfo::set_is_auction_phase(true);
+		MockEpochInfo::set_claiming_allowed(false);
 
 		// Staking during an auction is OK.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
 
-		// Claiming during an auction isn't OK.
+		// Claiming is not allowed.
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
-			<Error<Test>>::NoClaimsDuringAuctionPhase
+			<Error<Test>>::AuctionPhase
 		);
 	});
 }

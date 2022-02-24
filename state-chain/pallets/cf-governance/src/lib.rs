@@ -24,6 +24,7 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_traits::{ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
@@ -70,6 +71,10 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+		/// Provides the logic if a runtime can be performed
+		type UpgradeCondition: ExecutionCondition;
+		/// Provides to implementation for a runtime upgrade
+		type RuntimeUpgrade: RuntimeUpgrade;
 	}
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -86,10 +91,10 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Count how many proposals ever has been submitted
+	/// Count how many proposals have ever been submitted
 	#[pallet::storage]
-	#[pallet::getter(fn number_of_proposals)]
-	pub(super) type ProposalCount<T> = StorageValue<_, u32, ValueQuery>;
+	#[pallet::getter(fn proposal_id_counter)]
+	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Pipeline of proposals which will get executed in the next block
 	#[pallet::storage]
@@ -135,6 +140,8 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
+		/// The upgrade conditions for a runtime upgrade were satisfied
+		UpgradeConditionsSatisfied,
 	}
 
 	#[pallet::error]
@@ -149,6 +156,10 @@ pub mod pallet {
 		DecodeOfCallFailed,
 		/// The majority was not reached when the execution was triggered
 		MajorityNotReached,
+		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
+		UpgradeConditionsNotMet,
+		/// A runtime upgrade was not successful
+		UpgradeHasFailed,
 	}
 
 	#[pallet::call]
@@ -202,6 +213,32 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Performs a runtime upgrade of the Chainflip runtime
+		/// **Can only be called via the Governance Origin**
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn chainflip_runtime_upgrade(
+			origin: OriginFor<T>,
+			code: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			// Ensure the extrinsic was executed by the governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+			// Ensure execution conditions
+			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
+			// Emit an additional event
+			Self::deposit_event(Event::UpgradeConditionsSatisfied);
+			// Do the runtime upgrade
+			T::RuntimeUpgrade::do_upgrade(code)
+		}
+
 		/// Approve a proposal by a given proposal id
 		/// Approve a Proposal.
 		///
@@ -241,6 +278,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
+			// TODO: Not possible to fix the clippy warning here. At the moment we
+			// need to ignore it on a global level.
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -371,14 +410,14 @@ impl<T: Config> Pallet<T> {
 		// Insert a new proposal
 		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: vec![] });
 		// Update the proposal counter
-		ProposalCount::<T>::put(id);
+		ProposalIdCounter::<T>::put(id);
 		// Add the proposal to the active proposals array
 		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
 		id
 	}
 	/// Returns the next proposal id
 	fn get_next_id() -> ProposalId {
-		ProposalCount::<T>::get().add(1)
+		ProposalIdCounter::<T>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
 	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {

@@ -5,7 +5,6 @@ use crate::multisig::{KeyDB, KeyId};
 use super::common::KeygenResultInfo;
 
 // Successfully generated multisig keys live here
-#[derive(Clone)]
 pub struct KeyStore<S>
 where
     S: KeyDB,
@@ -34,7 +33,6 @@ where
     }
 
     // Save `key` under key `key_id` overwriting if exists
-    // TODO: Can we borrow KeyId here too?
     pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo) {
         self.db.update_key(&key_id, &key);
         self.keys.insert(key_id, key);

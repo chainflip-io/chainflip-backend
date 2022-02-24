@@ -24,19 +24,13 @@ use sp_std::{
 	prelude::*,
 	str, vec,
 };
-//------------------------//
-// TODO: these should be on-chain constants or config items. See github issue #520.
+
+// Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
-pub fn stake_manager_contract_address() -> [u8; 20] {
-	const ADDR: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
-	let mut buffer = [0u8; 20];
-	buffer.copy_from_slice(hex::decode(ADDR).unwrap().as_slice());
-	buffer
-}
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;
@@ -113,7 +107,7 @@ pub enum AggKeyVerificationError {
 /// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ParityBit {
 	Odd,
 	Even,
@@ -134,10 +128,7 @@ impl ParityBit {
 	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
 	///
 	/// Returns `None` if conversion was not possible for this chain id.
-	pub(super) fn to_eth_recovery_id(
-		&self,
-		chain_id: u64,
-	) -> Option<ethereum::TransactionRecoveryId> {
+	pub(super) fn eth_recovery_id(&self, chain_id: u64) -> Option<ethereum::TransactionRecoveryId> {
 		let offset = match self {
 			ParityBit::Odd => 36,
 			ParityBit::Even => 35,
@@ -162,7 +153,7 @@ impl From<ParityBit> for Uint {
 
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AggKey {
 	/// X coordinate of the public key as a 32-byte array.
 	pub pub_key_x: [u8; 32],
@@ -238,13 +229,13 @@ impl AggKey {
 
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&nonce));
+		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(nonce));
 		let e = {
-			let challenge = self.message_challenge(&msg_hash, &k_times_g_addr);
+			let challenge = self.message_challenge(msg_hash, &k_times_g_addr);
 			let mut s = Scalar::default();
 			let mut bytes = [0u8; 32];
 			bytes.copy_from_slice(&challenge);
-			let _ = s.set_b32(&bytes);
+			let _overflowed = s.set_b32(&bytes);
 			s
 		};
 
@@ -301,7 +292,7 @@ impl AggKey {
 				let mut bytes = [0u8; 32];
 				bytes.copy_from_slice(msg_challenge.as_ref());
 				// Question: Is it ok that this prevents overflow?
-				let _ = e.set_b32(&bytes);
+				let _overflowed = e.set_b32(&bytes);
 				e
 			};
 
@@ -582,7 +573,7 @@ pub type RawSignedTransaction = Vec<u8>;
 /// **TODO: In-depth review to ensure correctness.**
 pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
-	signed: &RawSignedTransaction,
+	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
 ) -> Result<(), TransactionVerificationError> {
 	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
@@ -604,7 +595,7 @@ pub fn verify_transaction(
 	let parity_to_recovery_id = |odd: bool, chain_id: u64| {
 		let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
 		parity
-			.to_eth_recovery_id(chain_id)
+			.eth_recovery_id(chain_id)
 			.ok_or(TransactionVerificationError::InvalidChainId)
 	};
 	let (r, s, v) = match decoded_tx {

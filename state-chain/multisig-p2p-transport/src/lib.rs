@@ -229,7 +229,7 @@ pub fn new_p2p_validator_network_node<
 					for (peer_id, _) in peers.iter().filter(|(peer_id, port_addr)| {
 						state.reserved_peers.get(peer_id) != Some(port_addr)
 					}) {
-						self.p2p_network_service.remove_reserved_peer(peer_id.clone());
+						self.p2p_network_service.remove_reserved_peer(*peer_id);
 					}
 
 					for (peer_id, (port, addr)) in state
@@ -237,7 +237,7 @@ pub fn new_p2p_validator_network_node<
 						.iter()
 						.filter(|(peer_id, addr_port)| peers.get(peer_id) != Some(addr_port))
 					{
-						self.p2p_network_service.reserve_peer(peer_id.clone(), *port, *addr);
+						self.p2p_network_service.reserve_peer(*peer_id, *port, *addr);
 					}
 
 					log::info!(
@@ -400,7 +400,7 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers = total_connected_peers + 1;
+								total_connected_peers += 1;
 								log::info!(
 									"Connected and established {} with peer: {} (Total Connected: {})",
 									protocol,
@@ -411,7 +411,7 @@ pub fn new_p2p_validator_network_node<
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers = total_connected_peers - 1;
+								total_connected_peers -= 1;
 								log::info!(
 									"Disconnected and closed {} with peer: {} (Total Connected: {})",
 									protocol,
@@ -470,7 +470,6 @@ mod tests {
 	use jsonrpc_core::MetaIoHandler;
 	use jsonrpc_core_client::transports::local;
 	use mockall::{predicate::eq, Sequence};
-	use tokio;
 
 	struct LockedMockPeerNetwork(RwLock<MockPeerNetwork>);
 	impl LockedMockPeerNetwork {

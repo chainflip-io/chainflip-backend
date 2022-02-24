@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -176,6 +176,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransmissionTimeout: Get<BlockNumberFor<Self>>;
 
+		/// Maximum number of attempts
+		#[pallet::constant]
+		type MaximumAttempts: Get<AttemptCount>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -241,6 +245,8 @@ pub mod pallet {
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
+		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
+		BroadcastAborted(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -314,7 +320,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
+			let _success = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 				*id += 1;
@@ -410,7 +416,7 @@ pub mod pallet {
 			attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Remove the transmission details now the broadcast is completed.
 			let TransmissionAttempt::<T, I> { broadcast_id, .. } =
@@ -440,7 +446,7 @@ pub mod pallet {
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let failed_attempt = AwaitingTransmission::<T, I>::take(attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
@@ -513,11 +519,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// In this case all validators are currently offline. We just do
 			// nothing in this case and wait until someone comes up again.
 			log::warn!("No online validators at the moment.");
-			let failed = FailedBroadcastAttempt::<T, I> {
-				broadcast_id,
-				attempt_count,
-				unsigned_tx: unsigned_tx.clone(),
-			};
+			let failed =
+				FailedBroadcastAttempt::<T, I> { broadcast_id, attempt_count, unsigned_tx };
 			Self::schedule_retry(failed);
 		}
 	}
@@ -527,21 +530,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		failed: FailedBroadcastAttempt<T, I>,
 		offline_condition: OfflineCondition,
 	) {
-		T::OfflineReporter::report(offline_condition, signer).unwrap_or_else(|_| {
-			// Should never fail unless the validator doesn't exist.
-			log::error!("Unable to report unknown validator {:?}", signer);
-			0
-		});
+		T::OfflineReporter::report(offline_condition, signer);
 		Self::schedule_retry(failed);
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
+	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
 	fn schedule_retry(failed: FailedBroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append(&failed);
-		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-			failed.broadcast_id,
-			failed.attempt_count,
-		));
+		if failed.attempt_count < T::MaximumAttempts::get() {
+			BroadcastRetryQueue::<T, I>::append(&failed);
+			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
+				failed.broadcast_id,
+				failed.attempt_count,
+			));
+		} else {
+			Self::deposit_event(Event::<T, I>::BroadcastAborted(failed.broadcast_id));
+		}
 	}
 
 	/// Retry a failed attempt by starting anew with incremented attempt_count.

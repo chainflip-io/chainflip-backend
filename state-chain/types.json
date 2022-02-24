@@ -113,6 +113,10 @@
     "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
   "KeyId": "Vec<u8>",
+  "Keys": {
+    "aura": "[u8; 32]",
+    "grandpa": "[u8; 32]"
+  },
   "Liveness": {
     "last_heartbeat": "BlockNumber",
     "banned_until": "BlockNumber"
@@ -134,6 +138,7 @@
   "OnlineCredits": "BlockNumber",
   "OnlineCreditsFor": "BlockNumber",
   "PayloadFor": "[u8; 32]",
+  "Percentage": "u8",
   "PercentageRange": {
     "top": "u8",
     "bottom": "u8"
