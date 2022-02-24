@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use futures::{stream, Stream};
-use sp_core::H256;
-use web3::types::{Block, U64};
+use web3::types::U64;
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
@@ -89,7 +88,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
         block.and_then(|block| {
             if block.number.is_none() || block.logs_bloom.is_none() {
                 Err(anyhow::Error::msg(
-                    "Block did not contain necessary block number and/or logs bloom",
+                    "HTTP block header did not contain necessary block number and/or logs bloom",
                 ))
             } else {
                 Ok(CFEthBlockHeader {
@@ -108,6 +107,8 @@ pub mod tests {
 
     use futures::StreamExt;
     use mockall::{predicate::eq, Sequence};
+    use sp_core::H256;
+    use web3::types::Block;
 
     use super::*;
 
