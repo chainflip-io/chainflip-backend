@@ -16,11 +16,17 @@ pub(crate) mod v1 {
 
 	generate_storage_alias!(Validator, Force => Value<()>);
 
-	// Retrieve from storage AuctionResult as defined in v0 of the auction pallet
 	fn take_v0_auction_result<T: Config>(
 	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
 		take_storage_value(b"Auction", b"LastAuctionResult", b"")
 	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_v0_auction_result<T: Config>(
+	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
+		get_storage_value(b"Auction", b"LastAuctionResult", b"")
+	}
+
 	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
 	#[cfg(feature = "try-runtime")]
@@ -28,7 +34,7 @@ pub(crate) mod v1 {
 		assert!(P::on_chain_storage_version() == releases::V0, "Storage version too high.");
 
 		assert!(
-			take_v0_auction_result::<T>().is_some(),
+			get_v0_auction_result::<T>().is_some(),
 			"if we don't have a previous auction then we shouldn't be upgrading"
 		);
 
