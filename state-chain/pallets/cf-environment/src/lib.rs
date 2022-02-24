@@ -8,7 +8,7 @@ use frame_system::pallet_prelude::*;
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq, Copy)]
+	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
@@ -20,6 +20,18 @@ pub mod cfe {
 		pub max_ceremony_stage_duration: u32,
 		/// Number of times to retry after incrementing the nonce on a nonce error
 		pub max_extrinsic_retry_attempts: u32,
+	}
+
+	/// Sensible default values for the CFE setting.
+	impl Default for CfeSettings {
+		fn default() -> Self {
+			Self {
+				eth_block_safety_margin: 4,
+				pending_sign_duration: 500,
+				max_ceremony_stage_duration: 300,
+				max_extrinsic_retry_attempts: 10,
+			}
+		}
 	}
 }
 
@@ -87,14 +99,15 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
+			let default_cfe_settings = cfe::CfeSettings::default();
 			Self {
 				stake_manager_address: Default::default(),
 				key_manager_address: Default::default(),
 				ethereum_chain_id: Default::default(),
-				eth_block_safety_margin: Default::default(),
-				pending_sign_duration: Default::default(),
-				max_ceremony_stage_duration: Default::default(),
-				max_extrinsic_retry_attempts: Default::default(),
+				eth_block_safety_margin: default_cfe_settings.eth_block_safety_margin,
+				pending_sign_duration: default_cfe_settings.pending_sign_duration,
+				max_ceremony_stage_duration: default_cfe_settings.max_ceremony_stage_duration,
+				max_extrinsic_retry_attempts: default_cfe_settings.max_extrinsic_retry_attempts,
 			}
 		}
 	}
