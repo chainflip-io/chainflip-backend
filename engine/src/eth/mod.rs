@@ -60,7 +60,7 @@ use event_common::EventWithCommon;
 
 use async_trait::async_trait;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CFEthBlockHeader {
     pub block_number: U64,
     pub logs_bloom: H2048,
