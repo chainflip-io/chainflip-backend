@@ -5268,6 +5268,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "log 0.4.14",
+ "pallet-cf-online",
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
