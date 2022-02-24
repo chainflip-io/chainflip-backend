@@ -112,7 +112,7 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
-		MockVaultRotator::set_start_vault_rotation(DispatchError::Other("failure").into());
+		MockVaultRotator::set_start_vault_rotation(Err("failure"));
 		run_to_block(epoch);
 		// Move forward a few blocks, vault rotations would be failing with "failure"
 		move_forward_blocks(100);

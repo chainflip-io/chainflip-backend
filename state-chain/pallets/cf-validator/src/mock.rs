@@ -194,18 +194,18 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 }
 
 thread_local! {
-	pub static START_VAULT_ROTATION: RefCell<Result<(), DispatchError>> = RefCell::new(Ok(()));
+	pub static START_VAULT_ROTATION: RefCell<Result<(), &'static str>> = RefCell::new(Ok(()));
 }
 pub struct MockVaultRotator;
 impl MockVaultRotator {
-	pub fn set_start_vault_rotation(result: Result<(), DispatchError>) {
+	pub fn set_start_vault_rotation(result: Result<(), &'static str>) {
 		START_VAULT_ROTATION.with(|cell| *cell.borrow_mut() = result);
 	}
 }
 
 impl VaultRotator for MockVaultRotator {
 	type ValidatorId = ValidatorId;
-	type RotationError = DispatchError;
+	type RotationError = &'static str;
 
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
