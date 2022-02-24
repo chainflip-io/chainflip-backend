@@ -11,16 +11,18 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod weights;
+
 use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
 use frame_support::traits::{EnsureOrigin, Get};
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
 pub use pallet::*;
 use sp_runtime::{
 	traits::{BlockNumberProvider, Saturating},
@@ -33,6 +35,7 @@ use sp_std::{
 	marker::PhantomData,
 	prelude::*,
 };
+use weights::WeightInfo;
 
 pub type CeremonyId = u64;
 
@@ -146,7 +149,7 @@ pub mod pallet {
 			> + Member
 			+ FullCodec
 			+ BenchmarkDefault;
-			
+
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
@@ -164,6 +167,9 @@ pub mod pallet {
 		/// number of blocks to wait before retrying with a new set.
 		#[pallet::constant]
 		type CeremonyRetryDelay: Get<Self::BlockNumber>;
+
+		/// Pallet weights
+		type Weights: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -303,7 +309,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](sp_runtime::traits::InvalidCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::signature_success())]
 		pub fn signature_success(
 			origin: OriginFor<T>,
 			id: CeremonyId,
@@ -350,7 +356,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
@@ -407,7 +413,7 @@ pub mod pallet {
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed_unbounded(
 			origin: OriginFor<T>,
 			id: CeremonyId,
