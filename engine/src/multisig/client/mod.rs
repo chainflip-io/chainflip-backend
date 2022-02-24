@@ -168,7 +168,6 @@ pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutc
 pub enum MultisigOutcome {
     Signing(SigningOutcome),
     Keygen(KeygenOutcome),
-    Ignore,
 }
 
 derive_try_from_variant!(SigningOutcome, MultisigOutcome::Signing, MultisigOutcome);
@@ -272,11 +271,6 @@ where
                 self.logger,
                 "Keygen request ignored: we are not among participants"
             );
-
-            // TODO: remove this once parallel ceremonies PR is merged
-            self.multisig_outcome_sender
-                .send(MultisigOutcome::Ignore)
-                .unwrap();
             return;
         }
 
@@ -335,11 +329,6 @@ where
                 self.logger,
                 "Signing request ignored: we are not among participants"
             );
-
-            // TODO: remove this once parallel ceremonies PR is merged
-            self.multisig_outcome_sender
-                .send(MultisigOutcome::Ignore)
-                .unwrap();
             return;
         }
 

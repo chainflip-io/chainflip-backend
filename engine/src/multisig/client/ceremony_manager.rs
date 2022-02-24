@@ -236,8 +236,6 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-                // TODO: Look at better way of releasing the lock on the sc_observer
-                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -247,7 +245,6 @@ impl CeremonyManager {
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -312,8 +309,6 @@ impl CeremonyManager {
                 "Request to sign ignored: not enough signers {}/{}",
                 signers.len(), minimum_signers_needed
             );
-            // TODO: Look at better way of releasing the lock on the sc_observer
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -323,8 +318,6 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-                // TODO: Look at better way of releasing the lock on the sc_observer
-                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -334,7 +327,6 @@ impl CeremonyManager {
             .is_signing_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 

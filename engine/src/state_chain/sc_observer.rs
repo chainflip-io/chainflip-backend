@@ -33,7 +33,7 @@ async fn process_multisig_outcome<RpcClient>(
                 let _result = state_chain_client
                     .submit_unsigned_extrinsic(
                         pallet_cf_threshold_signature::Call::signature_success(id, sig.into()),
-                        &logger,
+                        logger,
                     )
                     .await;
             }
@@ -51,12 +51,11 @@ async fn process_multisig_outcome<RpcClient>(
                             id,
                             bad_account_ids.into_iter().collect(),
                         ),
-                        &logger,
+                        logger,
                     )
                     .await;
             }
         },
-        MultisigOutcome::Ignore => { /* ignore */ }
         MultisigOutcome::Keygen(KeygenOutcome { id, result }) => match result {
             Ok(pubkey) => {
                 let _result = state_chain_client
@@ -67,7 +66,7 @@ async fn process_multisig_outcome<RpcClient>(
                                 cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
                             ),
                         ),
-                        &logger,
+                        logger,
                     )
                     .await;
             }
@@ -86,7 +85,7 @@ async fn process_multisig_outcome<RpcClient>(
                                 bad_account_ids,
                             )),
                         ),
-                        &logger,
+                        logger,
                     )
                     .await;
             }
