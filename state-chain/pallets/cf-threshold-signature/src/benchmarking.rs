@@ -4,7 +4,7 @@
 use super::*;
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
-use frame_benchmarking::{account, benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_system::RawOrigin;
 use pallet_cf_validator::{ValidatorLookup, Validators};
 use sp_std::convert::TryInto;
@@ -70,4 +70,4 @@ benchmarks_instance_pallet! {
 	}
 }
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+// NOTE: Test suite not included because of dependency mismatch between benchmarks and mocks.
