@@ -854,13 +854,12 @@ pub trait EthObserver {
             BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
         >(
             protocol_state: &mut ProtocolState,
-            protocol_stream: BlockEventsStream,
+            mut protocol_stream: BlockEventsStream,
             next_block_to_yield: u64,
             logger: &slog::Logger,
         ) -> Result<BlockEvents<EventParameters>> {
             // we want a pointer to inside the stream state items, not the state itself.
-            let mut stream = Box::pin(protocol_stream);
-            while let Some(result_block_events) = stream.next().await {
+            while let Some(result_block_events) = protocol_stream.next().await {
                 if let Ok(block_events) = result_block_events {
                     protocol_state.last_block_pulled = block_events.block_number;
                     if protocol_state.last_block_pulled == next_block_to_yield {
@@ -869,8 +868,9 @@ pub trait EthObserver {
                         // still catching up
                         slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                     } else {
-                        // we have skipped blocks ERROR
-                        return Err(anyhow::Error::msg("The stream has skipped blocks. Fuck"));
+                        return Err(anyhow::Error::msg(
+                            "The stream has skipped blocks. We were expecting a contiguous sequence of blocks",
+                        ));
                     }
                 } else {
                     return Err(anyhow::Error::msg(
@@ -894,61 +894,65 @@ pub trait EthObserver {
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
             result_block_events: Result<BlockEvents<EventParameters>>,
-        ) -> Option<BlockEvents<EventParameters>> {
+        ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
             if let Ok(block_events) = result_block_events {
                 protocol_state.last_block_pulled = block_events.block_number;
 
                 if block_events.block_number > merged_stream_state.last_block_yielded {
-                    Some(block_events)
+                    Ok(Some(block_events))
                 } else {
                     slog::trace!(
                         merged_stream_state.logger,
                         "Ignoring log from {}, already produced by other stream",
                         block_events.block_number
                     );
-                    None
+                    Ok(None)
                 }
             } else {
                 // we got an error block, so now we care if *we* yieled the last block
                 let we_yielded_last_block =
                     protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
+                // if we yieled the last one, we let the other stream progress to try and cover for us
                 if we_yielded_last_block {
-                    let block_events_result = catch_up_other_stream(
-                        other_protocol_state,
-                        other_protocol_stream,
-                        next_block_to_yield,
-                        &merged_stream_state.logger,
-                    )
-                    .await;
+                    Ok(Some(
+                        catch_up_other_stream(
+                            other_protocol_state,
+                            other_protocol_stream,
+                            next_block_to_yield,
+                            &merged_stream_state.logger,
+                        )
+                        .await?,
+                    ))
                 } else {
+                    // we're behind, so we just log an error and continue on
                     slog::error!(
                         merged_stream_state.logger,
                         "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
                         protocol_state.protocol,
                         next_block_to_yield
                     );
+                    Ok(None)
                 }
-
-                None
             }
         }
 
         let stream = stream::unfold(init_state, |mut stream_state| async move {
             let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
 
-            tokio::select! {
-                Some(result_block_events) = stream_state.ws_stream.next() => {
-                    do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, stream_state.http_stream, result_block_events).await;
-                }
-                Some(result_block_events) = stream_state.http_stream.next() => {
-                    do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, stream_state.ws_stream, result_block_events).await;
-                }
-            };
+            loop {
+                tokio::select! {
+                    Some(result_block_events) = stream_state.ws_stream.next() => {
+                        let result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
 
-            None
+                    }
+                    Some(result_block_events) = stream_state.http_stream.next() => {
+                        let result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
+                    }
+                }
+            }
         });
 
         Ok(Box::pin(stream))
