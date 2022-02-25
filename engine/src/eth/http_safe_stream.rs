@@ -42,7 +42,6 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     tokio::time::sleep(poll_interval).await;
                 }
                 let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
-                assert!(unsafe_block_number.as_u64() >= ETH_BLOCK_SAFETY_MARGIN, "the fetched block number is too early in the chain to fetch a corresponding safe block");
                 if unsafe_block_number + U64::from(ETH_BLOCK_SAFETY_MARGIN)
                     < state.last_head_fetched
                 {
@@ -62,8 +61,7 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
             let next_block_to_yield = if is_first_iteration {
                 state
                     .last_head_fetched
-                    .checked_sub(U64::from(ETH_BLOCK_SAFETY_MARGIN))
-                    .unwrap()
+                    .saturating_sub(U64::from(ETH_BLOCK_SAFETY_MARGIN))
             } else {
                 // the last block yielded was safe, so the next is +1
                 state.last_block_yielded + U64::from(1)
@@ -138,6 +136,35 @@ pub mod tests {
             stream.next().await.unwrap().number().unwrap(),
             expected_returned_block_number
         );
+    }
+
+    #[tokio::test]
+    async fn does_not_return_until_chain_head_is_beyond_safety_margin() {
+        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+
+        let logger = new_test_logger();
+
+        let mut seq = Sequence::new();
+
+        // we can't yield block 0
+        let range = 1..=ETH_BLOCK_SAFETY_MARGIN + 1;
+        for n in range {
+            mock_eth_http_rpc
+                .expect_block_number()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(move || Ok(U64::from(n)));
+        }
+
+        mock_eth_http_rpc
+            .expect_block()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move |n| dummy_block(n.as_u64()));
+
+        let mut stream =
+            safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
+        assert_eq!(stream.next().await.unwrap().number().unwrap(), U64::from(1));
     }
 
     #[tokio::test]
