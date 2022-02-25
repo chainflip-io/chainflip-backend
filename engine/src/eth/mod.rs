@@ -542,15 +542,12 @@ pub struct BlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    // return the block number, with an Option<Vec<Logs>>. None when there are no interesting logs
-    // TODO: Handle header bs in here and then can have one less function.
     async fn get_logs_for_block<EthRpc>(
         &self,
         header: Result<CFEthBlockHeader>,
         eth_rpc: EthRpc,
         contract_address: H160,
         logger: slog::Logger,
-        // This should return a Result, where the error could be failure on logs OR the original header
     ) -> Result<BlockEvents<Self::EventParameters>>
     where
         EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
@@ -630,31 +627,6 @@ pub trait EthObserver {
         }
     }
 
-    // This will return a stream of BlockEvents, it will return for every block
-    // If the header is error, then it returns an error
-    // If the bloom says nothing interesting is in the block, logs = None
-    // If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
-    // If the bloom is interesting and we fetch the logs. logs = Some(Ok)
-    async fn block_events_stream_by_contract<'a, SafeBlockHeaderStream, EthRpc>(
-        &'a self,
-        safe_eth_head_stream: SafeBlockHeaderStream,
-        eth_rpc: EthRpc,
-        contract_address: H160,
-        logger: slog::Logger,
-    ) -> Pin<Box<dyn 'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send>>
-    where
-        SafeBlockHeaderStream: Stream<Item = Result<CFEthBlockHeader>> + 'static + Send,
-        EthRpc: EthRpcApi + Clone + Send + Sync + 'static,
-    {
-        Box::pin(safe_eth_head_stream.then(move |header| {
-            let eth_rpc = eth_rpc.clone();
-            let logger = logger.clone();
-            let contract_address = contract_address.clone();
-
-            self.get_logs_for_block(header, eth_rpc, contract_address, logger)
-        }))
-    }
-
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_logs_stream_from_head_stream<'a, BlockHeaderStream, EthRpc>(
         &'a self,
@@ -723,15 +695,19 @@ pub trait EthObserver {
                         })
                     });
 
-                // now we pass the headers in here, to get the logs.
-                return Ok(self
-                    .block_events_stream_by_contract(
-                        past_logs.chain(safe_head_stream),
-                        eth_rpc.clone(),
-                        contract_address,
-                        logger.clone(),
-                    )
-                    .await);
+                // TODO: Revise this comment
+                // This will return a stream of BlockEvents, it will return for every block
+                // If the header is error, then it returns an error
+                // If the bloom says nothing interesting is in the block, logs = None
+                // If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
+                // If the bloom is interesting and we fetch the logs. logs = Some(Ok)
+                return Ok(Box::pin(past_logs.chain(safe_head_stream).then(
+                    move |header| {
+                        let eth_rpc = eth_rpc.clone();
+                        let logger = logger.clone();
+                        self.get_logs_for_block(header, eth_rpc, contract_address, logger)
+                    },
+                )));
             }
         }
         Err(anyhow::Error::msg("No events in safe head stream"))
