@@ -801,262 +801,160 @@ pub trait EthObserver {
             )
             .await?;
 
-        // todo!("merged stream");
-        // self.merged_log_stream(safe_ws_event_logs, safe_http_event_logs, logger.clone())
-        //     .await
         self.merged_log_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
             .await
     }
 
-    async fn merged_log_stream<'a, EventCommonStream>(
+    // rename merged event stream
+    async fn merged_log_stream<'a, BlockEventsStream>(
         &'a self,
-        safe_ws_log_stream: EventCommonStream,
-        safe_http_log_stream: EventCommonStream,
+        safe_ws_block_events_stream: BlockEventsStream,
+        safe_http_block_events_stream: BlockEventsStream,
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn 'a + Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
     where
-        EventCommonStream: Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
+        BlockEventsStream:
+            'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
     {
-        todo!("Implementation");
+        struct ProtocolState {
+            last_block_pulled: u64,
+            protocol: TransportProtocol,
+        }
+
+        struct MergedStreamState {
+            last_block_yielded: u64,
+            logger: slog::Logger,
+        }
+
+        struct StreamState<BlockEventsStream: Stream> {
+            ws_state: ProtocolState,
+            ws_stream: BlockEventsStream,
+            http_state: ProtocolState,
+            http_stream: BlockEventsStream,
+            merged_stream_state: MergedStreamState,
+        }
+
+        let init_state = StreamState::<BlockEventsStream> {
+            ws_state: ProtocolState {
+                last_block_pulled: 0,
+                protocol: TransportProtocol::Ws,
+            },
+            ws_stream: safe_ws_block_events_stream,
+            http_state: ProtocolState {
+                last_block_pulled: 0,
+                protocol: TransportProtocol::Http,
+            },
+            http_stream: safe_http_block_events_stream,
+            merged_stream_state: MergedStreamState {
+                last_block_yielded: 0,
+                logger,
+            },
+        };
+
+        async fn catch_up_other_stream<
+            EventParameters: Debug,
+            BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
+        >(
+            protocol_state: &mut ProtocolState,
+            protocol_stream: BlockEventsStream,
+            next_block_to_yield: u64,
+            logger: &slog::Logger,
+        ) -> Result<BlockEvents<EventParameters>> {
+            // we want a pointer to inside the stream state items, not the state itself.
+            let mut stream = Box::pin(protocol_stream);
+            while let Some(result_block_events) = stream.next().await {
+                if let Ok(block_events) = result_block_events {
+                    protocol_state.last_block_pulled = block_events.block_number;
+                    if protocol_state.last_block_pulled == next_block_to_yield {
+                        return Ok(block_events);
+                    } else if protocol_state.last_block_pulled < next_block_to_yield {
+                        // still catching up
+                        slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
+                    } else {
+                        // we have skipped blocks ERROR
+                        return Err(anyhow::Error::msg("The stream has skipped blocks. Fuck"));
+                    }
+                } else {
+                    return Err(anyhow::Error::msg(
+                        "The {} stream has failed after pulling block: {} while attempting to ",
+                    ));
+                }
+            }
+            Err(anyhow::Error::msg(format!(
+                "The {} stream failed to yield any values.",
+                protocol_state.protocol,
+            )))
+        }
+
+        // returns the block when we are ready to yield the block
+        async fn do_for_protocol<
+            BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
+            EventParameters: Debug,
+        >(
+            merged_stream_state: &mut MergedStreamState,
+            protocol_state: &mut ProtocolState,
+            other_protocol_state: &mut ProtocolState,
+            other_protocol_stream: BlockEventsStream,
+            result_block_events: Result<BlockEvents<EventParameters>>,
+        ) -> Option<BlockEvents<EventParameters>> {
+            let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
+
+            if let Ok(block_events) = result_block_events {
+                protocol_state.last_block_pulled = block_events.block_number;
+
+                if block_events.block_number > merged_stream_state.last_block_yielded {
+                    Some(block_events)
+                } else {
+                    slog::trace!(
+                        merged_stream_state.logger,
+                        "Ignoring log from {}, already produced by other stream",
+                        block_events.block_number
+                    );
+                    None
+                }
+            } else {
+                // we got an error block, so now we care if *we* yieled the last block
+                let we_yielded_last_block =
+                    protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
+
+                if we_yielded_last_block {
+                    let block_events_result = catch_up_other_stream(
+                        other_protocol_state,
+                        other_protocol_stream,
+                        next_block_to_yield,
+                        &merged_stream_state.logger,
+                    )
+                    .await;
+                } else {
+                    slog::error!(
+                        merged_stream_state.logger,
+                        "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
+                        protocol_state.protocol,
+                        next_block_to_yield
+                    );
+                }
+
+                None
+            }
+        }
+
+        let stream = stream::unfold(init_state, |mut stream_state| async move {
+            let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
+
+            tokio::select! {
+                Some(result_block_events) = stream_state.ws_stream.next() => {
+                    do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, stream_state.http_stream, result_block_events).await;
+                }
+                Some(result_block_events) = stream_state.http_stream.next() => {
+                    do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, stream_state.ws_stream, result_block_events).await;
+                }
+            };
+
+            None
+        });
+
+        Ok(Box::pin(stream))
     }
-
-    //     async fn merged_log_stream<EventCommonStream, EventCommonStream2>(
-    //     &self,
-    //     safe_ws_log_stream: EventCommonStream,
-    //     safe_http_log_stream: EventCommonStream2,
-    //     logger: slog::Logger,
-    // ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
-    // where
-    //     EventCommonStream: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
-    //     EventCommonStream2: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
-    // {
-    //     Err(anyhow::Error::msg("Hello"))
-    // }
-    /// Takes two *safe* log streams one from each protocol. We shouldn't see reorgs occur in either of the streams
-    /// This will deduplicate the logs (since for two correctly functioning individual streams we should get 2 of each log)
-    /// It will continue when one of the streams stops returning, or one of the streams progresses backwards
-    /// It logs when one of the streams is behind the other, on an interval.
-    // async fn merged_log_stream<EventCommonStream, EventCommonStream2>(
-    //     &self,
-    //     safe_ws_log_stream: EventCommonStream,
-    //     safe_http_log_stream: EventCommonStream2,
-    //     logger: slog::Logger,
-    // ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
-    // where
-    //     EventCommonStream: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
-    //     EventCommonStream2: Stream<Item = Result<BlockEvents<Self::EventParameters>> + Unpin + Send + 'static,
-    // {
-    //     let logger = logger.new(o!(COMPONENT_KEY => "MergedETHStream"));
-    //     let safe_ws_log_stream = safe_ws_log_stream.zip(repeat(TransportProtocol::Ws));
-    //     let safe_http_log_stream = safe_http_log_stream.zip(repeat(TransportProtocol::Http));
-
-    //     let selected_stream = select(safe_ws_log_stream, safe_http_log_stream);
-
-    //     struct StreamState<EventCommonStream: Stream, EventCommonStream2: Stream, EventParameters> {
-    //         selected_stream: Select<
-    //             Zip<EventCommonStream, Repeat<TransportProtocol>>,
-    //             Zip<EventCommonStream2, Repeat<TransportProtocol>>,
-    //         >,
-    //         last_yielded_block_number: u64,
-    //         last_http_block_pulled: u64,
-    //         last_ws_block_pulled: u64,
-    //         txs_in_current_block: HashMap<(H256, U256), ()>,
-    //         logs_to_yield_this_block: VecDeque<EventWithCommon<EventParameters>>,
-    //         logger: slog::Logger,
-    //     }
-
-    //     let init_data = StreamState::<EventCommonStream, EventCommonStream2> {
-    //         selected_stream,
-    //         last_yielded_block_number: 0,
-    //         last_http_block_pulled: 0,
-    //         last_ws_block_pulled: 0,
-    //         txs_in_current_block: HashMap::new(),
-    //         logs_to_yield_this_block: VecDeque::new(),
-    //         logger,
-    //     };
-
-    //     // Log when we one of the streams is at least ETH_FALLING_BEHIND_MARGIN_BLOCKS
-    //     // and log it every time the ahead stream progresses ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL blocks
-    //     fn log_stream_returned_and_behind<
-    //         EventParameters: std::fmt::Debug + Send + Sync,
-    //         EventCommonStream: Stream,
-    //         EventCommonStream2: Stream,
-    //     >(
-    //         state: &StreamState<EventCommonStream, EventCommonStream2>,
-    //         protocol: TransportProtocol,
-    //         yield_item: &EventWithCommon<EventParameters>,
-    //     ) {
-    //         let (last_pulled_other, other_protocol) = match protocol {
-    //             TransportProtocol::Http => {
-    //                 slog::info!(
-    //                     state.logger,
-    //                     #ETH_HTTP_STREAM_RETURNED,
-    //                     "Processing ETH log {} from {} stream",
-    //                     yield_item,
-    //                     protocol
-    //                 );
-    //                 (&state.last_ws_block_pulled, TransportProtocol::Ws)
-    //             }
-    //             TransportProtocol::Ws => {
-    //                 slog::info!(
-    //                     state.logger,
-    //                     #ETH_WS_STREAM_RETURNED,
-    //                     "Processing ETH log {} from {} stream",
-    //                     yield_item,
-    //                     protocol
-    //                 );
-    //                 (&state.last_http_block_pulled, TransportProtocol::Http)
-    //             }
-    //         };
-
-    //         let blocks_behind = yield_item.block_number - last_pulled_other;
-
-    //         if *last_pulled_other != 0 // first iteration
-    //             && ((last_pulled_other + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
-    //                 <= yield_item.block_number) // if true the other stream has fallen behind
-    //             // only log every ETH_NUMBER_OF_BLOCK_BEFORE_LOG_BEHIND number of blocks
-    //             && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
-    //         {
-    //             slog::warn!(
-    //                 state.logger,
-    //                 #ETH_STREAM_BEHIND,
-    //                 "{} stream at ETH block {} but {} stream at ETH block {}",
-    //                 protocol,
-    //                 yield_item.block_number,
-    //                 other_protocol,
-    //                 state.last_http_block_pulled,
-    //             );
-    //         }
-    //     }
-
-    //     let decode_log = self.decode_log_closure()?;
-    //     Ok(Box::pin(stream::unfold(
-    //         init_data,
-    //         move |mut state| async move {
-    //             if let Some(next_yielded_log) = state.logs_to_yield_this_block.pop_front() {
-    //                 Some((next_yielded_log, state))
-    //             }
-
-    //             // we can get multiple events for the same block number. So we cannot use block number here
-    //             // to determine if we have returned or not.
-    //             // Instead we have to do something a little more sophisticated, tracking hashes for events
-    //             // and clearing the hash cache as we progress for each block
-    //             if let Some((yield_item, protocol, state)) = loop {
-    //                 if let Some((current_block_logs, protocol)) = state.selected_stream.next().await
-    //                 {
-    //                     let current_block_logs = current_block_logs.unwrap();
-    //                     let current_item_block_number = current_block_logs.block_number;
-
-    //                     let protocol_block_number = match protocol {
-    //                         // this function takes safe streams, so we should only progress
-    //                         // forward by one block at a time
-    //                         TransportProtocol::Http => &mut state.last_http_block_pulled,
-    //                         TransportProtocol::Ws => &mut state.last_ws_block_pulled,
-    //                     };
-
-    //                     if *protocol_block_number != 0
-    //                         && *protocol_block_number >= current_item_block_number
-    //                     {
-    //                         slog::warn!(
-    //                             &state.logger,
-    //                             #SAFE_PROTOCOL_STREAM_JUMP_BACK,
-    //                             "The {} stream moved back from ETH block {} to ETH block",
-    //                             protocol_block_number,
-    //                             current_item_block_number
-    //                         );
-    //                     }
-
-    //                     *protocol_block_number = current_item_block_number;
-
-    //                     // We have progressed - time to do some stuff
-    //                     if current_block_logs.block_number > state.last_yielded_block_number {
-    //                         slog::info!(
-    //                             state.logger,
-    //                             "Got block number: {} from {} stream",
-    //                             current_block_logs.block_number,
-    //                             protocol
-    //                         );
-
-    //                         // We only want to do this when we have progressed.
-    //                         // the bloom has said we have something, so let's fkn do something
-    //                         if let Some(logs) = current_block_logs.logs {
-    //                             if let Ok(logs) = logs {
-    //                                 let decoded_logs: Result<
-    //                                     Vec<EventWithCommon<Self::EventParameters>>,
-    //                                 > = logs
-    //                                     .into_iter()
-    //                                     .map(
-    //                                         move |unparsed_log| -> Result<
-    //                                             EventWithCommon<Self::EventParameters>,
-    //                                             anyhow::Error,
-    //                                         > {
-    //                                             EventWithCommon::<Self::EventParameters>::decode(
-    //                                                 &decode_log,
-    //                                                 unparsed_log,
-    //                                             )
-    //                                         },
-    //                                     )
-    //                                     .collect()
-    //                                     // TODO: Handle this error
-    //                                     // if there was an error decoding, we will try the other stream???
-    //                                     .unwrap();
-
-    //                                 state.logs_to_yield_this_block = decoded_logs;
-    //                                 break Some((
-    //                                     state.logs_to_yield_this_block.pop_front(),
-    //                                     state,
-    //                                 ));
-    //                             } else {
-    //                                 println!("The logs fetched errored. What do we do here?")
-    //                             }
-    //                         }
-    //                     }
-
-    //                     // if (current_item_block_number > state.last_yielded_block_number)
-    //                     // // first iteration
-    //                     // || state.last_yielded_block_number == 0
-    //                     // {
-    //                     //     // we've progressed, so we can clear our log cache for the previous block
-    //                     //     state.txs_in_current_block = HashMap::new();
-
-    //                     //     state.last_yielded_block_number = current_item_block_number;
-    //                     //     state
-    //                     //         .txs_in_current_block
-    //                     //         .insert((current_item_tx_hash, current_item_log_index), ());
-    //                     //     break Some((current_item, protocol, state));
-    //                     // } else if current_item_block_number == state.last_yielded_block_number {
-    //                     //     let log_already_yielded = state
-    //                     //         .txs_in_current_block
-    //                     //         .insert((current_item_tx_hash, current_item_log_index), ())
-    //                     //         .is_some();
-
-    //                     //     // if the key already existed, we have already emitted it
-    //                     //     if !log_already_yielded {
-    //                     //         break Some((current_item, protocol, state));
-    //                     //     }
-    //                     // } else {
-    //                     //     // discard anything that's less than the last yielded block number
-    //                     //     // since we've already returned anything we need to from those logs
-    //                     //     slog::debug!(
-    //                     //     state.logger,
-    //                     //     "Already returned logs from this block number. Discarding ETH log {} from {} stream",
-    //                     //     current_item,
-    //                     //     protocol
-    //                     // );
-    //                     //     continue;
-    //                     // }
-    //                 } else {
-    //                     break None;
-    //                 }
-    //             } {
-    //                 log_stream_returned_and_behind(&state, protocol, &yield_item);
-    //                 Some((yield_item, state))
-    //             } else {
-    //                 None
-    //             }
-    //         },
-    //     )))
-    // }
 
     // Could we have a closure that decodes the whole thing?
     fn decode_log_closure(
