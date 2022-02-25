@@ -10,7 +10,7 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
 
 # Ethereum
-ethabi = {default-features = false, features = ['parity-codec'], git = 'https://github.com/dandanlen/ethabi.git', branch = 'feature-parity-codec'}
+ethabi = {default-features = false, features = ['parity-codec'], git = 'https://github.com/rust-ethereum/ethabi.git', rev = '321a65'}
 ethereum = {default-features = false, version = "0.10"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}

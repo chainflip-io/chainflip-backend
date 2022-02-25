@@ -1864,7 +1864,7 @@ dependencies = [
 [[package]]
 name = "ethabi"
 version = "16.0.0"
-source = "git+https://github.com/dandanlen/ethabi.git?branch=feature-parity-codec#b3923c3914b935485c315bd9f13338b6bf8656f4"
+source = "git+https://github.com/rust-ethereum/ethabi.git?rev=321a65#321a651e767d7dbe81e8606cbf42f08dedf58c2b"
 dependencies = [
  "ethereum-types",
  "hex",
