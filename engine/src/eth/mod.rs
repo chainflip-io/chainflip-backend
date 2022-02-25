@@ -923,6 +923,7 @@ pub trait EthObserver {
                     Some(result_block_events) = stream_state.http_stream.next() => {
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
                     }
+                    else => break None
                 }
 
                 match iter_result {
@@ -1120,8 +1121,8 @@ mod merged_stream_tests {
         KeyManager::new(H160::default()).unwrap()
     }
 
-    fn key_change(block_number: u64, log_index: u8) -> Result<EventWithCommon<KeyManagerEvent>> {
-        Ok(EventWithCommon::<KeyManagerEvent> {
+    fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
+        EventWithCommon::<KeyManagerEvent> {
             tx_hash: Default::default(),
             log_index: U256::from(log_index),
             block_number,
@@ -1130,7 +1131,32 @@ mod merged_stream_tests {
                 old_key: ChainflipKey::default(),
                 new_key: ChainflipKey::default(),
             },
-        })
+        }
+    }
+
+    fn block_events_with_event(
+        block_number: u64,
+        log_indices: Vec<u8>,
+    ) -> BlockEvents<KeyManagerEvent> {
+        BlockEvents {
+            block_number,
+            events: Some(
+                log_indices
+                    .into_iter()
+                    .map(|index| key_change(block_number, index))
+                    .collect(),
+            ),
+        }
+    }
+
+    fn block_events_no_events(
+        block_number: u64,
+        log_indices: Vec<u8>,
+    ) -> BlockEvents<KeyManagerEvent> {
+        BlockEvents {
+            block_number,
+            events: None,
+        }
     }
 
     // Generate a stream for each protocol, that, when selected upon, will return
@@ -1186,6 +1212,54 @@ mod merged_stream_tests {
         };
 
         (delayed_stream(ws_items), delayed_stream(http_items))
+    }
+
+    #[tokio::test]
+    async fn empty_inners_returns_none() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let safe_ws_block_events_stream = Box::pin(stream::empty());
+        let safe_http_block_events_stream = Box::pin(stream::empty());
+
+        let mut stream = key_manager
+            .merged_block_events_stream(
+                safe_ws_block_events_stream,
+                safe_http_block_events_stream,
+                logger,
+            )
+            .await
+            .unwrap();
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn merged_does_not_return_duplicate_events() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let key_change_1 = 10;
+        let key_change_2 = 15;
+        let safe_ws_block_events_stream = Box::pin(stream::iter([block_events_with_event(
+            key_change_1,
+            vec![0],
+        )]));
+        let safe_http_block_events_stream = Box::pin(stream::iter([
+            key_change(key_change_1, 0),
+            key_change(key_change_2, 0),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(
+                safe_ws_block_events_stream,
+                safe_http_block_events_stream,
+                logger,
+            )
+            .await
+            .unwrap();
+
+        assert!(stream.next().await.is_none());
     }
 }
 
