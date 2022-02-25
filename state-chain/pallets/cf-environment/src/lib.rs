@@ -9,6 +9,7 @@ pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
 	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
@@ -86,30 +87,12 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
-		pub eth_block_safety_margin: u32,
-		pub pending_sign_duration: u32,
-		pub max_ceremony_stage_duration: u32,
-		pub max_extrinsic_retry_attempts: u32,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			let default_cfe_settings = cfe::CfeSettings::default();
-			Self {
-				stake_manager_address: Default::default(),
-				key_manager_address: Default::default(),
-				ethereum_chain_id: Default::default(),
-				eth_block_safety_margin: default_cfe_settings.eth_block_safety_margin,
-				pending_sign_duration: default_cfe_settings.pending_sign_duration,
-				max_ceremony_stage_duration: default_cfe_settings.max_ceremony_stage_duration,
-				max_extrinsic_retry_attempts: default_cfe_settings.max_extrinsic_retry_attempts,
-			}
-		}
+		pub cfe_settings: cfe::CfeSettings,
 	}
 
 	/// Sets the genesis config
@@ -119,12 +102,7 @@ pub mod pallet {
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
-			CfeSettings::<T>::set(cfe::CfeSettings {
-				eth_block_safety_margin: self.eth_block_safety_margin,
-				pending_sign_duration: self.pending_sign_duration,
-				max_ceremony_stage_duration: self.max_ceremony_stage_duration,
-				max_extrinsic_retry_attempts: self.max_extrinsic_retry_attempts,
-			});
+			CfeSettings::<T>::set(self.cfe_settings);
 		}
 	}
 }
