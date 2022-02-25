@@ -248,11 +248,11 @@ pub mod tests {
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
-            first_block_prime.unwrap()
+            first_block_prime.unwrap().into()
         );
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
-            second_block_prime.unwrap()
+            second_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
     }
@@ -275,7 +275,7 @@ pub mod tests {
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
-            first_block_prime.unwrap()
+            first_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
     }
