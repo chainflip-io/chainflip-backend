@@ -41,6 +41,8 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                 if !is_first_iteration {
                     tokio::time::sleep(poll_interval).await;
                 }
+
+                // TODO: Handle error
                 let unsafe_block_number = state.eth_http_rpc.block_number().await.unwrap();
                 if unsafe_block_number + U64::from(ETH_BLOCK_SAFETY_MARGIN)
                     < state.last_head_fetched
