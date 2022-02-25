@@ -546,7 +546,7 @@ pub trait EthObserver {
 
     async fn get_logs_for_block<EthRpc>(
         &self,
-        header: Result<CFEthBlockHeader>,
+        header: CFEthBlockHeader,
         eth_rpc: EthRpc,
         contract_address: H160,
         logger: slog::Logger,
@@ -554,7 +554,6 @@ pub trait EthObserver {
     where
         EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
     {
-        let header = header?;
         let block_number = header.block_number;
         let mut contract_bloom = Bloom::default();
         contract_bloom.accrue(Input::Raw(&contract_address.0));
@@ -704,10 +703,18 @@ pub trait EthObserver {
                 // If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
                 // If the bloom is interesting and we fetch the logs. logs = Some(Ok)
                 return Ok(Box::pin(past_logs.chain(safe_head_stream).then(
-                    move |header| {
+                    move |result_header| {
                         let eth_rpc = eth_rpc.clone();
                         let logger = logger.clone();
-                        self.get_logs_for_block(header, eth_rpc, contract_address, logger)
+                        async move {
+                            self.get_logs_for_block(
+                                result_header?,
+                                eth_rpc,
+                                contract_address,
+                                logger,
+                            )
+                            .await
+                        }
                     },
                 )));
             }
