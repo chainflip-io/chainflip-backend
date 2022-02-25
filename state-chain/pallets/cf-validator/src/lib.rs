@@ -625,6 +625,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 }
 
 /// Indicates to the session module if the session should be rotated.
+///
+/// Note: We need to rotate the session pallet twice in order to rotate in the new set of
+///       validators due to a limitation in the design of the session pallet. See the
+///       substrate issue https://github.com/paritytech/substrate/issues/8650 for context.
+///
+///       Also see `SessionManager::new_session` impl below.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
@@ -676,7 +682,11 @@ impl<T: Config> Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
-	/// If we have a set of confirmed validators we roll them in over two blocks
+	/// If we have a set of confirmed validators we roll them in over two blocks. See the comment
+	/// on `ShouldEndSession` for further context.
+	///
+	/// The first rotation queues the new validators, the next rotation queues `None`, and
+	/// activates the queued validators.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match RotationPhase::<T>::get() {
 			RotationStatus::VaultsRotated(auction_result) => Some(auction_result.winners),
