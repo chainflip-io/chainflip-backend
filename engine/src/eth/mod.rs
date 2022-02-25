@@ -838,7 +838,6 @@ pub trait EthObserver {
                     if protocol_state.last_block_pulled == next_block_to_yield {
                         return Ok(block_events);
                     } else if protocol_state.last_block_pulled < next_block_to_yield {
-                        // still catching up
                         slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                     } else {
                         return Err(anyhow::Error::msg(
@@ -857,7 +856,7 @@ pub trait EthObserver {
             )))
         }
 
-        // returns the block when we are ready to yield the block
+        /// Returns a block only if we are ready to yield this particular block
         async fn do_for_protocol<
             BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
             EventParameters: Debug,
@@ -902,7 +901,7 @@ pub trait EthObserver {
                         .await?,
                     ))
                 } else {
-                    // we're behind, so we just log an error and continue on
+                    // we're behind, so we just log an error and continue on.
                     slog::error!(
                         merged_stream_state.logger,
                         "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
@@ -943,7 +942,14 @@ pub trait EthObserver {
                             }
                         }
                     }
-                    Err(_) => todo!(),
+                    Err(err) => {
+                        slog::error!(
+                            stream_state.merged_stream_state.logger,
+                            "Error in ETH merged event stream: {}",
+                            err
+                        );
+                        break None;
+                    }
                 }
             }
         });
@@ -1247,254 +1253,6 @@ mod merged_stream_tests {
         };
 
         (delayed_stream(ws_items), delayed_stream(http_items))
-    }
-
-    #[tokio::test]
-    async fn empty_inners_return_none() {
-        // use concrete type for tests
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let safe_ws_log_stream = Box::pin(stream::empty());
-        let safe_http_log_stream = Box::pin(stream::empty());
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn merged_does_not_return_duplicate_events() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let key_change_1 = 10;
-        let key_change_2 = 15;
-
-        let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(key_change_1, 0),
-            key_change(key_change_2, 0),
-        ]));
-        let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(key_change_1, 0),
-            key_change(key_change_2, 0),
-        ]));
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            stream.next().await.unwrap(),
-            key_change(key_change_1, 0).unwrap()
-        );
-        assert_eq!(
-            stream.next().await.unwrap(),
-            key_change(key_change_2, 0).unwrap()
-        );
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn merged_stream_handles_broken_stream() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        // websockets is down :(
-        let safe_ws_log_stream = Box::pin(stream::empty());
-        // http is working
-        let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(8, 0),
-            key_change(10, 0),
-            key_change(12, 0),
-        ]));
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(8, 0).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn merged_stream_handles_behind_stream() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(10, 0),
-            key_change(12, 0),
-            key_change(14, 0),
-        ]));
-        // is 2 blocks behind the ws stream
-        let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(8, 0),
-            key_change(10, 0),
-            key_change(12, 0),
-        ]));
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(12, 0).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn merged_stream_handles_logs_in_same_tx() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(10, 0),
-            key_change(10, 1),
-            key_change(14, 0),
-        ]));
-
-        let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(10, 0),
-            key_change(10, 1),
-            key_change(14, 0),
-        ]));
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 1).unwrap());
-        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn interleaved_streams_works_as_expected() {
-        let items = vec![
-            // return
-            (key_change(10, 0), TransportProtocol::Ws),
-            // return
-            (key_change(11, 0), TransportProtocol::Ws),
-            // ignore
-            (key_change(10, 0), TransportProtocol::Http),
-            // ignore
-            (key_change(11, 0), TransportProtocol::Http),
-            // return
-            (key_change(12, 0), TransportProtocol::Http),
-            // ignore
-            (key_change(12, 0), TransportProtocol::Ws),
-            // return
-            (key_change(13, 0), TransportProtocol::Http),
-            // ignore
-            (key_change(13, 0), TransportProtocol::Ws),
-            // return
-            (key_change(14, 0), TransportProtocol::Ws),
-        ];
-
-        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
-        let (ws_stream, http_stream) = interleaved_streams(items);
-
-        let key_manager = test_km_contract();
-        let mut merged_stream = key_manager
-            .merged_log_stream(Box::pin(ws_stream), Box::pin(http_stream), logger)
-            .await
-            .unwrap();
-
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
-
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
-
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
-        tag_cache.clear();
-
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
-        tag_cache.clear();
-
-        merged_stream.next().await;
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
-        tag_cache.clear();
-    }
-
-    #[tokio::test]
-    async fn merged_stream_notifies_once_every_x_blocks_when_one_falls_behind() {
-        let key_manager = test_km_contract();
-        let (logger, tag_cache) = new_test_logger_with_tag_cache();
-
-        let ws_range = 10..54;
-        let events = ws_range.clone().map(|i| key_change(i, 0));
-        let safe_ws_log_stream = Box::pin(stream::iter(events));
-
-        let safe_http_log_stream = Box::pin(stream::iter([key_change(10, 0)]));
-
-        let mut merged_stream = key_manager
-            .merged_log_stream(
-                Box::pin(safe_ws_log_stream),
-                Box::pin(safe_http_log_stream),
-                logger,
-            )
-            .await
-            .unwrap();
-
-        for i in ws_range {
-            let event = merged_stream.next().await.unwrap();
-            assert_eq!(event, key_change(i, 0).unwrap());
-        }
-
-        assert_eq!(tag_cache.get_tag_count(ETH_STREAM_BEHIND), 4);
-        assert!(merged_stream.next().await.is_none());
-    }
-
-    // We assume the input streams are "safe streams" i.e. that they progress only forward, since we
-    // won't reorg backwards. However, we should be able to continue the merged stream if one of them
-    // goes backwards
-    #[tokio::test]
-    async fn merged_stream_continues_when_one_stream_moves_back_in_blocks() {
-        let key_manager = test_km_contract();
-        let (logger, tag_cache) = new_test_logger_with_tag_cache();
-
-        let safe_ws_log_stream = Box::pin(stream::iter([
-            key_change(10, 0),
-            key_change(10, 2),
-            key_change(14, 0),
-        ]));
-
-        let safe_http_log_stream = Box::pin(stream::iter([
-            key_change(8, 0),
-            key_change(7, 0),
-            key_change(12, 0),
-        ]));
-
-        let mut stream = key_manager
-            .merged_log_stream(safe_ws_log_stream, safe_http_log_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 0).unwrap());
-        assert!(!tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(10, 2).unwrap());
-        assert!(tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(14, 0).unwrap());
-        assert!(stream.next().await.is_none());
     }
 }
 
