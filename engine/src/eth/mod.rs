@@ -766,12 +766,15 @@ pub trait EthObserver {
             )
             .await?;
 
-        self.merged_log_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
-            .await
+        self.merged_block_events_stream(
+            safe_ws_block_events,
+            safe_http_block_events,
+            logger.clone(),
+        )
+        .await
     }
 
-    // rename merged event stream
-    async fn merged_log_stream<'a, BlockEventsStream>(
+    async fn merged_block_events_stream<'a, BlockEventsStream>(
         &'a self,
         safe_ws_block_events_stream: BlockEventsStream,
         safe_http_block_events_stream: BlockEventsStream,
