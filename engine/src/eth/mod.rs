@@ -536,7 +536,7 @@ impl fmt::Display for TransportProtocol {
 
 pub struct BlockEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub events: Option<Result<Vec<EventWithCommon<EventParameters>>>>,
+    pub events: Option<Vec<EventWithCommon<EventParameters>>>,
 }
 
 // Specify a default type for the mock
@@ -589,7 +589,7 @@ pub trait EthObserver {
                     {
                         Ok(events) => Ok(BlockEvents {
                             block_number: block_number.as_u64(),
-                            events: Some(Ok(events)),
+                            events: Some(events),
                         }),
                         Err(err) => {
                             slog::error!(
@@ -598,10 +598,7 @@ pub trait EthObserver {
                                 block_number,
                                 err,
                             );
-                            Ok(BlockEvents {
-                                block_number: block_number.as_u64(),
-                                events: Some(Err(err)),
-                            })
+                            Err(err)
                         }
                     }
                 }
@@ -613,10 +610,7 @@ pub trait EthObserver {
                         err,
                     );
                     // we expected there to be logs, but failed to fetch them
-                    Ok(BlockEvents {
-                        block_number: block_number.as_u64(),
-                        events: Some(Err(err)),
-                    })
+                    Err(err)
                 }
             }
         } else {
@@ -872,10 +866,7 @@ pub trait EthObserver {
             protocol_state: &mut ProtocolState,
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
-            // The logs in here should *not* be an error
             result_block_events: Result<BlockEvents<EventParameters>>,
-            // Ok means we can return something, Some means we should do something with this block
-            // None means, we have received the block, but it's not interesting
         ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
@@ -938,21 +929,20 @@ pub trait EthObserver {
                 }
 
                 match iter_result {
-                    Ok(opt_block_events) => match opt_block_events {
-                        Some(block_events) => {
-                            // if we get to this point, we shouldn't have any failing logs. So, we should
-                            // probably have another "clean block" struct or something to represent this state of a block
-                            // let events = block_events.events.unwrap();
+                    Ok(opt_block_events) => {
+                        if let Some(block_events) = opt_block_events {
                             if let Some(events) = block_events.events {
-                                let events = events.unwrap();
                                 stream_state.merged_stream_state.events_to_yield =
                                     events.into_iter().collect();
+                            } else {
+                                slog::debug!(
+                                    stream_state.merged_stream_state.logger,
+                                    "No interesting events in ETH block {}",
+                                    block_events.block_number
+                                );
                             }
                         }
-                        None => {
-                            // ignore these. Not important
-                        }
-                    },
+                    }
                     Err(_) => todo!(),
                 }
             }
