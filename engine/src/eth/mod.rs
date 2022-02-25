@@ -548,14 +548,16 @@ pub trait EthObserver {
     // TODO: Handle header bs in here and then can have one less function.
     async fn get_logs_for_block<EthRpc>(
         &self,
-        header: CFEthBlockHeader,
+        header: Result<CFEthBlockHeader>,
         eth_rpc: EthRpc,
         contract_address: H160,
         logger: slog::Logger,
-    ) -> BlockEvents<Self::EventParameters>
+        // This should return a Result, where the error could be failure on logs OR the original header
+    ) -> Result<BlockEvents<Self::EventParameters>>
     where
         EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
     {
+        let header = header?;
         let block_number = header.block_number;
         let mut contract_bloom = Bloom::default();
         contract_bloom.accrue(Input::Raw(&contract_address.0));
@@ -589,10 +591,10 @@ pub trait EthObserver {
                         )
                         .collect::<Result<Vec<_>>>()
                     {
-                        Ok(events) => BlockEvents {
+                        Ok(events) => Ok(BlockEvents {
                             block_number: block_number.as_u64(),
                             events: Some(Ok(events)),
-                        },
+                        }),
                         Err(err) => {
                             slog::error!(
                                 logger,
@@ -600,10 +602,10 @@ pub trait EthObserver {
                                 block_number,
                                 err,
                             );
-                            BlockEvents {
+                            Ok(BlockEvents {
                                 block_number: block_number.as_u64(),
                                 events: Some(Err(err)),
-                            }
+                            })
                         }
                     }
                 }
@@ -615,18 +617,18 @@ pub trait EthObserver {
                         err,
                     );
                     // we expected there to be logs, but failed to fetch them
-                    BlockEvents {
+                    Ok(BlockEvents {
                         block_number: block_number.as_u64(),
                         events: Some(Err(err)),
-                    }
+                    })
                 }
             }
         } else {
             // we didn't expect there to be logs, so didn't fetch
-            BlockEvents {
+            Ok(BlockEvents {
                 block_number: block_number.as_u64(),
                 events: None,
-            }
+            })
         }
     }
 
@@ -635,7 +637,7 @@ pub trait EthObserver {
     // If the bloom says nothing interesting is in the block, logs = None
     // If the bloom is interesting, and we fail to fetch logs. logs = Some(Err)
     // If the bloom is interesting and we fetch the logs. logs = Some(Ok)
-    async fn block_log_stream_by_contract<'a, SafeBlockHeaderStream, EthRpc>(
+    async fn block_events_stream_by_contract<'a, SafeBlockHeaderStream, EthRpc>(
         &'a self,
         safe_eth_head_stream: SafeBlockHeaderStream,
         eth_rpc: EthRpc,
@@ -650,18 +652,8 @@ pub trait EthObserver {
             let eth_rpc = eth_rpc.clone();
             let logger = logger.clone();
             let contract_address = contract_address.clone();
-            async move {
-                match header {
-                    Ok(header) => {
-                        let logs = self
-                            .get_logs_for_block(header, eth_rpc, contract_address, logger)
-                            .await;
-                        Ok(logs)
-                    }
-                    // if the header is an error, then return the error
-                    Err(e) => Err(e),
-                }
-            }
+
+            self.get_logs_for_block(header, eth_rpc, contract_address, logger)
         }))
     }
 
@@ -699,16 +691,11 @@ pub trait EthObserver {
                 // The `fromBlock` parameter doesn't seem to work reliably with the web3 subscription streams
 
                 let eth_rpc_c = eth_rpc.clone();
-                let logger_c = logger.clone();
-
-                // TODO: Look at using block_log_stream_by_contract
-                // TODO: Wait to get all past logs before continuing
 
                 // block log stream for contract instead of this.
                 let past_logs = stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64())
                     .then(move |block_number| {
                         let eth_rpc = eth_rpc_c.clone();
-                        let logger = logger_c.clone();
                         // TODO: Can this async block be removed, by using .then()?
                         async move {
                             eth_rpc
@@ -721,6 +708,8 @@ pub trait EthObserver {
                                 })
                         }
                     });
+
+                // if the block doesn't contain shit, we say the *BLOCK* is an error. we have not yet fetched the logs
                 let past_logs = past_logs.then(|block| async {
                         block.and_then(|block| {
                             if block.number.is_none() || block.logs_bloom.is_none() {
@@ -738,7 +727,7 @@ pub trait EthObserver {
 
                 // now we pass the headers in here, to get the logs.
                 return Ok(self
-                    .block_log_stream_by_contract(
+                    .block_events_stream_by_contract(
                         past_logs.chain(safe_head_stream),
                         eth_rpc.clone(),
                         contract_address,
@@ -821,20 +810,21 @@ pub trait EthObserver {
             protocol: TransportProtocol,
         }
 
-        struct MergedStreamState {
+        struct MergedStreamState<EventParameters: Debug> {
             last_block_yielded: u64,
             logger: slog::Logger,
+            events_to_yield: VecDeque<EventWithCommon<EventParameters>>,
         }
 
-        struct StreamState<BlockEventsStream: Stream> {
+        struct StreamState<BlockEventsStream: Stream, EventParameters: Debug> {
             ws_state: ProtocolState,
             ws_stream: BlockEventsStream,
             http_state: ProtocolState,
             http_stream: BlockEventsStream,
-            merged_stream_state: MergedStreamState,
+            merged_stream_state: MergedStreamState<EventParameters>,
         }
 
-        let init_state = StreamState::<BlockEventsStream> {
+        let init_state = StreamState::<BlockEventsStream, Self::EventParameters> {
             ws_state: ProtocolState {
                 last_block_pulled: 0,
                 protocol: TransportProtocol::Ws,
@@ -847,6 +837,7 @@ pub trait EthObserver {
             http_stream: safe_http_block_events_stream,
             merged_stream_state: MergedStreamState {
                 last_block_yielded: 0,
+                events_to_yield: VecDeque::new(),
                 logger,
             },
         };
@@ -891,11 +882,14 @@ pub trait EthObserver {
             BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
             EventParameters: Debug,
         >(
-            merged_stream_state: &mut MergedStreamState,
+            merged_stream_state: &mut MergedStreamState<EventParameters>,
             protocol_state: &mut ProtocolState,
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
+            // The logs in here should *not* be an error
             result_block_events: Result<BlockEvents<EventParameters>>,
+            // Ok means we can return something, Some means we should do something with this block
+            // None means, we have received the block, but it's not interesting
         ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
@@ -913,7 +907,9 @@ pub trait EthObserver {
                     Ok(None)
                 }
             } else {
-                // we got an error block, so now we care if *we* yieled the last block
+                // we got an error block.
+
+                // TODO: What do we do when we get error *logs* -> Should we merge these to be the same concept??
                 let we_yielded_last_block =
                     protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
@@ -943,16 +939,35 @@ pub trait EthObserver {
 
         let stream = stream::unfold(init_state, |mut stream_state| async move {
             let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
-
             loop {
+                let iter_result;
                 tokio::select! {
                     Some(result_block_events) = stream_state.ws_stream.next() => {
-                        let result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
+                        iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
 
                     }
                     Some(result_block_events) = stream_state.http_stream.next() => {
-                        let result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
+                        iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
                     }
+                }
+
+                match iter_result {
+                    Ok(opt_block_events) => match opt_block_events {
+                        Some(block_events) => {
+                            // if we get to this point, we shouldn't have any failing logs. So, we should
+                            // probably have another "clean block" struct or something to represent this state of a block
+                            // let events = block_events.events.unwrap();
+                            if let Some(events) = block_events.events {
+                                let events = events.unwrap();
+                                stream_state.merged_stream_state.events_to_yield =
+                                    events.into_iter().collect();
+                            }
+                        }
+                        None => {
+                            // ignore these. Not important
+                        }
+                    },
+                    Err(_) => todo!(),
                 }
             }
         });
