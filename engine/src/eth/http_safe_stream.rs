@@ -111,6 +111,7 @@ pub mod tests {
     use mockall::{predicate::eq, Sequence};
     use sp_core::H256;
     use web3::types::Block;
+    use web3::types::H2048;
 
     use super::*;
 
@@ -125,7 +126,7 @@ pub mod tests {
         Ok(Some(Block {
             hash: Some(H256([(block_number % 256) as u8; 32])),
             number: Some(U64::from(block_number)),
-            logs_bloom: Default::default(),
+            logs_bloom: Some(H2048::default()),
             ..Default::default()
         }))
     }
@@ -404,4 +405,6 @@ pub mod tests {
             };
         }
     }
+
+    // TODO: Tests for returning errors
 }
