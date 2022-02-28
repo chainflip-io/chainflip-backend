@@ -1792,14 +1792,11 @@ mod merged_stream_tests {
             .unwrap();
 
         assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
-
         assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
-
         assert_eq!(stream.next().await.unwrap(), key_change(14, 0));
 
         // Gets the blocks from WS after HTTP catches up and lets it recover
         assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
-
         assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
         assert!(stream.next().await.is_none());
     }
@@ -1819,7 +1816,6 @@ mod merged_stream_tests {
             block_events_with_event(11, vec![0]),
         ]));
 
-        // http is behind, but then catches up and saves the day
         let http_stream = Box::pin(stream::iter([
             block_events_no_events(8),
             block_events_no_events(9),
@@ -1847,10 +1843,9 @@ mod merged_stream_tests {
             Err(anyhow::Error::msg("NOOO")),
         ]));
 
-        // http is behind, but then catches up and saves the day
         let http_stream = Box::pin(stream::iter([
             block_events_with_event(11, vec![0]),
-            Err(anyhow::Error::msg("NOOO, except this time worse :(")),
+            Err(anyhow::Error::msg("NOOO, except this time it's worse :(")),
         ]));
 
         let mut stream = key_manager
