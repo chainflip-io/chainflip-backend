@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
@@ -22,6 +22,19 @@ fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
     *hasher.finalize().as_ref()
 }
 
+/// Check that the reported indexes match the expected ones exactly
+fn check_verification_message_indexes<T>(
+    message: &BroadcastVerificationMessage<T>,
+    expected_idxs: &BTreeSet<usize>,
+) -> bool
+where
+    T: Clone,
+{
+    let received_idxs: BTreeSet<_> = message.data.keys().copied().collect();
+
+    &received_idxs == expected_idxs
+}
+
 // This might result in an error if we don't get 2/3 of parties agreeing on the same value.
 // If we don't, this means that either (a) the broadcaster did an inconsistent broadcast,
 // (b) that the broadcaster failed to deliver the message to large enough number of parties,
@@ -31,9 +44,13 @@ pub fn verify_broadcasts<T>(
     verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<T>>>,
 ) -> Result<HashMap<usize, T>, Vec<usize>>
 where
-    T: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
     let num_parties = verification_messages.len();
+
+    // We know these indexes to be correct, as this data structure is constructed
+    // locally based on ceremony parameters
+    let participating_idxs: BTreeSet<_> = verification_messages.keys().copied().collect();
 
     // Even if we haven't received data from all parties at this point, we
     // might still be able to recover as long as there is a quorum agreement
@@ -41,6 +58,10 @@ where
     let verification_messages: HashMap<_, _> = verification_messages
         .into_iter()
         .filter_map(|(k, v)| v.map(|unwrapped_v| (k, unwrapped_v)))
+        // We ignore all messages that don't contain all (and only) expected signer indexes
+        .filter(|(_sender, messages)| {
+            check_verification_message_indexes(messages, &participating_idxs)
+        })
         .collect();
 
     assert!(verification_messages
@@ -58,17 +79,7 @@ where
 
     let mut blamed_parties = vec![];
 
-    // We know all indexes to be correct (and the same for all senders) as our
-    // node constructed this datastructure locally
-    let participating_idxs = verification_messages
-        .iter()
-        .next()
-        .expect("must be non-empty")
-        .1
-        .data
-        .keys();
-
-    for idx in participating_idxs {
+    for idx in &participating_idxs {
         use itertools::Itertools;
 
         if let Some((Some(data), _)) = verification_messages
@@ -102,13 +113,10 @@ mod tests {
     use std::collections::BTreeSet;
 
     /// Transforms the (more concise) test data into the expected "shape";
-    /// check that the result matches `expected` (transforming Vec into a Set
-    /// to make it *NOT* sensitive to the order of elements)
-    fn check_broadcast_verification(
+    fn to_broadcast_verification_messages(
         test_data: Vec<(usize, Option<Vec<Option<i32>>>)>,
-        expected: Result<Vec<(usize, i32)>, Vec<usize>>,
-    ) {
-        let verification_messages: HashMap<_, _> = test_data
+    ) -> HashMap<usize, Option<BroadcastVerificationMessage<i32>>> {
+        test_data
             .into_iter()
             .map(|(idx, opt_values)| {
                 let opt_data = opt_values.map(|values| {
@@ -123,8 +131,15 @@ mod tests {
 
                 (idx, opt_data)
             })
-            .collect();
+            .collect()
+    }
 
+    /// check that the result matches `expected` (transforming Vec into a Set
+    /// to make it *NOT* sensitive to the order of elements)
+    fn check_broadcast_verification(
+        verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<i32>>>,
+        expected: Result<Vec<(usize, i32)>, Vec<usize>>,
+    ) {
         let res = verify_broadcasts(verification_messages)
             .map_err(|reported_idxs| reported_idxs.iter().copied().collect::<BTreeSet<usize>>());
 
@@ -140,12 +155,12 @@ mod tests {
         // There is a consensus on each of the values,
         // even though some parties disagree on some values
 
-        let all_messages = vec![
+        let all_messages = to_broadcast_verification_messages(vec![
             (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), None, Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(1), None, Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
-        ];
+        ]);
 
         // Expect all to agree on the following values:
         check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
@@ -157,12 +172,12 @@ mod tests {
         // 2 and 4 (indexes in inner vectors), which we assume
         // is due to them sending messages inconsistently
 
-        let all_messages = vec![
+        let all_messages = to_broadcast_verification_messages(vec![
             (1usize, Some(vec![Some(1), None, Some(1), Some(2)])),
             (2, Some(vec![Some(1), None, Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(1), Some(2), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
-        ];
+        ]);
 
         // Expect parties 2 and 4 to be reported
         check_broadcast_verification(all_messages, Err(vec![2, 4]));
@@ -176,12 +191,66 @@ mod tests {
         // recovered message is `None`)
 
         // Note that party 3's message is missing
-        let all_messages = vec![
+        let all_messages = to_broadcast_verification_messages(vec![
             (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, None),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
-        ];
+        ]);
+
+        // Expect all to agree on the following values:
+        check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
+    }
+
+    #[test]
+    fn can_recover_from_missing_signer_indexes() {
+        // Note that party 2's message is missing an "inner" message
+        // for party 4.
+        let all_messages = to_broadcast_verification_messages(vec![
+            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (2, Some(vec![Some(1), Some(1), Some(1)])),
+            (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+        ]);
+
+        // Expect all to agree on the following values:
+        check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
+    }
+
+    #[test]
+    fn can_recover_from_extraneous_signer_indexes() {
+        // Note that party 2's message contains an extra message
+        // for non-existent party 5.
+        let all_messages = to_broadcast_verification_messages(vec![
+            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (2, Some(vec![Some(1), Some(1), Some(1), Some(1), Some(1)])),
+            (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+        ]);
+
+        // Expect all to agree on the following values:
+        check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
+    }
+
+    #[test]
+    fn can_recover_from_unexpected_signer_indexes() {
+        // Note that party 2's message is missing an "inner" message
+        // for party 4. It will be "replaced" by a non-existent index below
+        let mut all_messages = to_broadcast_verification_messages(vec![
+            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (2, Some(vec![Some(1), Some(1), Some(1)])),
+            (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+        ]);
+
+        // Insert a non-existent index 5 for party 2 (the number of messages is correct however)
+        all_messages
+            .get_mut(&2)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .data
+            .insert(5, None);
 
         // Expect all to agree on the following values:
         check_broadcast_verification(all_messages, Ok(vec![(1, 1), (2, 1), (3, 1), (4, 1)]));
