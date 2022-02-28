@@ -558,7 +558,9 @@ pub trait EthObserver {
         let block_number = header.block_number;
         let mut contract_bloom = Bloom::default();
         contract_bloom.accrue(Input::Raw(&contract_address.0));
-        let decode_log_fn = self.decode_log_closure().unwrap();
+        let decode_log_fn = self
+            .decode_log_closure()
+            .expect("Could not get get decode log closure");
 
         // if we have logs for this block, fetch them.
         if header.logs_bloom.contains_bloom(&contract_bloom) {
