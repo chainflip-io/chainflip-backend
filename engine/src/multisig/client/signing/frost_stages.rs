@@ -52,7 +52,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
-            index: self.common.own_idx,
             d: self.nonces.d_pub,
             e: self.nonces.e_pub,
         })

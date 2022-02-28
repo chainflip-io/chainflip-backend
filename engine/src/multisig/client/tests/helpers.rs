@@ -861,7 +861,6 @@ pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
 
 pub fn gen_invalid_signing_comm1(mut rng: &mut Rng) -> SigningCommitment {
     SigningCommitment {
-        index: 0,
         d: Point::random(&mut rng),
         e: Point::random(&mut rng),
     }
