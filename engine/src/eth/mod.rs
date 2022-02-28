@@ -944,14 +944,15 @@ pub trait EthObserver {
 
             if let Ok(block_events) = result_block_events {
                 if block_events.block_number > merged_stream_state.last_block_yielded {
+                    merged_stream_state.last_block_yielded = block_events.block_number;
+                    protocol_state.last_block_pulled = block_events.block_number;
+
                     log_when_stream_behind(
                         protocol_state,
                         other_protocol_state,
                         merged_stream_state,
                         &block_events,
                     );
-                    merged_stream_state.last_block_yielded = block_events.block_number;
-                    protocol_state.last_block_pulled = block_events.block_number;
                     Ok(Some(block_events))
                 } else if protocol_state.last_block_pulled != 0
                     && block_events.block_number <= protocol_state.last_block_pulled
