@@ -194,6 +194,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = ();
 }
 
 pub struct MockBroadcastConfig;

@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(array_map)] // stable as of rust 1.55
 
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
 use sp_std::{
@@ -9,6 +10,9 @@ use sp_std::{
 };
 
 pub mod eth;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
@@ -22,7 +26,7 @@ pub trait ChainCrypto: Chain {
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Ord;
 	type Payload: Member + Parameter;
-	type ThresholdSignature: Member + Parameter;
+	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
 	type TransactionHash: Member + Parameter;
 
 	fn verify_threshold_signature(

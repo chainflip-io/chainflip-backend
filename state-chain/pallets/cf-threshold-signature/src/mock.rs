@@ -174,6 +174,12 @@ pub enum DogeSig {
 	Invalid,
 }
 
+impl Default for DogeSig {
+	fn default() -> Self {
+		Self::Valid
+	}
+}
+
 impl ChainCrypto for Doge {
 	type AggKey = eth::AggKey;
 	type Payload = String;
@@ -228,6 +234,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = ();
 }
 
 pub struct ExtBuilder {

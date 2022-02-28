@@ -15,8 +15,13 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
+cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', default-features = false }
 
 log = { version = '0.4.14', default-features = false }
+
+# Required for bechmarking
+pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }
+pallet-cf-online = { path = '../cf-online', optional = true, default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -75,6 +80,7 @@ default = ['std']
 std = [
 	'cf-chains/std',
 	'cf-traits/std',
+	'cf-runtime-benchmark-utilities/std',
 	'codec/std',
 	'scale-info/std',
 	'frame-support/std',
@@ -88,5 +94,9 @@ runtime-benchmarks = [
 	'frame-support/runtime-benchmarks',
 	'frame-system/runtime-benchmarks',
 	'cf-traits/runtime-benchmarks',
+	'cf-chains/runtime-benchmarks',
+	'cf-runtime-benchmark-utilities/runtime-benchmarks',
+	'pallet-cf-validator',
+	'pallet-cf-online',
 ]
 try-runtime = ['frame-support/try-runtime'] 

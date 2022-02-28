@@ -1,0 +1,20 @@
+[package]
+name = "cf-runtime-benchmark-utilities"
+version = "0.1.0"
+edition = "2018"
+authors = ['Chainflip <https://chainflip.io>']
+description = "Utilities to help write benchmarks for the Chainflip runtime."
+
+[dependencies]
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-09+1'
+
+[features]
+default = ['std']
+std = [
+    'sp-std/std'
+]
+runtime-benchmarks = []

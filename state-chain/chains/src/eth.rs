@@ -394,7 +394,7 @@ impl From<&secp256k1::PublicKey> for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],

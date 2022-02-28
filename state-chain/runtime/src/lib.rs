@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 mod chainflip;
 pub mod constants;
 #[cfg(test)]
@@ -452,6 +454,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type OfflineReporter = Reputation;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
 parameter_types! {
@@ -693,6 +696,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
 			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
+			list_benchmark!(list, extra, pallet_cf_threshold_signature, EthereumThresholdSigner);
 			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
@@ -736,6 +740,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
 			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
+			add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
