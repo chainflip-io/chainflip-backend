@@ -28,7 +28,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::stream::{self, repeat, select, select_all, Repeat, Select, Zip};
+use futures::stream::{self, repeat, select, select_all, Fuse, Repeat, Select, Zip};
 use futures::TryFutureExt;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
@@ -774,14 +774,16 @@ pub trait EthObserver {
         .await
     }
 
-    async fn merged_block_events_stream<'a, BlockEventsStream>(
+    async fn merged_block_events_stream<'a, BlockEventsStreamWs, BlockEventsStreamHttp>(
         &'a self,
-        safe_ws_block_events_stream: BlockEventsStream,
-        safe_http_block_events_stream: BlockEventsStream,
+        safe_ws_block_events_stream: BlockEventsStreamWs,
+        safe_http_block_events_stream: BlockEventsStreamHttp,
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn 'a + Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
     where
-        BlockEventsStream:
+        BlockEventsStreamWs:
+            'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
+        BlockEventsStreamHttp:
             'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
     {
         struct ProtocolState {
@@ -795,31 +797,87 @@ pub trait EthObserver {
             events_to_yield: VecDeque<EventWithCommon<EventParameters>>,
         }
 
-        struct StreamState<BlockEventsStream: Stream, EventParameters: Debug> {
+        struct StreamState<
+            BlockEventsStreamWs: Stream,
+            BlockEventsStreamHttp: Stream,
+            EventParameters: Debug,
+        > {
             ws_state: ProtocolState,
-            ws_stream: BlockEventsStream,
+            ws_stream: Fuse<BlockEventsStreamWs>,
             http_state: ProtocolState,
-            http_stream: BlockEventsStream,
+            http_stream: Fuse<BlockEventsStreamHttp>,
             merged_stream_state: MergedStreamState<EventParameters>,
         }
 
-        let init_state = StreamState::<BlockEventsStream, Self::EventParameters> {
-            ws_state: ProtocolState {
-                last_block_pulled: 0,
-                protocol: TransportProtocol::Ws,
-            },
-            ws_stream: safe_ws_block_events_stream,
-            http_state: ProtocolState {
-                last_block_pulled: 0,
-                protocol: TransportProtocol::Http,
-            },
-            http_stream: safe_http_block_events_stream,
-            merged_stream_state: MergedStreamState {
-                last_block_yielded: 0,
-                events_to_yield: VecDeque::new(),
-                logger,
-            },
-        };
+        let init_state =
+            StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp, Self::EventParameters> {
+                ws_state: ProtocolState {
+                    last_block_pulled: 0,
+                    protocol: TransportProtocol::Ws,
+                },
+                ws_stream: safe_ws_block_events_stream.fuse(),
+                http_state: ProtocolState {
+                    last_block_pulled: 0,
+                    protocol: TransportProtocol::Http,
+                },
+                http_stream: safe_http_block_events_stream.fuse(),
+                merged_stream_state: MergedStreamState {
+                    last_block_yielded: 0,
+                    events_to_yield: VecDeque::new(),
+                    logger,
+                },
+            };
+
+        fn log_when_stream_behind<EventParameters: Debug>(
+            protocol_state: &ProtocolState,
+            other_protocol_state: &ProtocolState,
+            merged_stream_state: &MergedStreamState<EventParameters>,
+            // the current block events
+            block_events: &BlockEvents<EventParameters>,
+        ) {
+            match protocol_state.protocol {
+                TransportProtocol::Http => {
+                    slog::info!(
+                        merged_stream_state.logger,
+                        #ETH_HTTP_STREAM_RETURNED,
+                        "ETH block {} returning from {} stream",
+                        block_events.block_number,
+                        protocol_state.protocol
+                    );
+                }
+                TransportProtocol::Ws => {
+                    slog::info!(
+                        merged_stream_state.logger,
+                        #ETH_WS_STREAM_RETURNED,
+                        "ETH block {} returning from {} stream",
+                        block_events.block_number,
+                        protocol_state.protocol
+                    );
+                }
+            }
+
+            println!(
+                "Last block yielded: {}, last block pulled: {}",
+                merged_stream_state.last_block_yielded, other_protocol_state.last_block_pulled
+            );
+            let blocks_behind =
+                merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
+
+            if ((other_protocol_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
+                <= block_events.block_number)
+                && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
+            {
+                slog::warn!(
+                    merged_stream_state.logger,
+                    #ETH_STREAM_BEHIND,
+                    "{} stream at ETH block {} but {} stream at ETH block {}",
+                    protocol_state.protocol,
+                    block_events.block_number,
+                    other_protocol_state.protocol,
+                    protocol_state.last_block_pulled,
+                );
+            }
+        }
 
         async fn catch_up_other_stream<
             EventParameters: Debug,
@@ -873,15 +931,16 @@ pub trait EthObserver {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
             if let Ok(block_events) = result_block_events {
-                println!("Got ok block events");
                 protocol_state.last_block_pulled = block_events.block_number;
 
-                println!(
-                    "block number: {}, last_block yielded: {}",
-                    block_events.block_number, merged_stream_state.last_block_yielded
-                );
                 if block_events.block_number > merged_stream_state.last_block_yielded {
-                    println!("Returning ok Some block events, we have something to yield");
+                    log_when_stream_behind(
+                        protocol_state,
+                        other_protocol_state,
+                        merged_stream_state,
+                        &block_events,
+                    );
+                    merged_stream_state.last_block_yielded = block_events.block_number;
                     Ok(Some(block_events))
                 } else {
                     slog::trace!(
@@ -923,13 +982,10 @@ pub trait EthObserver {
 
         let stream = stream::unfold(init_state, |mut stream_state| async move {
             loop {
-                if let Some(block_to_yield) =
+                if let Some(event_to_yield) =
                     stream_state.merged_stream_state.events_to_yield.pop_front()
                 {
-                    // we only yield blocks here
-                    stream_state.merged_stream_state.last_block_yielded =
-                        block_to_yield.block_number;
-                    break Some((block_to_yield, stream_state));
+                    break Some((event_to_yield, stream_state));
                 }
                 let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
                 let iter_result;
@@ -1182,12 +1238,12 @@ mod merged_stream_tests {
     // alternatingly
     fn interleaved_streams(
         // contains the streams in the order they will return
-        items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, TransportProtocol)>,
+        items: Vec<(Result<BlockEvents<KeyManagerEvent>>, TransportProtocol)>,
     ) -> (
         // ws
-        impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
+        impl Stream<Item = Result<BlockEvents<KeyManagerEvent>>>,
         // http
-        impl Stream<Item = Result<EventWithCommon<KeyManagerEvent>>>,
+        impl Stream<Item = Result<BlockEvents<KeyManagerEvent>>>,
     ) {
         assert!(!items.is_empty(), "should have at least one item");
 
@@ -1215,16 +1271,17 @@ mod merged_stream_tests {
             protocol_last_returned = protocol;
         }
 
-        let delayed_stream = |items: Vec<(Result<EventWithCommon<KeyManagerEvent>>, Duration)>| {
+        let delayed_stream = |items: Vec<(Result<BlockEvents<KeyManagerEvent>>, Duration)>| {
             let items = items.into_iter();
-            Box::pin(stream::unfold(items, |mut items| async move {
+            let item = Box::pin(stream::unfold(items, |mut items| async move {
                 if let Some((i, d)) = items.next() {
                     tokio::time::sleep(d).await;
                     Some((i, items))
                 } else {
                     None
                 }
-            }))
+            }));
+            item
         };
 
         (delayed_stream(ws_items), delayed_stream(http_items))
@@ -1391,7 +1448,64 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // interleaved_streams_works_as_expected()
+    #[tokio::test]
+    async fn interleaved_streams_works_as_expected() {
+        let items = vec![
+            // yields nothing
+            (block_events_no_events(10), TransportProtocol::Http),
+            // returns
+            (
+                block_events_with_event(11, vec![0]),
+                TransportProtocol::Http,
+            ),
+            // ignored
+            (block_events_no_events(10), TransportProtocol::Ws),
+            // ignored - already returned
+            (block_events_with_event(11, vec![0]), TransportProtocol::Ws),
+            // returns
+            (block_events_with_event(12, vec![0]), TransportProtocol::Ws),
+            // ignored
+            (
+                block_events_with_event(12, vec![0]),
+                TransportProtocol::Http,
+            ),
+            // ignored / nothing interesting -  no return expected from these 4
+            (block_events_no_events(13), TransportProtocol::Ws),
+            (block_events_no_events(14), TransportProtocol::Ws),
+            (block_events_no_events(13), TransportProtocol::Http),
+            (block_events_no_events(14), TransportProtocol::Http),
+            // returned
+            (block_events_with_event(15, vec![0]), TransportProtocol::Ws),
+            // ignored
+            (
+                block_events_with_event(15, vec![0]),
+                TransportProtocol::Http,
+            ),
+        ];
+
+        let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
+        let (ws_stream, http_stream) = interleaved_streams(items);
+
+        let key_manager = test_km_contract();
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(11, 0));
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        tag_cache.clear();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        tag_cache.clear();
+
+        assert!(stream.next().await.is_none());
+    }
 
     // merged_stream_notifies_once_every_x_blocks_when_one_falls_behind
 
