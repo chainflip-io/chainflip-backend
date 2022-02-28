@@ -936,10 +936,6 @@ pub trait EthObserver {
             other_protocol_stream: BlockEventsStream,
             result_block_events: Result<BlockEvents<EventParameters>>,
         ) -> Result<Option<BlockEvents<EventParameters>>> {
-            println!(
-                "doing for protocol: with block events: {:?}",
-                result_block_events
-            );
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
             if let Ok(block_events) = result_block_events {
@@ -970,19 +966,21 @@ pub trait EthObserver {
                     protocol_state.last_block_pulled = block_events.block_number;
                     slog::trace!(
                         merged_stream_state.logger,
-                        "Ignoring log from {}, already produced by other stream",
-                        block_events.block_number
+                        "Ignoring BlockEvents for block number {} from {}, already produced by other stream",
+                        block_events.block_number, protocol_state.protocol
                     );
                     Ok(None)
                 }
             } else {
                 // we got an error block.
+                println!("We got an error block");
 
                 let we_yielded_last_block =
                     protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
                 // if we yieled the last one, we let the other stream progress to try and cover for us
                 if we_yielded_last_block {
+                    println!("Catch up other stream");
                     Ok(Some(
                         catch_up_other_stream(
                             other_protocol_state,
@@ -993,6 +991,7 @@ pub trait EthObserver {
                         .await?,
                     ))
                 } else {
+                    println!("We are behind");
                     // we're behind, so we just log an error and continue on.
                     slog::error!(
                         merged_stream_state.logger,
@@ -1016,10 +1015,12 @@ pub trait EthObserver {
                 let iter_result;
                 tokio::select! {
                     Some(result_block_events) = stream_state.ws_stream.next() => {
+                        println!("Polled WS");
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
 
                     }
                     Some(result_block_events) = stream_state.http_stream.next() => {
+                        println!("Polled HTTP");
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
                     }
                     else => break None
@@ -1689,6 +1690,44 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
+    #[tokio::test]
+    async fn merged_stream_recovers_when_one_stream_errors_and_other_catches_up_with_success() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let ws_stream = Box::pin(stream::iter([
+            block_events_with_event(12, vec![0]),
+            block_events_with_event(13, vec![0]),
+            // expecting block 14
+            Err(anyhow::Error::msg("NOOOO")),
+            block_events_with_event(15, vec![0]),
+            block_events_with_event(16, vec![0]),
+        ]));
+
+        // http is behind, but then catches up and saves the day
+        let http_stream = Box::pin(stream::iter([
+            block_events_no_events(8),
+            block_events_no_events(9),
+            block_events_no_events(10),
+            block_events_no_events(11),
+            block_events_with_event(12, vec![0]),
+            block_events_with_event(13, vec![0]),
+            block_events_with_event(14, vec![0]),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 0));
+
+        // Gets the blocks from WS after HTTP catches up and lets it recover
+        assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
 
         assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
         assert!(stream.next().await.is_none());
