@@ -865,8 +865,10 @@ pub trait EthObserver {
             let blocks_behind =
                 merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
 
-            if ((other_protocol_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
-                <= block_events.block_number)
+            // don't want to log on the first iteration
+            if other_protocol_state.last_block_pulled != 0
+                && ((other_protocol_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
+                    <= block_events.block_number)
                 && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
             {
                 slog::warn!(
@@ -876,7 +878,7 @@ pub trait EthObserver {
                     protocol_state.protocol,
                     block_events.block_number,
                     other_protocol_state.protocol,
-                    protocol_state.last_block_pulled,
+                    other_protocol_state.last_block_pulled,
                 );
             }
         }
@@ -1601,7 +1603,34 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // merged_stream_notifies_once_every_x_blocks_when_one_falls_behind
+    #[tokio::test]
+    async fn merged_stream_notifies_once_every_x_blocks_when_one_falls_behind() {
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
+
+        let ws_range = 10..54;
+        let range_block_events = ws_range
+            .clone()
+            .map(|n| block_events_with_event(n, vec![0]));
+
+        let ws_stream = stream::iter(range_block_events);
+        let http_stream = stream::iter([block_events_with_event(10, vec![0])]);
+
+        let key_manager = test_km_contract();
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        for i in ws_range {
+            let event = stream.next().await.unwrap();
+            assert_eq!(event, key_change(i, 0));
+        }
+
+        assert_eq!(tag_cache.get_tag_count(ETH_STREAM_BEHIND), 4);
+        assert!(stream.next().await.is_none());
+    }
+
+    // handle when one of the streams doesn't even start - we won't get notified of that currently
 
     // merged_stream_continues_when_one_stream_moves_back_in_blocks
 
