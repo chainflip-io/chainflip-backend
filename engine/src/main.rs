@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
-        EthRpcClient,
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
+        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
     },
     health::HealthMonitor,
     logging,
@@ -41,12 +41,16 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .expect("Should create EthRpcClient");
+        .expect("Should create EthWsRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
-        .expect("Failed to create ETH broadcaster");
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth).expect("Should create EthHttpRpcClient");
+
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)
+            .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
@@ -107,18 +111,46 @@ async fn main() {
         .await
         .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = eth_rpc_client
+        let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
             .await
             .expect("Should fetch chain id");
 
-        if chain_id_from_sc != chain_id_from_eth {
-            slog::error!(
-            &root_logger,
-            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
-            chain_id_from_eth,
+        let chain_id_from_eth_http = eth_http_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
+
+        let both_nodes_string = format!(
+            "Please ensure both nodes are pointing to the network with ChainId: {}",
             chain_id_from_sc
         );
+        if chain_id_from_sc != chain_id_from_eth_ws && chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+            &root_logger,
+            "Both WS (ChainId: {}) and HTTP (ChainId: {}) ETH nodes are pointing to the wrong chain id. {}",
+            chain_id_from_eth_ws,
+            chain_id_from_eth_http,
+            both_nodes_string
+        );
+            return;
+        } else if chain_id_from_sc != chain_id_from_eth_ws {
+            slog::error!(
+                &root_logger,
+                "The WS (ChainId: {}) ETH node is pointing to the wrong chain id (HTTP node is correct (ChainId: {}). {}",
+                chain_id_from_eth_ws,
+                chain_id_from_eth_http,
+                both_nodes_string
+            );
+            return;
+        } else if chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+                &root_logger,
+                "The HTTP (ChainId: {}) ETH node is pointing to the wrong chain id (WS node is correct (ChainId: {}). {}",
+                chain_id_from_eth_http,
+                chain_id_from_eth_ws,
+                both_nodes_string
+            );
             return;
         }
     }
@@ -188,14 +220,16 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,
