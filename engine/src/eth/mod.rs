@@ -528,8 +528,8 @@ pub enum TransportProtocol {
 impl fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            TransportProtocol::Ws => write!(f, "Websocket"),
-            TransportProtocol::Http => write!(f, "Http"),
+            TransportProtocol::Ws => write!(f, "WebSocket"),
+            TransportProtocol::Http => write!(f, "HTTP"),
         }
     }
 }
@@ -935,8 +935,6 @@ pub trait EthObserver {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
             if let Ok(block_events) = result_block_events {
-                protocol_state.last_block_pulled = block_events.block_number;
-
                 if block_events.block_number > merged_stream_state.last_block_yielded {
                     log_when_stream_behind(
                         protocol_state,
@@ -945,8 +943,22 @@ pub trait EthObserver {
                         &block_events,
                     );
                     merged_stream_state.last_block_yielded = block_events.block_number;
+                    protocol_state.last_block_pulled = block_events.block_number;
                     Ok(Some(block_events))
+                } else if protocol_state.last_block_pulled != 0
+                    && block_events.block_number <= protocol_state.last_block_pulled
+                {
+                    slog::warn!(
+                        &merged_stream_state.logger,
+                        #SAFE_PROTOCOL_STREAM_JUMP_BACK,
+                        "The {} stream moved back from ETH block {} to ETH block {}",
+                        protocol_state.protocol,
+                        protocol_state.last_block_pulled,
+                        block_events.block_number
+                    );
+                    Ok(None)
                 } else {
+                    protocol_state.last_block_pulled = block_events.block_number;
                     slog::trace!(
                         merged_stream_state.logger,
                         "Ignoring log from {}, already produced by other stream",
@@ -1630,9 +1642,46 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // handle when one of the streams doesn't even start - we won't get notified of that currently
+    #[tokio::test]
+    async fn merged_stream_continues_when_one_stream_jumps_back_in_blocks() {
+        let key_manager = test_km_contract();
+        let (logger, tag_cache) = new_test_logger_with_tag_cache();
 
-    // merged_stream_continues_when_one_stream_moves_back_in_blocks
+        let ws_stream = Box::pin(stream::iter([
+            block_events_with_event(12, vec![0]),
+            block_events_no_events(13),
+            block_events_with_event(14, vec![2]),
+            block_events_no_events(15),
+            block_events_with_event(16, vec![0]),
+        ]));
+
+        let http_stream = Box::pin(stream::iter([
+            block_events_with_event(12, vec![0]),
+            // stream glitches :(
+            block_events_with_event(7, vec![2]),
+            // recovers back to where it was
+            block_events_no_events(13),
+            block_events_with_event(14, vec![2]),
+            block_events_no_events(15),
+            block_events_with_event(16, vec![0]),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
+        assert!(!tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 2));
+        assert!(tag_cache.contains_tag(SAFE_PROTOCOL_STREAM_JUMP_BACK));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
+        assert!(stream.next().await.is_none());
+    }
+
+    // handle when one of the streams doesn't even start - we won't get notified of that currently
 
     // TODO: Test when the block events are skipped i.e. the block numbers are skipped. What should we do?
 
