@@ -1235,14 +1235,11 @@ mod merged_stream_tests {
         })
     }
 
-    fn block_events_no_events(
-        block_number: u64,
-        log_indices: Vec<u8>,
-    ) -> BlockEvents<KeyManagerEvent> {
-        BlockEvents {
+    fn block_events_no_events(block_number: u64) -> Result<BlockEvents<KeyManagerEvent>> {
+        Ok(BlockEvents {
             block_number,
             events: None,
-        }
+        })
     }
 
     // Generate a stream for each protocol, that, when selected upon, will return
@@ -1326,15 +1323,70 @@ mod merged_stream_tests {
         let logger = new_test_logger();
 
         let key_change_1 = 10;
-        let key_change_2 = 15;
+        let key_change_2 = 13;
         let log_index = 0;
         let safe_ws_block_events_stream = Box::pin(stream::iter([
             block_events_with_event(key_change_1, vec![log_index]),
+            // no events in these blocks
+            block_events_no_events(11),
+            block_events_no_events(12),
             block_events_with_event(key_change_2, vec![log_index]),
         ]));
         let safe_http_block_events_stream = Box::pin(stream::iter([
             block_events_with_event(key_change_1, vec![log_index]),
+            block_events_no_events(11),
+            block_events_no_events(12),
             block_events_with_event(key_change_2, vec![log_index]),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(
+                safe_ws_block_events_stream,
+                safe_http_block_events_stream,
+                logger,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_1, log_index)
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_2, log_index)
+        );
+        assert!(stream.next().await.is_none());
+    }
+
+    // TODO: Test when one of the streams always returns None (empty) - prev: merged_stream_handles_broken_stream()
+
+    // TODO: Test when the block events are skipped i.e. the block numbers are skipped. What should we do?
+
+    #[tokio::test]
+    async fn merged_stream_handles_behind_stream() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let key_change_1 = 10;
+        let key_change_2 = 13;
+        let log_index = 0;
+
+        // websockets is a block behind
+        let safe_ws_block_events_stream = Box::pin(stream::iter([
+            block_events_no_events(9),
+            block_events_with_event(key_change_1, vec![log_index]),
+            block_events_no_events(11),
+            block_events_no_events(12),
+            block_events_with_event(13, vec![log_index]),
+        ]));
+        // http is a block ahead
+        let safe_http_block_events_stream = Box::pin(stream::iter([
+            block_events_with_event(key_change_1, vec![log_index]),
+            block_events_no_events(11),
+            block_events_no_events(12),
+            block_events_with_event(key_change_2, vec![log_index]),
+            block_events_no_events(14),
         ]));
 
         let mut stream = key_manager
