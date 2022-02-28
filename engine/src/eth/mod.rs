@@ -989,9 +989,8 @@ pub trait EthObserver {
                 {
                     break Some((event_to_yield, stream_state));
                 }
-                let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
-                let iter_result;
 
+                let iter_result;
                 tokio::select! {
                     Some(result_block_events) = stream_state.ws_stream.next() => {
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
@@ -1417,6 +1416,34 @@ mod merged_stream_tests {
     }
 
     #[tokio::test]
+    async fn merged_stream_handles_broken_stream() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let safe_ws_block_events_stream = Box::pin(stream::empty());
+        let safe_http_block_events_stream = Box::pin(stream::iter([
+            block_events_with_event(10, vec![0]),
+            block_events_no_events(11),
+            block_events_no_events(12),
+            block_events_with_event(13, vec![0]),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(
+                safe_ws_block_events_stream,
+                safe_http_block_events_stream,
+                logger,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(10, 0));
+        assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
     async fn merged_stream_handles_behind_stream() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
@@ -1577,8 +1604,6 @@ mod merged_stream_tests {
     // merged_stream_notifies_once_every_x_blocks_when_one_falls_behind
 
     // merged_stream_continues_when_one_stream_moves_back_in_blocks
-
-    // TODO: Test when one of the streams always returns None (empty) - prev: merged_stream_handles_broken_stream()
 
     // TODO: Test when the block events are skipped i.e. the block numbers are skipped. What should we do?
 
