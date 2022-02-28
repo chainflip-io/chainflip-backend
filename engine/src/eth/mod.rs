@@ -894,7 +894,6 @@ pub trait EthObserver {
             } else {
                 // we got an error block.
 
-                // TODO: What do we do when we get error *logs* -> Should we merge these to be the same concept??
                 let we_yielded_last_block =
                     protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
