@@ -1359,10 +1359,6 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // TODO: Test when one of the streams always returns None (empty) - prev: merged_stream_handles_broken_stream()
-
-    // TODO: Test when the block events are skipped i.e. the block numbers are skipped. What should we do?
-
     #[tokio::test]
     async fn merged_stream_handles_behind_stream() {
         let key_manager = test_km_contract();
@@ -1408,6 +1404,77 @@ mod merged_stream_tests {
         );
         assert!(stream.next().await.is_none());
     }
+
+    #[tokio::test]
+    async fn merged_stream_handles_logs_in_same_tx() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let key_change_1 = 10;
+        let key_change_2 = 13;
+        let first_log_index = 0;
+        let second_log_index = 2;
+        let log_indices = vec![first_log_index, second_log_index];
+
+        let safe_ws_block_events_stream = Box::pin(stream::iter([
+            block_events_with_event(key_change_1, log_indices.clone()),
+            block_events_no_events(11),
+            block_events_no_events(12),
+            block_events_with_event(key_change_2, log_indices.clone()),
+        ]));
+
+        let safe_http_block_events_stream = Box::pin(stream::iter([
+            block_events_with_event(key_change_1, log_indices.clone()),
+            block_events_no_events(11),
+            block_events_no_events(12),
+            block_events_with_event(key_change_2, log_indices.clone()),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(
+                safe_ws_block_events_stream,
+                safe_http_block_events_stream,
+                logger,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_1, first_log_index)
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_1, second_log_index)
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_2, first_log_index)
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_2, second_log_index)
+        );
+        assert!(stream.next().await.is_none());
+    }
+
+    // interleaved_streams_works_as_expected()
+
+    // merged_stream_notifies_once_every_x_blocks_when_one_falls_behind
+
+    // merged_stream_continues_when_one_stream_moves_back_in_blocks
+
+    // TODO: Test when one of the streams always returns None (empty) - prev: merged_stream_handles_broken_stream()
+
+    // TODO: Test when the block events are skipped i.e. the block numbers are skipped. What should we do?
+
+    // merged stream recovers when only one stream returns error block
+
+    // merged stream terminates when both streams return error block
+
+    // merged stream does not return blocks ahead of the failed block
+
+    // merged stream ignores when the stream receives a failed block
 }
 
 #[cfg(test)]
