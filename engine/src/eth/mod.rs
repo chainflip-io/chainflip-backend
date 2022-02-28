@@ -534,6 +534,7 @@ impl fmt::Display for TransportProtocol {
     }
 }
 
+#[derive(Debug)]
 pub struct BlockEvents<EventParameters: Debug> {
     pub block_number: u64,
     pub events: Option<Vec<EventWithCommon<EventParameters>>>,
@@ -867,12 +868,22 @@ pub trait EthObserver {
             other_protocol_stream: BlockEventsStream,
             result_block_events: Result<BlockEvents<EventParameters>>,
         ) -> Result<Option<BlockEvents<EventParameters>>> {
+            println!(
+                "doing for protocol: with block events: {:?}",
+                result_block_events
+            );
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 
             if let Ok(block_events) = result_block_events {
+                println!("Got ok block events");
                 protocol_state.last_block_pulled = block_events.block_number;
 
+                println!(
+                    "block number: {}, last_block yielded: {}",
+                    block_events.block_number, merged_stream_state.last_block_yielded
+                );
                 if block_events.block_number > merged_stream_state.last_block_yielded {
+                    println!("Returning ok Some block events, we have something to yield");
                     Ok(Some(block_events))
                 } else {
                     slog::trace!(
@@ -914,9 +925,18 @@ pub trait EthObserver {
         }
 
         let stream = stream::unfold(init_state, |mut stream_state| async move {
-            let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
             loop {
+                if let Some(block_to_yield) =
+                    stream_state.merged_stream_state.events_to_yield.pop_front()
+                {
+                    // we only yield blocks here
+                    stream_state.merged_stream_state.last_block_yielded =
+                        block_to_yield.block_number;
+                    break Some((block_to_yield, stream_state));
+                }
+                let is_first_iteration = stream_state.merged_stream_state.last_block_yielded == 0;
                 let iter_result;
+
                 tokio::select! {
                     Some(result_block_events) = stream_state.ws_stream.next() => {
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
@@ -1204,8 +1224,8 @@ mod merged_stream_tests {
     fn block_events_with_event(
         block_number: u64,
         log_indices: Vec<u8>,
-    ) -> BlockEvents<KeyManagerEvent> {
-        BlockEvents {
+    ) -> Result<BlockEvents<KeyManagerEvent>> {
+        Ok(BlockEvents {
             block_number,
             events: Some(
                 log_indices
@@ -1213,7 +1233,7 @@ mod merged_stream_tests {
                     .map(|index| key_change(block_number, index))
                     .collect(),
             ),
-        }
+        })
     }
 
     fn block_events_no_events(
@@ -1308,13 +1328,14 @@ mod merged_stream_tests {
 
         let key_change_1 = 10;
         let key_change_2 = 15;
-        let safe_ws_block_events_stream = Box::pin(stream::iter([block_events_with_event(
-            key_change_1,
-            vec![0],
-        )]));
+        let log_index = 0;
+        let safe_ws_block_events_stream = Box::pin(stream::iter([
+            block_events_with_event(key_change_1, vec![log_index]),
+            block_events_with_event(key_change_2, vec![log_index]),
+        ]));
         let safe_http_block_events_stream = Box::pin(stream::iter([
-            key_change(key_change_1, 0),
-            key_change(key_change_2, 0),
+            block_events_with_event(key_change_1, vec![log_index]),
+            block_events_with_event(key_change_2, vec![log_index]),
         ]));
 
         let mut stream = key_manager
@@ -1326,6 +1347,14 @@ mod merged_stream_tests {
             .await
             .unwrap();
 
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_1, log_index)
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            key_change(key_change_2, log_index)
+        );
         assert!(stream.next().await.is_none());
     }
 }
