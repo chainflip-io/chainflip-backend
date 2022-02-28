@@ -1790,12 +1790,6 @@ mod merged_stream_tests {
 
         assert!(stream.next().await.is_none());
     }
-
-    // merged stream does not return blocks ahead of the failed block
-
-    // merged stream ignores when the stream receives a failed block
-
-    // test interleaving errors - the other tests should cover this, but it's cool to see that it can happen
 }
 
 #[cfg(test)]
