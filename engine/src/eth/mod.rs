@@ -906,13 +906,14 @@ pub trait EthObserver {
                     } else if block_events.block_number < next_block_to_yield {
                         slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                     } else {
+                        // TODO: Some more info here? I actually havent' seen this logged before, so maybe it's not that useful?
                         return Err(anyhow::Error::msg(
                             "The stream has skipped blocks. We were expecting a contiguous sequence of blocks",
                         ));
                     }
                 } else {
                     return Err(anyhow::Error::msg(
-                        "The {} stream has failed after pulling block: {} while attempting to ",
+                        format!("The {} stream has failed after pulling block: {} while attempting to recover.", protocol_state.protocol, protocol_state.last_block_pulled),
                     ));
                 }
             }
@@ -962,7 +963,9 @@ pub trait EthObserver {
                         block_events.block_number
                     );
                     Ok(None)
-                } else if block_events.block_number > protocol_state.last_block_pulled + 1 {
+                } else if !is_first_iteration
+                    && block_events.block_number > protocol_state.last_block_pulled + 1
+                {
                     // if we've jumped ahead in blocks, we don't want to update our state
                     // we want to ignore, and continue so we can recover
                     slog::warn!(merged_stream_state.logger, "{} ETH stream jumped from block {} to {}. Ignoring, as expecting contiguous sequence.", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
@@ -1737,7 +1740,7 @@ mod merged_stream_tests {
     // handle when one of the streams doesn't even start - we won't get notified of that currently
 
     #[tokio::test]
-    async fn ignore_and_wait_when_a_stream_skips_blocks() {
+    async fn merged_stream_ignores_and_waits_when_a_stream_skips_blocks() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
 
@@ -1767,9 +1770,31 @@ mod merged_stream_tests {
         assert!(stream.next().await.is_none());
     }
 
-    // merged stream recovers when only one stream returns error block
+    #[tokio::test]
+    async fn merged_stream_exits_when_both_stream_fail_to_get_block() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
 
-    // merged stream terminates when both streams return error block
+        let ws_stream = Box::pin(stream::iter([
+            block_events_with_event(11, vec![0]),
+            Err(anyhow::Error::msg("NOOO")),
+        ]));
+
+        // http is behind, but then catches up and saves the day
+        let http_stream = Box::pin(stream::iter([
+            block_events_with_event(11, vec![0]),
+            Err(anyhow::Error::msg("NOOO, except this time worse :(")),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(11, 0));
+
+        assert!(stream.next().await.is_none());
+    }
 
     // merged stream does not return blocks ahead of the failed block
 
