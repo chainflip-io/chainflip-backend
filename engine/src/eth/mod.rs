@@ -899,6 +899,12 @@ pub trait EthObserver {
                 if let Ok(block_events) = result_block_events {
                     protocol_state.last_block_pulled = block_events.block_number;
                     if protocol_state.last_block_pulled == next_block_to_yield {
+                        slog::info!(
+                            logger,
+                            "ETH {} stream has caught up and returned block {}",
+                            protocol_state.protocol,
+                            block_events.block_number
+                        );
                         return Ok(block_events);
                     } else if protocol_state.last_block_pulled < next_block_to_yield {
                         slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
