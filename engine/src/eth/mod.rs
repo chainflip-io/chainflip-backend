@@ -954,7 +954,7 @@ pub trait EthObserver {
                     slog::warn!(
                         &merged_stream_state.logger,
                         #SAFE_PROTOCOL_STREAM_JUMP_BACK,
-                        "The {} stream moved back from ETH block {} to ETH block {}",
+                        "Unexpected: ETH {} stream last returned {}, but now returned {}",
                         protocol_state.protocol,
                         protocol_state.last_block_pulled,
                         block_events.block_number
@@ -1633,6 +1633,7 @@ mod merged_stream_tests {
             block_events_with_event(13, vec![0]),
             // expecting block 14
             Err(anyhow::Error::msg("NOOOO")),
+            // NB: We jump from 14 to 15
             block_events_with_event(15, vec![0]),
             block_events_with_event(16, vec![0]),
         ]));
@@ -1640,6 +1641,49 @@ mod merged_stream_tests {
         // http is behind, but then catches up and saves the day
         let http_stream = Box::pin(stream::iter([
             block_events_no_events(8),
+            block_events_no_events(9),
+            block_events_no_events(10),
+            block_events_no_events(11),
+            block_events_with_event(12, vec![0]),
+            block_events_with_event(13, vec![0]),
+            block_events_with_event(14, vec![0]),
+        ]));
+
+        let mut stream = key_manager
+            .merged_block_events_stream(ws_stream, http_stream, logger)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(14, 0));
+
+        // Gets the blocks from WS after HTTP catches up and lets it recover
+        assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
+
+        assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn single_stream_returns_previously_expected_block_after_erroring() {
+        let key_manager = test_km_contract();
+        let logger = new_test_logger();
+
+        let ws_stream = Box::pin(stream::iter([
+            block_events_with_event(12, vec![0]),
+            Err(anyhow::Error::msg("NOOOO")),
+            // returns the old one intsead of jumping like in the previous test
+            block_events_with_event(13, vec![0]),
+            block_events_with_event(13, vec![0]),
+            block_events_with_event(15, vec![0]),
+            block_events_with_event(16, vec![0]),
+        ]));
+
+        // http is behind, but then catches up and saves the day
+        let http_stream = Box::pin(stream::iter([
             block_events_no_events(9),
             block_events_no_events(10),
             block_events_no_events(11),
