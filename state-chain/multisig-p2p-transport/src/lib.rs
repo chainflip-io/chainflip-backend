@@ -89,6 +89,7 @@ struct P2PValidatorNetworkNodeState {
 	p2p_message_rpc_subscribers:
 		HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
 	reserved_peers: BTreeMap<PeerId, (u16, Ipv6Addr)>,
+	connected_peers: BTreeSet<PeerId>,
 }
 
 /// An abstration of the underlying network of peers.
@@ -312,6 +313,9 @@ pub fn new_p2p_validator_network_node<
 					let state = self.state.read().unwrap();
 					if peers.iter().all(|peer| state.reserved_peers.contains_key(peer)) {
 						for peer in peers {
+							if !state.connected_peers.contains(&peer) {
+								log::warn!("Trying to send message to unconnected peer {}", peer);
+							}
 							self.p2p_network_service.write_notification(peer, message.clone());
 						}
 						Ok(200)
@@ -389,7 +393,6 @@ pub fn new_p2p_validator_network_node<
 			let mut network_event_stream = p2p_network_service.event_stream();
 
 			async move {
-				let mut total_connected_peers: usize = 0;
 				while let Some(event) = network_event_stream.next().await {
 					match event {
 						/* A peer has connected to us */
@@ -400,23 +403,25 @@ pub fn new_p2p_validator_network_node<
 							negotiated_fallback: _,
 						} =>
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers += 1;
+								let mut state = state.write().unwrap();
+								state.connected_peers.insert(remote);
 								log::info!(
 									"Connected and established {} with peer: {} (Total Connected: {})",
 									protocol,
 									remote,
-									total_connected_peers
+									state.connected_peers.len()
 								);
 							},
 						/* A peer has disconnected from us */
 						Event::NotificationStreamClosed { remote, protocol } => {
 							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-								total_connected_peers -= 1;
+								let mut state = state.write().unwrap();
+								state.connected_peers.remove(&remote);
 								log::info!(
 									"Disconnected and closed {} with peer: {} (Total Connected: {})",
 									protocol,
 									remote,
-									total_connected_peers
+									state.connected_peers.len()
 								);
 							}
 						},
