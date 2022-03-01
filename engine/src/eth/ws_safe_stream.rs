@@ -161,7 +161,7 @@ pub mod tests {
     async fn returns_none_when_none_in_inner_no_safety() {
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let mut stream = safe_ws_head_stream(header_stream, 0);
 
         assert!(stream.next().await.is_none());
     }
@@ -170,7 +170,7 @@ pub mod tests {
     async fn returns_none_when_none_in_inner_with_safety() {
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 4);
+        let mut stream = safe_ws_head_stream(header_stream, 4);
 
         assert!(stream.next().await.is_none());
     }
@@ -180,7 +180,7 @@ pub mod tests {
         let header_stream =
             stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![block_header(1, 0)]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 4);
+        let mut stream = safe_ws_head_stream(header_stream, 4);
 
         assert!(stream.next().await.is_none());
     }
@@ -191,7 +191,7 @@ pub mod tests {
         let header_stream =
             stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![first_block.clone()]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let mut stream = safe_ws_head_stream(header_stream, 0);
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
@@ -210,7 +210,7 @@ pub mod tests {
             block_header(3, 2),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 1);
+        let mut stream = safe_ws_head_stream(header_stream, 1);
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
@@ -233,7 +233,7 @@ pub mod tests {
             first_block_prime.clone(),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let mut stream = safe_ws_head_stream(header_stream, 0);
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
@@ -258,7 +258,7 @@ pub mod tests {
             block_header(2, 2),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 1);
+        let mut stream = safe_ws_head_stream(header_stream, 1);
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
@@ -285,7 +285,7 @@ pub mod tests {
             block_header(2, 12),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 2);
+        let mut stream = safe_ws_head_stream(header_stream, 2);
 
         assert_eq!(
             stream.next().await.unwrap().unwrap(),

@@ -9,6 +9,7 @@ mod ws_safe_stream;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use regex::Regex;
 
 use crate::constants::{ETH_FALLING_BEHIND_MARGIN_BLOCKS, ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL};
 use crate::eth::http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL};

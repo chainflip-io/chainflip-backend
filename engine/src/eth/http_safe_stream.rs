@@ -10,6 +10,8 @@ pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 use super::{CFEthBlockHeader, EthHttpRpcApi};
 
+use anyhow::Result;
+
 pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
     eth_http_rpc: EthHttpRpc,
     poll_interval: Duration,
@@ -74,13 +76,11 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .eth_http_rpc
                     .block(next_block_to_yield)
                     .await
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "Failed to fetch ETH block `{}` via HTTP: {}",
-                            next_block_to_yield, e
-                        )
-                    })
-                    .unwrap();
+                    .and_then(|opt_block| {
+                        opt_block.ok_or(anyhow::Error::msg(
+                            "Could not find ETH block in HTTP safe stream",
+                        ))
+                    });
                 state.last_block_yielded = next_block_to_yield;
                 break Some((block, state));
             }
@@ -183,7 +183,10 @@ pub mod tests {
 
         let mut stream =
             safe_polling_http_head_stream(mock_eth_http_rpc, TEST_HTTP_POLL_INTERVAL, logger).await;
-        assert_eq!(stream.next().await.unwrap().number().unwrap(), U64::from(1));
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().block_number,
+            U64::from(1)
+        );
     }
 
     #[tokio::test]
