@@ -37,9 +37,9 @@ where
                     Ok(header) => header,
                     Err(e) => break Some((Err(e.into()), state)),
                 };
-                let current_block_number = match current_header.number.ok_or(anyhow::Error::msg(
-                    "WS Block header does not contain block number.",
-                )) {
+                let current_block_number = match current_header.number.ok_or_else(|| {
+                    anyhow::Error::msg("WS Block header does not contain block number.")
+                }) {
                     Ok(number) => number,
                     Err(err) => break Some((Err(err), state)),
                 };

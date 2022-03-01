@@ -29,13 +29,14 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::stream::{self, repeat, select, select_all, Fuse, Repeat, Select, Zip};
+use futures::stream::{self, Fuse};
 use futures::TryFutureExt;
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
-use std::collections::{HashMap, VecDeque};
+use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::fmt;
 use std::{fmt::Debug, pin::Pin, str::FromStr, sync::Arc};
 use thiserror::Error;
@@ -671,9 +672,11 @@ pub trait EthObserver {
                                 .block(U64::from(block_number))
                                 .await
                                 .and_then(|opt_block| {
-                                    opt_block.ok_or(anyhow::Error::msg(
-                                        "Could not find ETH block in HTTP safe stream",
-                                    ))
+                                    opt_block.ok_or_else(|| {
+                                        anyhow::Error::msg(
+                                            "Could not find ETH block in HTTP safe stream",
+                                        )
+                                    })
                                 })
                         }
                     });
@@ -894,20 +897,24 @@ pub trait EthObserver {
         ) -> Result<BlockEvents<EventParameters>> {
             while let Some(result_block_events) = protocol_stream.next().await {
                 if let Ok(block_events) = result_block_events {
-                    if block_events.block_number == next_block_to_yield {
-                        slog::info!(
-                            logger,
-                            "ETH {} stream has caught up and returned block {}",
-                            protocol_state.protocol,
-                            block_events.block_number
-                        );
-                        return Ok(block_events);
-                    } else if block_events.block_number < next_block_to_yield {
-                        slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
-                    } else {
-                        return Err(anyhow::Error::msg(
-                            "The stream has skipped blocks. We were expecting a contiguous sequence of blocks",
-                        ));
+                    match block_events.block_number.cmp(&next_block_to_yield) {
+                        Ordering::Equal => {
+                            slog::info!(
+                                logger,
+                                "ETH {} stream has caught up and returned block {}",
+                                protocol_state.protocol,
+                                block_events.block_number
+                            );
+                            return Ok(block_events);
+                        }
+                        Ordering::Less => {
+                            slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
+                        }
+                        Ordering::Greater => {
+                            return Err(anyhow::Error::msg(
+                                "The stream has skipped blocks. We were expecting a contiguous sequence of blocks",
+                            ));
+                        }
                     }
                 } else {
                     return Err(anyhow::Error::msg(
@@ -995,7 +1002,7 @@ pub trait EthObserver {
                     protocol_state,
                     other_protocol_state,
                     merged_stream_state,
-                    &block_events,
+                    block_events,
                 );
             }
 
@@ -1192,7 +1199,7 @@ pub mod mocks {
     use mockall::mock;
 
     // Create a mock of the http interface of web3
-    mock! {
+    mock! (
         // MockEthHttpRpc will be the name of the mock
         pub EthHttpRpc {}
 
@@ -1223,10 +1230,10 @@ pub mod mocks {
         impl EthHttpRpcApi for EthHttpRpc {
             async fn block_number(&self) -> Result<U64>;
         }
-    }
+    );
 
     // Create a mock of the Websockets interface of web3
-    mock! {
+    mock! (
         // MockEthWsRpc will be the name of the mock
         pub EthWsRpc {}
 
@@ -1259,7 +1266,7 @@ pub mod mocks {
                 &self,
             ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
         }
-    }
+    );
 }
 
 #[cfg(test)]
@@ -1358,15 +1365,14 @@ mod merged_stream_tests {
 
         let delayed_stream = |items: Vec<(Result<BlockEvents<KeyManagerEvent>>, Duration)>| {
             let items = items.into_iter();
-            let item = Box::pin(stream::unfold(items, |mut items| async move {
+            Box::pin(stream::unfold(items, |mut items| async move {
                 if let Some((i, d)) = items.next() {
                     tokio::time::sleep(d).await;
                     Some((i, items))
                 } else {
                     None
                 }
-            }));
-            item
+            }))
         };
 
         (delayed_stream(ws_items), delayed_stream(http_items))

@@ -77,9 +77,9 @@ pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
                     .block(next_block_to_yield)
                     .await
                     .and_then(|opt_block| {
-                        opt_block.ok_or(anyhow::Error::msg(
-                            "Could not find ETH block in HTTP safe stream",
-                        ))
+                        opt_block.ok_or_else(|| {
+                            anyhow::Error::msg("Could not find ETH block in HTTP safe stream")
+                        })
                     });
                 state.last_block_yielded = next_block_to_yield;
                 break Some((block, state));
