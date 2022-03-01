@@ -108,18 +108,36 @@ async fn main() {
         .await
         .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = eth_ws_rpc_client
+        let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
             .await
             .expect("Should fetch chain id");
 
-        if chain_id_from_sc != chain_id_from_eth {
+        let chain_id_from_eth_http = eth_http_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
+
+        let mut has_wrong_chain_id = false;
+        if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
-            &root_logger,
-            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
-            chain_id_from_eth,
-            chain_id_from_sc
-        );
+                &root_logger,
+                "The WS (ChainId: {}) ETH node is pointing to the wrong chain id (HTTP node is correct (ChainId: {}).",
+                chain_id_from_eth_ws,
+                chain_id_from_eth_http,
+            );
+            has_wrong_chain_id = true;
+        }
+        if chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+                &root_logger,
+                "The HTTP (ChainId: {}) ETH node is pointing to the wrong chain id (WS node is correct (ChainId: {}).",
+                chain_id_from_eth_http,
+                chain_id_from_eth_ws,
+            );
+            has_wrong_chain_id = true;
+        }
+        if has_wrong_chain_id {
             return;
         }
     }
