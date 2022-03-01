@@ -42,6 +42,7 @@ where
 // the threshold to 50% for symmetry?)
 pub fn verify_broadcasts<T>(
     verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<T>>>,
+    logger: &slog::Logger,
 ) -> Result<HashMap<usize, T>, Vec<usize>>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
@@ -59,8 +60,16 @@ where
         .into_iter()
         .filter_map(|(k, v)| v.map(|unwrapped_v| (k, unwrapped_v)))
         // We ignore all messages that don't contain all (and only) expected signer indexes
-        .filter(|(_sender, messages)| {
-            check_verification_message_indexes(messages, &participating_idxs)
+        .filter(|(sender, message)| {
+            let valid = check_verification_message_indexes(message, &participating_idxs);
+            if !(valid) {
+                slog::warn!(
+                    logger,
+                    "Disregarding verification messages from: {}",
+                    sender
+                );
+            }
+            valid
         })
         .collect();
 
@@ -140,7 +149,8 @@ mod tests {
         verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<i32>>>,
         expected: Result<Vec<(usize, i32)>, Vec<usize>>,
     ) {
-        let res = verify_broadcasts(verification_messages)
+        let logger = crate::logging::test_utils::new_test_logger();
+        let res = verify_broadcasts(verification_messages, &logger)
             .map_err(|reported_idxs| reported_idxs.iter().copied().collect::<BTreeSet<usize>>());
 
         let expected = expected
