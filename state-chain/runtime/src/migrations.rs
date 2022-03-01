@@ -3,6 +3,9 @@ use crate::System;
 use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
+mod delete_rewards;
+pub use delete_rewards::DeleteRewardsPallet;
+
 /// A runtime storage migration that will only be applied if the `SPEC_VERSION` matches the
 /// post-upgrade runtime's spec version.
 pub struct VersionedMigration<U, const SPEC_VERSION: u32>(PhantomData<U>);
