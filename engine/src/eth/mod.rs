@@ -937,25 +937,15 @@ pub trait EthObserver {
             result_block_events: Result<BlockEvents<EventParameters>>,
         ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
-            let is_first_iteration = protocol_state.last_block_pulled == 0;
-
-            println!("is first iteration: {}", is_first_iteration);
-            println!("Protocol state: {:?}", protocol_state);
-            println!("Merged stream state: {:?}", merged_stream_state);
 
             let result_opt_block_events = if let Ok(block_events) = result_block_events {
-                if (is_first_iteration
-                    || block_events.block_number == protocol_state.last_block_pulled + 1) // we should only ever increment by one on one stream
-                    && block_events.block_number > merged_stream_state.last_block_yielded
-                {
+                if block_events.block_number > merged_stream_state.last_block_yielded {
                     println!(
                         "{} Yielding {} from main yield location",
                         protocol_state.protocol, block_events.block_number
                     );
                     Ok(Some(block_events))
-                } else if !is_first_iteration
-                    && block_events.block_number <= protocol_state.last_block_pulled
-                {
+                } else if block_events.block_number <= protocol_state.last_block_pulled {
                     slog::warn!(
                         &merged_stream_state.logger,
                         #SAFE_PROTOCOL_STREAM_JUMP_BACK,
@@ -964,13 +954,6 @@ pub trait EthObserver {
                         protocol_state.last_block_pulled,
                         block_events.block_number
                     );
-                    Ok(None)
-                } else if !is_first_iteration
-                    && block_events.block_number > protocol_state.last_block_pulled + 1
-                {
-                    // if we've jumped ahead in blocks, we don't want to update our state
-                    // we want to ignore, and continue so we can recover
-                    slog::warn!(merged_stream_state.logger, "{} ETH stream jumped from block {} to {}. Ignoring, as expecting contiguous sequence.", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
                     Ok(None)
                 } else {
                     protocol_state.last_block_pulled = block_events.block_number;
@@ -1802,36 +1785,6 @@ mod merged_stream_tests {
     }
 
     // handle when one of the streams doesn't even start - we won't get notified of that currently
-
-    #[tokio::test]
-    async fn merged_stream_ignores_and_waits_when_a_stream_skips_blocks() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let ws_stream = Box::pin(stream::iter([
-            block_events_no_events(9),
-            block_events_no_events(10),
-            // skipped ahead, but missed events that were in the skipped group
-            block_events_no_events(14),
-            block_events_with_event(11, vec![0]),
-        ]));
-
-        let http_stream = Box::pin(stream::iter([
-            block_events_no_events(8),
-            block_events_no_events(9),
-            block_events_no_events(10),
-            block_events_with_event(11, vec![0]),
-        ]));
-
-        let mut stream = key_manager
-            .merged_block_events_stream(ws_stream, http_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(11, 0));
-
-        assert!(stream.next().await.is_none());
-    }
 
     #[tokio::test]
     async fn merged_stream_exits_when_both_stream_fail_to_get_block() {
