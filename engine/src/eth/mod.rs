@@ -253,7 +253,7 @@ pub struct EthWsRpcClient {
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let ws_node_endpoint = &eth_settings.ws_node_endpoint;
-        redact_and_log_node_endpoint(ws_node_endpoint, logger);
+        redact_and_log_node_endpoint(ws_node_endpoint, TransportProtocol::Ws, logger);
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(ws_node_endpoint)
@@ -361,9 +361,9 @@ pub struct EthHttpRpcClient {
 impl EthHttpRpcClient {
     pub fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let http_node_endpoint = &eth_settings.http_node_endpoint;
-        redact_and_log_node_endpoint(http_node_endpoint, logger);
+        redact_and_log_node_endpoint(http_node_endpoint, TransportProtocol::Http, logger);
         let web3 = web3::Web3::new(
-            web3::transports::Http::new(&http_node_endpoint)
+            web3::transports::Http::new(http_node_endpoint)
                 .context("Failed to create HTTP Transport for web3 client")?,
         );
 
@@ -980,14 +980,28 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
     }
 }
 
-fn redact_and_log_node_endpoint(endpoint: &str, logger: &slog::Logger) {
+fn redact_and_log_node_endpoint(
+    endpoint: &str,
+    protocol: TransportProtocol,
+    logger: &slog::Logger,
+) {
     match redact_secret_eth_node_endpoint(endpoint) {
         Ok(redacted) => {
-            slog::debug!(logger, "Connecting new web3 client to {}", redacted);
+            slog::debug!(
+                logger,
+                "Connecting new {} web3 client to {}",
+                protocol,
+                redacted
+            );
         }
         Err(e) => {
-            slog::error!(logger, "Could not redact secret in node endpoint: {}", e);
-            slog::debug!(logger, "Connecting new web3 client");
+            slog::error!(
+                logger,
+                "Could not redact secret in {} ETH node endpoint: {}",
+                protocol,
+                e
+            );
+            slog::debug!(logger, "Connecting new {} web3 client", protocol);
         }
     }
 }
