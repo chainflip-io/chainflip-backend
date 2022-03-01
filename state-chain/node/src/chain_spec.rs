@@ -4,7 +4,7 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig,
+	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, CfeSettings,
 	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
 	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
 	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
@@ -25,12 +25,6 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 // 50k FLIP in Fliperinos
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
-
-// CFE config default values
-const ETH_BLOCK_SAFETY_MARGIN_DEFAULT: u32 = 4;
-const MAX_RETRY_ATTEMPTS_DEFAULT: u32 = 10;
-const MAX_STAGE_DURATION_DEFAULT: u32 = 300;
-const PENDING_SIGN_DURATION_DEFAULT: u32 = 500;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -100,22 +94,22 @@ pub fn get_environment() -> StateChainEnvironment {
 		.expect("GENESIS_STAKE env var could not be parsed to u128");
 
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
-		.unwrap_or(format!("{}", ETH_BLOCK_SAFETY_MARGIN_DEFAULT))
+		.unwrap_or(format!("{}", CfeSettings::default().eth_block_safety_margin))
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
 	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", MAX_RETRY_ATTEMPTS_DEFAULT))
+		.unwrap_or(format!("{}", CfeSettings::default().max_extrinsic_retry_attempts))
 		.parse::<u32>()
 		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
 
 	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
-		.unwrap_or(format!("{}", MAX_STAGE_DURATION_DEFAULT))
+		.unwrap_or(format!("{}", CfeSettings::default().max_ceremony_stage_duration))
 		.parse::<u32>()
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 
 	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
-		.unwrap_or(format!("{}", PENDING_SIGN_DURATION_DEFAULT))
+		.unwrap_or(format!("{}", CfeSettings::default().pending_sign_duration))
 		.parse::<u32>()
 		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
 
@@ -181,10 +175,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
-					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
-					max_extrinsic_retry_attempts,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						pending_sign_duration,
+						max_ceremony_stage_duration,
+						max_extrinsic_retry_attempts,
+					},
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -254,10 +250,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
-					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
-					max_extrinsic_retry_attempts,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						pending_sign_duration,
+						max_ceremony_stage_duration,
+						max_extrinsic_retry_attempts,
+					},
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -377,10 +375,12 @@ fn chainflip_three_node_testnet_config_from_env(
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
-					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
-					max_extrinsic_retry_attempts,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						pending_sign_duration,
+						max_ceremony_stage_duration,
+						max_extrinsic_retry_attempts,
+					},
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -503,10 +503,12 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
-					eth_block_safety_margin,
-					pending_sign_duration,
-					max_ceremony_stage_duration,
-					max_extrinsic_retry_attempts,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						pending_sign_duration,
+						max_ceremony_stage_duration,
+						max_extrinsic_retry_attempts,
+					},
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -549,6 +551,7 @@ fn testnet_genesis(
 		validator: ValidatorConfig {
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+			bond: genesis_stake_amount,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
@@ -565,14 +568,7 @@ fn testnet_genesis(
 			minimum_stake: MIN_STAKE,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
-		auction: AuctionConfig {
-			validator_size_range: (min_validators, MAX_VALIDATORS),
-			winners: initial_authorities
-				.iter()
-				.map(|(validator_id, ..)| validator_id.clone())
-				.collect::<Vec<AccountId>>(),
-			minimum_active_bid: genesis_stake_amount,
-		},
+		auction: AuctionConfig { validator_size_range: (min_validators, MAX_VALIDATORS) },
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },

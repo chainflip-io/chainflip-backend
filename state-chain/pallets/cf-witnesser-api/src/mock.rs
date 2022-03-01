@@ -11,7 +11,7 @@ use cf_traits::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		key_provider::MockKeyProvider,
 	},
-	Chainflip, NonceProvider, VaultRotationHandler,
+	Chainflip, NonceProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
 use frame_system as system;
@@ -194,6 +194,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = ();
 }
 
 pub struct MockBroadcastConfig;
@@ -233,12 +234,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type WeightInfo = ();
 }
 
-impl VaultRotationHandler for Test {
-	type ValidatorId = ValidatorId;
-
-	fn vault_rotation_aborted() {}
-}
-
 parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25; // 25 * 6 == 150 seconds
 }
@@ -246,7 +241,6 @@ parameter_types! {
 impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
 	type Chain = Ethereum;
-	type RotationHandler = Self;
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;

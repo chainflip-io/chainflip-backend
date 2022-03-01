@@ -52,7 +52,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
-            index: self.common.own_idx,
             d: self.nonces.d_pub,
             e: self.nonces.e_pub,
         })
@@ -105,7 +104,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     /// Verify that all values have been broadcast correctly during stage 1
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
-        let verified_commitments = match verify_broadcasts(messages) {
+        let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(blamed_parties) => {
                 return StageResult::Error(
@@ -217,7 +216,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     /// Verify that signature shares have been broadcast correctly, and if so,
     /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
-        let local_sigs = match verify_broadcasts(messages) {
+        let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
             Err(blamed_parties) => {
                 return StageResult::Error(

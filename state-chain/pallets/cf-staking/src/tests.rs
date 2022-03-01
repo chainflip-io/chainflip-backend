@@ -466,7 +466,7 @@ fn claim_expiry() {
 fn no_claims_allowed_out_of_claim_period() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
-		MockEpochInfo::set_claiming_allowed(false);
+		MockEpochInfo::set_is_auction_phase(true);
 
 		// Staking during an auction is OK.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));

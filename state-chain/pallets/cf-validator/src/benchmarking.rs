@@ -16,7 +16,7 @@ benchmarks! {
 	force_rotation {
 	}: _(RawOrigin::Root)
 	verify {
-		assert_eq!(Pallet::<T>::force(), true)
+		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
@@ -27,7 +27,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(caller.clone()), version.clone())
 	verify {
-		let validator_id: T::ValidatorId = caller.into();
+		let validator_id: ValidatorIdOf<T> = caller.into();
 		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
 	}
 	// TODO: this benchmark is failing in in an test environment.

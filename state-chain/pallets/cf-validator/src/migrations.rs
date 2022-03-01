@@ -1,23 +1,46 @@
-use cf_traits::{AuctionResult, Auctioneer};
-use frame_support::traits::Get;
-
 use super::*;
 
 pub(crate) mod v1 {
 	use super::*;
+	use frame_support::{generate_storage_alias, storage::migration::*};
+	mod v0_types {
+		use super::*;
+		use codec::{Decode, Encode};
+		use frame_support::RuntimeDebug;
+		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+		pub struct AuctionResult<ValidatorId, Amount> {
+			pub winners: Vec<ValidatorId>,
+			pub minimum_active_bid: Amount,
+		}
+	}
+
+	generate_storage_alias!(Validator, Force => Value<()>);
+
+	fn take_v0_auction_result<T: Config>(
+	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
+		take_storage_value(b"Auction", b"LastAuctionResult", b"")
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_v0_auction_result<T: Config>(
+	) -> Option<v0_types::AuctionResult<<T as cf_traits::Chainflip>::ValidatorId, T::Amount>> {
+		get_storage_value(b"Auction", b"LastAuctionResult", b"")
+	}
+
 	const PERCENTAGE_CLAIM_PERIOD: u8 = 50;
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn pre_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
 		assert!(P::on_chain_storage_version() == releases::V0, "Storage version too high.");
+
 		assert!(
-			T::Auctioneer::auction_result().is_some(),
+			get_v0_auction_result::<T>().is_some(),
 			"if we don't have a previous auction then we shouldn't be upgrading"
 		);
 
 		log::info!(
 			target: "runtime::cf_validator",
-			"migration: Validator storage version v1 PRE migration checks successful!"
+			"migration: Validator storage version v1 PRE migration checks successful!",
 		);
 
 		Ok(())
@@ -25,17 +48,21 @@ pub(crate) mod v1 {
 
 	pub fn migrate<T: Config>() -> frame_support::weights::Weight {
 		// Current version is is genesis, upgrade to version 1
-		// Changes are the addition of two storage items: `Validators`, `Bond` and
-		// `LastExpiredEpoch` We are using `Auctioneer::auction_result()` as the last successful
-		// auction to determine the bond to set.  Although we can derive the winners and hence the
-		// active validating set from the same storage item as the bond we want to maintain
-		// continuity with the genesis version(0) by reading this from the session pallet.
-		if let Some(AuctionResult { minimum_active_bid, .. }) = T::Auctioneer::auction_result() {
+		// Changes are the addition of two storage items: `Validators` and `Bond`
+		// We are using `LastAuctionResult` which was a storage item in the auction pallet as the
+		// last successful auction to determine the bond to set.  Although we can derive the winners
+		// and hence the active validating set from the same storage item as the bond we want to
+		// maintain continuity with the genesis version(0) by reading this from the session pallet.
+		if let Some(v0_types::AuctionResult { minimum_active_bid, .. }) =
+			take_v0_auction_result::<T>()
+		{
 			// Set the bond to that of the last auction result
 			Bond::<T>::put(minimum_active_bid);
 			let validators = <pallet_session::Pallet<T>>::validators();
 			// Set the validating set from the session pallet
 			Validators::<T>::put(validators);
+			// Kill the Force
+			Force::kill();
 			// Set last expired epoch to the previous one
 			let current_epoch_index = CurrentEpoch::<T>::get();
 			LastExpiredEpoch::<T>::put(current_epoch_index.saturating_sub(1));
@@ -53,14 +80,20 @@ pub(crate) mod v1 {
 
 	#[cfg(feature = "try-runtime")]
 	pub(crate) fn post_migrate<T: Config, P: GetStorageVersion>() -> Result<(), &'static str> {
+		use frame_support::assert_err;
+
 		assert_eq!(P::on_chain_storage_version(), releases::V1);
 
-		let AuctionResult { minimum_active_bid, .. } = T::Auctioneer::auction_result()
-			.expect("if we don't have a previous auction then we shouldn't be upgrading");
+		assert!(Bond::<T>::get() > Zero::zero(), "bond should be set to last auction result");
 
-		assert_eq!(minimum_active_bid, Bond::<T>::get());
+		assert_eq!(
+			<pallet_session::Pallet<T>>::validators(),
+			Validators::<T>::get(),
+			"session validators should match"
+		);
 
-		assert_eq!(<pallet_session::Pallet<T>>::validators(), Validators::<T>::get());
+		// We should expect no values for the Force item
+		assert_err!(Force::try_get(), ());
 
 		let current_epoch_index = CurrentEpoch::<T>::get();
 
