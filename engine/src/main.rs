@@ -46,7 +46,7 @@ async fn main() {
         .expect("Should create EthWsRpcClient");
 
     let eth_http_rpc_client =
-        EthHttpRpcClient::new(&settings.eth).expect("Should create EthHttpRpcClient");
+        EthHttpRpcClient::new(&settings.eth, &root_logger).expect("Should create EthHttpRpcClient");
 
     let eth_broadcaster =
         EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)

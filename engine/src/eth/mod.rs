@@ -253,19 +253,7 @@ pub struct EthWsRpcClient {
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let ws_node_endpoint = &eth_settings.ws_node_endpoint;
-        match redact_secret_eth_node_endpoint(ws_node_endpoint) {
-            Ok(redacted) => {
-                slog::debug!(logger, "Connecting new web3 client to {}", redacted);
-            }
-            Err(e) => {
-                slog::error!(
-                    logger,
-                    "Could not redact secret from ws node endpoint: {}",
-                    e
-                );
-                slog::debug!(logger, "Connecting new web3 client");
-            }
-        }
+        redact_and_log_node_endpoint(ws_node_endpoint, logger);
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(ws_node_endpoint)
@@ -371,9 +359,11 @@ pub struct EthHttpRpcClient {
 }
 
 impl EthHttpRpcClient {
-    pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
+    pub fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        let http_node_endpoint = &eth_settings.http_node_endpoint;
+        redact_and_log_node_endpoint(http_node_endpoint, logger);
         let web3 = web3::Web3::new(
-            web3::transports::Http::new(&eth_settings.http_node_endpoint)
+            web3::transports::Http::new(&http_node_endpoint)
                 .context("Failed to create HTTP Transport for web3 client")?,
         );
 
@@ -990,6 +980,18 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
     }
 }
 
+fn redact_and_log_node_endpoint(endpoint: &str, logger: &slog::Logger) {
+    match redact_secret_eth_node_endpoint(endpoint) {
+        Ok(redacted) => {
+            slog::debug!(logger, "Connecting new web3 client to {}", redacted);
+        }
+        Err(e) => {
+            slog::error!(logger, "Could not redact secret in node endpoint: {}", e);
+            slog::debug!(logger, "Connecting new web3 client");
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod mocks {
     use super::*;
@@ -1429,6 +1431,14 @@ mod tests {
             .unwrap(),
             "wss://cdc****.rinkeby.ws.rivet.cloud/"
         );
+        // same, but HTTP
+        assert_eq!(
+            redact_secret_eth_node_endpoint(
+                "https://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.rpc.rivet.cloud/"
+            )
+            .unwrap(),
+            "https://cdc****.rinkeby.rpc.rivet.cloud/"
+        );
         assert_eq!(
             redact_secret_eth_node_endpoint("wss://non_32hex_secret.rinkeby.ws.rivet.cloud/")
                 .unwrap(),
@@ -1437,6 +1447,11 @@ mod tests {
         assert_eq!(
             redact_secret_eth_node_endpoint("wss://a").unwrap(),
             "wss://a****"
+        );
+        // same, but HTTP
+        assert_eq!(
+            redact_secret_eth_node_endpoint("http://a").unwrap(),
+            "http://a****"
         );
         assert!(redact_secret_eth_node_endpoint("no.schema.com").is_err());
     }
