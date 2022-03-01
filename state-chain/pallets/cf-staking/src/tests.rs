@@ -541,7 +541,7 @@ fn claim_with_withdrawal_address() {
 		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
-		// Claim it - expect to fail cause the address is different
+		// Claim it - expect to fail because the address is different
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
 			<Error<Test>>::WithdrawalAddressRestricted
