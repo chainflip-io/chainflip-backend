@@ -861,10 +861,6 @@ pub trait EthObserver {
                 }
             }
 
-            println!(
-                "Last block yielded (what we at bro): {}, last block pulled from other: {}",
-                merged_stream_state.last_block_yielded, other_protocol_state.last_block_pulled
-            );
             let blocks_behind =
                 merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
 
@@ -908,7 +904,6 @@ pub trait EthObserver {
                     } else if block_events.block_number < next_block_to_yield {
                         slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                     } else {
-                        // TODO: Some more info here? I actually havent' seen this logged before, so maybe it's not that useful?
                         return Err(anyhow::Error::msg(
                             "The stream has skipped blocks. We were expecting a contiguous sequence of blocks",
                         ));
@@ -926,6 +921,9 @@ pub trait EthObserver {
         }
 
         /// Returns a block only if we are ready to yield this particular block
+        /// Ok(Some) => Yield from unfold stream
+        /// Ok(None) => Something mundane occurred, just ignore and continue
+        /// Err - currently only occurs when the recovery fails => Terminate the unfold stream
         async fn do_for_protocol<
             BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
             EventParameters: Debug,
@@ -940,10 +938,6 @@ pub trait EthObserver {
 
             let result_opt_block_events = if let Ok(block_events) = result_block_events {
                 if block_events.block_number > merged_stream_state.last_block_yielded {
-                    println!(
-                        "{} Yielding {} from main yield location",
-                        protocol_state.protocol, block_events.block_number
-                    );
                     Ok(Some(block_events))
                 } else if block_events.block_number <= protocol_state.last_block_pulled {
                     slog::warn!(
@@ -965,16 +959,13 @@ pub trait EthObserver {
                     Ok(None)
                 }
             } else {
-                // we got an error block.
-                println!("We got an error block");
+                // We got an error block
 
                 let we_yielded_last_block =
                     protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
-                // if we yieled the last one, we let the other stream progress to try and cover for us
+                // if we yieled the last one i.e. we are the stream ahead, we let the other stream progress to try and recover
                 if we_yielded_last_block {
-                    println!("Catch up other stream");
-                    // we can also yield from here
                     Ok(Some(
                         catch_up_other_stream(
                             other_protocol_state,
@@ -985,8 +976,6 @@ pub trait EthObserver {
                         .await?,
                     ))
                 } else {
-                    println!("We are behind");
-                    // we're behind, so we just log an error and continue on.
                     slog::error!(
                         merged_stream_state.logger,
                         "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
@@ -1023,12 +1012,10 @@ pub trait EthObserver {
                 let iter_result;
                 tokio::select! {
                     Some(result_block_events) = stream_state.ws_stream.next() => {
-                        println!("Polled WS");
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
 
                     }
                     Some(result_block_events) = stream_state.http_stream.next() => {
-                        println!("Polled HTTP");
                         iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
                     }
                     else => break None
@@ -1064,7 +1051,6 @@ pub trait EthObserver {
         Ok(Box::pin(stream))
     }
 
-    // Could we have a closure that decodes the whole thing?
     fn decode_log_closure(
         &self,
     ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>>;
@@ -1663,7 +1649,7 @@ mod merged_stream_tests {
     #[tokio::test]
     async fn merged_stream_continues_when_one_stream_jumps_back_in_blocks() {
         let key_manager = test_km_contract();
-        let (logger, tag_cache) = new_test_logger_with_tag_cache();
+        let logger = new_test_logger();
 
         let ws_stream = Box::pin(stream::iter([
             block_events_with_event(12, vec![0]),
