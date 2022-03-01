@@ -1,14 +1,11 @@
 use std::collections::VecDeque;
 
 use futures::{stream, Stream};
-use sp_core::H160;
-use web3::types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64};
-
-use ethbloom::{Bloom, Input};
+use web3::types::{BlockHeader, U64};
 
 use futures::StreamExt;
 
-use super::{CFEthBlockHeader, EthRpcApi};
+use super::CFEthBlockHeader;
 
 use anyhow::Result;
 
@@ -24,29 +21,45 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
+        last_block_yielded: U64,
         unsafe_block_headers: VecDeque<BlockHeader>,
     }
     let init_data = StreamAndBlocks {
         stream: Box::pin(header_stream),
+        last_block_yielded: U64::from(0),
         unsafe_block_headers: Default::default(),
     };
 
     let stream = stream::unfold(init_data, move |mut state| async move {
         loop {
             if let Some(header) = state.stream.next().await {
-                let header = match header {
+                let current_header = match header {
                     Ok(header) => header,
                     Err(e) => break Some((Err(e.into()), state)),
                 };
-                let number = header.number.unwrap();
+                let current_block_number = match current_header.number.ok_or(anyhow::Error::msg(
+                    "WS Block header does not contain block number.",
+                )) {
+                    Ok(number) => number,
+                    Err(err) => break Some((Err(err), state)),
+                };
+
+                // Terminate stream if we have skipped into the future
+                let is_first_iteration = state.last_block_yielded == U64::from(0);
+                if !is_first_iteration && current_block_number > state.last_block_yielded + 1 {
+                    break None;
+                }
 
                 if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
-                    // TODO: REturn error here
-                    let last_unsafe_block_number = last_unsafe_block_header.number.unwrap();
-                    assert!(number <= last_unsafe_block_number + 1);
-                    if number <= last_unsafe_block_number {
+                    let last_unsafe_block_number = last_unsafe_block_header
+                        .number
+                        .expect("Handled before being added to the state");
+
+                    assert!(current_block_number <= last_unsafe_block_number + 1);
+                    if current_block_number <= last_unsafe_block_number {
                         // if we receive two of the same block number then we still need to drop the first
-                        let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
+                        let reorg_depth =
+                            (last_unsafe_block_number - current_block_number) + U64::from(1);
 
                         (0..reorg_depth.as_u64()).for_each(|_| {
                             state.unsafe_block_headers.pop_back();
@@ -54,15 +67,16 @@ where
                     }
                 }
 
-                state.unsafe_block_headers.push_back(header);
+                state.unsafe_block_headers.push_back(current_header);
 
                 if let Some(header) = state.unsafe_block_headers.front() {
                     if header
                         .number
                         .expect("all blocks on the chain have block numbers")
                         .saturating_add(U64::from(safety_margin))
-                        <= number
+                        <= current_block_number
                     {
+                        state.last_block_yielded = header.number.unwrap();
                         break Some((
                             Ok(state
                                 .unsafe_block_headers
@@ -104,7 +118,7 @@ where
 #[cfg(test)]
 pub mod tests {
 
-    use sp_core::H256;
+    use sp_core::{H160, H256};
 
     use super::*;
 
@@ -277,6 +291,31 @@ pub mod tests {
             stream.next().await.unwrap().unwrap(),
             first_block_prime.unwrap().into()
         );
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn safe_stream_terminates_when_input_stream_skips_into_future() {
+        let first_block = block_header(1, 11);
+        let second_block = block_header(2, 12);
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            second_block.clone(),
+            block_header(7, 17),
+        ]);
+
+        let mut stream = safe_ws_head_stream(header_stream, 0);
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block.unwrap().into()
+        );
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            second_block.unwrap().into()
+        );
+
         assert!(stream.next().await.is_none());
     }
 }
