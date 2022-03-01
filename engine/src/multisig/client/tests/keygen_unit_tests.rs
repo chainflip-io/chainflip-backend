@@ -289,6 +289,60 @@ async fn should_report_on_invalid_blame_response() {
     ceremony.complete_with_error(&[bad_node_id_1.clone()]).await;
 }
 
+/// If party is blamed by one or more peers, its BlameResponse sent in
+/// the next stage must be complete, that is, it must contain a (valid)
+/// entry for *every* peer it is blamed by. Otherwise the blamed party
+/// get reported.
+#[tokio::test]
+async fn should_report_on_incomplete_blame_response() {
+    let mut ceremony = KeygenCeremonyRunner::new(
+        new_nodes(
+            ACCOUNT_IDS.iter().cloned(),
+            KeygenOptions::allowing_high_pubkey(),
+        ),
+        1,
+        Rng::from_seed([8; 32]),
+    );
+
+    let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
+
+    // stage 1
+    let messages = ceremony.request().await;
+
+    let mut messages = helpers::run_stages!(
+        ceremony,
+        messages,
+        keygen::VerifyComm2,
+        keygen::SecretShare3
+    );
+
+    // stage 3 - with bad_node_id_1 sending a bad secret share
+    *messages
+        .get_mut(&bad_node_id_1)
+        .unwrap()
+        .get_mut(&target_node_id)
+        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+
+    let mut messages = helpers::run_stages!(
+        ceremony,
+        messages,
+        keygen::Complaints4,
+        keygen::VerifyComplaints5,
+        keygen::BlameResponse6
+    );
+
+    // stage 7 - bad_node_id_1 sends an empty BlameResponse
+    for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
+        *message = keygen::BlameResponse6(std::collections::HashMap::default())
+    }
+
+    let messages = ceremony
+        .run_stage::<keygen::VerifyBlameResponses7, _, _>(messages)
+        .await;
+    ceremony.distribute_messages(messages);
+    ceremony.complete_with_error(&[bad_node_id_1.clone()]).await;
+}
+
 #[tokio::test]
 async fn should_abort_on_blames_at_invalid_indexes() {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, KeygenResultInfo};
@@ -522,6 +522,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
     ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
+            complaints: self.complaints,
             blame_responses,
             shares: self.shares,
             commitments: self.commitments,
@@ -535,6 +536,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
 
 struct VerifyBlameResponsesBroadcastStage7 {
     common: CeremonyCommon,
+    complaints: HashMap<usize, Complaints4>,
     // Blame responses received from other parties in the previous communication round
     blame_responses: HashMap<usize, Option<BlameResponse6>>,
     shares: IncomingShares,
@@ -542,6 +544,53 @@ struct VerifyBlameResponsesBroadcastStage7 {
 }
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
+
+fn derive_expected_blame_response_indexes(
+    complaints: &HashMap<usize, Complaints4>,
+) -> HashMap<usize, BTreeSet<usize>> {
+    let mut expected: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+
+    for (blamer_idx, Complaints4(blamed_idxs)) in complaints {
+        for blamed_idx in blamed_idxs {
+            expected.entry(*blamed_idx).or_default().insert(*blamer_idx);
+        }
+    }
+
+    expected
+}
+
+/// Checks if the blame response contains all (and only) expected indexes
+fn is_blame_response_complete(response: &BlameResponse6, expected_idxs: &BTreeSet<usize>) -> bool {
+    let received_idxs: BTreeSet<_> = response.0.keys().copied().collect();
+
+    &received_idxs == expected_idxs
+}
+
+#[cfg(test)]
+#[test]
+fn test_derive_expected_blame_response_indexes() {
+    use std::iter::FromIterator;
+
+    let complaints: HashMap<usize, Complaints4> = [
+        (1, Complaints4(vec![])),
+        (2, Complaints4(vec![1, 3])),
+        (3, Complaints4(vec![1])),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    let expected: HashMap<usize, BTreeSet<usize>> = {
+        let set1 = BTreeSet::from_iter([2, 3].iter().copied());
+        let set2 = BTreeSet::from_iter([2].iter().copied());
+        [(1, set1), (3, set2)].iter().cloned().collect()
+    };
+
+    assert_eq!(
+        derive_expected_blame_response_indexes(&complaints),
+        expected
+    );
+}
 
 impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
@@ -577,7 +626,24 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
 
         let mut bad_parties = vec![];
 
-        for (sender_idx, response) in verified_responses {
+        // For each party, the indexes as which secret shares
+        // should be revealed
+        let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
+
+        'sender: for (sender_idx, response) in verified_responses {
+            // Check that the responses match complaints
+
+            // Note: for parties who weren't blamed we will get an empty vec,
+            // and check that the response is also empty
+            let expected_idxs = expected_blame_responses
+                .remove(&sender_idx)
+                .unwrap_or_default();
+
+            if !is_blame_response_complete(&response, &expected_idxs) {
+                bad_parties.push(sender_idx);
+                continue;
+            }
+
             for (dest_idx, share) in response.0 {
                 let commitment = &self.commitments[&sender_idx];
 
@@ -595,6 +661,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
                     );
 
                     bad_parties.push(sender_idx);
+                    // No reason to look at any other share from this sender
+                    continue 'sender;
                 }
             }
         }
