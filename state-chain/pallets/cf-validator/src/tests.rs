@@ -220,6 +220,13 @@ fn should_rotate_at_epoch() {
 			"the new validators are now validating"
 		);
 		assert_eq!(min_bid(), bond, "bond should be updated");
+
+		let auction_winners = AUCTION_WINNERS
+			.with(|cell| (*cell.borrow()).clone())
+			.expect("no value for auction winners is provided!");
+
+		// Expect new_validators to be auction winners as well
+		assert_eq!(new_validators, auction_winners);
 	});
 }
 
