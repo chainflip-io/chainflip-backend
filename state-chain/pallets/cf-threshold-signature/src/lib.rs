@@ -8,8 +8,10 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
 
 use codec::{Decode, Encode};
 
@@ -35,6 +37,7 @@ use sp_std::{
 	marker::PhantomData,
 	prelude::*,
 };
+use weights::WeightInfo;
 
 /// The type of the Id given to signing ceremonies.
 pub type CeremonyId = u64;
@@ -173,6 +176,9 @@ pub mod pallet {
 		/// number of blocks to wait before retrying with a new set.
 		#[pallet::constant]
 		type CeremonyRetryDelay: Get<Self::BlockNumber>;
+
+		/// Pallet weights
+		type Weights: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -353,7 +359,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](sp_runtime::traits::InvalidCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::signature_success())]
 		pub fn signature_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -414,7 +420,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
@@ -471,7 +477,7 @@ pub mod pallet {
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed_unbounded(
 			origin: OriginFor<T>,
 			id: CeremonyId,

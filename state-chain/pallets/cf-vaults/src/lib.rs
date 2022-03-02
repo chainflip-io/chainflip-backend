@@ -7,8 +7,8 @@
 use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, NonceProvider,
-	VaultRotationHandler, VaultRotator,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, KeygenStatus,
+	NonceProvider, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -265,9 +265,6 @@ pub mod pallet {
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
-		/// Rotation handler.
-		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
-
 		/// For reporting misbehaving validators.
 		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 
@@ -371,6 +368,12 @@ pub mod pallet {
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	/// Status of the key generation.
+	#[pallet::storage]
+	#[pallet::getter(fn keygen_status)]
+	pub(super) type StatusOfKeygen<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, KeygenStatus, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -430,14 +433,14 @@ pub mod pallet {
 		/// - [KeygenSuccessReported](Event::KeygenSuccessReported)
 		/// - [KeygenFailureReported](Event::KeygenFailureReported)
 		///
-		/// ## Errors
+		/// ## Errors
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
-		/// ## Dependencies
+		/// ## Dependencies
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
@@ -490,7 +493,7 @@ pub mod pallet {
 		/// - [UnexpectedPubkeyWitnessed](Event::UnexpectedPubkeyWitnessed)
 		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
 		///
-		/// ## Errors
+		/// ## Errors
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
@@ -667,7 +670,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// state.
 		PendingVaultRotation::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
-		T::RotationHandler::vault_rotation_aborted();
+		StatusOfKeygen::<T, I>::put(KeygenStatus::Failed);
 	}
 }
 
@@ -677,19 +680,22 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type RotationError = DispatchError;
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
-		Self::start_vault_rotation(candidates)
+		Self::start_vault_rotation(candidates)?;
+		StatusOfKeygen::<T, I>::put(KeygenStatus::Busy);
+		Ok(())
 	}
 
-	fn finalize_rotation() -> Result<(), Self::RotationError> {
+	/// Get the status of the current key generation
+	fn get_keygen_status() -> Option<KeygenStatus> {
 		if Pallet::<T, I>::no_active_chain_vault_rotations() {
 			// The 'exit' point for the pallet, no rotations left to process
 			PendingVaultRotation::<T, I>::kill();
+			StatusOfKeygen::<T, I>::set(None);
+
 			Self::deposit_event(Event::<T, I>::VaultsRotated);
-			Ok(())
-		} else {
-			// Wait on confirmation
-			Err(Error::<T, I>::NotConfirmed.into())
 		}
+
+		StatusOfKeygen::<T, I>::get()
 	}
 }
 

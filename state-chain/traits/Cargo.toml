@@ -54,6 +54,7 @@ optional = true
 default = ['std']
 std = [
     'cf-chains/std',
+    'cf-utilities/std',
     'codec/std',
     'scale-info/std',
     'sp-std/std',
@@ -62,7 +63,7 @@ std = [
     'sp-runtime/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
+    'cf-chains/runtime-benchmarks',
 ]

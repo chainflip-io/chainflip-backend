@@ -20,7 +20,6 @@
       "NotConfirmed"
     ]
   },
-  "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
       "WaitingForBids": "",

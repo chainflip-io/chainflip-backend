@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 
 use futures::stream::{self, repeat, select, Repeat, Select, Zip};
 use pallet_cf_vaults::BlockHeightWindow;
+use regex::Regex;
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
@@ -252,7 +253,7 @@ pub struct EthWsRpcClient {
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let ws_node_endpoint = &eth_settings.ws_node_endpoint;
-        slog::debug!(logger, "Connecting new web3 client to {}", ws_node_endpoint);
+        redact_and_log_node_endpoint(ws_node_endpoint, TransportProtocol::Ws, logger);
         let web3 = tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
             Ok(web3::Web3::new(
                 web3::transports::WebSocket::new(ws_node_endpoint)
@@ -358,9 +359,11 @@ pub struct EthHttpRpcClient {
 }
 
 impl EthHttpRpcClient {
-    pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
+    pub fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        let http_node_endpoint = &eth_settings.http_node_endpoint;
+        redact_and_log_node_endpoint(http_node_endpoint, TransportProtocol::Http, logger);
         let web3 = web3::Web3::new(
-            web3::transports::Http::new(&eth_settings.http_node_endpoint)
+            web3::transports::Http::new(http_node_endpoint)
                 .context("Failed to create HTTP Transport for web3 client")?,
         );
 
@@ -938,6 +941,71 @@ fn decode_shared_event_closure(
     )
 }
 
+const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
+const SCHEMA_PADDING_LEN: usize = 3;
+
+/// Partially redacts the secret in the url of the node endpoint.
+///  eg: `wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/` -> `wss://cdc****.rinkeby.ws.rivet.cloud/`
+fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
+    let re = Regex::new(r"[0-9a-fA-F]{32}").unwrap();
+    if re.is_match(endpoint) {
+        // A 32 character hex string was found, redact it
+        let mut endpoint_redacted = endpoint.to_string();
+        for capture in re.captures_iter(endpoint) {
+            endpoint_redacted = endpoint_redacted.replace(
+                &capture[0],
+                &format!(
+                    "{}****",
+                    &capture[0]
+                        .split_at(capture[0].len().min(MAX_SECRET_CHARACTERS_REVEALED))
+                        .0
+                ),
+            );
+        }
+        Ok(endpoint_redacted)
+    } else {
+        // No secret was found, so just redact almost all of the url
+        let url = url::Url::parse(endpoint)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| "Failed to parse node endpoint into a URL")?;
+        Ok(format!(
+            "{}****",
+            endpoint
+                .split_at(usize::min(
+                    url.scheme().len() + SCHEMA_PADDING_LEN + MAX_SECRET_CHARACTERS_REVEALED,
+                    endpoint.len()
+                ))
+                .0
+        ))
+    }
+}
+
+fn redact_and_log_node_endpoint(
+    endpoint: &str,
+    protocol: TransportProtocol,
+    logger: &slog::Logger,
+) {
+    match redact_secret_eth_node_endpoint(endpoint) {
+        Ok(redacted) => {
+            slog::debug!(
+                logger,
+                "Connecting new {} web3 client to {}",
+                protocol,
+                redacted
+            );
+        }
+        Err(e) => {
+            slog::error!(
+                logger,
+                "Could not redact secret in {} ETH node endpoint: {}",
+                protocol,
+                e
+            );
+            slog::debug!(logger, "Connecting new {} web3 client", protocol);
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod mocks {
     use super::*;
@@ -1359,5 +1427,46 @@ mod tests {
         let eth_rpc_api_mock = MockEthRpcApi::new();
         let logger = new_test_logger();
         EthBroadcaster::new_test(eth_rpc_api_mock, &logger);
+    }
+
+    #[test]
+    fn test_secret_web_addresses() {
+        assert_eq!(
+            redact_secret_eth_node_endpoint(
+                "wss://mainnet.infura.io/ws/v3/d52c362116b640b98a166d08d3170a42"
+            )
+            .unwrap(),
+            "wss://mainnet.infura.io/ws/v3/d52****"
+        );
+        assert_eq!(
+            redact_secret_eth_node_endpoint(
+                "wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/"
+            )
+            .unwrap(),
+            "wss://cdc****.rinkeby.ws.rivet.cloud/"
+        );
+        // same, but HTTP
+        assert_eq!(
+            redact_secret_eth_node_endpoint(
+                "https://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.rpc.rivet.cloud/"
+            )
+            .unwrap(),
+            "https://cdc****.rinkeby.rpc.rivet.cloud/"
+        );
+        assert_eq!(
+            redact_secret_eth_node_endpoint("wss://non_32hex_secret.rinkeby.ws.rivet.cloud/")
+                .unwrap(),
+            "wss://non****"
+        );
+        assert_eq!(
+            redact_secret_eth_node_endpoint("wss://a").unwrap(),
+            "wss://a****"
+        );
+        // same, but HTTP
+        assert_eq!(
+            redact_secret_eth_node_endpoint("http://a").unwrap(),
+            "http://a****"
+        );
+        assert!(redact_secret_eth_node_endpoint("no.schema.com").is_err());
     }
 }

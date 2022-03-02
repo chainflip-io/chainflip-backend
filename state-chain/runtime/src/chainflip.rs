@@ -18,13 +18,12 @@ use cf_traits::{
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
 	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
-	VaultRotationHandler,
 };
 use frame_support::weights::Weight;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
-use pallet_cf_auction::{HandleStakes, VaultRotationEventHandler};
+use pallet_cf_auction::HandleStakes;
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
@@ -60,7 +59,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the the bond of all validators for the new epoch
+		// Update the bond of all validators for the new epoch
 		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
@@ -105,15 +104,6 @@ impl StakeHandler for ChainflipStakeHandler {
 
 	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
 		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
-	}
-}
-
-pub struct ChainflipVaultRotationHandler;
-impl VaultRotationHandler for ChainflipVaultRotationHandler {
-	type ValidatorId = AccountId;
-
-	fn vault_rotation_aborted() {
-		VaultRotationEventHandler::<Runtime>::vault_rotation_aborted();
 	}
 }
 

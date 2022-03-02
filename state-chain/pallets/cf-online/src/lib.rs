@@ -22,7 +22,7 @@ pub mod pallet {
 	use super::*;
 	use cf_traits::{
 		offline_conditions::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, KeygenExclusionSet,
-		NetworkState,
+		NetworkState, QualifyValidator,
 	};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
@@ -183,6 +183,14 @@ pub mod pallet {
 			Nodes::<T>::mutate(validator_id, |node| {
 				(*node).banned_until = ban;
 			});
+		}
+	}
+
+	impl<T: Config> QualifyValidator for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+			<Self as IsOnline>::is_online(validator_id)
 		}
 	}
 

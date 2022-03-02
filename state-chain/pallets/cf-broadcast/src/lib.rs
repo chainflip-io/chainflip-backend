@@ -59,6 +59,10 @@ pub mod pallet {
 	/// Type alias for the instance's configured SignerId.
 	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
 
+	/// Type alias for the payload hash
+	pub type ThresholdSignatureFor<T, I> =
+		<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
@@ -190,6 +194,16 @@ pub mod pallet {
 		TransactionSigningAttempt<T, I>,
 		OptionQuery,
 	>;
+
+	/// Lookup table between Signature -> Broadcast
+	#[pallet::storage]
+	pub type SignatureToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, BroadcastId, OptionQuery>;
+
+	/// Lookup table between BroadcastId -> AttemptId
+	#[pallet::storage]
+	pub type BroadcastIdToAttemptIdLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, BroadcastAttemptId, OptionQuery>;
 
 	/// Live transaction transmission requests.
 	#[pallet::storage]
@@ -382,6 +396,9 @@ pub mod pallet {
 				AwaitingTransmission::<T, I>::take(attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
+			// Cleanup lookup storage
+			Self::remove_lookup_storage(broadcast_id);
+
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
 
 			Ok(().into())
@@ -459,8 +476,33 @@ pub mod pallet {
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?;
 
-			Self::start_broadcast(T::TransactionBuilder::build_transaction(&api_call.signed(&sig)));
+			Self::start_broadcast(
+				&sig,
+				T::TransactionBuilder::build_transaction(&api_call.signed(&sig)),
+			);
 
+			Ok(().into())
+		}
+
+		/// Nodes have witnessed that a signature was accepted on the target chain.
+		///
+		/// ## Events
+		///
+		/// - [BroadcastComplete](Event::BroadcastComplete)
+		#[pallet::weight(T::WeightInfo::signature_accepted())]
+		pub fn signature_accepted(
+			origin: OriginFor<T>,
+			payload: ThresholdSignatureFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
+				match BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id) {
+					Some(attempt_id)
+						if AwaitingTransmission::<T, I>::take(attempt_id).is_some() =>
+						Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id)),
+					_ => (),
+				}
+			}
 			Ok(().into())
 		}
 	}
@@ -477,19 +519,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Begin the process of broadcasting a transaction.
 	///
-	/// This triggers the first step - requesting a transaction signature from a nominated
-	/// validator.
-	///
 	/// ## Events
 	///
 	/// - [TransactionSigningRequest](Event::TransactionSigningRequest)
-	fn start_broadcast(unsigned_tx: UnsignedTransactionFor<T, I>) {
+	fn start_broadcast(
+		signature: &ThresholdSignatureFor<T, I>,
+		unsigned_tx: UnsignedTransactionFor<T, I>,
+	) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
+		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
+
 		Self::start_broadcast_attempt(broadcast_id, 0, unsigned_tx);
+	}
+
+	// TODO: remove this function when we remove the transmission_success extrinsic
+	fn remove_lookup_storage(broadcast_id: BroadcastId) {
+		// Remove the BroadcastId lookup
+		BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id);
+		// Try to figure out the payload by the broadcast_id
+		if let Some(payload) = SignatureToBroadcastIdLookup::<T, I>::iter()
+			.filter_map(|(payload, id)| if id == broadcast_id { Some(payload) } else { None })
+			.next()
+		{
+			// Remove the payload lookup
+			SignatureToBroadcastIdLookup::<T, I>::remove(payload);
+		}
 	}
 
 	fn start_broadcast_attempt(
@@ -502,6 +560,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
+		// Update the lookup table
+		BroadcastIdToAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
 
 		// Seed based on the input data of the extrinsic
 		let seed = (attempt_id, unsigned_tx.clone()).encode();

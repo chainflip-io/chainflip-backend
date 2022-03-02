@@ -25,4 +25,5 @@ benchmarks_instance_pallet! {
 	transmission_success {} : {}
 	transmission_failure {} : {}
 	on_signature_ready {} : {}
+	signature_accepted {} : {}
 }

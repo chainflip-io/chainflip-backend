@@ -1,20 +1,19 @@
-use crate::VaultRotator;
+use sp_runtime::DispatchError;
+
+use crate::{KeygenStatus, VaultRotator};
 use std::cell::RefCell;
 
 thread_local! {
-	pub static TO_CONFIRM: RefCell<Result<(), MockError>> = RefCell::new(Err(MockError));
+	pub static KEYGEN_STATUS: RefCell<Option<KeygenStatus>> = RefCell::new(None);
 	pub static ERROR_ON_START: RefCell<bool> = RefCell::new(false);
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Mock;
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct MockError;
-
 // Helper function to clear the confirmation result
 pub fn clear_confirmation() {
-	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
+	KEYGEN_STATUS.with(|l| *l.borrow_mut() = None);
 }
 
 impl Mock {
@@ -31,21 +30,21 @@ impl Mock {
 
 impl VaultRotator for Mock {
 	type ValidatorId = u64;
-	type RotationError = MockError;
+	type RotationError = DispatchError;
 
 	fn start_vault_rotation(
 		_candidates: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::RotationError> {
 		if Self::error_on_start() {
 			Self::reset_error_on_start();
-			return Err(MockError)
+			return DispatchError::Other("failure").into()
 		}
 
-		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(MockError));
+		KEYGEN_STATUS.with(|l| *l.borrow_mut() = Some(KeygenStatus::Busy));
 		Ok(())
 	}
 
-	fn finalize_rotation() -> Result<(), Self::RotationError> {
-		TO_CONFIRM.with(|l| *l.borrow())
+	fn get_keygen_status() -> Option<KeygenStatus> {
+		KEYGEN_STATUS.with(|l| (*l.borrow()).clone())
 	}
 }

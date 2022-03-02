@@ -581,7 +581,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
 		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
 		// If a claim already exists, return an error. The validator must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.

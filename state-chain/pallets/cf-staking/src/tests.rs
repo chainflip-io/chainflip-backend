@@ -477,7 +477,7 @@ fn claim_expiry() {
 fn no_claims_allowed_out_of_claim_period() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
-		MockEpochInfo::set_claiming_allowed(false);
+		MockEpochInfo::set_is_auction_phase(true);
 
 		// Staking during an auction is OK.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
@@ -551,7 +551,7 @@ fn claim_with_withdrawal_address() {
 		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
-		// Claim it - expect to fail cause the the address is different
+		// Claim it - expect to fail because the address is different
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
 			<Error<Test>>::WithdrawalAddressRestricted

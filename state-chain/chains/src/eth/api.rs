@@ -15,18 +15,18 @@ pub enum EthereumApi {
 }
 
 impl ChainAbi for Ethereum {
-	type UnsignedTransaction = super::UnsignedTransaction;
-	type SignedTransaction = super::RawSignedTransaction;
-	type SignerCredential = super::Address;
+	type UnsignedTransaction = eth::UnsignedTransaction;
+	type SignedTransaction = eth::RawSignedTransaction;
+	type SignerCredential = eth::Address;
 	type Nonce = u64;
-	type ValidationError = super::TransactionVerificationError;
+	type ValidationError = eth::TransactionVerificationError;
 
 	fn verify_signed_transaction(
 		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
 		signer_credential: &Self::SignerCredential,
 	) -> Result<(), Self::ValidationError> {
-		super::verify_transaction(unsigned_tx, signed_tx, signer_credential)
+		eth::verify_transaction(unsigned_tx, signed_tx, signer_credential)
 	}
 }
 

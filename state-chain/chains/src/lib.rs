@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(array_map)] // stable as of rust 1.55
 
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use eth::SchnorrVerificationComponents;
 use frame_support::{pallet_prelude::Member, Parameter};
 use sp_runtime::traits::AtLeast32BitUnsigned;
@@ -12,6 +13,9 @@ use sp_std::{
 
 pub mod eth;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {}
@@ -21,9 +25,9 @@ pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord;
-	type Payload: Member + Parameter;
-	type ThresholdSignature: Member + Parameter;
-	type TransactionHash: Member + Parameter;
+	type Payload: Member + Parameter + BenchmarkDefault;
+	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
+	type TransactionHash: Member + Parameter + BenchmarkDefault;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -63,7 +67,7 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
-	///
+	/// The call, encoded as a vector of bytes using the chain's native encoding.
 	fn encoded(&self) -> Vec<u8>;
 }
 
@@ -180,7 +184,7 @@ pub mod mocks {
 		Invalid,
 	}
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode)]
 	pub struct MockThresholdSignature<K, P> {
 		pub signing_key: K,
 		pub signed_payload: P,
