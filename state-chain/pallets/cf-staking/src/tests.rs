@@ -77,8 +77,8 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount(), CLAIM_A.into());
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount(), CLAIM_B.into());
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount(), CLAIM_A);
+		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount(), CLAIM_B);
 
 		// Two threshold signature requests should have been made.
 		assert_eq!(MockThresholdSigner::received_requests().len(), 2);

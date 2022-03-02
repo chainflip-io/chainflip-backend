@@ -355,7 +355,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                                 tx_hash
                                                             );
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                                attempt_id, tx_hash.into()
+                                                                attempt_id, tx_hash
                                                             )
                                                         }
                                                         Err(e) => {
