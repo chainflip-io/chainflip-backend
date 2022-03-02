@@ -127,18 +127,16 @@ impl SignatureAndEvent {
 
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start_contract_observer<ContractObserver, StateChainRpc, EthWsRpc, EthHttpRpc>(
+pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
-    eth_ws_rpc: &EthWsRpc,
-    eth_http_rpc: &EthHttpRpc,
+    eth_ws_rpc: &EthWsRpcClient,
+    eth_http_rpc: &EthHttpRpcClient,
     mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
     ContractObserver: 'static + EthObserver + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
-    EthWsRpc: 'static + EthWsRpcApi + Sync + Send + Clone,
-    EthHttpRpc: 'static + EthHttpRpcApi + Sync + Send + Clone,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
     slog::info!(logger, "Starting");
@@ -212,42 +210,66 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc, EthWsRpc, 
     }
 }
 
-#[cfg_attr(test, automock)]
-#[async_trait]
-pub trait EthRpcApi {
-    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+#[derive(Clone, Debug)]
+pub struct CommonEthRpcApi<T: web3::Transport> {
+    web3: Web3<T>,
+}
 
-    async fn sign_transaction(
+impl<T: web3::Transport> CommonEthRpcApi<T> {
+    pub async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
+        self.web3
+            .eth()
+            .estimate_gas(req, block)
+            .await
+            .context("Failed to estimate gas")
+    }
+
+    pub async fn sign_transaction(
         &self,
         tx: TransactionParameters,
         key: &SecretKey,
-    ) -> Result<SignedTransaction>;
+    ) -> Result<SignedTransaction> {
+        self.web3
+            .accounts()
+            .sign_transaction(tx, SecretKeyRef::from(key))
+            .await
+            .context("Failed to sign transaction")
+    }
 
-    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
+    pub async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
+        self.web3
+            .eth()
+            .send_raw_transaction(rlp)
+            .await
+            .context("Failed to send raw transaction")
+    }
 
-    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
+    pub async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
+        let request_fut = self.web3.eth().logs(filter);
 
-    async fn chain_id(&self) -> Result<U256>;
-}
+        // NOTE: if this does time out we will most likely have a
+        // "memory leak" associated with rust-web3's state for this
+        // request not getting properly cleaned up
+        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
+            .await
+            .context("Web3 WS get_logs request timeout")?
+            .context("Failed to fetch ETH logs")
+    }
 
-#[async_trait]
-pub trait EthWsRpcApi: EthRpcApi {
-    async fn subscribe_new_heads(
-        &self,
-    ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>>;
-}
-
-#[async_trait]
-pub trait EthHttpRpcApi: EthRpcApi {
-    async fn block_number(&self) -> Result<U64>;
-
-    async fn block(&self, block_number: U64) -> Result<Option<Block<H256>>>;
+    pub async fn chain_id(&self) -> Result<U256> {
+        self.web3
+            .eth()
+            .chain_id()
+            .await
+            .context("Failed to fetch ETH ChainId")
+    }
 }
 
 /// Wraps the web3 library, so can use a trait to make testing easier
 #[derive(Clone)]
 pub struct EthWsRpcClient {
     web3: Web3<web3::transports::WebSocket>,
+    pub common: CommonEthRpcApi<web3::transports::WebSocket>,
 }
 
 impl EthWsRpcClient {
@@ -285,63 +307,13 @@ impl EthWsRpcClient {
         })
         .await?;
 
-        Ok(Self { web3 })
-    }
-}
-
-#[async_trait]
-impl EthRpcApi for EthWsRpcClient {
-    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
-        self.web3
-            .eth()
-            .estimate_gas(req, block)
-            .await
-            .context("Failed to estimate gas with WS Client")
+        // TODO: Does web3 need to be cloned here?
+        Ok(Self {
+            web3: web3.clone(),
+            common: CommonEthRpcApi { web3 },
+        })
     }
 
-    async fn sign_transaction(
-        &self,
-        tx: TransactionParameters,
-        key: &SecretKey,
-    ) -> Result<SignedTransaction> {
-        self.web3
-            .accounts()
-            .sign_transaction(tx, SecretKeyRef::from(key))
-            .await
-            .context("Failed to sign transaction with WS Client")
-    }
-
-    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-        self.web3
-            .eth()
-            .send_raw_transaction(rlp)
-            .await
-            .context("Failed to send raw transaction with WS Client")
-    }
-
-    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        let request_fut = self.web3.eth().logs(filter);
-
-        // NOTE: if this does time out we will most likely have a
-        // "memory leak" associated with rust-web3's state for this
-        // request not getting properly cleaned up
-        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
-            .await
-            .context("Web3 WS get_logs request timeout")?
-            .context("Failed to fetch ETH logs with WS client")
-    }
-
-    async fn chain_id(&self) -> Result<U256> {
-        self.web3
-            .eth()
-            .chain_id()
-            .await
-            .context("Failed to fetch ETH ChainId with WS Client")
-    }
-}
-
-#[async_trait]
-impl EthWsRpcApi for EthWsRpcClient {
     async fn subscribe_new_heads(
         &self,
     ) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
@@ -356,6 +328,7 @@ impl EthWsRpcApi for EthWsRpcClient {
 #[derive(Clone)]
 pub struct EthHttpRpcClient {
     web3: Web3<web3::transports::Http>,
+    pub common: CommonEthRpcApi<web3::transports::Http>,
 }
 
 impl EthHttpRpcClient {
@@ -367,59 +340,15 @@ impl EthHttpRpcClient {
                 .context("Failed to create HTTP Transport for web3 client")?,
         );
 
-        Ok(Self { web3 })
-    }
-}
+        // TODO: Do we actually need to clone web3 here, might be able to reference the parent one.
+        // with some lifetime magic
 
-#[async_trait]
-impl EthRpcApi for EthHttpRpcClient {
-    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
-        self.web3
-            .eth()
-            .estimate_gas(req, block)
-            .await
-            .context("Failed to estimate gas with HTTP client")
+        Ok(Self {
+            web3: web3.clone(),
+            common: CommonEthRpcApi { web3 },
+        })
     }
 
-    async fn sign_transaction(
-        &self,
-        tx: TransactionParameters,
-        key: &SecretKey,
-    ) -> Result<SignedTransaction> {
-        self.web3
-            .accounts()
-            .sign_transaction(tx, SecretKeyRef::from(key))
-            .await
-            .context("Failed to sign transaction with HTTP client")
-    }
-
-    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-        self.web3
-            .eth()
-            .send_raw_transaction(rlp)
-            .await
-            .context("Failed to send raw transaction with HTTP client")
-    }
-
-    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        let request_fut = self.web3.eth().logs(filter);
-
-        // NOTE: if this does time out we will most likely have a
-        // "memory leak" associated with rust-web3's state for this
-        // request not getting properly cleaned up
-        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
-            .await
-            .context("Web3 HTTP get_logs request timeout")?
-            .context("Failed to fetch ETH logs with HTTP client")
-    }
-
-    async fn chain_id(&self) -> Result<U256> {
-        Ok(self.web3.eth().chain_id().await?)
-    }
-}
-
-#[async_trait]
-impl EthHttpRpcApi for EthHttpRpcClient {
     async fn block_number(&self) -> Result<U64> {
         self.web3
             .eth()
@@ -439,17 +368,17 @@ impl EthHttpRpcApi for EthHttpRpcClient {
 
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
 #[derive(Clone, Debug)]
-pub struct EthBroadcaster<EthRpc: EthRpcApi> {
-    eth_rpc: EthRpc,
+pub struct EthBroadcaster<T: web3::Transport> {
+    eth_rpc: CommonEthRpcApi<T>,
     secret_key: SecretKey,
     pub address: Address,
     logger: slog::Logger,
 }
 
-impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
+impl<T: web3::Transport> EthBroadcaster<T> {
     pub fn new(
         eth_settings: &settings::Eth,
-        eth_rpc: EthRpc,
+        eth_rpc: CommonEthRpcApi<T>,
         logger: &slog::Logger,
     ) -> Result<Self> {
         let secret_key = read_clean_and_decode_hex_str_file(
@@ -466,7 +395,7 @@ impl<EthRpc: EthRpcApi> EthBroadcaster<EthRpc> {
     }
 
     #[cfg(test)]
-    pub fn new_test(eth_rpc: EthRpc, logger: &slog::Logger) -> Self {
+    pub fn new_test(eth_rpc: CommonEthRpcApi<T>, logger: &slog::Logger) -> Self {
         // just a fake key
         let secret_key =
             SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
@@ -559,19 +488,20 @@ pub trait EthObserver {
 
     /// Takes a stream of BlockHeaderable items, and turns this into a stream of logs/events
     /// for all logs/events from a particular contract
-    async fn log_stream_from_head_stream<BlockHeaderStream, EthRpc, EthBlockHeader>(
+    async fn log_stream_from_head_stream<BlockHeaderStream, T, EthBlockHeader>(
         &self,
         from_block: u64,
         contract_address: H160,
         safe_head_stream: BlockHeaderStream,
-        eth_rpc: &EthRpc,
+        eth_rpc: &CommonEthRpcApi<T>,
         logger: &slog::Logger,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<EventWithCommon<Self::EventParameters>>> + Unpin + Send>>,
     >
     where
         BlockHeaderStream: Stream<Item = EthBlockHeader> + 'static + Send,
-        EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+        T: web3::Transport + Send + Sync + 'static,
+        <T as web3::Transport>::Out: Send,
         EthBlockHeader: BlockHeaderable + Send + Sync + Clone + 'static,
     {
         let from_block = U64::from(from_block);
@@ -643,18 +573,14 @@ pub trait EthObserver {
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream<EthWsRpc, EthHttpRpc>(
+    async fn event_stream(
         &self,
-        eth_http_rpc: &EthHttpRpc,
-        eth_ws_rpc: &EthWsRpc,
+        eth_http_rpc: &EthHttpRpcClient,
+        eth_ws_rpc: &EthWsRpcClient,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
-    where
-        EthWsRpc: 'static + EthWsRpcApi + Send + Sync + Clone,
-        EthHttpRpc: 'static + EthHttpRpcApi + Send + Sync + Clone,
-    {
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>> {
         let deployed_address = self.get_contract_address();
         slog::info!(
             logger,
@@ -672,7 +598,7 @@ pub trait EthObserver {
                 from_block,
                 deployed_address,
                 safe_ws_head_stream,
-                eth_ws_rpc,
+                &eth_ws_rpc.common,
                 logger,
             )
             .await?;
@@ -686,7 +612,7 @@ pub trait EthObserver {
                 from_block,
                 deployed_address,
                 safe_http_head_stream,
-                eth_http_rpc,
+                &eth_http_rpc.common,
                 logger,
             )
             .await?;

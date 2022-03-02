@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
         self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
-        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
+        EthHttpRpcClient, EthWsRpcClient,
     },
     health::HealthMonitor,
     logging,
@@ -48,9 +48,12 @@ async fn main() {
     let eth_http_rpc_client =
         EthHttpRpcClient::new(&settings.eth, &root_logger).expect("Should create EthHttpRpcClient");
 
-    let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)
-            .expect("Failed to create ETH broadcaster");
+    let eth_broadcaster = EthBroadcaster::new(
+        &settings.eth,
+        eth_ws_rpc_client.common.clone(),
+        &root_logger,
+    )
+    .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
@@ -109,11 +112,13 @@ async fn main() {
         .expect("Should get EthereumChainId from SC"));
 
         let chain_id_from_eth_ws = eth_ws_rpc_client
+            .common
             .chain_id()
             .await
             .expect("Should fetch chain id");
 
         let chain_id_from_eth_http = eth_http_rpc_client
+            .common
             .chain_id()
             .await
             .expect("Should fetch chain id");

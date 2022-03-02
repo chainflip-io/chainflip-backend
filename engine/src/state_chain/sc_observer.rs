@@ -10,7 +10,7 @@ use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcApi},
+    eth::EthBroadcaster,
     logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
         KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
@@ -93,10 +93,10 @@ async fn process_multisig_outcome<RpcClient>(
     };
 }
 
-pub async fn start<BlockStream, RpcClient, EthRpc>(
+pub async fn start<BlockStream, RpcClient, T>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster<EthRpc>,
+    eth_broadcaster: EthBroadcaster<T>,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
@@ -113,7 +113,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi,
-    EthRpc: EthRpcApi,
+    T: web3::Transport,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 

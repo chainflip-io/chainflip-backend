@@ -227,7 +227,7 @@ async fn register_claim(
         .await
         .expect("Unable to create EthRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_ws_rpc_client, logger)?;
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.common, logger)?;
 
     eth_broadcaster
         .send(

@@ -10,7 +10,7 @@ use futures::StreamExt;
 
 use crate::eth::BlockHeaderable;
 
-use super::EthRpcApi;
+use super::CommonEthRpcApi;
 
 pub fn safe_eth_log_header_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
@@ -80,15 +80,15 @@ where
     }))
 }
 
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthRpc, EthBlockHeader>(
+pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, T, EthBlockHeader>(
     safe_eth_head_stream: SafeBlockHeaderStream,
-    eth_rpc: EthRpc,
+    eth_rpc: CommonEthRpcApi<T>,
     contract_address: H160,
     logger: slog::Logger,
 ) -> impl Stream<Item = Log>
 where
     SafeBlockHeaderStream: Stream<Item = EthBlockHeader>,
-    EthRpc: EthRpcApi + Clone,
+    T: web3::Transport,
     EthBlockHeader: BlockHeaderable + Clone,
 {
     let my_stream = safe_eth_head_stream

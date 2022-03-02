@@ -6,19 +6,19 @@ use web3::types::{Block, U64};
 
 use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
 
+use super::EthHttpRpcClient;
+
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-use super::EthHttpRpcApi;
-
-pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
-    eth_http_rpc: EthHttpRpc,
+pub async fn safe_polling_http_head_stream(
+    eth_http_rpc: EthHttpRpcClient,
     poll_interval: Duration,
     logger: slog::Logger,
 ) -> impl Stream<Item = Block<H256>> {
-    struct StreamState<EthHttpRpc> {
+    struct StreamState {
         last_block_yielded: U64,
         last_head_fetched: U64,
-        eth_http_rpc: EthHttpRpc,
+        eth_http_rpc: EthHttpRpcClient,
         logger: slog::Logger,
     }
 
