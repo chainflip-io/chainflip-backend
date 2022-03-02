@@ -26,6 +26,7 @@ use keygen::{
     },
 };
 
+use super::keygen_frost::ShamirShare;
 use super::KeygenOptions;
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
@@ -592,6 +593,65 @@ fn test_derive_expected_blame_response_indexes() {
     );
 }
 
+impl VerifyBlameResponsesBroadcastStage7 {
+    /// Check that blame responses contain all (and only) the requested shares, and that all the shares are valid.
+    /// If all responses are valid, returns shares destined for us along with the corresponding index. Otherwise,
+    /// returns a list of party indexes who provided invalid responses.
+    fn check_blame_responses(
+        &self,
+        blame_responses: HashMap<usize, BlameResponse6>,
+    ) -> Result<HashMap<usize, ShamirShare>, Vec<usize>> {
+        // For each party, the indexes as which secret shares
+        // should be revealed
+        let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
+
+        let mut shares_for_us = HashMap::<usize, ShamirShare>::new();
+        let mut bad_parties = vec![];
+
+        'sender: for (sender_idx, response) in blame_responses {
+            // Check that indexes in responses match those in complaints
+
+            // Note: for parties who weren't blamed we will get an empty vec,
+            // and check that the response is also empty
+            let expected_idxs = expected_blame_responses
+                .remove(&sender_idx)
+                .unwrap_or_default();
+
+            if !is_blame_response_complete(&response, &expected_idxs) {
+                bad_parties.push(sender_idx);
+                continue;
+            }
+
+            for (dest_idx, share) in response.0 {
+                let commitment = &self.commitments[&sender_idx];
+
+                if verify_share(&share, commitment, dest_idx) {
+                    // if the share is meant for us, save it
+                    if dest_idx == self.common.own_idx {
+                        shares_for_us.insert(sender_idx, share);
+                    }
+                } else {
+                    slog::warn!(
+                        self.common.logger,
+                        "Invalid secret share in a blame response from party: {}",
+                        sender_idx
+                    );
+
+                    bad_parties.push(sender_idx);
+                    // No reason to look at any other share from this sender
+                    continue 'sender;
+                }
+            }
+        }
+
+        if bad_parties.is_empty() {
+            Ok(shares_for_us)
+        } else {
+            Err(bad_parties)
+        }
+    }
+}
+
 impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
 
@@ -624,59 +684,21 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
             }
         };
 
-        let mut bad_parties = vec![];
-
-        // For each party, the indexes as which secret shares
-        // should be revealed
-        let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
-
-        'sender: for (sender_idx, response) in verified_responses {
-            // Check that the responses match complaints
-
-            // Note: for parties who weren't blamed we will get an empty vec,
-            // and check that the response is also empty
-            let expected_idxs = expected_blame_responses
-                .remove(&sender_idx)
-                .unwrap_or_default();
-
-            if !is_blame_response_complete(&response, &expected_idxs) {
-                bad_parties.push(sender_idx);
-                continue;
-            }
-
-            for (dest_idx, share) in response.0 {
-                let commitment = &self.commitments[&sender_idx];
-
-                if verify_share(&share, commitment, dest_idx) {
-                    // if the share is meant for us, save it
-                    if dest_idx == self.common.own_idx {
-                        self.shares.0.insert(sender_idx, share);
-                    }
-                } else {
-                    slog::warn!(
-                        self.common.logger,
-                        "[{}] Invalid secret share in a blame response from party: {}",
-                        self.common.own_idx,
-                        sender_idx
-                    );
-
-                    bad_parties.push(sender_idx);
-                    // No reason to look at any other share from this sender
-                    continue 'sender;
+        match self.check_blame_responses(verified_responses) {
+            Ok(shares_for_us) => {
+                for (sender_idx, share) in shares_for_us {
+                    self.shares.0.insert(sender_idx, share);
                 }
+
+                let keygen_result_info =
+                    compute_keygen_result_info(self.common, self.shares, &self.commitments);
+
+                StageResult::Done(keygen_result_info)
             }
-        }
-
-        if bad_parties.is_empty() {
-            let keygen_result_info =
-                compute_keygen_result_info(self.common, self.shares, &self.commitments);
-
-            StageResult::Done(keygen_result_info)
-        } else {
-            StageResult::Error(
+            Err(bad_parties) => StageResult::Error(
                 bad_parties,
                 anyhow::Error::msg("Invalid secret share in a blame response"),
-            )
+            ),
         }
     }
 }
