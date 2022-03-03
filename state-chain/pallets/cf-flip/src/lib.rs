@@ -21,12 +21,12 @@ use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
-use cf_traits::HistoricalEpochInfo;
-
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
+
+use cf_traits::StakeTransfer;
 
 use codec::{Decode, Encode};
 use sp_runtime::{
@@ -82,9 +82,6 @@ pub mod pallet {
 
 		/// Handles the access of governance extrinsic
 		type WaivedFees: WaivedFees<AccountId = Self::AccountId, Call = Self::Call>;
-
-		///
-		type EpochHistory: HistoricalEpochInfo<Amount = Self::Balance, EpochIndex = u32>;
 	}
 
 	#[pallet::pallet]
@@ -410,8 +407,7 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
 		Account::<T>::iter().for_each(|(account, _)| {
 			if new_validators.contains(&account) {
-				let previous_epoch = T::EpochHistory::previous_epoch();
-				let old_bond = T::EpochHistory::epoch_bond(previous_epoch);
+				let old_bond = Self::locked_balance(&account);
 				if old_bond < new_bond {
 					Self::set_validator_bond(&account, new_bond);
 				}
@@ -426,6 +422,12 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 	type Handler = T::StakeHandler;
+
+	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
+		let total = Account::<T>::get(account_id).total();
+		let liquid = Account::<T>::get(account_id).liquid();
+		total.saturating_sub(liquid)
+	}
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()

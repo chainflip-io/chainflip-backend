@@ -249,7 +249,7 @@ impl Chainflip for Test {
 pub struct MockEpochExpiryHandler;
 
 impl EpochExpiry for MockEpochExpiryHandler {
-	fn expire_epoch(epoch: cf_traits::EpochIndex) {
+	fn expire_epoch(_: cf_traits::EpochIndex) {
 		todo!()
 	}
 }

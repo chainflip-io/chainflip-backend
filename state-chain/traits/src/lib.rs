@@ -258,6 +258,9 @@ pub trait StakeTransfer {
 	type Balance;
 	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
+	/// The amount of locked tokens in the current epoch - aka the bond
+	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
+
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
 
@@ -650,7 +653,6 @@ pub trait HistoricalEpochInfo {
 	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex>;
-	fn previous_epoch() -> Self::EpochIndex;
 }
 
 pub trait EpochExpiry {

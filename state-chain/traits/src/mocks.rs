@@ -2,7 +2,6 @@
 pub mod chainflip_account;
 pub mod ensure_origin_mock;
 pub mod ensure_witnessed;
-pub mod epoch_history;
 pub mod epoch_info;
 pub mod key_provider;
 pub mod keygen_exclusion;

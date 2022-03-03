@@ -211,7 +211,12 @@ fn update_bonds() {
 
 		<Flip as BondRotation>::update_validator_bonds(&[BOB], 10);
 		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 10);
+		// Expect the bond not to be overwriten if the previous was hire #1355
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
+
+		// Simulate an increase of the bond from on epoch to the next
+		<Flip as BondRotation>::update_validator_bonds(&[BOB], 25);
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 25);
 
 		check_balance_integrity();
 	});

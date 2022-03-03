@@ -695,13 +695,13 @@ impl<T: Config> Pallet<T> {
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 
-		//
+		// Save the epoch -> validators map
 		HistoricalValidators::<T>::insert(new_epoch, new_validators);
 
-		//
+		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		//
+		// Remember in which epoch an validator was active
 		for validator in new_validators.into_iter() {
 			HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
 				epochs.push(new_epoch);
@@ -739,10 +739,6 @@ impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
 
 	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(id)
-	}
-
-	fn previous_epoch() -> Self::EpochIndex {
-		CurrentEpoch::<T>::get().saturating_sub(1)
 	}
 }
 

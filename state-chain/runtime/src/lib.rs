@@ -345,7 +345,6 @@ impl pallet_cf_flip::Config for Runtime {
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
-	type EpochHistory = pallet_cf_validator::EpochHistory<Self>;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
