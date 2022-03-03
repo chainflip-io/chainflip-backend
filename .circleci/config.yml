@@ -159,28 +159,28 @@ workflows:
     when:
       not: <<pipeline.parameters.build_testnet>>
     jobs:
-#      - cargo-clippy:
-#          requires:
-#            - cargo-fmt
-#          context:
-#            - ghcr-credentials
-#            - github-credentials
-#          <<: *ignore_main_branches
-#
-#      # The follow jobs always run, regardless of PR or merge.
-#      - cargo-check:
-#          requires:
-#            - cargo-fmt
-#          context:
-#            - ghcr-credentials
-#            - github-credentials
-#      - cargo-fmt:
-#          context:
-#            - ghcr-credentials
-#            - github-credentials
+      - cargo-clippy:
+          requires:
+            - cargo-fmt
+          context:
+            - ghcr-credentials
+            - github-credentials
+          <<: *ignore_main_branches
+
+      # The follow jobs always run, regardless of PR or merge.
+      - cargo-check:
+          requires:
+            - cargo-fmt
+          context:
+            - ghcr-credentials
+            - github-credentials
+      - cargo-fmt:
+          context:
+            - ghcr-credentials
+            - github-credentials
       - cargo-build-and-test:
-#          requires:
-#            - cargo-fmt
+          requires:
+            - cargo-fmt
           context:
             - ghcr-credentials
             - github-credentials
@@ -375,7 +375,6 @@ jobs:
   cargo-build-and-test:
     executor: rust-base-ci
     resource_class: xlarge
-    parallelism: 4
     steps:
       - checkout
       - merge_target
@@ -384,10 +383,6 @@ jobs:
           cargo build --locked --release
           sccache --show-stats
       - run: |
-          groupadd ci
-          useradd -g ci ci
-      - run: |
-          su - ci
           cargo test --lib --locked --release --all-features
           sccache --show-stats
       - persist_to_workspace:
