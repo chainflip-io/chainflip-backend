@@ -716,8 +716,7 @@ mod tests {
         let mut permissions = backups_path.metadata().unwrap().permissions();
         permissions.set_readonly(true);
         assert_ok!(fs::set_permissions(&backups_path, permissions));
-        assert_eq!(
-            true,
+        assert!(
             backups_path.metadata().unwrap().permissions().readonly(),
             "Readonly permissions were not set"
         );
