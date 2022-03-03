@@ -406,14 +406,21 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 
 	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
 		Account::<T>::iter().for_each(|(account, _)| {
-			if new_validators.contains(&account) {
-				let old_bond = Self::locked_balance(&account);
-				if old_bond < new_bond {
-					Self::set_validator_bond(&account, new_bond);
-				}
-			} else {
-				Self::set_validator_bond(&account, T::Balance::zero());
-			}
+			// The only thing we care about is the highest mab of every **NOT** expired
+			// epoch
+
+			// Get the max bond and charge it
+
+			// if new_validators.contains(&account) {
+			// 	let old_bond = Self::locked_balance(&account);
+			// 	if old_bond < new_bond {
+			// 		Self::set_validator_bond(&account, new_bond);
+			// 	}
+			// } else {
+			// 	// Max of remaining epochs
+			// 	// BondManger
+			// 	Self::set_validator_bond(&account, T::Balance::zero());
+			// }
 		});
 	}
 }

@@ -653,6 +653,8 @@ pub trait HistoricalEpochInfo {
 	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	fn set_last_expired_epoch(epoch: EpochIndex);
+	fn set_active_epochs(validator: Self::ValidatorId, epoch: EpochIndex);
 }
 
 pub trait EpochExpiry {

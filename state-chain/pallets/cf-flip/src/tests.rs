@@ -202,25 +202,25 @@ fn stake_transfers() {
 	});
 }
 
-#[test]
-fn update_bonds() {
-	new_test_ext().execute_with(|| {
-		<Flip as BondRotation>::update_validator_bonds(&[ALICE, BOB], 20);
-		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
+// #[test]
+// fn update_bonds() {
+// 	new_test_ext().execute_with(|| {
+// 		<Flip as BondRotation>::update_validator_bonds(&[ALICE, BOB], 20);
+// 		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
+// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
 
-		<Flip as BondRotation>::update_validator_bonds(&[BOB], 10);
-		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
-		// Expect the bond not to be overwriten if the previous was hire #1355
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
+// 		<Flip as BondRotation>::update_validator_bonds(&[BOB], 10);
+// 		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
+// 		// Expect the bond not to be overwriten if the previous was hire #1355
+// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
 
-		// Simulate an increase of the bond from on epoch to the next
-		<Flip as BondRotation>::update_validator_bonds(&[BOB], 25);
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 25);
+// 		// Simulate an increase of the bond from on epoch to the next
+// 		<Flip as BondRotation>::update_validator_bonds(&[BOB], 25);
+// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 25);
 
-		check_balance_integrity();
-	});
-}
+// 		check_balance_integrity();
+// 	});
+// }
 
 #[cfg(test)]
 mod test_issuance {

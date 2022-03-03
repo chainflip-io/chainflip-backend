@@ -711,16 +711,6 @@ impl<T: Config> Pallet<T> {
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
 	}
-
-	pub fn set_last_expired_epoch(epoch: EpochIndex) {
-		LastExpiredEpoch::<T>::set(epoch);
-	}
-
-	pub fn set_active_epochs(validator: ValidatorIdOf<T>, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
-			active_epochs.retain(|&x| x != epoch);
-		});
-	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -739,6 +729,16 @@ impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
 
 	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(id)
+	}
+
+	fn set_last_expired_epoch(epoch: EpochIndex) {
+		LastExpiredEpoch::<T>::set(epoch);
+	}
+
+	fn set_active_epochs(validator: ValidatorIdOf<T>, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
+			active_epochs.retain(|&x| x != epoch);
+		});
 	}
 }
 
