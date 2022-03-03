@@ -2,7 +2,10 @@ use crate as pallet_cf_staking;
 use cf_chains::{
 	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
 };
-use cf_traits::{impl_mock_waived_fees, WaivedFees};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::epoch_history::MockEpochHistory, EpochExpiry,
+	HistoricalEpochInfo, WaivedFees,
+};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
 use sp_runtime::{
@@ -130,6 +133,7 @@ impl pallet_cf_flip::Config for Test {
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
+	type EpochHistory = MockEpochHistory;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);

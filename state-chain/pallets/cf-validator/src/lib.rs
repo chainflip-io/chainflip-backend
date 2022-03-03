@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, QualifyValidator,
+	ExecutionCondition, HistoricalEpochInfo, QualifyValidator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -27,6 +27,8 @@ pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
 use sp_std::prelude::*;
+
+use cf_traits::EpochExpiry;
 
 pub mod releases {
 	use frame_support::traits::StorageVersion;
@@ -131,6 +133,8 @@ pub mod pallet {
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
+
+		type EpochExpiryHandler: EpochExpiry;
 	}
 
 	#[pallet::event]
@@ -184,7 +188,8 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				LastExpiredEpoch::<T>::set(epoch_index);
+				// LastExpiredEpoch::<T>::set(epoch_index);
+				T::EpochExpiryHandler::expire_epoch(epoch_index);
 			}
 
 			match RotationPhase::<T>::get() {
@@ -541,6 +546,21 @@ pub mod pallet {
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
+	/// A map between an epoch and an vector of validators (participating in this epoch)
+	#[pallet::storage]
+	pub type HistoricalValidators<T: Config> =
+		StorageMap<_, Blake2_128Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
+
+	/// A map between an epoch and the bonded balance (MAB)
+	#[pallet::storage]
+	pub type HistoricalBonds<T: Config> =
+		StorageMap<_, Blake2_128Concat, EpochIndex, T::Amount, ValueQuery>;
+
+	/// A map between an validator and an vector of epoch he attended
+	#[pallet::storage]
+	pub type HistoricalActiveEpochs<T: Config> =
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
@@ -675,8 +695,54 @@ impl<T: Config> Pallet<T> {
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 
+		//
+		HistoricalValidators::<T>::insert(new_epoch, new_validators);
+
+		//
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
+		//
+		for validator in new_validators.into_iter() {
+			HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
+				epochs.push(new_epoch);
+			});
+		}
+
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+	}
+
+	pub fn set_last_expired_epoch(epoch: EpochIndex) {
+		LastExpiredEpoch::<T>::set(epoch);
+	}
+
+	pub fn set_active_epochs(validator: ValidatorIdOf<T>, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
+			active_epochs.retain(|&x| x != epoch);
+		});
+	}
+}
+
+pub struct EpochHistory<T>(PhantomData<T>);
+
+impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	type EpochIndex = EpochIndex;
+	type Amount = T::Amount;
+	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
+		HistoricalValidators::<T>::get(epoch)
+	}
+
+	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount {
+		HistoricalBonds::<T>::get(epoch)
+	}
+
+	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex> {
+		HistoricalActiveEpochs::<T>::get(id)
+	}
+
+	fn previous_epoch() -> Self::EpochIndex {
+		CurrentEpoch::<T>::get().saturating_sub(1)
 	}
 }
 

@@ -1,7 +1,8 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
-	WaivedFees,
+	impl_mock_waived_fees,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_history::MockEpochHistory},
+	HistoricalEpochInfo, StakeTransfer, WaivedFees,
 };
 use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
@@ -83,6 +84,7 @@ impl pallet_cf_flip::Config for Test {
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
+	type EpochHistory = MockEpochHistory;
 }
 
 parameter_types! {

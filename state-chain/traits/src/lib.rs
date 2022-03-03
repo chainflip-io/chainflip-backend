@@ -642,3 +642,17 @@ pub trait KeygenExclusionSet {
 	/// Clear the exclusion set
 	fn forgive_all();
 }
+
+pub trait HistoricalEpochInfo {
+	type ValidatorId;
+	type EpochIndex;
+	type Amount;
+	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
+	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	fn previous_epoch() -> Self::EpochIndex;
+}
+
+pub trait EpochExpiry {
+	fn expire_epoch(epoch: EpochIndex);
+}

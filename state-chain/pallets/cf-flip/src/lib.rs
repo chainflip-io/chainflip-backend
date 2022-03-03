@@ -21,6 +21,8 @@ use cf_traits::{Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
+use cf_traits::HistoricalEpochInfo;
+
 use frame_support::{
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
@@ -80,6 +82,9 @@ pub mod pallet {
 
 		/// Handles the access of governance extrinsic
 		type WaivedFees: WaivedFees<AccountId = Self::AccountId, Call = Self::Call>;
+
+		///
+		type EpochHistory: HistoricalEpochInfo<Amount = Self::Balance, EpochIndex = u32>;
 	}
 
 	#[pallet::pallet]
@@ -405,7 +410,11 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
 		Account::<T>::iter().for_each(|(account, _)| {
 			if new_validators.contains(&account) {
-				Self::set_validator_bond(&account, new_bond);
+				let previous_epoch = T::EpochHistory::previous_epoch();
+				let old_bond = T::EpochHistory::epoch_bond(previous_epoch);
+				if old_bond < new_bond {
+					Self::set_validator_bond(&account, new_bond);
+				}
 			} else {
 				Self::set_validator_bond(&account, T::Balance::zero());
 			}

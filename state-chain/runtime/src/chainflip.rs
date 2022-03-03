@@ -21,9 +21,9 @@ use cf_chains::{
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
-	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardsDistribution, SigningContext, StakeHandler,
-	StakeTransfer,
+	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochExpiry, EpochIndex, EpochInfo,
+	EpochTransitionHandler, Heartbeat, HistoricalEpochInfo, Issuance, NetworkState,
+	RewardsDistribution, SigningContext, StakeHandler, StakeTransfer,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::*, weights::Weight};
@@ -33,7 +33,7 @@ use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchIn
 use pallet_cf_auction::HandleStakes;
 use pallet_cf_broadcast::BroadcastConfig;
 
-use pallet_cf_validator::PercentageRange;
+use pallet_cf_validator::{EpochHistory, PercentageRange};
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
@@ -374,5 +374,21 @@ pub struct RuntimeUpgradeManager;
 impl RuntimeUpgrade for RuntimeUpgradeManager {
 	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
+	}
+}
+
+pub struct EpochExpiryHandler;
+
+impl EpochExpiry for EpochExpiryHandler {
+	fn expire_epoch(epoch: EpochIndex) {
+		Validator::set_last_expired_epoch(epoch);
+		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
+			Validator::set_active_epochs(validator.clone(), epoch);
+			let active_epochs =
+				EpochHistory::<Runtime>::active_epochs_for_validator(validator.clone());
+			let max_bond = *active_epochs.iter().max().unwrap();
+			// Set the new bond
+			Flip::set_validator_bond(validator, max_bond.into());
+		}
 	}
 }

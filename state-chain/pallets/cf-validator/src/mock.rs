@@ -246,6 +246,14 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
+pub struct MockEpochExpiryHandler;
+
+impl EpochExpiry for MockEpochExpiryHandler {
+	fn expire_epoch(epoch: cf_traits::EpochIndex) {
+		todo!()
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
@@ -256,6 +264,7 @@ impl Config for Test {
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type EpochExpiryHandler = MockEpochExpiryHandler;
 }
 
 /// Session pallet requires a set of validators at genesis.
