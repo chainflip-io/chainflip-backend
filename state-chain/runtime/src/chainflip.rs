@@ -1,6 +1,8 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
+mod missed_authorship_slots;
 mod signer_nomination;
+pub use missed_authorship_slots::MissedAuraSlots;
 use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
@@ -240,6 +242,7 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::ParticipateKeygenFailed => (15, true),
 			OfflineCondition::InvalidTransactionAuthored => (15, false),
 			OfflineCondition::TransactionFailedOnTransmission => (15, false),
+			OfflineCondition::MissedAuthorshipSlot => (15, true),
 		}
 	}
 }

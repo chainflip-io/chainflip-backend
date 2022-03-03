@@ -24,6 +24,7 @@ macro_rules! impl_mock_offline_conditions {
 					$crate::offline_conditions::OfflineCondition::ParticipateKeygenFailed => (15, true),
 					$crate::offline_conditions::OfflineCondition::InvalidTransactionAuthored => (15, false),
 					$crate::offline_conditions::OfflineCondition::TransactionFailedOnTransmission => (15, false),
+					$crate::offline_conditions::OfflineCondition::MissedAuthorshipSlot => (15, true),
 				}
 			}
 		}
