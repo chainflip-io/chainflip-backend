@@ -5,7 +5,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, keygen_verification, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -164,6 +164,13 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
 
+    let (
+        multisig_instructions_sender_sc_observer,
+        multisig_instructions_receiver_keygen_verification,
+    ) = tokio::sync::mpsc::unbounded_channel();
+
+    let (_, shutdown_keygen_verification_receiver) = tokio::sync::oneshot::channel::<()>();
+
     tokio::join!(
         // Start signing components
         multisig::start_client(
@@ -175,6 +182,14 @@ async fn main() {
             outgoing_p2p_message_sender,
             shutdown_client_rx,
             multisig::KeygenOptions::default(),
+            &root_logger,
+        ),
+        keygen_verification::start(
+            multisig_instruction_sender,
+            multisig_instructions_receiver_keygen_verification,
+            multisig_outcome_receiver,
+            state_chain_client.clone(),
+            shutdown_keygen_verification_receiver,
             &root_logger,
         ),
         async {
@@ -195,9 +210,8 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_instruction_sender,
+            multisig_instructions_sender_sc_observer,
             account_peer_mapping_change_sender,
-            multisig_outcome_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,

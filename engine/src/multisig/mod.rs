@@ -7,6 +7,9 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
+/// Layer between the State Chain and Multisig module that handles keygen verification
+pub mod keygen_verification;
+
 #[cfg(test)]
 mod tests;
 

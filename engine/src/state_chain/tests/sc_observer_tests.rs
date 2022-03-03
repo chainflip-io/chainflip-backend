@@ -17,7 +17,7 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
     eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
-    multisig::{MultisigInstruction, MultisigOutcome},
+    multisig::MultisigInstruction,
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
@@ -142,8 +142,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -155,7 +153,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -249,8 +246,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -263,7 +258,6 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -339,8 +333,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -353,7 +345,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -378,8 +369,6 @@ async fn backup_checks_account_data_every_block() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -442,7 +431,6 @@ async fn backup_checks_account_data_every_block() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -478,8 +466,6 @@ async fn validator_to_validator_on_new_epoch_event() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -612,7 +598,6 @@ async fn validator_to_validator_on_new_epoch_event() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -667,8 +652,6 @@ async fn backup_to_validator_on_new_epoch() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -793,7 +776,6 @@ async fn backup_to_validator_on_new_epoch() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -978,8 +960,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -992,7 +972,6 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1157,8 +1136,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -1171,7 +1148,6 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1208,8 +1184,6 @@ async fn run_the_sc_observer() {
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
     let eth_broadcaster =
@@ -1226,7 +1200,6 @@ async fn run_the_sc_observer() {
         eth_broadcaster,
         multisig_instruction_sender,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
