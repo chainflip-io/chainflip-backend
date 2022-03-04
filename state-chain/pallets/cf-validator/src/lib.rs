@@ -407,7 +407,9 @@ pub mod pallet {
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+			if let Some((_, existing_peer_id, existing_port, existing_ip_address)) =
+				AccountPeerMapping::<T>::get(&account_id)
+			{
 				if existing_peer_id != peer_id {
 					ensure!(
 						!MappedPeers::<T>::contains_key(&peer_id),
@@ -415,6 +417,11 @@ pub mod pallet {
 					);
 					MappedPeers::<T>::remove(&existing_peer_id);
 					MappedPeers::<T>::insert(&peer_id, ());
+				} else {
+					ensure!(
+						existing_port != port || existing_ip_address != ip_address,
+						Error::<T>::AccountPeerMappingOverlap
+					);
 				}
 			} else {
 				ensure!(
