@@ -48,7 +48,8 @@ use cf_traits::{offline_conditions::ReputationPoints, ChainflipAccountData};
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler, OfflinePenalty,
+	epoch_transition::{ChainflipEpochTransitions, EpochExpiryHandler},
+	ChainflipHeartbeat, ChainflipStakeHandler, OfflinePenalty,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
@@ -161,7 +162,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type EpochExpiryHandler = chainflip::EpochExpiryHandler;
+	type EpochExpiryHandler = EpochExpiryHandler;
 }
 
 impl pallet_cf_environment::Config for Runtime {

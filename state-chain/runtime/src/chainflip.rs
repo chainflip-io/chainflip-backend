@@ -1,12 +1,13 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
+pub mod epoch_transition;
 mod signer_nomination;
 use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
 use super::{
 	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Runtime,
-	Validator, Witnesser,
+	Validator,
 };
 use crate::{
 	Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval, System,
@@ -20,9 +21,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BackupValidators, BlockEmissions, Bonding, Chainflip, ChainflipAccount, ChainflipAccountStore,
-	EmergencyRotation, EmissionsTrigger, EpochExpiry, EpochIndex, EpochInfo,
-	EpochTransitionHandler, Heartbeat, HistoricalEpoch, Issuance, NetworkState,
+	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	RewardsDistribution, SigningContext, StakeHandler, StakeTransfer,
 };
 use codec::{Decode, Encode};
@@ -50,62 +49,6 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = Validator;
-}
-
-pub struct ChainflipEpochTransitions;
-
-/// Trigger emissions on epoch transitions.
-impl EpochTransitionHandler for ChainflipEpochTransitions {
-	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
-
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
-		// Calculate block emissions on every epoch
-		<Emissions as BlockEmissions>::calculate_block_emissions();
-		// Process any outstanding emissions.
-		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the the bond of all validators for the new epoch
-		for validator in new_validators {
-			BondManager::bond_validator(validator);
-		}
-		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
-	}
-}
-
-pub struct AccountStateManager<T>(PhantomData<T>);
-
-impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
-	type ValidatorId = AccountId;
-	type Amount = T::Amount;
-
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		_new_bid: Self::Amount,
-	) {
-		// Update the last active epoch for the new validating set
-		let epoch_index = Validator::epoch_index();
-		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
-		}
-	}
 }
 
 pub struct ChainflipStakeHandler;
@@ -376,39 +319,5 @@ pub struct RuntimeUpgradeManager;
 impl RuntimeUpgrade for RuntimeUpgradeManager {
 	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
-	}
-}
-
-pub struct EpochExpiryHandler;
-
-impl EpochExpiry for EpochExpiryHandler {
-	fn expire_epoch(epoch: EpochIndex) {
-		EpochHistory::<Runtime>::set_last_expired_epoch(epoch);
-		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
-			EpochHistory::<Runtime>::remove_epoch(validator, epoch);
-			BondManager::bond_validator(validator);
-		}
-	}
-}
-
-pub struct BondManager;
-
-impl Bonding for BondManager {
-	type ValidatorId = AccountId;
-	fn bond_validator(validator: &Self::ValidatorId) {
-		let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(validator);
-		if active_epochs.is_empty() {
-			Flip::set_validator_bond(validator, 0u128);
-		} else {
-			Flip::set_validator_bond(
-				validator,
-				active_epochs
-					.iter()
-					.map(|bond| EpochHistory::<Runtime>::epoch_bond(*bond))
-					.max()
-					.expect("we expect at least one active epoch")
-					.into(),
-			);
-		}
 	}
 }
