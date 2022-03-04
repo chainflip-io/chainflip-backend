@@ -1018,7 +1018,6 @@ dependencies = [
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
- "users",
  "utilities",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
  "websocket",
@@ -9820,16 +9819,6 @@ dependencies = [
  "idna 0.2.3",
  "matches",
  "percent-encoding 2.1.0",
-]
-
-[[package]]
-name = "users"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
-dependencies = [
- "libc",
- "log 0.4.14",
 ]
 
 [[package]]

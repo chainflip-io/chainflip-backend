@@ -701,15 +701,6 @@ mod tests {
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
 
-        // Check who the current users is
-        let user = users::get_user_by_uid(users::get_current_uid()).expect("Should get user");
-        println!(
-            "Username: {:?}, uid: {}, group: {:?}",
-            user.name(),
-            user.uid(),
-            users::get_group_by_gid(user.primary_group_id())
-        );
-
         // Change the backups folder to readonly
         let backups_path = parent_path.join(BACKUPS_DIRECTORY);
         assert!(backups_path.exists());
