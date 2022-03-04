@@ -574,6 +574,7 @@ where
         self.eth_rpc
             .send_raw_transaction(raw_signed_tx.into())
             .await
+            .context("Failed to broadcast ETH transaction to network")
     }
 }
 
