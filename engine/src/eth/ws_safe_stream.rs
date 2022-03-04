@@ -320,7 +320,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn safe_stream_does_not_return_prematurely_on_error_header_with_safety() {
+    async fn safe_stream_returns_on_error_header_with_safety() {
         let first_block = block_header(1, 11);
         let error_block = Err(web3::Error::Internal);
 
